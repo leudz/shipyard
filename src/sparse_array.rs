@@ -15,7 +15,7 @@ pub(crate) struct SparseArray<T> {
 }
 
 impl<T> SparseArray<T> {
-    // Inserts a value at a given index, if a value was already present it will be returned
+    /// Inserts a value at a given index, if a value was already present it will be returned.
     pub(crate) fn insert(&mut self, index: usize, mut value: T) -> Option<T> {
         if index >= self.sparse.len() {
             self.sparse.resize(index + 1, 0);
@@ -30,13 +30,13 @@ impl<T> SparseArray<T> {
             None
         }
     }
-    // Returns true if the sparse array contains data at this index
+    /// Returns true if the sparse array contains data at this index.
     fn contains(&self, index: usize) -> bool {
         index < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
             && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
     }
-    // Returns a reference to the element at this index if present
+    /// Returns a reference to the element at this index if present.
     pub(crate) fn get(&self, index: usize) -> Option<&T> {
         if self.contains(index) {
             Some(unsafe { self.data.get_unchecked(*self.sparse.get_unchecked(index)) })
@@ -44,7 +44,7 @@ impl<T> SparseArray<T> {
             None
         }
     }
-    // Returns a mutable reference to the element at this index if present
+    /// Returns a mutable reference to the element at this index if present.
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         if self.contains(index) {
             Some(unsafe {
@@ -55,7 +55,7 @@ impl<T> SparseArray<T> {
             None
         }
     }
-    // Removes and returns the element at index if present
+    /// Removes and returns the element at index if present.
     pub(crate) fn remove(&mut self, index: usize) -> Option<T> {
         if self.contains(index) {
             let dense_index = unsafe { *self.sparse.get_unchecked(index) };
@@ -71,7 +71,7 @@ impl<T> SparseArray<T> {
             None
         }
     }
-    // Returns the number of element present in the sparse array
+    /// Returns the number of element present in the sparse array.
     pub(crate) fn len(&self) -> usize {
         self.dense.len()
     }

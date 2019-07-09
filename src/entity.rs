@@ -11,25 +11,25 @@ impl Key {
     const INDEX_MASK: usize = !0 >> Self::VERSION_LEN;
     const VERSION_MASK: usize = !Self::INDEX_MASK;
 
-    // Returns the index part of the Key
+    /// Returns the index part of the Key.
     pub(crate) fn index(self) -> usize {
         self.0 & Self::INDEX_MASK
     }
-    // Returns the version part of the Key
+    /// Returns the version part of the Key.
     fn version(self) -> usize {
         (self.0 & Self::VERSION_MASK) >> (0usize.count_zeros() as usize - Self::VERSION_LEN)
     }
-    // Make a new Key with the given index
+    /// Make a new Key with the given index.
     fn new(index: usize) -> Self {
         assert!(index <= Self::INDEX_MASK);
         Key(index)
     }
-    // Modify the index
+    /// Modify the index.
     fn set_index(&mut self, index: usize) {
         assert!(index <= Self::INDEX_MASK);
         self.0 = (self.0 & Self::VERSION_MASK) | index
     }
-    // Increments the version, returns Err if version + 1 == version::MAX()
+    /// Increments the version, returns Err if version + 1 == version::MAX().
     fn bump_version(&mut self) -> Result<(), ()> {
         if self.0 < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = self.index()
@@ -69,7 +69,7 @@ impl Default for Entities {
 }
 
 impl Entities {
-    // Returns a valid Key, reuse removed Key when possible
+    /// Returns a valid Key, reuse removed Key when possible
     pub(crate) fn generate(&mut self) -> Key {
         let index = self.list.map(|(_, old)| old);
         if let Some((new, ref mut old)) = self.list {
@@ -88,11 +88,11 @@ impl Entities {
             key
         }
     }
-    // Return true if the key matches a living entity
+    /// Return true if the key matches a living entity
     pub(crate) fn is_alive(&self, key: Key) -> bool {
         key.index() < self.data.len() && key == unsafe { *self.data.get_unchecked(key.index()) }
     }
-    // Delete an entity, returns true if the entity was alive
+    /// Delete an entity, returns true if the entity was alive
     pub(crate) fn delete(&mut self, key: Key) -> bool {
         if self.is_alive(key) {
             if let Ok(_) = unsafe { self.data.get_unchecked_mut(key.index()).bump_version() } {
