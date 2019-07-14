@@ -5,3 +5,6 @@ mod component_storage;
 mod entity;
 mod error;
 mod sparse_array;
+mod world;
+
+pub use world::World;
