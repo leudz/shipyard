@@ -128,6 +128,19 @@ pub struct Ref<'a, T: ?Sized> {
     pub(crate) borrow: Borrow<'a>,
 }
 
+impl<'a, T: 'a + Sized> Ref<'a, T> {
+    /// Makes a new `Ref` for a component of the borrowed data.
+    pub fn map<U, F>(origin: Self, f: F) -> Ref<'a, U>
+    where
+        F: FnOnce(&T) -> &U,
+    {
+        Ref {
+            inner: f(origin.inner),
+            borrow: origin.borrow,
+        }
+    }
+}
+
 impl<T: ?Sized> std::ops::Deref for Ref<'_, T> {
     type Target = T;
 
@@ -140,6 +153,19 @@ impl<T: ?Sized> std::ops::Deref for Ref<'_, T> {
 pub struct RefMut<'a, T: ?Sized> {
     pub(crate) inner: &'a mut T,
     pub(crate) borrow: Borrow<'a>,
+}
+
+impl<'a, T: 'a + Sized> RefMut<'a, T> {
+    /// Makes a new `RefMut` for a component of the borrowed data.
+    pub fn map<U, F>(origin: Self, f: F) -> RefMut<'a, U>
+    where
+        F: FnOnce(&mut T) -> &mut U,
+    {
+        RefMut {
+            inner: f(origin.inner),
+            borrow: origin.borrow,
+        }
+    }
 }
 
 impl<T: ?Sized> std::ops::Deref for RefMut<'_, T> {
