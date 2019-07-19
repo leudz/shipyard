@@ -54,7 +54,7 @@ impl Key {
  * Removed entities are added to one end and removed from the other.
  * Dead entities are simply never added to the linked list.
 */
-pub(crate) struct Entities {
+pub struct Entities {
     data: Vec<Key>,
     list: Option<(usize, usize)>,
 }
