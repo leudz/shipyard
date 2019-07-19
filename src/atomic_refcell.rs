@@ -71,7 +71,7 @@ impl BorrowState {
             .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
         {
             Ok(_) => Ok(Borrow::Unique(self)),
-            Err(x) if x & HIGH_BIT == 0 => Err(error::Borrow::Unique),
+            Err(x) if x & HIGH_BIT != 0 => Err(error::Borrow::Unique),
             _ => Err(error::Borrow::Shared),
         }
     }
@@ -94,6 +94,12 @@ impl BorrowState {
                 .compare_exchange(new, new - 1, Ordering::Release, Ordering::Relaxed);
             error::Borrow::Unique
         }
+    }
+    /// Downgrades a unique Borrow to a shared Borrow.
+    /// # Safety
+    /// Has to be used with a unique borrow.
+    unsafe fn downgrade(&self) {
+        self.0.store(1, Ordering::Release);
     }
 }
 
@@ -139,6 +145,22 @@ impl<'a, T: 'a + Sized> Ref<'a, T> {
             borrow: origin.borrow,
         }
     }
+    /// Makes a new `Ref` for a component of the borrowed data, the operation can fail.
+    pub fn try_map<U, E, F>(origin: Self, f: F) -> Result<Ref<'a, U>, E>
+    where
+        F: FnOnce(&T) -> Result<&U, E>,
+    {
+        Ok(Ref {
+            inner: f(origin.inner)?,
+            borrow: origin.borrow,
+        })
+    }
+    /// Get the inner parts of the `Ref`.
+    /// # Safety
+    /// The reference has to be dropped before `Borrow`.
+    pub(crate) unsafe fn destructure(Ref { inner, borrow }: Self) -> (&'a T, Borrow<'a>) {
+        (inner, borrow)
+    }
 }
 
 impl<T: ?Sized> std::ops::Deref for Ref<'_, T> {
@@ -166,6 +188,30 @@ impl<'a, T: 'a + Sized> RefMut<'a, T> {
             borrow: origin.borrow,
         }
     }
+    /// Makes a new `RefMut` for a component of the borrowed data, the operation can fail.
+    pub fn try_map<U, E, F>(origin: Self, f: F) -> Result<RefMut<'a, U>, E>
+    where
+        F: FnOnce(&mut T) -> Result<&mut U, E>,
+    {
+        Ok(RefMut {
+            inner: f(origin.inner)?,
+            borrow: origin.borrow,
+        })
+    }
+    /// Downgrades a unique Borrow to a shared Borrow.
+    pub fn downgrade(RefMut { inner, borrow }: Self) -> Ref<'a, T> {
+        match borrow {
+            Borrow::Unique(borrow) => unsafe { borrow.downgrade() },
+            Borrow::Shared(_) => unreachable!(),
+        }
+        Ref { inner, borrow }
+    }
+    /// Get the inner parts of the `RefMut`.
+    /// # Safety
+    /// The reference has to be dropped before `Borrow`
+    pub(crate) unsafe fn destructure(RefMut { inner, borrow }: Self) -> (&'a mut T, Borrow<'a>) {
+        (inner, borrow)
+    }
 }
 
 impl<T: ?Sized> std::ops::Deref for RefMut<'_, T> {
@@ -179,5 +225,35 @@ impl<T: ?Sized> std::ops::Deref for RefMut<'_, T> {
 impl<T: ?Sized> std::ops::DerefMut for RefMut<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.inner
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn reborrow() {
+        let refcell = AtomicRefCell::new(0);
+        let _first_borrow = refcell.try_borrow().unwrap();
+
+        assert!(&refcell.try_borrow().is_ok());
+        assert_eq!(
+            std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
+            std::mem::discriminant(&error::Borrow::Shared)
+        );
+    }
+    #[test]
+    fn unique_reborrow() {
+        let refcell = AtomicRefCell::new(0);
+        let _first_borrow = refcell.try_borrow_mut().unwrap();
+
+        assert_eq!(
+            std::mem::discriminant(&refcell.try_borrow().err().unwrap()),
+            std::mem::discriminant(&error::Borrow::Unique)
+        );
+        assert_eq!(
+            std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
+            std::mem::discriminant(&error::Borrow::Unique)
+        );
     }
 }
