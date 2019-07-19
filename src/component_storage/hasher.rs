@@ -4,7 +4,7 @@ use std::hash::Hasher;
 /// This is the purpose of this hasher, not doing anything.
 /// It will get bytes, check if the number is right and return a `u64`.
 #[derive(Default)]
-pub(super) struct TypeIdHasher(u64);
+pub(crate) struct TypeIdHasher(u64);
 
 impl Hasher for TypeIdHasher {
     fn write(&mut self, bytes: &[u8]) {
