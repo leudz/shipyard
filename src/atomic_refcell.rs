@@ -114,6 +114,27 @@ pub enum Borrow<'a> {
     Unique(&'a BorrowState),
 }
 
+impl Borrow<'_> {
+    fn downgrade(self) -> Self {
+        match self {
+            Borrow::Unique(borrow) => {
+                unsafe { borrow.downgrade() }
+                Borrow::Shared(borrow)
+            }
+            Borrow::Shared(_) => unreachable!(),
+        }
+    }
+}
+
+impl Clone for Borrow<'_> {
+    fn clone(&self) -> Self {
+        match self {
+            Borrow::Shared(borrow) => borrow.try_borrow().unwrap(),
+            Borrow::Unique(_) => panic!("Can't clone a unique borrow."),
+        }
+    }
+}
+
 impl<'a> Drop for Borrow<'a> {
     fn drop(&mut self) {
         match self {
@@ -135,6 +156,13 @@ pub struct Ref<'a, T: ?Sized> {
 }
 
 impl<'a, T: 'a + Sized> Ref<'a, T> {
+    /// Make a clone, the value is already borrowed so it can't fail.
+    pub fn clone(origin: &Self) -> Self {
+        Ref {
+            inner: origin.inner,
+            borrow: origin.borrow.clone(),
+        }
+    }
     /// Makes a new `Ref` for a component of the borrowed data.
     pub fn map<U, F>(origin: Self, f: F) -> Ref<'a, U>
     where
@@ -200,11 +228,10 @@ impl<'a, T: 'a + Sized> RefMut<'a, T> {
     }
     /// Downgrades a unique Borrow to a shared Borrow.
     pub fn downgrade(RefMut { inner, borrow }: Self) -> Ref<'a, T> {
-        match borrow {
-            Borrow::Unique(borrow) => unsafe { borrow.downgrade() },
-            Borrow::Shared(_) => unreachable!(),
+        Ref {
+            inner,
+            borrow: borrow.downgrade(),
         }
-        Ref { inner, borrow }
     }
     /// Get the inner parts of the `RefMut`.
     /// # Safety
@@ -254,6 +281,20 @@ mod test {
         assert_eq!(
             std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
             std::mem::discriminant(&error::Borrow::Unique)
+        );
+    }
+    // Checks if a downgrade change the ref type to `Ref`
+    // and if the borrow is `Borrow::Shared`
+    #[test]
+    fn downgrade_is_shared() {
+        let refcell = AtomicRefCell::new(0);
+        let borrow = refcell.try_borrow_mut().unwrap();
+        let borrow = RefMut::downgrade(borrow);
+        let (_, borrow) = unsafe { Ref::destructure(borrow) };
+        let borrow_state = BorrowState(AtomicUsize::new(1));
+        assert_eq!(
+            std::mem::discriminant(&borrow),
+            std::mem::discriminant(&Borrow::Shared(&borrow_state))
         );
     }
 }
