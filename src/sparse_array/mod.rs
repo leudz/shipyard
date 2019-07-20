@@ -1,3 +1,8 @@
+mod read_write;
+
+use crate::entity::Key;
+pub(crate) use read_write::{Read, Write};
+
 /* A sparse array is a data structure with 2 vectors: one sparse, the other dense.
  * Only usize can be added. On insertion, the number is pushed into the dense vector
  * and sparse[number] is set to dense.len() - 1.
@@ -7,11 +12,20 @@
  * We can't be limited to store solely integers, this is why there is a third vector.
  * It mimics the dense vector in regard to insertion/deletion.
 */
-
-pub(crate) struct SparseArray<T> {
+pub struct SparseArray<T> {
     pub(crate) sparse: Vec<usize>,
     pub(crate) dense: Vec<usize>,
     pub(crate) data: Vec<T>,
+}
+
+impl<T> Default for SparseArray<T> {
+    fn default() -> Self {
+        SparseArray {
+            sparse: Vec::new(),
+            dense: Vec::new(),
+            data: Vec::new(),
+        }
+    }
 }
 
 impl<T> SparseArray<T> {
@@ -72,18 +86,15 @@ impl<T> SparseArray<T> {
         }
     }
     /// Returns the number of element present in the sparse array.
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.dense.len()
     }
 }
 
-impl<T> Default for SparseArray<T> {
-    fn default() -> Self {
-        SparseArray {
-            sparse: Vec::new(),
-            dense: Vec::new(),
-            data: Vec::new(),
-        }
+impl<T> std::ops::Index<Key> for SparseArray<T> {
+    type Output = T;
+    fn index(&self, index: Key) -> &Self::Output {
+        self.get(index.index()).unwrap()
     }
 }
 
