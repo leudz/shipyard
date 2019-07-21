@@ -22,7 +22,7 @@ pub enum GetStorage {
 /// AllStoragesBorrow means an add_storage operation is in progress.
 /// Entities means entities is already borrowed.
 #[derive(Debug)]
-pub enum AddEntity {
+pub enum NewEntity {
     AllStoragesBorrow(Borrow),
     Entities(Borrow),
 }
