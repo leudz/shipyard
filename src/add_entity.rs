@@ -6,6 +6,7 @@ use crate::sparse_array::{SparseArray, Write};
 pub trait AddEntity {
     type Component;
     /// Stores `component` in a new entity, the `Key` to this entity is returned.
+    /// Multiple components can be added at the same time using a tuple.
     ///
     /// Due to current restriction, the storages and `component` have to be tuples,
     /// even for a single value. In this case use (T,).
