@@ -6,7 +6,7 @@ pub trait AddComponent {
     type Component;
     /// Stores `component` in `entity`, if the entity had already a component
     /// of this type, it will be replaced.
-    /// 
+    ///
     /// Multiple components can be added at the same time using a tuple.
     fn add_component(self, component: Self::Component, entity: Key);
 }
