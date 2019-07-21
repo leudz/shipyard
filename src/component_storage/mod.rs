@@ -54,7 +54,7 @@ impl AllStorages {
 }
 
 impl<'a> Ref<'a, AllStorages> {
-    /// Same as `try_get_storage` but will `unwrap` if an error occurs
+    /// Same as `try_get_storage` but will `unwrap` if an error occurs.
     pub fn get_storage<T: GetStorage<'a>>(&self) -> T::Storage {
         self.try_get_storage::<T>().unwrap()
     }
@@ -68,7 +68,7 @@ impl<'a> Ref<'a, AllStorages> {
 }
 
 impl<'a> RefMut<'a, AllStorages> {
-    /// Same as `try_get_storage` but will `unwrap` if an error occurs
+    /// Same as `try_get_storage` but will `unwrap` if an error occurs.
     pub fn get_storage<T: GetStorage<'a>>(self) -> T::Storage {
         self.try_get_storage::<T>().unwrap()
     }
