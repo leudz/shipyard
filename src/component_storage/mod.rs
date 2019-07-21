@@ -46,7 +46,7 @@ pub struct AllStorages(
 impl AllStorages {
     /// Register a new component type and create a storage for it.
     /// Does nothing if a storage already exists.
-    pub fn register<T: 'static + Send + Sync>(&mut self) {
+    pub(crate) fn register<T: 'static + Send + Sync>(&mut self) {
         self.0
             .entry(TypeId::of::<T>())
             .or_insert_with(|| ComponentStorage::new::<T>());
