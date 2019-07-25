@@ -1,7 +1,9 @@
 mod read_write;
+mod view;
 
 use crate::entity::Key;
 pub(crate) use read_write::{Read, Write};
+pub(crate) use view::{View, ViewMut};
 
 /* A sparse array is a data structure with 2 vectors: one sparse, the other dense.
  * Only usize can be added. On insertion, the number is pushed into the dense vector
@@ -13,9 +15,9 @@ pub(crate) use read_write::{Read, Write};
  * It mimics the dense vector in regard to insertion/deletion.
 */
 pub struct SparseArray<T> {
-    pub(crate) sparse: Vec<usize>,
-    pub(crate) dense: Vec<usize>,
-    pub(crate) data: Vec<T>,
+    sparse: Vec<usize>,
+    dense: Vec<usize>,
+    data: Vec<T>,
 }
 
 impl<T> Default for SparseArray<T> {
@@ -88,6 +90,20 @@ impl<T> SparseArray<T> {
     /// Returns the number of element present in the sparse array.
     pub fn len(&self) -> usize {
         self.dense.len()
+    }
+    pub(crate) fn view(&self) -> View<T> {
+        View {
+            sparse: &self.sparse,
+            dense: &self.dense,
+            data: &self.data,
+        }
+    }
+    pub(crate) fn view_mut(&mut self) -> ViewMut<T> {
+        ViewMut {
+            sparse: &mut self.sparse,
+            dense: &mut self.dense,
+            data: &mut self.data,
+        }
     }
 }
 
