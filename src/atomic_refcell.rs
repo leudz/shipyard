@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Threadsafe `RefCell`-like container.
 /// Can be shared across threads as long as the inner type is `Sync`.
-pub(crate) struct AtomicRefCell<T: ?Sized> {
+pub struct AtomicRefCell<T: ?Sized> {
     borrow_state: BorrowState,
     inner: UnsafeCell<T>,
 }
