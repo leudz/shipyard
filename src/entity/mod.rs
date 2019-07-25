@@ -1,3 +1,7 @@
+mod view;
+
+pub(crate) use view::EntityViewMut;
+
 /* A Key is a handle to an entity and has two parts, the index and the version.
  * The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
  * Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
@@ -106,6 +110,12 @@ impl Entities {
             true
         } else {
             false
+        }
+    }
+    pub(crate) fn view_mut(&mut self) -> EntityViewMut {
+        EntityViewMut {
+            data: &mut self.data,
+            list: &mut self.list,
         }
     }
 }
