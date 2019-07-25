@@ -6,6 +6,7 @@ use crate::component_storage::AllStorages;
 use crate::entity::{Entities, Key};
 use crate::error;
 use crate::get_storage::GetStorage;
+use crate::run::Run;
 use new_entity::WorldNewEntity;
 use register::Register;
 
@@ -99,5 +100,15 @@ impl World {
     pub fn try_register<T: 'static + Send + Sync>(&self) -> Result<(), error::Borrow> {
         self.storages.try_borrow_mut()?.register::<T>();
         Ok(())
+    }
+    /// Allows to perform some actions not possible otherwise like iteration.
+    /// Each type has to come with a mutablility expressed by `&` or `&mut`.
+    /// `Entities` are the exception, they only come in mutable flavor.
+    /// Multiple types can be queried by using a tuple.
+    ///
+    /// `T` has to be a tuple even for a single type due to restrictions.
+    /// In this case use (T,).
+    pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
+        T::run(&self.entities, &self.storages, f);
     }
 }

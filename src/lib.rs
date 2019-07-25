@@ -8,12 +8,14 @@ mod entity;
 mod error;
 mod get;
 mod get_storage;
+mod run;
 mod sparse_array;
 mod world;
 
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use get::GetComponent;
+pub use run::Run;
 pub use world::World;
 
 #[cfg(test)]
@@ -58,5 +60,12 @@ mod test {
         (usizes, u32s).add_component((4usize, 5u32), entity1);
         let storages = world.get_storage::<(&usize, &u32)>();
         assert_eq!(storages.get(entity1).unwrap(), (&4, &5));
+    }
+    #[test]
+    fn run() {
+        let world = World::default();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize, 3u32));
+        world.run::<(&mut usize, &u32), _>(|(usizes, u32s)| {});
     }
 }
