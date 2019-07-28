@@ -1,6 +1,8 @@
 use crate::sparse_array::{Read, View, ViewMut, Write};
 use std::ops::Not as NotOps;
 
+// Used to filter out components
+// Get and iterators will skip entities that have this component
 #[derive(Copy, Clone)]
 pub struct Not<T>(pub T);
 
