@@ -34,9 +34,9 @@ impl<T> View<'_, T> {
 
 /// Mutable view into a `ComponentStorage`.
 pub struct ViewMut<'a, T> {
-    pub(crate) sparse: &'a mut Vec<usize>,
-    pub(crate) dense: &'a mut Vec<usize>,
-    pub(crate) data: &'a mut Vec<T>,
+    pub(super) sparse: &'a mut Vec<usize>,
+    pub(super) dense: &'a mut Vec<usize>,
+    pub(super) data: &'a mut Vec<T>,
 }
 
 impl<T> ViewMut<'_, T> {
