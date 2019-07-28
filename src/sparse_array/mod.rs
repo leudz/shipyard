@@ -47,7 +47,7 @@ impl<T> SparseArray<T> {
         }
     }
     /// Returns true if the sparse array contains data at this index.
-    fn contains(&self, index: usize) -> bool {
+    pub(crate) fn contains(&self, index: usize) -> bool {
         index < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
             && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
