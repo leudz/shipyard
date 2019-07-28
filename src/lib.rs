@@ -19,6 +19,7 @@ pub use get::GetComponent;
 pub use not::Not;
 pub use run::Run;
 pub use world::World;
+pub use entity::Entities;
 
 #[cfg(test)]
 mod test {
@@ -65,10 +66,11 @@ mod test {
     }
     #[test]
     fn run() {
-        let world = World::default();
-        world.new_entity((0usize, 1u32));
-        world.new_entity((2usize, 3u32));
-        world.run::<(&mut usize, &u32), _>(|(usizes, u32s)| {});
+        let world = World::new::<(usize, u32)>();
+        world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+            entities.add((&mut usizes, &mut u32s), (0usize, 1u32));
+            entities.add((&mut usizes, &mut u32s), (2usize, 3u32));
+        });
     }
     #[test]
     fn not() {

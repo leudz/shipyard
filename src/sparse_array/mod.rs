@@ -1,9 +1,11 @@
 mod read_write;
 mod view;
+mod view_add_entity;
 
 use crate::entity::Key;
 pub(crate) use read_write::{Read, Write};
 pub(crate) use view::{View, ViewMut};
+pub(crate) use view_add_entity::ViewAddEntity;
 
 /* A sparse array is a data structure with 2 vectors: one sparse, the other dense.
  * Only usize can be added. On insertion, the number is pushed into the dense vector
