@@ -115,7 +115,7 @@ pub enum Borrow<'a> {
 }
 
 impl Borrow<'_> {
-    fn downgrade(self) -> Self {
+    pub(crate) fn downgrade(self) -> Self {
         match self {
             Borrow::Unique(borrow) => {
                 unsafe { borrow.downgrade() }
