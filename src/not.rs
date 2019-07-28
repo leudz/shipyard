@@ -1,4 +1,4 @@
-use crate::sparse_array::{Read, Write, View, ViewMut};
+use crate::sparse_array::{Read, View, ViewMut, Write};
 use std::ops::Not as NotOps;
 
 #[derive(Copy, Clone)]

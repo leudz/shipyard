@@ -8,17 +8,17 @@ mod entity;
 mod error;
 mod get;
 mod get_storage;
+mod not;
 mod run;
 mod sparse_array;
 mod world;
-mod not;
 
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use get::GetComponent;
+pub use not::Not;
 pub use run::Run;
 pub use world::World;
-pub use not::Not;
 
 #[cfg(test)]
 mod test {

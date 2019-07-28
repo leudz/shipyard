@@ -1,6 +1,6 @@
 use crate::entity::Key;
-use crate::sparse_array::{Read, Write};
 use crate::not::Not;
+use crate::sparse_array::{Read, Write};
 
 pub trait GetComponent {
     type Out;
