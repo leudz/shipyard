@@ -1,5 +1,6 @@
 use crate::entity::Key;
 use crate::sparse_array::{Read, Write};
+use crate::not::Not;
 
 pub trait GetComponent {
     type Out;
@@ -41,6 +42,94 @@ impl<'a, 'b, T> GetComponent for &'b mut Write<'a, T> {
     type Out = &'b mut T;
     fn get(self, entity: Key) -> Option<Self::Out> {
         self.inner.get_mut(entity.index())
+    }
+}
+
+impl<'a, T> GetComponent for Not<Read<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, 'b, T> GetComponent for &'b Not<Read<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, 'b, T> GetComponent for Not<&'b Read<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, T> GetComponent for Not<Write<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, 'b, T> GetComponent for &'b Not<Write<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, 'b, T> GetComponent for Not<&'b Write<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, 'b, T> GetComponent for &'b mut Not<Write<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
+    }
+}
+
+impl<'a, 'b, T> GetComponent for Not<&'b mut Write<'a, T>> {
+    type Out = ();
+    fn get(self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity.index()) {
+            None
+        } else {
+            Some(())
+        }
     }
 }
 

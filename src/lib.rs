@@ -11,12 +11,14 @@ mod get_storage;
 mod run;
 mod sparse_array;
 mod world;
+mod not;
 
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use get::GetComponent;
 pub use run::Run;
 pub use world::World;
+pub use not::Not;
 
 #[cfg(test)]
 mod test {
@@ -67,5 +69,17 @@ mod test {
         world.new_entity((0usize, 1u32));
         world.new_entity((2usize, 3u32));
         world.run::<(&mut usize, &u32), _>(|(usizes, u32s)| {});
+    }
+    #[test]
+    fn not() {
+        let world = World::new::<(usize, u32)>();
+        let entity1 = world.new_entity((0usize, 1u32));
+        let entity2 = world.new_entity((2usize,));
+        let entity3 = world.new_entity((3u32,));
+        let (usizes, not_u32s) = world.get_storage::<(&usize, &u32)>();
+        let storages = (&usizes, &!not_u32s);
+        assert_eq!(storages.get(entity1), None);
+        assert_eq!(storages.get(entity2), Some((&2usize, ())));
+        assert_eq!(storages.get(entity3), None);
     }
 }
