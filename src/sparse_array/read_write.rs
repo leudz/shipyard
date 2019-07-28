@@ -54,6 +54,17 @@ pub struct Write<'a, T> {
     pub(crate) _outer_borrow: Borrow<'a>,
 }
 
+impl<'a, T> Write<'a, T> {
+    /// Downgrades a `Write` to a `Read` allowing other borrow to occur.
+    pub fn downgrade(origin: Self) -> Read<'a, T> {
+        Read {
+            inner: origin.inner,
+            _inner_borrow: origin._inner_borrow.downgrade(),
+            _outer_borrow: origin._outer_borrow,
+        }
+    }
+}
+
 impl<T> std::ops::Deref for Write<'_, T> {
     type Target = SparseArray<T>;
     fn deref(&self) -> &Self::Target {
