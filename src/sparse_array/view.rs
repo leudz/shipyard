@@ -2,15 +2,17 @@ use crate::entity::Key;
 
 /// Immutable view into a `ComponentStorage`.
 pub struct View<'a, T> {
-    pub(super) sparse: &'a [usize],
-    pub(super) dense: &'a [usize],
-    pub(super) data: &'a [T],
+    pub(crate) sparse: &'a [usize],
+    pub(crate) dense: &'a [usize],
+    pub(crate) data: &'a [T],
 }
 
 impl<T> View<'_, T> {
     /// Returns true if the `entity` has this component.
     fn contains(&self, entity: Key) -> bool {
-        let index = entity.index();
+        self.contains_index(entity.index())
+    }
+    pub(crate) fn contains_index(&self, index: usize) -> bool {
         index < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
             && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
@@ -34,9 +36,9 @@ impl<T> View<'_, T> {
 
 /// Mutable view into a `ComponentStorage`.
 pub struct ViewMut<'a, T> {
-    pub(super) sparse: &'a mut Vec<usize>,
-    pub(super) dense: &'a mut Vec<usize>,
-    pub(super) data: &'a mut Vec<T>,
+    pub(crate) sparse: &'a mut Vec<usize>,
+    pub(crate) dense: &'a mut Vec<usize>,
+    pub(crate) data: &'a mut Vec<T>,
 }
 
 impl<T> ViewMut<'_, T> {
@@ -58,7 +60,9 @@ impl<T> ViewMut<'_, T> {
     }
     /// Returns true if the `entity` has this component.
     fn contains(&self, entity: Key) -> bool {
-        let index = entity.index();
+        self.contains_index(entity.index())
+    }
+    pub(crate) fn contains_index(&self, index: usize) -> bool {
         index < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
             && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
