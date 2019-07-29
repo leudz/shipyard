@@ -11,7 +11,7 @@ pub struct Packed<'a, T: AbstractMut<'a>> {
     _phantom: PhantomData<&'a mut T>,
 }
 
-impl<'a, T: 'static> IntoIterator for View<'a, T> {
+impl<'a, T: 'a> IntoIterator for View<'a, T> {
     type IntoIter = Packed<'a, *const T>;
     type Item = <Self::IntoIter as Iterator>::Item;
     fn into_iter(self) -> Self::IntoIter {
@@ -24,7 +24,7 @@ impl<'a, T: 'static> IntoIterator for View<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoIterator for &'b View<'a, T> {
+impl<'a: 'b, 'b, T: 'a> IntoIterator for &'b View<'a, T> {
     type IntoIter = Packed<'b, *const T>;
     type Item = <Self::IntoIter as Iterator>::Item;
     fn into_iter(self) -> Self::IntoIter {
@@ -37,7 +37,7 @@ impl<'a: 'b, 'b, T: 'static> IntoIterator for &'b View<'a, T> {
     }
 }
 
-impl<'a, T: 'static> IntoIterator for ViewMut<'a, T> {
+impl<'a, T: 'a> IntoIterator for ViewMut<'a, T> {
     type IntoIter = Packed<'a, *mut T>;
     type Item = <Self::IntoIter as Iterator>::Item;
     fn into_iter(self) -> Self::IntoIter {
@@ -50,7 +50,7 @@ impl<'a, T: 'static> IntoIterator for ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoIterator for &'b ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: 'a> IntoIterator for &'b ViewMut<'a, T> {
     type IntoIter = Packed<'b, *const T>;
     type Item = <Self::IntoIter as Iterator>::Item;
     fn into_iter(self) -> Self::IntoIter {
@@ -63,7 +63,7 @@ impl<'a: 'b, 'b, T: 'static> IntoIterator for &'b ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoIterator for &'b mut ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: 'a> IntoIterator for &'b mut ViewMut<'a, T> {
     type IntoIter = Packed<'b, *mut T>;
     type Item = <Self::IntoIter as Iterator>::Item;
     fn into_iter(self) -> Self::IntoIter {
