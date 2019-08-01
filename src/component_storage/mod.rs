@@ -49,7 +49,7 @@ impl AllStorages {
     pub(crate) fn register<T: 'static + Send + Sync>(&mut self) {
         self.0
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| ComponentStorage::new::<T>());
+            .or_insert_with(ComponentStorage::new::<T>);
     }
 }
 

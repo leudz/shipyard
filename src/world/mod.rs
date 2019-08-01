@@ -52,7 +52,7 @@ impl World {
     ) -> Result<T::Storage, error::GetStorage> {
         Ok(self
             .try_all_storages()
-            .map_err(|err| error::GetStorage::AllStoragesBorrow(err))?
+            .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_get_storage::<T>()?)
     }
     /// Same as `try_new_entity` but will `unwrap` any error.
@@ -68,12 +68,12 @@ impl World {
     pub fn try_new_entity<T: WorldNewEntity>(&self, component: T) -> Result<Key, error::NewEntity> {
         let mut entities = self
             .try_entities_mut()
-            .map_err(|err| error::NewEntity::Entities(err))?;
+            .map_err(error::NewEntity::Entities)?;
         let mut storages = self
             .storages
             .try_borrow_mut()
-            .map_err(|err| error::NewEntity::AllStoragesBorrow(err))?;
-        Ok(T::new(component, &mut *storages, &mut *entities))
+            .map_err(error::NewEntity::AllStoragesBorrow)?;
+        Ok(T::new_entitiy(component, &mut *storages, &mut *entities))
     }
     /// Same as `try_entities_mut` but will `unwrap` any error.
     pub fn entities_mut(&self) -> RefMut<Entities> {

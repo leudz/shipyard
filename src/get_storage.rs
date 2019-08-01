@@ -28,7 +28,7 @@ impl<'a, T: 'static> AbstractMut<'a> for &T {
             }
         })?
         .try_into()
-        .map_err(|err| error::GetStorage::StorageBorrow(err))
+        .map_err(error::GetStorage::StorageBorrow)
     }
 }
 
@@ -42,7 +42,7 @@ impl<'a, T: 'static> AbstractMut<'a> for &mut T {
             }
         })?
         .try_into()
-        .map_err(|err| error::GetStorage::StorageBorrow(err))
+        .map_err(error::GetStorage::StorageBorrow)
     }
 }
 

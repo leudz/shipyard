@@ -15,7 +15,7 @@ impl Key {
     const VERSION_LEN: usize = 16;
     #[cfg(not(target_pointer_width = "64"))]
     const VERSION_LEN: usize = 12;
-    
+
     const INDEX_MASK: usize = !0 >> Self::VERSION_LEN;
     const VERSION_MASK: usize = !Self::INDEX_MASK;
 
@@ -41,7 +41,7 @@ impl Key {
     fn bump_version(&mut self) -> Result<(), ()> {
         if self.0 < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = self.index()
-                | ((self.version() + 1) << 0usize.count_zeros() as usize - Self::VERSION_LEN);
+                | ((self.version() + 1) << (std::mem::size_of::<usize>() * 8 - Self::VERSION_LEN));
             Ok(())
         } else {
             Err(())
@@ -103,7 +103,12 @@ impl Entities {
     /// Delete an entity, returns true if the entity was alive
     pub(crate) fn delete(&mut self, key: Key) -> bool {
         if self.is_alive(key) {
-            if let Ok(_) = unsafe { self.data.get_unchecked_mut(key.index()).bump_version() } {
+            if unsafe {
+                self.data
+                    .get_unchecked_mut(key.index())
+                    .bump_version()
+                    .is_ok()
+            } {
                 if let Some((ref mut new, _)) = self.list {
                     unsafe { self.data.get_unchecked_mut(*new).set_index(key.index()) };
                     *new = key.index();
