@@ -18,6 +18,7 @@ pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use entity::Entities;
 pub use get::GetComponent;
+pub use iterators::IntoIter;
 pub use not::Not;
 pub use run::Run;
 pub use world::World;
@@ -71,16 +72,51 @@ mod test {
         world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
             entities.add((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add((&mut usizes, &mut u32s), (2usize, 3u32));
+
             // possible to borrow twice as immutable
             let mut iter1 = (&usizes).into_iter();
             let _iter2 = (&usizes).into_iter();
             assert_eq!(iter1.next(), Some(&0));
+
             // impossible to borrow twice as mutable
+            // if switched, the next two lines should trigger an error
             let _iter = (&mut usizes).into_iter();
             let mut iter = (&mut usizes).into_iter();
             assert_eq!(iter.next(), Some(&mut 0));
             assert_eq!(iter.next(), Some(&mut 2));
             assert_eq!(iter.next(), None);
+
+            // possible to borrow twice as immutable
+            let mut iter = (&usizes, &u32s).into_iter();
+            let _iter = (&usizes, &u32s).into_iter();
+            assert_eq!(iter.next(), Some((&0, &1)));
+            assert_eq!(iter.next(), Some((&2, &3)));
+            assert_eq!(iter.next(), None);
+
+            // impossible to borrow twice as mutable
+            // if switched, the next two lines should trigger an error
+            let _iter = (&mut usizes, &u32s).into_iter();
+            let mut iter = (&mut usizes, &u32s).into_iter();
+            assert_eq!(iter.next(), Some((&mut 0, &1)));
+            assert_eq!(iter.next(), Some((&mut 2, &3)));
+            assert_eq!(iter.next(), None);
+        });
+    }
+    #[test]
+    fn iterators() {
+        let world = World::new::<(usize, u32)>();
+        world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+            entities.add((&mut usizes, &mut u32s), (0usize, 1u32));
+            entities.add((&mut usizes,), (2usize,));
+
+            let mut iter1 = (&usizes).into_iter();
+            assert_eq!(iter1.next(), Some(&0));
+            assert_eq!(iter1.next(), Some(&2));
+            assert_eq!(iter1.next(), None);
+
+            let mut iter1 = (&usizes, &u32s).into_iter();
+            assert_eq!(iter1.next(), Some((&0, &1)));
+            assert_eq!(iter1.next(), None);
         });
     }
     #[test]
