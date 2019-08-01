@@ -11,7 +11,11 @@ pub struct Key(usize);
 
 impl Key {
     // Number of bits used by the version
+    #[cfg(target_pointer_width = "64")]
     const VERSION_LEN: usize = 16;
+    #[cfg(not(target_pointer_width = "64"))]
+    const VERSION_LEN: usize = 12;
+    
     const INDEX_MASK: usize = !0 >> Self::VERSION_LEN;
     const VERSION_MASK: usize = !Self::INDEX_MASK;
 
