@@ -6,13 +6,13 @@ use std::any::TypeId;
 // Store components in a new entity
 // If no storage exists for a component it will be created
 pub trait WorldNewEntity {
-    fn new(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key;
+    fn new_entitiy(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key;
 }
 
 macro_rules! impl_new_entity {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: 'static + Send + Sync),+> WorldNewEntity for ($($type,)+) {
-            fn new(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key {
+            fn new_entitiy(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key {
                 let key = entities.generate();
 
                 $({
