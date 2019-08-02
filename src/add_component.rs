@@ -1,5 +1,5 @@
 use crate::entity::Key;
-use crate::sparse_array::{SparseArray, Write, ViewMut};
+use crate::sparse_array::{SparseArray, ViewMut, Write};
 
 // No new storage will be created
 pub trait AddComponent {
