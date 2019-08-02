@@ -12,7 +12,7 @@ impl<T: IntoAbstract> IntoIter for T {
     type IntoIter = Packed<Self>;
     fn into_iter(self) -> Self::IntoIter {
         Packed {
-            end: self.indices().1,
+            end: self.indices().1.unwrap_or(0),
             data: self.into_abstract(),
             current: 0,
         }

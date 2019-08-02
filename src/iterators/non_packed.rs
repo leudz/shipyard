@@ -18,13 +18,21 @@ macro_rules! impl_non_packed {
                 let mut tuple: (*const usize, usize) = (&0, std::usize::MAX);
                     $({
                         let new_tuple = self.$index.indices();
-                        if new_tuple.1 < tuple.1 {
-                            smallest_index = i;
-                            tuple = new_tuple;
+                        if let Some(new_len) = new_tuple.1 {
+                            if new_len < tuple.1 {
+                                smallest_index = i;
+                                tuple = (new_tuple.0, new_len);
+                            }
                         }
                         i += 1;
                     })+
                 let _ = i;
+
+                // if the user is trying to iterate over Not containers only
+                if tuple.1 == std::usize::MAX {
+                    tuple.1 = 0;
+                }
+
                 $name {
                     data: ($(self.$index.into_abstract(),)+),
                     indices: tuple.0,

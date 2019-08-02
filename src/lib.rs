@@ -110,14 +110,36 @@ mod test {
             (&mut u32s,).add_component((1u32,), entity1);
             entities.add((&mut usizes,), (2usize,));
 
-            let mut iter1 = (&usizes).into_iter();
-            assert_eq!(iter1.next(), Some(&0));
-            assert_eq!(iter1.next(), Some(&2));
-            assert_eq!(iter1.next(), None);
+            let mut iter = (&usizes).into_iter();
+            assert_eq!(iter.next(), Some(&0));
+            assert_eq!(iter.next(), Some(&2));
+            assert_eq!(iter.next(), None);
 
-            let mut iter1 = (&usizes, &u32s).into_iter();
-            assert_eq!(iter1.next(), Some((&0, &1)));
-            assert_eq!(iter1.next(), None);
+            let mut iter = (&usizes, &u32s).into_iter();
+            assert_eq!(iter.next(), Some((&0, &1)));
+            assert_eq!(iter.next(), None);
+        });
+    }
+    #[test]
+    fn not_iterators() {
+        let world = World::new::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize,));
+        world.run::<(Not<&usize>, &u32), _>(|(not_usizes, u32s)| {
+            let mut iter = (&not_usizes).into_iter();
+            assert_eq!(iter.next(), None);
+
+            let mut iter = (&not_usizes, !&u32s).into_iter();
+            assert_eq!(iter.next(), None);
+
+            let mut iter = (&not_usizes, &u32s).into_iter();
+            assert_eq!(iter.next(), None);
+
+            let usizes = not_usizes.into_inner();
+
+            let mut iter = (&usizes, !&u32s).into_iter();
+            assert_eq!(iter.next(), Some((&2, ())));
+            assert_eq!(iter.next(), None);
         });
     }
     #[test]
