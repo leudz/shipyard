@@ -106,7 +106,8 @@ mod test {
     fn iterators() {
         let world = World::new::<(usize, u32)>();
         world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
-            entities.add((&mut usizes, &mut u32s), (0usize, 1u32));
+            let entity1 = entities.add((&mut usizes,), (0usize,));
+            (&mut u32s,).add_component((1u32,), entity1);
             entities.add((&mut usizes,), (2usize,));
 
             let mut iter1 = (&usizes).into_iter();

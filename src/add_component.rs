@@ -1,5 +1,5 @@
 use crate::entity::Key;
-use crate::sparse_array::{SparseArray, Write};
+use crate::sparse_array::{SparseArray, Write, ViewMut};
 
 // No new storage will be created
 pub trait AddComponent {
@@ -15,6 +15,13 @@ impl<T> AddComponent for &mut SparseArray<T> {
     type Component = T;
     fn add_component(self, component: Self::Component, key: Key) {
         self.insert(key.index(), component);
+    }
+}
+
+impl<T> AddComponent for &mut ViewMut<'_, T> {
+    type Component = T;
+    fn add_component(self, component: Self::Component, key: Key) {
+        self.insert(key, component);
     }
 }
 
@@ -41,6 +48,14 @@ macro_rules! impl_add_component {
             fn add_component(self, component: Self::Component, key: Key) {
                 $(
                     <&mut SparseArray<$type>>::add_component(&mut *self.$index, component.$index, key);
+                )+
+            }
+        }
+        impl<$($type),+> AddComponent for ($(&mut ViewMut<'_, $type>,)+) {
+            type Component = ($($type,)+);
+            fn add_component(self, component: Self::Component, key: Key) {
+                $(
+                    <&mut ViewMut<$type>>::add_component(&mut *self.$index, component.$index, key);
                 )+
             }
         }
