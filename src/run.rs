@@ -1,6 +1,7 @@
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::component_storage::AllStorages;
 use crate::entity::{Entities, EntityViewMut};
+use crate::not::Not;
 use crate::sparse_array::{View, ViewMut};
 use std::any::TypeId;
 
@@ -80,6 +81,28 @@ impl<'a, T: 'static> AbstractStorage<'a> for &mut T {
             array.view_mut(),
             Either::Double([inner_borrow, outer_borrow]),
         )
+    }
+}
+
+impl<'a, T: 'static> AbstractStorage<'a> for Not<&T> {
+    type AbstractStorage = Not<View<'a, T>>;
+    fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        storages: &'a AtomicRefCell<AllStorages>,
+    ) -> (Self::AbstractStorage, Either<Borrow<'a>, [Borrow<'a>; 2]>) {
+        let (view, borrow) = <&T>::borrow(entities, storages);
+        (Not(view), borrow)
+    }
+}
+
+impl<'a, T: 'static> AbstractStorage<'a> for Not<&mut T> {
+    type AbstractStorage = Not<ViewMut<'a, T>>;
+    fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        storages: &'a AtomicRefCell<AllStorages>,
+    ) -> (Self::AbstractStorage, Either<Borrow<'a>, [Borrow<'a>; 2]>) {
+        let (view, borrow) = <&mut T>::borrow(entities, storages);
+        (Not(view), borrow)
     }
 }
 
