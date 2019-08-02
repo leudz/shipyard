@@ -1,25 +1,27 @@
+mod pack_info;
 mod read_write;
 mod view;
 mod view_add_entity;
 
 use crate::entity::Key;
+use pack_info::PackInfo;
 pub(crate) use read_write::{Read, Write};
 pub(crate) use view::{View, ViewMut, ViewSemiMut};
 pub(crate) use view_add_entity::ViewAddEntity;
 
-/* A sparse array is a data structure with 2 vectors: one sparse, the other dense.
- * Only usize can be added. On insertion, the number is pushed into the dense vector
- * and sparse[number] is set to dense.len() - 1.
- * For all number present in the sparse array, dense[sparse[number]] == number.
- * For all other values if set sparse[number] will have any value left there
- * and if set dense[sparse[number]] != number.
- * We can't be limited to store solely integers, this is why there is a third vector.
- * It mimics the dense vector in regard to insertion/deletion.
-*/
+// A sparse array is a data structure with 2 vectors: one sparse, the other dense.
+// Only usize can be added. On insertion, the number is pushed into the dense vector
+// and sparse[number] is set to dense.len() - 1.
+// For all number present in the sparse array, dense[sparse[number]] == number.
+// For all other values if set sparse[number] will have any value left there
+// and if set dense[sparse[number]] != number.
+// We can't be limited to store solely integers, this is why there is a third vector.
+// It mimics the dense vector in regard to insertion/deletion.
 pub struct SparseArray<T> {
     sparse: Vec<usize>,
     dense: Vec<usize>,
     data: Vec<T>,
+    pack_info: PackInfo,
 }
 
 impl<T> Default for SparseArray<T> {
@@ -28,6 +30,7 @@ impl<T> Default for SparseArray<T> {
             sparse: Vec::new(),
             dense: Vec::new(),
             data: Vec::new(),
+            pack_info: Default::default(),
         }
     }
 }
@@ -105,6 +108,24 @@ impl<T> SparseArray<T> {
             sparse: &mut self.sparse,
             dense: &mut self.dense,
             data: &mut self.data,
+        }
+    }
+    //          ▼ old end of pack
+    //              ▼ new end of pack
+    // [_ _ _ _ | _ | _ _ _ _ _]
+    //            ▲       ▼
+    //            ---------
+    //              pack
+    pub(crate) fn pack(&mut self, index: usize) {
+        if self.contains(index) {
+            let dense_index = self.sparse[index];
+            if dense_index >= self.pack_info.owned_len {
+                self.sparse
+                    .swap(self.dense[self.pack_info.owned_len], index);
+                self.dense.swap(self.pack_info.owned_len, dense_index);
+                self.data.swap(self.pack_info.owned_len, dense_index);
+                self.pack_info.owned_len += 1;
+            }
         }
     }
 }
