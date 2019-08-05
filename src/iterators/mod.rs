@@ -201,7 +201,7 @@ impl<'a, T> AbstractMut for &View<'a, T> {
 impl<'a, T> AbstractMut for ViewSemiMut<'a, T> {
     type Out = &'a mut T;
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.contains_index(index) {
+        if self.contains(index) {
             Some(
                 &mut *(self
                     .data
@@ -276,7 +276,7 @@ impl<'a, T> AbstractMut for Not<&View<'a, T>> {
 impl<'a, T> AbstractMut for Not<ViewSemiMut<'a, T>> {
     type Out = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.0.contains_index(index) {
+        if self.0.contains(index) {
             None
         } else {
             Some(())
