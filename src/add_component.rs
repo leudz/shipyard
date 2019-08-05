@@ -1,75 +1,208 @@
 use crate::entity::Key;
+use crate::error;
 use crate::sparse_array::{SparseArray, ViewMut, Write};
+use std::any::TypeId;
 
 // No new storage will be created
-pub trait AddComponent {
-    type Component;
+pub trait AddComponent<T> {
     /// Stores `component` in `entity`, if the entity had already a component
     /// of this type, it will be replaced.
     ///
     /// Multiple components can be added at the same time using a tuple.
-    fn add_component(self, component: Self::Component, entity: Key);
+    fn try_add_component(self, component: T, entity: Key) -> Result<(), error::AddComponent>;
+    /// Same as try_add_component but will unwrap errors.
+    fn add_component(self, component: T, entity: Key);
 }
 
-impl<T> AddComponent for &mut SparseArray<T> {
-    type Component = T;
-    fn add_component(self, component: Self::Component, key: Key) {
-        self.insert(key.index(), component);
+impl<T: 'static> AddComponent<T> for &mut SparseArray<T> {
+    fn try_add_component(self, component: T, entitiy: Key) -> Result<(), error::AddComponent> {
+        if !self.is_packed_owned() {
+            self.insert(entitiy.index(), component);
+            Ok(())
+        } else {
+            Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
+        }
+    }
+    fn add_component(self, component: T, entity: Key) {
+        self.try_add_component(component, entity).unwrap()
     }
 }
 
-impl<T> AddComponent for &mut ViewMut<'_, T> {
-    type Component = T;
-    fn add_component(self, component: Self::Component, key: Key) {
-        self.insert(key, component);
+impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
+    fn try_add_component(self, component: T, entitiy: Key) -> Result<(), error::AddComponent> {
+        if !self.is_packed_owned() {
+            self.insert(entitiy, component);
+            Ok(())
+        } else {
+            Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
+        }
+    }
+    fn add_component(self, component: T, entity: Key) {
+        self.try_add_component(component, entity).unwrap()
     }
 }
 
-macro_rules! impl_add_component {
-    ($(($type: ident, $index: tt))+) => {
-        impl<$($type),+> AddComponent for ($(&mut SparseArray<$type>,)+) {
-            type Component = ($($type,)+);
-            fn add_component(self, component: Self::Component, key: Key) {
-                $(
-                    AddComponent::add_component(self.$index, component.$index, key);
-                )+
+macro_rules! impl_try_add_component {
+    // add is short for additional
+    ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
+        impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut SparseArray<$type>,)+ $(&mut SparseArray<$add_type>,)*) {
+            fn try_add_component(self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
+                if $(self.$index.is_packed_owned())||+ {
+                    let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
+                    type_ids.sort_unstable();
+                    // checks if the caller has passed all necessary storages
+                    let mut storage_type_ids = type_ids.clone();
+                    storage_type_ids.extend_from_slice(&[$(TypeId::of::<$add_type>()),*]);
+                    storage_type_ids.sort_unstable();
+                    $(
+                        if self.$index.is_packed_owned() && self.$index.should_pack_owned(&storage_type_ids).is_empty() {
+                            return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()));
+                        }
+                    )+
+                    // add the component to the storage
+                    $(
+                        self.$index.insert(entitiy.index(), component.$index);
+                    )+
+
+                    // add additional types if the entity has this component
+                    $(
+                        if self.$add_index.contains(entitiy.index()) {
+                            type_ids.push(TypeId::of::<$add_type>());
+                        }
+                    )*
+                    type_ids.sort_unstable();
+
+                    // keeps track of types to pack
+                    let mut should_pack = Vec::with_capacity(type_ids.len());
+                    $(
+                        let type_id = TypeId::of::<$type>();
+
+                        if should_pack.contains(&type_id) {
+                            self.$index.pack(entitiy.index());
+                        } else {
+                            let pack_types = self.$index.should_pack_owned(&type_ids);
+
+                            should_pack.extend(pack_types.iter().filter(|&&x| x != type_id));
+                            if !pack_types.is_empty() {
+                                self.$index.pack(entitiy.index());
+                            }
+                        }
+                    )+
+
+                    $(
+                        if should_pack.contains(&TypeId::of::<$add_type>()) {
+                            self.$add_index.pack(entitiy.index());
+                        }
+                    )*
+                } else {
+                    $(
+                        self.$index.insert(entitiy.index(), component.$index);
+                    )+
+                }
+
+                Ok(())
+            }
+            fn add_component(self, component: ($($type,)+), entity: Key) {
+                self.try_add_component(component, entity).unwrap()
             }
         }
-        impl<$($type),+> AddComponent for ($(Write<'_, $type>,)+) {
-            type Component = ($($type,)+);
-            fn add_component(mut self, component: Self::Component, key: Key) {
-                $(
-                    <&mut SparseArray<$type>>::add_component(&mut *self.$index, component.$index, key);
-                )+
+
+        impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(Write<'_, $type>,)+ $(Write<'_, $add_type>,)*) {
+            fn try_add_component(mut self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
+                ($(&mut *self.$index,)+ $(&mut *self.$add_index,)*).try_add_component(component, entitiy)
+            }
+            fn add_component(self, component: ($($type,)+), entity: Key) {
+                self.try_add_component(component, entity).unwrap()
             }
         }
-        impl<$($type),+> AddComponent for ($(&mut Write<'_, $type>,)+) {
-            type Component = ($($type,)+);
-            fn add_component(self, component: Self::Component, key: Key) {
-                $(
-                    <&mut SparseArray<$type>>::add_component(&mut *self.$index, component.$index, key);
-                )+
+
+        impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut Write<'_, $type>,)+ $(&mut Write<'_, $add_type>,)*) {
+            fn try_add_component(self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
+                ($(&mut **self.$index,)+ $(&mut **self.$add_index,)*).try_add_component(component, entitiy)
+            }
+            fn add_component(self, component: ($($type,)+), entity: Key) {
+                self.try_add_component(component, entity).unwrap()
             }
         }
-        impl<$($type),+> AddComponent for ($(&mut ViewMut<'_, $type>,)+) {
-            type Component = ($($type,)+);
-            fn add_component(self, component: Self::Component, key: Key) {
-                $(
-                    <&mut ViewMut<$type>>::add_component(&mut *self.$index, component.$index, key);
-                )+
+
+        impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
+            fn try_add_component(self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
+                if $(self.$index.is_packed_owned())||+ {
+                    let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
+                    type_ids.sort_unstable();
+                    // checks if the caller has passed all necessary storages
+                    let mut storage_type_ids = type_ids.clone();
+                    storage_type_ids.extend_from_slice(&[$(TypeId::of::<$add_type>()),*]);
+                    storage_type_ids.sort_unstable();
+                    $(
+                        if self.$index.is_packed_owned() && self.$index.should_pack_owned(&storage_type_ids).is_empty() {
+                            return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()));
+                        }
+                    )+
+                    // add the component to the storage
+                    $(
+                        self.$index.insert(entitiy, component.$index);
+                    )+
+
+                    // add additional types if the entity has this component
+                    $(
+                        if self.$add_index.contains_index(entitiy.index()) {
+                            type_ids.push(TypeId::of::<$add_type>());
+                        }
+                    )*
+                    type_ids.sort_unstable();
+
+                    // keeps track of types to pack
+                    let mut should_pack = Vec::with_capacity(type_ids.len());
+                    $(
+                        let type_id = TypeId::of::<$type>();
+
+                        if should_pack.contains(&type_id) {
+                            self.$index.pack(entitiy.index());
+                        } else {
+                            let pack_types = self.$index.should_pack_owned(&type_ids);
+
+                            should_pack.extend(pack_types.iter().filter(|&&x| x != type_id));
+                            if !pack_types.is_empty() {
+                                self.$index.pack(entitiy.index());
+                            }
+                        }
+                    )+
+
+                    $(
+                        if should_pack.contains(&TypeId::of::<$add_type>()) {
+                            self.$add_index.pack(entitiy.index());
+                        }
+                    )*
+
+                    Ok(())
+                } else {
+                    $(
+                        self.$index.insert(entitiy, component.$index);
+                    )+
+                    Ok(())
+                }
+            }
+            fn add_component(self, component: ($($type,)+), entity: Key) {
+                self.try_add_component(component, entity).unwrap()
             }
         }
     }
 }
 
-macro_rules! add_component {
-    ($(($left_type: ident, $left_index: tt))*;($type1: ident, $index1: tt) $(($type: ident, $index: tt))*) => {
-        impl_add_component![$(($left_type, $left_index))*];
-        add_component![$(($left_type, $left_index))* ($type1, $index1); $(($type, $index))*];
+macro_rules! try_add_component {
+    (($type1: ident, $index1: tt) $(($type: ident, $index: tt))*;; ($queue_type1: ident, $queue_index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_try_add_component![($type1, $index1) $(($type, $index))*;];
+        try_add_component![($type1, $index1); $(($type, $index))* ($queue_type1, $queue_index1); $(($queue_type, $queue_index))*];
     };
-    ($(($type: ident, $index: tt))*;) => {
-        impl_add_component![$(($type, $index))*];
+    // add is short for additional
+    ($(($type: ident, $index: tt))+; ($add_type1: ident, $add_index1: tt) $(($add_type: ident, $add_index: tt))*; $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_try_add_component![$(($type, $index))+; ($add_type1, $add_index1) $(($add_type, $add_index))*];
+        try_add_component![$(($type, $index))+ ($add_type1, $add_index1); $(($add_type, $add_index))*; $(($queue_type, $queue_index))*];
+    };
+    ($(($type: ident, $index: tt))+;;) => {
+        impl_try_add_component![$(($type, $index))+;];
     }
 }
 
-add_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];
+try_add_component![(A, 0);; (B, 1) (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];

@@ -1,4 +1,5 @@
 mod new_entity;
+mod pack;
 mod register;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
@@ -6,8 +7,10 @@ use crate::component_storage::AllStorages;
 use crate::entity::{Entities, Key};
 use crate::error;
 use crate::get_storage::GetStorage;
+use crate::pack::OwnedPack;
 use crate::run::Run;
 use new_entity::WorldNewEntity;
+use pack::WorldOwnedPack;
 use register::Register;
 
 /// `World` holds all components and keeps track of entities and what they own.
@@ -110,5 +113,22 @@ impl World {
     /// In this case use (T,).
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
         T::run(&self.entities, &self.storages, f);
+    }
+    /// Pack multiple storages, it can speed up iteration at the cost of insertion/removal.
+    pub fn try_pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self) -> Result<(), error::WorldPack>
+    where
+        <T as WorldOwnedPack<'a>>::Storage: GetStorage<'a>,
+        <<T as WorldOwnedPack<'a>>::Storage as GetStorage<'a>>::Storage: OwnedPack,
+    {
+        self.try_get_storage::<T::Storage>()?.try_pack_owned()?;
+        Ok(())
+    }
+    /// Same as `try_pack_owned` but will unwrap in case of error.
+    pub fn pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self)
+    where
+        <T as WorldOwnedPack<'a>>::Storage: GetStorage<'a>,
+        <<T as WorldOwnedPack<'a>>::Storage as GetStorage<'a>>::Storage: OwnedPack,
+    {
+        self.try_pack_owned::<T>().unwrap()
     }
 }

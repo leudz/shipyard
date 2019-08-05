@@ -10,6 +10,7 @@ mod get;
 mod get_storage;
 mod iterators;
 mod not;
+mod pack;
 mod run;
 mod sparse_array;
 mod world;
@@ -20,6 +21,7 @@ pub use entity::Entities;
 pub use get::GetComponent;
 pub use iterators::IntoIter;
 pub use not::Not;
+pub use pack::OwnedPack;
 pub use run::Run;
 pub use world::World;
 
@@ -60,9 +62,9 @@ mod test {
         let mut entities = world.entities_mut();
         let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
         let entity1 = ().add_entity((), &mut entities);
-        (&mut *usizes, &mut *u32s).add_component((0usize, 1u32), entity1);
-        (&mut usizes, &mut u32s).add_component((2usize, 3u32), entity1);
-        (usizes, u32s).add_component((4usize, 5u32), entity1);
+        (&mut *usizes, &mut *u32s).add_component((0, 1), entity1);
+        (&mut usizes, &mut u32s).add_component((2, 3), entity1);
+        (usizes, u32s).add_component((4, 5), entity1);
         let storages = world.get_storage::<(&usize, &u32)>();
         assert_eq!(storages.get(entity1).unwrap(), (&4, &5));
     }
@@ -153,5 +155,32 @@ mod test {
         assert_eq!(storages.get(entity1), None);
         assert_eq!(storages.get(entity2), Some((&2usize, ())));
         assert_eq!(storages.get(entity3), None);
+    }
+    #[test]
+    fn pack() {
+        let world = World::new::<(usize, u32)>();
+        let entity = world.new_entity(());
+        let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
+        (&mut usizes, &mut u32s).pack_owned();
+
+        (&mut usizes, &mut u32s).add_component((0, 1), entity);
+        (&mut usizes, &mut u32s).add_component((2,), entity);
+    }
+    #[test]
+    #[should_panic(
+        expected = "called `Result::unwrap()` on an `Err` value: MissingPackStorage(TypeId { t: 8766594652559642870 })"
+    )]
+    fn pack_missing_storage() {
+        assert_eq!(
+            format!("{:?}", std::any::TypeId::of::<usize>()),
+            "TypeId { t: 8766594652559642870 }"
+        );
+
+        let world = World::new::<(usize, u32)>();
+        let entity = world.new_entity(());
+        world.pack_owned::<(usize, u32)>();
+        let (mut usizes,) = world.get_storage::<(&mut usize,)>();
+
+        (&mut usizes,).add_component((0,), entity);
     }
 }

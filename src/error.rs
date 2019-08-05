@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 /// AtomicRefCell's borrow error.
 /// Unique means the BorrowState was mutably borrowed when an illegal borrow occured.
 /// Shared means the BorrowState was immutably borrowed when an illegal borrow occured.
@@ -25,4 +27,37 @@ pub enum GetStorage {
 pub enum NewEntity {
     AllStoragesBorrow(Borrow),
     Entities(Borrow),
+}
+
+/// Trying to pack a storage twice will result in this error.
+#[derive(Debug)]
+pub enum Pack {
+    // `TypeId` of the problematic storage
+    AlreadyPacked(TypeId),
+}
+
+/// If a storage is packed_owned all storages packed with it have to be
+/// passed in the add_component call even if no components are added.
+#[derive(Debug)]
+pub enum AddComponent {
+    // `TypeId` of the storage requirering more storages
+    MissingPackStorage(TypeId),
+}
+
+#[derive(Debug)]
+pub enum WorldPack {
+    GetStorage(GetStorage),
+    Pack(Pack),
+}
+
+impl From<GetStorage> for WorldPack {
+    fn from(get_storage: GetStorage) -> Self {
+        WorldPack::GetStorage(get_storage)
+    }
+}
+
+impl From<Pack> for WorldPack {
+    fn from(pack: Pack) -> Self {
+        WorldPack::Pack(pack)
+    }
 }

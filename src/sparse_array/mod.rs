@@ -6,6 +6,8 @@ mod view_add_entity;
 use crate::entity::Key;
 use pack_info::PackInfo;
 pub(crate) use read_write::{Read, Write};
+use std::any::TypeId;
+use std::sync::Arc;
 pub(crate) use view::{View, ViewMut, ViewSemiMut};
 pub(crate) use view_add_entity::ViewAddEntity;
 
@@ -101,6 +103,7 @@ impl<T> SparseArray<T> {
             sparse: &self.sparse,
             dense: &self.dense,
             data: &self.data,
+            pack_info: &self.pack_info,
         }
     }
     pub(crate) fn view_mut(&mut self) -> ViewMut<T> {
@@ -108,6 +111,7 @@ impl<T> SparseArray<T> {
             sparse: &mut self.sparse,
             dense: &mut self.dense,
             data: &mut self.data,
+            pack_info: &mut self.pack_info,
         }
     }
     //          ▼ old end of pack
@@ -126,6 +130,42 @@ impl<T> SparseArray<T> {
                 self.data.swap(self.pack_info.owned_len, dense_index);
                 self.pack_info.owned_len += 1;
             }
+        }
+    }
+    pub(crate) fn is_packed_owned(&self) -> bool {
+        !self.pack_info.owned_type.is_empty()
+    }
+    pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
+        &self.pack_info.owned_type
+    }
+    pub(crate) fn clone_indices(&self) -> Vec<usize> {
+        self.dense.clone()
+    }
+    pub(crate) fn pack_with(&mut self, types: Arc<[TypeId]>) {
+        self.pack_info.owned_type = types;
+    }
+    /// Check if `slice` has all the necessary types to be packed.
+    /// Assumes `slice` is sorted and don't have any duplicate.
+    pub(crate) fn should_pack_owned(&self, slice: &[TypeId]) -> &[TypeId] {
+        let pack_types = self.pack_types_owned();
+        let mut i = 0;
+        let mut j = 0;
+
+        while i < pack_types.len() && j < slice.len() {
+            if pack_types[i] == slice[j] {
+                i += 1;
+                j += 1;
+            } else if pack_types[i] > slice[j] {
+                j += 1;
+            } else {
+                return &[];
+            }
+        }
+
+        if i == pack_types.len() && j == slice.len() {
+            pack_types
+        } else {
+            &[]
         }
     }
 }
@@ -194,5 +234,40 @@ mod test {
         assert_eq!(array.get(5), None);
         assert_eq!(array.get(10), None);
         assert_eq!(array.len(), 0);
+    }
+    #[test]
+    fn check_types_for_pack_owned() {
+        let mut pack_types = vec![
+            TypeId::of::<u32>(),
+            TypeId::of::<usize>(),
+            TypeId::of::<u8>(),
+        ];
+        pack_types.sort_unstable();
+        let mut sparse_array = SparseArray::<u32>::default();
+        sparse_array.pack_with(pack_types.into_boxed_slice().into());
+
+        let mut slice = [
+            TypeId::of::<u32>(),
+            TypeId::of::<usize>(),
+            TypeId::of::<u8>(),
+        ];
+        slice.sort_unstable();
+        assert!(!sparse_array.should_pack_owned(&slice).is_empty());
+
+        let mut pack_types = vec![TypeId::of::<usize>(), TypeId::of::<u8>()];
+        pack_types.sort_unstable();
+        sparse_array.pack_with(pack_types.into_boxed_slice().into());
+        assert!(!sparse_array.should_pack_owned(&slice).is_empty());
+
+        let mut slice = [TypeId::of::<u32>(), TypeId::of::<u8>()];
+        slice.sort_unstable();
+        let mut pack_types = vec![
+            TypeId::of::<u32>(),
+            TypeId::of::<usize>(),
+            TypeId::of::<u8>(),
+        ];
+        pack_types.sort_unstable();
+        sparse_array.pack_with(pack_types.into_boxed_slice().into());
+        assert!(sparse_array.should_pack_owned(&slice).is_empty());
     }
 }
