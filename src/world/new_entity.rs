@@ -9,6 +9,12 @@ pub trait WorldNewEntity {
     fn new_entitiy(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key;
 }
 
+impl WorldNewEntity for () {
+    fn new_entitiy(self, _: &mut AllStorages, entities: &mut Entities) -> Key {
+        entities.generate()
+    }
+}
+
 macro_rules! impl_new_entity {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: 'static + Send + Sync),+> WorldNewEntity for ($($type,)+) {
