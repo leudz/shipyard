@@ -22,7 +22,7 @@ impl<T: 'static + Send + Sync> WorldNewEntity for (T,) {
         all_storages
             .0
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| ComponentStorage::new::<T>())
+            .or_insert_with(ComponentStorage::new::<T>)
             .array_mut()
             .unwrap()
             .insert(self.0, key.index());

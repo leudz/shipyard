@@ -12,6 +12,7 @@ pub trait OwnedPack {
 
 macro_rules! impl_owned_pack {
     ($(($type: ident, $index: tt))+) => {
+        #[allow(clippy::useless_let_if_seq)]
         impl<$($type: 'static),+> OwnedPack for ($(&mut SparseArray<$type>,)+) {
             fn try_pack_owned(self) -> Result<(), error::Pack> {
                 $(
@@ -39,8 +40,8 @@ macro_rules! impl_owned_pack {
                     }
                     i += 1;
                 )+
-                drop(smallest);
-                drop(i);
+                let _ = smallest;
+                let _ = i;
 
                 let mut indices = vec![];
 
