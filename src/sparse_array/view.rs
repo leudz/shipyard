@@ -35,6 +35,18 @@ impl<T> View<'_, T> {
     pub fn len(&self) -> usize {
         self.dense.len()
     }
+    /// Returns a slice of the types packed with this one.
+    pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
+        &self.pack_info.owned_type
+    }
+    /// Returns true if is packed with any other type.
+    pub(crate) fn is_packed_owned(&self) -> bool {
+        !self.pack_info.owned_type.is_empty()
+    }
+    /// Returns the length of the packed area within the data array.
+    pub(crate) fn pack_len(&self) -> usize {
+        self.pack_info.owned_len
+    }
 }
 
 /// Mutable view into a `ComponentStorage`.
@@ -150,9 +162,11 @@ impl<'a, T> ViewMut<'a, T> {
             }
         }
     }
+    /// Returns a slice of the types packed with this one.
     pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
         &self.pack_info.owned_type
     }
+    /// Returns true if is packed with any other type.
     pub(crate) fn is_packed_owned(&self) -> bool {
         !self.pack_info.owned_type.is_empty()
     }
@@ -179,6 +193,10 @@ impl<'a, T> ViewMut<'a, T> {
         } else {
             &[]
         }
+    }
+    /// Returns the length of the packed area within the data array.
+    pub(crate) fn pack_len(&self) -> usize {
+        self.pack_info.owned_len
     }
 }
 
