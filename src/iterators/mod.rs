@@ -9,7 +9,7 @@ use std::any::TypeId;
 // when using std::iter::IntoIterator
 pub trait IntoIter {
     type IntoIter;
-    fn into_iter(self) -> Self::IntoIter;
+    fn iter(self) -> Self::IntoIter;
 }
 
 // Allows to make ViewMut's sparse and dense fields immutable
@@ -274,6 +274,7 @@ impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
 // mutable and immutable views with the same iterator
 pub trait AbstractMut {
     type Out;
+    type Slice;
     // # Safety
     // The lifetime has to be valid
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out>;
@@ -283,10 +284,12 @@ pub trait AbstractMut {
     // # Safety
     // The lifetime has to be valid
     unsafe fn get_data(&mut self, index: usize) -> Self::Out;
+    unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
 }
 
 impl<'a, T> AbstractMut for View<'a, T> {
     type Out = &'a T;
+    type Slice = &'a [T];
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.contains_index(index) {
             Some(self.data.get_unchecked(*self.sparse.get_unchecked(index)))
@@ -299,11 +302,18 @@ impl<'a, T> AbstractMut for View<'a, T> {
     }
     unsafe fn get_data(&mut self, count: usize) -> Self::Out {
         &*self.data.as_ptr().add(count)
+    }
+    unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
+        &std::slice::from_raw_parts(
+            self.data.as_ptr().add(indices.start),
+            indices.end - indices.start,
+        )
     }
 }
 
 impl<'a, T> AbstractMut for &View<'a, T> {
     type Out = &'a T;
+    type Slice = &'a [T];
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.contains_index(index) {
             Some(self.data.get_unchecked(*self.sparse.get_unchecked(index)))
@@ -317,10 +327,17 @@ impl<'a, T> AbstractMut for &View<'a, T> {
     unsafe fn get_data(&mut self, count: usize) -> Self::Out {
         &*self.data.as_ptr().add(count)
     }
+    unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
+        std::slice::from_raw_parts(
+            self.data.as_ptr().add(indices.start),
+            indices.end - indices.start,
+        )
+    }
 }
 
 impl<'a, T> AbstractMut for ViewSemiMut<'a, T> {
     type Out = &'a mut T;
+    type Slice = &'a mut [T];
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.contains(index) {
             Some(
@@ -341,10 +358,17 @@ impl<'a, T> AbstractMut for ViewSemiMut<'a, T> {
     unsafe fn get_data(&mut self, count: usize) -> Self::Out {
         &mut *self.data.as_mut_ptr().add(count)
     }
+    unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
+        std::slice::from_raw_parts_mut(
+            self.data.as_mut_ptr().add(indices.start),
+            indices.end - indices.start,
+        )
+    }
 }
 
 impl<'a, T> AbstractMut for Not<View<'a, T>> {
     type Out = ();
+    type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.0.contains_index(index) {
             None
@@ -356,12 +380,16 @@ impl<'a, T> AbstractMut for Not<View<'a, T>> {
         unreachable!()
     }
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
+        unreachable!()
+    }
+    unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
     }
 }
 
 impl<'a, T> AbstractMut for &Not<View<'a, T>> {
     type Out = ();
+    type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.0.contains_index(index) {
             None
@@ -373,12 +401,16 @@ impl<'a, T> AbstractMut for &Not<View<'a, T>> {
         unreachable!()
     }
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
+        unreachable!()
+    }
+    unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
     }
 }
 
 impl<'a, T> AbstractMut for Not<&View<'a, T>> {
     type Out = ();
+    type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.0.contains_index(index) {
             None
@@ -392,10 +424,14 @@ impl<'a, T> AbstractMut for Not<&View<'a, T>> {
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
         unreachable!()
     }
+    unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
+        unreachable!()
+    }
 }
 
 impl<'a, T> AbstractMut for Not<ViewSemiMut<'a, T>> {
     type Out = ();
+    type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.0.contains(index) {
             None
@@ -407,6 +443,9 @@ impl<'a, T> AbstractMut for Not<ViewSemiMut<'a, T>> {
         unreachable!()
     }
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
+        unreachable!()
+    }
+    unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
     }
 }

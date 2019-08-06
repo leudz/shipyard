@@ -76,29 +76,29 @@ mod test {
             entities.add((&mut usizes, &mut u32s), (2usize, 3u32));
 
             // possible to borrow twice as immutable
-            let mut iter1 = (&usizes).into_iter();
-            let _iter2 = (&usizes).into_iter();
+            let mut iter1 = (&usizes).iter();
+            let _iter2 = (&usizes).iter();
             assert_eq!(iter1.next(), Some(&0));
 
             // impossible to borrow twice as mutable
             // if switched, the next two lines should trigger an error
-            let _iter = (&mut usizes).into_iter();
-            let mut iter = (&mut usizes).into_iter();
+            let _iter = (&mut usizes).iter();
+            let mut iter = (&mut usizes).iter();
             assert_eq!(iter.next(), Some(&mut 0));
             assert_eq!(iter.next(), Some(&mut 2));
             assert_eq!(iter.next(), None);
 
             // possible to borrow twice as immutable
-            let mut iter = (&usizes, &u32s).into_iter();
-            let _iter = (&usizes, &u32s).into_iter();
+            let mut iter = (&usizes, &u32s).iter();
+            let _iter = (&usizes, &u32s).iter();
             assert_eq!(iter.next(), Some((&0, &1)));
             assert_eq!(iter.next(), Some((&2, &3)));
             assert_eq!(iter.next(), None);
 
             // impossible to borrow twice as mutable
             // if switched, the next two lines should trigger an error
-            let _iter = (&mut usizes, &u32s).into_iter();
-            let mut iter = (&mut usizes, &u32s).into_iter();
+            let _iter = (&mut usizes, &u32s).iter();
+            let mut iter = (&mut usizes, &u32s).iter();
             assert_eq!(iter.next(), Some((&mut 0, &1)));
             assert_eq!(iter.next(), Some((&mut 2, &3)));
             assert_eq!(iter.next(), None);
@@ -112,12 +112,12 @@ mod test {
             (&mut u32s,).add_component((1u32,), entity1);
             entities.add((&mut usizes,), (2usize,));
 
-            let mut iter = (&usizes).into_iter();
+            let mut iter = (&usizes).iter();
             assert_eq!(iter.next(), Some(&0));
             assert_eq!(iter.next(), Some(&2));
             assert_eq!(iter.next(), None);
 
-            let mut iter = (&usizes, &u32s).into_iter();
+            let mut iter = (&usizes, &u32s).iter();
             assert_eq!(iter.next(), Some((&0, &1)));
             assert_eq!(iter.next(), None);
         });
@@ -128,18 +128,18 @@ mod test {
         world.new_entity((0usize, 1u32));
         world.new_entity((2usize,));
         world.run::<(Not<&usize>, &u32), _>(|(not_usizes, u32s)| {
-            let mut iter = (&not_usizes).into_iter();
+            let mut iter = (&not_usizes).iter();
             assert_eq!(iter.next(), None);
 
-            let mut iter = (&not_usizes, !&u32s).into_iter();
+            let mut iter = (&not_usizes, !&u32s).iter();
             assert_eq!(iter.next(), None);
 
-            let mut iter = (&not_usizes, &u32s).into_iter();
+            let mut iter = (&not_usizes, &u32s).iter();
             assert_eq!(iter.next(), None);
 
             let usizes = not_usizes.into_inner();
 
-            let mut iter = (&usizes, !&u32s).into_iter();
+            let mut iter = (&usizes, !&u32s).iter();
             assert_eq!(iter.next(), Some((&2, ())));
             assert_eq!(iter.next(), None);
         });
@@ -190,8 +190,82 @@ mod test {
         world.new_entity((0usize, 1u32));
         world.new_entity((2usize,));
         world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
-            if let Iter2::Packed(mut iter) = (usizes, u32s).into_iter() {
+            if let Iter2::Packed(mut iter) = (usizes, u32s).iter() {
                 assert_eq!(iter.next(), Some((&0, &1)));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+        });
+    }
+    #[test]
+    fn chunk_iterator() {
+        let world = World::new::<(usize, u32)>();
+        world.pack_owned::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize, 3u32));
+        world.new_entity((4usize, 5u32));
+        world.new_entity((6usize, 7u32));
+        world.new_entity((8usize, 9u32));
+        world.new_entity((10usize,));
+        world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
+            if let Iter2::Packed(iter) = (&usizes, &u32s).iter() {
+                let mut iter = iter.into_chunk(2);
+                assert_eq!(iter.next(), Some((&[0, 2][..], &[1, 3][..])));
+                assert_eq!(iter.next(), Some((&[4, 6][..], &[5, 7][..])));
+                assert_eq!(iter.next(), Some((&[8][..], &[9][..])));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+            if let Iter2::Packed(iter) = (&usizes, &u32s).iter() {
+                let mut iter = iter.into_chunk_exact(2);
+                assert_eq!(iter.next(), Some((&[0, 2][..], &[1, 3][..])));
+                assert_eq!(iter.next(), Some((&[4, 6][..], &[5, 7][..])));
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.remainder(), (&[8][..], &[9][..]));
+                assert_eq!(iter.remainder(), (&[][..], &[][..]));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+                iter.next();
+                let mut iter = iter.into_chunk(2);
+                assert_eq!(iter.next(), Some((&[2, 4][..], &[3, 5][..])));
+                assert_eq!(iter.next(), Some((&[6, 8][..], &[7, 9][..])));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+                iter.next();
+                let mut iter = iter.into_chunk_exact(2);
+                assert_eq!(iter.next(), Some((&[2, 4][..], &[3, 5][..])));
+                assert_eq!(iter.next(), Some((&[6, 8][..], &[7, 9][..])));
+                assert_eq!(iter.remainder(), (&[][..], &[][..]));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+                iter.next();
+                iter.next();
+                let mut iter = iter.into_chunk_exact(2);
+                assert_eq!(iter.next(), Some((&[4, 6][..], &[5, 7][..])));
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.remainder(), (&[8][..], &[9][..]));
+                assert_eq!(iter.remainder(), (&[][..], &[][..]));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+                iter.nth(3);
+                let mut iter = iter.into_chunk_exact(2);
+                assert_eq!(iter.next(), None);
+                assert_eq!(iter.remainder(), (&[8][..], &[9][..]));
+                assert_eq!(iter.remainder(), (&[][..], &[][..]));
                 assert_eq!(iter.next(), None);
             } else {
                 panic!("not packed");
