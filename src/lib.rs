@@ -11,6 +11,7 @@ mod get_storage;
 mod iterators;
 mod not;
 mod pack;
+mod remove;
 mod run;
 mod sparse_array;
 mod world;
@@ -22,6 +23,7 @@ pub use get::GetComponent;
 pub use iterators::{IntoIter, Iter2, Iter3, Iter4, Iter5};
 pub use not::Not;
 pub use pack::OwnedPack;
+pub use remove::Remove;
 pub use run::Run;
 pub use world::World;
 
@@ -271,5 +273,32 @@ mod test {
                 panic!("not packed");
             }
         });
+    }
+    #[test]
+    fn remove() {
+        let world = World::new::<(usize, u32)>();
+        let entity1 = world.new_entity((0usize, 1u32));
+        let entity2 = world.new_entity((2usize, 3u32));
+        let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
+        let component = Remove::<(usize,)>::remove((&mut usizes,), entity1);
+        assert_eq!(component, (Some(0usize),));
+        assert_eq!((&mut usizes).get(entity1), None);
+        assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
+        assert_eq!(usizes.get(entity2), Some(&mut 2));
+        assert_eq!(u32s.get(entity2), Some(&mut 3));
+    }
+    #[test]
+    fn remove_packed() {
+        let world = World::new::<(usize, u32)>();
+        world.pack_owned::<(usize, u32)>();
+        let entity1 = world.new_entity((0usize, 1u32));
+        let entity2 = world.new_entity((2usize, 3u32));
+        let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
+        let component = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
+        assert_eq!(component, (Some(0usize),));
+        assert_eq!((&mut usizes).get(entity1), None);
+        assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
+        assert_eq!(usizes.get(entity2), Some(&mut 2));
+        assert_eq!(u32s.get(entity2), Some(&mut 3));
     }
 }

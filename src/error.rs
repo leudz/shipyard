@@ -61,3 +61,11 @@ impl From<Pack> for WorldPack {
         WorldPack::Pack(pack)
     }
 }
+
+/// When removing components if one of them is packed owned, all storages packed
+/// with it must be passed to the function.
+/// This error occurs when there is a missing storage, `TypeId` will indicate which storage.
+#[derive(Debug)]
+pub enum Remove {
+    MissingPackStorage(TypeId),
+}
