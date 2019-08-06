@@ -1,5 +1,5 @@
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
-use crate::component_storage::AllStorages;
+use crate::component_storage::{AllStorages, AllStoragesViewMut};
 use crate::entity::{Entities, EntityViewMut};
 use crate::not::Not;
 use crate::sparse_array::{View, ViewMut};
@@ -39,6 +39,18 @@ impl<'a> AbstractStorage<'a> for Entities {
         // SAFE the reference is dropped before the borrow
         let (entities, borrow) = unsafe { RefMut::destructure(entities.try_borrow_mut().unwrap()) };
         (entities.view_mut(), Either::Single(borrow))
+    }
+}
+
+impl<'a> AbstractStorage<'a> for AllStorages {
+    type AbstractStorage = AllStoragesViewMut<'a>;
+    fn borrow(
+        _: &'a AtomicRefCell<Entities>,
+        storages: &'a AtomicRefCell<AllStorages>,
+    ) -> (Self::AbstractStorage, Either<Borrow<'a>, [Borrow<'a>; 2]>) {
+        // SAFE the reference is dropped before the borrow
+        let (storages, borrow) = unsafe { RefMut::destructure(storages.try_borrow_mut().unwrap()) };
+        (storages.view_mut(), Either::Single(borrow))
     }
 }
 
