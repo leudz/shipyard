@@ -1,4 +1,5 @@
 mod hasher;
+mod view;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
@@ -8,6 +9,7 @@ use hasher::TypeIdHasher;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
+pub(crate) use view::AllStoragesViewMut;
 
 /// Wrapper over `AtomicRefCell<Box<SparseArray<T>>>` to be able to store different `T`s
 /// in a `HashMap<TypeId, ComponentStorage>`.
@@ -50,6 +52,9 @@ impl AllStorages {
         self.0
             .entry(TypeId::of::<T>())
             .or_insert_with(ComponentStorage::new::<T>);
+    }
+    pub(crate) fn view_mut(&mut self) -> AllStoragesViewMut {
+        AllStoragesViewMut { data: &mut self.0 }
     }
 }
 
