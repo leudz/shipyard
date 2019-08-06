@@ -198,11 +198,9 @@ macro_rules! impl_iterators {
             fn iter(self) -> Self::IntoIter {
                 // check if all types are packed together
                 let packed_types = self.0.abs_pack_types_owned();
-                if $(std::ptr::eq(packed_types, self.$index.abs_pack_types_owned()))&&+ && {
-                    let mut i = 0;
-                    $(let _: PhantomData<$type> = {i += 1; PhantomData};)+
-                    i == packed_types.len()
-                } {
+                let mut i = 0;
+                $(let _: PhantomData<$type> = {i += 1; PhantomData};)+
+                if $(std::ptr::eq(packed_types, self.$index.abs_pack_types_owned()))&&+ && i == packed_types.len() {
                     $iter::Packed($packed {
                         end: self.0.abs_pack_len(),
                         data: ($(self.$index.into_abstract(),)+),
