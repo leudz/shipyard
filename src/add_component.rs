@@ -15,9 +15,9 @@ pub trait AddComponent<T> {
 }
 
 impl<T: 'static> AddComponent<T> for &mut SparseArray<T> {
-    fn try_add_component(self, component: T, entitiy: Key) -> Result<(), error::AddComponent> {
+    fn try_add_component(self, component: T, entity: Key) -> Result<(), error::AddComponent> {
         if !self.is_packed_owned() {
-            self.insert(entitiy.index(), component);
+            self.insert(component, entity.index());
             Ok(())
         } else {
             Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
@@ -29,9 +29,9 @@ impl<T: 'static> AddComponent<T> for &mut SparseArray<T> {
 }
 
 impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
-    fn try_add_component(self, component: T, entitiy: Key) -> Result<(), error::AddComponent> {
+    fn try_add_component(self, component: T, entity: Key) -> Result<(), error::AddComponent> {
         if !self.is_packed_owned() {
-            self.insert(entitiy, component);
+            self.insert(component, entity);
             Ok(())
         } else {
             Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
@@ -46,7 +46,7 @@ macro_rules! impl_try_add_component {
     // add is short for additional
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut SparseArray<$type>,)+ $(&mut SparseArray<$add_type>,)*) {
-            fn try_add_component(self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
+            fn try_add_component(self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
                 if $(self.$index.is_packed_owned())||+ {
                     let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
                     type_ids.sort_unstable();
@@ -61,12 +61,12 @@ macro_rules! impl_try_add_component {
                     )+
                     // add the component to the storage
                     $(
-                        self.$index.insert(entitiy.index(), component.$index);
+                        self.$index.insert(component.$index, entity.index());
                     )+
 
                     // add additional types if the entity has this component
                     $(
-                        if self.$add_index.contains(entitiy.index()) {
+                        if self.$add_index.contains(entity.index()) {
                             type_ids.push(TypeId::of::<$add_type>());
                         }
                     )*
@@ -78,25 +78,25 @@ macro_rules! impl_try_add_component {
                         let type_id = TypeId::of::<$type>();
 
                         if should_pack.contains(&type_id) {
-                            self.$index.pack(entitiy.index());
+                            self.$index.pack(entity.index());
                         } else {
                             let pack_types = self.$index.should_pack_owned(&type_ids);
 
                             should_pack.extend(pack_types.iter().filter(|&&x| x != type_id));
                             if !pack_types.is_empty() {
-                                self.$index.pack(entitiy.index());
+                                self.$index.pack(entity.index());
                             }
                         }
                     )+
 
                     $(
                         if should_pack.contains(&TypeId::of::<$add_type>()) {
-                            self.$add_index.pack(entitiy.index());
+                            self.$add_index.pack(entity.index());
                         }
                     )*
                 } else {
                     $(
-                        self.$index.insert(entitiy.index(), component.$index);
+                        self.$index.insert(component.$index, entity.index());
                     )+
                 }
 
@@ -108,8 +108,8 @@ macro_rules! impl_try_add_component {
         }
 
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(Write<'_, $type>,)+ $(Write<'_, $add_type>,)*) {
-            fn try_add_component(mut self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
-                ($(&mut *self.$index,)+ $(&mut *self.$add_index,)*).try_add_component(component, entitiy)
+            fn try_add_component(mut self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
+                ($(&mut *self.$index,)+ $(&mut *self.$add_index,)*).try_add_component(component, entity)
             }
             fn add_component(self, component: ($($type,)+), entity: Key) {
                 self.try_add_component(component, entity).unwrap()
@@ -117,8 +117,8 @@ macro_rules! impl_try_add_component {
         }
 
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut Write<'_, $type>,)+ $(&mut Write<'_, $add_type>,)*) {
-            fn try_add_component(self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
-                ($(&mut **self.$index,)+ $(&mut **self.$add_index,)*).try_add_component(component, entitiy)
+            fn try_add_component(self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
+                ($(&mut **self.$index,)+ $(&mut **self.$add_index,)*).try_add_component(component, entity)
             }
             fn add_component(self, component: ($($type,)+), entity: Key) {
                 self.try_add_component(component, entity).unwrap()
@@ -126,7 +126,7 @@ macro_rules! impl_try_add_component {
         }
 
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
-            fn try_add_component(self, component: ($($type,)+), entitiy: Key) -> Result<(), error::AddComponent> {
+            fn try_add_component(self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
                 if $(self.$index.is_packed_owned())||+ {
                     let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
                     type_ids.sort_unstable();
@@ -141,12 +141,12 @@ macro_rules! impl_try_add_component {
                     )+
                     // add the component to the storage
                     $(
-                        self.$index.insert(entitiy, component.$index);
+                        self.$index.insert(component.$index, entity);
                     )+
 
                     // add additional types if the entity has this component
                     $(
-                        if self.$add_index.contains_index(entitiy.index()) {
+                        if self.$add_index.contains_index(entity.index()) {
                             type_ids.push(TypeId::of::<$add_type>());
                         }
                     )*
@@ -158,27 +158,27 @@ macro_rules! impl_try_add_component {
                         let type_id = TypeId::of::<$type>();
 
                         if should_pack.contains(&type_id) {
-                            self.$index.pack(entitiy.index());
+                            self.$index.pack(entity.index());
                         } else {
                             let pack_types = self.$index.should_pack_owned(&type_ids);
 
                             should_pack.extend(pack_types.iter().filter(|&&x| x != type_id));
                             if !pack_types.is_empty() {
-                                self.$index.pack(entitiy.index());
+                                self.$index.pack(entity.index());
                             }
                         }
                     )+
 
                     $(
                         if should_pack.contains(&TypeId::of::<$add_type>()) {
-                            self.$add_index.pack(entitiy.index());
+                            self.$add_index.pack(entity.index());
                         }
                     )*
 
                     Ok(())
                 } else {
                     $(
-                        self.$index.insert(entitiy, component.$index);
+                        self.$index.insert(component.$index, entity);
                     )+
                     Ok(())
                 }

@@ -47,7 +47,7 @@ pub struct ViewMut<'a, T> {
 
 impl<'a, T> ViewMut<'a, T> {
     /// Add the component to the `entity`.
-    pub(crate) fn insert(&mut self, entity: Key, mut value: T) -> Option<T> {
+    pub(crate) fn insert(&mut self, mut value: T, entity: Key) -> Option<T> {
         let index = entity.index();
         if index >= self.sparse.len() {
             self.sparse.resize(index + 1, 0);

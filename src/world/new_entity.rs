@@ -6,17 +6,17 @@ use std::any::TypeId;
 // Store components in a new entity
 // If no storage exists for a component it will be created
 pub trait WorldNewEntity {
-    fn new_entitiy(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key;
+    fn new_entity(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key;
 }
 
 impl WorldNewEntity for () {
-    fn new_entitiy(self, _: &mut AllStorages, entities: &mut Entities) -> Key {
+    fn new_entity(self, _: &mut AllStorages, entities: &mut Entities) -> Key {
         entities.generate()
     }
 }
 
 impl<T: 'static + Send + Sync> WorldNewEntity for (T,) {
-    fn new_entitiy(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key {
+    fn new_entity(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key {
         let key = entities.generate();
 
         all_storages
@@ -25,7 +25,7 @@ impl<T: 'static + Send + Sync> WorldNewEntity for (T,) {
             .or_insert_with(|| ComponentStorage::new::<T>())
             .array_mut()
             .unwrap()
-            .insert(key.index(), self.0);
+            .insert(self.0, key.index());
 
         key
     }
@@ -34,7 +34,7 @@ impl<T: 'static + Send + Sync> WorldNewEntity for (T,) {
 macro_rules! impl_new_entity {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: 'static + Send + Sync),+> WorldNewEntity for ($($type,)+) {
-            fn new_entitiy(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key {
+            fn new_entity(self, all_storages: &mut AllStorages, entities: &mut Entities) -> Key {
                 let key = entities.generate();
 
                 let type_ids = [$({
@@ -42,7 +42,7 @@ macro_rules! impl_new_entity {
                     let mut array = all_storages.0.entry(type_id).or_insert_with(|| {
                         ComponentStorage::new::<$type>()
                     }).array_mut().unwrap();
-                    array.insert(key.index(), self.$index);
+                    array.insert(self.$index, key.index());
                     type_id
                 },)+];
 

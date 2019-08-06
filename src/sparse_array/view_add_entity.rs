@@ -14,15 +14,15 @@ impl ViewAddEntity for () {
 
 impl<T> ViewAddEntity for (ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(mut self, component: Self::Component, entitiy: Key) {
-        self.0.insert(entitiy, component.0);
+    fn add_entity(mut self, component: Self::Component, entity: Key) {
+        self.0.insert(component.0, entity);
     }
 }
 
 impl<T> ViewAddEntity for (&mut ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(self, component: Self::Component, entitiy: Key) {
-        self.0.insert(entitiy, component.0);
+    fn add_entity(self, component: Self::Component, entity: Key) {
+        self.0.insert(component.0, entity);
     }
 }
 
@@ -32,7 +32,7 @@ macro_rules! impl_view_add_entity {
             type Component = ($($type,)+);
             fn add_entity(mut self, component: Self::Component, entity: Key) {
                 $(
-                    self.$index.insert(entity, component.$index);
+                    self.$index.insert(component.$index, entity);
                 )+
 
                 let mut type_ids = [$(TypeId::of::<$type>()),+];
@@ -59,7 +59,7 @@ macro_rules! impl_view_add_entity {
             type Component = ($($type,)+);
             fn add_entity(self, component: Self::Component, entity: Key) {
                 $(
-                    self.$index.insert(entity, component.$index);
+                    self.$index.insert(component.$index, entity);
                 )+
             }
         }

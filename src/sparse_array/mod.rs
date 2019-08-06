@@ -39,7 +39,7 @@ impl<T> Default for SparseArray<T> {
 
 impl<T> SparseArray<T> {
     /// Inserts a value at a given index, if a value was already present it will be returned.
-    pub(crate) fn insert(&mut self, index: usize, mut value: T) -> Option<T> {
+    pub(crate) fn insert(&mut self, mut value: T, index: usize) -> Option<T> {
         if index >= self.sparse.len() {
             self.sparse.resize(index + 1, 0);
         }
@@ -183,16 +183,16 @@ mod test {
     #[test]
     fn insert() {
         let mut array = SparseArray::default();
-        array.insert(0, "0");
-        array.insert(1, "1");
+        array.insert("0", 0);
+        array.insert("1", 1);
         assert_eq!(array.len(), 2);
         assert_eq!(array.get(0), Some(&"0"));
         assert_eq!(array.get(1), Some(&"1"));
-        array.insert(5, "5");
+        array.insert("5", 5);
         assert_eq!(array.get_mut(5), Some(&mut "5"));
         assert_eq!(array.get(4), None);
         assert_eq!(array.get(6), None);
-        array.insert(6, "6");
+        array.insert("6", 6);
         assert_eq!(array.get(5), Some(&"5"));
         assert_eq!(array.get_mut(6), Some(&mut "6"));
         assert_eq!(array.get(4), None);
@@ -200,9 +200,9 @@ mod test {
     #[test]
     fn remove() {
         let mut array = SparseArray::default();
-        array.insert(0, "0");
-        array.insert(5, "5");
-        array.insert(10, "10");
+        array.insert("0", 0);
+        array.insert("5", 5);
+        array.insert("10", 10);
         assert_eq!(array.remove(0), Some("0"));
         assert_eq!(array.get(0), None);
         assert_eq!(array.get(5), Some(&"5"));
@@ -212,8 +212,8 @@ mod test {
         assert_eq!(array.get(5), Some(&"5"));
         assert_eq!(array.get(10), None);
         assert_eq!(array.len(), 1);
-        array.insert(3, "3");
-        array.insert(10, "100");
+        array.insert("3", 3);
+        array.insert("100", 10);
         assert_eq!(array.get(0), None);
         assert_eq!(array.get(3), Some(&"3"));
         assert_eq!(array.get(5), Some(&"5"));
