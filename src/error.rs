@@ -20,7 +20,7 @@ pub enum GetStorage {
     MissingComponent,
 }
 
-/// Error related to adding an entitiy.
+/// Error related to adding an entity.
 /// AllStoragesBorrow means an add_storage operation is in progress.
 /// Entities means entities is already borrowed.
 #[derive(Debug)]

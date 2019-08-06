@@ -76,7 +76,7 @@ impl World {
             .storages
             .try_borrow_mut()
             .map_err(error::NewEntity::AllStoragesBorrow)?;
-        Ok(T::new_entitiy(component, &mut *storages, &mut *entities))
+        Ok(T::new_entity(component, &mut *storages, &mut *entities))
     }
     /// Same as `try_entities_mut` but will `unwrap` any error.
     pub fn entities_mut(&self) -> RefMut<Entities> {
