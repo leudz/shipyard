@@ -1,8 +1,9 @@
-mod non_packed;
-mod packed;
+mod iter;
 
 use crate::not::Not;
 use crate::sparse_array::{View, ViewMut, ViewSemiMut};
+pub use iter::{Iter2, Iter3, Iter4, Iter5};
+use std::any::TypeId;
 
 // This trait exists because of conflicting implementations
 // when using std::iter::IntoIterator
@@ -17,6 +18,9 @@ pub trait IntoAbstract {
     type View: AbstractMut;
     fn into_abstract(self) -> Self::View;
     fn indices(&self) -> (*const usize, Option<usize>);
+    fn abs_is_packed(&self) -> bool;
+    fn abs_pack_types_owned(&self) -> &[TypeId];
+    fn abs_pack_len(&self) -> usize;
 }
 
 impl<'a, T> IntoAbstract for View<'a, T> {
@@ -26,6 +30,15 @@ impl<'a, T> IntoAbstract for View<'a, T> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
+    }
+    fn abs_is_packed(&self) -> bool {
+        self.is_packed_owned()
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        self.pack_types_owned()
+    }
+    fn abs_pack_len(&self) -> usize {
+        self.pack_len()
     }
 }
 
@@ -37,6 +50,15 @@ impl<'a, T> IntoAbstract for &View<'a, T> {
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
     }
+    fn abs_is_packed(&self) -> bool {
+        self.is_packed_owned()
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        self.pack_types_owned()
+    }
+    fn abs_pack_len(&self) -> usize {
+        self.pack_len()
+    }
 }
 
 impl<'a, T> IntoAbstract for ViewMut<'a, T> {
@@ -46,6 +68,15 @@ impl<'a, T> IntoAbstract for ViewMut<'a, T> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
+    }
+    fn abs_is_packed(&self) -> bool {
+        self.is_packed_owned()
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        self.pack_types_owned()
+    }
+    fn abs_pack_len(&self) -> usize {
+        self.pack_len()
     }
 }
 
@@ -57,6 +88,15 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b ViewMut<'a, T> {
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
     }
+    fn abs_is_packed(&self) -> bool {
+        self.is_packed_owned()
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        self.pack_types_owned()
+    }
+    fn abs_pack_len(&self) -> usize {
+        self.pack_len()
+    }
 }
 
 impl<'a: 'b, 'b, T> IntoAbstract for &'b mut ViewMut<'a, T> {
@@ -66,6 +106,15 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b mut ViewMut<'a, T> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
+    }
+    fn abs_is_packed(&self) -> bool {
+        self.is_packed_owned()
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        self.pack_types_owned()
+    }
+    fn abs_pack_len(&self) -> usize {
+        self.pack_len()
     }
 }
 
@@ -77,6 +126,15 @@ impl<'a, T> IntoAbstract for Not<View<'a, T>> {
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
     }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
+    }
 }
 
 impl<'a, T> IntoAbstract for &Not<View<'a, T>> {
@@ -86,6 +144,15 @@ impl<'a, T> IntoAbstract for &Not<View<'a, T>> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
+    }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
     }
 }
 
@@ -97,6 +164,15 @@ impl<'a, T> IntoAbstract for Not<&View<'a, T>> {
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
     }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
+    }
 }
 
 impl<'a, T> IntoAbstract for Not<ViewMut<'a, T>> {
@@ -106,6 +182,15 @@ impl<'a, T> IntoAbstract for Not<ViewMut<'a, T>> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
+    }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
     }
 }
 
@@ -117,6 +202,15 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b Not<ViewMut<'a, T>> {
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
     }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
+    }
 }
 
 impl<'a: 'b, 'b, T> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
@@ -126,6 +220,15 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
+    }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
     }
 }
 
@@ -137,6 +240,15 @@ impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
     }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
+    }
 }
 
 impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
@@ -146,6 +258,15 @@ impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
+    }
+    fn abs_is_packed(&self) -> bool {
+        false
+    }
+    fn abs_pack_types_owned(&self) -> &[TypeId] {
+        &[]
+    }
+    fn abs_pack_len(&self) -> usize {
+        0
     }
 }
 

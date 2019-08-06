@@ -19,7 +19,7 @@ pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use entity::Entities;
 pub use get::GetComponent;
-pub use iterators::IntoIter;
+pub use iterators::{IntoIter, Iter2, Iter3, Iter4, Iter5};
 pub use not::Not;
 pub use pack::OwnedPack;
 pub use run::Run;
@@ -182,5 +182,20 @@ mod test {
         let (mut usizes,) = world.get_storage::<(&mut usize,)>();
 
         (&mut usizes,).add_component((0,), entity);
+    }
+    #[test]
+    fn pack_iterator() {
+        let world = World::new::<(usize, u32)>();
+        world.pack_owned::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize,));
+        world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
+            if let Iter2::Packed(mut iter) = (usizes, u32s).into_iter() {
+                assert_eq!(iter.next(), Some((&0, &1)));
+                assert_eq!(iter.next(), None);
+            } else {
+                panic!("not packed");
+            }
+        });
     }
 }
