@@ -42,7 +42,7 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
     }
 }
 
-macro_rules! impl_try_add_component {
+macro_rules! impl_add_component {
     // add is short for additional
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut SparseArray<$type>,)+ $(&mut SparseArray<$add_type>,)*) {
@@ -125,7 +125,7 @@ macro_rules! impl_try_add_component {
             }
         }
 
-        impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
+        impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)+)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_add_component(self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
                 if $(self.$index.is_packed_owned())||+ {
                     let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
@@ -190,19 +190,19 @@ macro_rules! impl_try_add_component {
     }
 }
 
-macro_rules! try_add_component {
+macro_rules! add_component {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))*;; ($queue_type1: ident, $queue_index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_try_add_component![($type1, $index1) $(($type, $index))*;];
-        try_add_component![($type1, $index1); $(($type, $index))* ($queue_type1, $queue_index1); $(($queue_type, $queue_index))*];
+        impl_add_component![($type1, $index1) $(($type, $index))*;];
+        add_component![($type1, $index1); $(($type, $index))* ($queue_type1, $queue_index1); $(($queue_type, $queue_index))*];
     };
     // add is short for additional
     ($(($type: ident, $index: tt))+; ($add_type1: ident, $add_index1: tt) $(($add_type: ident, $add_index: tt))*; $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_try_add_component![$(($type, $index))+; ($add_type1, $add_index1) $(($add_type, $add_index))*];
-        try_add_component![$(($type, $index))+ ($add_type1, $add_index1); $(($add_type, $add_index))*; $(($queue_type, $queue_index))*];
+        impl_add_component![$(($type, $index))+; ($add_type1, $add_index1) $(($add_type, $add_index))*];
+        add_component![$(($type, $index))+ ($add_type1, $add_index1); $(($add_type, $add_index))*; $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))+;;) => {
-        impl_try_add_component![$(($type, $index))+;];
+        impl_add_component![$(($type, $index))+;];
     }
 }
 
-try_add_component![(A, 0);; (B, 1) (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];
+add_component![(A, 0);; (B, 1) (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];
