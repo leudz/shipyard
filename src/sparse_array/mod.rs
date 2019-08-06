@@ -4,6 +4,7 @@ mod view;
 mod view_add_entity;
 
 use crate::entity::Key;
+use crate::remove::RemoveComponent;
 use pack_info::PackInfo;
 pub(crate) use read_write::{Read, Write};
 use std::any::TypeId;
@@ -23,17 +24,24 @@ pub struct SparseArray<T> {
     sparse: Vec<usize>,
     dense: Vec<usize>,
     data: Vec<T>,
+    remove_function: usize,
     pack_info: PackInfo,
 }
 
 impl<T> Default for SparseArray<T> {
     fn default() -> Self {
-        SparseArray {
+        let mut sparse_array = SparseArray {
             sparse: Vec::new(),
             dense: Vec::new(),
             data: Vec::new(),
+            remove_function: 0,
             pack_info: Default::default(),
-        }
+        };
+        let ptr: [usize; 2] = unsafe {
+            std::ptr::read(&sparse_array as &dyn RemoveComponent as *const _ as *const _)
+        };
+        sparse_array.remove_function = ptr[1];
+        sparse_array
     }
 }
 
@@ -81,13 +89,26 @@ impl<T> SparseArray<T> {
     /// Removes and returns the element at index if present.
     pub(crate) fn remove(&mut self, index: usize) -> Option<T> {
         if self.contains(index) {
-            let dense_index = unsafe { *self.sparse.get_unchecked(index) };
+            let mut dense_index = unsafe { *self.sparse.get_unchecked(index) };
+            let pack_len = self.pack_len();
+            if dense_index < pack_len {
+                self.pack_info.owned_len -= 1;
+                // swap index and last packed element (can be the same)
+                unsafe {
+                    *self
+                        .sparse
+                        .get_unchecked_mut(*self.dense.get_unchecked(pack_len - 1)) = dense_index;
+                }
+                self.dense.swap(dense_index, pack_len - 1);
+                self.data.swap(dense_index, pack_len - 1);
+                dense_index = pack_len - 1;
+            }
             unsafe {
                 *self
                     .sparse
                     .get_unchecked_mut(*self.dense.get_unchecked(self.dense.len() - 1)) =
-                    dense_index
-            };
+                    dense_index;
+            }
             self.dense.swap_remove(dense_index);
             Some(self.data.swap_remove(dense_index))
         } else {
@@ -167,6 +188,10 @@ impl<T> SparseArray<T> {
         } else {
             &[]
         }
+    }
+    /// Returns the length of the packed area within the data array.
+    pub(crate) fn pack_len(&self) -> usize {
+        self.pack_info.owned_len
     }
 }
 
