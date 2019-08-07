@@ -8,7 +8,7 @@ pub struct EntityViewMut<'a> {
 }
 
 impl<'a> EntityViewMut<'a> {
-    fn generate(&mut self) -> Key {
+    pub(super) fn generate(&mut self) -> Key {
         let index = self.list.map(|(_, old)| old);
         if let Some((new, ref mut old)) = self.list {
             if *new == *old {
@@ -33,7 +33,7 @@ impl<'a> EntityViewMut<'a> {
     /// even for a single value. In this case use (T,).
     pub fn add<T: ViewAddEntity>(&mut self, storages: T, component: T::Component) -> Key {
         let key = self.generate();
-        storages.add_entity(component, key);
+        storages.add_entity(component, key.index());
         key
     }
 }

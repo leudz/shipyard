@@ -16,12 +16,7 @@ pub trait AddComponent<T> {
 
 impl<T: 'static> AddComponent<T> for &mut SparseArray<T> {
     fn try_add_component(self, component: T, entity: Key) -> Result<(), error::AddComponent> {
-        if !self.is_packed_owned() {
-            self.insert(component, entity.index());
-            Ok(())
-        } else {
-            Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
-        }
+        (&mut self.view_mut()).try_add_component(component, entity)
     }
     fn add_component(self, component: T, entity: Key) {
         self.try_add_component(component, entity).unwrap()
@@ -31,7 +26,7 @@ impl<T: 'static> AddComponent<T> for &mut SparseArray<T> {
 impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
     fn try_add_component(self, component: T, entity: Key) -> Result<(), error::AddComponent> {
         if !self.is_packed_owned() {
-            self.insert(component, entity);
+            self.insert(component, entity.index());
             Ok(())
         } else {
             Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
@@ -47,7 +42,8 @@ macro_rules! impl_add_component {
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut SparseArray<$type>,)+ $(&mut SparseArray<$add_type>,)*) {
             fn try_add_component(self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
-                if $(self.$index.is_packed_owned())||+ {
+                ($(&mut self.$index.view_mut(),)+ $(&mut self.$add_index.view_mut(),)*).try_add_component(component, entity)
+                /*if $(self.$index.is_packed_owned())||+ {
                     let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
                     type_ids.sort_unstable();
                     // checks if the caller has passed all necessary storages
@@ -100,7 +96,7 @@ macro_rules! impl_add_component {
                     )+
                 }
 
-                Ok(())
+                Ok(())*/
             }
             fn add_component(self, component: ($($type,)+), entity: Key) {
                 self.try_add_component(component, entity).unwrap()
@@ -141,7 +137,7 @@ macro_rules! impl_add_component {
                     )+
                     // add the component to the storage
                     $(
-                        self.$index.insert(component.$index, entity);
+                        self.$index.insert(component.$index, entity.index());
                     )+
 
                     // add additional types if the entity has this component
@@ -174,14 +170,13 @@ macro_rules! impl_add_component {
                             self.$add_index.pack(entity.index());
                         }
                     )*
-
-                    Ok(())
                 } else {
                     $(
-                        self.$index.insert(component.$index, entity);
+                        self.$index.insert(component.$index, entity.index());
                     )+
-                    Ok(())
                 }
+
+                Ok(())
             }
             fn add_component(self, component: ($($type,)+), entity: Key) {
                 self.try_add_component(component, entity).unwrap()

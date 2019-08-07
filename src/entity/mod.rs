@@ -79,22 +79,7 @@ impl Default for Entities {
 impl Entities {
     /// Returns a valid Key, reuse removed Key when possible
     pub(crate) fn generate(&mut self) -> Key {
-        let index = self.list.map(|(_, old)| old);
-        if let Some((new, ref mut old)) = self.list {
-            if new == *old {
-                self.list = None;
-            } else {
-                *old = unsafe { self.data.get_unchecked(*old).index() };
-            }
-        }
-        if let Some(index) = index {
-            unsafe { self.data.get_unchecked_mut(index).set_index(index) };
-            unsafe { *self.data.get_unchecked(index) }
-        } else {
-            let key = Key::new(self.data.len());
-            self.data.push(key);
-            key
-        }
+        self.view_mut().generate()
     }
     /// Return true if the key matches a living entity
     pub(crate) fn is_alive(&self, key: Key) -> bool {

@@ -47,25 +47,12 @@ impl<T> Default for SparseArray<T> {
 
 impl<T> SparseArray<T> {
     /// Inserts a value at a given index, if a value was already present it will be returned.
-    pub(crate) fn insert(&mut self, mut value: T, index: usize) -> Option<T> {
-        if index >= self.sparse.len() {
-            self.sparse.resize(index + 1, 0);
-        }
-        if let Some(data) = self.get_mut(index) {
-            std::mem::swap(data, &mut value);
-            Some(value)
-        } else {
-            unsafe { *self.sparse.get_unchecked_mut(index) = self.dense.len() };
-            self.dense.push(index);
-            self.data.push(value);
-            None
-        }
+    pub(crate) fn insert(&mut self, value: T, index: usize) -> Option<T> {
+        self.view_mut().insert(value, index)
     }
     /// Returns true if the sparse array contains data at this index.
     pub(crate) fn contains(&self, index: usize) -> bool {
-        index < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
-            && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
+        self.view().contains_index(index)
     }
     /// Returns a reference to the element at this index if present.
     pub(crate) fn get(&self, index: usize) -> Option<&T> {
@@ -88,32 +75,7 @@ impl<T> SparseArray<T> {
     }
     /// Removes and returns the element at index if present.
     pub(crate) fn remove(&mut self, index: usize) -> Option<T> {
-        if self.contains(index) {
-            let mut dense_index = unsafe { *self.sparse.get_unchecked(index) };
-            let pack_len = self.pack_len();
-            if dense_index < pack_len {
-                self.pack_info.owned_len -= 1;
-                // swap index and last packed element (can be the same)
-                unsafe {
-                    *self
-                        .sparse
-                        .get_unchecked_mut(*self.dense.get_unchecked(pack_len - 1)) = dense_index;
-                }
-                self.dense.swap(dense_index, pack_len - 1);
-                self.data.swap(dense_index, pack_len - 1);
-                dense_index = pack_len - 1;
-            }
-            unsafe {
-                *self
-                    .sparse
-                    .get_unchecked_mut(*self.dense.get_unchecked(self.dense.len() - 1)) =
-                    dense_index;
-            }
-            self.dense.swap_remove(dense_index);
-            Some(self.data.swap_remove(dense_index))
-        } else {
-            None
-        }
+        self.view_mut().remove(index)
     }
     /// Returns the number of element present in the sparse array.
     pub fn len(&self) -> usize {
@@ -142,16 +104,7 @@ impl<T> SparseArray<T> {
     //            ---------
     //              pack
     pub(crate) fn pack(&mut self, index: usize) {
-        if self.contains(index) {
-            let dense_index = self.sparse[index];
-            if dense_index >= self.pack_info.owned_len {
-                self.sparse
-                    .swap(self.dense[self.pack_info.owned_len], index);
-                self.dense.swap(self.pack_info.owned_len, dense_index);
-                self.data.swap(self.pack_info.owned_len, dense_index);
-                self.pack_info.owned_len += 1;
-            }
-        }
+        self.view_mut().pack(index)
     }
     pub(crate) fn is_packed_owned(&self) -> bool {
         !self.pack_info.owned_type.is_empty()
@@ -188,10 +141,6 @@ impl<T> SparseArray<T> {
         } else {
             &[]
         }
-    }
-    /// Returns the length of the packed area within the data array.
-    pub(crate) fn pack_len(&self) -> usize {
-        self.pack_info.owned_len
     }
 }
 

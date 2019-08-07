@@ -1,28 +1,27 @@
-use crate::entity::Key;
 use crate::sparse_array::ViewMut;
 use std::any::TypeId;
 
 pub trait ViewAddEntity {
     type Component;
-    fn add_entity(self, component: Self::Component, entity: Key);
+    fn add_entity(self, component: Self::Component, index: usize);
 }
 
 impl ViewAddEntity for () {
     type Component = ();
-    fn add_entity(self, _: Self::Component, _: Key) {}
+    fn add_entity(self, _: Self::Component, _: usize) {}
 }
 
 impl<T> ViewAddEntity for (ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(mut self, component: Self::Component, entity: Key) {
-        self.0.insert(component.0, entity);
+    fn add_entity(mut self, component: Self::Component, index: usize) {
+        self.0.insert(component.0, index);
     }
 }
 
 impl<T> ViewAddEntity for (&mut ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(self, component: Self::Component, entity: Key) {
-        self.0.insert(component.0, entity);
+    fn add_entity(self, component: Self::Component, index: usize) {
+        self.0.insert(component.0, index);
     }
 }
 
@@ -30,9 +29,9 @@ macro_rules! impl_view_add_entity {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: 'static + Send + Sync),+> ViewAddEntity for ($(ViewMut<'_, $type>,)+) {
             type Component = ($($type,)+);
-            fn add_entity(mut self, component: Self::Component, entity: Key) {
+            fn add_entity(mut self, component: Self::Component, index: usize) {
                 $(
-                    self.$index.insert(component.$index, entity);
+                    self.$index.insert(component.$index, index);
                 )+
 
                 let mut type_ids = [$(TypeId::of::<$type>()),+];
@@ -43,13 +42,13 @@ macro_rules! impl_view_add_entity {
                     let type_id = TypeId::of::<$type>();
 
                     if should_pack.contains(&type_id) {
-                        self.$index.pack(entity.index());
+                        self.$index.pack(index);
                     } else {
                         let pack_types = self.$index.should_pack_owned(&type_ids);
 
                         should_pack.extend(pack_types.iter().filter(|&&x| x == type_id));
                         if !pack_types.is_empty() {
-                            self.$index.pack(entity.index());
+                            self.$index.pack(index);
                         }
                     }
                 )+
@@ -57,9 +56,9 @@ macro_rules! impl_view_add_entity {
         }
         impl<'a, $($type: 'static + Send + Sync),+> ViewAddEntity for ($(&mut ViewMut<'_, $type>,)+) {
             type Component = ($($type,)+);
-            fn add_entity(self, component: Self::Component, entity: Key) {
+            fn add_entity(self, component: Self::Component, index: usize) {
                 $(
-                    self.$index.insert(component.$index, entity);
+                    self.$index.insert(component.$index, index);
                 )+
             }
         }
