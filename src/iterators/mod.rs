@@ -276,7 +276,7 @@ impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
 
 // Abstracts different types of view to iterate over
 // mutable and immutable views with the same iterator
-pub trait AbstractMut: Clone + Send + Sync {
+pub trait AbstractMut: Clone + Send {
     type Out;
     type Slice;
     // # Safety

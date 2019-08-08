@@ -208,7 +208,6 @@ pub struct RawViewMut<'a, T> {
 }
 
 unsafe impl<T: Send + Sync> Send for RawViewMut<'_, T> {}
-unsafe impl<T: Send + Sync> Sync for RawViewMut<'_, T> {}
 
 impl<'a, T> RawViewMut<'a, T> {
     /// Returns true if the `entity` has this component.
