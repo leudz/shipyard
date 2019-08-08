@@ -44,6 +44,13 @@ impl<T: IntoAbstract> IntoIter for T {
     }
 }
 
+impl<T: IntoAbstract> IntoIter for (T,) {
+    type IntoIter = Packed1<T>;
+    fn iter(self) -> Self::IntoIter {
+        T::iter(self.0)
+    }
+}
+
 impl<T: IntoAbstract> Iterator for Packed1<T> {
     type Item = <T::View as AbstractMut>::Out;
     fn next(&mut self) -> Option<Self::Item> {
