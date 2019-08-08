@@ -1,5 +1,7 @@
 mod view;
 
+use crate::component_storage::AllStorages;
+use std::ops::DerefMut;
 pub(crate) use view::EntityViewMut;
 
 /* A Key is a handle to an entity and has two parts, the index and the version.
@@ -81,36 +83,21 @@ impl Entities {
     pub(crate) fn generate(&mut self) -> Key {
         self.view_mut().generate()
     }
-    /// Return true if the key matches a living entity
-    pub(crate) fn is_alive(&self, key: Key) -> bool {
-        key.index() < self.data.len() && key == unsafe { *self.data.get_unchecked(key.index()) }
-    }
-    /// Delete an entity, returns true if the entity was alive
-    pub(crate) fn delete(&mut self, key: Key) -> bool {
-        if self.is_alive(key) {
-            if unsafe {
-                self.data
-                    .get_unchecked_mut(key.index())
-                    .bump_version()
-                    .is_ok()
-            } {
-                if let Some((ref mut new, _)) = self.list {
-                    unsafe { self.data.get_unchecked_mut(*new).set_index(key.index()) };
-                    *new = key.index();
-                } else {
-                    self.list = Some((key.index(), key.index()));
-                }
-            }
-            true
-        } else {
-            false
-        }
-    }
     pub(crate) fn view_mut(&mut self) -> EntityViewMut {
         EntityViewMut {
             data: &mut self.data,
             list: &mut self.list,
         }
+    }
+    /// Delete an entity and all its components.
+    /// Returns true if the entity was alive.
+    pub fn delete(
+        &mut self,
+        mut storages: impl DerefMut<Target = AllStorages>,
+        entity: Key,
+    ) -> bool {
+        self.view_mut()
+            .delete(&mut storages.deref_mut().view_mut(), entity)
     }
 }
 
@@ -146,15 +133,15 @@ mod test {
         assert_eq!(key10.index(), 1);
         assert_eq!(key10.version(), 0);
 
-        assert!(entities.delete(key00));
-        assert!(!entities.delete(key00));
+        assert!(entities.view_mut().delete_key(key00));
+        assert!(!entities.view_mut().delete_key(key00));
         let key01 = entities.generate();
 
         assert_eq!(key01.index(), 0);
         assert_eq!(key01.version(), 1);
 
-        assert!(entities.delete(key10));
-        assert!(entities.delete(key01));
+        assert!(entities.view_mut().delete_key(key10));
+        assert!(entities.view_mut().delete_key(key01));
         let key11 = entities.generate();
         let key02 = entities.generate();
 
@@ -165,7 +152,7 @@ mod test {
 
         let last_key = Key(!(!0 >> 15));
         entities.data[0] = last_key;
-        assert!(entities.delete(last_key));
+        assert!(entities.view_mut().delete_key(last_key));
         assert_eq!(entities.list, None);
         let dead = entities.generate();
         assert_eq!(dead.index(), 2);

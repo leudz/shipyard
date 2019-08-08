@@ -4,7 +4,6 @@ mod view;
 mod view_add_entity;
 
 use crate::entity::Key;
-use crate::remove::RemoveComponent;
 use pack_info::PackInfo;
 pub(crate) use read_write::{Read, Write};
 use std::any::TypeId;
@@ -24,24 +23,17 @@ pub struct SparseArray<T> {
     sparse: Vec<usize>,
     dense: Vec<usize>,
     data: Vec<T>,
-    remove_function: usize,
     pack_info: PackInfo,
 }
 
 impl<T> Default for SparseArray<T> {
     fn default() -> Self {
-        let mut sparse_array = SparseArray {
+        SparseArray {
             sparse: Vec::new(),
             dense: Vec::new(),
             data: Vec::new(),
-            remove_function: 0,
             pack_info: Default::default(),
-        };
-        let ptr: [usize; 2] = unsafe {
-            std::ptr::read(&sparse_array as &dyn RemoveComponent as *const _ as *const _)
-        };
-        sparse_array.remove_function = ptr[1];
-        sparse_array
+        }
     }
 }
 

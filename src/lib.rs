@@ -301,4 +301,16 @@ mod test {
         assert_eq!(usizes.get(entity2), Some(&mut 2));
         assert_eq!(u32s.get(entity2), Some(&mut 3));
     }
+    #[test]
+    fn delete() {
+        let world = World::new::<(usize, u32)>();
+        let entity1 = world.new_entity((0usize, 1u32));
+        let entity2 = world.new_entity((2usize, 3u32));
+        world.delete(entity1);
+        let (usizes, u32s) = world.get_storage::<(&usize, &u32)>();
+        assert_eq!((&usizes).get(entity1), None);
+        assert_eq!((&u32s).get(entity1), None);
+        assert_eq!(usizes.get(entity2), Some(&2));
+        assert_eq!(u32s.get(entity2), Some(&3));
+    }
 }

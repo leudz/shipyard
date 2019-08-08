@@ -94,6 +94,14 @@ impl World {
     pub fn try_all_storages(&self) -> Result<Ref<AllStorages>, error::Borrow> {
         Ok(self.storages.try_borrow()?)
     }
+    /// Same as `try_all_storages` but will `unwrap` any error.
+    pub fn all_storages_mut(&self) -> RefMut<AllStorages> {
+        self.try_all_storages_mut().unwrap()
+    }
+    /// Returns an immutable reference to the storage of all storages.
+    pub fn try_all_storages_mut(&self) -> Result<RefMut<AllStorages>, error::Borrow> {
+        Ok(self.storages.try_borrow_mut()?)
+    }
     /// Same as `try_register` but will `unwrap` any error.
     pub fn register<T: 'static + Send + Sync>(&self) {
         self.try_register::<T>().unwrap()
@@ -130,5 +138,16 @@ impl World {
         <<T as WorldOwnedPack<'a>>::Storage as GetStorage<'a>>::Storage: OwnedPack,
     {
         self.try_pack_owned::<T>().unwrap()
+    }
+    /// Delete an entity and all its components.
+    /// Returns true if the entity was alive.
+    pub fn try_delete(&self, entity: Key) -> Result<bool, error::Borrow> {
+        let mut entities = self.try_entities_mut()?;
+        let storages = self.try_all_storages_mut()?;
+        Ok(entities.delete(storages, entity))
+    }
+    /// Same as try_delete but will unwrap any error.
+    pub fn delete(&self, entity: Key) -> bool {
+        self.try_delete(entity).unwrap()
     }
 }
