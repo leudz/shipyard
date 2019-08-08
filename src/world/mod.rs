@@ -220,7 +220,6 @@ impl World {
 
         let pipeline = self.pipeline.try_borrow()?;
         for batch in &pipeline.batch[pipeline.default.clone()] {
-            dbg!(batch);
             self.thread_pool.install(|| {
                 batch.into_par_iter().for_each(|&index| {
                     pipeline.systems[index].dispatch(&self);
