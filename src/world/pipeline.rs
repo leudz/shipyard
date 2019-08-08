@@ -68,7 +68,8 @@ macro_rules! impl_pipeline {
                             match mutation {
                                 Mutation::Immutable => {
                                     for &(batch_type_id, mutation) in batch.iter() {
-                                        if type_id == batch_type_id && mutation == Mutation::Mutable || batch_type_id == TypeId::of::<AllStorages>() {
+                                        if type_id == batch_type_id && mutation == Mutation::Mutable
+                                        || (batch_type_id == TypeId::of::<AllStorages>() && type_id != TypeId::of::<crate::ThreadPool>()) {
                                             conflict = true;
                                             break;
                                         }
