@@ -25,7 +25,11 @@ pub use not::Not;
 pub use pack::OwnedPack;
 pub use remove::Remove;
 pub use run::Run;
+pub use run::{System, SystemData};
 pub use world::World;
+
+/// Type used to borrow the rayon::ThreadPool inside `World`.
+pub struct ThreadPool;
 
 #[cfg(test)]
 mod test {
@@ -306,11 +310,79 @@ mod test {
         let world = World::new::<(usize, u32)>();
         let entity1 = world.new_entity((0usize, 1u32));
         let entity2 = world.new_entity((2usize, 3u32));
-        world.delete(entity1);
+        assert!(world.delete(entity1));
+        assert!(!world.delete(entity1));
         let (usizes, u32s) = world.get_storage::<(&usize, &u32)>();
         assert_eq!((&usizes).get(entity1), None);
         assert_eq!((&u32s).get(entity1), None);
         assert_eq!(usizes.get(entity2), Some(&2));
         assert_eq!(u32s.get(entity2), Some(&3));
+    }
+    #[test]
+    fn thread_pool() {
+        let world = World::new::<(usize, u32)>();
+        world.run::<(ThreadPool,), _>(|(thread_pool,)| {
+            use rayon::prelude::*;
+
+            let vec = vec![0, 1, 2, 3];
+            thread_pool.install(|| {
+                assert_eq!(vec.into_par_iter().sum::<i32>(), 6);
+            });
+        })
+    }
+    #[test]
+    fn system() {
+        struct System1;
+        impl<'a> System<'a> for System1 {
+            type Data = (&'a mut usize, &'a u32);
+            fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+                for (x, y) in (usizes, u32s).iter() {
+                    *x += *y as usize;
+                }
+            }
+        }
+        let world = World::new::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize, 3u32));
+        world.add_workload("sys1", System1);
+        world.run_default();
+        world.run::<(&usize,), _>(|(usizes,)| {
+            let mut iter = usizes.iter();
+            assert_eq!(iter.next(), Some(&1));
+            assert_eq!(iter.next(), Some(&5));
+            assert_eq!(iter.next(), None);
+        });
+    }
+    #[test]
+    fn systems() {
+        struct System1;
+        impl<'a> System<'a> for System1 {
+            type Data = (&'a mut usize, &'a u32);
+            fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+                for (x, y) in (usizes, u32s).iter() {
+                    *x += *y as usize;
+                }
+            }
+        }
+        struct System2;
+        impl<'a> System<'a> for System2 {
+            type Data = (&'a mut usize,);
+            fn run(&self, (usizes,): <Self::Data as SystemData>::View) {
+                for x in (usizes,).iter() {
+                    *x += 1;
+                }
+            }
+        }
+        let world = World::new::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize, 3u32));
+        world.add_workload("sys1", (System1, System2));
+        world.run_default();
+        world.run::<(&usize,), _>(|(usizes,)| {
+            let mut iter = usizes.iter();
+            assert_eq!(iter.next(), Some(&2));
+            assert_eq!(iter.next(), Some(&6));
+            assert_eq!(iter.next(), None);
+        });
     }
 }

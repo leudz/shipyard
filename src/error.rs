@@ -69,3 +69,29 @@ impl From<Pack> for WorldPack {
 pub enum Remove {
     MissingPackStorage(TypeId),
 }
+
+/// Trying to set the default workload to a non existant one will result in this error.
+#[derive(Debug)]
+pub enum SetDefaultWorkload {
+    Borrow(Borrow),
+    MissingWorkload,
+}
+
+impl From<Borrow> for SetDefaultWorkload {
+    fn from(borrow: Borrow) -> Self {
+        SetDefaultWorkload::Borrow(borrow)
+    }
+}
+
+/// Try to run a non existant workload.
+#[derive(Debug)]
+pub enum RunWorkload {
+    Borrow(Borrow),
+    MissingWorkload,
+}
+
+impl From<Borrow> for RunWorkload {
+    fn from(borrow: Borrow) -> Self {
+        RunWorkload::Borrow(borrow)
+    }
+}

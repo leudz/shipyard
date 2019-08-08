@@ -5,3 +5,5 @@ authors = ["leudz <dylan.ancel@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+num_cpus = "1.10.1"
+rayon = "1.1.0"

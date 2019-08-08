@@ -1,5 +1,6 @@
 mod new_entity;
 mod pack;
+mod pipeline;
 mod register;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
@@ -11,12 +12,16 @@ use crate::pack::OwnedPack;
 use crate::run::Run;
 use new_entity::WorldNewEntity;
 use pack::WorldOwnedPack;
+use pipeline::{Pipeline, Workload};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use register::Register;
 
 /// `World` holds all components and keeps track of entities and what they own.
 pub struct World {
-    entities: AtomicRefCell<Entities>,
-    storages: AtomicRefCell<AllStorages>,
+    pub(crate) entities: AtomicRefCell<Entities>,
+    pub(crate) storages: AtomicRefCell<AllStorages>,
+    pub(crate) thread_pool: ThreadPool,
+    pipeline: AtomicRefCell<Pipeline>,
 }
 
 impl Default for World {
@@ -25,6 +30,11 @@ impl Default for World {
         World {
             entities: AtomicRefCell::new(Default::default()),
             storages: AtomicRefCell::new(Default::default()),
+            thread_pool: ThreadPoolBuilder::new()
+                .num_threads(num_cpus::get_physical())
+                .build()
+                .unwrap(),
+            pipeline: AtomicRefCell::new(Default::default()),
         }
     }
 }
@@ -120,7 +130,7 @@ impl World {
     /// `T` has to be a tuple even for a single type due to restrictions.
     /// In this case use (T,).
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
-        T::run(&self.entities, &self.storages, f);
+        T::run(&self.entities, &self.storages, &self.thread_pool, f);
     }
     /// Pack multiple storages, it can speed up iteration at the cost of insertion/removal.
     pub fn try_pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self) -> Result<(), error::WorldPack>
@@ -149,5 +159,77 @@ impl World {
     /// Same as try_delete but will unwrap any error.
     pub fn delete(&self, entity: Key) -> bool {
         self.try_delete(entity).unwrap()
+    }
+    /// Modifies the current default workload to `name`.
+    pub fn try_set_default_workload(
+        &self,
+        name: impl ToString,
+    ) -> Result<(), error::SetDefaultWorkload> {
+        let name = name.to_string();
+        let mut pipeline = self.pipeline.try_borrow_mut()?;
+        if let Some(workload) = pipeline.workloads.get(&name) {
+            pipeline.default = workload.clone();
+            Ok(())
+        } else {
+            Err(error::SetDefaultWorkload::MissingWorkload)
+        }
+    }
+    pub fn set_default_workload(&self, name: impl ToString) {
+        self.try_set_default_workload(name).unwrap();
+    }
+    /// A workload is a collection of systems.
+    /// They will execute as much in parallel as possible.
+    /// They are evaluated left to right.
+    /// The default workload will automatically be set to the first workload added.
+    pub fn try_add_workload<T: Workload>(
+        &self,
+        name: impl ToString,
+        system: T,
+    ) -> Result<(), error::Borrow> {
+        let mut pipeline = self.pipeline.try_borrow_mut()?;
+        system.into_workload(name.to_string(), &mut *pipeline);
+        Ok(())
+    }
+    pub fn add_workload<T: Workload>(&self, name: impl ToString, system: T) {
+        self.try_add_workload(name, system).unwrap();
+    }
+    /// Runs the `name` workload.
+    pub fn try_run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
+        use rayon::prelude::*;
+
+        let pipeline = self.pipeline.try_borrow()?;
+        if let Some(workload) = pipeline.workloads.get(name.as_ref()) {
+            for batch in &pipeline.batch[workload.clone()] {
+                self.thread_pool.install(|| {
+                    batch.into_par_iter().for_each(|&index| {
+                        pipeline.systems[index].dispatch(&self);
+                    });
+                })
+            }
+            Ok(())
+        } else {
+            Err(error::RunWorkload::MissingWorkload)
+        }
+    }
+    pub fn run_workload(&self, name: impl AsRef<str>) {
+        self.try_run_workload(name).unwrap();
+    }
+    /// Run the default workload.
+    pub fn try_run_default(&self) -> Result<(), error::Borrow> {
+        use rayon::prelude::*;
+
+        let pipeline = self.pipeline.try_borrow()?;
+        for batch in &pipeline.batch[pipeline.default.clone()] {
+            dbg!(batch);
+            self.thread_pool.install(|| {
+                batch.into_par_iter().for_each(|&index| {
+                    pipeline.systems[index].dispatch(&self);
+                });
+            })
+        }
+        Ok(())
+    }
+    pub fn run_default(&self) {
+        self.try_run_default().unwrap();
     }
 }
