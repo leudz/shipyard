@@ -1,15 +1,19 @@
 mod iter;
 
 use crate::not::Not;
-use crate::sparse_array::{View, ViewMut, ViewSemiMut};
-pub use iter::{Iter2, Iter3, Iter4, Iter5};
+use crate::sparse_array::{RawViewMut, View, ViewMut};
+pub use iter::{Iter2, Iter3, Iter4, Iter5, ParIter2, ParIter3, ParIter4, ParIter5};
 use std::any::TypeId;
 
 // This trait exists because of conflicting implementations
 // when using std::iter::IntoIterator
 pub trait IntoIter {
     type IntoIter;
+    type IntoParIter;
+    /// Returns an iterator over storages yielding only components meeting the requirements.
     fn iter(self) -> Self::IntoIter;
+    /// Returns a parallel iterator over storages yielding only components meeting the requirements.
+    fn par_iter(self) -> Self::IntoParIter;
 }
 
 // Allows to make ViewMut's sparse and dense fields immutable
@@ -23,7 +27,7 @@ pub trait IntoAbstract {
     fn abs_pack_len(&self) -> usize;
 }
 
-impl<'a, T> IntoAbstract for View<'a, T> {
+impl<'a, T: Send + Sync> IntoAbstract for View<'a, T> {
     type View = Self;
     fn into_abstract(self) -> Self::View {
         self
@@ -42,7 +46,7 @@ impl<'a, T> IntoAbstract for View<'a, T> {
     }
 }
 
-impl<'a, T> IntoAbstract for &View<'a, T> {
+impl<'a, T: Send + Sync> IntoAbstract for &View<'a, T> {
     type View = Self;
     fn into_abstract(self) -> Self::View {
         self
@@ -61,10 +65,10 @@ impl<'a, T> IntoAbstract for &View<'a, T> {
     }
 }
 
-impl<'a, T> IntoAbstract for ViewMut<'a, T> {
-    type View = ViewSemiMut<'a, T>;
+impl<'a, T: Send + Sync> IntoAbstract for ViewMut<'a, T> {
+    type View = RawViewMut<'a, T>;
     fn into_abstract(self) -> Self::View {
-        self.into_semi_mut()
+        self.into_raw()
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
@@ -80,7 +84,7 @@ impl<'a, T> IntoAbstract for ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T> IntoAbstract for &'b ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for &'b ViewMut<'a, T> {
     type View = View<'b, T>;
     fn into_abstract(self) -> Self::View {
         self.non_mut()
@@ -99,10 +103,10 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T> IntoAbstract for &'b mut ViewMut<'a, T> {
-    type View = ViewSemiMut<'b, T>;
+impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for &'b mut ViewMut<'a, T> {
+    type View = RawViewMut<'b, T>;
     fn into_abstract(self) -> Self::View {
-        self.semi_mut()
+        self.raw()
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.dense.as_ptr(), Some(self.dense.len()))
@@ -118,7 +122,7 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b mut ViewMut<'a, T> {
     }
 }
 
-impl<'a, T> IntoAbstract for Not<View<'a, T>> {
+impl<'a, T: Send + Sync> IntoAbstract for Not<View<'a, T>> {
     type View = Self;
     fn into_abstract(self) -> Self::View {
         self
@@ -137,7 +141,7 @@ impl<'a, T> IntoAbstract for Not<View<'a, T>> {
     }
 }
 
-impl<'a, T> IntoAbstract for &Not<View<'a, T>> {
+impl<'a, T: Send + Sync> IntoAbstract for &Not<View<'a, T>> {
     type View = Self;
     fn into_abstract(self) -> Self::View {
         self
@@ -156,7 +160,7 @@ impl<'a, T> IntoAbstract for &Not<View<'a, T>> {
     }
 }
 
-impl<'a, T> IntoAbstract for Not<&View<'a, T>> {
+impl<'a, T: Send + Sync> IntoAbstract for Not<&View<'a, T>> {
     type View = Self;
     fn into_abstract(self) -> Self::View {
         self
@@ -175,10 +179,10 @@ impl<'a, T> IntoAbstract for Not<&View<'a, T>> {
     }
 }
 
-impl<'a, T> IntoAbstract for Not<ViewMut<'a, T>> {
-    type View = Not<ViewSemiMut<'a, T>>;
+impl<'a, T: Send + Sync> IntoAbstract for Not<ViewMut<'a, T>> {
+    type View = Not<RawViewMut<'a, T>>;
     fn into_abstract(self) -> Self::View {
-        Not(self.0.into_semi_mut())
+        Not(self.0.into_raw())
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
@@ -194,7 +198,7 @@ impl<'a, T> IntoAbstract for Not<ViewMut<'a, T>> {
     }
 }
 
-impl<'a: 'b, 'b, T> IntoAbstract for &'b Not<ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for &'b Not<ViewMut<'a, T>> {
     type View = Not<View<'b, T>>;
     fn into_abstract(self) -> Self::View {
         Not(self.0.non_mut())
@@ -213,10 +217,10 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b Not<ViewMut<'a, T>> {
     }
 }
 
-impl<'a: 'b, 'b, T> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
-    type View = Not<ViewSemiMut<'b, T>>;
+impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
+    type View = Not<RawViewMut<'b, T>>;
     fn into_abstract(self) -> Self::View {
-        Not(self.0.semi_mut())
+        Not(self.0.raw())
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
@@ -232,7 +236,7 @@ impl<'a: 'b, 'b, T> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
     }
 }
 
-impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     type View = Not<View<'b, T>>;
     fn into_abstract(self) -> Self::View {
         Not(self.0.non_mut())
@@ -251,10 +255,10 @@ impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     }
 }
 
-impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
-    type View = Not<ViewSemiMut<'b, T>>;
+impl<'a: 'b, 'b, T: Send + Sync> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
+    type View = Not<RawViewMut<'b, T>>;
     fn into_abstract(self) -> Self::View {
-        Not(self.0.semi_mut())
+        Not(self.0.raw())
     }
     fn indices(&self) -> (*const usize, Option<usize>) {
         (self.0.dense.as_ptr(), None)
@@ -272,7 +276,7 @@ impl<'a: 'b, 'b, T> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
 
 // Abstracts different types of view to iterate over
 // mutable and immutable views with the same iterator
-pub trait AbstractMut {
+pub trait AbstractMut: Clone + Send + Sync {
     type Out;
     type Slice;
     // # Safety
@@ -287,7 +291,7 @@ pub trait AbstractMut {
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
 }
 
-impl<'a, T> AbstractMut for View<'a, T> {
+impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
     type Out = &'a T;
     type Slice = &'a [T];
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
@@ -311,7 +315,7 @@ impl<'a, T> AbstractMut for View<'a, T> {
     }
 }
 
-impl<'a, T> AbstractMut for &View<'a, T> {
+impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
     type Out = &'a T;
     type Slice = &'a [T];
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
@@ -335,38 +339,28 @@ impl<'a, T> AbstractMut for &View<'a, T> {
     }
 }
 
-impl<'a, T> AbstractMut for ViewSemiMut<'a, T> {
+impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
     type Out = &'a mut T;
     type Slice = &'a mut [T];
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
         if self.contains(index) {
-            Some(
-                &mut *(self
-                    .data
-                    .get_unchecked_mut(*self.sparse.get_unchecked(index))
-                    as *mut _),
-            )
+            Some(&mut *(self.data.add(*self.sparse.get_unchecked(index)) as *mut _))
         } else {
             None
         }
     }
     unsafe fn abs_get_unchecked(&mut self, index: usize) -> Self::Out {
-        &mut *(self
-            .data
-            .get_unchecked_mut(*self.sparse.get_unchecked(index)) as *mut _)
+        &mut *(self.data.add(*self.sparse.get_unchecked(index)) as *mut _)
     }
     unsafe fn get_data(&mut self, count: usize) -> Self::Out {
-        &mut *self.data.as_mut_ptr().add(count)
+        &mut *self.data.add(count)
     }
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
-        std::slice::from_raw_parts_mut(
-            self.data.as_mut_ptr().add(indices.start),
-            indices.end - indices.start,
-        )
+        std::slice::from_raw_parts_mut(self.data.add(indices.start), indices.end - indices.start)
     }
 }
 
-impl<'a, T> AbstractMut for Not<View<'a, T>> {
+impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
@@ -387,7 +381,7 @@ impl<'a, T> AbstractMut for Not<View<'a, T>> {
     }
 }
 
-impl<'a, T> AbstractMut for &Not<View<'a, T>> {
+impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
@@ -408,7 +402,7 @@ impl<'a, T> AbstractMut for &Not<View<'a, T>> {
     }
 }
 
-impl<'a, T> AbstractMut for Not<&View<'a, T>> {
+impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
@@ -429,7 +423,7 @@ impl<'a, T> AbstractMut for Not<&View<'a, T>> {
     }
 }
 
-impl<'a, T> AbstractMut for Not<ViewSemiMut<'a, T>> {
+impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {

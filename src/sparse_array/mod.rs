@@ -8,7 +8,7 @@ use pack_info::PackInfo;
 pub(crate) use read_write::{Read, Write};
 use std::any::TypeId;
 use std::sync::Arc;
-pub(crate) use view::{View, ViewMut, ViewSemiMut};
+pub(crate) use view::{RawViewMut, View, ViewMut};
 pub(crate) use view_add_entity::ViewAddEntity;
 
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.

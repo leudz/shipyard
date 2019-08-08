@@ -20,7 +20,7 @@ pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use entity::Entities;
 pub use get::GetComponent;
-pub use iterators::{IntoIter, Iter2, Iter3, Iter4, Iter5};
+pub use iterators::{IntoIter, Iter2, Iter3, Iter4, Iter5, ParIter2, ParIter3, ParIter4, ParIter5};
 pub use not::Not;
 pub use pack::OwnedPack;
 pub use remove::Remove;
@@ -382,6 +382,45 @@ mod test {
             let mut iter = usizes.iter();
             assert_eq!(iter.next(), Some(&2));
             assert_eq!(iter.next(), Some(&6));
+            assert_eq!(iter.next(), None);
+        });
+    }
+    #[test]
+    fn simple_parallel_sum() {
+        use rayon::prelude::*;
+
+        let world = World::new::<(usize, u32)>();
+        world.new_entity((1usize, 2u32));
+        world.new_entity((3usize, 4u32));
+        world.run::<(&mut usize, ThreadPool), _>(|(usizes, thread_pool)| {
+            thread_pool.install(|| {
+                let sum: usize = (&usizes,).par_iter().cloned().sum();
+                assert_eq!(sum, 4);
+            });
+        });
+    }
+    #[test]
+    fn parallel_iterator() {
+        use rayon::prelude::*;
+
+        let world = World::new::<(usize, u32)>();
+        world.pack_owned::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize, 3u32));
+        world.run::<(&mut usize, &u32, ThreadPool), _>(|(mut usizes, u32s, thread_pool)| {
+            thread_pool.install(|| {
+                if let ParIter2::Packed(iter) = (&mut usizes, &u32s).par_iter() {
+                    dbg!(iter.opt_len());
+                    iter.for_each(|(x, y)| {
+                        *x += *y as usize;
+                    });
+                } else {
+                    panic!()
+                }
+            });
+            let mut iter = usizes.iter();
+            assert_eq!(iter.next(), Some(&mut 1));
+            assert_eq!(iter.next(), Some(&mut 5));
             assert_eq!(iter.next(), None);
         });
     }

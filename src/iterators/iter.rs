@@ -1,4 +1,6 @@
 use super::{AbstractMut, IntoAbstract, IntoIter};
+use rayon::iter::plumbing::{bridge_producer_consumer, Producer, UnindexedConsumer};
+use rayon::iter::ParallelIterator;
 use std::marker::PhantomData;
 
 // Packed iterators go from start to end without index lookup
@@ -33,8 +35,19 @@ impl<T: IntoAbstract> Packed1<T> {
     }
 }
 
+impl<T: IntoAbstract> Clone for Packed1<T> {
+    fn clone(&self) -> Self {
+        Packed1 {
+            data: self.data.clone(),
+            current: self.current,
+            end: self.end,
+        }
+    }
+}
+
 impl<T: IntoAbstract> IntoIter for T {
     type IntoIter = Packed1<Self>;
+    type IntoParIter = ParPacked1<Self>;
     fn iter(self) -> Self::IntoIter {
         Packed1 {
             end: self.indices().1.unwrap_or(0),
@@ -42,12 +55,19 @@ impl<T: IntoAbstract> IntoIter for T {
             current: 0,
         }
     }
+    fn par_iter(self) -> Self::IntoParIter {
+        ParPacked1(self.iter())
+    }
 }
 
 impl<T: IntoAbstract> IntoIter for (T,) {
     type IntoIter = Packed1<T>;
+    type IntoParIter = ParPacked1<T>;
     fn iter(self) -> Self::IntoIter {
         T::iter(self.0)
+    }
+    fn par_iter(self) -> Self::IntoParIter {
+        ParPacked1(self.iter())
     }
 }
 
@@ -80,6 +100,45 @@ impl<T: IntoAbstract> DoubleEndedIterator for Packed1<T> {
 impl<T: IntoAbstract> ExactSizeIterator for Packed1<T> {
     fn len(&self) -> usize {
         self.end - self.current
+    }
+}
+
+pub struct ParPacked1<T: IntoAbstract>(Packed1<T>);
+
+impl<T: IntoAbstract> ParPacked1<T> {
+    /// Trasnform this parallel iterator into its sequential version.
+    pub fn into_seq(self) -> Packed1<T> {
+        self.0
+    }
+}
+
+impl<T: IntoAbstract> Producer for Packed1<T>
+where
+    <T::View as AbstractMut>::Out: Send,
+{
+    type Item = <T::View as AbstractMut>::Out;
+    type IntoIter = Self;
+    fn into_iter(self) -> Self::IntoIter {
+        self
+    }
+    fn split_at(mut self, index: usize) -> (Self, Self) {
+        let mut clone = self.clone();
+        self.end -= index;
+        clone.current += index;
+        (self, clone)
+    }
+}
+
+impl<T: IntoAbstract> ParallelIterator for ParPacked1<T>
+where
+    <T::View as AbstractMut>::Out: Send,
+{
+    type Item = <T::View as AbstractMut>::Out;
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: UnindexedConsumer<Self::Item>,
+    {
+        bridge_producer_consumer(self.0.len(), self.0, consumer)
     }
 }
 
@@ -137,7 +196,7 @@ impl<T: IntoAbstract> Iterator for ChunkExact1<T> {
 }
 
 macro_rules! impl_iterators {
-    ($iter: ident $packed: ident $non_packed: ident $chunk: ident $chunk_exact: ident $(($type: ident, $index: tt))+) => {
+    ($iter: ident $par_iter: ident $packed: ident $non_packed: ident $chunk: ident $chunk_exact: ident $par_packed: ident $par_non_packed: ident $(($type: ident, $index: tt))+) => {
         pub struct $packed<$($type: IntoAbstract),+> {
             data: ($($type::View,)+),
             current: usize,
@@ -167,6 +226,18 @@ macro_rules! impl_iterators {
                 }
             }
         }
+
+        impl<$($type: IntoAbstract),+> Clone for $packed<$($type),+> {
+            fn clone(&self) -> Self {
+                $packed {
+                    data: self.data.clone(),
+                    current: self.current,
+                    end: self.end,
+                }
+            }
+        }
+
+        pub struct $par_packed<$($type: IntoAbstract),+>($packed<$($type),+>);
 
         pub struct $chunk<$($type: IntoAbstract),+> {
             data: ($($type::View,)+),
@@ -203,6 +274,8 @@ macro_rules! impl_iterators {
             array: usize,
         }
 
+        pub struct $par_non_packed;
+
         pub enum $iter<$($type: IntoAbstract),+> {
             Packed($packed<$($type),+>),
             NonPacked($non_packed<$($type),+>),
@@ -218,8 +291,14 @@ macro_rules! impl_iterators {
             }
         }
 
+        pub enum $par_iter<$($type: IntoAbstract),+> {
+            Packed($par_packed<$($type),+>),
+            NonPacked($par_non_packed),
+        }
+
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
             type IntoIter = $iter<$($type,)+>;
+            type IntoParIter = $par_iter<$($type,)+>;
             fn iter(self) -> Self::IntoIter {
                 // check if all types are packed together
                 let packed_types = self.0.abs_pack_types_owned();
@@ -261,6 +340,12 @@ macro_rules! impl_iterators {
                     })
                 }
             }
+            fn par_iter(self) -> Self::IntoParIter {
+                match self.iter() {
+                    $iter::Packed(iter) => $par_iter::Packed($par_packed(iter)),
+                    $iter::NonPacked(_) => $par_iter::NonPacked($par_non_packed),
+                }
+            }
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $packed<$($type),+> {
@@ -292,6 +377,36 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract),+> ExactSizeIterator for $packed<$($type),+> {
             fn len(&self) -> usize {
                 self.end - self.current
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> Producer for $packed<$($type),+>
+        where
+            $(<$type::View as AbstractMut>::Out: Send),+
+        {
+            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type IntoIter = Self;
+            fn into_iter(self) -> Self::IntoIter {
+                self
+            }
+            fn split_at(mut self, index: usize) -> (Self, Self) {
+                let mut clone = self.clone();
+                self.end -= index;
+                clone.current += index;
+                (self, clone)
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> ParallelIterator for $par_packed<$($type),+>
+        where
+            $(<$type::View as AbstractMut>::Out: Send),+
+        {
+            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
+            where
+                Cons: UnindexedConsumer<Self::Item>,
+            {
+                bridge_producer_consumer(self.0.len(), self.0, consumer)
             }
         }
 
@@ -355,39 +470,51 @@ macro_rules! impl_iterators {
 macro_rules! iterators {
     (
         $($iter: ident)*; $iter1: ident $($queue_iter: ident)+;
+        $($par_iter: ident)*; $par_iter1: ident $($queue_par_iter: ident)+;
         $($packed: ident)*; $packed1: ident $($queue_packed: ident)+;
         $($non_packed: ident)*; $non_packed1: ident $($queue_non_packed: ident)+;
         $($chunk: ident)*; $chunk1: ident $($queue_chunk: ident)+;
         $($chunk_exact: ident)*; $chunk_exact1: ident $($queue_chunk_exact: ident)+;
+        $($par_packed: ident)*; $par_packed1: ident $($queue_par_packed: ident)+;
+        $($par_non_packed: ident)*; $par_non_packed1: ident $($queue_par_non_packed: ident)+;
         $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
-        impl_iterators![$iter1 $packed1 $non_packed1 $chunk1 $chunk_exact1 $(($type, $index))*];
+        impl_iterators![$iter1 $par_iter1 $packed1 $non_packed1 $chunk1 $chunk_exact1 $par_packed1 $par_non_packed1 $(($type, $index))*];
         iterators![
             $($iter)* $iter1; $($queue_iter)+;
+            $($par_iter)* $par_iter1; $($queue_par_iter)+;
             $($packed)* $packed1; $($queue_packed)+;
             $($non_packed)* $non_packed1; $($queue_non_packed)+;
             $($chunk)* $chunk1; $($queue_chunk)+;
             $($chunk_exact)* $chunk_exact1; $($queue_chunk_exact)+;
+            $($par_packed)* $par_packed1; $($queue_par_packed)+;
+            $($par_non_packed)* $par_non_packed1; $($queue_par_non_packed)+;
             $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*
         ];
     };
     (
         $($iter: ident)*; $iter1: ident;
+        $($par_iter: ident)*; $par_iter1: ident;
         $($packed: ident)*; $packed1: ident;
         $($non_packed: ident)*; $non_packed1: ident;
         $($chunk: ident)*; $chunk1: ident;
         $($chunk_exact: ident)*; $chunk_exact1: ident;
+        $($par_packed: ident)*; $par_packed1: ident;
+        $($par_non_packed: ident)*; $par_non_packed1: ident;
         $(($type: ident, $index: tt))*;
     ) => {
-        impl_iterators![$iter1 $packed1 $non_packed1 $chunk1 $chunk_exact1 $(($type, $index))*];
+        impl_iterators![$iter1 $par_iter1 $packed1 $non_packed1 $chunk1 $chunk_exact1 $par_packed1 $par_non_packed1 $(($type, $index))*];
     }
 }
 
 iterators![
     ;Iter2 Iter3 Iter4 Iter5;
+    ;ParIter2 ParIter3 ParIter4 ParIter5;
     ;Packed2 Packed3 Packed4 Packed5;
     ;NonPacked2 NonPacked3 NonPacked4 NonPacked5;
     ;Chunk2 Chunk3 Chunk4 Chunk5;
     ;ChunkExact2 ChunkExact3 ChunkExact4 ChunkExact5;
+    ;ParPacked2 ParPacked3 ParPacked4 ParPacked5;
+    ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5;
     (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/
 ];

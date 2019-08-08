@@ -9,6 +9,17 @@ pub struct View<'a, T> {
     pub(super) pack_info: &'a PackInfo,
 }
 
+impl<'a, T> Clone for View<'a, T> {
+    fn clone(&self) -> Self {
+        View {
+            sparse: self.sparse,
+            dense: self.dense,
+            data: self.data,
+            pack_info: self.pack_info,
+        }
+    }
+}
+
 impl<T> View<'_, T> {
     pub(crate) fn contains_index(&self, index: usize) -> bool {
         index < self.sparse.len()
@@ -115,19 +126,19 @@ impl<'a, T> ViewMut<'a, T> {
         self.dense.len()
     }
     /// Consumes the ViewMut and returns a ViewSemiMut.
-    pub(crate) fn into_semi_mut(self) -> ViewSemiMut<'a, T> {
-        ViewSemiMut {
+    pub(crate) fn into_raw(self) -> RawViewMut<'a, T> {
+        RawViewMut {
             sparse: self.sparse,
             dense: self.dense,
-            data: self.data,
+            data: self.data.as_mut_ptr(),
         }
     }
     /// Borrows the ViewMut and returns a ViewSemiMut.
-    pub(crate) fn semi_mut(&mut self) -> ViewSemiMut<T> {
-        ViewSemiMut {
+    pub(crate) fn raw(&mut self) -> RawViewMut<T> {
+        RawViewMut {
             sparse: self.sparse,
             dense: self.dense,
-            data: self.data,
+            data: self.data.as_mut_ptr(),
         }
     }
     /// Borrows the ViewMut and returns a View.
@@ -190,13 +201,16 @@ impl<'a, T> ViewMut<'a, T> {
 }
 
 // Used in iterators to be able to keep a pointer to the indices
-pub struct ViewSemiMut<'a, T> {
+pub struct RawViewMut<'a, T> {
     pub(crate) sparse: &'a [usize],
     pub(crate) dense: &'a [usize],
-    pub(crate) data: &'a mut [T],
+    pub(crate) data: *mut T,
 }
 
-impl<'a, T> ViewSemiMut<'a, T> {
+unsafe impl<T: Send + Sync> Send for RawViewMut<'_, T> {}
+unsafe impl<T: Send + Sync> Sync for RawViewMut<'_, T> {}
+
+impl<'a, T> RawViewMut<'a, T> {
     /// Returns true if the `entity` has this component.
     pub(crate) fn contains(&self, index: usize) -> bool {
         index < self.sparse.len()
@@ -206,5 +220,15 @@ impl<'a, T> ViewSemiMut<'a, T> {
     /// Returns the number of components in the view.
     pub fn len(&self) -> usize {
         self.dense.len()
+    }
+}
+
+impl<'a, T> Clone for RawViewMut<'a, T> {
+    fn clone(&self) -> Self {
+        RawViewMut {
+            sparse: self.sparse,
+            dense: self.dense,
+            data: self.data,
+        }
     }
 }
