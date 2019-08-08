@@ -65,6 +65,24 @@ impl<T: IntoAbstract> Iterator for Packed1<T> {
     }
 }
 
+impl<T: IntoAbstract> DoubleEndedIterator for Packed1<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.end > self.current {
+            self.end -= 1;
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { self.data.get_data(self.end) })
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: IntoAbstract> ExactSizeIterator for Packed1<T> {
+    fn len(&self) -> usize {
+        self.end - self.current
+    }
+}
+
 pub struct Chunk1<T: IntoAbstract> {
     data: T::View,
     current: usize,
@@ -256,6 +274,24 @@ macro_rules! impl_iterators {
                 } else {
                     None
                 }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> DoubleEndedIterator for $packed<$($type),+> {
+            fn next_back(&mut self) -> Option<Self::Item> {
+                if self.end > self.current {
+                    self.end -= 1;
+                    // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+                    Some(unsafe { ($(self.data.$index.get_data(self.end),)+) })
+                } else {
+                    None
+                }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> ExactSizeIterator for $packed<$($type),+> {
+            fn len(&self) -> usize {
+                self.end - self.current
             }
         }
 
