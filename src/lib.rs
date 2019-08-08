@@ -400,7 +400,7 @@ mod test {
         });
     }
     #[test]
-    fn parallel_iterator() {
+    fn packed_parallel_iterator() {
         use rayon::prelude::*;
 
         let world = World::new::<(usize, u32)>();
@@ -408,16 +408,40 @@ mod test {
         world.new_entity((0usize, 1u32));
         world.new_entity((2usize, 3u32));
         world.run::<(&mut usize, &u32, ThreadPool), _>(|(mut usizes, u32s, thread_pool)| {
+            let counter = std::sync::atomic::AtomicUsize::new(0);
             thread_pool.install(|| {
                 if let ParIter2::Packed(iter) = (&mut usizes, &u32s).par_iter() {
-                    dbg!(iter.opt_len());
                     iter.for_each(|(x, y)| {
+                        counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         *x += *y as usize;
                     });
                 } else {
                     panic!()
                 }
             });
+            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
+            let mut iter = usizes.iter();
+            assert_eq!(iter.next(), Some(&mut 1));
+            assert_eq!(iter.next(), Some(&mut 5));
+            assert_eq!(iter.next(), None);
+        });
+    }
+    #[test]
+    fn parallel_iterator() {
+        use rayon::prelude::*;
+
+        let world = World::new::<(usize, u32)>();
+        world.new_entity((0usize, 1u32));
+        world.new_entity((2usize, 3u32));
+        world.run::<(&mut usize, &u32, ThreadPool), _>(|(mut usizes, u32s, thread_pool)| {
+            let counter = std::sync::atomic::AtomicUsize::new(0);
+            thread_pool.install(|| {
+                (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    *x += *y as usize;
+                });
+            });
+            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
             let mut iter = usizes.iter();
             assert_eq!(iter.next(), Some(&mut 1));
             assert_eq!(iter.next(), Some(&mut 5));

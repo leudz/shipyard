@@ -1,5 +1,8 @@
 use super::{AbstractMut, IntoAbstract, IntoIter};
-use rayon::iter::plumbing::{bridge_producer_consumer, Producer, UnindexedConsumer};
+use rayon::iter::plumbing::{
+    bridge_producer_consumer, bridge_unindexed, Folder, Producer, UnindexedConsumer,
+    UnindexedProducer,
+};
 use rayon::iter::ParallelIterator;
 use std::marker::PhantomData;
 
@@ -274,7 +277,21 @@ macro_rules! impl_iterators {
             array: usize,
         }
 
-        pub struct $par_non_packed;
+        unsafe impl<$($type: IntoAbstract),+> Send for $non_packed<$($type),+> {}
+
+        impl<$($type: IntoAbstract),+> Clone for $non_packed<$($type),+> {
+            fn clone(&self) -> Self {
+                $non_packed {
+                    data: self.data.clone(),
+                    indices: self.indices,
+                    current: self.current,
+                    end: self.end,
+                    array: self.array,
+                }
+            }
+        }
+
+        pub struct $par_non_packed<$($type: IntoAbstract),+>($non_packed<$($type),+>);
 
         pub enum $iter<$($type: IntoAbstract),+> {
             Packed($packed<$($type),+>),
@@ -293,7 +310,21 @@ macro_rules! impl_iterators {
 
         pub enum $par_iter<$($type: IntoAbstract),+> {
             Packed($par_packed<$($type),+>),
-            NonPacked($par_non_packed),
+            NonPacked($par_non_packed<$($type),+>),
+        }
+
+        impl<$($type: IntoAbstract),+> ParallelIterator for $par_iter<$($type),+>
+        where $(<$type::View as AbstractMut>::Out: Send),+ {
+            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
+            where
+                Cons: UnindexedConsumer<Self::Item>,
+            {
+                match self {
+                    $par_iter::Packed(iter) => bridge_producer_consumer(iter.0.len(), iter.0, consumer),
+                    $par_iter::NonPacked(iter) => bridge_unindexed(iter.0, consumer),
+                }
+            }
         }
 
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
@@ -343,7 +374,7 @@ macro_rules! impl_iterators {
             fn par_iter(self) -> Self::IntoParIter {
                 match self.iter() {
                     $iter::Packed(iter) => $par_iter::Packed($par_packed(iter)),
-                    $iter::NonPacked(_) => $par_iter::NonPacked($par_non_packed),
+                    $iter::NonPacked(iter) => $par_iter::NonPacked($par_non_packed(iter)),
                 }
             }
         }
@@ -433,6 +464,32 @@ macro_rules! impl_iterators {
                     },)+))
                 }
                 None
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> UnindexedProducer for $non_packed<$($type,)+> {
+            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            fn split(mut self) -> (Self, Option<Self>) {
+                let len = self.end - self.current;
+                if self.end - self.current >= 2 {
+                    let mut clone = self.clone();
+                    self.end -= len / 2;
+                    clone.current += len / 2;
+                    (self, Some(clone))
+                } else {
+                    (self, None)
+                }
+            }
+            fn fold_with<F>(mut self, mut folder: F) -> F
+            where F: Folder<Self::Item> {
+                while !folder.full() {
+                    if let Some(item) = self.next() {
+                        folder = folder.consume(item);
+                    } else {
+                        break;
+                    }
+                }
+                folder
             }
         }
 
