@@ -1,50 +1,142 @@
 use std::any::TypeId;
+use std::fmt::{Debug, Display, Formatter};
 
 /// AtomicRefCell's borrow error.
 /// Unique means the BorrowState was mutably borrowed when an illegal borrow occured.
 /// Shared means the BorrowState was immutably borrowed when an illegal borrow occured.
-#[derive(Debug)]
 pub enum Borrow {
     Unique,
     Shared,
+}
+
+impl Debug for Borrow {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Borrow::Unique => fmt.write_str("Cannot mutably borrow while already borrowed."),
+            Borrow::Shared => {
+                fmt.write_str("Cannot immutably borrow while already mutably borrowed.")
+            }
+        }
+    }
+}
+
+impl Display for Borrow {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
 }
 
 /// Error related to acquiring a storage.
 /// AllStoragesBorrow means an add_storage operation is in progress.
 /// StorageBorrow means this storage is already borrowed.
 /// MissingComponent signify no storage exists for this type.
-#[derive(Debug)]
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
     StorageBorrow(Borrow),
     MissingComponent,
 }
 
+impl Debug for GetStorage {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            GetStorage::AllStoragesBorrow(borrow) => match borrow {
+                Borrow::Unique => fmt.write_str("Cannot mutably borrow all storages while it's already borrowed (this include component storage)."),
+                Borrow::Shared => {
+                    fmt.write_str("Cannot immutably borrow all storages while it's already mutably borrowed.")
+                }
+            },
+            GetStorage::StorageBorrow(borrow) => match borrow {
+                Borrow::Unique => fmt.write_str("Cannot mutably borrow a storage while it's already borrowed."),
+                Borrow::Shared => {
+                    fmt.write_str("Cannot immutably borrow a storage while it's already mutably borrowed.")
+                }
+            },
+            GetStorage::MissingComponent => fmt.write_str("No storage with this type exists.")
+        }
+    }
+}
+
+impl Display for GetStorage {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// Error related to adding an entity.
 /// AllStoragesBorrow means an add_storage operation is in progress.
 /// Entities means entities is already borrowed.
-#[derive(Debug)]
 pub enum NewEntity {
     AllStoragesBorrow(Borrow),
     Entities(Borrow),
 }
 
+impl Debug for NewEntity {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            NewEntity::AllStoragesBorrow(borrow) => match borrow {
+                Borrow::Unique => fmt.write_str("Cannot mutably borrow all storages while it's already borrowed (this include component storage)."),
+                Borrow::Shared => {
+                    fmt.write_str("Cannot immutably borrow all storages while it's already mutably borrowed.")
+                }
+            },
+            NewEntity::Entities(borrow) => match borrow {
+                Borrow::Unique => fmt.write_str("Cannot mutably borrow entities while it's already borrowed."),
+                Borrow::Shared => unreachable!(),
+            },
+        }
+    }
+}
+
+impl Display for NewEntity {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// Trying to pack a storage twice will result in this error.
-#[derive(Debug)]
 pub enum Pack {
     // `TypeId` of the problematic storage
     AlreadyPacked(TypeId),
 }
 
+impl Debug for Pack {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Pack::AlreadyPacked(type_id) => fmt.write_fmt(format_args!(
+                "The storage of type ({:?}) is already packed owned.",
+                type_id
+            )),
+        }
+    }
+}
+
+impl Display for Pack {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// If a storage is packed_owned all storages packed with it have to be
 /// passed in the add_component call even if no components are added.
-#[derive(Debug)]
 pub enum AddComponent {
     // `TypeId` of the storage requirering more storages
     MissingPackStorage(TypeId),
 }
 
-#[derive(Debug)]
+impl Debug for AddComponent {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            AddComponent::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage of type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id))
+        }
+    }
+}
+
+impl Display for AddComponent {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 pub enum WorldPack {
     GetStorage(GetStorage),
     Pack(Pack),
@@ -62,16 +154,43 @@ impl From<Pack> for WorldPack {
     }
 }
 
+impl Debug for WorldPack {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            WorldPack::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
+            WorldPack::Pack(pack) => Debug::fmt(pack, fmt),
+        }
+    }
+}
+
+impl Display for WorldPack {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// When removing components if one of them is packed owned, all storages packed
 /// with it must be passed to the function.
 /// This error occurs when there is a missing storage, `TypeId` will indicate which storage.
-#[derive(Debug)]
 pub enum Remove {
     MissingPackStorage(TypeId),
 }
 
+impl Debug for Remove {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Remove::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage of type ({:?}). To remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
+        }
+    }
+}
+
+impl Display for Remove {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// Trying to set the default workload to a non existant one will result in this error.
-#[derive(Debug)]
 pub enum SetDefaultWorkload {
     Borrow(Borrow),
     MissingWorkload,
@@ -83,8 +202,29 @@ impl From<Borrow> for SetDefaultWorkload {
     }
 }
 
+impl Debug for SetDefaultWorkload {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            SetDefaultWorkload::Borrow(borrow) => match borrow {
+                Borrow::Unique => {
+                    fmt.write_str("Cannot mutably borrow pipeline while it's already borrowed.")
+                }
+                Borrow::Shared => unreachable!(),
+            },
+            SetDefaultWorkload::MissingWorkload => {
+                fmt.write_str("No workload with this name exists.")
+            }
+        }
+    }
+}
+
+impl Display for SetDefaultWorkload {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// Try to run a non existant workload.
-#[derive(Debug)]
 pub enum RunWorkload {
     Borrow(Borrow),
     MissingWorkload,
@@ -93,5 +233,25 @@ pub enum RunWorkload {
 impl From<Borrow> for RunWorkload {
     fn from(borrow: Borrow) -> Self {
         RunWorkload::Borrow(borrow)
+    }
+}
+
+impl Debug for RunWorkload {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            RunWorkload::Borrow(borrow) => match borrow {
+                Borrow::Unique => unreachable!(),
+                Borrow::Shared => {
+                    fmt.write_str("Cannot mutably borrow pipeline while it's already borrowed.")
+                }
+            },
+            RunWorkload::MissingWorkload => fmt.write_str("No workload with this name exists."),
+        }
+    }
+}
+
+impl Display for RunWorkload {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
     }
 }
