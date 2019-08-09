@@ -2,7 +2,7 @@ mod system;
 
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::component_storage::{AllStorages, AllStoragesViewMut};
-use crate::entity::{Entities, EntityViewMut};
+use crate::entity::{Entities, EntitiesViewMut};
 use crate::not::Not;
 use crate::sparse_array::{View, ViewMut};
 use rayon::ThreadPool;
@@ -22,8 +22,8 @@ pub enum Mutation {
     Mutable,
 }
 
-// `Run` make it possible to iterate over entities
-// It acts like an unnamed system
+// `Run` make it possible to iterate over entities.
+// It acts as an unnamed system.
 pub trait Run<'a> {
     type Storage;
     fn run<F: FnOnce(Self::Storage)>(
@@ -46,7 +46,7 @@ pub trait AbstractStorage<'a> {
 }
 
 impl<'a> AbstractStorage<'a> for Entities {
-    type AbstractStorage = EntityViewMut<'a>;
+    type AbstractStorage = EntitiesViewMut<'a>;
     unsafe fn borrow(
         entities: &'a AtomicRefCell<Entities>,
         _: &'a AtomicRefCell<AllStorages>,

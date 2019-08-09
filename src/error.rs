@@ -2,7 +2,9 @@ use std::any::TypeId;
 use std::fmt::{Debug, Display, Formatter};
 
 /// AtomicRefCell's borrow error.
+///
 /// Unique means the BorrowState was mutably borrowed when an illegal borrow occured.
+///
 /// Shared means the BorrowState was immutably borrowed when an illegal borrow occured.
 pub enum Borrow {
     Unique,
@@ -27,8 +29,11 @@ impl Display for Borrow {
 }
 
 /// Error related to acquiring a storage.
+///
 /// AllStoragesBorrow means an add_storage operation is in progress.
+///
 /// StorageBorrow means this storage is already borrowed.
+///
 /// MissingComponent signify no storage exists for this type.
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
@@ -63,7 +68,9 @@ impl Display for GetStorage {
 }
 
 /// Error related to adding an entity.
+///
 /// AllStoragesBorrow means an add_storage operation is in progress.
+///
 /// Entities means entities is already borrowed.
 pub enum NewEntity {
     AllStoragesBorrow(Borrow),
@@ -137,6 +144,10 @@ impl Display for AddComponent {
     }
 }
 
+/// Error related to [World::pack_owned] and [World::try_pack_owned].
+///
+/// [World::pack_owned]: ../struct.World.html#method.pack_owned
+/// [World::try_pack_owned]: ../struct.World.html#method.try_pack_owned
 pub enum WorldPack {
     GetStorage(GetStorage),
     Pack(Pack),
@@ -171,6 +182,7 @@ impl Display for WorldPack {
 
 /// When removing components if one of them is packed owned, all storages packed
 /// with it must be passed to the function.
+///
 /// This error occurs when there is a missing storage, `TypeId` will indicate which storage.
 pub enum Remove {
     MissingPackStorage(TypeId),

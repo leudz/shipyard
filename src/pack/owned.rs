@@ -3,10 +3,27 @@ use crate::sparse_array::{SparseArray, Write};
 use std::any::TypeId;
 use std::sync::Arc;
 
+/// Allows to pack multiple storages.
 pub trait OwnedPack {
-    /// Pack multiple storages, it can speed up iteration at the cost of insertion/removal.
+    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
+    /// (&mut usizes, &mut u32s).try_pack_owned().unwrap();
+    /// ```
     fn try_pack_owned(self) -> Result<(), error::Pack>;
-    /// Same as `try_pack_owned` but will unwrap in case of error.
+    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
+    /// (&mut usizes, &mut u32s).pack_owned();
+    /// ```
     fn pack_owned(self);
 }
 
@@ -99,4 +116,4 @@ macro_rules! owned_pack {
     }
 }
 
-owned_pack![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];
+owned_pack![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];

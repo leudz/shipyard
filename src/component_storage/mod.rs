@@ -82,28 +82,80 @@ impl AllStorages {
 }
 
 impl<'a> Ref<'a, AllStorages> {
-    /// Same as `try_get_storage` but will `unwrap` if an error occurs.
+    /// Retrives storages based on type `T`.
+    ///
+    /// `&T` returns a read access to the storage.
+    ///
+    /// `&mut T` returns a write access to the storage.
+    ///
+    /// To retrive multiple storages at once, use a tuple.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let all_storages = world.all_storages();
+    /// let (usizes, u32s) = all_storages.get_storage::<(&mut usize, &u32)>();
+    /// ```
     pub fn get_storage<T: GetStorage<'a>>(&self) -> T::Storage {
         self.try_get_storage::<T>().unwrap()
     }
     /// Retrives storages based on type `T`.
+    ///
     /// `&T` returns a read access to the storage.
+    ///
     /// `&mut T` returns a write access to the storage.
+    ///
     /// To retrive multiple storages at once, use a tuple.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let all_storages = world.all_storages();
+    /// let (usizes, u32s) = all_storages.try_get_storage::<(&mut usize, &u32)>().unwrap();
+    /// ```
     pub fn try_get_storage<T: GetStorage<'a>>(&self) -> Result<T::Storage, error::GetStorage> {
         T::get_in(Ref::clone(self))
     }
 }
 
 impl<'a> RefMut<'a, AllStorages> {
-    /// Same as `try_get_storage` but will `unwrap` if an error occurs.
+    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
+    /// to only borrow it immutably.
+    ///
+    /// `&T` returns a read access to the storage.
+    ///
+    /// `&mut T` returns a write access to the storage.
+    ///
+    /// To retrive multiple storages at once, use a tuple.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let all_storages = world.all_storages_mut();
+    /// let (usizes, u32s) = all_storages.get_storage::<(&mut usize, &u32)>();
+    /// ```
     pub fn get_storage<T: GetStorage<'a>>(self) -> T::Storage {
         self.try_get_storage::<T>().unwrap()
     }
-    /// Retrives storages based on type `T`.
+    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
+    /// to only borrow it immutably.
+    ///
     /// `&T` returns a read access to the storage.
+    ///
     /// `&mut T` returns a write access to the storage.
+    ///
     /// To retrive multiple storages at once, use a tuple.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let all_storages = world.all_storages_mut();
+    /// let (usizes, u32s) = all_storages.try_get_storage::<(&mut usize, &u32)>().unwrap();
+    /// ```
     pub fn try_get_storage<T: GetStorage<'a>>(self) -> Result<T::Storage, error::GetStorage> {
         RefMut::downgrade(self).try_get_storage::<T>()
     }

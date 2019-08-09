@@ -7,12 +7,79 @@ pub trait Removable {
     type Out;
 }
 
+/// Removes component from entities.
 pub trait Remove<T: Removable> {
-    /// Removes `entity`'s components based on `T`.
-    /// To remove component from a packed storage all storages packed with it
-    /// have to be passed to the function.
+    /// Removes component in `entity`, if the entity had them, they will be returned.
+    ///
+    /// Multiple components can be removed at the same time using a tuple.
+    ///
+    /// `T` has to be a tuple even for a single type.
+    /// In this case use (T,).
+    ///
+    /// The compiler has trouble inferring the return types.
+    /// You'll often have to use the full path `Remove::<type>::try_remove`.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity((0usize, 1u32));
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     let old = Remove::<(usize, u32)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
+    ///     assert_eq!(old, (Some(0), Some(1)));
+    /// });
+    /// ```
+    /// When using packed storages you have to pass all storages packed with it,
+    /// even if you don't remove any component from it.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// let entity1 = world.new_entity((0usize, 1u32));
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     let old = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
+    ///     assert_eq!(old, (Some(0),));
+    /// });
+    /// ```
     fn try_remove(self, entity: Key) -> Result<T::Out, error::Remove>;
-    /// Same as try_remove but will unwrap errors.
+    /// Removes component in `entity`, if the entity had them, they will be returned.
+    ///
+    /// Multiple components can be removed at the same time using a tuple.
+    ///
+    /// `T` has to be a tuple even for a single type.
+    /// In this case use (T,).
+    ///
+    /// The compiler has trouble inferring the return types.
+    /// You'll often have to use the full path `Remove::<type>::remove`.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity((0usize, 1u32));
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     let old = Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity1);
+    ///     assert_eq!(old, (Some(0), Some(1)));
+    /// });
+    /// ```
+    /// When using packed storages you have to pass all storages packed with it,
+    /// even if you don't remove any component from it.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// let entity1 = world.new_entity((0usize, 1u32));
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
+    ///     assert_eq!(old, (Some(0),));
+    /// });
+    /// ```
     fn remove(self, entity: Key) -> T::Out;
 }
 

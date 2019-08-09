@@ -5,7 +5,7 @@ use crate::sparse_array::SparseArray;
 use std::convert::TryFrom;
 
 /// `Read` is a `Ref` with two levels of borrow.
-/// First it borrows `AllComponent`,
+/// First it borrows `AllComponent` immutably,
 /// then it borrows the storage itself.
 pub struct Read<'a, T> {
     pub(crate) inner: &'a SparseArray<T>,
@@ -46,7 +46,7 @@ impl<'a, T: 'static> TryFrom<Ref<'a, ComponentStorage>> for Read<'a, T> {
 }
 
 /// `Write` is a `RefMut` with two levels of borrow.
-/// First it borrows `AllComponent`,
+/// First it borrows `AllComponent` immutably,
 /// then it borrows the storage itself.
 pub struct Write<'a, T> {
     pub(crate) inner: &'a mut SparseArray<T>,

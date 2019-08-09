@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Threadsafe `RefCell`-like container.
 /// Can be shared across threads as long as the inner type is `Sync`.
+#[doc(hidden)]
 pub struct AtomicRefCell<T: ?Sized> {
     borrow_state: BorrowState,
     inner: UnsafeCell<T>,
@@ -109,6 +110,7 @@ impl Default for BorrowState {
     }
 }
 
+#[doc(hidden)]
 pub enum Borrow<'a> {
     Shared(&'a BorrowState),
     Unique(&'a BorrowState),
@@ -157,14 +159,14 @@ pub struct Ref<'a, T: ?Sized> {
 
 impl<'a, T: 'a + Sized> Ref<'a, T> {
     /// Make a clone, the value is already borrowed so it can't fail.
-    pub fn clone(origin: &Self) -> Self {
+    pub(crate) fn clone(origin: &Self) -> Self {
         Ref {
             inner: origin.inner,
             borrow: origin.borrow.clone(),
         }
     }
     /// Makes a new `Ref` for a component of the borrowed data.
-    pub fn map<U, F>(origin: Self, f: F) -> Ref<'a, U>
+    pub(crate) fn map<U, F>(origin: Self, f: F) -> Ref<'a, U>
     where
         F: FnOnce(&T) -> &U,
     {
@@ -174,7 +176,7 @@ impl<'a, T: 'a + Sized> Ref<'a, T> {
         }
     }
     /// Makes a new `Ref` for a component of the borrowed data, the operation can fail.
-    pub fn try_map<U, E, F>(origin: Self, f: F) -> Result<Ref<'a, U>, E>
+    pub(crate) fn try_map<U, E, F>(origin: Self, f: F) -> Result<Ref<'a, U>, E>
     where
         F: FnOnce(&T) -> Result<&U, E>,
     {
@@ -213,7 +215,7 @@ pub struct RefMut<'a, T: ?Sized> {
 
 impl<'a, T: 'a + Sized> RefMut<'a, T> {
     /// Makes a new `RefMut` for a component of the borrowed data.
-    pub fn map<U, F>(origin: Self, f: F) -> RefMut<'a, U>
+    pub(crate) fn map<U, F>(origin: Self, f: F) -> RefMut<'a, U>
     where
         F: FnOnce(&mut T) -> &mut U,
     {
@@ -222,18 +224,8 @@ impl<'a, T: 'a + Sized> RefMut<'a, T> {
             borrow: origin.borrow,
         }
     }
-    /// Makes a new `RefMut` for a component of the borrowed data, the operation can fail.
-    pub fn try_map<U, E, F>(origin: Self, f: F) -> Result<RefMut<'a, U>, E>
-    where
-        F: FnOnce(&mut T) -> Result<&mut U, E>,
-    {
-        Ok(RefMut {
-            inner: f(origin.inner)?,
-            borrow: origin.borrow,
-        })
-    }
     /// Downgrades a unique Borrow to a shared Borrow.
-    pub fn downgrade(RefMut { inner, borrow }: Self) -> Ref<'a, T> {
+    pub(crate) fn downgrade(RefMut { inner, borrow }: Self) -> Ref<'a, T> {
         Ref {
             inner,
             borrow: borrow.downgrade(),

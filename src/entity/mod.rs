@@ -1,13 +1,15 @@
 mod view;
 
+use crate::add_entity::AddEntity;
 use crate::component_storage::AllStorages;
 use std::convert::AsMut;
-pub(crate) use view::EntityViewMut;
+pub use view::EntitiesViewMut;
 
 /* A Key is a handle to an entity and has two parts, the index and the version.
  * The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
  * Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
 */
+#[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Key(usize);
 
@@ -52,15 +54,15 @@ impl Key {
 }
 
 /// Entities holds the Keys to all entities: living, removed and dead.
-/// 
+///
 /// A living entity is an entity currently present, with or without component.
-/// 
+///
 /// Removed and dead entities don't have any component.
-/// 
+///
 /// The big difference is that removed ones can become alive again.
-/// 
+///
 /// The life cycle of an entity looks like this:
-/// 
+///
 /// Generation -> Deletion -> Dead\
 ///           ⬑----------↵
 // An entity starts with a generation at 0, each removal will increase it by 1
@@ -87,15 +89,34 @@ impl Entities {
     pub(crate) fn generate(&mut self) -> Key {
         self.view_mut().generate()
     }
-    pub(crate) fn view_mut(&mut self) -> EntityViewMut {
-        EntityViewMut {
+    pub(crate) fn view_mut(&mut self) -> EntitiesViewMut {
+        EntitiesViewMut {
             data: &mut self.data,
             list: &mut self.list,
         }
     }
+    /// Stores `component` in a new entity, the `Key` to this entity is returned.
+    ///
+    /// This is a lot more efficient than [World::new_entity]
+    /// since it doesn't have to borrow/release Entities and the storages.
+    ///
+    /// Multiple components can be added at the same time using a tuple.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
+    /// let mut entities = world.entities_mut();
+    ///
+    /// let entity = entities.add((&mut usizes, &mut u32s), (0, 1));
+    /// ```
+    /// [World::new_entity]: struct.World.html#method.new_entity
+    pub fn add<T: AddEntity>(&mut self, storages: T, component: T::Component) -> Key {
+        storages.add_entity(component, self)
+    }
     /// Delete an entity and all its components.
     /// Returns true if the entity was alive.
-    /// 
+    ///
     /// [World::delete] is easier to use but will borrow and release [Entities] and [AllStorages] for each entity.
     /// # Example
     /// ```
@@ -105,24 +126,20 @@ impl Entities {
     /// let entity2 = world.new_entity((2usize, 3u32));
     /// let mut entities = world.entities_mut();
     /// let mut all_storages = world.all_storages_mut();
-    /// 
+    ///
     /// entities.delete(&mut all_storages, entity1);
-    /// 
+    ///
     /// let (usizes, u32s) = all_storages.get_storage::<(&usize, &u32)>();
     /// assert_eq!((&usizes).get(entity1), None);
     /// assert_eq!((&u32s).get(entity1), None);
     /// assert_eq!(usizes.get(entity2), Some(&2));
     /// assert_eq!(u32s.get(entity2), Some(&3));
     /// ```
-    /// 
+    ///
     /// [World::delete]: struct.World.html#method.delete
     /// [Entities]: struct.Entities.html
     /// [AllStorages]: struct.AllStorages.html
-    pub fn delete(
-        &mut self,
-        mut storages: impl AsMut<AllStorages>,
-        entity: Key,
-    ) -> bool {
+    pub fn delete(&mut self, mut storages: impl AsMut<AllStorages>, entity: Key) -> bool {
         self.view_mut()
             .delete(&mut storages.as_mut().view_mut(), entity)
     }

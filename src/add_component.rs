@@ -4,13 +4,69 @@ use crate::sparse_array::{SparseArray, ViewMut, Write};
 use std::any::TypeId;
 
 // No new storage will be created
+/// Adds components to an existing entity without creating new storage.
 pub trait AddComponent<T> {
     /// Stores `component` in `entity`, if the entity had already a component
     /// of this type, it will be replaced.
     ///
     /// Multiple components can be added at the same time using a tuple.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     (&mut usizes, &mut u32s).try_add_component((0, 1), entity1).unwrap();
+    ///     assert_eq!((&usizes, &u32s).get(entity1), Some((&0, &1)));
+    /// });
+    /// ```
+    /// When using packed storages you have to pass all storages packed with it,
+    /// even if you don't add any component to it.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     (&mut usizes, &mut u32s).try_add_component((0,), entity1).unwrap();
+    ///     assert_eq!((&usizes,).get(entity1), Some((&0,)));
+    /// });
+    /// ```
     fn try_add_component(self, component: T, entity: Key) -> Result<(), error::AddComponent>;
-    /// Same as try_add_component but will unwrap errors.
+    /// Stores `component` in `entity`, if the entity had already a component
+    /// of this type, it will be replaced.
+    ///
+    /// Multiple components can be added at the same time using a tuple.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     (&mut usizes, &mut u32s).add_component((0, 1), entity1);
+    ///     assert_eq!((&usizes, &u32s).get(entity1), Some((&0, &1)));
+    /// });
+    /// ```
+    /// When using packed storages you have to pass all storages packed with it,
+    /// even if you don't add any component to it.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    ///     (&mut usizes, &mut u32s).add_component((0,), entity1);
+    ///     assert_eq!((&usizes,).get(entity1), Some((&0,)));
+    /// });
+    /// ```
     fn add_component(self, component: T, entity: Key);
 }
 
@@ -43,60 +99,6 @@ macro_rules! impl_add_component {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)*)> for ($(&mut SparseArray<$type>,)+ $(&mut SparseArray<$add_type>,)*) {
             fn try_add_component(self, component: ($($type,)+), entity: Key) -> Result<(), error::AddComponent> {
                 ($(&mut self.$index.view_mut(),)+ $(&mut self.$add_index.view_mut(),)*).try_add_component(component, entity)
-                /*if $(self.$index.is_packed_owned())||+ {
-                    let mut type_ids = vec![$(TypeId::of::<$type>(),)+];
-                    type_ids.sort_unstable();
-                    // checks if the caller has passed all necessary storages
-                    let mut storage_type_ids = type_ids.clone();
-                    storage_type_ids.extend_from_slice(&[$(TypeId::of::<$add_type>()),*]);
-                    storage_type_ids.sort_unstable();
-                    $(
-                        if self.$index.is_packed_owned() && self.$index.should_pack_owned(&storage_type_ids).is_empty() {
-                            return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()));
-                        }
-                    )+
-                    // add the component to the storage
-                    $(
-                        self.$index.insert(component.$index, entity.index());
-                    )+
-
-                    // add additional types if the entity has this component
-                    $(
-                        if self.$add_index.contains(entity.index()) {
-                            type_ids.push(TypeId::of::<$add_type>());
-                        }
-                    )*
-                    type_ids.sort_unstable();
-
-                    // keeps track of types to pack
-                    let mut should_pack = Vec::with_capacity(type_ids.len());
-                    $(
-                        let type_id = TypeId::of::<$type>();
-
-                        if should_pack.contains(&type_id) {
-                            self.$index.pack(entity.index());
-                        } else {
-                            let pack_types = self.$index.should_pack_owned(&type_ids);
-
-                            should_pack.extend(pack_types.iter().filter(|&&x| x != type_id));
-                            if !pack_types.is_empty() {
-                                self.$index.pack(entity.index());
-                            }
-                        }
-                    )+
-
-                    $(
-                        if should_pack.contains(&TypeId::of::<$add_type>()) {
-                            self.$add_index.pack(entity.index());
-                        }
-                    )*
-                } else {
-                    $(
-                        self.$index.insert(component.$index, entity.index());
-                    )+
-                }
-
-                Ok(())*/
             }
             fn add_component(self, component: ($($type,)+), entity: Key) {
                 self.try_add_component(component, entity).unwrap()

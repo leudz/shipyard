@@ -27,7 +27,7 @@ impl<T> View<'_, T> {
             && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
     }
     /// Returns a reference to the component if the `entity` has it.
-    pub fn get(&self, index: usize) -> Option<&T> {
+    pub(crate) fn get(&self, index: usize) -> Option<&T> {
         if self.contains_index(index) {
             Some(unsafe { self.data.get_unchecked(*self.sparse.get_unchecked(index)) })
         } else {
@@ -80,6 +80,14 @@ impl<'a, T> ViewMut<'a, T> {
         index < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
             && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
+    }
+    /// Returns a reference to the component if the `entity` has it.
+    pub(crate) fn get(&self, index: usize) -> Option<&T> {
+        if self.contains_index(index) {
+            Some(unsafe { self.data.get_unchecked(*self.sparse.get_unchecked(index)) })
+        } else {
+            None
+        }
     }
     /// Returns a mutable reference to the component if the `entity` has it.
     pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {

@@ -8,42 +8,36 @@ use std::marker::PhantomData;
 
 // Packed iterators go from start to end without index lookup
 // They only work in specific circumstances but are the fastest
+/// Iterator over a single component.
 pub struct Packed1<T: IntoAbstract> {
-    data: T::View,
+    data: T::AbsView,
     current: usize,
     end: usize,
 }
 
 impl<T: IntoAbstract> Packed1<T> {
     /// Transform the iterator into a chunk iterator, returning multiple items.
-    /// Chunk will return a smaller slice at the end if the step does not divide exactly the length.
-    pub fn into_chunk(self, step: usize) -> Chunk1<T> {
+    ///
+    /// Chunk will return a smaller slice at the end if `size` does not divide exactly the length.
+    pub fn into_chunk(self, size: usize) -> Chunk1<T> {
         Chunk1 {
             data: self.data,
             current: self.current,
             end: self.end,
-            step,
+            step: size,
         }
     }
     /// Transform the iterator into a chunk exact iterator, returning multiple items.
+    ///
     /// ChunkExact will always return a slice with the same length.
+    ///
     /// To get the remaining items (if any) use the `remainder` method.
-    pub fn into_chunk_exact(self, step: usize) -> ChunkExact1<T> {
+    pub fn into_chunk_exact(self, size: usize) -> ChunkExact1<T> {
         ChunkExact1 {
             data: self.data,
             current: self.current,
             end: self.end,
-            step,
-        }
-    }
-}
-
-impl<T: IntoAbstract> Clone for Packed1<T> {
-    fn clone(&self) -> Self {
-        Packed1 {
-            data: self.data.clone(),
-            current: self.current,
-            end: self.end,
+            step: size,
         }
     }
 }
@@ -75,7 +69,7 @@ impl<T: IntoAbstract> IntoIter for (T,) {
 }
 
 impl<T: IntoAbstract> Iterator for Packed1<T> {
-    type Item = <T::View as AbstractMut>::Out;
+    type Item = <T::AbsView as AbstractMut>::Out;
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
         if current < self.end {
@@ -105,7 +99,7 @@ impl<T: IntoAbstract> ExactSizeIterator for Packed1<T> {
         self.end - self.current
     }
 }
-
+/// Parallel iterator over a single component.
 pub struct ParPacked1<T: IntoAbstract>(Packed1<T>);
 
 impl<T: IntoAbstract> ParPacked1<T> {
@@ -117,15 +111,19 @@ impl<T: IntoAbstract> ParPacked1<T> {
 
 impl<T: IntoAbstract> Producer for Packed1<T>
 where
-    <T::View as AbstractMut>::Out: Send,
+    <T::AbsView as AbstractMut>::Out: Send,
 {
-    type Item = <T::View as AbstractMut>::Out;
+    type Item = <T::AbsView as AbstractMut>::Out;
     type IntoIter = Self;
     fn into_iter(self) -> Self::IntoIter {
         self
     }
     fn split_at(mut self, index: usize) -> (Self, Self) {
-        let mut clone = self.clone();
+        let mut clone = Packed1 {
+            data: self.data.clone(),
+            current: self.current,
+            end: self.end,
+        };
         self.end -= index;
         clone.current += index;
         (self, clone)
@@ -134,9 +132,9 @@ where
 
 impl<T: IntoAbstract> ParallelIterator for ParPacked1<T>
 where
-    <T::View as AbstractMut>::Out: Send,
+    <T::AbsView as AbstractMut>::Out: Send,
 {
-    type Item = <T::View as AbstractMut>::Out;
+    type Item = <T::AbsView as AbstractMut>::Out;
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
     where
         C: UnindexedConsumer<Self::Item>,
@@ -145,15 +143,20 @@ where
     }
 }
 
+/// Chunk iterator over a single component.
+///
+/// Returns slice and not single elements.
+///
+/// The last chunk's length will be smaller than `size` if `size` does not divide the iterator's length perfectly.
 pub struct Chunk1<T: IntoAbstract> {
-    data: T::View,
+    data: T::AbsView,
     current: usize,
     end: usize,
     step: usize,
 }
 
 impl<T: IntoAbstract> Iterator for Chunk1<T> {
-    type Item = <T::View as AbstractMut>::Slice;
+    type Item = <T::AbsView as AbstractMut>::Slice;
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
         if current + self.step < self.end {
@@ -168,8 +171,12 @@ impl<T: IntoAbstract> Iterator for Chunk1<T> {
     }
 }
 
+/// Chunk iterator over a single component.
+///
+/// Returns a slice and not single elements.
+/// One of the benefit is to allow the use of SIMD instructions.
 pub struct ChunkExact1<T: IntoAbstract> {
-    data: T::View,
+    data: T::AbsView,
     current: usize,
     end: usize,
     step: usize,
@@ -177,8 +184,9 @@ pub struct ChunkExact1<T: IntoAbstract> {
 
 impl<T: IntoAbstract> ChunkExact1<T> {
     /// Returns the items at the end of the slice.
-    /// Will always return a slice smaller than `step`.
-    pub fn remainder(&mut self) -> <T::View as AbstractMut>::Slice {
+    ///
+    /// Will always return a slice smaller than `size`.
+    pub fn remainder(&mut self) -> <T::AbsView as AbstractMut>::Slice {
         let remainder = std::cmp::min(self.end - self.current, self.end % self.step);
         self.end -= remainder;
         unsafe { self.data.get_data_slice((self.end - remainder)..self.end) }
@@ -186,7 +194,7 @@ impl<T: IntoAbstract> ChunkExact1<T> {
 }
 
 impl<T: IntoAbstract> Iterator for ChunkExact1<T> {
-    type Item = <T::View as AbstractMut>::Slice;
+    type Item = <T::AbsView as AbstractMut>::Slice;
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
         if current + self.step < self.end {
@@ -200,57 +208,65 @@ impl<T: IntoAbstract> Iterator for ChunkExact1<T> {
 
 macro_rules! impl_iterators {
     ($iter: ident $par_iter: ident $packed: ident $non_packed: ident $chunk: ident $chunk_exact: ident $par_packed: ident $par_non_packed: ident $(($type: ident, $index: tt))+) => {
+        /// Packed iterator over multiple components.
+        ///
+        /// Packed owned iterators are fast but are limited to components packed together.
         pub struct $packed<$($type: IntoAbstract),+> {
-            data: ($($type::View,)+),
+            data: ($($type::AbsView,)+),
             current: usize,
             end: usize,
         }
 
         impl<$($type: IntoAbstract),+> $packed<$($type),+> {
             /// Transform the iterator into a chunk iterator, returning multiple items.
-            /// Chunk will return a smaller slice at the end if the step does not divide exactly the length.
-            pub fn into_chunk(self, step: usize) -> $chunk<$($type),+> {
+            ///
+            /// Chunk will return a smaller slice at the end if `size` does not divide exactly the length.
+            pub fn into_chunk(self, size: usize) -> $chunk<$($type),+> {
                 $chunk {
                     data: self.data,
                     current: self.current,
                     end: self.end,
-                    step,
+                    step: size,
                 }
             }
             /// Transform the iterator into a chunk exact iterator, returning multiple items.
+            ///
             /// ChunkExact will always return a slice with the same length.
+            ///
             /// To get the remaining items (if any) use the `remainder` method.
-            pub fn into_chunk_exact(self, step: usize) -> $chunk_exact<$($type),+> {
+            pub fn into_chunk_exact(self, size: usize) -> $chunk_exact<$($type),+> {
                 $chunk_exact {
                     data: self.data,
                     current: self.current,
                     end: self.end,
-                    step,
+                    step: size,
                 }
             }
         }
 
-        impl<$($type: IntoAbstract),+> Clone for $packed<$($type),+> {
-            fn clone(&self) -> Self {
-                $packed {
-                    data: self.data.clone(),
-                    current: self.current,
-                    end: self.end,
-                }
-            }
-        }
-
+        /// Parallel iterator over multiple components.
+        ///
+        /// Packed owned iterators are fast but are limited to components packed together.
         pub struct $par_packed<$($type: IntoAbstract),+>($packed<$($type),+>);
 
+        /// Chunk iterator over multiple components.
+        ///
+        /// Returns a tuple of slices and not single element.
+        ///
+        /// The last chunk's length will be smaller than `size` if `size` does not divide the iterator's length perfectly.
         pub struct $chunk<$($type: IntoAbstract),+> {
-            data: ($($type::View,)+),
+            data: ($($type::AbsView,)+),
             current: usize,
             end: usize,
             step: usize,
         }
 
+        /// Chunk iterator over multiple components.
+        ///
+        /// Returns a tuple of slices and not single element.
+        /// One of the benefit is to allow the use of SIMD instructions.
         pub struct $chunk_exact<$($type: IntoAbstract),+> {
-            data: ($($type::View,)+),
+            data: ($($type::AbsView,)+),
             current: usize,
             end: usize,
             step: usize,
@@ -258,8 +274,9 @@ macro_rules! impl_iterators {
 
         impl<$($type: IntoAbstract),+> $chunk_exact<$($type),+> {
             /// Returns the items at the end of the slice.
-            /// Will always return a slice smaller than `step`.
-            pub fn remainder(&mut self) -> ($(<$type::View as AbstractMut>::Slice,)+) {
+            ///
+            /// Will always return a slice smaller than `size`.
+            pub fn remainder(&mut self) -> ($(<$type::AbsView as AbstractMut>::Slice,)+) {
                 let end = self.end;
                 let remainder = std::cmp::min(self.end - self.current, self.end % self.step);
                 self.end -= remainder;
@@ -269,8 +286,9 @@ macro_rules! impl_iterators {
             }
         }
 
+        /// Non packed iterator over multiple components.
         pub struct $non_packed<$($type: IntoAbstract),+> {
-            data: ($($type::View,)+),
+            data: ($($type::AbsView,)+),
             indices: *const usize,
             current: usize,
             end: usize,
@@ -291,15 +309,45 @@ macro_rules! impl_iterators {
             }
         }
 
+        /// Parallel non packed iterator over multiple components.
         pub struct $par_non_packed<$($type: IntoAbstract),+>($non_packed<$($type),+>);
 
+        /// Iterator over multiple components.
+        ///
+        /// The enum allows to abstract away what kind of iterator you really get.
+        /// That doesn't mean the performance will suffer.
         pub enum $iter<$($type: IntoAbstract),+> {
             Packed($packed<$($type),+>),
             NonPacked($non_packed<$($type),+>),
         }
 
+        impl<$($type: IntoAbstract),+> $iter<$($type),+> {
+            /// Tries to transform the iterator into a chunk iterator, returning multiple items.
+            /// If the components are not packed together the iterator is returned.
+            ///
+            /// Chunk will return a smaller slice at the end if `size` does not divide exactly the length.
+            pub fn into_chunk(self, size: usize) -> Result<$chunk<$($type),+>, Self> {
+                match self {
+                    $iter::Packed(iter) => Ok(iter.into_chunk(size)),
+                    $iter::NonPacked(_) => Err(self),
+                }
+            }
+            /// Tries to transform the iterator into a chunk exact iterator, returning multiple items.
+            /// If the components are not packed together the iterator is returned.
+            ///
+            /// ChunkExact will always return a slice with the same length.
+            ///
+            /// To get the remaining items (if any) use the `remainder` method.
+            pub fn into_chunk_exact(self, size: usize) -> Result<$chunk_exact<$($type),+>, Self> {
+                match self {
+                    $iter::Packed(iter) => Ok(iter.into_chunk_exact(size)),
+                    $iter::NonPacked(_) => Err(self),
+                }
+            }
+        }
+
         impl<$($type: IntoAbstract),+> Iterator for $iter<$($type),+> {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 match self {
                     $iter::Packed(iter) => iter.next(),
@@ -308,14 +356,18 @@ macro_rules! impl_iterators {
             }
         }
 
+        /// Parallel iterator over multiple components.
+        ///
+        /// The enum allows to abstract away what kind of iterator you really get.
+        /// That doesn't mean the performance will suffer.
         pub enum $par_iter<$($type: IntoAbstract),+> {
             Packed($par_packed<$($type),+>),
             NonPacked($par_non_packed<$($type),+>),
         }
 
         impl<$($type: IntoAbstract),+> ParallelIterator for $par_iter<$($type),+>
-        where $(<$type::View as AbstractMut>::Out: Send),+ {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+        where $(<$type::AbsView as AbstractMut>::Out: Send),+ {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
             where
                 Cons: UnindexedConsumer<Self::Item>,
@@ -380,7 +432,7 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $packed<$($type),+> {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 let current = self.current;
                 if current < self.end {
@@ -413,15 +465,19 @@ macro_rules! impl_iterators {
 
         impl<$($type: IntoAbstract),+> Producer for $packed<$($type),+>
         where
-            $(<$type::View as AbstractMut>::Out: Send),+
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
         {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             type IntoIter = Self;
             fn into_iter(self) -> Self::IntoIter {
                 self
             }
             fn split_at(mut self, index: usize) -> (Self, Self) {
-                let mut clone = self.clone();
+                let mut clone = $packed {
+                    data: self.data.clone(),
+                    current: self.current,
+                    end: self.end,
+                };
                 self.end -= index;
                 clone.current += index;
                 (self, clone)
@@ -430,9 +486,9 @@ macro_rules! impl_iterators {
 
         impl<$($type: IntoAbstract),+> ParallelIterator for $par_packed<$($type),+>
         where
-            $(<$type::View as AbstractMut>::Out: Send),+
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
         {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
             where
                 Cons: UnindexedConsumer<Self::Item>,
@@ -442,7 +498,7 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $non_packed<$($type,)+> {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 while self.current < self.end {
                     // SAFE at this point there are no mutable reference to sparse or dense
@@ -468,7 +524,7 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> UnindexedProducer for $non_packed<$($type,)+> {
-            type Item = ($(<$type::View as AbstractMut>::Out,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn split(mut self) -> (Self, Option<Self>) {
                 let len = self.end - self.current;
                 if self.end - self.current >= 2 {
@@ -494,7 +550,7 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $chunk<$($type),+> {
-            type Item = ($(<$type::View as AbstractMut>::Slice,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Slice,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 let current = self.current;
                 if current + self.step <= self.end {
@@ -510,7 +566,7 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $chunk_exact<$($type),+> {
-            type Item = ($(<$type::View as AbstractMut>::Slice,)+);
+            type Item = ($(<$type::AbsView as AbstractMut>::Slice,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 let current = self.current;
                 if current + self.step <= self.end {

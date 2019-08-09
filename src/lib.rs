@@ -1,3 +1,101 @@
+//! # Getting started
+//! ```
+//! use shipyard::*;
+//!
+//! struct Health(f32);
+//! struct Position { x: f32, y: f32 };
+//!
+//! struct InAcid;
+//! impl<'a> System<'a> for InAcid {
+//!     type Data = (&'a Position, &'a mut Health);
+//!     fn run(&self, (pos, mut health): <Self::Data as SystemData>::View) {
+//!         for (pos, health) in (&pos, &mut health).iter() {
+//!             if is_in_acid(pos) {
+//!                 health.0 -= 1.0;
+//!             }
+//!         }
+//!     }
+//! }
+//!
+//! fn is_in_acid(pos: &Position) -> bool {
+//!     // well... it's wet season
+//!      
+//!     true
+//! }
+//!
+//! let world = World::default();
+//!
+//! world.new_entity((Position { x: 0.0, y: 0.0 }, Health(1000.0)));
+//!
+//! world.add_workload("In acid", InAcid);
+//! world.run_default();
+//! ```
+//! # Let's make some pigs!
+//! ```
+//! use shipyard::*;
+//!
+//! struct Health(f32);
+//! struct Fat(f32);
+//!
+//! struct Reproduction;
+//! impl<'a> System<'a> for Reproduction {
+//!     type Data = (&'a mut Fat, &'a mut Health, Entities);
+//!     fn run(&self, (mut fat, mut health, mut entities): <Self::Data as SystemData>::View) {
+//!         let count = (&health, &fat).iter().filter(|(health, fat)| health.0 > 40.0 && fat.0 > 20.0).count();
+//!         (0..count).for_each(|_| {
+//!             entities.add((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
+//!         });
+//!     }
+//! }
+//!
+//! struct Meal;
+//! impl<'a> System<'a> for Meal {
+//!     type Data = &'a mut Fat;
+//!     fn run(&self, mut fat: <Self::Data as SystemData>::View) {
+//!         for slice in fat.iter().into_chunk(8) {
+//!             for fat in slice {
+//!                 fat.0 += 3.0;
+//!             }
+//!         }
+//!     }
+//! }
+//!
+//! struct Age;
+//! impl<'a> System<'a> for Age {
+//!     type Data = (&'a mut Health, ThreadPool);
+//!     fn run(&self, (mut health, thread_pool): <Self::Data as SystemData>::View) {
+//!         use rayon::prelude::ParallelIterator;
+//!
+//!         thread_pool.install(|| {
+//!             health.par_iter().for_each(|health| {
+//!                 health.0 -= 4.0;
+//!             });
+//!         });
+//!     }
+//! }
+//!
+//! let world = World::new::<(Health, Fat)>();
+//!
+//! world.run::<(Entities, &mut Health, &mut Fat), _>(|(mut entities, mut health, mut fat)| {
+//!     (0..100).for_each(|_| {
+//!         entities.add((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
+//!     })
+//! });
+//!
+//! world.add_workload("Life", (Meal, Age));
+//! world.add_workload("Reproduction", Reproduction);
+//!
+//! for day in 0..100 {
+//!     if day % 6 == 0 {
+//!         world.run_workload("Reproduction");
+//!     }
+//!     world.run_default();
+//! }
+//!
+//! // we've got some new pigs
+//! assert_eq!(world.get_storage::<&Health>().len(), 838);
+//! ```
+
 #![deny(bare_trait_objects)]
 
 mod add_component;
@@ -5,10 +103,10 @@ mod add_entity;
 mod atomic_refcell;
 mod component_storage;
 mod entity;
-mod error;
+pub mod error;
 mod get;
 mod get_storage;
-mod iterators;
+pub mod iterators;
 mod not;
 mod pack;
 mod remove;
@@ -16,23 +114,25 @@ mod run;
 mod sparse_array;
 mod world;
 
-pub use add_component::AddComponent;
-pub use add_entity::AddEntity;
-pub use entity::Entities;
-pub use get::GetComponent;
-pub use iterators::{IntoIter, Iter2, Iter3, Iter4, Iter5, ParIter2, ParIter3, ParIter4, ParIter5};
-pub use not::Not;
-pub use pack::OwnedPack;
-pub use remove::Remove;
-pub use run::Run;
-pub use run::{System, SystemData};
-pub use world::World;
+pub use crate::add_component::AddComponent;
+pub use crate::component_storage::AllStorages;
+pub use crate::get::GetComponent;
+pub use crate::not::Not;
+pub use crate::pack::OwnedPack;
+pub use crate::remove::Remove;
+pub use crate::run::System;
+#[doc(hidden)]
+pub use crate::run::SystemData;
+pub use crate::world::World;
+pub use entity::{Entities, EntitiesViewMut};
+pub use iterators::IntoIter;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
 pub struct ThreadPool;
 
 #[cfg(test)]
 mod test {
+    use super::iterators::*;
     use super::*;
     #[test]
     fn new_entity() {
@@ -57,7 +157,7 @@ mod test {
         world.register::<u32>();
         let mut entities = world.entities_mut();
         let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
-        let entity1 = (&mut usizes, &mut u32s).add_entity((0, 1), &mut entities);
+        let entity1 = entities.add((&mut usizes, &mut u32s), (0, 1));
         assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
     }
     #[test]
@@ -67,12 +167,10 @@ mod test {
         world.register::<u32>();
         let mut entities = world.entities_mut();
         let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
-        let entity1 = ().add_entity((), &mut entities);
+        let entity1 = entities.add((), ());
         (&mut *usizes, &mut *u32s).add_component((0, 1), entity1);
         (&mut usizes, &mut u32s).add_component((2, 3), entity1);
-        (usizes, u32s).add_component((4, 5), entity1);
-        let storages = world.get_storage::<(&usize, &u32)>();
-        assert_eq!(storages.get(entity1).unwrap(), (&4, &5));
+        assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&2, &3));
     }
     #[test]
     fn run() {
@@ -285,8 +383,8 @@ mod test {
         assert_eq!(component, (Some(0usize),));
         assert_eq!((&mut usizes).get(entity1), None);
         assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
-        assert_eq!(usizes.get(entity2), Some(&mut 2));
-        assert_eq!(u32s.get(entity2), Some(&mut 3));
+        assert_eq!(usizes.get(entity2), Some(&2));
+        assert_eq!(u32s.get(entity2), Some(&3));
     }
     #[test]
     fn remove_packed() {
@@ -299,8 +397,8 @@ mod test {
         assert_eq!(component, (Some(0usize),));
         assert_eq!((&mut usizes).get(entity1), None);
         assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
-        assert_eq!(usizes.get(entity2), Some(&mut 2));
-        assert_eq!(u32s.get(entity2), Some(&mut 3));
+        assert_eq!(usizes.get(entity2), Some(&2));
+        assert_eq!(u32s.get(entity2), Some(&3));
     }
     #[test]
     fn delete() {

@@ -16,7 +16,7 @@ use pipeline::{Pipeline, Workload};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use register::Register;
 
-/// `World` holds all components and keeps track of entities and what they own.
+/// Holds all components and keeps track of entities and what they own.
 pub struct World {
     pub(crate) entities: AtomicRefCell<Entities>,
     pub(crate) storages: AtomicRefCell<AllStorages>,
@@ -40,23 +40,57 @@ impl Default for World {
 }
 
 impl World {
-    /// Create a `World` with storages based on `T`.
+    /// Creates a `World` with storages based on `T` already created.
+    /// More storages can be added latter.
     ///
     /// `T` has to be a tuple even for a single type.
     /// In this case use (T,).
+    ///
+    /// `World` is never used mutably.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize,)>();
+    /// let world = World::new::<(usize, u32)>();
+    /// ```
     pub fn new<T: Register>() -> Self {
         let world = World::default();
         T::register(&world);
         world
     }
-    /// Same as `try_get_storage` but will `unwrap` any error.
+    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
+    /// to only borrow it immutably.
+    ///
+    /// `&T` returns a read access to the storage.
+    ///
+    /// `&mut T` returns a write access to the storage.
+    ///
+    /// To retrive multiple storages at once, use a tuple.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let (usizes, u32s) = world.get_storage::<(&mut usize, &u32)>();
+    /// ```
     pub fn get_storage<'a, T: GetStorage<'a>>(&'a self) -> T::Storage {
         self.try_get_storage::<T>().unwrap()
     }
-    /// Retrives storages based on type `T`.
+    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
+    /// to only borrow it immutably.
+    ///
     /// `&T` returns a read access to the storage.
+    ///
     /// `&mut T` returns a write access to the storage.
+    ///
     /// To retrive multiple storages at once, use a tuple.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let (usizes, u32s) = world.try_get_storage::<(&mut usize, &u32)>().unwrap();
+    /// ```
     pub fn try_get_storage<'a, T: GetStorage<'a>>(
         &'a self,
     ) -> Result<T::Storage, error::GetStorage> {
@@ -65,16 +99,45 @@ impl World {
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_get_storage::<T>()?)
     }
-    /// Same as `try_new_entity` but will `unwrap` any error.
-    pub fn new_entity<T: WorldNewEntity>(&self, component: T) -> Key {
-        self.try_new_entity::<T>(component).unwrap()
-    }
     /// Stores `component` in a new entity, the `Key` to this entity is returned.
-    /// As opposed to `add_entity`, storages will be created if they don't exist.
+    ///
     /// Multiple components can be added at the same time using a tuple.
     ///
     /// `T` has to be a tuple even for a single type.
     /// In this case use (T,).
+    ///
+    /// As opposed to [Entities::add] and [EntitiesViewMut::add], storages will be created if they don't exist.
+    /// This is at the cost of borrow/release `Entities` and the storages involved.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::default();
+    /// let entity = world.new_entity((0usize, 1u32));
+    /// ```
+    /// [Entities::add]: struct.Entities.html#method.add
+    /// [EntitiesViewMut::add]: struct.EntitiesViewMut.html#method.add
+    pub fn new_entity<T: WorldNewEntity>(&self, component: T) -> Key {
+        self.try_new_entity::<T>(component).unwrap()
+    }
+    /// Stores `component` in a new entity, the `Key` to this entity is returned.
+    ///
+    /// Multiple components can be added at the same time using a tuple.
+    ///
+    /// `T` has to be a tuple even for a single type.
+    /// In this case use (T,).
+    ///
+    /// As opposed to [Entities::add] and [EntitiesViewMut::add], storages will be created if they don't exist.
+    /// This is at the cost of borrow/release `Entities` and the storages involved.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::default();
+    /// let entity = world.try_new_entity((0usize, 1u32)).unwrap();
+    /// ```
+    /// [Entities::add]: struct.Entities.html#method.add
+    /// [EntitiesViewMut::add]: struct.EntitiesViewMut.html#method.add
     pub fn try_new_entity<T: WorldNewEntity>(&self, component: T) -> Result<Key, error::NewEntity> {
         let mut entities = self
             .try_entities_mut()
@@ -85,7 +148,9 @@ impl World {
             .map_err(error::NewEntity::AllStoragesBorrow)?;
         Ok(T::new_entity(component, &mut *storages, &mut *entities))
     }
-    /// Same as `try_entities_mut` but will `unwrap` any error.
+    /// Returns a mutable reference to the entities' storage.
+    ///
+    /// Unwraps errors.
     pub fn entities_mut(&self) -> RefMut<Entities> {
         self.try_entities_mut().unwrap()
     }
@@ -93,7 +158,9 @@ impl World {
     pub fn try_entities_mut(&self) -> Result<RefMut<Entities>, error::Borrow> {
         Ok(self.entities.try_borrow_mut()?)
     }
-    /// Same as `try_all_storages` but will `unwrap` any error.
+    /// Returns an immutable reference to the storage of all storages.
+    ///
+    /// Unwraps errors.
     pub fn all_storages(&self) -> Ref<AllStorages> {
         self.try_all_storages().unwrap()
     }
@@ -101,7 +168,9 @@ impl World {
     pub fn try_all_storages(&self) -> Result<Ref<AllStorages>, error::Borrow> {
         Ok(self.storages.try_borrow()?)
     }
-    /// Same as `try_all_storages` but will `unwrap` any error.
+    /// Returns an immutable reference to the storage of all storages.
+    ///
+    /// Unwraps errors.
     pub fn all_storages_mut(&self) -> RefMut<AllStorages> {
         self.try_all_storages_mut().unwrap()
     }
@@ -109,24 +178,56 @@ impl World {
     pub fn try_all_storages_mut(&self) -> Result<RefMut<AllStorages>, error::Borrow> {
         Ok(self.storages.try_borrow_mut()?)
     }
-    /// Same as `try_register` but will `unwrap` any error.
+    /// Register a new component type and create a storage for it.
+    /// Does nothing if the storage already exists.
+    ///
+    /// Unwraps errors.
     pub fn register<T: 'static + Send + Sync>(&self) {
         self.try_register::<T>().unwrap()
     }
     /// Register a new component type and create a storage for it.
-    /// Does nothing if a storage already exists.
+    /// Does nothing if the storage already exists.
     pub fn try_register<T: 'static + Send + Sync>(&self) -> Result<(), error::Borrow> {
         self.storages.try_borrow_mut()?.register::<T>();
         Ok(())
     }
     /// Allows to perform some actions not possible otherwise like iteration.
-    /// Each type has to come with a mutablility expressed by `&` or `&mut`.
-    /// `Entities` are the exception, they only come in mutable flavor.
-    /// Multiple types can be queried by using a tuple.
+    /// This is basically an unnamed system.
+    ///
+    /// `T` can be:
+    /// * `&T` for an immutable reference to `T` storage
+    /// * `&mut T` for a mutable reference to `T` storage
+    /// * [Entities] for a mutable reference to the entity storage
+    /// * [AllStorages] for a mutable reference to the storage of all components
+    /// * [ThreadPool] for an immutable reference to the `rayon::ThreadPool` used by the [World]
+    /// * [Not] can be used to filter out a component type
+    ///
+    /// A tuple will allow multiple references.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.run::<(&usize, &mut u32), _>(|(usizes, u32s)| {
+    ///     // -- snip --
+    /// });
+    /// ```
+    /// [Entities]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
+    /// [ThreadPool]: struct.ThreadPool.html
+    /// [World]: struct.World.html
+    /// [Not]: struct.Not.html
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
         T::run(&self.entities, &self.storages, &self.thread_pool, f);
     }
-    /// Pack multiple storages, it can speed up iteration at the cost of insertion/removal.
+    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.try_pack_owned::<(usize, u32)>().unwrap();
+    /// ```
     pub fn try_pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self) -> Result<(), error::WorldPack>
     where
         <T as WorldOwnedPack<'a>>::Storage: GetStorage<'a>,
@@ -135,7 +236,15 @@ impl World {
         self.try_get_storage::<T::Storage>()?.try_pack_owned()?;
         Ok(())
     }
-    /// Same as `try_pack_owned` but will unwrap in case of error.
+    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// ```
     pub fn pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self)
     where
         <T as WorldOwnedPack<'a>>::Storage: GetStorage<'a>,
@@ -150,7 +259,10 @@ impl World {
         let storages = self.try_all_storages_mut()?;
         Ok(entities.delete(storages, entity))
     }
-    /// Same as try_delete but will unwrap any error.
+    /// Delete an entity and all its components.
+    /// Returns true if the entity was alive.
+    ///
+    /// Unwraps errors.
     pub fn delete(&self, entity: Key) -> bool {
         self.try_delete(entity).unwrap()
     }
@@ -168,13 +280,49 @@ impl World {
             Err(error::SetDefaultWorkload::MissingWorkload)
         }
     }
+    /// Modifies the current default workload to `name`.
+    ///
+    /// Unwraps errors.
     pub fn set_default_workload(&self, name: impl ToString) {
         self.try_set_default_workload(name).unwrap();
     }
     /// A workload is a collection of systems.
     /// They will execute as much in parallel as possible.
-    /// They are evaluated left to right.
+    ///
+    /// They are evaluated left to right when they can't be parallelized.
+    ///
     /// The default workload will automatically be set to the first workload added.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// struct Adder;
+    /// impl<'a> System<'a> for Adder {
+    ///     type Data = (&'a mut usize, &'a u32);
+    ///     fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+    ///         for (x, &y) in (usizes, u32s).iter() {
+    ///             *x += y as usize;
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// struct Checker;
+    /// impl<'a> System<'a> for Checker {
+    ///     type Data = &'a usize;
+    ///     fn run(&self, usizes: <Self::Data as SystemData>::View) {
+    ///         let mut iter = usizes.iter();
+    ///         assert_eq!(iter.next(), Some(&1));
+    ///         assert_eq!(iter.next(), Some(&5));
+    ///         assert_eq!(iter.next(), Some(&9));
+    ///     }
+    /// }
+    ///
+    /// let world = World::new::<(usize, u32)>();
+    /// world.new_entity((0usize, 1u32));
+    /// world.new_entity((2usize, 3u32));
+    /// world.new_entity((4usize, 5u32));
+    /// world.try_add_workload("Add & Check", (Adder, Checker)).unwrap();
+    /// world.run_default();
+    /// ```
     pub fn try_add_workload<T: Workload>(
         &self,
         name: impl ToString,
@@ -184,6 +332,45 @@ impl World {
         system.into_workload(name.to_string(), &mut *pipeline);
         Ok(())
     }
+    /// A workload is a collection of systems.
+    /// They will execute as much in parallel as possible.
+    ///
+    /// They are evaluated left to right when they can't be parallelized.
+    ///
+    /// The default workload will automatically be set to the first workload added.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// struct Adder;
+    /// impl<'a> System<'a> for Adder {
+    ///     type Data = (&'a mut usize, &'a u32);
+    ///     fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+    ///         for (x, &y) in (usizes, u32s).iter() {
+    ///             *x += y as usize;
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// struct Checker;
+    /// impl<'a> System<'a> for Checker {
+    ///     type Data = &'a usize;
+    ///     fn run(&self, usizes: <Self::Data as SystemData>::View) {
+    ///         let mut iter = usizes.iter();
+    ///         assert_eq!(iter.next(), Some(&1));
+    ///         assert_eq!(iter.next(), Some(&5));
+    ///         assert_eq!(iter.next(), Some(&9));
+    ///     }
+    /// }
+    ///
+    /// let world = World::new::<(usize, u32)>();
+    /// world.new_entity((0usize, 1u32));
+    /// world.new_entity((2usize, 3u32));
+    /// world.new_entity((4usize, 5u32));
+    /// world.add_workload("Add & Check", (Adder, Checker));
+    /// world.run_default();
+    /// ```
     pub fn add_workload<T: Workload>(&self, name: impl ToString, system: T) {
         self.try_add_workload(name, system).unwrap();
     }
@@ -205,6 +392,9 @@ impl World {
             Err(error::RunWorkload::MissingWorkload)
         }
     }
+    /// Runs the `name` workload.
+    ///
+    /// Unwraps error.
     pub fn run_workload(&self, name: impl AsRef<str>) {
         self.try_run_workload(name).unwrap();
     }
@@ -222,6 +412,9 @@ impl World {
         }
         Ok(())
     }
+    /// Run the default workload.
+    ///
+    /// Unwraps error.
     pub fn run_default(&self) {
         self.try_run_default().unwrap();
     }

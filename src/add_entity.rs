@@ -6,8 +6,6 @@ use std::any::TypeId;
 // No new storage will be created
 pub trait AddEntity {
     type Component;
-    /// Stores `component` in a new entity, the `Key` to this entity is returned.
-    /// Multiple components can be added at the same time using a tuple.
     fn add_entity(self, component: Self::Component, entities: &mut Entities) -> Key;
 }
 
