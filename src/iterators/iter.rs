@@ -119,13 +119,12 @@ where
         self
     }
     fn split_at(mut self, index: usize) -> (Self, Self) {
-        let mut clone = Packed1 {
+        let clone = Packed1 {
             data: self.data.clone(),
-            current: self.current,
+            current: self.current + index,
             end: self.end,
         };
-        self.end -= index;
-        clone.current += index;
+        self.end = clone.current;
         (self, clone)
     }
 }
@@ -473,13 +472,12 @@ macro_rules! impl_iterators {
                 self
             }
             fn split_at(mut self, index: usize) -> (Self, Self) {
-                let mut clone = $packed {
+                let clone = $packed {
                     data: self.data.clone(),
-                    current: self.current,
+                    current: self.current + index,
                     end: self.end,
                 };
-                self.end -= index;
-                clone.current += index;
+                self.end = clone.current;
                 (self, clone)
             }
         }
@@ -527,25 +525,18 @@ macro_rules! impl_iterators {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn split(mut self) -> (Self, Option<Self>) {
                 let len = self.end - self.current;
-                if self.end - self.current >= 2 {
+                if len >= 2 {
                     let mut clone = self.clone();
-                    self.end -= len / 2;
                     clone.current += len / 2;
+                    self.end = clone.current;
                     (self, Some(clone))
                 } else {
                     (self, None)
                 }
             }
-            fn fold_with<F>(mut self, mut folder: F) -> F
+            fn fold_with<F>(self, folder: F) -> F
             where F: Folder<Self::Item> {
-                while !folder.full() {
-                    if let Some(item) = self.next() {
-                        folder = folder.consume(item);
-                    } else {
-                        break;
-                    }
-                }
-                folder
+                folder.consume_iter(self)
             }
         }
 

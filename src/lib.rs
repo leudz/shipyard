@@ -93,7 +93,7 @@
 //! }
 //!
 //! // we've got some new pigs
-//! assert_eq!(world.get_storage::<&Health>().len(), 838);
+//! assert_eq!(world.get_storage::<&Health>().len(), 900);
 //! ```
 
 #![deny(bare_trait_objects)]
