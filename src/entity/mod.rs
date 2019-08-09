@@ -8,7 +8,7 @@ pub(crate) use view::EntityViewMut;
  * The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
  * Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
 */
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Key(usize);
 
 impl Key {
