@@ -1,7 +1,7 @@
 mod view;
 
 use crate::component_storage::AllStorages;
-use std::ops::DerefMut;
+use std::convert::AsMut;
 pub(crate) use view::EntityViewMut;
 
 /* A Key is a handle to an entity and has two parts, the index and the version.
@@ -51,19 +51,23 @@ impl Key {
     }
 }
 
-/* Entities holds the Keys to all entities: living, removed and dead.
- * A living entity is an entity currently present, with or without component.
- * Removed and dead entities don't have any component.
- * The big difference is that removed ones can become alive again.
- * The life cycle of an entity looks like this:
- * Generation -> Deletion -> Dead
- *      ⬑----------↵
- * An entity starts with a generation at 0, each removal will increase it by 1
- * until version::MAX() where the entity is considered dead.
- * Removed entities form a linked list inside the vector, using their index part to point to the next.
- * Removed entities are added to one end and removed from the other.
- * Dead entities are simply never added to the linked list.
-*/
+/// Entities holds the Keys to all entities: living, removed and dead.
+/// 
+/// A living entity is an entity currently present, with or without component.
+/// 
+/// Removed and dead entities don't have any component.
+/// 
+/// The big difference is that removed ones can become alive again.
+/// 
+/// The life cycle of an entity looks like this:
+/// 
+/// Generation -> Deletion -> Dead\
+///           ⬑----------↵
+// An entity starts with a generation at 0, each removal will increase it by 1
+// until version::MAX() where the entity is considered dead.
+// Removed entities form a linked list inside the vector, using their index part to point to the next.
+// Removed entities are added to one end and removed from the other.
+// Dead entities are simply never added to the linked list.
 pub struct Entities {
     data: Vec<Key>,
     list: Option<(usize, usize)>,
@@ -91,13 +95,36 @@ impl Entities {
     }
     /// Delete an entity and all its components.
     /// Returns true if the entity was alive.
+    /// 
+    /// [World::delete] is easier to use but will borrow and release [Entities] and [AllStorages] for each entity.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity((0usize, 1u32));
+    /// let entity2 = world.new_entity((2usize, 3u32));
+    /// let mut entities = world.entities_mut();
+    /// let mut all_storages = world.all_storages_mut();
+    /// 
+    /// entities.delete(&mut all_storages, entity1);
+    /// 
+    /// let (usizes, u32s) = all_storages.get_storage::<(&usize, &u32)>();
+    /// assert_eq!((&usizes).get(entity1), None);
+    /// assert_eq!((&u32s).get(entity1), None);
+    /// assert_eq!(usizes.get(entity2), Some(&2));
+    /// assert_eq!(u32s.get(entity2), Some(&3));
+    /// ```
+    /// 
+    /// [World::delete]: struct.World.html#method.delete
+    /// [Entities]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
     pub fn delete(
         &mut self,
-        mut storages: impl DerefMut<Target = AllStorages>,
+        mut storages: impl AsMut<AllStorages>,
         entity: Key,
     ) -> bool {
         self.view_mut()
-            .delete(&mut storages.deref_mut().view_mut(), entity)
+            .delete(&mut storages.as_mut().view_mut(), entity)
     }
 }
 
