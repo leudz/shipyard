@@ -173,21 +173,18 @@ mod test {
         (&mut usizes, &mut u32s).add_component((2,), entity);
     }
     #[test]
-    #[should_panic(
-        expected = "called `Result::unwrap()` on an `Err` value: MissingPackStorage(TypeId { t: 8766594652559642870 })"
-    )]
     fn pack_missing_storage() {
-        assert_eq!(
-            format!("{:?}", std::any::TypeId::of::<usize>()),
-            "TypeId { t: 8766594652559642870 }"
-        );
+        match std::panic::catch_unwind(|| {
+            let world = World::new::<(usize, u32)>();
+            let entity = world.new_entity(());
+            world.pack_owned::<(usize, u32)>();
+            let (mut usizes,) = world.get_storage::<(&mut usize,)>();
 
-        let world = World::new::<(usize, u32)>();
-        let entity = world.new_entity(());
-        world.pack_owned::<(usize, u32)>();
-        let (mut usizes,) = world.get_storage::<(&mut usize,)>();
-
-        (&mut usizes,).add_component((0,), entity);
+            usizes.add_component(0, entity);
+        }) {
+            Ok(_) => panic!(),
+            Err(err) => assert_eq!(format!("{}", err.downcast::<String>().unwrap()), format!("called `Result::unwrap()` on an `Err` value: Missing storage of type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", std::any::TypeId::of::<usize>())),
+        }
     }
     #[test]
     fn pack_iterator() {
