@@ -199,6 +199,12 @@ impl<T: ?Sized> std::ops::Deref for Ref<'_, T> {
     }
 }
 
+impl<T: ?Sized> std::convert::AsRef<T> for Ref<'_, T> {
+    fn as_ref(&self) -> &T {
+        self.inner
+    }
+}
+
 /// A wrapper type for a unique borrow from a `AtomicRefCell<T>`.
 pub struct RefMut<'a, T: ?Sized> {
     pub(crate) inner: &'a mut T,
@@ -251,6 +257,18 @@ impl<T: ?Sized> std::ops::Deref for RefMut<'_, T> {
 
 impl<T: ?Sized> std::ops::DerefMut for RefMut<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
+        self.inner
+    }
+}
+
+impl<T: ?Sized> std::convert::AsRef<T> for RefMut<'_, T> {
+    fn as_ref(&self) -> &T {
+        self.inner
+    }
+}
+
+impl<T: ?Sized> std::convert::AsMut<T> for RefMut<'_, T> {
+    fn as_mut(&mut self) -> &mut T {
         self.inner
     }
 }
