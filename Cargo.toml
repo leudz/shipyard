@@ -3,6 +3,12 @@ name = "shipyard"
 version = "0.1.0"
 authors = ["leudz <dylan.ancel@gmail.com>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
+description = "Entity Component System"
+keywords = ["ecs", "entity", "component"]
+categories = ["concurrency, game-engines"]
+readme = "README.md"
+repository = "https://github.com/leudz/shipyard"
 
 [dependencies]
 num_cpus = "1.10.1"
