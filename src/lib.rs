@@ -543,4 +543,41 @@ mod test {
             assert_eq!(iter.next(), None);
         });
     }
+    #[test]
+    fn two_workloads() {
+        struct System1;
+        impl<'a> System<'a> for System1 {
+            type Data = (&'a usize, );
+            fn run(&self, _: <Self::Data as SystemData>::View) {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+
+        let world = World::new::<(usize, u32)>();
+        world.add_workload("default", (System1,));
+
+        rayon::scope(|s| {
+            s.spawn(|_| world.run_default());
+            s.spawn(|_| world.run_default());
+        });
+    }
+    #[test]
+    #[should_panic(expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow while already borrowed.")]
+    fn two_bad_workloads() {
+        struct System1;
+        impl<'a> System<'a> for System1 {
+            type Data = (&'a mut usize, );
+            fn run(&self, _: <Self::Data as SystemData>::View) {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+
+        let world = World::new::<(usize, u32)>();
+        world.add_workload("default", (System1,));
+
+        rayon::scope(|s| {
+            s.spawn(|_| world.run_default());
+            s.spawn(|_| world.run_default());
+        });
+    }
 }
