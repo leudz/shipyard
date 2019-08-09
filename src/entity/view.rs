@@ -54,9 +54,6 @@ impl<'a> EntityViewMut<'a> {
     }
     /// Stores `component` in a new entity, the `Key` to this entity is returned.
     /// Multiple components can be added at the same time using a tuple.
-    ///
-    /// Due to current restriction, `storages` and `component` have to be tuples,
-    /// even for a single value. In this case use (T,).
     pub fn add<T: ViewAddEntity>(&mut self, storages: T, component: T::Component) -> Key {
         let key = self.generate();
         storages.add_entity(component, key.index());

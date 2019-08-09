@@ -42,7 +42,7 @@ impl Default for World {
 impl World {
     /// Create a `World` with storages based on `T`.
     ///
-    /// `T` has to be a tuple even for a single type due to restrictions.
+    /// `T` has to be a tuple even for a single type.
     /// In this case use (T,).
     pub fn new<T: Register>() -> Self {
         let world = World::default();
@@ -57,9 +57,6 @@ impl World {
     /// `&T` returns a read access to the storage.
     /// `&mut T` returns a write access to the storage.
     /// To retrive multiple storages at once, use a tuple.
-    ///
-    /// `T` has to be a tuple even for a single type due to restrictions.
-    /// In this case use (T,).
     pub fn try_get_storage<'a, T: GetStorage<'a>>(
         &'a self,
     ) -> Result<T::Storage, error::GetStorage> {
@@ -76,7 +73,7 @@ impl World {
     /// As opposed to `add_entity`, storages will be created if they don't exist.
     /// Multiple components can be added at the same time using a tuple.
     ///
-    /// `T` has to be a tuple even for a single type due to restrictions.
+    /// `T` has to be a tuple even for a single type.
     /// In this case use (T,).
     pub fn try_new_entity<T: WorldNewEntity>(&self, component: T) -> Result<Key, error::NewEntity> {
         let mut entities = self
@@ -126,9 +123,6 @@ impl World {
     /// Each type has to come with a mutablility expressed by `&` or `&mut`.
     /// `Entities` are the exception, they only come in mutable flavor.
     /// Multiple types can be queried by using a tuple.
-    ///
-    /// `T` has to be a tuple even for a single type due to restrictions.
-    /// In this case use (T,).
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
         T::run(&self.entities, &self.storages, &self.thread_pool, f);
     }

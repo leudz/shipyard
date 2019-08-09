@@ -8,9 +8,6 @@ pub trait AddEntity {
     type Component;
     /// Stores `component` in a new entity, the `Key` to this entity is returned.
     /// Multiple components can be added at the same time using a tuple.
-    ///
-    /// Due to current restriction, the storages and `component` have to be tuples,
-    /// even for a single value. In this case use (T,).
     fn add_entity(self, component: Self::Component, entities: &mut Entities) -> Key;
 }
 
@@ -21,14 +18,28 @@ impl AddEntity for () {
     }
 }
 
-impl<T: 'static + Send + Sync> AddEntity for (&mut SparseArray<T>,) {
+impl<T: 'static + Send + Sync> AddEntity for &mut SparseArray<T> {
     type Component = (T,);
     fn add_entity(self, component: Self::Component, entities: &mut Entities) -> Key {
         let key = entities.generate();
 
-        self.0.insert(component.0, key.index());
+        self.insert(component.0, key.index());
 
         key
+    }
+}
+
+impl<T: 'static + Send + Sync> AddEntity for (&mut SparseArray<T>,) {
+    type Component = (T,);
+    fn add_entity(self, component: Self::Component, entities: &mut Entities) -> Key {
+        self.0.add_entity(component, entities)
+    }
+}
+
+impl<'a, T: 'static + Send + Sync> AddEntity for Write<'_, T> {
+    type Component = (T,);
+    fn add_entity(mut self, component: Self::Component, entities: &mut Entities) -> Key {
+        (&mut *self,).add_entity(component, entities)
     }
 }
 
@@ -36,6 +47,13 @@ impl<'a, T: 'static + Send + Sync> AddEntity for (Write<'_, T>,) {
     type Component = (T,);
     fn add_entity(mut self, component: Self::Component, entities: &mut Entities) -> Key {
         (&mut *self.0,).add_entity(component, entities)
+    }
+}
+
+impl<'a, T: 'static + Send + Sync> AddEntity for &mut Write<'_, T> {
+    type Component = (T,);
+    fn add_entity(self, component: Self::Component, entities: &mut Entities) -> Key {
+        (&mut **self).add_entity(component, entities)
     }
 }
 

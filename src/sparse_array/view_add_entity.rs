@@ -11,17 +11,31 @@ impl ViewAddEntity for () {
     fn add_entity(self, _: Self::Component, _: usize) {}
 }
 
+impl<T> ViewAddEntity for ViewMut<'_, T> {
+    type Component = T;
+    fn add_entity(mut self, component: Self::Component, index: usize) {
+        self.insert(component, index);
+    }
+}
+
+impl<T> ViewAddEntity for &mut ViewMut<'_, T> {
+    type Component = T;
+    fn add_entity(self, component: Self::Component, index: usize) {
+        self.insert(component, index);
+    }
+}
+
 impl<T> ViewAddEntity for (ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(mut self, component: Self::Component, index: usize) {
-        self.0.insert(component.0, index);
+    fn add_entity(self, component: Self::Component, index: usize) {
+        self.0.add_entity(component.0, index);
     }
 }
 
 impl<T> ViewAddEntity for (&mut ViewMut<'_, T>,) {
     type Component = (T,);
     fn add_entity(self, component: Self::Component, index: usize) {
-        self.0.insert(component.0, index);
+        self.0.add_entity(component.0, index);
     }
 }
 
