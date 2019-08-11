@@ -25,6 +25,8 @@ impl ComponentStorage {
     /// Creates a new `ComponentStorage` storing elements of type T.
     pub(crate) fn new<T: 'static + Send + Sync>() -> Self {
         let array = SparseArray::<T>::default();
+        // store the vtable of this trait object
+        // for a full explanation see Delete documentation
         let delete: [usize; 2] = unsafe {
             *(&(&array as &dyn Delete as *const _) as *const *const _ as *const [usize; 2])
         };
@@ -52,6 +54,7 @@ impl ComponentStorage {
     /// Mutably borrows the container and delete `index`.
     pub(crate) fn delete(&mut self, index: usize) -> Result<(), error::Borrow> {
         // reconstruct a `dyn Delete` from two pointers
+        // for a full explanation see Delete documentation
         let array: RefMut<Box<dyn Any + Send + Sync>> = self.data.try_borrow_mut()?;
         let array: usize = &**array as *const dyn Any as *const () as usize;
         let delete: &mut dyn Delete =
