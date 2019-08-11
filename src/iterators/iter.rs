@@ -534,8 +534,8 @@ macro_rules! impl_iterators {
                     (self, None)
                 }
             }
-            fn fold_with<F>(self, folder: F) -> F
-            where F: Folder<Self::Item> {
+            fn fold_with<Fold>(self, folder: Fold) -> Fold
+            where Fold: Folder<Self::Item> {
                 folder.consume_iter(self)
             }
         }
@@ -612,13 +612,13 @@ macro_rules! iterators {
 }
 
 iterators![
-    ;Iter2 Iter3 Iter4 Iter5;
-    ;ParIter2 ParIter3 ParIter4 ParIter5;
-    ;Packed2 Packed3 Packed4 Packed5;
-    ;NonPacked2 NonPacked3 NonPacked4 NonPacked5;
-    ;Chunk2 Chunk3 Chunk4 Chunk5;
-    ;ChunkExact2 ChunkExact3 ChunkExact4 ChunkExact5;
-    ;ParPacked2 ParPacked3 ParPacked4 ParPacked5;
-    ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5;
-    (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/
+    ;Iter2 Iter3 Iter4 Iter5 Iter6 Iter7 Iter8 Iter9 Iter10;
+    ;ParIter2 ParIter3 ParIter4 ParIter5 ParIter6 ParIter7 ParIter8 ParIter9 Pariter10;
+    ;Packed2 Packed3 Packed4 Packed5 Packed6 Packed7 Packed8 Packed9 Packed10;
+    ;NonPacked2 NonPacked3 NonPacked4 NonPacked5 NonPacked6 NonPacked7 NonPacked8 NonPacked9 NonPacked10;
+    ;Chunk2 Chunk3 Chunk4 Chunk5 Chunk6 Chunk7 Chunk8 Chunk9 Chunk10;
+    ;ChunkExact2 ChunkExact3 ChunkExact4 ChunkExact5 ChunkExact6 ChunkExact7 ChunkExact8 ChunkExact9 ChunkExact10;
+    ;ParPacked2 ParPacked3 ParPacked4 ParPacked5 ParPacked6 ParPacked7 ParPacked8 ParPacked9 ParPacked10;
+    ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5 ParNonPacked6 ParNonPacked7 ParNonPacked8 ParNonPacked9 ParNonPacked10;
+    (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];

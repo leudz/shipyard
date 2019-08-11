@@ -194,11 +194,11 @@ macro_rules! impl_add_component {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: AbstractStorage<'a>,)+> Run<'a> for ($($type,)+) {
             type Storage = ($($type::AbstractStorage,)+);
-            fn run<F: FnOnce(Self::Storage)>(
+            fn run<Func: FnOnce(Self::Storage)>(
                 entities: &'a AtomicRefCell<Entities>,
                 storages: &'a AtomicRefCell<AllStorages>,
                 thread_pool: &'a ThreadPool,
-                f: F
+                f: Func
             ) {
                 let mut i = 0;
                 $({
@@ -228,4 +228,4 @@ macro_rules! add_component {
     }
 }
 
-add_component![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];
+add_component![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
