@@ -547,7 +547,7 @@ mod test {
     fn two_workloads() {
         struct System1;
         impl<'a> System<'a> for System1 {
-            type Data = (&'a usize, );
+            type Data = (&'a usize,);
             fn run(&self, _: <Self::Data as SystemData>::View) {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
@@ -562,11 +562,13 @@ mod test {
         });
     }
     #[test]
-    #[should_panic(expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow while already borrowed.")]
+    #[should_panic(
+        expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow while already borrowed."
+    )]
     fn two_bad_workloads() {
         struct System1;
         impl<'a> System<'a> for System1 {
-            type Data = (&'a mut usize, );
+            type Data = (&'a mut usize,);
             fn run(&self, _: <Self::Data as SystemData>::View) {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
