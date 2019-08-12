@@ -6,6 +6,7 @@ Shipyard is an Entity Component System. While it's usable it is far from finishe
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg)](LICENSE-APACHE)
 [![Crates.io](https://img.shields.io/crates/v/shipyard.svg)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
+[![Gitter](https://badges.gitter.im/leudz-shipyard/community.svg)](https://gitter.im/leudz-shipyard/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 ## Interesting features
 - **Packing** can enable perfect components alignment, allowing fast iteration but also SIMD instructions. To learn how it's done read Michele **skypjack** Caini's [great blog article](https://skypjack.github.io/2019-03-21-ecs-baf-part-2-insights/).
