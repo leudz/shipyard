@@ -221,7 +221,7 @@ impl World {
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
         T::run(&self.entities, &self.storages, &self.thread_pool, f);
     }
-    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     /// # Example
     /// ```
     /// # use shipyard::*;
@@ -236,7 +236,7 @@ impl World {
         self.try_get_storage::<T::Storage>()?.try_pack_owned()?;
         Ok(())
     }
-    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     ///
     /// Unwraps errors.
     /// # Example

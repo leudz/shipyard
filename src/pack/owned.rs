@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 /// Allows to pack multiple storages.
 pub trait OwnedPack {
-    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     /// # Example
     /// ```
     /// # use shipyard::*;
@@ -14,7 +14,7 @@ pub trait OwnedPack {
     /// (&mut usizes, &mut u32s).try_pack_owned().unwrap();
     /// ```
     fn try_pack_owned(self) -> Result<(), error::Pack>;
-    /// Pack multiple storages together, it can speed up iteration at the cost of insertion/removal.
+    /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     ///
     /// Unwraps errors.
     /// # Example
