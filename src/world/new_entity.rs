@@ -75,9 +75,9 @@ macro_rules! impl_new_entity {
 }
 
 macro_rules! new_entity {
-    ($(($left_type: ident, $left_index: tt))*;($type1: ident, $index1: tt) $(($type: ident, $index: tt))*) => {
-        impl_new_entity![$(($left_type, $left_index))*];
-        new_entity![$(($left_type, $left_index))* ($type1, $index1); $(($type, $index))*];
+    ($(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_new_entity![$(($type, $index))*];
+        new_entity![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))*;) => {
         impl_new_entity![$(($type, $index))*];

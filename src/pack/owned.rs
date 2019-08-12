@@ -107,9 +107,9 @@ macro_rules! impl_owned_pack {
 }
 
 macro_rules! owned_pack {
-    ($(($left_type: ident, $left_index: tt))*;($type1: ident, $index1: tt) $(($type: ident, $index: tt))*) => {
-        impl_owned_pack![$(($left_type, $left_index))*];
-        owned_pack![$(($left_type, $left_index))* ($type1, $index1); $(($type, $index))*];
+    ($(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_owned_pack![$(($type, $index))*];
+        owned_pack![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))*;) => {
         impl_owned_pack![$(($type, $index))*];

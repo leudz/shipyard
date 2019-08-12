@@ -67,9 +67,9 @@ macro_rules! impl_get_storage {
 }
 
 macro_rules! get_storage {
-    ($(($left_type: ident, $left_index: tt))*;($type1: ident, $index1: tt) $(($type: ident, $index: tt))*) => {
-        impl_get_storage![$(($left_type, $left_index))*];
-        get_storage![$(($left_type, $left_index))* ($type1, $index1); $(($type, $index))*];
+    ($(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_get_storage![$(($type, $index))*];
+        get_storage![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))*;) => {
         impl_get_storage![$(($type, $index))*];

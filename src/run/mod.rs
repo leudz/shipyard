@@ -219,9 +219,9 @@ macro_rules! impl_add_component {
 }
 
 macro_rules! add_component {
-    ($(($left_type: ident, $left_index: tt))*;($type1: ident, $index1: tt) $(($type: ident, $index: tt))*) => {
-        impl_add_component![$(($left_type, $left_index))*];
-        add_component![$(($left_type, $left_index))* ($type1, $index1); $(($type, $index))*];
+    ($(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_add_component![$(($type, $index))*];
+        add_component![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))*;) => {
         impl_add_component![$(($type, $index))*];
