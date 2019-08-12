@@ -3,6 +3,7 @@ use crate::atomic_refcell::{AtomicRefCell, Borrow};
 use crate::component_storage::AllStorages;
 use crate::entity::Entities;
 use crate::world::World;
+#[cfg(feature = "parallel")]
 use rayon::ThreadPool;
 use std::any::TypeId;
 
@@ -57,10 +58,19 @@ where
     fn dispatch(&self, world: &World) {
         let entities = &world.entities;
         let storages = &world.storages;
-        let thread_pool = &world.thread_pool;
-        // SAFE data is dropped before borrow
-        let (data, _borrow) =
-            unsafe { <T::Data as SystemData<'_>>::borrow(&entities, &storages, &thread_pool) };
+
+        let (data, _borrow) = {
+            #[cfg(feature = "parallel")]
+            {
+                let thread_pool = &world.thread_pool;
+                // SAFE data is dropped before borrow
+                unsafe { <T::Data as SystemData<'_>>::borrow(&entities, &storages, &thread_pool) }
+            }
+            #[cfg(not(feature = "parallel"))]
+            {
+                unsafe { <T::Data as SystemData<'_>>::borrow(&entities, &storages) }
+            }
+        };
         self.run(data);
     }
 }
@@ -68,22 +78,38 @@ where
 pub trait SystemData<'a> {
     type View;
     /// # Safety `Self::Data` has to be dropped before `Either`.
+    #[cfg(feature = "parallel")]
     unsafe fn borrow(
         entities: &'a AtomicRefCell<Entities>,
         storages: &'a AtomicRefCell<AllStorages>,
         thread_pool: &'a ThreadPool,
+    ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>);
+    /// # Safety `Self::Data` has to be dropped before `Either`.
+    #[cfg(not(feature = "parallel"))]
+    unsafe fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        storages: &'a AtomicRefCell<AllStorages>,
     ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>);
     fn borrow_status() -> Vec<(TypeId, Mutation)>;
 }
 
 impl<'a, T: AbstractStorage<'a>> SystemData<'a> for T {
     type View = T::AbstractStorage;
+    #[cfg(feature = "parallel")]
     unsafe fn borrow(
         entities: &'a AtomicRefCell<Entities>,
         storages: &'a AtomicRefCell<AllStorages>,
         thread_pool: &'a ThreadPool,
     ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>) {
         let (data, borrow) = <T as AbstractStorage<'a>>::borrow(entities, storages, thread_pool);
+        (data, vec![borrow])
+    }
+    #[cfg(not(feature = "parallel"))]
+    unsafe fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        storages: &'a AtomicRefCell<AllStorages>,
+    ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>) {
+        let (data, borrow) = <T as AbstractStorage<'a>>::borrow(entities, storages);
         (data, vec![borrow])
     }
     fn borrow_status() -> Vec<(TypeId, Mutation)> {
@@ -93,12 +119,21 @@ impl<'a, T: AbstractStorage<'a>> SystemData<'a> for T {
 
 impl<'a, T: AbstractStorage<'a>> SystemData<'a> for (T,) {
     type View = (T::AbstractStorage,);
+    #[cfg(feature = "parallel")]
     unsafe fn borrow(
         entities: &'a AtomicRefCell<Entities>,
         storages: &'a AtomicRefCell<AllStorages>,
         thread_pool: &'a ThreadPool,
     ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>) {
         let (data, borrow) = T::borrow(entities, storages, thread_pool);
+        ((data,), vec![borrow])
+    }
+    #[cfg(not(feature = "parallel"))]
+    unsafe fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        storages: &'a AtomicRefCell<AllStorages>,
+    ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>) {
+        let (data, borrow) = T::borrow(entities, storages);
         ((data,), vec![borrow])
     }
     fn borrow_status() -> Vec<(TypeId, Mutation)> {
@@ -110,6 +145,7 @@ macro_rules! impl_system_data {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: AbstractStorage<'a>),+> SystemData<'a> for ($($type,)+) {
             type View = ($($type::AbstractStorage,)+);
+            #[cfg(feature = "parallel")]
             unsafe fn borrow(
                 entities: &'a AtomicRefCell<Entities>,
                 storages: &'a AtomicRefCell<AllStorages>,
@@ -118,6 +154,18 @@ macro_rules! impl_system_data {
                 let mut borrows = Vec::new();
                 (($({
                     let (data, borrow) = <$type as AbstractStorage<'a>>::borrow(entities, storages, thread_pool);
+                    borrows.push(borrow);
+                    data
+                },)+), borrows)
+            }
+            #[cfg(not(feature = "parallel"))]
+            unsafe fn borrow(
+                entities: &'a AtomicRefCell<Entities>,
+                storages: &'a AtomicRefCell<AllStorages>,
+            ) -> (Self::View, Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>) {
+                let mut borrows = Vec::new();
+                (($({
+                    let (data, borrow) = <$type as AbstractStorage<'a>>::borrow(entities, storages);
                     borrows.push(borrow);
                     data
                 },)+), borrows)

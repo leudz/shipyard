@@ -13,6 +13,7 @@ use crate::run::Run;
 use new_entity::WorldNewEntity;
 use pack::WorldOwnedPack;
 use pipeline::{Pipeline, Workload};
+#[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use register::Register;
 
@@ -20,6 +21,7 @@ use register::Register;
 pub struct World {
     pub(crate) entities: AtomicRefCell<Entities>,
     pub(crate) storages: AtomicRefCell<AllStorages>,
+    #[cfg(feature = "parallel")]
     pub(crate) thread_pool: ThreadPool,
     pipeline: AtomicRefCell<Pipeline>,
 }
@@ -30,6 +32,7 @@ impl Default for World {
         World {
             entities: AtomicRefCell::new(Default::default()),
             storages: AtomicRefCell::new(Default::default()),
+            #[cfg(feature = "parallel")]
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
                 .build()
@@ -219,7 +222,14 @@ impl World {
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
-        T::run(&self.entities, &self.storages, &self.thread_pool, f);
+        #[cfg(feature = "parallel")]
+        {
+            T::run(&self.entities, &self.storages, &self.thread_pool, f);
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            T::run(&self.entities, &self.storages, f);
+        }
     }
     /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     /// # Example
@@ -376,16 +386,25 @@ impl World {
     }
     /// Runs the `name` workload.
     pub fn try_run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
-        use rayon::prelude::*;
-
         let pipeline = self.pipeline.try_borrow()?;
         if let Some(workload) = pipeline.workloads.get(name.as_ref()) {
             for batch in &pipeline.batch[workload.clone()] {
-                self.thread_pool.install(|| {
-                    batch.into_par_iter().for_each(|&index| {
+                #[cfg(feature = "parallel")]
+                {
+                    use rayon::prelude::*;
+
+                    self.thread_pool.install(|| {
+                        batch.into_par_iter().for_each(|&index| {
+                            pipeline.systems[index].dispatch(&self);
+                        });
+                    })
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    batch.iter().for_each(|&index| {
                         pipeline.systems[index].dispatch(&self);
                     });
-                })
+                }
             }
             Ok(())
         } else {
@@ -400,15 +419,24 @@ impl World {
     }
     /// Run the default workload.
     pub fn try_run_default(&self) -> Result<(), error::Borrow> {
-        use rayon::prelude::*;
-
         let pipeline = self.pipeline.try_borrow()?;
         for batch in &pipeline.batch[pipeline.default.clone()] {
-            self.thread_pool.install(|| {
-                batch.into_par_iter().for_each(|&index| {
+            #[cfg(feature = "parallel")]
+            {
+                use rayon::prelude::*;
+
+                self.thread_pool.install(|| {
+                    batch.into_par_iter().for_each(|&index| {
+                        pipeline.systems[index].dispatch(&self);
+                    });
+                })
+            }
+            #[cfg(not(feature = "parallel"))]
+            {
+                batch.iter().for_each(|&index| {
                     pipeline.systems[index].dispatch(&self);
                 });
-            })
+            }
         }
         Ok(())
     }

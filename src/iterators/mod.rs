@@ -4,10 +4,14 @@ use crate::not::Not;
 use crate::sparse_array::{RawViewMut, View, ViewMut};
 pub use iter::{
     Iter2, Iter3, Iter4, Iter5, NonPacked2, NonPacked3, NonPacked4, NonPacked5, Packed1, Packed2,
-    Packed3, Packed4, Packed5, ParIter2, ParIter3, ParIter4, ParIter5, ParNonPacked2,
-    ParNonPacked3, ParNonPacked4, ParNonPacked5, ParPacked1, ParPacked2, ParPacked3, ParPacked4,
-    ParPacked5,
+    Packed3, Packed4, Packed5,
 };
+#[cfg(feature = "parallel")]
+pub use iter::{
+    ParIter2, ParIter3, ParIter4, ParIter5, ParNonPacked2, ParNonPacked3, ParNonPacked4,
+    ParNonPacked5, ParPacked1, ParPacked2, ParPacked3, ParPacked4, ParPacked5,
+};
+
 use std::any::TypeId;
 
 // This trait exists because of conflicting implementations
@@ -18,6 +22,7 @@ use std::any::TypeId;
 /// This trait serves as substitute.
 pub trait IntoIter {
     type IntoIter;
+    #[cfg(feature = "parallel")]
     type IntoParIter;
     /// Returns an iterator over storages yielding only components meeting the requirements.
     ///
@@ -56,6 +61,7 @@ pub trait IntoIter {
     /// });
     /// ```
     /// [run]: ../struct.World.html#method.run
+    #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter;
 }
 

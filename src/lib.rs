@@ -32,6 +32,8 @@
 //! ```
 //! # Let's make some pigs!
 //! ```
+//! # #[cfg(feature = "parallel")]
+//! # {
 //! use shipyard::*;
 //!
 //! struct Health(f32);
@@ -94,6 +96,7 @@
 //!
 //! // we've got some new pigs
 //! assert_eq!(world.get_storage::<&Health>().len(), 900);
+//! # }
 //! ```
 
 #![deny(bare_trait_objects)]
@@ -128,6 +131,7 @@ pub use entity::{Entities, EntitiesViewMut};
 pub use iterators::IntoIter;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
+#[cfg(feature = "parallel")]
 pub struct ThreadPool;
 
 #[cfg(test)]
@@ -413,6 +417,7 @@ mod test {
         assert_eq!(usizes.get(entity2), Some(&2));
         assert_eq!(u32s.get(entity2), Some(&3));
     }
+    #[cfg(feature = "parallel")]
     #[test]
     fn thread_pool() {
         let world = World::new::<(usize, u32)>();
@@ -480,6 +485,7 @@ mod test {
             assert_eq!(iter.next(), None);
         });
     }
+    #[cfg(feature = "parallel")]
     #[test]
     fn simple_parallel_sum() {
         use rayon::prelude::*;
@@ -494,6 +500,7 @@ mod test {
             });
         });
     }
+    #[cfg(feature = "parallel")]
     #[test]
     fn packed_parallel_iterator() {
         use rayon::prelude::*;
@@ -521,6 +528,7 @@ mod test {
             assert_eq!(iter.next(), None);
         });
     }
+    #[cfg(feature = "parallel")]
     #[test]
     fn parallel_iterator() {
         use rayon::prelude::*;
@@ -543,6 +551,7 @@ mod test {
             assert_eq!(iter.next(), None);
         });
     }
+    #[cfg(feature = "parallel")]
     #[test]
     fn two_workloads() {
         struct System1;
@@ -561,6 +570,7 @@ mod test {
             s.spawn(|_| world.run_default());
         });
     }
+    #[cfg(feature = "parallel")]
     #[test]
     #[should_panic(
         expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow while already borrowed."

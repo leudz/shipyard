@@ -1,8 +1,10 @@
 use super::{AbstractMut, IntoAbstract, IntoIter};
+#[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{
     bridge_producer_consumer, bridge_unindexed, Folder, Producer, UnindexedConsumer,
     UnindexedProducer,
 };
+#[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 use std::marker::PhantomData;
 
@@ -44,6 +46,7 @@ impl<T: IntoAbstract> Packed1<T> {
 
 impl<T: IntoAbstract> IntoIter for T {
     type IntoIter = Packed1<Self>;
+    #[cfg(feature = "parallel")]
     type IntoParIter = ParPacked1<Self>;
     fn iter(self) -> Self::IntoIter {
         Packed1 {
@@ -52,6 +55,7 @@ impl<T: IntoAbstract> IntoIter for T {
             current: 0,
         }
     }
+    #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter {
         ParPacked1(self.iter())
     }
@@ -59,10 +63,12 @@ impl<T: IntoAbstract> IntoIter for T {
 
 impl<T: IntoAbstract> IntoIter for (T,) {
     type IntoIter = Packed1<T>;
+    #[cfg(feature = "parallel")]
     type IntoParIter = ParPacked1<T>;
     fn iter(self) -> Self::IntoIter {
         T::iter(self.0)
     }
+    #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter {
         ParPacked1(self.iter())
     }
@@ -100,8 +106,10 @@ impl<T: IntoAbstract> ExactSizeIterator for Packed1<T> {
     }
 }
 /// Parallel iterator over a single component.
+#[cfg(feature = "parallel")]
 pub struct ParPacked1<T: IntoAbstract>(Packed1<T>);
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParPacked1<T> {
     /// Trasnform this parallel iterator into its sequential version.
     pub fn into_seq(self) -> Packed1<T> {
@@ -109,6 +117,7 @@ impl<T: IntoAbstract> ParPacked1<T> {
     }
 }
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> Producer for Packed1<T>
 where
     <T::AbsView as AbstractMut>::Out: Send,
@@ -129,6 +138,7 @@ where
     }
 }
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParallelIterator for ParPacked1<T>
 where
     <T::AbsView as AbstractMut>::Out: Send,
@@ -246,6 +256,7 @@ macro_rules! impl_iterators {
         /// Parallel iterator over multiple components.
         ///
         /// Packed owned iterators are fast but are limited to components packed together.
+        #[cfg(feature = "parallel")]
         pub struct $par_packed<$($type: IntoAbstract),+>($packed<$($type),+>);
 
         /// Chunk iterator over multiple components.
@@ -309,6 +320,7 @@ macro_rules! impl_iterators {
         }
 
         /// Parallel non packed iterator over multiple components.
+        #[cfg(feature = "parallel")]
         pub struct $par_non_packed<$($type: IntoAbstract),+>($non_packed<$($type),+>);
 
         /// Iterator over multiple components.
@@ -359,11 +371,13 @@ macro_rules! impl_iterators {
         ///
         /// The enum allows to abstract away what kind of iterator you really get.
         /// That doesn't mean the performance will suffer.
+        #[cfg(feature = "parallel")]
         pub enum $par_iter<$($type: IntoAbstract),+> {
             Packed($par_packed<$($type),+>),
             NonPacked($par_non_packed<$($type),+>),
         }
 
+        #[cfg(feature = "parallel")]
         impl<$($type: IntoAbstract),+> ParallelIterator for $par_iter<$($type),+>
         where $(<$type::AbsView as AbstractMut>::Out: Send),+ {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
@@ -380,6 +394,7 @@ macro_rules! impl_iterators {
 
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
             type IntoIter = $iter<$($type,)+>;
+            #[cfg(feature = "parallel")]
             type IntoParIter = $par_iter<$($type,)+>;
             fn iter(self) -> Self::IntoIter {
                 // check if all types are packed together
@@ -422,6 +437,7 @@ macro_rules! impl_iterators {
                     })
                 }
             }
+            #[cfg(feature = "parallel")]
             fn par_iter(self) -> Self::IntoParIter {
                 match self.iter() {
                     $iter::Packed(iter) => $par_iter::Packed($par_packed(iter)),
@@ -462,6 +478,7 @@ macro_rules! impl_iterators {
             }
         }
 
+        #[cfg(feature = "parallel")]
         impl<$($type: IntoAbstract),+> Producer for $packed<$($type),+>
         where
             $(<$type::AbsView as AbstractMut>::Out: Send),+
@@ -482,6 +499,7 @@ macro_rules! impl_iterators {
             }
         }
 
+        #[cfg(feature = "parallel")]
         impl<$($type: IntoAbstract),+> ParallelIterator for $par_packed<$($type),+>
         where
             $(<$type::AbsView as AbstractMut>::Out: Send),+
@@ -521,6 +539,7 @@ macro_rules! impl_iterators {
             }
         }
 
+        #[cfg(feature = "parallel")]
         impl<$($type: IntoAbstract),+> UnindexedProducer for $non_packed<$($type,)+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn split(mut self) -> (Self, Option<Self>) {
@@ -613,7 +632,7 @@ macro_rules! iterators {
 
 iterators![
     ;Iter2 Iter3 Iter4 Iter5 Iter6 Iter7 Iter8 Iter9 Iter10;
-    ;ParIter2 ParIter3 ParIter4 ParIter5 ParIter6 ParIter7 ParIter8 ParIter9 Pariter10;
+    ;ParIter2 ParIter3 ParIter4 ParIter5 ParIter6 ParIter7 ParIter8 ParIter9 ParIter10;
     ;Packed2 Packed3 Packed4 Packed5 Packed6 Packed7 Packed8 Packed9 Packed10;
     ;NonPacked2 NonPacked3 NonPacked4 NonPacked5 NonPacked6 NonPacked7 NonPacked8 NonPacked9 NonPacked10;
     ;Chunk2 Chunk3 Chunk4 Chunk5 Chunk6 Chunk7 Chunk8 Chunk9 Chunk10;

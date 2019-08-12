@@ -68,10 +68,21 @@ macro_rules! impl_pipeline {
                             match mutation {
                                 Mutation::Immutable => {
                                     for &(batch_type_id, mutation) in batch.iter() {
-                                        if type_id == batch_type_id && mutation == Mutation::Mutable
-                                        || (batch_type_id == TypeId::of::<AllStorages>() && type_id != TypeId::of::<crate::ThreadPool>()) {
-                                            conflict = true;
-                                            break;
+                                        #[cfg(feature = "parallel")]
+                                        {
+                                            if type_id == batch_type_id && mutation == Mutation::Mutable
+                                            || (batch_type_id == TypeId::of::<AllStorages>() && type_id != TypeId::of::<crate::ThreadPool>()) {
+                                                conflict = true;
+                                                break;
+                                            }
+                                        }
+                                        #[cfg(not(feature = "parallel"))]
+                                        {
+                                            if type_id == batch_type_id && mutation == Mutation::Mutable
+                                            || batch_type_id == TypeId::of::<AllStorages>() {
+                                                conflict = true;
+                                                break;
+                                            }
                                         }
                                     };
 
@@ -79,13 +90,26 @@ macro_rules! impl_pipeline {
                                 },
                                 Mutation::Mutable => {
                                     for &(batch_type_id, _) in batch.iter() {
-                                        if type_id == batch_type_id
-                                            || (type_id == TypeId::of::<AllStorages>()
-                                                && (batch_type_id != TypeId::of::<crate::ThreadPool>()
-                                                && batch_type_id != TypeId::of::<Entities>()))
+                                        #[cfg(feature = "parallel")]
                                         {
-                                            conflict = true;
-                                            break;
+                                            if type_id == batch_type_id
+                                                || (type_id == TypeId::of::<AllStorages>()
+                                                    && (batch_type_id != TypeId::of::<crate::ThreadPool>()
+                                                    && batch_type_id != TypeId::of::<Entities>()))
+                                            {
+                                                conflict = true;
+                                                break;
+                                            }
+                                        }
+                                        #[cfg(not(feature = "parallel"))]
+                                        {
+                                            if type_id == batch_type_id
+                                                || (type_id == TypeId::of::<AllStorages>()
+                                                    && batch_type_id != TypeId::of::<Entities>())
+                                            {
+                                                conflict = true;
+                                                break;
+                                            }
                                         }
                                     };
                                 },
