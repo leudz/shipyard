@@ -35,6 +35,7 @@
 //! # #[cfg(feature = "parallel")]
 //! # {
 //! use shipyard::*;
+//! use iterators::Iter;
 //!
 //! struct Health(f32);
 //! struct Fat(f32);
@@ -54,9 +55,11 @@
 //! impl<'a> System<'a> for Meal {
 //!     type Data = &'a mut Fat;
 //!     fn run(&self, mut fat: <Self::Data as SystemData>::View) {
-//!         for slice in fat.iter().into_chunk(8) {
-//!             for fat in slice {
-//!                 fat.0 += 3.0;
+//!         if let Iter::Packed(iter) = fat.iter() {
+//!             for slice in iter.into_chunk(8) {
+//!                 for fat in slice {
+//!                     fat.0 += 3.0;
+//!                 }
 //!             }
 //!         }
 //!     }
@@ -295,7 +298,7 @@ mod test {
         world.new_entity((0usize, 1u32));
         world.new_entity((2usize,));
         world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
-            if let Iter2::Packed(mut iter) = (usizes, u32s).iter() {
+            if let Iter::Packed(mut iter) = (usizes, u32s).iter() {
                 assert_eq!(iter.next(), Some((&0, &1)));
                 assert_eq!(iter.next(), None);
             } else {
@@ -314,7 +317,7 @@ mod test {
         world.new_entity((8usize, 9u32));
         world.new_entity((10usize,));
         world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
-            if let Iter2::Packed(iter) = (&usizes, &u32s).iter() {
+            if let Iter::Packed(iter) = (&usizes, &u32s).iter() {
                 let mut iter = iter.into_chunk(2);
                 assert_eq!(iter.next(), Some((&[0, 2][..], &[1, 3][..])));
                 assert_eq!(iter.next(), Some((&[4, 6][..], &[5, 7][..])));
@@ -323,7 +326,7 @@ mod test {
             } else {
                 panic!("not packed");
             }
-            if let Iter2::Packed(iter) = (&usizes, &u32s).iter() {
+            if let Iter::Packed(iter) = (&usizes, &u32s).iter() {
                 let mut iter = iter.into_chunk_exact(2);
                 assert_eq!(iter.next(), Some((&[0, 2][..], &[1, 3][..])));
                 assert_eq!(iter.next(), Some((&[4, 6][..], &[5, 7][..])));
@@ -334,7 +337,7 @@ mod test {
             } else {
                 panic!("not packed");
             }
-            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+            if let Iter::Packed(mut iter) = (&usizes, &u32s).iter() {
                 iter.next();
                 let mut iter = iter.into_chunk(2);
                 assert_eq!(iter.next(), Some((&[2, 4][..], &[3, 5][..])));
@@ -343,7 +346,7 @@ mod test {
             } else {
                 panic!("not packed");
             }
-            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+            if let Iter::Packed(mut iter) = (&usizes, &u32s).iter() {
                 iter.next();
                 let mut iter = iter.into_chunk_exact(2);
                 assert_eq!(iter.next(), Some((&[2, 4][..], &[3, 5][..])));
@@ -353,7 +356,7 @@ mod test {
             } else {
                 panic!("not packed");
             }
-            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+            if let Iter::Packed(mut iter) = (&usizes, &u32s).iter() {
                 iter.next();
                 iter.next();
                 let mut iter = iter.into_chunk_exact(2);
@@ -365,7 +368,7 @@ mod test {
             } else {
                 panic!("not packed");
             }
-            if let Iter2::Packed(mut iter) = (&usizes, &u32s).iter() {
+            if let Iter::Packed(mut iter) = (&usizes, &u32s).iter() {
                 iter.nth(3);
                 let mut iter = iter.into_chunk_exact(2);
                 assert_eq!(iter.next(), None);
@@ -512,7 +515,7 @@ mod test {
         world.run::<(&mut usize, &u32, ThreadPool), _>(|(mut usizes, u32s, thread_pool)| {
             let counter = std::sync::atomic::AtomicUsize::new(0);
             thread_pool.install(|| {
-                if let ParIter2::Packed(iter) = (&mut usizes, &u32s).par_iter() {
+                if let ParIter::Packed(iter) = (&mut usizes, &u32s).par_iter() {
                     iter.for_each(|(x, y)| {
                         counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         *x += *y as usize;
