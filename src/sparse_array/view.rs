@@ -42,10 +42,6 @@ impl<T> View<'_, T> {
     pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
         &self.pack_info.owned_type
     }
-    /// Returns true if is packed with any other type.
-    pub(crate) fn is_packed_owned(&self) -> bool {
-        !self.pack_info.owned_type.is_empty()
-    }
     /// Returns the length of the packed area within the data array.
     pub(crate) fn pack_len(&self) -> usize {
         self.pack_info.owned_len
