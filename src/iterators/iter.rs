@@ -163,10 +163,11 @@ pub struct NonPacked<T: IntoAbstract> {
 
 unsafe impl<T: IntoAbstract> Send for NonPacked<T> {}
 
-impl<T: IntoAbstract> Clone for NonPacked<T>
+impl<T: IntoAbstract> NonPacked<T>
 where
     T::AbsView: AbstractMut,
 {
+    // Private version of clone, users should not be able to clone any iterators
     fn clone(&self) -> Self {
         NonPacked {
             data: self.data.clone(),
