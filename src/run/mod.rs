@@ -2,7 +2,7 @@ mod system;
 
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::component_storage::{AllStorages, AllStoragesViewMut};
-use crate::entity::{Entities, EntitiesViewMut};
+use crate::entity::{Entities, EntitiesMut, EntitiesView, EntitiesViewMut};
 use crate::not::Not;
 use crate::sparse_array::{View, ViewMut};
 #[cfg(feature = "parallel")]
@@ -63,6 +63,31 @@ pub trait AbstractStorage<'a> {
 }
 
 impl<'a> AbstractStorage<'a> for Entities {
+    type AbstractStorage = EntitiesView<'a>;
+    #[cfg(feature = "parallel")]
+    unsafe fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        _: &'a AtomicRefCell<AllStorages>,
+        _: &'a ThreadPool,
+    ) -> (Self::AbstractStorage, Either<Borrow<'a>, [Borrow<'a>; 2]>) {
+        let (entities, borrow) = Ref::destructure(entities.try_borrow().unwrap());
+        (entities.view(), Either::Single(borrow))
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    unsafe fn borrow(
+        entities: &'a AtomicRefCell<Entities>,
+        _: &'a AtomicRefCell<AllStorages>,
+    ) -> (Self::AbstractStorage, Either<Borrow<'a>, [Borrow<'a>; 2]>) {
+        let (entities, borrow) = Ref::destructure(entities.try_borrow().unwrap());
+        (entities.view(), Either::Single(borrow))
+    }
+    fn borrow_status() -> (TypeId, Mutation) {
+        (TypeId::of::<Entities>(), Mutation::Immutable)
+    }
+}
+
+impl<'a> AbstractStorage<'a> for EntitiesMut {
     type AbstractStorage = EntitiesViewMut<'a>;
     #[cfg(feature = "parallel")]
     unsafe fn borrow(

@@ -151,6 +151,16 @@ impl World {
             .map_err(error::NewEntity::AllStoragesBorrow)?;
         Ok(T::new_entity(component, &mut *storages, &mut *entities))
     }
+    /// Returns a reference to the entities' storage.
+    ///
+    /// Unwraps errors.
+    pub fn entities(&self) -> Ref<Entities> {
+        self.try_entities().unwrap()
+    }
+    /// Returns a reference to the entities' storage.
+    pub fn try_entities(&self) -> Result<Ref<Entities>, error::Borrow> {
+        Ok(self.entities.try_borrow()?)
+    }
     /// Returns a mutable reference to the entities' storage.
     ///
     /// Unwraps errors.

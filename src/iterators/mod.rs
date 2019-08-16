@@ -1,8 +1,9 @@
 mod iter;
 
+use crate::entity::Key;
 use crate::not::Not;
 use crate::sparse_array::{RawViewMut, View, ViewMut};
-pub use iter::{Iter, NonPacked, Packed, ParIter, ParNonPacked, ParPacked, Chunk, ChunkExact};
+pub use iter::{Chunk, ChunkExact, Iter, NonPacked, Packed, ParIter, ParNonPacked, ParPacked};
 use std::any::TypeId;
 
 // This trait exists because of conflicting implementations
@@ -57,7 +58,7 @@ pub trait IntoIter {
 #[doc(hidden)]
 #[derive(Clone, Copy)]
 pub enum Len {
-    Indices((*const usize, usize)),
+    Indices((*const Key, usize)),
     Packed(usize),
 }
 
@@ -150,7 +151,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for ViewMut<'a, T> {
 impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b ViewMut<'a, T> {
     type AbsView = View<'b, T>;
     fn into_abstract(self) -> Self::AbsView {
-        self.non_mut()
+        self.as_non_mut()
     }
     fn indices(&self, type_ids: &[TypeId]) -> Len {
         let pack_types = self.pack_types_owned();
@@ -268,7 +269,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<ViewMut<'a, T>> {
 impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b Not<ViewMut<'a, T>> {
     type AbsView = Not<View<'b, T>>;
     fn into_abstract(self) -> Self::AbsView {
-        Not(self.0.non_mut())
+        Not(self.0.as_non_mut())
     }
     fn indices(&self, type_ids: &[TypeId]) -> Len {
         if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
@@ -302,7 +303,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut Not<ViewMut<
 impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     type AbsView = Not<View<'b, T>>;
     fn into_abstract(self) -> Self::AbsView {
-        Not(self.0.non_mut())
+        Not(self.0.as_non_mut())
     }
     fn indices(&self, type_ids: &[TypeId]) -> Len {
         if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
@@ -341,7 +342,7 @@ pub trait AbstractMut: Clone + Send {
     type Slice;
     // # Safety
     // The lifetime has to be valid
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out>;
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out>;
     // # Safety
     // The lifetime has to be valid
     unsafe fn get_data(&mut self, index: usize) -> Self::Out;
@@ -353,15 +354,18 @@ pub trait AbstractMut: Clone + Send {
 impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
     type Out = &'a T;
     type Slice = &'a [T];
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.contains_index(index) {
-            Some(self.data.get_unchecked(*self.sparse.get_unchecked(index)))
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.contains(entity) {
+            Some(
+                self.data
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index())),
+            )
         } else {
             None
         }
     }
-    unsafe fn get_data(&mut self, count: usize) -> Self::Out {
-        &*self.data.as_ptr().add(count)
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        &*self.data.as_ptr().add(index)
     }
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
         &std::slice::from_raw_parts(
@@ -374,15 +378,18 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
 impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
     type Out = &'a T;
     type Slice = &'a [T];
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.contains_index(index) {
-            Some(self.data.get_unchecked(*self.sparse.get_unchecked(index)))
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.contains(entity) {
+            Some(
+                self.data
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index())),
+            )
         } else {
             None
         }
     }
-    unsafe fn get_data(&mut self, count: usize) -> Self::Out {
-        &*self.data.as_ptr().add(count)
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        &*self.data.as_ptr().add(index)
     }
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
         std::slice::from_raw_parts(
@@ -395,15 +402,15 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
 impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
     type Out = &'a mut T;
     type Slice = &'a mut [T];
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.contains(index) {
-            Some(&mut *(self.data.add(*self.sparse.get_unchecked(index)) as *mut _))
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.contains(entity) {
+            Some(&mut *(self.data.add(*self.sparse.get_unchecked(entity.index())) as *mut _))
         } else {
             None
         }
     }
-    unsafe fn get_data(&mut self, count: usize) -> Self::Out {
-        &mut *self.data.add(count)
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        &mut *self.data.add(index)
     }
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
         std::slice::from_raw_parts_mut(self.data.add(indices.start), indices.end - indices.start)
@@ -413,8 +420,8 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
 impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
     type Out = ();
     type Slice = ();
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.0.contains_index(index) {
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -431,8 +438,8 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
 impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
     type Out = ();
     type Slice = ();
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.0.contains_index(index) {
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -449,8 +456,8 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
 impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
     type Out = ();
     type Slice = ();
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.0.contains_index(index) {
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -467,8 +474,8 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
 impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
     type Out = ();
     type Slice = ();
-    unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-        if self.0.contains(index) {
+    unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -520,8 +527,8 @@ macro_rules! impl_abstract_mut {
         impl<$($type: AbstractMut),+> AbstractMut for ($($type,)+) {
             type Out = ($($type::Out,)+);
             type Slice = ($($type::Slice,)+);
-            unsafe fn abs_get(&mut self, index: usize) -> Option<Self::Out> {
-                Some(($(self.$index.abs_get(index)?,)+))
+            unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
+                Some(($(self.$index.abs_get(entity)?,)+))
             }
             unsafe fn get_data(&mut self, index: usize) -> Self::Out {
                 ($(self.$index.get_data(index),)+)

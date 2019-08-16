@@ -42,11 +42,11 @@
 //!
 //! struct Reproduction;
 //! impl<'a> System<'a> for Reproduction {
-//!     type Data = (&'a mut Fat, &'a mut Health, Entities);
+//!     type Data = (&'a mut Fat, &'a mut Health, EntitiesMut);
 //!     fn run(&self, (mut fat, mut health, mut entities): <Self::Data as SystemData>::View) {
 //!         let count = (&health, &fat).iter().filter(|(health, fat)| health.0 > 40.0 && fat.0 > 20.0).count();
 //!         (0..count).for_each(|_| {
-//!             entities.add((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
+//!             entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
 //!         });
 //!     }
 //! }
@@ -81,9 +81,9 @@
 //!
 //! let world = World::new::<(Health, Fat)>();
 //!
-//! world.run::<(Entities, &mut Health, &mut Fat), _>(|(mut entities, mut health, mut fat)| {
+//! world.run::<(EntitiesMut, &mut Health, &mut Fat), _>(|(mut entities, mut health, mut fat)| {
 //!     (0..100).for_each(|_| {
-//!         entities.add((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
+//!         entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
 //!     })
 //! });
 //!
@@ -104,7 +104,6 @@
 
 #![deny(bare_trait_objects)]
 
-mod add_component;
 mod add_entity;
 mod atomic_refcell;
 mod component_storage;
@@ -120,7 +119,6 @@ mod run;
 mod sparse_array;
 mod world;
 
-pub use crate::add_component::AddComponent;
 pub use crate::component_storage::AllStorages;
 pub use crate::get::GetComponent;
 pub use crate::not::Not;
@@ -130,7 +128,7 @@ pub use crate::run::System;
 #[doc(hidden)]
 pub use crate::run::SystemData;
 pub use crate::world::World;
-pub use entity::{Entities, EntitiesViewMut};
+pub use entity::{Entities, EntitiesMut, EntitiesViewMut};
 pub use iterators::IntoIter;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
@@ -164,7 +162,7 @@ mod test {
         world.register::<u32>();
         let mut entities = world.entities_mut();
         let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
-        let entity1 = entities.add((&mut usizes, &mut u32s), (0, 1));
+        let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
         assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
     }
     #[test]
@@ -174,64 +172,68 @@ mod test {
         world.register::<u32>();
         let mut entities = world.entities_mut();
         let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
-        let entity1 = entities.add((), ());
-        (&mut *usizes, &mut *u32s).add_component((0, 1), entity1);
-        (&mut usizes, &mut u32s).add_component((2, 3), entity1);
+        let entity1 = entities.add_entity((), ());
+        entities.add_component((&mut *usizes, &mut *u32s), (0, 1), entity1);
+        entities.add_component((&mut usizes, &mut u32s), (2, 3), entity1);
         assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&2, &3));
     }
     #[test]
     fn run() {
         let world = World::new::<(usize, u32)>();
-        world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
-            entities.add((&mut usizes, &mut u32s), (0usize, 1u32));
-            entities.add((&mut usizes, &mut u32s), (2usize, 3u32));
+        world.run::<(EntitiesMut, &mut usize, &mut u32), _>(
+            |(mut entities, mut usizes, mut u32s)| {
+                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
 
-            // possible to borrow twice as immutable
-            let mut iter1 = (&usizes).iter();
-            let _iter2 = (&usizes).iter();
-            assert_eq!(iter1.next(), Some(&0));
+                // possible to borrow twice as immutable
+                let mut iter1 = (&usizes).iter();
+                let _iter2 = (&usizes).iter();
+                assert_eq!(iter1.next(), Some(&0));
 
-            // impossible to borrow twice as mutable
-            // if switched, the next two lines should trigger an error
-            let _iter = (&mut usizes).iter();
-            let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next(), Some(&mut 0));
-            assert_eq!(iter.next(), Some(&mut 2));
-            assert_eq!(iter.next(), None);
+                // impossible to borrow twice as mutable
+                // if switched, the next two lines should trigger an error
+                let _iter = (&mut usizes).iter();
+                let mut iter = (&mut usizes).iter();
+                assert_eq!(iter.next(), Some(&mut 0));
+                assert_eq!(iter.next(), Some(&mut 2));
+                assert_eq!(iter.next(), None);
 
-            // possible to borrow twice as immutable
-            let mut iter = (&usizes, &u32s).iter();
-            let _iter = (&usizes, &u32s).iter();
-            assert_eq!(iter.next(), Some((&0, &1)));
-            assert_eq!(iter.next(), Some((&2, &3)));
-            assert_eq!(iter.next(), None);
+                // possible to borrow twice as immutable
+                let mut iter = (&usizes, &u32s).iter();
+                let _iter = (&usizes, &u32s).iter();
+                assert_eq!(iter.next(), Some((&0, &1)));
+                assert_eq!(iter.next(), Some((&2, &3)));
+                assert_eq!(iter.next(), None);
 
-            // impossible to borrow twice as mutable
-            // if switched, the next two lines should trigger an error
-            let _iter = (&mut usizes, &u32s).iter();
-            let mut iter = (&mut usizes, &u32s).iter();
-            assert_eq!(iter.next(), Some((&mut 0, &1)));
-            assert_eq!(iter.next(), Some((&mut 2, &3)));
-            assert_eq!(iter.next(), None);
-        });
+                // impossible to borrow twice as mutable
+                // if switched, the next two lines should trigger an error
+                let _iter = (&mut usizes, &u32s).iter();
+                let mut iter = (&mut usizes, &u32s).iter();
+                assert_eq!(iter.next(), Some((&mut 0, &1)));
+                assert_eq!(iter.next(), Some((&mut 2, &3)));
+                assert_eq!(iter.next(), None);
+            },
+        );
     }
     #[test]
     fn iterators() {
         let world = World::new::<(usize, u32)>();
-        world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
-            let entity1 = entities.add((&mut usizes,), (0usize,));
-            (&mut u32s,).add_component((1u32,), entity1);
-            entities.add((&mut usizes,), (2usize,));
+        world.run::<(EntitiesMut, &mut usize, &mut u32), _>(
+            |(mut entities, mut usizes, mut u32s)| {
+                let entity1 = entities.add_entity((&mut usizes,), (0usize,));
+                entities.add_component((&mut u32s,), (1u32,), entity1);
+                entities.add_entity((&mut usizes,), (2usize,));
 
-            let mut iter = (&usizes).iter();
-            assert_eq!(iter.next(), Some(&0));
-            assert_eq!(iter.next(), Some(&2));
-            assert_eq!(iter.next(), None);
+                let mut iter = (&usizes).iter();
+                assert_eq!(iter.next(), Some(&0));
+                assert_eq!(iter.next(), Some(&2));
+                assert_eq!(iter.next(), None);
 
-            let mut iter = (&usizes, &u32s).iter();
-            assert_eq!(iter.next(), Some((&0, &1)));
-            assert_eq!(iter.next(), None);
-        });
+                let mut iter = (&usizes, &u32s).iter();
+                assert_eq!(iter.next(), Some((&0, &1)));
+                assert_eq!(iter.next(), None);
+            },
+        );
     }
     #[test]
     fn not_iterators() {
@@ -274,8 +276,9 @@ mod test {
         let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
         (&mut usizes, &mut u32s).pack_owned();
 
-        (&mut usizes, &mut u32s).add_component((0, 1), entity);
-        (&mut usizes, &mut u32s).add_component((2,), entity);
+        let entities = world.entities();
+        entities.add_component((&mut usizes, &mut u32s), (0, 1), entity);
+        entities.add_component((&mut usizes, &mut u32s), (2,), entity);
     }
     #[test]
     fn pack_missing_storage() {
@@ -285,7 +288,8 @@ mod test {
             world.pack_owned::<(usize, u32)>();
             let (mut usizes,) = world.get_storage::<(&mut usize,)>();
 
-            usizes.add_component(0, entity);
+            let entities = world.entities();
+            entities.add_component(&mut *usizes, 0, entity);
         }) {
             Ok(_) => panic!(),
             Err(err) => assert_eq!(format!("{}", err.downcast::<String>().unwrap()), format!("called `Result::unwrap()` on an `Err` value: Missing storage of type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", std::any::TypeId::of::<usize>())),
@@ -593,6 +597,30 @@ mod test {
         rayon::scope(|s| {
             s.spawn(|_| world.run_default());
             s.spawn(|_| world.run_default());
+        });
+    }
+    #[test]
+    #[should_panic(expected = "Entity has to be alive to add component to it.")]
+    fn add_component_with_old_key() {
+        let world = World::new::<(usize, u32)>();
+        let entity = world.new_entity((0usize, 1u32));
+        world.delete(entity);
+
+        world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+            entities.add_component((&mut usizes, &mut u32s), (1, 2), entity);
+        });
+    }
+    #[test]
+    fn remove_component_with_old_key() {
+        let world = World::new::<(usize, u32)>();
+        let entity = world.new_entity((0usize, 1u32));
+        world.delete(entity);
+        world.new_entity((1usize, 2u32));
+
+        world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+            let (old_usize, old_u32) =
+                Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity);
+            assert!(old_usize.is_none() && old_u32.is_none());
         });
     }
 }

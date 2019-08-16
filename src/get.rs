@@ -23,28 +23,28 @@ pub trait GetComponent {
 impl<'a: 'b, 'b, T> GetComponent for &'b View<'a, T> {
     type Out = &'b T;
     fn get(self, entity: Key) -> Option<Self::Out> {
-        self.get(entity.index())
+        self.get(entity)
     }
 }
 
 impl<'a: 'b, 'b, T> GetComponent for &'b ViewMut<'a, T> {
     type Out = &'b T;
     fn get(self, entity: Key) -> Option<Self::Out> {
-        self.get(entity.index())
+        self.get(entity)
     }
 }
 
 impl<'a: 'b, 'b, T> GetComponent for &'b mut ViewMut<'a, T> {
     type Out = &'b mut T;
     fn get(self, entity: Key) -> Option<Self::Out> {
-        self.get_mut(entity.index())
+        self.get_mut(entity)
     }
 }
 
 impl<'a, 'b, T> GetComponent for &'b Not<View<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains_index(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -55,7 +55,7 @@ impl<'a, 'b, T> GetComponent for &'b Not<View<'a, T>> {
 impl<'a, 'b, T> GetComponent for Not<&'b View<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains_index(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -66,7 +66,7 @@ impl<'a, 'b, T> GetComponent for Not<&'b View<'a, T>> {
 impl<'a, 'b, T> GetComponent for &'b Not<ViewMut<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains_index(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -77,7 +77,7 @@ impl<'a, 'b, T> GetComponent for &'b Not<ViewMut<'a, T>> {
 impl<'a, 'b, T> GetComponent for Not<&'b ViewMut<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains_index(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -88,7 +88,7 @@ impl<'a, 'b, T> GetComponent for Not<&'b ViewMut<'a, T>> {
 impl<'a, 'b, T> GetComponent for &'b mut Not<ViewMut<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains_index(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -99,7 +99,7 @@ impl<'a, 'b, T> GetComponent for &'b mut Not<ViewMut<'a, T>> {
 impl<'a, 'b, T> GetComponent for Not<&'b mut ViewMut<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains_index(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -110,28 +110,28 @@ impl<'a, 'b, T> GetComponent for Not<&'b mut ViewMut<'a, T>> {
 impl<'a: 'b, 'b, T> GetComponent for &'b Read<'a, T> {
     type Out = &'b T;
     fn get(self, entity: Key) -> Option<Self::Out> {
-        self.inner.get(entity.index())
+        self.inner.get(entity)
     }
 }
 
 impl<'a, 'b, T> GetComponent for &'b Write<'a, T> {
     type Out = &'b T;
     fn get(self, entity: Key) -> Option<Self::Out> {
-        self.inner.get(entity.index())
+        self.inner.get(entity)
     }
 }
 
 impl<'a, 'b, T> GetComponent for &'b mut Write<'a, T> {
     type Out = &'b mut T;
     fn get(self, entity: Key) -> Option<Self::Out> {
-        self.inner.get_mut(entity.index())
+        self.inner.get_mut(entity)
     }
 }
 
 impl<'a, 'b, T> GetComponent for &'b Not<Read<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -142,7 +142,7 @@ impl<'a, 'b, T> GetComponent for &'b Not<Read<'a, T>> {
 impl<'a, 'b, T> GetComponent for Not<&'b Read<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -153,7 +153,7 @@ impl<'a, 'b, T> GetComponent for Not<&'b Read<'a, T>> {
 impl<'a, 'b, T> GetComponent for &'b Not<Write<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -164,7 +164,7 @@ impl<'a, 'b, T> GetComponent for &'b Not<Write<'a, T>> {
 impl<'a, 'b, T> GetComponent for Not<&'b Write<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -175,7 +175,7 @@ impl<'a, 'b, T> GetComponent for Not<&'b Write<'a, T>> {
 impl<'a, 'b, T> GetComponent for &'b mut Not<Write<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())
@@ -186,7 +186,7 @@ impl<'a, 'b, T> GetComponent for &'b mut Not<Write<'a, T>> {
 impl<'a, 'b, T> GetComponent for Not<&'b mut Write<'a, T>> {
     type Out = ();
     fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity.index()) {
+        if self.0.contains(entity) {
             None
         } else {
             Some(())

@@ -1,6 +1,33 @@
+use super::add_component::AddComponent;
 use super::Key;
 use crate::component_storage::AllStoragesViewMut;
+use crate::error;
 use crate::sparse_array::ViewAddEntity;
+
+/// View into the entities.
+pub struct EntitiesView<'a> {
+    pub(super) data: &'a [Key],
+}
+
+impl EntitiesView<'_> {
+    /// Returns true if the key matches a living entity.
+    pub(crate) fn is_alive(&self, key: Key) -> bool {
+        key.index() < self.data.len() && key == unsafe { *self.data.get_unchecked(key.index()) }
+    }
+    pub fn try_add_component<C, S: AddComponent<C>>(
+        &self,
+        storages: S,
+        component: C,
+        entity: Key,
+    ) -> Result<(), error::AddComponent> {
+        storages.try_add_component(component, entity, &self)
+    }
+    pub fn add_component<C, S: AddComponent<C>>(&self, storages: S, component: C, entity: Key) {
+        storages
+            .try_add_component(component, entity, &self)
+            .unwrap()
+    }
+}
 
 /// View into the entities, this allows to add and remove entities.
 pub struct EntitiesViewMut<'a> {
@@ -8,7 +35,7 @@ pub struct EntitiesViewMut<'a> {
     pub(crate) list: &'a mut Option<(usize, usize)>,
 }
 
-impl<'a> EntitiesViewMut<'a> {
+impl EntitiesViewMut<'_> {
     pub(super) fn generate(&mut self) -> Key {
         let index = self.list.map(|(_, old)| old);
         if let Some((new, ref mut old)) = self.list {
@@ -27,11 +54,11 @@ impl<'a> EntitiesViewMut<'a> {
             key
         }
     }
-    /// Return true if the key matches a living entity
+    /// Returns true if the key matches a living entity.
     fn is_alive(&self, key: Key) -> bool {
-        key.index() < self.data.len() && key == unsafe { *self.data.get_unchecked(key.index()) }
+        self.as_non_mut().is_alive(key)
     }
-    /// Delete an entity, returns true if the entity was alive
+    /// Delete an entity, returns true if the entity was alive.
     pub(super) fn delete_key(&mut self, key: Key) -> bool {
         if self.is_alive(key) {
             if unsafe {
@@ -60,16 +87,16 @@ impl<'a> EntitiesViewMut<'a> {
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
-    ///     let entity = entities.add((&mut usizes, &mut u32s), (0, 1));
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///
     ///     assert_eq!(usizes.get(entity), Some(&0));
     ///     assert_eq!(u32s.get(entity), Some(&1));
     /// });
     /// ```
-    pub fn add<T: ViewAddEntity>(&mut self, storages: T, component: T::Component) -> Key {
+    pub fn add_entity<T: ViewAddEntity>(&mut self, storages: T, component: T::Component) -> Key {
         let key = self.generate();
-        storages.add_entity(component, key.index());
+        storages.add_entity(component, key);
         key
     }
     /// Delete an entity and all its components.
@@ -99,10 +126,26 @@ impl<'a> EntitiesViewMut<'a> {
     /// [AllStorages]: struct.AllStorages.html
     pub fn delete(&mut self, storages: &mut AllStoragesViewMut, entity: Key) -> bool {
         if self.delete_key(entity) {
-            storages.delete(entity.index());
+            storages.delete(entity);
             true
         } else {
             false
         }
+    }
+    fn as_non_mut(&self) -> EntitiesView {
+        EntitiesView { data: self.data }
+    }
+    pub fn try_add_component<C, S: AddComponent<C>>(
+        &self,
+        storages: S,
+        component: C,
+        entity: Key,
+    ) -> Result<(), error::AddComponent> {
+        storages.try_add_component(component, entity, &self.as_non_mut())
+    }
+    pub fn add_component<C, S: AddComponent<C>>(&self, storages: S, component: C, entity: Key) {
+        storages
+            .try_add_component(component, entity, &self.as_non_mut())
+            .unwrap()
     }
 }

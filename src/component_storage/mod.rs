@@ -3,6 +3,7 @@ mod hasher;
 mod view;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
+use crate::entity::Key;
 use crate::error;
 use crate::get_storage::GetStorage;
 use crate::sparse_array::SparseArray;
@@ -52,14 +53,14 @@ impl ComponentStorage {
         }))
     }
     /// Mutably borrows the container and delete `index`.
-    pub(crate) fn delete(&mut self, index: usize) -> Result<(), error::Borrow> {
+    pub(crate) fn delete(&mut self, entity: Key) -> Result<(), error::Borrow> {
         // reconstruct a `dyn Delete` from two pointers
         // for a full explanation see Delete documentation
         let array: RefMut<Box<dyn Any + Send + Sync>> = self.data.try_borrow_mut()?;
         let array: usize = &**array as *const dyn Any as *const () as usize;
         let delete: &mut dyn Delete =
             unsafe { &mut **(&[array, self.delete] as *const _ as *const *mut dyn Delete) };
-        delete.delete(index);
+        delete.delete(entity);
         Ok(())
     }
 }
@@ -170,17 +171,29 @@ mod test {
     #[test]
     fn delete() {
         let mut storage = ComponentStorage::new::<&'static str>();
-        storage.array_mut().unwrap().insert("test5", 5);
-        storage.array_mut().unwrap().insert("test10", 10);
-        storage.array_mut().unwrap().insert("test1", 1);
-        storage.delete(5).unwrap();
-        assert_eq!(storage.array::<&str>().unwrap().get(5), None);
-        assert_eq!(storage.array::<&str>().unwrap().get(10), Some(&"test10"));
-        assert_eq!(storage.array::<&str>().unwrap().get(1), Some(&"test1"));
-        storage.delete(10).unwrap();
-        storage.delete(1).unwrap();
-        assert_eq!(storage.array::<&str>().unwrap().get(5), None);
-        assert_eq!(storage.array::<&str>().unwrap().get(10), None);
-        assert_eq!(storage.array::<&str>().unwrap().get(1), None);
+        let mut key = Key::zero();
+        key.set_index(5);
+        storage.array_mut().unwrap().insert("test5", key);
+        key.set_index(10);
+        storage.array_mut().unwrap().insert("test10", key);
+        key.set_index(1);
+        storage.array_mut().unwrap().insert("test1", key);
+        key.set_index(5);
+        storage.delete(key).unwrap();
+        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
+        key.set_index(10);
+        assert_eq!(storage.array::<&str>().unwrap().get(key), Some(&"test10"));
+        key.set_index(1);
+        assert_eq!(storage.array::<&str>().unwrap().get(key), Some(&"test1"));
+        key.set_index(10);
+        storage.delete(key).unwrap();
+        key.set_index(1);
+        storage.delete(key).unwrap();
+        key.set_index(5);
+        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
+        key.set_index(10);
+        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
+        key.set_index(1);
+        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
     }
 }

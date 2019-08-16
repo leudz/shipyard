@@ -128,12 +128,14 @@ impl Display for Pack {
 pub enum AddComponent {
     // `TypeId` of the storage requirering more storages
     MissingPackStorage(TypeId),
+    EntityIsNotAlive,
 }
 
 impl Debug for AddComponent {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            AddComponent::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage of type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id))
+            AddComponent::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage of type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
+            AddComponent::EntityIsNotAlive => fmt.write_str("Entity has to be alive to add component to it."),
         }
     }
 }

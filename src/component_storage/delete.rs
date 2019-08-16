@@ -1,3 +1,4 @@
+use crate::entity::Key;
 use crate::sparse_array::SparseArray;
 
 // When removing an entity all its components have to be removed.
@@ -19,11 +20,11 @@ use crate::sparse_array::SparseArray;
 // in the future. Until then this hack works as long as trait objects' fat pointer don't
 // change representation.
 pub(super) trait Delete {
-    fn delete(&mut self, index: usize);
+    fn delete(&mut self, entity: Key);
 }
 
 impl<T> Delete for SparseArray<T> {
-    fn delete(&mut self, index: usize) {
-        self.remove(index);
+    fn delete(&mut self, entity: Key) {
+        self.remove(entity);
     }
 }

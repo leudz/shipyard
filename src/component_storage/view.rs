@@ -1,4 +1,5 @@
 use super::{hasher::TypeIdHasher, ComponentStorage};
+use crate::entity::Key;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
@@ -10,9 +11,9 @@ pub struct AllStoragesViewMut<'a>(
 );
 
 impl AllStoragesViewMut<'_> {
-    pub(crate) fn delete(&mut self, index: usize) {
+    pub(crate) fn delete(&mut self, entity: Key) {
         for storage in self.0.values_mut() {
-            storage.delete(index).unwrap();
+            storage.delete(entity).unwrap();
         }
     }
 }

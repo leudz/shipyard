@@ -1,10 +1,11 @@
 use super::PackInfo;
+use crate::entity::Key;
 use std::any::TypeId;
 
 /// Immutable view into a `ComponentStorage`.
 pub struct View<'a, T> {
     pub(crate) sparse: &'a [usize],
-    pub(crate) dense: &'a [usize],
+    pub(crate) dense: &'a [Key],
     pub(crate) data: &'a [T],
     pub(super) pack_info: &'a PackInfo,
 }
@@ -21,15 +22,23 @@ impl<'a, T> Clone for View<'a, T> {
 }
 
 impl<T> View<'_, T> {
-    pub(crate) fn contains_index(&self, index: usize) -> bool {
-        index < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
-            && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
+    pub(crate) fn contains(&self, entity: Key) -> bool {
+        entity.index() < self.sparse.len()
+            && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
+            && unsafe {
+                *self
+                    .dense
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+                    == entity
+            }
     }
     /// Returns a reference to the component if the `entity` has it.
-    pub(crate) fn get(&self, index: usize) -> Option<&T> {
-        if self.contains_index(index) {
-            Some(unsafe { self.data.get_unchecked(*self.sparse.get_unchecked(index)) })
+    pub(crate) fn get(&self, entity: Key) -> Option<&T> {
+        if self.contains(entity) {
+            Some(unsafe {
+                self.data
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+            })
         } else {
             None
         }
@@ -51,55 +60,56 @@ impl<T> View<'_, T> {
 /// Mutable view into a `ComponentStorage`.
 pub struct ViewMut<'a, T> {
     pub(crate) sparse: &'a mut Vec<usize>,
-    pub(crate) dense: &'a mut Vec<usize>,
+    pub(crate) dense: &'a mut Vec<Key>,
     pub(crate) data: &'a mut Vec<T>,
     pub(super) pack_info: &'a mut PackInfo,
 }
 
 impl<'a, T> ViewMut<'a, T> {
     /// Add the component to the `entity`.
-    pub(crate) fn insert(&mut self, mut value: T, index: usize) -> Option<T> {
-        if index >= self.sparse.len() {
-            self.sparse.resize(index + 1, 0);
+    pub(crate) fn insert(&mut self, mut value: T, entity: Key) -> Option<T> {
+        if entity.index() >= self.sparse.len() {
+            self.sparse.resize(entity.index() + 1, 0);
         }
-        if let Some(data) = self.get_mut(index) {
+        if let Some(data) = self.get_mut(entity) {
             std::mem::swap(data, &mut value);
             Some(value)
         } else {
-            unsafe { *self.sparse.get_unchecked_mut(index) = self.dense.len() };
-            self.dense.push(index);
+            unsafe { *self.sparse.get_unchecked_mut(entity.index()) = self.dense.len() };
+            self.dense.push(entity);
             self.data.push(value);
             None
         }
     }
-    pub(crate) fn contains_index(&self, index: usize) -> bool {
-        index < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
-            && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
+    pub(crate) fn contains(&self, entity: Key) -> bool {
+        self.as_non_mut().contains(entity)
     }
     /// Returns a reference to the component if the `entity` has it.
-    pub(crate) fn get(&self, index: usize) -> Option<&T> {
-        if self.contains_index(index) {
-            Some(unsafe { self.data.get_unchecked(*self.sparse.get_unchecked(index)) })
+    pub(crate) fn get(&self, entity: Key) -> Option<&T> {
+        if self.contains(entity) {
+            Some(unsafe {
+                self.data
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+            })
         } else {
             None
         }
     }
     /// Returns a mutable reference to the component if the `entity` has it.
-    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        if self.contains_index(index) {
+    pub(crate) fn get_mut(&mut self, entity: Key) -> Option<&mut T> {
+        if self.contains(entity) {
             Some(unsafe {
                 self.data
-                    .get_unchecked_mut(*self.sparse.get_unchecked(index))
+                    .get_unchecked_mut(*self.sparse.get_unchecked(entity.index()))
             })
         } else {
             None
         }
     }
     /// Remove the component if the `entity` has it and returns it.
-    pub(crate) fn remove(&mut self, index: usize) -> Option<T> {
-        if self.contains_index(index) {
-            let mut dense_index = unsafe { *self.sparse.get_unchecked(index) };
+    pub(crate) fn remove(&mut self, entity: Key) -> Option<T> {
+        if self.contains(entity) {
+            let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
             let pack_len = self.pack_len();
             if dense_index < pack_len {
                 self.pack_info.owned_len -= 1;
@@ -107,7 +117,8 @@ impl<'a, T> ViewMut<'a, T> {
                 unsafe {
                     *self
                         .sparse
-                        .get_unchecked_mut(*self.dense.get_unchecked(pack_len - 1)) = dense_index;
+                        .get_unchecked_mut(self.dense.get_unchecked(pack_len - 1).index()) =
+                        dense_index;
                 }
                 self.dense.swap(dense_index, pack_len - 1);
                 self.data.swap(dense_index, pack_len - 1);
@@ -116,7 +127,7 @@ impl<'a, T> ViewMut<'a, T> {
             unsafe {
                 *self
                     .sparse
-                    .get_unchecked_mut(*self.dense.get_unchecked(self.dense.len() - 1)) =
+                    .get_unchecked_mut(self.dense.get_unchecked(self.dense.len() - 1).index()) =
                     dense_index;
             }
             self.dense.swap_remove(dense_index);
@@ -146,7 +157,7 @@ impl<'a, T> ViewMut<'a, T> {
         }
     }
     /// Borrows the ViewMut and returns a View.
-    pub(crate) fn non_mut(&self) -> View<T> {
+    pub(crate) fn as_non_mut(&self) -> View<T> {
         View {
             sparse: self.sparse,
             dense: self.dense,
@@ -154,12 +165,12 @@ impl<'a, T> ViewMut<'a, T> {
             pack_info: self.pack_info,
         }
     }
-    pub(crate) fn pack(&mut self, index: usize) {
-        if self.contains_index(index) {
-            let dense_index = self.sparse[index];
+    pub(crate) fn pack(&mut self, entity: Key) {
+        if self.contains(entity) {
+            let dense_index = self.sparse[entity.index()];
             if dense_index >= self.pack_info.owned_len {
                 self.sparse
-                    .swap(self.dense[self.pack_info.owned_len], index);
+                    .swap(self.dense[self.pack_info.owned_len].index(), entity.index());
                 self.dense.swap(self.pack_info.owned_len, dense_index);
                 self.data.swap(self.pack_info.owned_len, dense_index);
                 self.pack_info.owned_len += 1;
@@ -207,7 +218,7 @@ impl<'a, T> ViewMut<'a, T> {
 // Used in iterators to be able to keep a pointer to the indices
 pub struct RawViewMut<'a, T> {
     pub(crate) sparse: &'a [usize],
-    pub(crate) dense: &'a [usize],
+    pub(crate) dense: &'a [Key],
     pub(crate) data: *mut T,
 }
 
@@ -215,10 +226,15 @@ unsafe impl<T: Send + Sync> Send for RawViewMut<'_, T> {}
 
 impl<'a, T> RawViewMut<'a, T> {
     /// Returns true if the `entity` has this component.
-    pub(crate) fn contains(&self, index: usize) -> bool {
-        index < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(index) } < self.dense.len()
-            && unsafe { *self.dense.get_unchecked(*self.sparse.get_unchecked(index)) == index }
+    pub(crate) fn contains(&self, entity: Key) -> bool {
+        entity.index() < self.sparse.len()
+            && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
+            && unsafe {
+                *self
+                    .dense
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+                    == entity
+            }
     }
     /// Returns the number of components in the view.
     pub fn len(&self) -> usize {

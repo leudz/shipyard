@@ -86,7 +86,7 @@ pub trait Remove<T: Removable> {
 impl<T: 'static> Remove<(T,)> for &mut SparseArray<T> {
     fn try_remove(self, entity: Key) -> Result<<(T,) as Removable>::Out, error::Remove> {
         if !self.is_packed_owned() {
-            Ok((self.remove(entity.index()),))
+            Ok((self.remove(entity),))
         } else {
             Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
         }
@@ -99,7 +99,7 @@ impl<T: 'static> Remove<(T,)> for &mut SparseArray<T> {
 impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
     fn try_remove(self, entity: Key) -> Result<<(T,) as Removable>::Out, error::Remove> {
         if !self.is_packed_owned() {
-            Ok((self.remove(entity.index()),))
+            Ok((self.remove(entity),))
         } else {
             Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
         }
@@ -169,11 +169,11 @@ macro_rules! impl_remove {
                     })+
 
                     Ok(($(
-                        self.$index.remove(entity.index()),
+                        self.$index.remove(entity),
                     )+))
                 } else {
                     Ok(($(
-                        self.$index.remove(entity.index()),
+                        self.$index.remove(entity),
                     )+))
                 }
             }

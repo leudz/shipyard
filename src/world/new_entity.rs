@@ -25,7 +25,7 @@ impl<T: 'static + Send + Sync> WorldNewEntity for (T,) {
             .or_insert_with(ComponentStorage::new::<T>)
             .array_mut()
             .unwrap()
-            .insert(self.0, key.index());
+            .insert(self.0, key);
 
         key
     }
@@ -42,7 +42,7 @@ macro_rules! impl_new_entity {
                     let mut array = all_storages.0.entry(type_id).or_insert_with(|| {
                         ComponentStorage::new::<$type>()
                     }).array_mut().unwrap();
-                    array.insert(self.$index, key.index());
+                    array.insert(self.$index, key);
                     type_id
                 },)+];
 
@@ -57,13 +57,13 @@ macro_rules! impl_new_entity {
 
                 $(
                     if should_pack.contains(&type_ids[$index]) {
-                        storages.$index.pack(key.index());
+                        storages.$index.pack(key);
                     } else {
                         let pack_types = storages.$index.should_pack_owned(&type_ids);
 
                         should_pack.extend(pack_types.iter().filter(|&&x| x == type_ids[$index]));
                         if !pack_types.is_empty() {
-                            storages.$index.pack(key.index());
+                            storages.$index.pack(key);
                         }
                     }
                 )+

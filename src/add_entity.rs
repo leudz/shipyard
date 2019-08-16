@@ -21,7 +21,7 @@ impl<T: 'static + Send + Sync> AddEntity for &mut SparseArray<T> {
     fn add_entity(self, component: Self::Component, entities: &mut Entities) -> Key {
         let key = entities.generate();
 
-        self.insert(component.0, key.index());
+        self.insert(component.0, key);
 
         key
     }
@@ -70,7 +70,7 @@ macro_rules! impl_add_entity {
                 let key = entities.generate();
 
                 $(
-                    self.$index.insert(component.$index, key.index());
+                    self.$index.insert(component.$index, key);
                 )+
 
                 let mut type_ids = [$(TypeId::of::<$type>()),+];
@@ -81,13 +81,13 @@ macro_rules! impl_add_entity {
                     let type_id = TypeId::of::<$type>();
 
                     if should_pack.contains(&type_id) {
-                        self.$index.pack(key.index());
+                        self.$index.pack(key);
                     } else {
                         let pack_types = self.$index.should_pack_owned(&type_ids);
 
                         should_pack.extend(pack_types.iter().filter(|&&x| x == type_id));
                         if !pack_types.is_empty() {
-                            self.$index.pack(key.index());
+                            self.$index.pack(key);
                         }
                     }
                 )+

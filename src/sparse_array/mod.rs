@@ -21,7 +21,7 @@ pub(crate) use view_add_entity::ViewAddEntity;
 // It mimics the dense vector in regard to insertion/deletion.
 pub struct SparseArray<T> {
     sparse: Vec<usize>,
-    dense: Vec<usize>,
+    dense: Vec<Key>,
     data: Vec<T>,
     pack_info: PackInfo,
 }
@@ -39,35 +39,38 @@ impl<T> Default for SparseArray<T> {
 
 impl<T> SparseArray<T> {
     /// Inserts a value at a given index, if a value was already present it will be returned.
-    pub(crate) fn insert(&mut self, value: T, index: usize) -> Option<T> {
-        self.view_mut().insert(value, index)
+    pub(crate) fn insert(&mut self, value: T, entity: Key) -> Option<T> {
+        self.view_mut().insert(value, entity)
     }
     /// Returns true if the sparse array contains data at this index.
-    pub(crate) fn contains(&self, index: usize) -> bool {
-        self.view().contains_index(index)
+    pub(crate) fn contains(&self, entity: Key) -> bool {
+        self.view().contains(entity)
     }
     /// Returns a reference to the element at this index if present.
-    pub(crate) fn get(&self, index: usize) -> Option<&T> {
-        if self.contains(index) {
-            Some(unsafe { self.data.get_unchecked(*self.sparse.get_unchecked(index)) })
+    pub(crate) fn get(&self, entity: Key) -> Option<&T> {
+        if self.contains(entity) {
+            Some(unsafe {
+                self.data
+                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+            })
         } else {
             None
         }
     }
     /// Returns a mutable reference to the element at this index if present.
-    pub(crate) fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        if self.contains(index) {
+    pub(crate) fn get_mut(&mut self, entity: Key) -> Option<&mut T> {
+        if self.contains(entity) {
             Some(unsafe {
                 self.data
-                    .get_unchecked_mut(*self.sparse.get_unchecked(index))
+                    .get_unchecked_mut(*self.sparse.get_unchecked(entity.index()))
             })
         } else {
             None
         }
     }
     /// Removes and returns the element at index if present.
-    pub(crate) fn remove(&mut self, index: usize) -> Option<T> {
-        self.view_mut().remove(index)
+    pub(crate) fn remove(&mut self, entity: Key) -> Option<T> {
+        self.view_mut().remove(entity)
     }
     /// Returns the number of element present in the sparse array.
     pub fn len(&self) -> usize {
@@ -95,8 +98,8 @@ impl<T> SparseArray<T> {
     //            ▲       ▼
     //            ---------
     //              pack
-    pub(crate) fn pack(&mut self, index: usize) {
-        self.view_mut().pack(index)
+    pub(crate) fn pack(&mut self, entity: Key) {
+        self.view_mut().pack(entity)
     }
     pub(crate) fn is_packed_owned(&self) -> bool {
         !self.pack_info.owned_type.is_empty()
@@ -104,7 +107,7 @@ impl<T> SparseArray<T> {
     pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
         &self.pack_info.owned_type
     }
-    pub(crate) fn clone_indices(&self) -> Vec<usize> {
+    pub(crate) fn clone_indices(&self) -> Vec<Key> {
         self.dense.clone()
     }
     pub(crate) fn pack_with(&mut self, types: Arc<[TypeId]>) {
@@ -139,7 +142,7 @@ impl<T> SparseArray<T> {
 impl<T> std::ops::Index<Key> for SparseArray<T> {
     type Output = T;
     fn index(&self, index: Key) -> &Self::Output {
-        self.get(index.index()).unwrap()
+        self.get(index).unwrap()
     }
 }
 
@@ -149,56 +152,97 @@ mod test {
     #[test]
     fn insert() {
         let mut array = SparseArray::default();
-        array.insert("0", 0);
-        array.insert("1", 1);
+        let mut key = Key::zero();
+        key.set_index(0);
+        assert!(array.insert("0", key).is_none());
+        key.set_index(1);
+        assert!(array.insert("1", key).is_none());
         assert_eq!(array.len(), 2);
-        assert_eq!(array.get(0), Some(&"0"));
-        assert_eq!(array.get(1), Some(&"1"));
-        array.insert("5", 5);
-        assert_eq!(array.get_mut(5), Some(&mut "5"));
-        assert_eq!(array.get(4), None);
-        assert_eq!(array.get(6), None);
-        array.insert("6", 6);
-        assert_eq!(array.get(5), Some(&"5"));
-        assert_eq!(array.get_mut(6), Some(&mut "6"));
-        assert_eq!(array.get(4), None);
+        key.set_index(0);
+        assert_eq!(array.get(key), Some(&"0"));
+        key.set_index(1);
+        assert_eq!(array.get(key), Some(&"1"));
+        key.set_index(5);
+        assert!(array.insert("5", key).is_none());
+        assert_eq!(array.get_mut(key), Some(&mut "5"));
+        key.set_index(4);
+        assert_eq!(array.get(key), None);
+        key.set_index(6);
+        assert_eq!(array.get(key), None);
+        assert!(array.insert("6", key).is_none());
+        key.set_index(5);
+        assert_eq!(array.get(key), Some(&"5"));
+        key.set_index(6);
+        assert_eq!(array.get_mut(key), Some(&mut "6"));
+        key.set_index(4);
+        assert_eq!(array.get(key), None);
     }
     #[test]
     fn remove() {
         let mut array = SparseArray::default();
-        array.insert("0", 0);
-        array.insert("5", 5);
-        array.insert("10", 10);
-        assert_eq!(array.remove(0), Some("0"));
-        assert_eq!(array.get(0), None);
-        assert_eq!(array.get(5), Some(&"5"));
-        assert_eq!(array.get(10), Some(&"10"));
-        assert_eq!(array.remove(10), Some("10"));
-        assert_eq!(array.get(0), None);
-        assert_eq!(array.get(5), Some(&"5"));
-        assert_eq!(array.get(10), None);
+        let mut key = Key::zero();
+        key.set_index(0);
+        array.insert("0", key);
+        key.set_index(5);
+        array.insert("5", key);
+        key.set_index(10);
+        array.insert("10", key);
+        key.set_index(0);
+        assert_eq!(array.remove(key), Some("0"));
+        assert_eq!(array.get(key), None);
+        key.set_index(5);
+        assert_eq!(array.get(key), Some(&"5"));
+        key.set_index(10);
+        assert_eq!(array.get(key), Some(&"10"));
+        assert_eq!(array.remove(key), Some("10"));
+        key.set_index(0);
+        assert_eq!(array.get(key), None);
+        key.set_index(5);
+        assert_eq!(array.get(key), Some(&"5"));
+        key.set_index(10);
+        assert_eq!(array.get(key), None);
         assert_eq!(array.len(), 1);
-        array.insert("3", 3);
-        array.insert("100", 10);
-        assert_eq!(array.get(0), None);
-        assert_eq!(array.get(3), Some(&"3"));
-        assert_eq!(array.get(5), Some(&"5"));
-        assert_eq!(array.get(10), Some(&"100"));
-        assert_eq!(array.remove(3), Some("3"));
-        assert_eq!(array.get(0), None);
-        assert_eq!(array.get(3), None);
-        assert_eq!(array.get(5), Some(&"5"));
-        assert_eq!(array.get(10), Some(&"100"));
-        assert_eq!(array.remove(10), Some("100"));
-        assert_eq!(array.get(0), None);
-        assert_eq!(array.get(3), None);
-        assert_eq!(array.get(5), Some(&"5"));
-        assert_eq!(array.get(10), None);
-        assert_eq!(array.remove(5), Some("5"));
-        assert_eq!(array.get(0), None);
-        assert_eq!(array.get(3), None);
-        assert_eq!(array.get(5), None);
-        assert_eq!(array.get(10), None);
+        key.set_index(3);
+        array.insert("3", key);
+        key.set_index(10);
+        array.insert("100", key);
+        key.set_index(0);
+        assert_eq!(array.get(key), None);
+        key.set_index(3);
+        assert_eq!(array.get(key), Some(&"3"));
+        key.set_index(5);
+        assert_eq!(array.get(key), Some(&"5"));
+        key.set_index(10);
+        assert_eq!(array.get(key), Some(&"100"));
+        key.set_index(3);
+        assert_eq!(array.remove(key), Some("3"));
+        key.set_index(0);
+        assert_eq!(array.get(key), None);
+        key.set_index(3);
+        assert_eq!(array.get(key), None);
+        key.set_index(5);
+        assert_eq!(array.get(key), Some(&"5"));
+        key.set_index(10);
+        assert_eq!(array.get(key), Some(&"100"));
+        assert_eq!(array.remove(key), Some("100"));
+        key.set_index(0);
+        assert_eq!(array.get(key), None);
+        key.set_index(3);
+        assert_eq!(array.get(key), None);
+        key.set_index(5);
+        assert_eq!(array.get(key), Some(&"5"));
+        key.set_index(10);
+        assert_eq!(array.get(key), None);
+        key.set_index(5);
+        assert_eq!(array.remove(key), Some("5"));
+        key.set_index(0);
+        assert_eq!(array.get(key), None);
+        key.set_index(3);
+        assert_eq!(array.get(key), None);
+        key.set_index(5);
+        assert_eq!(array.get(key), None);
+        key.set_index(10);
+        assert_eq!(array.get(key), None);
         assert_eq!(array.len(), 0);
     }
     #[test]

@@ -1,9 +1,12 @@
+mod add_component;
 mod view;
 
 use crate::add_entity::AddEntity;
 use crate::component_storage::AllStorages;
+use crate::error;
+use add_component::AddComponent;
 use std::convert::AsMut;
-pub use view::EntitiesViewMut;
+pub use view::{EntitiesView, EntitiesViewMut};
 
 /* A Key is a handle to an entity and has two parts, the index and the version.
  * The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
@@ -24,24 +27,36 @@ impl Key {
     const VERSION_MASK: usize = !Self::INDEX_MASK;
 
     /// Returns the index part of the Key.
+    #[inline]
     pub(crate) fn index(self) -> usize {
         self.0 & Self::INDEX_MASK
     }
     /// Returns the version part of the Key.
-    fn version(self) -> usize {
+    #[inline]
+    pub(crate) fn version(self) -> usize {
         (self.0 & Self::VERSION_MASK) >> (0usize.count_zeros() as usize - Self::VERSION_LEN)
     }
     /// Make a new Key with the given index.
+    #[inline]
     fn new(index: usize) -> Self {
         assert!(index <= Self::INDEX_MASK);
         Key(index)
     }
     /// Modify the index.
+    #[cfg(not(test))]
+    #[inline]
     fn set_index(&mut self, index: usize) {
         assert!(index <= Self::INDEX_MASK);
         self.0 = (self.0 & Self::VERSION_MASK) | index
     }
+    /// Modify the index.
+    #[cfg(test)]
+    pub(crate) fn set_index(&mut self, index: usize) {
+        assert!(index <= Self::INDEX_MASK);
+        self.0 = (self.0 & Self::VERSION_MASK) | index
+    }
     /// Increments the version, returns Err if version + 1 == version::MAX().
+    #[inline]
     fn bump_version(&mut self) -> Result<(), ()> {
         if self.0 < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = self.index()
@@ -51,7 +66,14 @@ impl Key {
             Err(())
         }
     }
+    #[cfg(test)]
+    pub(crate) fn zero() -> Self {
+        Key(0)
+    }
 }
+
+/// Type used to borrow `Entities` mutably.
+pub struct EntitiesMut;
 
 /// Entities holds the Keys to all entities: living, removed and dead.
 ///
@@ -89,6 +111,9 @@ impl Entities {
     pub(crate) fn generate(&mut self) -> Key {
         self.view_mut().generate()
     }
+    pub(crate) fn view(&self) -> EntitiesView {
+        EntitiesView { data: &self.data }
+    }
     pub(crate) fn view_mut(&mut self) -> EntitiesViewMut {
         EntitiesViewMut {
             data: &mut self.data,
@@ -108,10 +133,10 @@ impl Entities {
     /// let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
     /// let mut entities = world.entities_mut();
     ///
-    /// let entity = entities.add((&mut usizes, &mut u32s), (0, 1));
+    /// let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     /// ```
     /// [World::new_entity]: struct.World.html#method.new_entity
-    pub fn add<T: AddEntity>(&mut self, storages: T, component: T::Component) -> Key {
+    pub fn add_entity<T: AddEntity>(&mut self, storages: T, component: T::Component) -> Key {
         storages.add_entity(component, self)
     }
     /// Delete an entity and all its components.
@@ -142,6 +167,79 @@ impl Entities {
     pub fn delete(&mut self, mut storages: impl AsMut<AllStorages>, entity: Key) -> bool {
         self.view_mut()
             .delete(&mut storages.as_mut().view_mut(), entity)
+    }
+    /// Stores `component` in `entity`, if the entity had already a component
+    /// of this type, it will be replaced.
+    ///
+    /// Multiple components can be added at the same time using a tuple.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+    ///     entities.try_add_component((&mut usizes, &mut u32s), (0, 1), entity1).unwrap();
+    ///     assert_eq!((&usizes, &u32s).get(entity1), Some((&0, &1)));
+    /// });
+    /// ```
+    /// When using packed storages you have to pass all storages packed with it,
+    /// even if you don't add any component to it.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+    ///     entities.try_add_component((&mut usizes, &mut u32s), (0,), entity1).unwrap();
+    ///     assert_eq!((&usizes,).get(entity1), Some((&0,)));
+    /// });
+    /// ```
+    pub fn try_add_component<C, S: AddComponent<C>>(
+        &self,
+        storages: S,
+        component: C,
+        entity: Key,
+    ) -> Result<(), error::AddComponent> {
+        storages.try_add_component(component, entity, &self.view())
+    }
+    /// Stores `component` in `entity`, if the entity had already a component
+    /// of this type, it will be replaced.
+    ///
+    /// Multiple components can be added at the same time using a tuple.
+    ///
+    /// Unwraps errors.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+    ///     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
+    ///     assert_eq!((&usizes, &u32s).get(entity1), Some((&0, &1)));
+    /// });
+    /// ```
+    /// When using packed storages you have to pass all storages packed with it,
+    /// even if you don't add any component to it.
+    /// # Example
+    /// ```
+    /// # use shipyard::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.pack_owned::<(usize, u32)>();
+    /// let entity1 = world.new_entity(());
+    ///
+    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+    ///     entities.add_component((&mut usizes, &mut u32s), (0,), entity1);
+    ///     assert_eq!((&usizes,).get(entity1), Some((&0,)));
+    /// });
+    /// ```
+    pub fn add_component<C, S: AddComponent<C>>(&self, storages: S, component: C, entity: Key) {
+        storages
+            .try_add_component(component, entity, &self.view())
+            .unwrap()
     }
 }
 

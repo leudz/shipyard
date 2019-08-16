@@ -1,4 +1,5 @@
 use super::{AbstractMut, IntoAbstract, IntoIter};
+use crate::entity::Key;
 use rayon::iter::plumbing::{
     bridge_producer_consumer, bridge_unindexed, Folder, Producer, UnindexedConsumer,
     UnindexedProducer,
@@ -156,7 +157,7 @@ where
 /// Non packed iterator over multiple components.
 pub struct NonPacked<T: IntoAbstract> {
     data: T::AbsView,
-    pub(crate) indices: *const usize,
+    pub(crate) indices: *const Key,
     pub(crate) current: usize,
     pub(crate) end: usize,
 }
@@ -187,10 +188,10 @@ where
         while self.current < self.end {
             // SAFE at this point there are no mutable reference to sparse or dense
             // and self.indices can't access out of bounds
-            let index: usize = unsafe { std::ptr::read(self.indices.add(self.current)) };
+            let entity: Key = unsafe { std::ptr::read(self.indices.add(self.current)) };
             self.current += 1;
             // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            if let Some(item) = unsafe { self.data.abs_get(index) } {
+            if let Some(item) = unsafe { self.data.abs_get(entity) } {
                 return Some(item);
             } else {
                 continue;
@@ -236,7 +237,7 @@ where
 /// Returns slices and not single elements.
 ///
 /// The slices length will always by the same. To get the remaining elements (if any) use [remainder].
-/// 
+///
 /// [remainder]: struct.ChunkExact.html#method.remainder
 pub struct ChunkExact<T: IntoAbstract> {
     data: T::AbsView,
