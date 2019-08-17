@@ -58,8 +58,10 @@ macro_rules! impl_pipeline {
                 let mut new_batch: Vec<Vec<usize>> = vec![Vec::new()];
                 let mut batch_info: Vec<Vec<(TypeId, Mutation)>> = vec![Vec::new()];
 
+
                 $({
-                    let mut borrow_status = $type::Data::borrow_status();
+                    let mut borrow_status = Vec::new();
+                    $type::Data::borrow_status(&mut borrow_status);
                     let mut batch_index = batch_info.len();
                     for batch in batch_info.iter().rev() {
                         let mut conflict = false;
@@ -155,7 +157,7 @@ macro_rules! pipeline {
     }
 }
 
-pipeline![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) /*(F, 5) (G, 6) (H, 7) (I, 8) (J, 9) (K, 10) (L, 11)*/];
+pipeline![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
 
 #[cfg(test)]
 mod test {
