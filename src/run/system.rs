@@ -6,7 +6,8 @@ use crate::world::World;
 /// `System::Data` can be:
 /// * `&T` for an immutable reference to `T` storage
 /// * `&mut T` for a mutable reference to `T` storage
-/// * [Entities] for a mutable reference to the entity storage
+/// * [Entities] for an immmutable reference to the entity storage
+/// * [EntitiesMut] for a mutable reference to the entity storage
 /// * [AllStorages] for a mutable reference to the storage of all components
 /// * [ThreadPool] for an immutable reference to the `rayon::ThreadPool` used by the [World]
 /// * [Not] can be used to filter out a component type
