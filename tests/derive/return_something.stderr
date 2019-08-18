@@ -1,0 +1,7 @@
+error: custom attribute panicked
+ --> $DIR/return_something.rs:3:1
+  |
+3 | #[system(Test)]
+  | ^^^^^^^^^^^^^^^
+  |
+  = help: message: run should not return anything.

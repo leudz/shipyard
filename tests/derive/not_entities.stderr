@@ -1,0 +1,7 @@
+error: custom attribute panicked
+ --> $DIR/not_entities.rs:3:1
+  |
+3 | #[system(Test)]
+  | ^^^^^^^^^^^^^^^
+  |
+  = help: message: Not will only work with component storages refered by &T or &mut T.

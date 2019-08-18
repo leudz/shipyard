@@ -10,10 +10,18 @@ categories = ["concurrency", "game-engines"]
 readme = "README.md"
 repository = "https://github.com/leudz/shipyard"
 
+[workspace]
+members = ["shipyard_proc"]
+
 [dependencies]
 num_cpus = {version = "1.10.1", optional = true}
 rayon = {version = "1.1.0", optional = true}
+shipyard_proc = { version = "0.1.0", path = "./shipyard_proc", optional = true }
 
 [features]
-default = ["parallel"]
+default = ["parallel", "proc"]
 parallel = ["rayon", "num_cpus"]
+proc = ["shipyard_proc"]
+
+[dev-dependencies]
+trybuild = "1.0.11"

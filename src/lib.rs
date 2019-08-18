@@ -5,14 +5,11 @@
 //! struct Health(f32);
 //! struct Position { x: f32, y: f32 };
 //!
-//! struct InAcid;
-//! impl<'a> System<'a> for InAcid {
-//!     type Data = (&'a Position, &'a mut Health);
-//!     fn run(&self, (pos, mut health): <Self::Data as SystemData>::View) {
-//!         for (pos, health) in (&pos, &mut health).iter() {
-//!             if is_in_acid(pos) {
-//!                 health.0 -= 1.0;
-//!             }
+//! #[system(InAcid)]
+//! fn run(pos: &Position, mut health: &mut Health) {
+//!     for (pos, health) in (pos, health).iter() {
+//!         if is_in_acid(pos) {
+//!             health.0 -= 1.0;
 //!         }
 //!     }
 //! }
@@ -40,43 +37,34 @@
 //! struct Health(f32);
 //! struct Fat(f32);
 //!
-//! struct Reproduction;
-//! impl<'a> System<'a> for Reproduction {
-//!     type Data = (&'a mut Fat, &'a mut Health, EntitiesMut);
-//!     fn run(&self, (mut fat, mut health, mut entities): <Self::Data as SystemData>::View) {
-//!         let count = (&health, &fat).iter().filter(|(health, fat)| health.0 > 40.0 && fat.0 > 20.0).count();
-//!         (0..count).for_each(|_| {
-//!             entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
-//!         });
-//!     }
+//! #[system(Reproduction)]
+//! fn run(mut fat: &mut Fat, mut health: &mut Health, mut entities: &mut Entities) {
+//!     let count = (&health, &fat).iter().filter(|(health, fat)| health.0 > 40.0 && fat.0 > 20.0).count();
+//!     (0..count).for_each(|_| {
+//!         entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
+//!     });
 //! }
 //!
-//! struct Meal;
-//! impl<'a> System<'a> for Meal {
-//!     type Data = &'a mut Fat;
-//!     fn run(&self, mut fat: <Self::Data as SystemData>::View) {
-//!         if let Iter::Packed(iter) = fat.iter() {
-//!             for slice in iter.into_chunk(8) {
-//!                 for fat in slice {
-//!                     fat.0 += 3.0;
-//!                 }
+//! #[system(Meal)]
+//! fn run(fat: &mut Fat) {
+//!     if let Iter::Packed(iter) = fat.iter() {
+//!         for slice in iter.into_chunk(8) {
+//!             for fat in slice {
+//!                 fat.0 += 3.0;
 //!             }
 //!         }
 //!     }
 //! }
 //!
-//! struct Age;
-//! impl<'a> System<'a> for Age {
-//!     type Data = (&'a mut Health, ThreadPool);
-//!     fn run(&self, (mut health, thread_pool): <Self::Data as SystemData>::View) {
-//!         use rayon::prelude::ParallelIterator;
+//! #[system(Age)]
+//! fn run(health: &mut Health, thread_pool: ThreadPool) {
+//!     use rayon::prelude::ParallelIterator;
 //!
-//!         thread_pool.install(|| {
-//!             health.par_iter().for_each(|health| {
-//!                 health.0 -= 4.0;
-//!             });
+//!     thread_pool.install(|| {
+//!         health.par_iter().for_each(|health| {
+//!             health.0 -= 4.0;
 //!         });
-//!     }
+//!     });
 //! }
 //!
 //! let world = World::new::<(Health, Fat)>();
@@ -130,6 +118,9 @@ pub use crate::run::SystemData;
 pub use crate::world::World;
 pub use entity::{Entities, EntitiesMut, EntitiesViewMut};
 pub use iterators::IntoIter;
+#[doc(hidden)]
+#[cfg(feature = "proc")]
+pub use shipyard_proc::system;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
 #[cfg(feature = "parallel")]
@@ -622,5 +613,18 @@ mod test {
                 Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity);
             assert!(old_usize.is_none() && old_u32.is_none());
         });
+    }
+    #[test]
+    fn derive() {
+        let t = trybuild::TestCases::new();
+        t.pass("tests/derive/good.rs");
+        t.pass("tests/derive/return_nothing.rs");
+        t.compile_fail("tests/derive/generic_lifetime.rs");
+        t.compile_fail("tests/derive/generic_type.rs");
+        t.compile_fail("tests/derive/not_entities.rs");
+        t.compile_fail("tests/derive/not_run.rs");
+        t.compile_fail("tests/derive/return_something.rs");
+        t.compile_fail("tests/derive/where.rs");
+        t.compile_fail("tests/derive/wrong_type.rs");
     }
 }
