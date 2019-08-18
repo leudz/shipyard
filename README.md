@@ -19,14 +19,11 @@ use shipyard::*;
 struct Health(f32);
 struct Position { x: f32, y: f32 };
 
-struct InAcid;
-impl<'a> System<'a> for InAcid {
-    type Data = (&'a Position, &'a mut Health);
-    fn run(&self, (pos, mut health): <Self::Data as SystemData>::View) {
-        for (pos, health) in (&pos, &mut health).iter() {
-            if is_in_acid(pos) {
-                health.0 -= 1.0;
-            }
+#[system(InAcid)]
+fn run(pos: &Position, health: &mut Health) {
+    for (pos, health) in (pos, health).iter() {
+        if is_in_acid(pos) {
+            health.0 -= 1.0;
         }
     }
 }
