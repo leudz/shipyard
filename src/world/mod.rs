@@ -43,7 +43,7 @@ impl Default for World {
 }
 
 impl World {
-    /// Creates a `World` with storages based on `T` already created.
+    /// Returns a new `World` with storages based on `T` already created.
     /// More storages can be added latter.
     ///
     /// `T` has to be a tuple even for a single type.
@@ -60,6 +60,34 @@ impl World {
         let world = World::default();
         T::register(&world);
         world
+    }
+    /// Returns a new `World` with storages based on `T` already created
+    /// and custom threads.
+    /// More storages can be added latter.
+    ///
+    /// `T` has to be a tuple even for a single type.
+    /// In this case use (T,).
+    ///
+    /// Custom threads can be useful when working with wasm for example.
+    ///
+    /// `World` is never used mutably.
+    #[cfg(feature = "parallel")]
+    pub fn new_with_custom_threads<
+        T: Register,
+        F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>,
+    >(
+        f: F,
+    ) -> Self {
+        World {
+            entities: AtomicRefCell::new(Default::default()),
+            storages: AtomicRefCell::new(Default::default()),
+            thread_pool: ThreadPoolBuilder::new()
+                .num_threads(num_cpus::get_physical())
+                .spawn_handler(f)
+                .build()
+                .unwrap(),
+            pipeline: AtomicRefCell::new(Default::default()),
+        }
     }
     /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
     /// to only borrow it immutably.
