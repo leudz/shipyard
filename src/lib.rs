@@ -22,7 +22,9 @@
 //!
 //! let world = World::default();
 //!
-//! world.new_entity((Position { x: 0.0, y: 0.0 }, Health(1000.0)));
+//! world.run::<(EntitiesMut, &mut Position, &mut Health), _>(|(entities, pos, health)| {
+//!     entities.add_entity((&mut pos, &mut health), (Position { x: 0.0, y: 0.0 }, Health(1000.0)));
+//! });
 //!
 //! world.add_workload("In acid", InAcid);
 //! world.run_default();
@@ -85,23 +87,22 @@
 //!     world.run_default();
 //! }
 //!
-//! // we've got some new pigs
-//! assert_eq!(world.get_storage::<&Health>().len(), 900);
+//! world.run::<&Health, _>(|health| {
+//!     // we've got some new pigs
+//!     assert_eq!(health.len(), 900);
+//! });
 //! # }
 //! ```
 
 #![deny(bare_trait_objects)]
 
-mod add_entity;
 mod atomic_refcell;
 mod component_storage;
 mod entity;
 pub mod error;
 mod get;
-mod get_storage;
-pub mod iterators;
+//pub mod iterators;
 mod not;
-mod pack;
 mod remove;
 mod run;
 mod sparse_array;
@@ -110,14 +111,13 @@ mod world;
 pub use crate::component_storage::AllStorages;
 pub use crate::get::GetComponent;
 pub use crate::not::Not;
-pub use crate::pack::OwnedPack;
 pub use crate::remove::Remove;
 pub use crate::run::System;
 #[doc(hidden)]
 pub use crate::run::SystemData;
 pub use crate::world::World;
 pub use entity::{Entities, EntitiesMut, EntitiesViewMut};
-pub use iterators::IntoIter;
+//pub use iterators::IntoIter;
 #[doc(hidden)]
 #[cfg(feature = "proc")]
 pub use shipyard_proc::system;
@@ -125,7 +125,7 @@ pub use shipyard_proc::system;
 /// Type used to borrow the rayon::ThreadPool inside `World`.
 #[cfg(feature = "parallel")]
 pub struct ThreadPool;
-
+/*
 #[cfg(test)]
 mod test {
     use super::iterators::*;
@@ -628,3 +628,4 @@ mod test {
         t.compile_fail("tests/derive/wrong_type.rs");
     }
 }
+*/

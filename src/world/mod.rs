@@ -1,17 +1,13 @@
-mod new_entity;
 mod pack;
 mod pipeline;
 mod register;
 
-use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
+use crate::atomic_refcell::{AtomicRefCell, RefMut};
 use crate::component_storage::AllStorages;
-use crate::entity::{Entities, Key};
+use crate::entity::Entities;
 use crate::error;
-use crate::get_storage::GetStorage;
-use crate::pack::OwnedPack;
 use crate::run::Run;
-use new_entity::WorldNewEntity;
-use pack::WorldOwnedPack;
+use pack::TightPack;
 use pipeline::{Pipeline, Workload};
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -89,136 +85,6 @@ impl World {
             pipeline: AtomicRefCell::new(Default::default()),
         }
     }
-    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
-    /// to only borrow it immutably.
-    ///
-    /// `&T` returns a read access to the storage.
-    ///
-    /// `&mut T` returns a write access to the storage.
-    ///
-    /// To retrive multiple storages at once, use a tuple.
-    ///
-    /// Unwraps errors.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let (usizes, u32s) = world.get_storage::<(&mut usize, &u32)>();
-    /// ```
-    pub fn get_storage<'a, T: GetStorage<'a>>(&'a self) -> T::Storage {
-        self.try_get_storage::<T>().unwrap()
-    }
-    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
-    /// to only borrow it immutably.
-    ///
-    /// `&T` returns a read access to the storage.
-    ///
-    /// `&mut T` returns a write access to the storage.
-    ///
-    /// To retrive multiple storages at once, use a tuple.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let (usizes, u32s) = world.try_get_storage::<(&mut usize, &u32)>().unwrap();
-    /// ```
-    pub fn try_get_storage<'a, T: GetStorage<'a>>(
-        &'a self,
-    ) -> Result<T::Storage, error::GetStorage> {
-        Ok(self
-            .try_all_storages()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_get_storage::<T>()?)
-    }
-    /// Stores `component` in a new entity, the `Key` to this entity is returned.
-    ///
-    /// Multiple components can be added at the same time using a tuple.
-    ///
-    /// `T` has to be a tuple even for a single type.
-    /// In this case use (T,).
-    ///
-    /// As opposed to [Entities::add] and [EntitiesViewMut::add], storages will be created if they don't exist.
-    /// This is at the cost of borrow/release `Entities` and the storages involved.
-    ///
-    /// Unwraps errors.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::default();
-    /// let entity = world.new_entity((0usize, 1u32));
-    /// ```
-    /// [Entities::add]: struct.Entities.html#method.add
-    /// [EntitiesViewMut::add]: struct.EntitiesViewMut.html#method.add
-    pub fn new_entity<T: WorldNewEntity>(&self, component: T) -> Key {
-        self.try_new_entity::<T>(component).unwrap()
-    }
-    /// Stores `component` in a new entity, the `Key` to this entity is returned.
-    ///
-    /// Multiple components can be added at the same time using a tuple.
-    ///
-    /// `T` has to be a tuple even for a single type.
-    /// In this case use (T,).
-    ///
-    /// As opposed to [Entities::add] and [EntitiesViewMut::add], storages will be created if they don't exist.
-    /// This is at the cost of borrow/release `Entities` and the storages involved.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::default();
-    /// let entity = world.try_new_entity((0usize, 1u32)).unwrap();
-    /// ```
-    /// [Entities::add]: struct.Entities.html#method.add
-    /// [EntitiesViewMut::add]: struct.EntitiesViewMut.html#method.add
-    pub fn try_new_entity<T: WorldNewEntity>(&self, component: T) -> Result<Key, error::NewEntity> {
-        let mut entities = self
-            .try_entities_mut()
-            .map_err(error::NewEntity::Entities)?;
-        let mut storages = self
-            .storages
-            .try_borrow_mut()
-            .map_err(error::NewEntity::AllStoragesBorrow)?;
-        Ok(T::new_entity(component, &mut *storages, &mut *entities))
-    }
-    /// Returns a reference to the entities' storage.
-    ///
-    /// Unwraps errors.
-    pub fn entities(&self) -> Ref<Entities> {
-        self.try_entities().unwrap()
-    }
-    /// Returns a reference to the entities' storage.
-    pub fn try_entities(&self) -> Result<Ref<Entities>, error::Borrow> {
-        Ok(self.entities.try_borrow()?)
-    }
-    /// Returns a mutable reference to the entities' storage.
-    ///
-    /// Unwraps errors.
-    pub fn entities_mut(&self) -> RefMut<Entities> {
-        self.try_entities_mut().unwrap()
-    }
-    /// Returns a mutable reference to the entities' storage.
-    pub fn try_entities_mut(&self) -> Result<RefMut<Entities>, error::Borrow> {
-        Ok(self.entities.try_borrow_mut()?)
-    }
-    /// Returns an immutable reference to the storage of all storages.
-    ///
-    /// Unwraps errors.
-    pub fn all_storages(&self) -> Ref<AllStorages> {
-        self.try_all_storages().unwrap()
-    }
-    /// Returns an immutable reference to the storage of all storages.
-    pub fn try_all_storages(&self) -> Result<Ref<AllStorages>, error::Borrow> {
-        Ok(self.storages.try_borrow()?)
-    }
-    /// Returns an immutable reference to the storage of all storages.
-    ///
-    /// Unwraps errors.
-    pub fn all_storages_mut(&self) -> RefMut<AllStorages> {
-        self.try_all_storages_mut().unwrap()
-    }
-    /// Returns an immutable reference to the storage of all storages.
-    pub fn try_all_storages_mut(&self) -> Result<RefMut<AllStorages>, error::Borrow> {
-        Ok(self.storages.try_borrow_mut()?)
-    }
     /// Register a new component type and create a storage for it.
     /// Does nothing if the storage already exists.
     ///
@@ -275,15 +141,10 @@ impl World {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.try_pack_owned::<(usize, u32)>().unwrap();
+    /// world.try_tight_pack::<(usize, u32)>().unwrap();
     /// ```
-    pub fn try_pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self) -> Result<(), error::WorldPack>
-    where
-        <T as WorldOwnedPack<'a>>::Storage: GetStorage<'a>,
-        <<T as WorldOwnedPack<'a>>::Storage as GetStorage<'a>>::Storage: OwnedPack,
-    {
-        self.try_get_storage::<T::Storage>()?.try_pack_owned()?;
-        Ok(())
+    pub fn try_tight_pack<'a, T: TightPack>(&self) -> Result<(), error::Pack> {
+        T::try_tight_pack(&self.storages)
     }
     /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     ///
@@ -292,28 +153,10 @@ impl World {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.pack_owned::<(usize, u32)>();
+    /// world.tight_pack::<(usize, u32)>();
     /// ```
-    pub fn pack_owned<'a, T: WorldOwnedPack<'a>>(&'a self)
-    where
-        <T as WorldOwnedPack<'a>>::Storage: GetStorage<'a>,
-        <<T as WorldOwnedPack<'a>>::Storage as GetStorage<'a>>::Storage: OwnedPack,
-    {
-        self.try_pack_owned::<T>().unwrap()
-    }
-    /// Delete an entity and all its components.
-    /// Returns true if the entity was alive.
-    pub fn try_delete(&self, entity: Key) -> Result<bool, error::Borrow> {
-        let mut entities = self.try_entities_mut()?;
-        let storages = self.try_all_storages_mut()?;
-        Ok(entities.delete(storages, entity))
-    }
-    /// Delete an entity and all its components.
-    /// Returns true if the entity was alive.
-    ///
-    /// Unwraps errors.
-    pub fn delete(&self, entity: Key) -> bool {
-        self.try_delete(entity).unwrap()
+    pub fn tight_pack<T: TightPack>(&self) {
+        self.try_tight_pack::<T>().unwrap()
     }
     /// Modifies the current default workload to `name`.
     pub fn try_set_default_workload(
@@ -366,9 +209,13 @@ impl World {
     /// }
     ///
     /// let world = World::new::<(usize, u32)>();
-    /// world.new_entity((0usize, 1u32));
-    /// world.new_entity((2usize, 3u32));
-    /// world.new_entity((4usize, 5u32));
+    ///
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+    ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    ///     entities.add_entity((&mut usizes, &mut u32s), (2, 3));
+    ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
+    /// });
+    ///
     /// world.try_add_workload("Add & Check", (Adder, Checker)).unwrap();
     /// world.run_default();
     /// ```
@@ -414,9 +261,13 @@ impl World {
     /// }
     ///
     /// let world = World::new::<(usize, u32)>();
-    /// world.new_entity((0usize, 1u32));
-    /// world.new_entity((2usize, 3u32));
-    /// world.new_entity((4usize, 5u32));
+    ///
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(entities, usizes, u32s)| {
+    ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    ///     entities.add_entity((&mut usizes, &mut u32s), (2, 3));
+    ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
+    /// });
+    ///
     /// world.add_workload("Add & Check", (Adder, Checker));
     /// world.run_default();
     /// ```

@@ -5,7 +5,6 @@ mod view;
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::entity::Key;
 use crate::error;
-use crate::get_storage::GetStorage;
 use crate::sparse_array::SparseArray;
 use delete::Delete;
 use hasher::TypeIdHasher;
@@ -85,86 +84,6 @@ impl AllStorages {
     }
 }
 
-impl<'a> Ref<'a, AllStorages> {
-    /// Retrives storages based on type `T`.
-    ///
-    /// `&T` returns a read access to the storage.
-    ///
-    /// `&mut T` returns a write access to the storage.
-    ///
-    /// To retrive multiple storages at once, use a tuple.
-    ///
-    /// Unwraps errors.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let all_storages = world.all_storages();
-    /// let (usizes, u32s) = all_storages.get_storage::<(&mut usize, &u32)>();
-    /// ```
-    pub fn get_storage<T: GetStorage<'a>>(&self) -> T::Storage {
-        self.try_get_storage::<T>().unwrap()
-    }
-    /// Retrives storages based on type `T`.
-    ///
-    /// `&T` returns a read access to the storage.
-    ///
-    /// `&mut T` returns a write access to the storage.
-    ///
-    /// To retrive multiple storages at once, use a tuple.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let all_storages = world.all_storages();
-    /// let (usizes, u32s) = all_storages.try_get_storage::<(&mut usize, &u32)>().unwrap();
-    /// ```
-    pub fn try_get_storage<T: GetStorage<'a>>(&self) -> Result<T::Storage, error::GetStorage> {
-        T::get_in(Ref::clone(self))
-    }
-}
-
-impl<'a> RefMut<'a, AllStorages> {
-    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
-    /// to only borrow it immutably.
-    ///
-    /// `&T` returns a read access to the storage.
-    ///
-    /// `&mut T` returns a write access to the storage.
-    ///
-    /// To retrive multiple storages at once, use a tuple.
-    ///
-    /// Unwraps errors.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let all_storages = world.all_storages_mut();
-    /// let (usizes, u32s) = all_storages.get_storage::<(&mut usize, &u32)>();
-    /// ```
-    pub fn get_storage<T: GetStorage<'a>>(self) -> T::Storage {
-        self.try_get_storage::<T>().unwrap()
-    }
-    /// Retrives storages based on type `T` consuming the `RefMut<AllStorages>` in the process
-    /// to only borrow it immutably.
-    ///
-    /// `&T` returns a read access to the storage.
-    ///
-    /// `&mut T` returns a write access to the storage.
-    ///
-    /// To retrive multiple storages at once, use a tuple.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let all_storages = world.all_storages_mut();
-    /// let (usizes, u32s) = all_storages.try_get_storage::<(&mut usize, &u32)>().unwrap();
-    /// ```
-    pub fn try_get_storage<T: GetStorage<'a>>(self) -> Result<T::Storage, error::GetStorage> {
-        RefMut::downgrade(self).try_get_storage::<T>()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -173,11 +92,15 @@ mod test {
         let mut storage = ComponentStorage::new::<&'static str>();
         let mut key = Key::zero();
         key.set_index(5);
-        storage.array_mut().unwrap().insert("test5", key);
+        storage.array_mut().unwrap().view_mut().insert("test5", key);
         key.set_index(10);
-        storage.array_mut().unwrap().insert("test10", key);
+        storage
+            .array_mut()
+            .unwrap()
+            .view_mut()
+            .insert("test10", key);
         key.set_index(1);
-        storage.array_mut().unwrap().insert("test1", key);
+        storage.array_mut().unwrap().view_mut().insert("test1", key);
         key.set_index(5);
         storage.delete(key).unwrap();
         assert_eq!(storage.array::<&str>().unwrap().get(key), None);

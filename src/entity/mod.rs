@@ -1,11 +1,6 @@
 mod add_component;
 mod view;
 
-use crate::add_entity::AddEntity;
-use crate::component_storage::AllStorages;
-use crate::error;
-use add_component::AddComponent;
-use std::convert::AsMut;
 pub use view::{EntitiesView, EntitiesViewMut};
 
 /* A Key is a handle to an entity and has two parts, the index and the version.
@@ -119,127 +114,6 @@ impl Entities {
             data: &mut self.data,
             list: &mut self.list,
         }
-    }
-    /// Stores `component` in a new entity, the `Key` to this entity is returned.
-    ///
-    /// This is a lot more efficient than [World::new_entity]
-    /// since it doesn't have to borrow/release Entities and the storages.
-    ///
-    /// Multiple components can be added at the same time using a tuple.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let (mut usizes, mut u32s) = world.get_storage::<(&mut usize, &mut u32)>();
-    /// let mut entities = world.entities_mut();
-    ///
-    /// let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    /// ```
-    /// [World::new_entity]: struct.World.html#method.new_entity
-    pub fn add_entity<T: AddEntity>(&mut self, storages: T, component: T::Component) -> Key {
-        storages.add_entity(component, self)
-    }
-    /// Delete an entity and all its components.
-    /// Returns true if the entity was alive.
-    ///
-    /// [World::delete] is easier to use but will borrow and release [Entities] and [AllStorages] for each entity.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let entity1 = world.new_entity((0usize, 1u32));
-    /// let entity2 = world.new_entity((2usize, 3u32));
-    /// let mut entities = world.entities_mut();
-    /// let mut all_storages = world.all_storages_mut();
-    ///
-    /// entities.delete(&mut all_storages, entity1);
-    ///
-    /// let (usizes, u32s) = all_storages.get_storage::<(&usize, &u32)>();
-    /// assert_eq!((&usizes).get(entity1), None);
-    /// assert_eq!((&u32s).get(entity1), None);
-    /// assert_eq!(usizes.get(entity2), Some(&2));
-    /// assert_eq!(u32s.get(entity2), Some(&3));
-    /// ```
-    ///
-    /// [World::delete]: struct.World.html#method.delete
-    /// [Entities]: struct.Entities.html
-    /// [AllStorages]: struct.AllStorages.html
-    pub fn delete(&mut self, mut storages: impl AsMut<AllStorages>, entity: Key) -> bool {
-        self.view_mut()
-            .delete(&mut storages.as_mut().view_mut(), entity)
-    }
-    /// Stores `component` in `entity`, if the entity had already a component
-    /// of this type, it will be replaced.
-    ///
-    /// Multiple components can be added at the same time using a tuple.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let entity1 = world.new_entity(());
-    ///
-    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
-    ///     entities.try_add_component((&mut usizes, &mut u32s), (0, 1), entity1).unwrap();
-    ///     assert_eq!((&usizes, &u32s).get(entity1), Some((&0, &1)));
-    /// });
-    /// ```
-    /// When using packed storages you have to pass all storages packed with it,
-    /// even if you don't add any component to it.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// world.pack_owned::<(usize, u32)>();
-    /// let entity1 = world.new_entity(());
-    ///
-    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
-    ///     entities.try_add_component((&mut usizes, &mut u32s), (0,), entity1).unwrap();
-    ///     assert_eq!((&usizes,).get(entity1), Some((&0,)));
-    /// });
-    /// ```
-    pub fn try_add_component<C, S: AddComponent<C>>(
-        &self,
-        storages: S,
-        component: C,
-        entity: Key,
-    ) -> Result<(), error::AddComponent> {
-        storages.try_add_component(component, entity, &self.view())
-    }
-    /// Stores `component` in `entity`, if the entity had already a component
-    /// of this type, it will be replaced.
-    ///
-    /// Multiple components can be added at the same time using a tuple.
-    ///
-    /// Unwraps errors.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// let entity1 = world.new_entity(());
-    ///
-    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
-    ///     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
-    ///     assert_eq!((&usizes, &u32s).get(entity1), Some((&0, &1)));
-    /// });
-    /// ```
-    /// When using packed storages you have to pass all storages packed with it,
-    /// even if you don't add any component to it.
-    /// # Example
-    /// ```
-    /// # use shipyard::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// world.pack_owned::<(usize, u32)>();
-    /// let entity1 = world.new_entity(());
-    ///
-    /// world.run::<(Entities, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
-    ///     entities.add_component((&mut usizes, &mut u32s), (0,), entity1);
-    ///     assert_eq!((&usizes,).get(entity1), Some((&0,)));
-    /// });
-    /// ```
-    pub fn add_component<C, S: AddComponent<C>>(&self, storages: S, component: C, entity: Key) {
-        storages
-            .try_add_component(component, entity, &self.view())
-            .unwrap()
     }
 }
 

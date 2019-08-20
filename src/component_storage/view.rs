@@ -15,5 +15,6 @@ impl AllStoragesViewMut<'_> {
         for storage in self.0.values_mut() {
             storage.delete(entity).unwrap();
         }
+        unimplemented!()
     }
 }

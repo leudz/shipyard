@@ -101,24 +101,28 @@ impl EntitiesViewMut<'_> {
     }
     /// Delete an entity and all its components.
     /// Returns true if the entity was alive.
-    ///
-    /// [World::delete] is easier to use but will borrow and release [Entities] and [AllStorages] for each entity.
     /// # Example
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// let entity1 = world.new_entity((0usize, 1u32));
-    /// let entity2 = world.new_entity((2usize, 3u32));
-    /// let mut entities = world.entities_mut();
-    /// let mut all_storages = world.all_storages_mut();
     ///
-    /// entities.delete(&mut all_storages, entity1);
+    /// let mut entity1 = None;
+    /// let mut entity2 = None;
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     entity1 = Some(entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)));
+    ///     entity2 = Some(entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)));
+    /// });
     ///
-    /// let (usizes, u32s) = all_storages.get_storage::<(&usize, &u32)>();
-    /// assert_eq!((&usizes).get(entity1), None);
-    /// assert_eq!((&u32s).get(entity1), None);
-    /// assert_eq!(usizes.get(entity2), Some(&2));
-    /// assert_eq!(u32s.get(entity2), Some(&3));
+    /// world.run::<(EntitiesMut, AllStorages), _>(|(mut entities, mut all_storages)| {
+    ///     entities.delete(&mut all_storages, entity1.unwrap());
+    /// });
+    ///
+    /// world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
+    ///     assert_eq!((&usizes).get(entity1.unwrap()), None);
+    ///     assert_eq!((&u32s).get(entity1.unwrap()), None);
+    ///     assert_eq!(usizes.get(entity2.unwrap()), Some(&2));
+    ///     assert_eq!(u32s.get(entity2.unwrap()), Some(&3));
+    /// });
     /// ```
     ///
     /// [World::delete]: struct.World.html#method.delete

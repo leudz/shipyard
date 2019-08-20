@@ -23,7 +23,7 @@ pub(super) trait Delete {
     fn delete(&mut self, entity: Key);
 }
 
-impl<T> Delete for SparseArray<T> {
+impl<T: 'static> Delete for SparseArray<T> {
     fn delete(&mut self, entity: Key) {
         self.remove(entity);
     }

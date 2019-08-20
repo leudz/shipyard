@@ -1,4 +1,4 @@
-use crate::sparse_array::{Read, View, ViewMut, Write};
+use crate::sparse_array::{View, ViewMut};
 use std::ops::Not as NotOps;
 
 /// Used to filter out components.
@@ -7,8 +7,11 @@ use std::ops::Not as NotOps;
 /// ```
 /// # use shipyard::*;
 /// let world = World::new::<(usize, u32)>();
-/// world.new_entity((0usize, 1u32));
-/// world.new_entity((2usize,));
+///
+/// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+///     entities.add_entity((&mut usizes,), (2usize,));
+/// });
 ///
 /// world.run::<(&usize, Not<&u32>), _>(|(usizes, not_u32s)| {
 ///     let mut iter = (&usizes, &not_u32s).iter();
@@ -35,41 +38,6 @@ impl<T> Not<T> {
     /// Returns the usual `T` storage.
     pub fn into_inner(self) -> T {
         self.0
-    }
-}
-
-impl<T> NotOps for Read<'_, T> {
-    type Output = Not<Self>;
-    fn not(self) -> Self::Output {
-        Not(self)
-    }
-}
-
-impl<T> NotOps for &Read<'_, T> {
-    type Output = Not<Self>;
-    fn not(self) -> Self::Output {
-        Not(self)
-    }
-}
-
-impl<T> NotOps for Write<'_, T> {
-    type Output = Not<Self>;
-    fn not(self) -> Self::Output {
-        Not(self)
-    }
-}
-
-impl<T> NotOps for &Write<'_, T> {
-    type Output = Not<Self>;
-    fn not(self) -> Self::Output {
-        Not(self)
-    }
-}
-
-impl<T> NotOps for &mut Write<'_, T> {
-    type Output = Not<Self>;
-    fn not(self) -> Self::Output {
-        Not(self)
     }
 }
 

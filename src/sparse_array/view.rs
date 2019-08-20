@@ -7,7 +7,7 @@ pub struct View<'a, T> {
     pub(crate) sparse: &'a [usize],
     pub(crate) dense: &'a [Key],
     pub(crate) data: &'a [T],
-    pub(super) pack_info: &'a PackInfo,
+    pub(crate) pack_info: &'a PackInfo,
 }
 
 impl<'a, T> Clone for View<'a, T> {
@@ -47,14 +47,6 @@ impl<T> View<'_, T> {
     pub fn len(&self) -> usize {
         self.dense.len()
     }
-    /// Returns a slice of the types packed with this one.
-    pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
-        &self.pack_info.owned_type
-    }
-    /// Returns the length of the packed area within the data array.
-    pub(crate) fn pack_len(&self) -> usize {
-        self.pack_info.owned_len
-    }
 }
 
 /// Mutable view into a `ComponentStorage`.
@@ -62,10 +54,10 @@ pub struct ViewMut<'a, T> {
     pub(crate) sparse: &'a mut Vec<usize>,
     pub(crate) dense: &'a mut Vec<Key>,
     pub(crate) data: &'a mut Vec<T>,
-    pub(super) pack_info: &'a mut PackInfo,
+    pub(crate) pack_info: &'a mut PackInfo,
 }
 
-impl<'a, T> ViewMut<'a, T> {
+impl<'a, T: 'static> ViewMut<'a, T> {
     /// Add the component to the `entity`.
     pub(crate) fn insert(&mut self, mut value: T, entity: Key) -> Option<T> {
         if entity.index() >= self.sparse.len() {
@@ -110,19 +102,38 @@ impl<'a, T> ViewMut<'a, T> {
     pub(crate) fn remove(&mut self, entity: Key) -> Option<T> {
         if self.contains(entity) {
             let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
-            let pack_len = self.pack_len();
-            if dense_index < pack_len {
-                self.pack_info.owned_len -= 1;
-                // swap index and last packed element (can be the same)
-                unsafe {
-                    *self
-                        .sparse
-                        .get_unchecked_mut(self.dense.get_unchecked(pack_len - 1).index()) =
-                        dense_index;
+            match self.pack_info {
+                PackInfo::Tight(pack_info) => {
+                    let pack_len = pack_info.len;
+                    if dense_index < pack_len {
+                        pack_info.len -= 1;
+                        // swap index and last packed element (can be the same)
+                        unsafe {
+                            *self.sparse.get_unchecked_mut(
+                                self.dense.get_unchecked(pack_len - 1).index(),
+                            ) = dense_index;
+                        }
+                        self.dense.swap(dense_index, pack_len - 1);
+                        self.data.swap(dense_index, pack_len - 1);
+                        dense_index = pack_len - 1;
+                    }
                 }
-                self.dense.swap(dense_index, pack_len - 1);
-                self.data.swap(dense_index, pack_len - 1);
-                dense_index = pack_len - 1;
+                PackInfo::Loose(pack_info) => {
+                    let pack_len = pack_info.len;
+                    if dense_index < pack_len {
+                        pack_info.len -= 1;
+                        // swap index and last packed element (can be the same)
+                        unsafe {
+                            *self.sparse.get_unchecked_mut(
+                                self.dense.get_unchecked(pack_len - 1).index(),
+                            ) = dense_index;
+                        }
+                        self.dense.swap(dense_index, pack_len - 1);
+                        self.data.swap(dense_index, pack_len - 1);
+                        dense_index = pack_len - 1;
+                    }
+                }
+                PackInfo::NoPack => {}
             }
             unsafe {
                 *self
@@ -168,50 +179,55 @@ impl<'a, T> ViewMut<'a, T> {
     pub(crate) fn pack(&mut self, entity: Key) {
         if self.contains(entity) {
             let dense_index = self.sparse[entity.index()];
-            if dense_index >= self.pack_info.owned_len {
-                self.sparse
-                    .swap(self.dense[self.pack_info.owned_len].index(), entity.index());
-                self.dense.swap(self.pack_info.owned_len, dense_index);
-                self.data.swap(self.pack_info.owned_len, dense_index);
-                self.pack_info.owned_len += 1;
+            match self.pack_info {
+                PackInfo::Tight(pack_info) => {
+                    if dense_index >= pack_info.len {
+                        self.sparse
+                            .swap(self.dense[pack_info.len].index(), entity.index());
+                        self.dense.swap(pack_info.len, dense_index);
+                        self.data.swap(pack_info.len, dense_index);
+                        pack_info.len += 1;
+                    }
+                }
+                _ => {}
             }
         }
     }
-    /// Returns a slice of the types packed with this one.
-    pub(crate) fn pack_types_owned(&self) -> &[TypeId] {
-        &self.pack_info.owned_type
-    }
-    /// Returns true if is packed with any other type.
-    pub(crate) fn is_packed_owned(&self) -> bool {
-        !self.pack_info.owned_type.is_empty()
-    }
-    /// Check if `slice` has all the necessary types to be packed.
-    /// Assumes `slice` is sorted and don't have any duplicate.
-    pub(crate) fn should_pack_owned(&self, slice: &[TypeId]) -> &[TypeId] {
-        let pack_types = self.pack_types_owned();
-        let mut i = 0;
-        let mut j = 0;
-
-        while i < pack_types.len() && j < slice.len() {
-            if pack_types[i] == slice[j] {
-                i += 1;
-                j += 1;
-            } else if pack_types[i] > slice[j] {
-                j += 1;
-            } else {
-                return &[];
+    pub(crate) fn unpack(&mut self, entity: Key) {
+        let dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
+        match self.pack_info {
+            PackInfo::Tight(pack_info) => {
+                let pack_len = pack_info.len;
+                if dense_index < pack_len {
+                    pack_info.len -= 1;
+                    // swap index and last packed element (can be the same)
+                    unsafe {
+                        *self
+                            .sparse
+                            .get_unchecked_mut(self.dense.get_unchecked(pack_len - 1).index()) =
+                            dense_index;
+                    }
+                    self.dense.swap(dense_index, pack_len - 1);
+                    self.data.swap(dense_index, pack_len - 1);
+                }
             }
+            PackInfo::Loose(pack_info) => {
+                let pack_len = pack_info.len;
+                if dense_index < pack_len {
+                    pack_info.len -= 1;
+                    // swap index and last packed element (can be the same)
+                    unsafe {
+                        *self
+                            .sparse
+                            .get_unchecked_mut(self.dense.get_unchecked(pack_len - 1).index()) =
+                            dense_index;
+                    }
+                    self.dense.swap(dense_index, pack_len - 1);
+                    self.data.swap(dense_index, pack_len - 1);
+                }
+            }
+            PackInfo::NoPack => {}
         }
-
-        if i == pack_types.len() && j == slice.len() {
-            pack_types
-        } else {
-            &[]
-        }
-    }
-    /// Returns the length of the packed area within the data array.
-    pub(crate) fn pack_len(&self) -> usize {
-        self.pack_info.owned_len
     }
 }
 

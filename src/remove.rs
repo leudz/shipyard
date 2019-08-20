@@ -1,6 +1,6 @@
 use crate::entity::Key;
 use crate::error;
-use crate::sparse_array::{SparseArray, ViewMut, Write};
+use crate::sparse_array::{PackInfo, ViewMut};
 use std::any::TypeId;
 
 pub trait Removable {
@@ -22,9 +22,9 @@ pub trait Remove<T: Removable> {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// let entity1 = world.new_entity((0usize, 1u32));
     ///
-    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     ///     assert_eq!(old, (Some(0), Some(1)));
     /// });
@@ -35,10 +35,10 @@ pub trait Remove<T: Removable> {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.pack_owned::<(usize, u32)>();
-    /// let entity1 = world.new_entity((0usize, 1u32));
+    /// world.tight_pack::<(usize, u32)>();
     ///
-    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     ///     assert_eq!(old, (Some(0),));
     /// });
@@ -59,9 +59,9 @@ pub trait Remove<T: Removable> {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// let entity1 = world.new_entity((0usize, 1u32));
     ///
-    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity1);
     ///     assert_eq!(old, (Some(0), Some(1)));
     /// });
@@ -72,10 +72,10 @@ pub trait Remove<T: Removable> {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.pack_owned::<(usize, u32)>();
-    /// let entity1 = world.new_entity((0usize, 1u32));
+    /// world.tight_pack::<(usize, u32)>();
     ///
-    /// world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
     ///     assert_eq!(old, (Some(0),));
     /// });
@@ -83,25 +83,12 @@ pub trait Remove<T: Removable> {
     fn remove(self, entity: Key) -> T::Out;
 }
 
-impl<T: 'static> Remove<(T,)> for &mut SparseArray<T> {
-    fn try_remove(self, entity: Key) -> Result<<(T,) as Removable>::Out, error::Remove> {
-        if !self.is_packed_owned() {
-            Ok((self.remove(entity),))
-        } else {
-            Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
-        }
-    }
-    fn remove(self, entity: Key) -> <(T,) as Removable>::Out {
-        self.try_remove(entity).unwrap()
-    }
-}
-
 impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
     fn try_remove(self, entity: Key) -> Result<<(T,) as Removable>::Out, error::Remove> {
-        if !self.is_packed_owned() {
-            Ok((self.remove(entity),))
-        } else {
-            Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+        match self.pack_info {
+            PackInfo::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+            PackInfo::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+            PackInfo::NoPack => Ok((self.remove(entity),)),
         }
     }
     fn remove(self, entity: Key) -> <(T,) as Removable>::Out {
@@ -120,62 +107,50 @@ macro_rules! impl_removable {
 macro_rules! impl_remove {
     // add is short for additional
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
-        impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)+)> for ($(&mut SparseArray<$type>,)+ $(&mut SparseArray<$add_type>,)*) {
-            fn try_remove(self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
-                Remove::<($($type,)+)>::try_remove(($(&mut self.$index.view_mut(),)+ $(&mut self.$add_index.view_mut(),)*), entity)
-            }
-            fn remove(self, entity: Key) -> <($($type,)+) as Removable>::Out {
-                Remove::<($($type,)+)>::try_remove(self, entity).unwrap()
-            }
-        }
-
-        impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(Write<'_, $type>,)+ $(Write<'_, $add_type>,)*) {
-            fn try_remove(mut self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
-                Remove::<($($type,)+)>::try_remove(($(&mut *self.$index,)+ $(&mut *self.$add_index,)*), entity)
-            }
-            fn remove(self, entity: Key) -> <($($type,)+) as Removable>::Out {
-                Remove::<($($type,)+)>::try_remove(self, entity).unwrap()
-            }
-        }
-
-        impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut Write<'_, $type>,)+ $(&mut Write<'_, $add_type>,)*) {
-            fn try_remove(self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
-                Remove::<($($type,)+)>::try_remove(($(&mut **self.$index,)+ $(&mut **self.$add_index,)*), entity)
-            }
-            fn remove(self, entity: Key) -> <($($type,)+) as Removable>::Out {
-                Remove::<($($type,)+)>::try_remove(self, entity).unwrap()
-            }
-        }
-
         impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_remove(self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
-                if $(self.$index.is_packed_owned())||+ {
-                    let type_ids = [$(TypeId::of::<$type>(),)+ $(TypeId::of::<$add_type>()),*];
-                    let mut sorted_type_ids = type_ids.clone();
-                    sorted_type_ids.sort_unstable();
-                    let i = type_ids.len();
+                // non packed storages should not pay the price of pack
+                let mut packed = false;
+                $(
+                    if std::mem::discriminant(self.$index.pack_info) != std::mem::discriminant(&PackInfo::NoPack) {
+                        packed = true;
+                    }
+                )+
 
-                    let mut pack_types = Vec::with_capacity(i);
-                    $({
-                        let type_id = TypeId::of::<$type>();
-                        if !pack_types.contains(&type_id) {
-                            let new_pack_types = self.$index.should_pack_owned(&sorted_type_ids);
-                            if self.$index.is_packed_owned() && new_pack_types.len() == 0 {
-                                return Err(error::Remove::MissingPackStorage(type_id));
-                            } else {
-                                pack_types.extend(new_pack_types.iter().filter(|&&x| x == type_id));
+                if packed {
+                    let mut all_types = [$(TypeId::of::<$type>(),)+ $(TypeId::of::<$add_type>()),*];
+                    all_types.sort_unstable();
+                    let mut should_unpack = Vec::new();
+                    $(
+                        if !should_unpack.contains(&TypeId::of::<$type>()) {
+                            match self.$index.pack_info {
+                                PackInfo::Tight(pack) => {
+                                    if pack.check_types(&all_types, &[]).0 {
+                                        return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()));
+                                    }
+                                    should_unpack.extend_from_slice(&pack.types);
+                                }
+                                PackInfo::Loose(pack) => {
+                                    if pack.check_types(&all_types, &[]).0 {
+                                        return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()));
+                                    }
+                                    should_unpack.extend_from_slice(&pack.tight_types);
+                                }
+                                PackInfo::NoPack => {}
                             }
                         }
-                    })+
+                    )+
 
-                    Ok(($(
-                        self.$index.remove(entity),
-                    )+))
-                } else {
-                    Ok(($(
-                        self.$index.remove(entity),
-                    )+))
+                    $(
+                        if should_unpack.contains(&TypeId::of::<$add_type>()) {
+                            self.$add_index.unpack(entity);
+                        }
+                    )*
                 }
+
+                Ok(($(
+                    self.$index.remove(entity),
+                )+))
             }
             fn remove(self, entity: Key) -> <($($type,)+) as Removable>::Out {
                 Remove::<($($type,)+)>::try_remove(self, entity).unwrap()

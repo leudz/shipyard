@@ -100,29 +100,6 @@ impl Display for NewEntity {
     }
 }
 
-/// Trying to pack a storage twice will result in this error.
-pub enum Pack {
-    // `TypeId` of the problematic storage
-    AlreadyPacked(TypeId),
-}
-
-impl Debug for Pack {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            Pack::AlreadyPacked(type_id) => fmt.write_fmt(format_args!(
-                "The storage of type ({:?}) is already packed owned.",
-                type_id
-            )),
-        }
-    }
-}
-
-impl Display for Pack {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
 /// If a storage is packed_owned all storages packed with it have to be
 /// passed in the add_component call even if no components are added.
 pub enum AddComponent {
@@ -134,7 +111,7 @@ pub enum AddComponent {
 impl Debug for AddComponent {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            AddComponent::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage of type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
+            AddComponent::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage for type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
             AddComponent::EntityIsNotAlive => fmt.write_str("Entity has to be alive to add component to it."),
         }
     }
@@ -150,33 +127,35 @@ impl Display for AddComponent {
 ///
 /// [World::pack_owned]: ../struct.World.html#method.pack_owned
 /// [World::try_pack_owned]: ../struct.World.html#method.try_pack_owned
-pub enum WorldPack {
+pub enum Pack {
     GetStorage(GetStorage),
-    Pack(Pack),
+    AlreadyTightPack(TypeId),
+    AlreadyLoosePack(TypeId),
 }
 
-impl From<GetStorage> for WorldPack {
+impl From<GetStorage> for Pack {
     fn from(get_storage: GetStorage) -> Self {
-        WorldPack::GetStorage(get_storage)
+        Pack::GetStorage(get_storage)
     }
 }
 
-impl From<Pack> for WorldPack {
-    fn from(pack: Pack) -> Self {
-        WorldPack::Pack(pack)
-    }
-}
-
-impl Debug for WorldPack {
+impl Debug for Pack {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            WorldPack::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
-            WorldPack::Pack(pack) => Debug::fmt(pack, fmt),
+            Pack::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
+            Pack::AlreadyTightPack(type_id) => fmt.write_fmt(format_args!(
+                "The storage of type ({:?}) is already tightly packed.",
+                type_id
+            )),
+            Pack::AlreadyLoosePack(type_id) => fmt.write_fmt(format_args!(
+                "The storage of type ({:?}) is already loosely packed.",
+                type_id
+            )),
         }
     }
 }
 
-impl Display for WorldPack {
+impl Display for Pack {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
@@ -193,7 +172,7 @@ pub enum Remove {
 impl Debug for Remove {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            Remove::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage of type ({:?}). To remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
+            Remove::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage for type ({:?}). To remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
         }
     }
 }
