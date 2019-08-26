@@ -8,7 +8,7 @@ use std::ops::Not as NotOps;
 /// # use shipyard::*;
 /// let world = World::new::<(usize, u32)>();
 ///
-/// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+/// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
 ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
 ///     entities.add_entity((&mut usizes,), (2usize,));
 /// });

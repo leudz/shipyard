@@ -1,4 +1,3 @@
-mod delete;
 mod hasher;
 mod view;
 
@@ -6,7 +5,7 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::entity::Key;
 use crate::error;
 use crate::sparse_array::SparseArray;
-use delete::Delete;
+use crate::unknown_storage::UnknownStorage;
 use hasher::TypeIdHasher;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
@@ -15,10 +14,10 @@ pub(crate) use view::AllStoragesViewMut;
 
 /// Abstract away `T` from `SparseArray<T>` to be able to store
 /// different types in a `HashMap<TypeId, ComponentStorage>`.
-/// `delete` is the address of the vtable part of the `SparseArray`'s `Delete` implementation.
+/// `unknown` is the address of the vtable part of the `SparseArray`'s `UnknownStorage` implementation.
 pub(crate) struct ComponentStorage {
     data: AtomicRefCell<Box<dyn Any + Send + Sync>>,
-    delete: usize,
+    unknown: usize,
 }
 
 impl ComponentStorage {
@@ -26,13 +25,13 @@ impl ComponentStorage {
     pub(crate) fn new<T: 'static + Send + Sync>() -> Self {
         let array = SparseArray::<T>::default();
         // store the vtable of this trait object
-        // for a full explanation see Delete documentation
-        let delete: [usize; 2] = unsafe {
-            *(&(&array as &dyn Delete as *const _) as *const *const _ as *const [usize; 2])
+        // for a full explanation see UnknownStorage documentation
+        let unknown: [usize; 2] = unsafe {
+            *(&(&array as &dyn UnknownStorage as *const _) as *const *const _ as *const [usize; 2])
         };
         ComponentStorage {
             data: AtomicRefCell::new(Box::new(array)),
-            delete: delete[1],
+            unknown: unknown[1],
         }
     }
     /// Immutably borrows the container.
@@ -52,14 +51,25 @@ impl ComponentStorage {
         }))
     }
     /// Mutably borrows the container and delete `index`.
-    pub(crate) fn delete(&mut self, entity: Key) -> Result<(), error::Borrow> {
-        // reconstruct a `dyn Delete` from two pointers
-        // for a full explanation see Delete documentation
+    pub(crate) fn delete(&mut self, entity: Key) -> Result<&[TypeId], error::Borrow> {
+        // reconstruct a `dyn UnknownStorage` from two pointers
+        // for a full explanation see UnknownStorage documentation
         let array: RefMut<Box<dyn Any + Send + Sync>> = self.data.try_borrow_mut()?;
         let array: usize = &**array as *const dyn Any as *const () as usize;
-        let delete: &mut dyn Delete =
-            unsafe { &mut **(&[array, self.delete] as *const _ as *const *mut dyn Delete) };
-        delete.delete(entity);
+        let unknown: &mut dyn UnknownStorage = unsafe {
+            &mut **(&[array, self.unknown] as *const _ as *const *mut dyn UnknownStorage)
+        };
+        Ok(unknown.delete(entity))
+    }
+    pub(crate) fn unpack(&mut self, entity: Key) -> Result<(), error::Borrow> {
+        // reconstruct a `dyn UnknownStorage` from two pointers
+        // for a full explanation see UnknownStorage documentation
+        let array: RefMut<Box<dyn Any + Send + Sync>> = self.data.try_borrow_mut()?;
+        let array: usize = &**array as *const dyn Any as *const () as usize;
+        let unknown: &mut dyn UnknownStorage = unsafe {
+            &mut **(&[array, self.unknown] as *const _ as *const *mut dyn UnknownStorage)
+        };
+        unknown.unpack(entity);
         Ok(())
     }
 }
@@ -84,39 +94,35 @@ impl AllStorages {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn delete() {
-        let mut storage = ComponentStorage::new::<&'static str>();
-        let mut key = Key::zero();
-        key.set_index(5);
-        storage.array_mut().unwrap().view_mut().insert("test5", key);
-        key.set_index(10);
-        storage
-            .array_mut()
-            .unwrap()
-            .view_mut()
-            .insert("test10", key);
-        key.set_index(1);
-        storage.array_mut().unwrap().view_mut().insert("test1", key);
-        key.set_index(5);
-        storage.delete(key).unwrap();
-        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
-        key.set_index(10);
-        assert_eq!(storage.array::<&str>().unwrap().get(key), Some(&"test10"));
-        key.set_index(1);
-        assert_eq!(storage.array::<&str>().unwrap().get(key), Some(&"test1"));
-        key.set_index(10);
-        storage.delete(key).unwrap();
-        key.set_index(1);
-        storage.delete(key).unwrap();
-        key.set_index(5);
-        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
-        key.set_index(10);
-        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
-        key.set_index(1);
-        assert_eq!(storage.array::<&str>().unwrap().get(key), None);
-    }
+#[test]
+fn delete() {
+    let mut storage = ComponentStorage::new::<&'static str>();
+    let mut key = Key::zero();
+    key.set_index(5);
+    storage.array_mut().unwrap().view_mut().insert("test5", key);
+    key.set_index(10);
+    storage
+        .array_mut()
+        .unwrap()
+        .view_mut()
+        .insert("test10", key);
+    key.set_index(1);
+    storage.array_mut().unwrap().view_mut().insert("test1", key);
+    key.set_index(5);
+    storage.delete(key).unwrap();
+    assert_eq!(storage.array::<&str>().unwrap().get(key), None);
+    key.set_index(10);
+    assert_eq!(storage.array::<&str>().unwrap().get(key), Some(&"test10"));
+    key.set_index(1);
+    assert_eq!(storage.array::<&str>().unwrap().get(key), Some(&"test1"));
+    key.set_index(10);
+    storage.delete(key).unwrap();
+    key.set_index(1);
+    storage.delete(key).unwrap();
+    key.set_index(5);
+    assert_eq!(storage.array::<&str>().unwrap().get(key), None);
+    key.set_index(10);
+    assert_eq!(storage.array::<&str>().unwrap().get(key), None);
+    key.set_index(1);
+    assert_eq!(storage.array::<&str>().unwrap().get(key), None);
 }

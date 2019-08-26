@@ -2,8 +2,8 @@ mod iter;
 
 use crate::entity::Key;
 use crate::not::Not;
-use crate::sparse_array::{RawViewMut, View, ViewMut};
-pub use iter::{Chunk, ChunkExact, Iter, NonPacked, Packed, ParIter, ParNonPacked, ParPacked};
+use crate::sparse_array::{PackInfo, RawViewMut, View, ViewMut};
+pub use iter::*;
 use std::any::TypeId;
 
 // This trait exists because of conflicting implementations
@@ -14,6 +14,7 @@ use std::any::TypeId;
 /// This trait serves as substitute.
 pub trait IntoIter {
     type IntoIter;
+    #[cfg(feature = "parallel")]
     type IntoParIter;
     /// Returns an iterator over storages yielding only components meeting the requirements.
     ///
@@ -22,10 +23,10 @@ pub trait IntoIter {
     /// ```
     /// # use shipyard::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.new_entity((0usize, 1u32));
-    /// world.new_entity((2usize, 3u32));
-    /// world.run::<(&mut usize, &u32), _>(|(usizes, u32s)| {
-    ///     for (x, &y) in (usizes, u32s).iter() {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///     for (x, &y) in (usizes, &u32s).iter() {
     ///         *x += y as usize;
     ///     }
     /// });
@@ -41,36 +42,31 @@ pub trait IntoIter {
     /// use rayon::prelude::ParallelIterator;
     ///
     /// let world = World::new::<(usize, u32)>();
-    /// world.new_entity((0usize, 1u32));
-    /// world.new_entity((2usize, 3u32));
-    /// world.run::<(&mut usize, &u32, ThreadPool), _>(|(usizes, u32s, thread_pool)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32, ThreadPool), _>(|(mut entities, mut usizes, mut u32s, thread_pool)| {
+    ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     ///     thread_pool.install(|| {
-    ///         (usizes, u32s).par_iter().for_each(|(x, &y)| {
+    ///         (usizes, &u32s).par_iter().for_each(|(x, &y)| {
     ///             *x += y as usize;
     ///         });
     ///     })
     /// });
     /// ```
     /// [run]: ../struct.World.html#method.run
+    #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter;
-}
-
-#[doc(hidden)]
-#[derive(Clone, Copy)]
-pub enum Len {
-    Indices((*const Key, usize)),
-    Packed(usize),
 }
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them
 #[doc(hidden)]
+#[allow(clippy::len_without_is_empty)]
 pub trait IntoAbstract {
-    type AbsView;
+    type AbsView: AbstractMut;
     fn into_abstract(self) -> Self::AbsView;
-    // Assumes `type_ids` is sorted
-    fn indices(&self, type_ids: &[TypeId]) -> Len;
-    fn add_type_id(type_ids: &mut Vec<TypeId>);
+    fn len(&self) -> Option<usize>;
+    fn pack_info(&self) -> &PackInfo;
+    fn type_id(&self) -> TypeId;
 }
 
 impl<'a, T: 'static + Send + Sync> IntoAbstract for View<'a, T> {
@@ -78,23 +74,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for View<'a, T> {
     fn into_abstract(self) -> Self::AbsView {
         self
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        let pack_types = self.pack_types_owned();
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(self.len())
-        } else if type_ids.len() == pack_types.len()
-            && pack_types
-                .iter()
-                .zip(type_ids.iter())
-                .all(|(pack_type_id, type_id)| pack_type_id == type_id)
-        {
-            Len::Packed(self.pack_len())
-        } else {
-            Len::Indices((self.dense.as_ptr(), self.dense.len()))
-        }
+    fn len(&self) -> Option<usize> {
+        Some(View::len(&self))
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -103,23 +90,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for &View<'a, T> {
     fn into_abstract(self) -> Self::AbsView {
         self
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        let pack_types = self.pack_types_owned();
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(self.len())
-        } else if type_ids.len() == pack_types.len()
-            && pack_types
-                .iter()
-                .zip(type_ids.iter())
-                .all(|(pack_type_id, type_id)| pack_type_id == type_id)
-        {
-            Len::Packed(self.pack_len())
-        } else {
-            Len::Indices((self.dense.as_ptr(), self.dense.len()))
-        }
+    fn len(&self) -> Option<usize> {
+        Some(View::len(&self))
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -128,23 +106,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for ViewMut<'a, T> {
     fn into_abstract(self) -> Self::AbsView {
         self.into_raw()
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        let pack_types = self.pack_types_owned();
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(self.len())
-        } else if type_ids.len() == pack_types.len()
-            && pack_types
-                .iter()
-                .zip(type_ids.iter())
-                .all(|(pack_type_id, type_id)| pack_type_id == type_id)
-        {
-            Len::Packed(self.pack_len())
-        } else {
-            Len::Indices((self.dense.as_ptr(), self.dense.len()))
-        }
+    fn len(&self) -> Option<usize> {
+        Some(ViewMut::len(&self))
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -153,23 +122,14 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b ViewMut<'a, T> {
     fn into_abstract(self) -> Self::AbsView {
         self.as_non_mut()
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        let pack_types = self.pack_types_owned();
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(self.len())
-        } else if type_ids.len() == pack_types.len()
-            && pack_types
-                .iter()
-                .zip(type_ids.iter())
-                .all(|(pack_type_id, type_id)| pack_type_id == type_id)
-        {
-            Len::Packed(self.pack_len())
-        } else {
-            Len::Indices((self.dense.as_ptr(), self.dense.len()))
-        }
+    fn len(&self) -> Option<usize> {
+        Some(ViewMut::len(&self))
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -178,23 +138,14 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut ViewMut<'a, 
     fn into_abstract(self) -> Self::AbsView {
         self.raw()
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        let pack_types = self.pack_types_owned();
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(self.len())
-        } else if type_ids.len() == pack_types.len()
-            && pack_types
-                .iter()
-                .zip(type_ids.iter())
-                .all(|(pack_type_id, type_id)| pack_type_id == type_id)
-        {
-            Len::Packed(self.pack_len())
-        } else {
-            Len::Indices((self.dense.as_ptr(), self.dense.len()))
-        }
+    fn len(&self) -> Option<usize> {
+        Some(ViewMut::len(&self))
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -203,15 +154,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<View<'a, T>> {
     fn into_abstract(self) -> Self::AbsView {
         self
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -220,15 +170,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for &Not<View<'a, T>> {
     fn into_abstract(self) -> Self::AbsView {
         self
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -237,15 +186,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<&View<'a, T>> {
     fn into_abstract(self) -> Self::AbsView {
         self
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -254,15 +202,14 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<ViewMut<'a, T>> {
     fn into_abstract(self) -> Self::AbsView {
         Not(self.0.into_raw())
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -271,15 +218,14 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b Not<ViewMut<'a, 
     fn into_abstract(self) -> Self::AbsView {
         Not(self.0.as_non_mut())
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -288,15 +234,14 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut Not<ViewMut<
     fn into_abstract(self) -> Self::AbsView {
         Not(self.0.raw())
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -305,15 +250,14 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b ViewMut<'a, 
     fn into_abstract(self) -> Self::AbsView {
         Not(self.0.as_non_mut())
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -322,15 +266,14 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b mut ViewMut<
     fn into_abstract(self) -> Self::AbsView {
         Not(self.0.raw())
     }
-    fn indices(&self, type_ids: &[TypeId]) -> Len {
-        if type_ids.len() == 1 && type_ids[0] == TypeId::of::<T>() {
-            Len::Packed(0)
-        } else {
-            Len::Indices((self.0.dense.as_ptr(), std::usize::MAX))
-        }
+    fn len(&self) -> Option<usize> {
+        None
     }
-    fn add_type_id(type_ids: &mut Vec<TypeId>) {
-        type_ids.push(TypeId::of::<T>());
+    fn pack_info(&self) -> &PackInfo {
+        &self.0.pack_info
+    }
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
 }
 
@@ -345,10 +288,14 @@ pub trait AbstractMut: Clone + Send {
     unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out>;
     // # Safety
     // The lifetime has to be valid
+    unsafe fn abs_get_unchecked(&mut self, entity: Key) -> Self::Out;
+    // # Safety
+    // The lifetime has to be valid
     unsafe fn get_data(&mut self, index: usize) -> Self::Out;
     // # Safety
     // The lifetime has to be valid
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
+    fn indices(&self) -> *const Key;
 }
 
 impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
@@ -364,6 +311,10 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
             None
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, entity: Key) -> Self::Out {
+        self.data
+            .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+    }
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
         &*self.data.as_ptr().add(index)
     }
@@ -372,6 +323,9 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
             self.data.as_ptr().add(indices.start),
             indices.end - indices.start,
         )
+    }
+    fn indices(&self) -> *const Key {
+        self.dense.as_ptr()
     }
 }
 
@@ -388,6 +342,10 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
             None
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, entity: Key) -> Self::Out {
+        self.data
+            .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+    }
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
         &*self.data.as_ptr().add(index)
     }
@@ -396,6 +354,9 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
             self.data.as_ptr().add(indices.start),
             indices.end - indices.start,
         )
+    }
+    fn indices(&self) -> *const Key {
+        self.dense.as_ptr()
     }
 }
 
@@ -409,11 +370,17 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
             None
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, entity: Key) -> Self::Out {
+        &mut *(self.data.add(*self.sparse.get_unchecked(entity.index())) as *mut _)
+    }
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
         &mut *self.data.add(index)
     }
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
         std::slice::from_raw_parts_mut(self.data.add(indices.start), indices.end - indices.start)
+    }
+    fn indices(&self) -> *const Key {
+        self.dense.as_ptr()
     }
 }
 
@@ -427,10 +394,14 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
             Some(())
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
         unreachable!()
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
+        unreachable!()
+    }
+    fn indices(&self) -> *const Key {
         unreachable!()
     }
 }
@@ -445,10 +416,14 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
             Some(())
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
         unreachable!()
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
+        unreachable!()
+    }
+    fn indices(&self) -> *const Key {
         unreachable!()
     }
 }
@@ -463,10 +438,14 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
             Some(())
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
         unreachable!()
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
+        unreachable!()
+    }
+    fn indices(&self) -> *const Key {
         unreachable!()
     }
 }
@@ -481,73 +460,14 @@ impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
             Some(())
         }
     }
+    unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
     unsafe fn get_data(&mut self, _: usize) -> Self::Out {
         unreachable!()
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
     }
-}
-
-macro_rules! impl_abstract_mut {
-    ($(($type: ident, $index: tt))+) => {
-        impl<$($type: IntoAbstract),+> IntoAbstract for ($($type,)+) {
-            type AbsView = ($($type::AbsView,)+);
-            fn into_abstract(self) -> Self::AbsView {
-                ($(self.$index.into_abstract(),)+)
-            }
-            // Recursively calls indices, if one of them can pack owned, return it
-            // else return the smallest len
-            fn indices(&self, type_ids: &[TypeId]) -> Len {
-                let lens = [
-                    $({
-                        let len = self.$index.indices(type_ids);
-                        if let Len::Packed(_) = len {
-                            return len;
-                        }
-                        len
-                    },)+
-                ];
-                *lens.iter().min_by(|len1, len2| if let Len::Indices(len1) = len1 {
-                    if let Len::Indices(len2) = len2 {
-                        len1.1.cmp(&len2.1)
-                    } else {
-                        unreachable!()
-                    }
-                } else {
-                    unreachable!()
-                }).unwrap()
-            }
-            fn add_type_id(type_ids: &mut Vec<TypeId>) {
-                $(
-                    $type::add_type_id(type_ids);
-                )+
-            }
-        }
-        impl<$($type: AbstractMut),+> AbstractMut for ($($type,)+) {
-            type Out = ($($type::Out,)+);
-            type Slice = ($($type::Slice,)+);
-            unsafe fn abs_get(&mut self, entity: Key) -> Option<Self::Out> {
-                Some(($(self.$index.abs_get(entity)?,)+))
-            }
-            unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                ($(self.$index.get_data(index),)+)
-            }
-            unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
-                ($(self.$index.get_data_slice(indices.clone()),)+)
-            }
-        }
-    };
-}
-
-macro_rules! abstract_mut {
-    ($(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_abstract_mut![$(($type, $index))*];
-        abstract_mut![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
-    };
-    ($(($type: ident, $index: tt))*;) => {
-        impl_abstract_mut![$(($type, $index))*];
+    fn indices(&self) -> *const Key {
+        unreachable!()
     }
 }
-
-abstract_mut![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

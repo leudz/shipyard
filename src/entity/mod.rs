@@ -102,10 +102,6 @@ impl Default for Entities {
 }
 
 impl Entities {
-    /// Returns a valid Key, reuse removed Key when possible
-    pub(crate) fn generate(&mut self) -> Key {
-        self.view_mut().generate()
-    }
     pub(crate) fn view(&self) -> EntitiesView {
         EntitiesView { data: &self.data }
     }
@@ -117,61 +113,57 @@ impl Entities {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn key() {
-        let mut key = Key::new(0);
-        assert_eq!(key.index(), 0);
-        assert_eq!(key.version(), 0);
-        key.set_index(701);
-        assert_eq!(key.index(), 701);
-        assert_eq!(key.version(), 0);
-        key.bump_version().unwrap();
-        key.bump_version().unwrap();
-        key.bump_version().unwrap();
-        assert_eq!(key.index(), 701);
-        assert_eq!(key.version(), 3);
-        key.set_index(554);
-        assert_eq!(key.index(), 554);
-        assert_eq!(key.version(), 3);
-    }
-    #[test]
-    fn entities() {
-        let mut entities = Entities::default();
+#[test]
+fn key() {
+    let mut key = Key::new(0);
+    assert_eq!(key.index(), 0);
+    assert_eq!(key.version(), 0);
+    key.set_index(701);
+    assert_eq!(key.index(), 701);
+    assert_eq!(key.version(), 0);
+    key.bump_version().unwrap();
+    key.bump_version().unwrap();
+    key.bump_version().unwrap();
+    assert_eq!(key.index(), 701);
+    assert_eq!(key.version(), 3);
+    key.set_index(554);
+    assert_eq!(key.index(), 554);
+    assert_eq!(key.version(), 3);
+}
+#[test]
+fn entities() {
+    let mut entities = Entities::default();
 
-        let key00 = entities.generate();
-        let key10 = entities.generate();
+    let key00 = entities.view_mut().generate();
+    let key10 = entities.view_mut().generate();
 
-        assert_eq!(key00.index(), 0);
-        assert_eq!(key00.version(), 0);
-        assert_eq!(key10.index(), 1);
-        assert_eq!(key10.version(), 0);
+    assert_eq!(key00.index(), 0);
+    assert_eq!(key00.version(), 0);
+    assert_eq!(key10.index(), 1);
+    assert_eq!(key10.version(), 0);
 
-        assert!(entities.view_mut().delete_key(key00));
-        assert!(!entities.view_mut().delete_key(key00));
-        let key01 = entities.generate();
+    assert!(entities.view_mut().delete_key(key00));
+    assert!(!entities.view_mut().delete_key(key00));
+    let key01 = entities.view_mut().generate();
 
-        assert_eq!(key01.index(), 0);
-        assert_eq!(key01.version(), 1);
+    assert_eq!(key01.index(), 0);
+    assert_eq!(key01.version(), 1);
 
-        assert!(entities.view_mut().delete_key(key10));
-        assert!(entities.view_mut().delete_key(key01));
-        let key11 = entities.generate();
-        let key02 = entities.generate();
+    assert!(entities.view_mut().delete_key(key10));
+    assert!(entities.view_mut().delete_key(key01));
+    let key11 = entities.view_mut().generate();
+    let key02 = entities.view_mut().generate();
 
-        assert_eq!(key11.index(), 1);
-        assert_eq!(key11.version(), 1);
-        assert_eq!(key02.index(), 0);
-        assert_eq!(key02.version(), 2);
+    assert_eq!(key11.index(), 1);
+    assert_eq!(key11.version(), 1);
+    assert_eq!(key02.index(), 0);
+    assert_eq!(key02.version(), 2);
 
-        let last_key = Key(!(!0 >> 15));
-        entities.data[0] = last_key;
-        assert!(entities.view_mut().delete_key(last_key));
-        assert_eq!(entities.list, None);
-        let dead = entities.generate();
-        assert_eq!(dead.index(), 2);
-        assert_eq!(dead.version(), 0);
-    }
+    let last_key = Key(!(!0 >> 15));
+    entities.data[0] = last_key;
+    assert!(entities.view_mut().delete_key(last_key));
+    assert_eq!(entities.list, None);
+    let dead = entities.view_mut().generate();
+    assert_eq!(dead.index(), 2);
+    assert_eq!(dead.version(), 0);
 }

@@ -2,12 +2,12 @@ mod pack;
 mod pipeline;
 mod register;
 
-use crate::atomic_refcell::{AtomicRefCell, RefMut};
+use crate::atomic_refcell::AtomicRefCell;
 use crate::component_storage::AllStorages;
 use crate::entity::Entities;
 use crate::error;
 use crate::run::Run;
-use pack::TightPack;
+use pack::{LoosePack, TightPack};
 use pipeline::{Pipeline, Workload};
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -143,7 +143,7 @@ impl World {
     /// let world = World::new::<(usize, u32)>();
     /// world.try_tight_pack::<(usize, u32)>().unwrap();
     /// ```
-    pub fn try_tight_pack<'a, T: TightPack>(&self) -> Result<(), error::Pack> {
+    pub fn try_tight_pack<T: TightPack>(&self) -> Result<(), error::Pack> {
         T::try_tight_pack(&self.storages)
     }
     /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
@@ -157,6 +157,18 @@ impl World {
     /// ```
     pub fn tight_pack<T: TightPack>(&self) {
         self.try_tight_pack::<T>().unwrap()
+    }
+    pub fn try_loose_pack<T, L>(&self) -> Result<(), error::Pack>
+    where
+        (T, L): LoosePack,
+    {
+        <(T, L)>::try_loose_pack(&self.storages)
+    }
+    pub fn loose_pack<T, L>(&self)
+    where
+        (T, L): LoosePack,
+    {
+        <(T, L)>::try_loose_pack(&self.storages).unwrap()
     }
     /// Modifies the current default workload to `name`.
     pub fn try_set_default_workload(
@@ -210,7 +222,7 @@ impl World {
     ///
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2, 3));
     ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
@@ -262,7 +274,7 @@ impl World {
     ///
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(entities, usizes, u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2, 3));
     ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));

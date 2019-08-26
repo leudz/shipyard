@@ -34,9 +34,11 @@ fn is_in_acid(pos: &Position) -> bool {
     true
 }
 
-let world = World::default();
+let world = World::new::<(Position, Health)>();
 
-world.new_entity((Position { x: 0.0, y: 0.0 }, Health(1000.0)));
+world.run::<(EntitiesMut, &mut Position, &mut Health), _>(|mut entities, mut pos, mut health| {
+    entities.add_entity((&mut pos, &mut health), Position { x: 0.0, y: 0.0 }, Health(1000.0));
+});
 
 world.add_workload("In acid", InAcid);
 world.run_default();

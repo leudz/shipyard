@@ -1,6 +1,5 @@
-use super::PackInfo;
+use super::{Pack, PackInfo};
 use crate::entity::Key;
-use std::any::TypeId;
 
 /// Immutable view into a `ComponentStorage`.
 pub struct View<'a, T> {
@@ -102,8 +101,8 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     pub(crate) fn remove(&mut self, entity: Key) -> Option<T> {
         if self.contains(entity) {
             let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
-            match self.pack_info {
-                PackInfo::Tight(pack_info) => {
+            match &mut self.pack_info.pack {
+                Pack::Tight(pack_info) => {
                     let pack_len = pack_info.len;
                     if dense_index < pack_len {
                         pack_info.len -= 1;
@@ -118,7 +117,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                         dense_index = pack_len - 1;
                     }
                 }
-                PackInfo::Loose(pack_info) => {
+                Pack::Loose(pack_info) => {
                     let pack_len = pack_info.len;
                     if dense_index < pack_len {
                         pack_info.len -= 1;
@@ -133,7 +132,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                         dense_index = pack_len - 1;
                     }
                 }
-                PackInfo::NoPack => {}
+                Pack::NoPack => {}
             }
             unsafe {
                 *self
@@ -179,54 +178,48 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     pub(crate) fn pack(&mut self, entity: Key) {
         if self.contains(entity) {
             let dense_index = self.sparse[entity.index()];
-            match self.pack_info {
-                PackInfo::Tight(pack_info) => {
-                    if dense_index >= pack_info.len {
+            match &mut self.pack_info.pack {
+                Pack::Tight(pack) => {
+                    if dense_index >= pack.len {
                         self.sparse
-                            .swap(self.dense[pack_info.len].index(), entity.index());
-                        self.dense.swap(pack_info.len, dense_index);
-                        self.data.swap(pack_info.len, dense_index);
-                        pack_info.len += 1;
+                            .swap(self.dense[pack.len].index(), entity.index());
+                        self.dense.swap(pack.len, dense_index);
+                        self.data.swap(pack.len, dense_index);
+                        pack.len += 1;
                     }
                 }
-                _ => {}
+                Pack::Loose(pack) => {
+                    if dense_index >= pack.len {
+                        self.sparse
+                            .swap(self.dense[pack.len].index(), entity.index());
+                        self.dense.swap(pack.len, dense_index);
+                        self.data.swap(pack.len, dense_index);
+                        pack.len += 1;
+                    }
+                }
+                Pack::NoPack => {}
             }
         }
     }
     pub(crate) fn unpack(&mut self, entity: Key) {
         let dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
-        match self.pack_info {
-            PackInfo::Tight(pack_info) => {
-                let pack_len = pack_info.len;
-                if dense_index < pack_len {
-                    pack_info.len -= 1;
+        match &mut self.pack_info.pack {
+            Pack::Tight(_) => {}
+            Pack::Loose(pack) => {
+                if dense_index < pack.len {
+                    pack.len -= 1;
                     // swap index and last packed element (can be the same)
                     unsafe {
                         *self
                             .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(pack_len - 1).index()) =
+                            .get_unchecked_mut(self.dense.get_unchecked(pack.len - 1).index()) =
                             dense_index;
                     }
-                    self.dense.swap(dense_index, pack_len - 1);
-                    self.data.swap(dense_index, pack_len - 1);
+                    self.dense.swap(dense_index, pack.len - 1);
+                    self.data.swap(dense_index, pack.len - 1);
                 }
             }
-            PackInfo::Loose(pack_info) => {
-                let pack_len = pack_info.len;
-                if dense_index < pack_len {
-                    pack_info.len -= 1;
-                    // swap index and last packed element (can be the same)
-                    unsafe {
-                        *self
-                            .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(pack_len - 1).index()) =
-                            dense_index;
-                    }
-                    self.dense.swap(dense_index, pack_len - 1);
-                    self.data.swap(dense_index, pack_len - 1);
-                }
-            }
-            PackInfo::NoPack => {}
+            Pack::NoPack => {}
         }
     }
 }

@@ -6,6 +6,7 @@ use std::fmt::{Debug, Display, Formatter};
 /// Unique means the BorrowState was mutably borrowed when an illegal borrow occured.
 ///
 /// Shared means the BorrowState was immutably borrowed when an illegal borrow occured.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Borrow {
     Unique,
     Shared,
@@ -35,6 +36,7 @@ impl Display for Borrow {
 /// StorageBorrow means this storage is already borrowed.
 ///
 /// MissingComponent signify no storage exists for this type.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
     StorageBorrow(Borrow),
@@ -72,6 +74,7 @@ impl Display for GetStorage {
 /// AllStoragesBorrow means an add_storage operation is in progress.
 ///
 /// Entities means entities is already borrowed.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NewEntity {
     AllStoragesBorrow(Borrow),
     Entities(Borrow),
@@ -102,6 +105,7 @@ impl Display for NewEntity {
 
 /// If a storage is packed_owned all storages packed with it have to be
 /// passed in the add_component call even if no components are added.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
     // `TypeId` of the storage requirering more storages
     MissingPackStorage(TypeId),
@@ -123,10 +127,10 @@ impl Display for AddComponent {
     }
 }
 
-/// Error related to [World::pack_owned] and [World::try_pack_owned].
-///
-/// [World::pack_owned]: ../struct.World.html#method.pack_owned
-/// [World::try_pack_owned]: ../struct.World.html#method.try_pack_owned
+/// Error occuring when a pack can't be made.
+/// It can be a borrow issue or one of the storage can alreadyhave
+/// an incompatible pack.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Pack {
     GetStorage(GetStorage),
     AlreadyTightPack(TypeId),
@@ -165,6 +169,7 @@ impl Display for Pack {
 /// with it must be passed to the function.
 ///
 /// This error occurs when there is a missing storage, `TypeId` will indicate which storage.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Remove {
     MissingPackStorage(TypeId),
 }
@@ -184,6 +189,7 @@ impl Display for Remove {
 }
 
 /// Trying to set the default workload to a non existant one will result in this error.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SetDefaultWorkload {
     Borrow(Borrow),
     MissingWorkload,
@@ -218,6 +224,7 @@ impl Display for SetDefaultWorkload {
 }
 
 /// Try to run a non existant workload.
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RunWorkload {
     Borrow(Borrow),
     MissingWorkload,

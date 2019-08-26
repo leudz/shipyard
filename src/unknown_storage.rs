@@ -1,5 +1,6 @@
 use crate::entity::Key;
 use crate::sparse_array::SparseArray;
+use std::any::TypeId;
 
 // When removing an entity all its components have to be removed.
 // These components are stored in HashMap<TypeId, Box<dyn Any>> to be able to store multiple types in the HashMap.
@@ -19,12 +20,17 @@ use crate::sparse_array::SparseArray;
 // All of this is temporary, the std will provide a way to get the vtable of a trait object
 // in the future. Until then this hack works as long as trait objects' fat pointer don't
 // change representation.
-pub(super) trait Delete {
-    fn delete(&mut self, entity: Key);
+pub(super) trait UnknownStorage {
+    fn delete(&mut self, entity: Key) -> &[TypeId];
+    fn unpack(&mut self, entitiy: Key);
 }
 
-impl<T: 'static> Delete for SparseArray<T> {
-    fn delete(&mut self, entity: Key) {
+impl<T: 'static> UnknownStorage for SparseArray<T> {
+    fn delete(&mut self, entity: Key) -> &[TypeId] {
         self.remove(entity);
+        &self.pack_info.observer_types
+    }
+    fn unpack(&mut self, entity: Key) {
+        Self::unpack(self, entity);
     }
 }

@@ -1,6 +1,6 @@
 use crate::entity::Key;
 use crate::error;
-use crate::sparse_array::{PackInfo, ViewMut};
+use crate::sparse_array::{Pack, ViewMut};
 use std::any::TypeId;
 
 pub trait Removable {
@@ -85,10 +85,16 @@ pub trait Remove<T: Removable> {
 
 impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
     fn try_remove(self, entity: Key) -> Result<<(T,) as Removable>::Out, error::Remove> {
-        match self.pack_info {
-            PackInfo::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-            PackInfo::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-            PackInfo::NoPack => Ok((self.remove(entity),)),
+        match self.pack_info.pack {
+            Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+            Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+            Pack::NoPack => {
+                if self.pack_info.observer_types.is_empty() {
+                    Ok((self.remove(entity),))
+                } else {
+                    Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+                }
+            }
         }
     }
     fn remove(self, entity: Key) -> <(T,) as Removable>::Out {
@@ -107,37 +113,26 @@ macro_rules! impl_removable {
 macro_rules! impl_remove {
     // add is short for additional
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
+
         impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_remove(self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
-                // non packed storages should not pay the price of pack
-                let mut packed = false;
-                $(
-                    if std::mem::discriminant(self.$index.pack_info) != std::mem::discriminant(&PackInfo::NoPack) {
-                        packed = true;
-                    }
-                )+
 
-                if packed {
-                    let mut all_types = [$(TypeId::of::<$type>(),)+ $(TypeId::of::<$add_type>()),*];
-                    all_types.sort_unstable();
-                    let mut should_unpack = Vec::new();
+                // non packed storages should not pay the price of pack
+                if $(std::mem::discriminant(&self.$index.pack_info.pack) != std::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
+                    let mut types = [$(TypeId::of::<$type>()),+];
+                    types.sort_unstable();
+                    let mut add_types = [$(TypeId::of::<$add_type>()),*];
+                    add_types.sort_unstable();
+
+                    let mut should_unpack = Vec::with_capacity(types.len() + add_types.len());
                     $(
-                        if !should_unpack.contains(&TypeId::of::<$type>()) {
-                            match self.$index.pack_info {
-                                PackInfo::Tight(pack) => {
-                                    if pack.check_types(&all_types, &[]).0 {
-                                        return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()));
-                                    }
-                                    should_unpack.extend_from_slice(&pack.types);
-                                }
-                                PackInfo::Loose(pack) => {
-                                    if pack.check_types(&all_types, &[]).0 {
-                                        return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()));
-                                    }
-                                    should_unpack.extend_from_slice(&pack.tight_types);
-                                }
-                                PackInfo::NoPack => {}
+                        match self.$index.pack_info.check_types(&types, &add_types, true) {
+                            Ok(_) => match &self.$index.pack_info.pack {
+                                Pack::Tight(_) => {},
+                                Pack::Loose(pack) => should_unpack.extend_from_slice(&pack.loose_types),
+                                Pack::NoPack => {},
                             }
+                            Err(_) => return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()))
                         }
                     )+
 

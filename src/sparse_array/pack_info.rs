@@ -2,15 +2,76 @@ use std::any::TypeId;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-pub(crate) enum PackInfo {
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum Pack {
     Tight(TightPack),
     Loose(LoosePack),
     NoPack,
 }
 
+pub struct PackInfo {
+    pub(crate) pack: Pack,
+    pub(crate) observer_types: Vec<TypeId>,
+}
+
 impl Default for PackInfo {
     fn default() -> Self {
-        PackInfo::NoPack
+        PackInfo {
+            pack: Pack::NoPack,
+            observer_types: Vec::new(),
+        }
+    }
+}
+
+impl PackInfo {
+    /// `components` is a sorted slice of all types this entity has.
+    /// `additional` is a sorted slice of types this entity might have.
+    pub(crate) fn check_types(
+        &self,
+        components: &[TypeId],
+        additional: &[TypeId],
+        ignore_loose_type: bool,
+    ) -> Result<&[TypeId], ()> {
+        let mut self_types: Vec<_> = match &self.pack {
+            Pack::Tight(pack) => pack
+                .types
+                .iter()
+                .copied()
+                .chain(self.observer_types.iter().copied())
+                .collect(),
+            Pack::Loose(pack) => {
+                if ignore_loose_type {
+                    pack.tight_types
+                        .iter()
+                        .copied()
+                        .chain(self.observer_types.iter().copied())
+                        .collect()
+                } else {
+                    pack.tight_types
+                        .iter()
+                        .copied()
+                        .chain(pack.loose_types.iter().copied())
+                        .chain(self.observer_types.iter().copied())
+                        .collect()
+                }
+            }
+            Pack::NoPack => self.observer_types.iter().copied().collect(),
+        };
+
+        self_types.sort_unstable();
+
+        let (all_types, should_pack) = check_types(&self_types, components, additional);
+        if all_types && should_pack {
+            Ok(match &self.pack {
+                Pack::Tight(pack) => &pack.types,
+                Pack::Loose(pack) => &pack.tight_types,
+                Pack::NoPack => &[],
+            })
+        } else if all_types {
+            Ok(&[])
+        } else {
+            Err(())
+        }
     }
 }
 
@@ -23,13 +84,12 @@ impl TightPack {
     pub(crate) fn new(types: Arc<[TypeId]>) -> Self {
         TightPack { types, len: 0 }
     }
-    /// The first returned `bool` is true if all packed types are present.
-    /// in either `components` or `additional`.
-    /// The second returned `bool` is true when all pack types are contained in `components`.
-    /// `components` is a sorted slice of all types this entity has.
-    /// `additional` is a sorted slice of types this entity might have.
-    pub(crate) fn check_types(&self, components: &[TypeId], additional: &[TypeId]) -> (bool, bool) {
-        check_types(&self.types, components, additional)
+    pub(crate) fn check_types(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+        if check_types(&self.types, &components, &[]) == (true, true) {
+            Ok(&self.types)
+        } else {
+            Err(())
+        }
     }
 }
 
@@ -40,29 +100,26 @@ pub(crate) struct LoosePack {
 }
 
 impl LoosePack {
-    fn new(tight_types: Arc<[TypeId]>, loose_types: Arc<[TypeId]>) -> Self {
+    pub(crate) fn new(tight_types: Arc<[TypeId]>, loose_types: Arc<[TypeId]>) -> Self {
         LoosePack {
             tight_types,
             loose_types,
             len: 0,
         }
     }
-
-    /// The first returned `bool` is true if all packed types are present.
-    /// in either `components` or `additional`.
-    /// The second returned `bool` is true when all pack types are contained in `components`.
-    /// `components` is a sorted slice of all types this entity has.
-    /// `additional` is a sorted slice of types this entity might have.
-    pub(crate) fn check_types(&self, components: &[TypeId], additional: &[TypeId]) -> (bool, bool) {
-        let mut self_types: Vec<_> = self
+    pub(crate) fn check_all_types(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+        let mut all_types: Vec<_> = self
             .tight_types
             .iter()
             .copied()
             .chain(self.loose_types.iter().copied())
             .collect();
-        self_types.sort_unstable();
-
-        check_types(&self_types, components, additional)
+        all_types.sort_unstable();
+        if check_types(&all_types, &components, &[]) == (true, true) {
+            Ok(&self.tight_types)
+        } else {
+            Err(())
+        }
     }
 }
 
@@ -128,7 +185,7 @@ fn check_types(
         }
     }
 
-    if packed == self_types.len() && comp == components.len() && add == additional.len() {
+    if packed == self_types.len() {
         (true, packed == comp)
     } else {
         (false, false)

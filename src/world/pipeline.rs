@@ -159,152 +159,148 @@ macro_rules! pipeline {
 
 pipeline![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn single_immutable() {
-        struct System1;
-        impl<'a> System<'a> for System1 {
-            type Data = (&'a usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-
-        let mut pipeline = Pipeline::default();
-        System1.into_workload("System1".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 1);
-        assert_eq!(pipeline.batch.len(), 1);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("System1"), Some(&(0..1)));
-        assert_eq!(pipeline.default, 0..1);
+#[test]
+fn single_immutable() {
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
     }
-    #[test]
-    fn single_mutable() {
-        struct System1;
-        impl<'a> System<'a> for System1 {
-            type Data = (&'a mut usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
 
-        let mut pipeline = Pipeline::default();
-        System1.into_workload("System1".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 1);
-        assert_eq!(pipeline.batch.len(), 1);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("System1"), Some(&(0..1)));
-        assert_eq!(pipeline.default, 0..1);
+    let mut pipeline = Pipeline::default();
+    System1.into_workload("System1".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 1);
+    assert_eq!(pipeline.batch.len(), 1);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("System1"), Some(&(0..1)));
+    assert_eq!(pipeline.default, 0..1);
+}
+#[test]
+fn single_mutable() {
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a mut usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
     }
-    #[test]
-    fn multiple_immutable() {
-        struct System1;
-        impl<'a> System<'a> for System1 {
-            type Data = (&'a usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-        struct System2;
-        impl<'a> System<'a> for System2 {
-            type Data = (&'a usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
 
-        let mut pipeline = Pipeline::default();
-        (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 2);
-        assert_eq!(pipeline.batch.len(), 1);
-        assert_eq!(&*pipeline.batch[0], &[0, 1]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..1)));
-        assert_eq!(pipeline.default, 0..1);
+    let mut pipeline = Pipeline::default();
+    System1.into_workload("System1".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 1);
+    assert_eq!(pipeline.batch.len(), 1);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("System1"), Some(&(0..1)));
+    assert_eq!(pipeline.default, 0..1);
+}
+#[test]
+fn multiple_immutable() {
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
     }
-    #[test]
-    fn multiple_mutable() {
-        struct System1;
-        impl<'a> System<'a> for System1 {
-            type Data = (&'a mut usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-        struct System2;
-        impl<'a> System<'a> for System2 {
-            type Data = (&'a mut usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-
-        let mut pipeline = Pipeline::default();
-        (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 2);
-        assert_eq!(pipeline.batch.len(), 2);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(&*pipeline.batch[1], &[1]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
-        assert_eq!(pipeline.default, 0..2);
+    struct System2;
+    impl<'a> System<'a> for System2 {
+        type Data = (&'a usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
     }
-    #[test]
-    fn multiple_mixed() {
-        struct System1;
-        impl<'a> System<'a> for System1 {
-            type Data = (&'a mut usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-        struct System2;
-        impl<'a> System<'a> for System2 {
-            type Data = (&'a usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
 
-        let mut pipeline = Pipeline::default();
-        (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 2);
-        assert_eq!(pipeline.batch.len(), 2);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(&*pipeline.batch[1], &[1]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
-        assert_eq!(pipeline.default, 0..2);
-
-        let mut pipeline = Pipeline::default();
-        (System2, System1).into_workload("Systems".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 2);
-        assert_eq!(pipeline.batch.len(), 2);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(&*pipeline.batch[1], &[1]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
-        assert_eq!(pipeline.default, 0..2);
+    let mut pipeline = Pipeline::default();
+    (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 2);
+    assert_eq!(pipeline.batch.len(), 1);
+    assert_eq!(&*pipeline.batch[0], &[0, 1]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..1)));
+    assert_eq!(pipeline.default, 0..1);
+}
+#[test]
+fn multiple_mutable() {
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a mut usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
     }
-    #[test]
-    fn all_storages() {
-        struct System1;
-        impl<'a> System<'a> for System1 {
-            type Data = (&'a usize,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-        struct System2;
-        impl<'a> System<'a> for System2 {
-            type Data = (AllStorages,);
-            fn run(&self, _: <Self::Data as SystemData>::View) {}
-        }
-
-        let mut pipeline = Pipeline::default();
-        (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 2);
-        assert_eq!(pipeline.batch.len(), 2);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(&*pipeline.batch[1], &[1]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
-        assert_eq!(pipeline.default, 0..2);
-
-        let mut pipeline = Pipeline::default();
-        (System2, System1).into_workload("Systems".to_string(), &mut pipeline);
-        assert_eq!(pipeline.systems.len(), 2);
-        assert_eq!(pipeline.batch.len(), 2);
-        assert_eq!(&*pipeline.batch[0], &[0]);
-        assert_eq!(&*pipeline.batch[1], &[1]);
-        assert_eq!(pipeline.workloads.len(), 1);
-        assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
-        assert_eq!(pipeline.default, 0..2);
+    struct System2;
+    impl<'a> System<'a> for System2 {
+        type Data = (&'a mut usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
     }
+
+    let mut pipeline = Pipeline::default();
+    (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 2);
+    assert_eq!(pipeline.batch.len(), 2);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(&*pipeline.batch[1], &[1]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
+    assert_eq!(pipeline.default, 0..2);
+}
+#[test]
+fn multiple_mixed() {
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a mut usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
+    }
+    struct System2;
+    impl<'a> System<'a> for System2 {
+        type Data = (&'a usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
+    }
+
+    let mut pipeline = Pipeline::default();
+    (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 2);
+    assert_eq!(pipeline.batch.len(), 2);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(&*pipeline.batch[1], &[1]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
+    assert_eq!(pipeline.default, 0..2);
+
+    let mut pipeline = Pipeline::default();
+    (System2, System1).into_workload("Systems".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 2);
+    assert_eq!(pipeline.batch.len(), 2);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(&*pipeline.batch[1], &[1]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
+    assert_eq!(pipeline.default, 0..2);
+}
+#[test]
+fn all_storages() {
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a usize,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
+    }
+    struct System2;
+    impl<'a> System<'a> for System2 {
+        type Data = (AllStorages,);
+        fn run(&self, _: <Self::Data as SystemData>::View) {}
+    }
+
+    let mut pipeline = Pipeline::default();
+    (System1, System2).into_workload("Systems".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 2);
+    assert_eq!(pipeline.batch.len(), 2);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(&*pipeline.batch[1], &[1]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
+    assert_eq!(pipeline.default, 0..2);
+
+    let mut pipeline = Pipeline::default();
+    (System2, System1).into_workload("Systems".to_string(), &mut pipeline);
+    assert_eq!(pipeline.systems.len(), 2);
+    assert_eq!(pipeline.batch.len(), 2);
+    assert_eq!(&*pipeline.batch[0], &[0]);
+    assert_eq!(&*pipeline.batch[1], &[1]);
+    assert_eq!(pipeline.workloads.len(), 1);
+    assert_eq!(pipeline.workloads.get("Systems"), Some(&(0..2)));
+    assert_eq!(pipeline.default, 0..2);
 }

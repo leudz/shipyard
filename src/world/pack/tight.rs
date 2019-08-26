@@ -2,7 +2,7 @@ use crate::atomic_refcell::{AtomicRefCell, Borrow};
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::component_storage::AllStorages;
 use crate::error;
-use crate::sparse_array::{PackInfo, SparseArray, TightPack as TightPackInfo};
+use crate::sparse_array::{Pack, SparseArray, TightPack as TightPackInfo};
 use std::any::TypeId;
 use std::sync::Arc;
 
@@ -12,6 +12,7 @@ pub trait TightPack {
 
 macro_rules! impl_tight_pack {
     ($(($type: ident, $index: tt))+) => {
+        #[allow(clippy::useless_let_if_seq)]
         impl<$($type: 'static),+> TightPack for ($($type,)+) {
             fn try_tight_pack(all_storages: &AtomicRefCell<AllStorages>) -> Result<(), error::Pack> {
                 let all_storages = all_storages.try_borrow().map_err(error::GetStorage::AllStoragesBorrow)?;
@@ -33,15 +34,15 @@ macro_rules! impl_tight_pack {
                 let type_ids: Arc<[_]> = type_ids.into();
 
                 $(
-                    match storages.$index.0.pack_info {
-                        PackInfo::Tight(_) => {
+                    match storages.$index.0.pack_info.pack {
+                        Pack::Tight(_) => {
                             return Err(error::Pack::AlreadyTightPack(TypeId::of::<$type>()));
                         },
-                        PackInfo::Loose(_) => {
+                        Pack::Loose(_) => {
                             return Err(error::Pack::AlreadyLoosePack(TypeId::of::<$type>()));
                         },
-                        PackInfo::NoPack => {
-                            storages.$index.0.pack_info = PackInfo::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
+                        Pack::NoPack => {
+                            storages.$index.0.pack_info.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
                         }
                     }
                 )+

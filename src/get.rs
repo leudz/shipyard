@@ -1,5 +1,4 @@
 use crate::entity::Key;
-use crate::not::Not;
 use crate::sparse_array::{View, ViewMut};
 
 /// Retrives components based on their type and entity key.
@@ -39,72 +38,6 @@ impl<'a: 'b, 'b, T: 'static> GetComponent for &'b mut ViewMut<'a, T> {
     type Out = &'b mut T;
     fn get(self, entity: Key) -> Option<Self::Out> {
         self.get_mut(entity)
-    }
-}
-
-impl<'a, 'b, T: 'static> GetComponent for &'b Not<View<'a, T>> {
-    type Out = ();
-    fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity) {
-            None
-        } else {
-            Some(())
-        }
-    }
-}
-
-impl<'a, 'b, T: 'static> GetComponent for Not<&'b View<'a, T>> {
-    type Out = ();
-    fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity) {
-            None
-        } else {
-            Some(())
-        }
-    }
-}
-
-impl<'a, 'b, T: 'static> GetComponent for &'b Not<ViewMut<'a, T>> {
-    type Out = ();
-    fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity) {
-            None
-        } else {
-            Some(())
-        }
-    }
-}
-
-impl<'a, 'b, T: 'static> GetComponent for Not<&'b ViewMut<'a, T>> {
-    type Out = ();
-    fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity) {
-            None
-        } else {
-            Some(())
-        }
-    }
-}
-
-impl<'a, 'b, T: 'static> GetComponent for &'b mut Not<ViewMut<'a, T>> {
-    type Out = ();
-    fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity) {
-            None
-        } else {
-            Some(())
-        }
-    }
-}
-
-impl<'a, 'b, T: 'static> GetComponent for Not<&'b mut ViewMut<'a, T>> {
-    type Out = ();
-    fn get(self, entity: Key) -> Option<Self::Out> {
-        if self.0.contains(entity) {
-            None
-        } else {
-            Some(())
-        }
     }
 }
 

@@ -17,27 +17,23 @@ impl Hasher for TypeIdHasher {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn hasher() {
-        fn verify<T: 'static + ?Sized>() {
-            use std::any::TypeId;
-            use std::hash::Hash;
+#[test]
+fn hasher() {
+    fn verify<T: 'static + ?Sized>() {
+        use std::any::TypeId;
+        use std::hash::Hash;
 
-            let mut hasher = TypeIdHasher::default();
-            let type_id = TypeId::of::<T>();
-            type_id.hash(&mut hasher);
-            assert_eq!(hasher.finish(), unsafe {
-                std::mem::transmute::<TypeId, u64>(type_id)
-            });
-        }
-
-        verify::<usize>();
-        verify::<()>();
-        verify::<str>();
-        verify::<&'static str>();
-        verify::<[u8; 20]>();
+        let mut hasher = TypeIdHasher::default();
+        let type_id = TypeId::of::<T>();
+        type_id.hash(&mut hasher);
+        assert_eq!(hasher.finish(), unsafe {
+            std::mem::transmute::<TypeId, u64>(type_id)
+        });
     }
+
+    verify::<usize>();
+    verify::<()>();
+    verify::<str>();
+    verify::<&'static str>();
+    verify::<[u8; 20]>();
 }

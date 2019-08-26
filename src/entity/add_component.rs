@@ -1,6 +1,6 @@
 use crate::entity::{EntitiesView, Key};
 use crate::error;
-use crate::sparse_array::{PackInfo, ViewMut};
+use crate::sparse_array::{Pack, ViewMut};
 use std::any::TypeId;
 
 // No new storage will be created
@@ -23,12 +23,17 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
         entities: &EntitiesView,
     ) -> Result<(), error::AddComponent> {
         if entities.is_alive(entity) {
-            match self.pack_info {
-                PackInfo::NoPack => {
-                    self.insert(component, entity);
-                    Ok(())
+            match self.pack_info.pack {
+                Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
+                Pack::NoPack => {
+                    if self.pack_info.observer_types.is_empty() {
+                        self.insert(component, entity);
+                        Ok(())
+                    } else {
+                        Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
+                    }
                 }
-                _ => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
             }
         } else {
             Err(error::AddComponent::EntityIsNotAlive)
@@ -45,54 +50,40 @@ macro_rules! impl_add_component {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)+)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_add_component(self, component: ($($type,)+), entity: Key, entities: &EntitiesView) -> Result<(), error::AddComponent> {
                 if entities.is_alive(entity) {
-
-                    // non packed storages should not pay the price of pack
-                    let mut packed = false;
-                    $(
-                        if std::mem::discriminant(self.$index.pack_info) != std::mem::discriminant(&PackInfo::NoPack) {
-                            packed = true;
-                        }
-                    )+
-
                     // checks if the caller has passed all necessary storages
                     // and list components we can pack
                     let mut should_pack = Vec::new();
-                    if packed {
-                        let mut all_types = [$(TypeId::of::<$type>(),)+ $(TypeId::of::<$add_type>()),*];
-                        all_types.sort_unstable();
-                        let mut type_ids = vec![$(TypeId::of::<$type>()),+];
+                    // non packed storages should not pay the price of pack
+                    if $(std::mem::discriminant(&self.$index.pack_info.pack) != std::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
+                        let mut type_ids = [$(TypeId::of::<$type>()),+];
+                        type_ids.sort_unstable();
+                        let mut add_types = [$(TypeId::of::<$add_type>()),*];
+                        add_types.sort_unstable();
+                        let mut real_types = Vec::with_capacity(type_ids.len() + add_types.len());
+                        real_types.extend_from_slice(&type_ids);
 
                         $(
                             if self.$add_index.contains(entity) {
-                                type_ids.push(TypeId::of::<$add_type>());
+                                real_types.push(TypeId::of::<$add_type>());
                             }
                         )*
+                        real_types.sort_unstable();
 
-                        type_ids.sort_unstable();
-
-                        should_pack.reserve(type_ids.len());
+                        should_pack.reserve(real_types.len());
                         $(
-                            if !should_pack.contains(&TypeId::of::<$type>()) {
-                                match self.$index.pack_info {
-                                    PackInfo::Tight(pack) => {
-                                        let (missing_storage, is_packed) = pack.check_types(&type_ids, &all_types);
-                                        if missing_storage {
-                                            return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()))
+                            if self.$index.pack_info.check_types(&type_ids, &add_types, false).is_err() {
+                                return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()));
+                            } else {
+                                if !should_pack.contains(&TypeId::of::<$type>()) {
+                                    match &self.$index.pack_info.pack {
+                                        Pack::Tight(pack) => if let Ok(types) = pack.check_types(&real_types) {
+                                            should_pack.extend_from_slice(types);
                                         }
-                                        if is_packed {
-                                            should_pack.extend_from_slice(&pack.types);
+                                        Pack::Loose(pack) => if let Ok(types) = pack.check_all_types(&real_types) {
+                                            should_pack.extend_from_slice(types);
                                         }
-                                    },
-                                    PackInfo::Loose(pack) => {
-                                        let (missing_storage, is_packed) = pack.check_types(&type_ids, &all_types);
-                                        if missing_storage {
-                                            return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()))
-                                        }
-                                        if is_packed {
-                                            should_pack.extend_from_slice(&pack.tight_types);
-                                        }
-                                    },
-                                    PackInfo::NoPack => {}
+                                        Pack::NoPack => {}
+                                    }
                                 }
                             }
                         )+
