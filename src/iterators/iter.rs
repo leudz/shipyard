@@ -262,7 +262,6 @@ macro_rules! impl_iterators {
 
                 let mut type_ids = [$(self.$index.type_id()),+];
                 type_ids.sort_unstable();
-                let mut already_checked = Vec::with_capacity(type_ids.len());
                 let mut smallest_index = std::usize::MAX;
                 let mut smallest = std::usize::MAX;
                 let mut i = 0;
@@ -270,41 +269,44 @@ macro_rules! impl_iterators {
 
                 $({
                     if let PackIter::None = pack_iter {
-                        let type_id = self.$index.type_id();
-
-                        if !already_checked.contains(&type_id) {
-                            match &self.$index.pack_info().pack {
-                                Pack::Tight(pack) => {
-                                    if pack.check_types(&type_ids).is_ok() {
-                                        if pack.types.len() == type_ids.len() {
-                                            pack_iter = PackIter::Tight;
-                                            smallest = pack.len;
-                                        } else if pack.len < smallest {
-                                            already_checked.extend_from_slice(&pack.types);
-                                            smallest = pack.len;
-                                            smallest_index = i;
-                                        }
+                        match &self.$index.pack_info().pack {
+                            Pack::Tight(pack) => {
+                                if let Ok(types) = pack.check_types(&type_ids) {
+                                    if types.len() == type_ids.len() {
+                                        pack_iter = PackIter::Tight;
+                                        smallest = pack.len;
+                                    } else if pack.len < smallest {
+                                        smallest = pack.len;
+                                        smallest_index = i;
                                     }
-                                }
-                                Pack::Loose(pack) => {
-                                    if pack.check_all_types(&type_ids).is_ok() {
-                                        if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
-                                            pack_iter = PackIter::Loose;
-                                            smallest = pack.len;
-                                            smallest_index = i;
-                                        } else if pack.len < smallest {
-                                            already_checked.extend_from_slice(&pack.tight_types);
-                                            already_checked.extend_from_slice(&pack.loose_types);
-                                            smallest = pack.len;
-                                            smallest_index = i;
-                                        }
-                                    }
-                                }
-                                Pack::NoPack => if let Some(len) = self.$index.len() {
+                                } else if let Some(len) = self.$index.len() {
                                     if len < smallest {
                                         smallest = len;
                                         smallest_index = i;
                                     }
+                                }
+                            }
+                            Pack::Loose(pack) => {
+                                if pack.check_all_types(&type_ids).is_ok() {
+                                    if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
+                                        pack_iter = PackIter::Loose;
+                                        smallest = pack.len;
+                                        smallest_index = i;
+                                    } else if pack.len < smallest {
+                                        smallest = pack.len;
+                                        smallest_index = i;
+                                    }
+                                } else if let Some(len) = self.$index.len() {
+                                    if len < smallest {
+                                        smallest = len;
+                                        smallest_index = i;
+                                    }
+                                }
+                            }
+                            Pack::NoPack => if let Some(len) = self.$index.len() {
+                                if len < smallest {
+                                    smallest = len;
+                                    smallest_index = i;
                                 }
                             }
                         }
@@ -368,7 +370,6 @@ macro_rules! impl_iterators {
                         })
                     }
                 }
-
             }
             #[cfg(feature = "parallel")]
             fn par_iter(self) -> Self::IntoParIter {

@@ -616,12 +616,17 @@ fn tight_loose_iterator() {
             panic!("not loose");
         }
         if let iterators::Iter2::Tight(mut iter) = (&usizes, &u64s).iter() {
-            assert_eq!(iter.next(), Some((&0, &1,)));
-            assert_eq!(iter.next(), Some((&3, &4,)));
-            assert_eq!(iter.next(), Some((&6, &7,)));
+            assert_eq!(iter.next(), Some((&0, &1)));
+            assert_eq!(iter.next(), Some((&3, &4)));
+            assert_eq!(iter.next(), Some((&6, &7)));
             assert_eq!(iter.next(), None);
         } else {
             panic!("not tight");
+        }
+        if let iterators::Iter2::NonPacked(mut iter) = (&usizes, &u32s).iter() {
+            assert_eq!(iter.next(), Some((&0, &2)));
+            assert_eq!(iter.next(), Some((&6, &8)));
+            assert_eq!(iter.next(), None);
         }
     });
 }
