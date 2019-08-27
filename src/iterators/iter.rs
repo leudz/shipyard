@@ -658,12 +658,12 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract),+> Iterator for $loose<$($type,)+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
-                while self.current < self.end {
+                if self.current < self.end {
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
                     let index = unsafe { std::ptr::read(self.indices.add(self.current)) };
                     self.current += 1;
-                    return Some(($({
+                    Some(($({
                         if (self.array >> $index) & 1 != 0 {
                             // SAFE the index is valid and the iterator can only be created where the lifetime is valid
                             unsafe { self.data.$index.get_data(self.current - 1) }
@@ -672,8 +672,18 @@ macro_rules! impl_iterators {
                             unsafe { self.data.$index.abs_get_unchecked(index) }
                         }
                     },)+))
+                } else {
+                    None
                 }
-                None
+            }
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (self.len(), Some(self.len()))
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> ExactSizeIterator for $loose<$($type),+> {
+            fn len(&self) -> usize {
+                self.end - self.current
             }
         }
 
