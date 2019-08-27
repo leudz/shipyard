@@ -128,9 +128,15 @@ macro_rules! impl_remove {
                     $(
                         match self.$index.pack_info.check_types(&types, &add_types) {
                             Ok(_) => match &self.$index.pack_info.pack {
-                                Pack::Tight(_) => {},
-                                Pack::Loose(pack) => should_unpack.extend_from_slice(&pack.loose_types),
-                                Pack::NoPack => {},
+                                Pack::Tight(pack) => {
+                                    should_unpack.extend_from_slice(&pack.types);
+                                    should_unpack.extend_from_slice(&self.$index.pack_info.observer_types);
+                                }
+                                Pack::Loose(pack) => {
+                                    should_unpack.extend_from_slice(&pack.tight_types);
+                                    should_unpack.extend_from_slice(&self.$index.pack_info.observer_types);
+                                }
+                                Pack::NoPack => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                             }
                             Err(_) => return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()))
                         }

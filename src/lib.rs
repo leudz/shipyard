@@ -656,6 +656,13 @@ fn remove_tight() {
         assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
         assert_eq!(usizes.get(entity2), Some(&2));
         assert_eq!(u32s.get(entity2), Some(&3));
+        let iter = (&usizes, &u32s).iter();
+        if let iterators::Iter2::Tight(mut iter) = iter {
+            assert_eq!(iter.next(), Some((&2, &3)));
+            assert_eq!(iter.next(), None);
+        } else {
+            panic!("not packed");
+        }
     });
 }
 
@@ -673,7 +680,48 @@ fn remove_loose() {
         assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
         assert_eq!(usizes.get(entity2), Some(&2));
         assert_eq!(u32s.get(entity2), Some(&3));
+        let mut iter = (&usizes, &u32s).iter();
+        assert_eq!(iter.next(), Some((&2, &3)));
+        assert_eq!(iter.next(), None);
     });
+}
+
+#[test]
+fn remove_tight_loose() {
+    let world = World::new::<(usize, u64, u32)>();
+    world.tight_pack::<(usize, u64)>();
+    world.loose_pack::<(u32,), (usize, u64)>();
+
+    world.run::<(EntitiesMut, &mut usize, &mut u64, &mut u32), _>(
+        |(mut entities, mut usizes, mut u64s, mut u32s)| {
+            let entity1 = entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2));
+            let entity2 = entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (3, 4, 5));
+            entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (6, 7, 8));
+            let component = Remove::<(u32,)>::remove((&mut u32s, &mut usizes, &mut u64s), entity1);
+            assert_eq!(component, (Some(2),));
+            let mut iter = (&usizes, &u64s).iter();
+            assert_eq!(iter.next(), Some((&0, &1)));
+            assert_eq!(iter.next(), Some((&3, &4)));
+            assert_eq!(iter.next(), Some((&6, &7)));
+            assert_eq!(iter.next(), None);
+            let iter = (&usizes, &u64s, &u32s).iter();
+            if let iterators::Iter3::Loose(mut iter) = iter {
+                assert_eq!(iter.next(), Some((&6, &7, &8)));
+                assert_eq!(iter.next(), Some((&3, &4, &5)));
+                assert_eq!(iter.next(), None);
+            }
+            let component =
+                Remove::<(usize,)>::remove((&mut usizes, &mut u32s, &mut u64s), entity2);
+            assert_eq!(component, (Some(3),));
+            let mut iter = (&usizes, &u64s).iter();
+            assert_eq!(iter.next(), Some((&0, &1)));
+            assert_eq!(iter.next(), Some((&6, &7)));
+            assert_eq!(iter.next(), None);
+            let mut iter = (&usizes, &u64s, &u32s).iter();
+            assert_eq!(iter.next(), Some((&6, &7, &8)));
+            assert_eq!(iter.next(), None);
+        },
+    );
 }
 
 #[test]

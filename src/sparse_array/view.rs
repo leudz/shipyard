@@ -204,21 +204,35 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     pub(crate) fn unpack(&mut self, entity: Key) {
         let dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
         match &mut self.pack_info.pack {
-            Pack::Tight(_) => {}
+            Pack::Tight(pack) => {
+                if dense_index < pack.len {
+                    pack.len -= 1;
+                    // swap index and last packed element (can be the same)
+                    unsafe {
+                        self.sparse.swap(
+                            self.dense.get_unchecked(pack.len).index(),
+                            self.dense.get_unchecked(dense_index).index(),
+                        )
+                    };
+                    self.dense.swap(dense_index, pack.len);
+                    self.data.swap(dense_index, pack.len);
+                }
+            }
             Pack::Loose(pack) => {
                 if dense_index < pack.len {
                     pack.len -= 1;
                     // swap index and last packed element (can be the same)
                     unsafe {
-                        *self
-                            .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(pack.len - 1).index()) =
-                            dense_index;
-                    }
-                    self.dense.swap(dense_index, pack.len - 1);
-                    self.data.swap(dense_index, pack.len - 1);
+                        self.sparse.swap(
+                            self.dense.get_unchecked(pack.len).index(),
+                            self.dense.get_unchecked(dense_index).index(),
+                        )
+                    };
+                    self.dense.swap(dense_index, pack.len);
+                    self.data.swap(dense_index, pack.len);
                 }
             }
+
             Pack::NoPack => {}
         }
     }
