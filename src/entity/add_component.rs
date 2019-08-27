@@ -71,7 +71,7 @@ macro_rules! impl_add_component {
 
                         should_pack.reserve(real_types.len());
                         $(
-                            if self.$index.pack_info.check_types(&type_ids, &add_types, false).is_err() {
+                            if self.$index.pack_info.check_types(&type_ids, &add_types).is_err() {
                                 return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()));
                             } else {
                                 if !should_pack.contains(&TypeId::of::<$type>()) {

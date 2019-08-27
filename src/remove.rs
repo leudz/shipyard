@@ -126,7 +126,7 @@ macro_rules! impl_remove {
 
                     let mut should_unpack = Vec::with_capacity(types.len() + add_types.len());
                     $(
-                        match self.$index.pack_info.check_types(&types, &add_types, true) {
+                        match self.$index.pack_info.check_types(&types, &add_types) {
                             Ok(_) => match &self.$index.pack_info.pack {
                                 Pack::Tight(_) => {},
                                 Pack::Loose(pack) => should_unpack.extend_from_slice(&pack.loose_types),

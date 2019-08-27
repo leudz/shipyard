@@ -30,7 +30,6 @@ impl PackInfo {
         &self,
         components: &[TypeId],
         additional: &[TypeId],
-        ignore_loose_type: bool,
     ) -> Result<&[TypeId], ()> {
         let mut self_types: Vec<_> = match &self.pack {
             Pack::Tight(pack) => pack
@@ -39,22 +38,13 @@ impl PackInfo {
                 .copied()
                 .chain(self.observer_types.iter().copied())
                 .collect(),
-            Pack::Loose(pack) => {
-                if ignore_loose_type {
-                    pack.tight_types
-                        .iter()
-                        .copied()
-                        .chain(self.observer_types.iter().copied())
-                        .collect()
-                } else {
-                    pack.tight_types
-                        .iter()
-                        .copied()
-                        .chain(pack.loose_types.iter().copied())
-                        .chain(self.observer_types.iter().copied())
-                        .collect()
-                }
-            }
+            Pack::Loose(pack) => pack
+                .tight_types
+                .iter()
+                .copied()
+                .chain(pack.loose_types.iter().copied())
+                .chain(self.observer_types.iter().copied())
+                .collect(),
             Pack::NoPack => self.observer_types.iter().copied().collect(),
         };
 
