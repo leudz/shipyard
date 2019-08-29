@@ -1,4 +1,5 @@
 mod pack_info;
+mod sort;
 mod view;
 mod view_add_entity;
 
