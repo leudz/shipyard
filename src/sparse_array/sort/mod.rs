@@ -2,6 +2,7 @@ use crate::sparse_array::ViewMut;
 use std::cmp::Ordering;
 use std::ptr;
 
+#[allow(dead_code)]
 fn insertion_sort<T, F>(view: &mut ViewMut<T>, cmp: &mut F)
 where
     F: FnMut(&T, &T) -> Ordering,
@@ -63,6 +64,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 fn heapsort<T: std::fmt::Debug, F: FnMut(&T, &T) -> Ordering>(view: &mut ViewMut<T>, cmp: &mut F) {
     // find the biggest leaf node
     fn leaf_search<T, F: FnMut(&T, &T) -> Ordering>(
