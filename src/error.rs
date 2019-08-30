@@ -255,3 +255,25 @@ impl Display for RunWorkload {
         Debug::fmt(self, fmt)
     }
 }
+
+/// Error occuring when trying to sort a single packed storage.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Sort {
+    MissingPackStorage,
+    TooManyStorages,
+}
+
+impl Debug for Sort {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Sort::MissingPackStorage => fmt.write_str("The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."),
+            Sort::TooManyStorages => fmt.write_str("You provided too many storages non packed together. Only single storage and storages packed together can be sorted."),
+        }
+    }
+}
+
+impl Display for Sort {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}

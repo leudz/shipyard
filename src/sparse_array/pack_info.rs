@@ -9,6 +9,15 @@ pub(crate) enum Pack {
     NoPack,
 }
 
+impl Pack {
+    pub(crate) fn is_loose(&self) -> bool {
+        match self {
+            Pack::Loose(_) => true,
+            _ => false,
+        }
+    }
+}
+
 pub struct PackInfo {
     pub(crate) pack: Pack,
     pub(crate) observer_types: Vec<TypeId>,
