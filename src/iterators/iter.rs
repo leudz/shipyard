@@ -67,6 +67,12 @@ impl<T: IntoAbstract> Tight1<T> {
             step: size,
         }
     }
+    pub fn as_filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
+        self,
+        pred: P,
+    ) -> Filter1<T, P> {
+        Filter1 { iter: self, pred }
+    }
 }
 
 impl<T: IntoAbstract> Iterator for Tight1<T>
@@ -234,6 +240,28 @@ where
     }
 }
 
+pub struct Filter1<
+    T: IntoAbstract,
+    P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool,
+> {
+    iter: Tight1<T>,
+    pred: P,
+}
+
+impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>
+    Iterator for Filter1<T, P>
+{
+    type Item = <Tight1<T> as Iterator>::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(item) = self.iter.next() {
+            if (self.pred)(&item) {
+                return Some(item);
+            }
+        }
+        None
+    }
+}
+
 macro_rules! impl_iterators {
     (
         $number: literal
@@ -247,6 +275,7 @@ macro_rules! impl_iterators {
         $par_tight: ident
         $par_loose: ident
         $par_non_packed: ident
+        $filter: ident
         $(($type: ident, $index: tt))+
     ) => {
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
@@ -416,6 +445,12 @@ macro_rules! impl_iterators {
                     $iter::NonPacked(_) => Err(self),
                 }
             }
+            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+                $filter {
+                    iter: self,
+                    pred,
+                }
+            }
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $iter<$($type),+> {
@@ -488,6 +523,12 @@ macro_rules! impl_iterators {
                     current: self.current,
                     end: self.end,
                     step: size,
+                }
+            }
+            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+                $filter {
+                    iter: $iter::Tight(self),
+                    pred,
                 }
             }
         }
@@ -644,17 +685,14 @@ macro_rules! impl_iterators {
 
         unsafe impl<$($type: IntoAbstract),+> Send for $loose<$($type),+> {}
 
-        /*impl<$($type: IntoAbstract),+> $loose<$($type),+> {
-            fn clone(&self) -> Self {
-                $loose {
-                    data: self.data.clone(),
-                    indices: self.indices,
-                    current: self.current,
-                    end: self.end,
-                    array: self.array,
+        impl<$($type: IntoAbstract),+> $loose<$($type),+> {
+            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+                $filter {
+                    iter: $iter::Loose(self),
+                    pred,
                 }
             }
-        }*/
+        }
 
         impl<$($type: IntoAbstract),+> Iterator for $loose<$($type,)+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
@@ -717,6 +755,12 @@ macro_rules! impl_iterators {
                     array: self.array,
                 }
             }
+            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+                $filter {
+                    iter: $iter::NonPacked(self),
+                    pred,
+                }
+            }
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $non_packed<$($type,)+> {
@@ -770,6 +814,23 @@ macro_rules! impl_iterators {
         #[doc = "components.\n"]
         #[cfg(feature = "parallel")]
         pub struct $par_non_packed<$($type: IntoAbstract),+>($non_packed<$($type),+>);
+
+        pub struct $filter<$($type: IntoAbstract,)+ P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool> {
+            iter: $iter<$($type,)+>,
+            pred: P,
+        }
+
+        impl<$($type: IntoAbstract,)+ P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool> Iterator for $filter<$($type,)+ P> {
+            type Item = ($(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+);
+            fn next(&mut self) -> Option<Self::Item> {
+                while let Some(item) = self.iter.next() {
+                    if (self.pred)($(&item.$index),+) {
+                        return Some(item);
+                    }
+                }
+                None
+            }
+        }
     }
 }
 
@@ -786,9 +847,10 @@ macro_rules! iterators {
         $($par_tight: ident)*; $par_tight1: ident $($queue_par_tight: ident)+;
         $($par_loose: ident)*; $par_loose1: ident $($queue_par_loose: ident)+;
         $($par_non_packed: ident)*; $par_non_packed1: ident $($queue_par_non_packed: ident)+;
+        $($filter: ident)*; $filter1: ident $($queue_filter: ident)+;
         $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
-        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $(($type, $index))*];
         iterators![
             $($number)* $number1; $($queue_number)+;
             $($iter)* $iter1; $($queue_iter)+;
@@ -801,6 +863,7 @@ macro_rules! iterators {
             $($par_tight)* $par_tight1; $($queue_par_tight)+;
             $($par_loose)* $par_loose1; $($queue_par_loose)+;
             $($par_non_packed)* $par_non_packed1; $($queue_par_non_packed)+;
+            $($filter)* $filter1; $($queue_filter)+;
             $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*
         ];
     };
@@ -816,9 +879,10 @@ macro_rules! iterators {
         $($par_tight: ident)*; $par_tight1: ident;
         $($par_loose: ident)*; $par_loose1: ident;
         $($par_non_packed: ident)*; $par_non_packed1: ident;
+        $($filter: ident)*; $filter1: ident;
         $(($type: ident, $index: tt))*;
     ) => {
-        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $(($type, $index))*];
     }
 }
 
@@ -834,5 +898,6 @@ iterators![
     ;ParTight2 ParTight3 ParTight4 ParTight5 ParTight6 ParTight7 ParTight8 ParTight9 ParTight10;
     ;ParLoose2 ParLoose3 ParLoose4 ParLoose5 ParLoose6 ParLoose7 ParLoose8 ParLoose9 ParLoose10;
     ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5 ParNonPacked6 ParNonPacked7 ParNonPacked8 ParNonPacked9 ParNonPacked10;
+    ;Filter2 Filter3 Filter4 Filter5 Filter6 Filter7 Filter8 Filter9 Filter10;
     (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];

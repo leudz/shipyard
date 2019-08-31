@@ -1320,3 +1320,39 @@ fn tight_sort_too_many_storages() {
             });
     });
 }
+
+#[test]
+fn simple_filter() {
+    let world = World::new::<(usize,)>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 5);
+        entities.add_entity(&mut usizes, 2);
+        entities.add_entity(&mut usizes, 4);
+        entities.add_entity(&mut usizes, 3);
+        entities.add_entity(&mut usizes, 1);
+
+        let mut iter = usizes.iter().as_filtered(|&&mut x| x % 2 == 0);
+
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), Some(&mut 4));
+        assert_eq!(iter.next(), None);
+    });
+}
+
+#[test]
+fn tight_filter() {
+    let world = World::new::<(usize, u32)>();
+    world.tight_pack::<(usize, u32)>();
+
+    world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+        entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+        entities.add_entity((&mut usizes,), (2,));
+        entities.add_entity((&mut usizes, &mut u32s), (3, 4));
+
+        let mut iter = (&usizes, &u32s).iter().as_filtered(|&&x, _| x % 2 == 0);
+
+        assert_eq!(iter.next(), Some((&0, &1)));
+        assert_eq!(iter.next(), None);
+    });
+}
