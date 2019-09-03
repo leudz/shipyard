@@ -105,6 +105,7 @@ macro_rules! impl_unstable_sort {
                                     return Err(error::Sort::MissingPackStorage);
                                 }
                             }
+                            Pack::Update(_) => return Err(error::Sort::TooManyStorages),
                             Pack::NoPack => return Err(error::Sort::TooManyStorages),
                         }
                     }

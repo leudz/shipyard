@@ -88,6 +88,13 @@ impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
         match self.pack_info.pack {
             Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
             Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+            Pack::Update(_) => {
+                if self.pack_info.observer_types.is_empty() {
+                    Ok((self.remove(entity),))
+                } else {
+                    Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+                }
+            }
             Pack::NoPack => {
                 if self.pack_info.observer_types.is_empty() {
                     Ok((self.remove(entity),))
@@ -116,7 +123,6 @@ macro_rules! impl_remove {
 
         impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_remove(self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
-
                 // non packed storages should not pay the price of pack
                 if $(std::mem::discriminant(&self.$index.pack_info.pack) != std::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
                     let mut types = [$(TypeId::of::<$type>()),+];
@@ -136,6 +142,7 @@ macro_rules! impl_remove {
                                     should_unpack.extend_from_slice(&pack.tight_types);
                                     should_unpack.extend_from_slice(&self.$index.pack_info.observer_types);
                                 }
+                                Pack::Update(_) => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                                 Pack::NoPack => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                             }
                             Err(_) => return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()))

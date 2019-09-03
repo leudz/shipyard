@@ -26,6 +26,14 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
             match self.pack_info.pack {
                 Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
                 Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Update(_) => {
+                    if self.pack_info.observer_types.is_empty() {
+                        self.insert(component, entity);
+                        Ok(())
+                    } else {
+                        Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
+                    }
+                }
                 Pack::NoPack => {
                     if self.pack_info.observer_types.is_empty() {
                         self.insert(component, entity);
@@ -82,6 +90,7 @@ macro_rules! impl_add_component {
                                         Pack::Loose(pack) => if let Ok(types) = pack.check_all_types(&real_types) {
                                             should_pack.extend_from_slice(types);
                                         }
+                                        Pack::Update(_) => {}
                                         Pack::NoPack => {}
                                     }
                                 }

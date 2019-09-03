@@ -135,6 +135,7 @@ pub enum Pack {
     GetStorage(GetStorage),
     AlreadyTightPack(TypeId),
     AlreadyLoosePack(TypeId),
+    AlreadyUpdatePack(TypeId),
 }
 
 impl From<GetStorage> for Pack {
@@ -153,6 +154,10 @@ impl Debug for Pack {
             )),
             Pack::AlreadyLoosePack(type_id) => fmt.write_fmt(format_args!(
                 "The storage of type ({:?}) is already loosely packed.",
+                type_id
+            )),
+            Pack::AlreadyUpdatePack(type_id) => fmt.write_fmt(format_args!(
+                "The storage of type ({:?}) is already has an update pack.",
                 type_id
             )),
         }

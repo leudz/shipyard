@@ -8,19 +8,32 @@ use rayon::iter::plumbing::{
 use rayon::iter::ParallelIterator;
 
 impl<T: IntoAbstract> IntoIter for T {
-    type IntoIter = Tight1<Self>;
+    type IntoIter = Iter1<Self>;
     #[cfg(feature = "parallel")]
-    type IntoParIter = ParTight1<Self>;
+    type IntoParIter = ParIter1<Self>;
     fn iter(self) -> Self::IntoIter {
-        Tight1 {
-            end: self.len().unwrap_or(0),
-            data: self.into_abstract(),
-            current: 0,
+        match &self.pack_info().pack {
+            Pack::Update(_) => {
+                let end = self.len().unwrap_or(0);
+                Iter1::Update(Update1 {
+                    end,
+                    data: self.into_abstract(),
+                    current: 0,
+                })
+            }
+            _ => Iter1::Tight(Tight1 {
+                end: self.len().unwrap_or(0),
+                data: self.into_abstract(),
+                current: 0,
+            }),
         }
     }
     #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter {
-        ParTight1(self.iter())
+        match self.iter() {
+            Iter1::Tight(iter) => ParIter1::Tight(ParTight1(iter)),
+            Iter1::Update(_) => unimplemented!(),
+        }
     }
 }
 
@@ -32,6 +45,73 @@ impl<T: IntoIter> IntoIter for (T,) {
     }
     fn par_iter(self) -> Self::IntoParIter {
         self.0.par_iter()
+    }
+}
+
+pub enum Iter1<T: IntoAbstract> {
+    Tight(Tight1<T>),
+    Update(Update1<T>),
+}
+
+impl<T: IntoAbstract> Iter1<T> {
+    /// Tries to transform the iterator into a chunk iterator, returning `size` items at a time.
+    /// If the component is packed with update pack the iterator is returned.
+    ///
+    /// Chunk will return a smaller slice at the end if `size` does not divide exactly the length.
+    pub fn into_chunk(self, size: usize) -> Result<Chunk1<T>, Self> {
+        match self {
+            Iter1::Tight(iter) => Ok(iter.into_chunk(size)),
+
+            Iter1::Update(_) => Err(self),
+        }
+    }
+    /// Tries to transform the iterator into a chunk exact iterator, returning `size` items at a time.
+    /// If the component is packed with update pack the iterator is returned.
+    ///
+    /// ChunkExact will always return a slice with the same length.
+    ///
+    /// To get the remaining items (if any) use the `remainder` method.
+    pub fn into_chunk_exact(self, size: usize) -> Result<ChunkExact1<T>, Self> {
+        match self {
+            Iter1::Tight(iter) => Ok(iter.into_chunk_exact(size)),
+
+            Iter1::Update(_) => Err(self),
+        }
+    }
+    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
+        self,
+        pred: P,
+    ) -> Filter1<T, P> {
+        Filter1 { iter: self, pred }
+    }
+}
+
+impl<T: IntoAbstract> Iterator for Iter1<T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Iter1::Tight(iter) => iter.next(),
+            Iter1::Update(iter) => iter.next(),
+        }
+    }
+}
+
+pub enum ParIter1<T: IntoAbstract> {
+    Tight(ParTight1<T>),
+}
+
+impl<T: IntoAbstract + Send + Sync> ParallelIterator for ParIter1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: UnindexedConsumer<Self::Item>,
+    {
+        match self {
+            ParIter1::Tight(iter) => bridge_producer_consumer(iter.0.len(), iter.0, consumer),
+        }
     }
 }
 
@@ -67,11 +147,14 @@ impl<T: IntoAbstract> Tight1<T> {
             step: size,
         }
     }
-    pub fn as_filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
+    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
         self,
         pred: P,
     ) -> Filter1<T, P> {
-        Filter1 { iter: self, pred }
+        Filter1 {
+            iter: Iter1::Tight(self),
+            pred,
+        }
     }
 }
 
@@ -244,7 +327,7 @@ pub struct Filter1<
     T: IntoAbstract,
     P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool,
 > {
-    iter: Tight1<T>,
+    iter: Iter1<T>,
     pred: P,
 }
 
@@ -253,12 +336,59 @@ impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::O
 {
     type Item = <Tight1<T> as Iterator>::Item;
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(item) = self.iter.next() {
-            if (self.pred)(&item) {
-                return Some(item);
+        match &mut self.iter {
+            Iter1::Tight(iter) => {
+                for item in iter {
+                    if (self.pred)(&item) {
+                        return Some(item);
+                    }
+                }
+                None
+            }
+            Iter1::Update(iter) => {
+                while iter.current < iter.end {
+                    iter.current += 1;
+                    // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+                    if (self.pred)(unsafe { &iter.data.get_data(iter.current - 1) }) {
+                        return Some(unsafe { iter.data.mark_modified(iter.current - 1) });
+                    }
+                }
+                None
             }
         }
-        None
+    }
+}
+
+pub struct Update1<T: IntoAbstract> {
+    data: T::AbsView,
+    current: usize,
+    end: usize,
+}
+
+impl<T: IntoAbstract> Update1<T> {
+    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
+        self,
+        pred: P,
+    ) -> Filter1<T, P> {
+        Filter1 {
+            iter: Iter1::Update(self),
+            pred,
+        }
+    }
+}
+
+impl<T: IntoAbstract> Iterator for Update1<T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current;
+        if current < self.end {
+            self.current += 1;
+            unsafe { self.data.mark_modified(current) };
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { self.data.get_data(current) })
+        } else {
+            None
+        }
     }
 }
 
@@ -332,6 +462,7 @@ macro_rules! impl_iterators {
                                     }
                                 }
                             }
+                            Pack::Update(_) => unimplemented!(),
                             Pack::NoPack => if let Some(len) = self.$index.len() {
                                 if len < smallest {
                                     smallest = len;
@@ -445,7 +576,7 @@ macro_rules! impl_iterators {
                     $iter::NonPacked(_) => Err(self),
                 }
             }
-            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+            pub fn filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
                 $filter {
                     iter: self,
                     pred,
@@ -525,7 +656,7 @@ macro_rules! impl_iterators {
                     step: size,
                 }
             }
-            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+            pub fn filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
                 $filter {
                     iter: $iter::Tight(self),
                     pred,
@@ -686,7 +817,7 @@ macro_rules! impl_iterators {
         unsafe impl<$($type: IntoAbstract),+> Send for $loose<$($type),+> {}
 
         impl<$($type: IntoAbstract),+> $loose<$($type),+> {
-            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+            pub fn filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
                 $filter {
                     iter: $iter::Loose(self),
                     pred,
@@ -755,7 +886,7 @@ macro_rules! impl_iterators {
                     array: self.array,
                 }
             }
-            pub fn as_filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+            pub fn filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
                 $filter {
                     iter: $iter::NonPacked(self),
                     pred,
@@ -899,5 +1030,6 @@ iterators![
     ;ParLoose2 ParLoose3 ParLoose4 ParLoose5 ParLoose6 ParLoose7 ParLoose8 ParLoose9 ParLoose10;
     ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5 ParNonPacked6 ParNonPacked7 ParNonPacked8 ParNonPacked9 ParNonPacked10;
     ;Filter2 Filter3 Filter4 Filter5 Filter6 Filter7 Filter8 Filter9 Filter10;
+    //;Update2 Update3 Update4 Update5 Update6 Update7 Update8 Update9 Update10;
     (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];

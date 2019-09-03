@@ -48,7 +48,7 @@
 //!
 //! #[system(Meal)]
 //! fn run(fat: &mut Fat) {
-//!     for slice in fat.iter().into_chunk(8) {
+//!     for slice in fat.iter().into_chunk(8).ok().unwrap() {
 //!         for fat in slice {
 //!             fat.0 += 3.0;
 //!         }
@@ -1332,7 +1332,7 @@ fn simple_filter() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().as_filtered(|&&mut x| x % 2 == 0);
+        let mut iter = usizes.iter().filtered(|&&mut x| x % 2 == 0);
 
         assert_eq!(iter.next(), Some(&mut 2));
         assert_eq!(iter.next(), Some(&mut 4));
@@ -1350,9 +1350,49 @@ fn tight_filter() {
         entities.add_entity((&mut usizes,), (2,));
         entities.add_entity((&mut usizes, &mut u32s), (3, 4));
 
-        let mut iter = (&usizes, &u32s).iter().as_filtered(|&&x, _| x % 2 == 0);
+        let mut iter = (&usizes, &u32s).iter().filtered(|&&x, _| x % 2 == 0);
 
         assert_eq!(iter.next(), Some((&0, &1)));
+        assert_eq!(iter.next(), None);
+    });
+}
+
+#[test]
+fn update_pack() {
+    let world = World::new::<(usize,)>();
+    world.update_pack::<usize>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 0);
+        entities.add_entity(&mut usizes, 1);
+        entities.add_entity(&mut usizes, 2);
+        entities.add_entity(&mut usizes, 3);
+
+        let mut iter = usizes.inserted().iter();
+        assert_eq!(iter.next(), Some(&0));
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), None);
+
+        let mut iter = usizes.modified().iter();
+        assert_eq!(iter.next(), None);
+
+        usizes.clear_inserted();
+
+        let mut iter = (&mut usizes).iter().filtered(|&&mut x| x % 2 == 0);
+        assert_eq!(iter.next(), Some(&mut 0));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), None);
+
+        let mut iter = usizes.modified_mut().iter();
+        assert_eq!(iter.next(), Some(&mut 0));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), None);
+
+        usizes.clear_modified();
+
+        let mut iter = usizes.modified().iter();
         assert_eq!(iter.next(), None);
     });
 }

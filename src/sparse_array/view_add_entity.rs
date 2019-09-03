@@ -16,6 +16,28 @@ impl<T: 'static> ViewAddEntity for ViewMut<'_, T> {
     type Component = T;
     fn add_entity(mut self, component: Self::Component, entity: Key) {
         self.insert(component, entity);
+
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            let len = self.dense.len() - 1;
+            unsafe {
+                *self.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
+                *self.sparse.get_unchecked_mut(
+                    self.dense
+                        .get_unchecked(pack.inserted + pack.modified)
+                        .index(),
+                ) = len;
+                *self
+                    .sparse
+                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).index()) =
+                    pack.inserted + pack.modified;
+            }
+            self.dense.swap(pack.inserted + pack.modified, len);
+            self.dense
+                .swap(pack.inserted, pack.inserted + pack.modified);
+            self.data.swap(pack.inserted + pack.modified, len);
+            self.data.swap(pack.inserted, pack.inserted + pack.modified);
+            pack.inserted += 1;
+        }
     }
 }
 
@@ -23,6 +45,28 @@ impl<T: 'static> ViewAddEntity for &mut ViewMut<'_, T> {
     type Component = T;
     fn add_entity(self, component: Self::Component, entity: Key) {
         self.insert(component, entity);
+
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            let len = self.dense.len() - 1;
+            unsafe {
+                *self.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
+                *self.sparse.get_unchecked_mut(
+                    self.dense
+                        .get_unchecked(pack.inserted + pack.modified)
+                        .index(),
+                ) = len;
+                *self
+                    .sparse
+                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).index()) =
+                    pack.inserted + pack.modified;
+            }
+            self.dense.swap(pack.inserted + pack.modified, len);
+            self.dense
+                .swap(pack.inserted, pack.inserted + pack.modified);
+            self.data.swap(pack.inserted + pack.modified, len);
+            self.data.swap(pack.inserted, pack.inserted + pack.modified);
+            pack.inserted += 1;
+        }
     }
 }
 
@@ -65,7 +109,7 @@ macro_rules! impl_view_add_entity {
                     if should_pack.contains(&type_id) {
                         self.$index.pack(entity);
                     } else {
-                        match &self.$index.pack_info.pack {
+                        match &mut self.$index.pack_info.pack {
                             Pack::Tight(pack) => if let Ok(types) = pack.check_types(&type_ids) {
                                 should_pack.extend_from_slice(&pack.types);
                                 if !types.is_empty() {
@@ -77,6 +121,19 @@ macro_rules! impl_view_add_entity {
                                 if !types.is_empty() {
                                     self.$index.pack(entity);
                                 }
+                            }
+                            Pack::Update(pack) => {
+                                let len = self.$index.dense.len() - 1;
+                                unsafe {
+                                    *self.$index.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
+                                    *self.$index.sparse.get_unchecked_mut(self.$index.dense.get_unchecked(pack.inserted + pack.modified).index()) = len;
+                                    *self.$index.sparse.get_unchecked_mut(self.$index.dense.get_unchecked(pack.inserted).index()) = pack.inserted + pack.modified;
+                                }
+                                self.$index.dense.swap(pack.inserted + pack.modified, len);
+                                self.$index.dense.swap(pack.inserted, pack.inserted + pack.modified);
+                                self.$index.data.swap(pack.inserted + pack.modified, len);
+                                self.$index.data.swap(pack.inserted, pack.inserted + pack.modified);
+                                pack.inserted += 1;
                             }
                             Pack::NoPack => {}
                         }

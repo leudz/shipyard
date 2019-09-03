@@ -4,7 +4,7 @@ mod view;
 mod view_add_entity;
 
 use crate::entity::Key;
-pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack};
+pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view::{RawViewMut, View, ViewMut};
 pub(crate) use view_add_entity::ViewAddEntity;
 
@@ -20,7 +20,7 @@ pub struct SparseArray<T> {
     sparse: Vec<usize>,
     dense: Vec<Key>,
     data: Vec<T>,
-    pub(crate) pack_info: PackInfo,
+    pub(crate) pack_info: PackInfo<T>,
 }
 
 impl<T> Default for SparseArray<T> {

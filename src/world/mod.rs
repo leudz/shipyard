@@ -7,6 +7,7 @@ use crate::component_storage::AllStorages;
 use crate::entity::Entities;
 use crate::error;
 use crate::run::Run;
+use crate::sparse_array::{Pack, UpdatePack};
 use pack::{LoosePack, TightPack};
 use pipeline::{Pipeline, Workload};
 #[cfg(feature = "parallel")]
@@ -169,6 +170,35 @@ impl World {
         (T, L): LoosePack,
     {
         <(T, L)>::try_loose_pack(&self.storages).unwrap()
+    }
+    pub fn try_update_pack<T: 'static>(&self) -> Result<(), error::Pack> {
+        let all_storages = self
+            .storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?;
+        if let Some(storage) = all_storages.0.get(&std::any::TypeId::of::<T>()) {
+            let mut array = storage
+                .array_mut::<T>()
+                .map_err(error::GetStorage::StorageBorrow)?;
+            match array.pack_info.pack {
+                Pack::NoPack => {
+                    array.pack_info.pack = Pack::Update(UpdatePack {
+                        inserted: array.len(),
+                        modified: 0,
+                        removed: Vec::new(),
+                    });
+                    Ok(())
+                }
+                Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(std::any::TypeId::of::<T>())),
+                Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(std::any::TypeId::of::<T>())),
+                Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(std::any::TypeId::of::<T>())),
+            }
+        } else {
+            Err(error::GetStorage::MissingComponent)?
+        }
+    }
+    pub fn update_pack<T: 'static>(&self) {
+        self.try_update_pack::<T>().unwrap();
     }
     /// Modifies the current default workload to `name`.
     pub fn try_set_default_workload(

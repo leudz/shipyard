@@ -56,6 +56,9 @@ macro_rules! impl_loose_pack {
                         Pack::Loose(_) => {
                             return Err(error::Pack::AlreadyLoosePack(TypeId::of::<$tight>()));
                         },
+                        Pack::Update(_) => {
+                            return Err(error::Pack::AlreadyUpdatePack(TypeId::of::<$tight>()))
+                        },
                         Pack::NoPack => {
                             storages.$tight_index.0.pack_info.pack = Pack::Loose(LoosePackInfo::new(Arc::clone(&tight_types), Arc::clone(&loose_types)));
                         }

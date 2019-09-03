@@ -1,15 +1,17 @@
+use crate::entity::Key;
 use std::any::TypeId;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
 #[allow(clippy::enum_variant_names)]
-pub(crate) enum Pack {
+pub(crate) enum Pack<T> {
     Tight(TightPack),
     Loose(LoosePack),
+    Update(UpdatePack<T>),
     NoPack,
 }
 
-impl Pack {
+impl<T> Pack<T> {
     pub(crate) fn is_loose(&self) -> bool {
         match self {
             Pack::Loose(_) => true,
@@ -18,12 +20,12 @@ impl Pack {
     }
 }
 
-pub struct PackInfo {
-    pub(crate) pack: Pack,
+pub struct PackInfo<T> {
+    pub(crate) pack: Pack<T>,
     pub(crate) observer_types: Vec<TypeId>,
 }
 
-impl Default for PackInfo {
+impl<T> Default for PackInfo<T> {
     fn default() -> Self {
         PackInfo {
             pack: Pack::NoPack,
@@ -32,7 +34,7 @@ impl Default for PackInfo {
     }
 }
 
-impl PackInfo {
+impl<T> PackInfo<T> {
     /// `components` is a sorted slice of all types this entity has.
     /// `additional` is a sorted slice of types this entity might have.
     pub(crate) fn check_types(
@@ -54,6 +56,7 @@ impl PackInfo {
                 .chain(pack.loose_types.iter().copied())
                 .chain(self.observer_types.iter().copied())
                 .collect(),
+            Pack::Update(_) => self.observer_types.iter().copied().collect(),
             Pack::NoPack => self.observer_types.iter().copied().collect(),
         };
 
@@ -64,6 +67,7 @@ impl PackInfo {
             Ok(match &self.pack {
                 Pack::Tight(pack) => &pack.types,
                 Pack::Loose(pack) => &pack.tight_types,
+                Pack::Update(_) => &[],
                 Pack::NoPack => &[],
             })
         } else if all_types {
@@ -120,6 +124,12 @@ impl LoosePack {
             Err(())
         }
     }
+}
+
+pub(crate) struct UpdatePack<T> {
+    pub(crate) inserted: usize,
+    pub(crate) modified: usize,
+    pub(crate) removed: Vec<(Key, T)>,
 }
 
 /// The first returned `bool` is true if all packed types are present.

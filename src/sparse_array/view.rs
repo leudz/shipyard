@@ -1,12 +1,13 @@
 use super::{Pack, PackInfo};
 use crate::entity::Key;
+use std::marker::PhantomData;
 
 /// Immutable view into a `ComponentStorage`.
 pub struct View<'a, T> {
     pub(crate) sparse: &'a [usize],
     pub(crate) dense: &'a [Key],
     pub(crate) data: &'a [T],
-    pub(crate) pack_info: &'a PackInfo,
+    pub(crate) pack_info: &'a PackInfo<T>,
 }
 
 impl<'a, T> Clone for View<'a, T> {
@@ -46,6 +47,40 @@ impl<T> View<'_, T> {
     pub fn len(&self) -> usize {
         self.dense.len()
     }
+    pub fn modified(&self) -> Option<View<T>> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted + pack.modified {
+                    Some(View {
+                        sparse: self.sparse,
+                        dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
+                        data: &self.data[pack.inserted..pack.inserted + pack.modified],
+                        pack_info: self.pack_info,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    pub fn inserted(&self) -> Option<View<T>> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted {
+                    Some(View {
+                        sparse: self.sparse,
+                        dense: &self.dense[0..pack.inserted],
+                        data: &self.data[0..pack.inserted],
+                        pack_info: self.pack_info,
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Mutable view into a `ComponentStorage`.
@@ -53,7 +88,7 @@ pub struct ViewMut<'a, T> {
     pub(crate) sparse: &'a mut Vec<usize>,
     pub(crate) dense: &'a mut Vec<Key>,
     pub(crate) data: &'a mut Vec<T>,
-    pub(crate) pack_info: &'a mut PackInfo,
+    pub(crate) pack_info: &'a mut PackInfo<T>,
 }
 
 impl<'a, T: 'static> ViewMut<'a, T> {
@@ -132,6 +167,32 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                         dense_index = pack_len - 1;
                     }
                 }
+                Pack::Update(pack) => {
+                    if dense_index < pack.inserted {
+                        pack.inserted -= 1;
+                        unsafe {
+                            *self.sparse.get_unchecked_mut(
+                                self.dense.get_unchecked(pack.inserted).index(),
+                            ) = dense_index;
+                        }
+                        self.dense.swap(dense_index, pack.inserted);
+                        self.data.swap(dense_index, pack.inserted);
+                        dense_index = pack.inserted;
+                    }
+                    if dense_index < pack.inserted + pack.modified {
+                        pack.modified -= 1;
+                        unsafe {
+                            *self.sparse.get_unchecked_mut(
+                                self.dense
+                                    .get_unchecked(pack.inserted + pack.modified)
+                                    .index(),
+                            ) = dense_index;
+                        }
+                        self.dense.swap(dense_index, pack.inserted + pack.modified);
+                        self.data.swap(dense_index, pack.inserted + pack.modified);
+                        dense_index = pack.inserted + pack.modified;
+                    }
+                }
                 Pack::NoPack => {}
             }
             unsafe {
@@ -150,20 +211,28 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     pub fn len(&self) -> usize {
         self.dense.len()
     }
-    /// Consumes the ViewMut and returns a ViewSemiMut.
+    /// Consumes the ViewMut and returns a RawViewMut.
     pub(crate) fn into_raw(self) -> RawViewMut<'a, T> {
         RawViewMut {
-            sparse: self.sparse,
-            dense: self.dense,
+            sparse: self.sparse.as_mut_ptr(),
+            dense: self.dense.as_mut_ptr(),
             data: self.data.as_mut_ptr(),
+            sparse_len: self.sparse.len(),
+            len: self.dense.len(),
+            pack_info: self.pack_info,
+            _phantom: PhantomData,
         }
     }
-    /// Borrows the ViewMut and returns a ViewSemiMut.
+    /// Borrows the ViewMut and returns a RawViewMut.
     pub(crate) fn raw(&mut self) -> RawViewMut<T> {
         RawViewMut {
-            sparse: self.sparse,
-            dense: self.dense,
+            sparse: self.sparse.as_mut_ptr(),
+            dense: self.dense.as_mut_ptr(),
             data: self.data.as_mut_ptr(),
+            sparse_len: self.sparse.len(),
+            len: self.dense.len(),
+            pack_info: self.pack_info,
+            _phantom: PhantomData,
         }
     }
     /// Borrows the ViewMut and returns a View.
@@ -197,6 +266,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                         pack.len += 1;
                     }
                 }
+                Pack::Update(_) => {}
                 Pack::NoPack => {}
             }
         }
@@ -232,36 +302,168 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                     self.data.swap(dense_index, pack.len);
                 }
             }
-
+            Pack::Update(_) => {}
             Pack::NoPack => {}
+        }
+    }
+    pub fn modified(&self) -> View<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted + pack.modified {
+                    View {
+                        sparse: self.sparse,
+                        dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
+                        data: &self.data[pack.inserted..pack.inserted + pack.modified],
+                        pack_info: self.pack_info,
+                    }
+                } else {
+                    View {
+                        sparse: &[],
+                        dense: &[],
+                        data: &[],
+                        pack_info: self.pack_info,
+                    }
+                }
+            }
+            _ => View {
+                sparse: &[],
+                dense: &[],
+                data: &[],
+                pack_info: self.pack_info,
+            },
+        }
+    }
+    pub fn modified_mut(&mut self) -> RawViewMut<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted + pack.modified {
+                    let new = pack.inserted;
+                    let modified = pack.modified;
+                    let mut raw = self.raw();
+                    raw.dense = unsafe { raw.dense.add(new) };
+                    raw.data = unsafe { raw.data.add(new) };
+                    raw.len = modified;
+                    raw
+                } else {
+                    let mut raw = self.raw();
+                    raw.len = 0;
+                    raw
+                }
+            }
+            _ => {
+                let mut raw = self.raw();
+                raw.len = 0;
+                raw
+            }
+        }
+    }
+    pub fn inserted(&self) -> View<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted {
+                    View {
+                        sparse: self.sparse,
+                        dense: &self.dense[0..pack.inserted],
+                        data: &self.data[0..pack.inserted],
+                        pack_info: self.pack_info,
+                    }
+                } else {
+                    View {
+                        sparse: &[],
+                        dense: &[],
+                        data: &[],
+                        pack_info: self.pack_info,
+                    }
+                }
+            }
+            _ => View {
+                sparse: &[],
+                dense: &[],
+                data: &[],
+                pack_info: self.pack_info,
+            },
+        }
+    }
+    pub fn inserted_mut(&mut self) -> RawViewMut<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted {
+                    let new = pack.inserted;
+                    let mut raw = self.raw();
+                    raw.len = new;
+                    raw
+                } else {
+                    let mut raw = self.raw();
+                    raw.len = 0;
+                    raw
+                }
+            }
+            _ => {
+                let mut raw = self.raw();
+                raw.len = 0;
+                raw
+            }
+        }
+    }
+    pub fn take_removed(&mut self) -> Option<Vec<(Key, T)>> {
+        match &mut self.pack_info.pack {
+            Pack::Update(pack) => {
+                let mut vec = Vec::with_capacity(pack.removed.capacity());
+                std::mem::swap(&mut vec, &mut pack.removed);
+                Some(vec)
+            }
+            _ => None,
+        }
+    }
+    pub fn clear_modified(&mut self) {
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            pack.modified = 0;
+        }
+    }
+    /// If you intent to clear both modified and new, starting by modified will be more efficient.
+    pub fn clear_inserted(&mut self) {
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            if pack.modified == 0 {
+                pack.inserted = 0;
+            } else {
+                let new_len = pack.inserted;
+                while pack.inserted > 0 {
+                    let new_end =
+                        std::cmp::min(pack.inserted + pack.modified - 1, self.dense.len());
+                    self.dense.swap(new_end, pack.inserted - 1);
+                    self.data.swap(new_end, pack.inserted - 1);
+                    pack.inserted -= 1;
+                }
+                for i in pack.modified.saturating_sub(new_len)..pack.modified + new_len {
+                    unsafe {
+                        *self
+                            .sparse
+                            .get_unchecked_mut(self.dense.get_unchecked(i).index()) = i;
+                    }
+                }
+            }
         }
     }
 }
 
-// Used in iterators to be able to keep a pointer to the indices
+// Used in iterators
 pub struct RawViewMut<'a, T> {
-    pub(crate) sparse: &'a [usize],
-    pub(crate) dense: &'a [Key],
+    pub(crate) sparse: *mut usize,
+    pub(crate) sparse_len: usize,
+    pub(crate) dense: *mut Key,
+    pub(crate) len: usize,
     pub(crate) data: *mut T,
+    pub(crate) pack_info: *mut PackInfo<T>,
+    _phantom: PhantomData<&'a ()>,
 }
 
 unsafe impl<T: Send + Sync> Send for RawViewMut<'_, T> {}
 
 impl<'a, T> RawViewMut<'a, T> {
-    /// Returns true if the `entity` has this component.
-    pub(crate) fn contains(&self, entity: Key) -> bool {
-        entity.index() < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
-            && unsafe {
-                *self
-                    .dense
-                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
-                    == entity
-            }
-    }
-    /// Returns the number of components in the view.
-    pub fn len(&self) -> usize {
-        self.dense.len()
+    pub(crate) unsafe fn contains(&self, entity: Key) -> bool {
+        entity.index() < self.sparse_len
+            && *self.sparse.add(entity.index()) < self.len
+            && *self.dense.add(*self.sparse.add(entity.index())) == entity
     }
 }
 
@@ -271,6 +473,10 @@ impl<'a, T> Clone for RawViewMut<'a, T> {
             sparse: self.sparse,
             dense: self.dense,
             data: self.data,
+            sparse_len: self.sparse_len,
+            len: self.len,
+            pack_info: self.pack_info,
+            _phantom: PhantomData,
         }
     }
 }
