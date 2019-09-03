@@ -72,7 +72,7 @@ where
             }
             #[cfg(not(feature = "parallel"))]
             {
-                unsafe { <T::Data as SystemData<'_>>::borrow(&entities, &storages) }
+                unsafe { <T::Data as SystemData<'_>>::borrow(&mut borrows, &entities, &storages) }
             }
         };
         self.run(data);

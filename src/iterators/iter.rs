@@ -1,10 +1,12 @@
 use super::{AbstractMut, IntoAbstract, IntoIter};
 use crate::entity::Key;
 use crate::sparse_array::Pack;
+#[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{
     bridge_producer_consumer, bridge_unindexed, Folder, Producer, UnindexedConsumer,
     UnindexedProducer,
 };
+#[cfg(feature = "parallel")]
 use rayon::iter::ParallelIterator;
 
 impl<T: IntoAbstract> IntoIter for T {
@@ -39,10 +41,12 @@ impl<T: IntoAbstract> IntoIter for T {
 
 impl<T: IntoIter> IntoIter for (T,) {
     type IntoIter = T::IntoIter;
+    #[cfg(feature = "parallel")]
     type IntoParIter = T::IntoParIter;
     fn iter(self) -> Self::IntoIter {
         self.0.iter()
     }
+    #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter {
         self.0.par_iter()
     }
@@ -96,10 +100,12 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
     }
 }
 
+#[cfg(feature = "parallel")]
 pub enum ParIter1<T: IntoAbstract> {
     Tight(ParTight1<T>),
 }
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract + Send + Sync> ParallelIterator for ParIter1<T>
 where
     <T::AbsView as AbstractMut>::Out: Send,
@@ -202,6 +208,7 @@ where
     }
 }
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> Producer for Tight1<T>
 where
     T::AbsView: AbstractMut,
@@ -224,8 +231,10 @@ where
 }
 
 /// Parallel iterator over a single component.
+#[cfg(feature = "parallel")]
 pub struct ParTight1<T: IntoAbstract>(Tight1<T>);
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParTight1<T> {
     /// Trasnform this parallel iterator into its sequential version.
     pub fn into_seq(self) -> Tight1<T> {
@@ -233,6 +242,7 @@ impl<T: IntoAbstract> ParTight1<T> {
     }
 }
 
+#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParallelIterator for ParTight1<T>
 where
     T::AbsView: AbstractMut,
@@ -877,6 +887,7 @@ macro_rules! impl_iterators {
         unsafe impl<$($type: IntoAbstract),+> Send for $non_packed<$($type),+> {}
 
         impl<$($type: IntoAbstract),+> $non_packed<$($type),+> {
+            #[cfg(feature = "parallel")]
             fn clone(&self) -> Self {
                 $non_packed {
                     data: self.data.clone(),

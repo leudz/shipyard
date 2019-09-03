@@ -82,7 +82,7 @@ impl<'a> SystemData<'a> for Entities {
         borrows: &mut Vec<Either<Borrow<'a>, [Borrow<'a>; 2]>>,
         entities: &'a AtomicRefCell<Entities>,
         _: &'a AtomicRefCell<AllStorages>,
-    ) -> (Self::View, Either<Borrow<'a>, [Borrow<'a>; 2]>) {
+    ) -> Self::View {
         let (entities, borrow) = Ref::destructure(entities.try_borrow().unwrap());
         borrows.push(Either::Single(borrow));
         entities.view()
@@ -319,8 +319,9 @@ impl<'a, T: SystemData<'a>> Run<'a> for T {
         storages: &'a AtomicRefCell<AllStorages>,
         f: F,
     ) {
+        let mut borrows = Vec::new();
         // SAFE storage is dropped before borrow
-        let (storage, _borrow) = unsafe { T::borrow(entities, storages) };
+        let storage = unsafe { T::borrow(&mut borrows, entities, storages) };
         f(storage);
     }
 }
