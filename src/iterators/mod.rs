@@ -1,9 +1,11 @@
 mod iter;
+mod parallel_buffer;
 
 use crate::entity::Key;
 use crate::not::Not;
 use crate::sparse_array::{Pack, PackInfo, RawViewMut, View, ViewMut};
 pub use iter::*;
+use parallel_buffer::ParBuf;
 use std::any::TypeId;
 
 // This trait exists because of conflicting implementations

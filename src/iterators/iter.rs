@@ -1,13 +1,13 @@
-use super::{AbstractMut, IntoAbstract, IntoIter};
+use super::{AbstractMut, IntoAbstract, IntoIter, ParBuf};
 use crate::entity::Key;
 use crate::sparse_array::Pack;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{
-    bridge_producer_consumer, bridge_unindexed, Folder, Producer, UnindexedConsumer,
-    UnindexedProducer,
+    bridge, bridge_producer_consumer, bridge_unindexed, Consumer, Folder, Producer,
+    ProducerCallback, UnindexedConsumer, UnindexedProducer,
 };
 #[cfg(feature = "parallel")]
-use rayon::iter::ParallelIterator;
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 impl<T: IntoAbstract> IntoIter for T {
     type IntoIter = Iter1<Self>;
@@ -34,7 +34,7 @@ impl<T: IntoAbstract> IntoIter for T {
     fn par_iter(self) -> Self::IntoParIter {
         match self.iter() {
             Iter1::Tight(iter) => ParIter1::Tight(ParTight1(iter)),
-            Iter1::Update(_) => unimplemented!(),
+            Iter1::Update(iter) => ParIter1::Update(ParUpdate1(iter)),
         }
     }
 }
@@ -103,6 +103,7 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
 #[cfg(feature = "parallel")]
 pub enum ParIter1<T: IntoAbstract> {
     Tight(ParTight1<T>),
+    Update(ParUpdate1<T>),
 }
 
 #[cfg(feature = "parallel")]
@@ -117,6 +118,7 @@ where
     {
         match self {
             ParIter1::Tight(iter) => bridge_producer_consumer(iter.0.len(), iter.0, consumer),
+            ParIter1::Update(iter) => bridge(iter, consumer),
         }
     }
 }
@@ -164,10 +166,7 @@ impl<T: IntoAbstract> Tight1<T> {
     }
 }
 
-impl<T: IntoAbstract> Iterator for Tight1<T>
-where
-    T::AbsView: AbstractMut,
-{
+impl<T: IntoAbstract> Iterator for Tight1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
@@ -184,10 +183,7 @@ where
     }
 }
 
-impl<T: IntoAbstract> DoubleEndedIterator for Tight1<T>
-where
-    T::AbsView: AbstractMut,
-{
+impl<T: IntoAbstract> DoubleEndedIterator for Tight1<T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.end > self.current {
             self.end -= 1;
@@ -199,10 +195,7 @@ where
     }
 }
 
-impl<T: IntoAbstract> ExactSizeIterator for Tight1<T>
-where
-    T::AbsView: AbstractMut,
-{
+impl<T: IntoAbstract> ExactSizeIterator for Tight1<T> {
     fn len(&self) -> usize {
         self.end - self.current
     }
@@ -269,10 +262,7 @@ pub struct Chunk1<T: IntoAbstract> {
     step: usize,
 }
 
-impl<T: IntoAbstract> Iterator for Chunk1<T>
-where
-    T::AbsView: AbstractMut,
-{
+impl<T: IntoAbstract> Iterator for Chunk1<T> {
     type Item = <T::AbsView as AbstractMut>::Slice;
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
@@ -302,10 +292,7 @@ pub struct ChunkExact1<T: IntoAbstract> {
     step: usize,
 }
 
-impl<T: IntoAbstract> ChunkExact1<T>
-where
-    T::AbsView: AbstractMut,
-{
+impl<T: IntoAbstract> ChunkExact1<T> {
     /// Returns the items at the end of the slice.
     ///
     /// Will always return a slice smaller than `size`.
@@ -317,10 +304,7 @@ where
     }
 }
 
-impl<T: IntoAbstract> Iterator for ChunkExact1<T>
-where
-    T::AbsView: AbstractMut,
-{
+impl<T: IntoAbstract> Iterator for ChunkExact1<T> {
     type Item = <T::AbsView as AbstractMut>::Slice;
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.current;
@@ -399,6 +383,141 @@ impl<T: IntoAbstract> Iterator for Update1<T> {
         } else {
             None
         }
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub struct ParUpdate1<T: IntoAbstract>(Update1<T>);
+
+#[cfg(feature = "parallel")]
+pub struct InnerParUpdate1<'a, T: IntoAbstract> {
+    iter: Update1<T>,
+    indices: &'a ParBuf<usize>,
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> Producer for InnerParUpdate1<'a, T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    type IntoIter = ParSeqUpdate1<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        ParSeqUpdate1 {
+            indices: self.indices,
+            data: self.iter.data,
+            current: self.iter.current,
+            end: self.iter.end,
+        }
+    }
+    fn split_at(mut self, index: usize) -> (Self, Self) {
+        let clone = InnerParUpdate1 {
+            iter: Update1 {
+                data: self.iter.data.clone(),
+                current: self.iter.current + index,
+                end: self.iter.end,
+            },
+            indices: self.indices,
+        };
+        self.iter.end = clone.iter.current;
+        (self, clone)
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub struct ParSeqUpdate1<'a, T: IntoAbstract> {
+    indices: &'a ParBuf<usize>,
+    data: T::AbsView,
+    current: usize,
+    end: usize,
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> Iterator for ParSeqUpdate1<'a, T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current;
+        if current < self.end {
+            self.current += 1;
+            self.indices.push(current);
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { self.data.get_data(current) })
+        } else {
+            None
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> DoubleEndedIterator for ParSeqUpdate1<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.end > self.current {
+            self.end -= 1;
+            self.indices.push(self.end);
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { self.data.get_data(self.end) })
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> ExactSizeIterator for ParSeqUpdate1<'a, T> {
+    fn len(&self) -> usize {
+        self.end - self.current
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParallelIterator for ParUpdate1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: UnindexedConsumer<Self::Item>,
+    {
+        bridge(self, consumer)
+    }
+    fn opt_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> IndexedParallelIterator for ParUpdate1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    fn len(&self) -> usize {
+        self.0.end - self.0.current
+    }
+    fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
+        bridge(self, consumer)
+    }
+    fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+        use std::sync::atomic::Ordering;
+
+        let mut data = self.0.data.clone();
+        let len = self.0.end - self.0.current;
+        let indices = ParBuf::new(len);
+
+        let inner = InnerParUpdate1 {
+            iter: self.0,
+            indices: &indices,
+        };
+
+        let result = callback.callback(inner);
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(indices.buf, indices.len.load(Ordering::Relaxed))
+        };
+        slice.sort();
+        for &mut index in slice {
+            unsafe { data.mark_modified(index) };
+        }
+        result
     }
 }
 

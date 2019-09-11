@@ -1396,3 +1396,38 @@ fn update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
+
+#[test]
+fn par_update_pack() {
+    use rayon::prelude::*;
+
+    let world = World::new::<(usize,)>();
+    world.update_pack::<usize>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 0);
+        entities.add_entity(&mut usizes, 1);
+        entities.add_entity(&mut usizes, 2);
+        entities.add_entity(&mut usizes, 3);
+
+        usizes.clear_inserted();
+
+        (&usizes).par_iter().sum::<usize>();
+
+        assert_eq!(usizes.modified().len(), 0);
+
+        (&mut usizes).par_iter().for_each(|i| {
+            *i += 1;
+        });
+
+        let mut iter = usizes.inserted().iter();
+        assert_eq!(iter.next(), None);
+
+        let mut iter = usizes.modified_mut().iter();
+        assert_eq!(iter.next(), Some(&mut 1));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), Some(&mut 3));
+        assert_eq!(iter.next(), Some(&mut 4));
+        assert_eq!(iter.next(), None);
+    });
+}
