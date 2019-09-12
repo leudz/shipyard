@@ -246,7 +246,26 @@ where
     where
         C: UnindexedConsumer<Self::Item>,
     {
-        bridge_producer_consumer(self.0.len(), self.0, consumer)
+        bridge(self, consumer)
+    }
+    fn opt_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> IndexedParallelIterator for ParTight1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    fn len(&self) -> usize {
+        self.0.end - self.0.current
+    }
+    fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
+        bridge(self, consumer)
+    }
+    fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+        callback.callback(self.0)
     }
 }
 
@@ -865,7 +884,26 @@ macro_rules! impl_iterators {
             where
                 Cons: UnindexedConsumer<Self::Item>,
             {
-                bridge_producer_consumer(self.0.len(), self.0, consumer)
+                bridge(self, consumer)
+            }
+            fn opt_len(&self) -> Option<usize> {
+                Some(self.len())
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> IndexedParallelIterator for $par_tight<$($type),+>
+        where
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
+        {
+            fn len(&self) -> usize {
+                self.0.end - self.0.current
+            }
+            fn drive<Cons: Consumer<Self::Item>>(self, consumer: Cons) -> Cons::Result {
+                bridge(self, consumer)
+            }
+            fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+                callback.callback(self.0)
             }
         }
 
