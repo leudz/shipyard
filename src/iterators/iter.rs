@@ -833,8 +833,8 @@ macro_rules! impl_iterators {
                 Cons: UnindexedConsumer<Self::Item>,
             {
                 match self {
-                    $par_iter::Tight(iter) => bridge_producer_consumer(iter.0.len(), iter.0, consumer),
-                    $par_iter::Loose(_) => unimplemented!(),
+                    $par_iter::Tight(iter) => bridge(iter, consumer),
+                    $par_iter::Loose(iter) => bridge(iter, consumer),
                     $par_iter::NonPacked(iter) => bridge_unindexed(iter.0, consumer),
                 }
             }
@@ -1088,6 +1088,28 @@ macro_rules! impl_iterators {
             }
         }
 
+        impl<$($type: IntoAbstract),+> DoubleEndedIterator for $loose<$($type,)+> {
+            fn next_back(&mut self) -> Option<Self::Item> {
+                if self.end > self.current {
+                    self.end -= 1;
+                    // SAFE at this point there are no mutable reference to sparse or dense
+                    // and self.indices can't access out of bounds
+                    let index = unsafe { std::ptr::read(self.indices.add(self.end)) };
+                    Some(($({
+                        if (self.array >> $index) & 1 != 0 {
+                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+                            unsafe { self.data.$index.get_data(self.end) }
+                        } else {
+                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+                            unsafe { self.data.$index.abs_get_unchecked(index) }
+                        }
+                    },)+))
+                } else {
+                    None
+                }
+            }
+        }
+
         impl<$($type: IntoAbstract),+> ExactSizeIterator for $loose<$($type),+> {
             fn len(&self) -> usize {
                 self.end - self.current
@@ -1099,6 +1121,62 @@ macro_rules! impl_iterators {
         #[doc = "components.\n"]
         #[cfg(feature = "parallel")]
         pub struct $par_loose<$($type: IntoAbstract),+>($loose<$($type),+>);
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> Producer for $loose<$($type),+>
+        where
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
+        {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
+            type IntoIter = Self;
+            fn into_iter(self) -> Self::IntoIter {
+                self
+            }
+            fn split_at(mut self, index: usize) -> (Self, Self) {
+                let clone = $loose {
+                    data: self.data.clone(),
+                    indices: self.indices,
+                    current: self.current + index,
+                    end: self.end,
+                    array: self.array,
+                };
+                self.end = clone.current;
+                (self, clone)
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> ParallelIterator for $par_loose<$($type),+>
+        where
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
+        {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
+            fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
+            where
+                Cons: UnindexedConsumer<Self::Item>,
+            {
+                bridge(self, consumer)
+            }
+            fn opt_len(&self) -> Option<usize> {
+                Some(self.len())
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> IndexedParallelIterator for $par_loose<$($type),+>
+        where
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
+        {
+            fn len(&self) -> usize {
+                self.0.end - self.0.current
+            }
+            fn drive<Cons: Consumer<Self::Item>>(self, consumer: Cons) -> Cons::Result {
+                bridge(self, consumer)
+            }
+            fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+                callback.callback(self.0)
+            }
+        }
 
         #[doc = "Non packed iterator over"]
         #[doc = $number]

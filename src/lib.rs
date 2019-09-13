@@ -952,7 +952,7 @@ fn simple_parallel_sum() {
 
 #[cfg(feature = "parallel")]
 #[test]
-fn packed_parallel_iterator() {
+fn tight_parallel_iterator() {
     use iterators::ParIter2;
     use rayon::prelude::*;
 
@@ -1003,6 +1003,40 @@ fn parallel_iterator() {
                 counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 *x += *y as usize;
             });
+        });
+        assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
+        let mut iter = usizes.iter();
+        assert_eq!(iter.next(), Some(&mut 1));
+        assert_eq!(iter.next(), Some(&mut 5));
+        assert_eq!(iter.next(), None);
+    });
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn loose_parallel_iterator() {
+    use iterators::ParIter2;
+    use rayon::prelude::*;
+
+    let world = World::new::<(usize, u32)>();
+    world.loose_pack::<(usize,), (u32,)>();
+
+    world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+        entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+        entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    });
+
+    world.run::<(&mut usize, &u32, ThreadPool), _>(|(mut usizes, u32s, thread_pool)| {
+        let counter = std::sync::atomic::AtomicUsize::new(0);
+        thread_pool.install(|| {
+            if let ParIter2::Loose(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(x, y)| {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    *x += *y as usize;
+                });
+            } else {
+                panic!()
+            }
         });
         assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
         let mut iter = usizes.iter();
