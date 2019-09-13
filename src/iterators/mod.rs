@@ -59,6 +59,10 @@ pub trait IntoIter {
     fn par_iter(self) -> Self::IntoParIter;
 }
 
+pub trait IteratorWithId: Iterator {
+    fn next_with_id(&mut self) -> Option<(Key, Self::Item)>;
+}
+
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them
 #[doc(hidden)]
@@ -382,6 +386,7 @@ pub trait AbstractMut: Clone + Send {
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
     fn indices(&self) -> *const Key;
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out;
+    unsafe fn id_at(&self, index: usize) -> Key;
 }
 
 impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
@@ -416,6 +421,9 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.dense.get_unchecked(index)
+    }
 }
 
 impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
@@ -449,6 +457,9 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
     }
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
+    }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.dense.get_unchecked(index)
     }
 }
 
@@ -500,6 +511,9 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
             _ => self.get_data(index),
         }
     }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.dense.add(index)
+    }
 }
 
 impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
@@ -524,6 +538,9 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
     }
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
+    }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.0.dense.get_unchecked(index)
     }
 }
 
@@ -550,6 +567,9 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.0.dense.get_unchecked(index)
+    }
 }
 
 impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
@@ -575,6 +595,9 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.0.dense.get_unchecked(index)
+    }
 }
 
 impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
@@ -599,5 +622,8 @@ impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
     }
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
+    }
+    unsafe fn id_at(&self, index: usize) -> Key {
+        *self.0.dense.add(index)
     }
 }

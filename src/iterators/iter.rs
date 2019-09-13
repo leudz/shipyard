@@ -1,4 +1,4 @@
-use super::{AbstractMut, IntoAbstract, IntoIter, ParBuf};
+use super::{AbstractMut, IntoAbstract, IntoIter, IteratorWithId, ParBuf};
 use crate::entity::Key;
 use crate::sparse_array::Pack;
 #[cfg(feature = "parallel")]
@@ -65,7 +65,6 @@ impl<T: IntoAbstract> Iter1<T> {
     pub fn into_chunk(self, size: usize) -> Result<Chunk1<T>, Self> {
         match self {
             Iter1::Tight(iter) => Ok(iter.into_chunk(size)),
-
             Iter1::Update(_) => Err(self),
         }
     }
@@ -78,7 +77,6 @@ impl<T: IntoAbstract> Iter1<T> {
     pub fn into_chunk_exact(self, size: usize) -> Result<ChunkExact1<T>, Self> {
         match self {
             Iter1::Tight(iter) => Ok(iter.into_chunk_exact(size)),
-
             Iter1::Update(_) => Err(self),
         }
     }
@@ -88,6 +86,9 @@ impl<T: IntoAbstract> Iter1<T> {
     ) -> Filter1<T, P> {
         Filter1 { iter: self, pred }
     }
+    pub fn with_id(self) -> WithId<Self> {
+        WithId(self)
+    }
 }
 
 impl<T: IntoAbstract> Iterator for Iter1<T> {
@@ -96,6 +97,15 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
         match self {
             Iter1::Tight(iter) => iter.next(),
             Iter1::Update(iter) => iter.next(),
+        }
+    }
+}
+
+impl<T: IntoAbstract> IteratorWithId for Iter1<T> {
+    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
+        match self {
+            Iter1::Tight(iter) => iter.next_with_id(),
+            Iter1::Update(iter) => iter.next_with_id(),
         }
     }
 }
@@ -220,6 +230,13 @@ where
         };
         self.end = clone.current;
         (self, clone)
+    }
+}
+
+impl<T: IntoAbstract> IteratorWithId for Tight1<T> {
+    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
+        self.next()
+            .map(|item| (unsafe { self.data.id_at(self.current - 1) }, item))
     }
 }
 
@@ -372,6 +389,38 @@ impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::O
     }
 }
 
+impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>
+    IteratorWithId for Filter1<T, P>
+{
+    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
+        match &mut self.iter {
+            Iter1::Tight(iter) => {
+                while let Some((id, item)) = iter.next_with_id() {
+                    if (self.pred)(&item) {
+                        return Some((id, item));
+                    }
+                }
+                None
+            }
+            Iter1::Update(iter) => {
+                while iter.current < iter.end {
+                    iter.current += 1;
+                    // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+                    if (self.pred)(unsafe { &iter.data.get_data(iter.current - 1) }) {
+                        return Some(unsafe {
+                            (
+                                iter.data.id_at(iter.current - 1),
+                                iter.data.mark_modified(iter.current - 1),
+                            )
+                        });
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
 pub struct Update1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,
@@ -396,9 +445,21 @@ impl<T: IntoAbstract> Iterator for Update1<T> {
         let current = self.current;
         if current < self.end {
             self.current += 1;
-            unsafe { self.data.mark_modified(current) };
             // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            Some(unsafe { self.data.get_data(current) })
+            Some(unsafe { self.data.mark_modified(current) })
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: IntoAbstract> IteratorWithId for Update1<T> {
+    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
+        let current = self.current;
+        if current < self.end {
+            self.current += 1;
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { (self.data.id_at(current), self.data.mark_modified(current)) })
         } else {
             None
         }
@@ -537,6 +598,15 @@ where
             unsafe { data.mark_modified(index) };
         }
         result
+    }
+}
+
+pub struct WithId<I>(I);
+
+impl<I: IteratorWithId> Iterator for WithId<I> {
+    type Item = (Key, I::Item);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next_with_id()
     }
 }
 

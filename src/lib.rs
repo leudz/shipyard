@@ -1431,3 +1431,25 @@ fn par_update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
+
+#[test]
+fn simple_with_id() {
+    let world = World::new::<(usize, u32)>();
+    world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+        let entity1 = entities.add_entity((&mut usizes,), (0usize,));
+        entities.add_component((&mut u32s,), (1u32,), entity1);
+        let entity2 = entities.add_entity((&mut usizes,), (2usize,));
+
+        let mut iter = (&usizes).iter().with_id();
+        let item = iter.next().unwrap();
+        assert!(item.0 == entity1 && item.1 == &0);
+        let item = iter.next().unwrap();
+        assert!(item.0 == entity2 && item.1 == &2);
+        assert!(iter.next().is_none());
+
+        let mut iter = (&u32s).iter().with_id();
+        let item = iter.next().unwrap();
+        assert!(item.0 == entity1 && item.1 == &1);
+        assert!(iter.next().is_none());
+    });
+}
