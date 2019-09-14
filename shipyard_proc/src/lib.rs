@@ -33,6 +33,7 @@ pub fn system(
     }
 
     let body = &*run.block;
+    let vis = run.vis;
 
     let mut data = Vec::with_capacity(run.sig.inputs.len());
     let mut binding = Vec::with_capacity(run.sig.inputs.len());
@@ -120,7 +121,7 @@ pub fn system(
     }
 
     (quote! {
-        struct #name;
+        #vis struct #name;
         impl<'a> ::shipyard::System<'a> for #name {
             type Data = (#(#data,)*);
             fn run(&self, (#(#binding,)*): <Self::Data as ::shipyard::SystemData<'a>>::View) #body
