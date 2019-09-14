@@ -47,38 +47,58 @@ impl<T> View<'_, T> {
     pub fn len(&self) -> usize {
         self.dense.len()
     }
-    pub fn modified(&self) -> Option<View<T>> {
+    pub fn modified(&self) -> View<T> {
         match &self.pack_info.pack {
             Pack::Update(pack) => {
                 if self.dense.len() >= pack.inserted + pack.modified {
-                    Some(View {
+                    View {
                         sparse: self.sparse,
                         dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
                         data: &self.data[pack.inserted..pack.inserted + pack.modified],
                         pack_info: self.pack_info,
-                    })
+                    }
                 } else {
-                    None
+                    View {
+                        sparse: &[],
+                        dense: &[],
+                        data: &[],
+                        pack_info: self.pack_info,
+                    }
                 }
             }
-            _ => None,
+            _ => View {
+                sparse: &[],
+                dense: &[],
+                data: &[],
+                pack_info: self.pack_info,
+            },
         }
     }
-    pub fn inserted(&self) -> Option<View<T>> {
+    pub fn inserted(&self) -> View<T> {
         match &self.pack_info.pack {
             Pack::Update(pack) => {
                 if self.dense.len() >= pack.inserted {
-                    Some(View {
+                    View {
                         sparse: self.sparse,
                         dense: &self.dense[0..pack.inserted],
                         data: &self.data[0..pack.inserted],
                         pack_info: self.pack_info,
-                    })
+                    }
                 } else {
-                    None
+                    View {
+                        sparse: &[],
+                        dense: &[],
+                        data: &[],
+                        pack_info: self.pack_info,
+                    }
                 }
             }
-            _ => None,
+            _ => View {
+                sparse: &[],
+                dense: &[],
+                data: &[],
+                pack_info: self.pack_info,
+            },
         }
     }
 }
