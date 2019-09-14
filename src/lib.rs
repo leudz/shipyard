@@ -1487,3 +1487,68 @@ fn simple_with_id() {
         assert!(iter.next().is_none());
     });
 }
+
+#[test]
+fn multiple_update_pack() {
+    use iterators::Iter2;
+
+    let world = World::new::<(usize, u32)>();
+    world.update_pack::<u32>();
+
+    world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+        entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+        entities.add_entity(&mut usizes, 2usize);
+        entities.add_entity((&mut usizes, &mut u32s), (4usize, 5u32));
+        entities.add_entity(&mut u32s, 7u32);
+        entities.add_entity((&mut usizes, &mut u32s), (8usize, 9u32));
+        entities.add_entity((&mut usizes,), (10usize,));
+
+        u32s.clear_inserted();
+    });
+
+    world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+        if let Iter2::Update(mut iter) = (&usizes, &u32s).iter() {
+            assert_eq!(iter.next(), Some((&0, &1)));
+            assert_eq!(iter.next(), Some((&4, &5)));
+            assert_eq!(iter.next(), Some((&8, &9)));
+            assert_eq!(iter.next(), None);
+        } else {
+            panic!("not packed");
+        }
+
+        assert_eq!(u32s.modified().len(), 0);
+
+        if let Iter2::Update(mut iter) = (&mut usizes, &u32s).iter() {
+            assert_eq!(iter.next(), Some((&mut 0, &1)));
+            assert_eq!(iter.next(), Some((&mut 4, &5)));
+            assert_eq!(iter.next(), Some((&mut 8, &9)));
+            assert_eq!(iter.next(), None);
+        } else {
+            panic!("not packed");
+        }
+
+        assert_eq!(u32s.modified().len(), 0);
+
+        if let Iter2::Update(mut iter) = (&usizes, &mut u32s).iter() {
+            assert_eq!(iter.next(), Some((&0, &mut 1)));
+            assert_eq!(iter.next(), Some((&4, &mut 5)));
+            assert_eq!(iter.next(), Some((&8, &mut 9)));
+            assert_eq!(iter.next(), None);
+        } else {
+            panic!("not packed");
+        }
+
+        let mut modified = u32s.modified().iter();
+        assert_eq!(modified.next(), Some(&1));
+        assert_eq!(modified.next(), Some(&5));
+        assert_eq!(modified.next(), Some(&9));
+        assert_eq!(modified.next(), None);
+
+        let mut iter = (&u32s).iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&5));
+        assert_eq!(iter.next(), Some(&9));
+        assert_eq!(iter.next(), Some(&7));
+        assert_eq!(iter.next(), None);
+    });
+}

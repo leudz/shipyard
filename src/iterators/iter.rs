@@ -624,6 +624,7 @@ macro_rules! impl_iterators {
         $par_loose: ident
         $par_non_packed: ident
         $filter: ident
+        $update: ident
         $(($type: ident, $index: tt))+
     ) => {
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
@@ -631,9 +632,11 @@ macro_rules! impl_iterators {
             #[cfg(feature = "parallel")]
             type IntoParIter = $par_iter<$($type,)+>;
             fn iter(self) -> Self::IntoIter {
+                #[derive(PartialEq, Eq)]
                 enum PackIter {
                     Tight,
                     Loose,
+                    Update,
                     None,
                 }
 
@@ -645,7 +648,7 @@ macro_rules! impl_iterators {
                 let mut pack_iter = PackIter::None;
 
                 $({
-                    if let PackIter::None = pack_iter {
+                    if pack_iter == PackIter::None || pack_iter == PackIter::Update {
                         match &self.$index.pack_info().pack {
                             Pack::Tight(pack) => {
                                 if let Ok(types) = pack.check_types(&type_ids) {
@@ -680,7 +683,15 @@ macro_rules! impl_iterators {
                                     }
                                 }
                             }
-                            Pack::Update(_) => unimplemented!(),
+                            Pack::Update(_) => {
+                                pack_iter = PackIter::Update;
+                                if let Some(len) = self.$index.len() {
+                                    if len < smallest {
+                                        smallest = len;
+                                        smallest_index = i;
+                                    }
+                                }
+                            }
                             Pack::NoPack => if let Some(len) = self.$index.len() {
                                 if len < smallest {
                                     smallest = len;
@@ -725,6 +736,28 @@ macro_rules! impl_iterators {
                             indices: indices.unwrap(),
                         })
                     }
+                    PackIter::Update => {
+                        let mut indices = None;
+                        let data = ($(self.$index.into_abstract(),)+);
+                        // if the user is trying to iterate over Not containers only
+                        if smallest == std::usize::MAX {
+                            smallest = 0;
+                        } else {
+                            $(
+                                if $index == smallest_index {
+                                    indices = Some(data.$index.indices());
+                                }
+                            )+
+                        }
+
+                        $iter::Update($update {
+                            data,
+                            indices: indices.unwrap_or(std::ptr::null()),
+                            current: 0,
+                            end: smallest,
+                            array: smallest_index,
+                        })
+                    }
                     PackIter::None => {
                         let mut indices = None;
                         let data = ($(self.$index.into_abstract(),)+);
@@ -754,6 +787,7 @@ macro_rules! impl_iterators {
                 match self.iter() {
                     $iter::Tight(iter) => $par_iter::Tight($par_tight(iter)),
                     $iter::Loose(iter) => $par_iter::Loose($par_loose(iter)),
+                    $iter::Update(_) => unimplemented!(),
                     $iter::NonPacked(iter) => $par_iter::NonPacked($par_non_packed(iter)),
                 }
             }
@@ -766,6 +800,7 @@ macro_rules! impl_iterators {
         pub enum $iter<$($type: IntoAbstract),+> {
             Tight($tight<$($type),+>),
             Loose($loose<$($type),+>),
+            Update($update<$($type),+>),
             NonPacked($non_packed<$($type),+>),
         }
 
@@ -778,6 +813,7 @@ macro_rules! impl_iterators {
                 match self {
                     $iter::Tight(iter) => Ok(iter.into_chunk(size)),
                     $iter::Loose(_) => Err(self),
+                    $iter::Update(_) => Err(self),
                     $iter::NonPacked(_) => Err(self),
                 }
             }
@@ -791,6 +827,7 @@ macro_rules! impl_iterators {
                 match self {
                     $iter::Tight(iter) => Ok(iter.into_chunk_exact(size)),
                     $iter::Loose(_) => Err(self),
+                    $iter::Update(_) => Err(self),
                     $iter::NonPacked(_) => Err(self),
                 }
             }
@@ -808,6 +845,7 @@ macro_rules! impl_iterators {
                 match self {
                     $iter::Tight(iter) => iter.next(),
                     $iter::Loose(iter) => iter.next(),
+                    $iter::Update(iter) => iter.next(),
                     $iter::NonPacked(iter) => iter.next(),
                 }
             }
@@ -1218,19 +1256,20 @@ macro_rules! impl_iterators {
                     // and self.indices can't access out of bounds
                     let index = unsafe { std::ptr::read(self.indices.add(self.current)) };
                     self.current += 1;
-                    return Some(($({
+                    let data_indices = ($(
                         if $index == self.array {
-                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                            unsafe { self.data.$index.get_data(self.current - 1) }
+                            self.current - 1
                         } else {
-                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                            if let Some(item) = unsafe { self.data.$index.abs_get(index) } {
-                                item
+                            if let Some(index) = self.data.$index.index_of(index) {
+                                index
                             } else {
                                 continue
                             }
-                        }
-                    },)+))
+                        },
+                    )+);
+                    unsafe {
+                        return Some(($(self.data.$index.get_data(data_indices.$index),)+))
+                    }
                 }
                 None
             }
@@ -1278,6 +1317,41 @@ macro_rules! impl_iterators {
                 None
             }
         }
+
+        pub struct $update<$($type: IntoAbstract),+> {
+            data: ($($type::AbsView,)+),
+            indices: *const Key,
+            current: usize,
+            end: usize,
+            array: usize,
+        }
+
+        impl<$($type: IntoAbstract,)+> Iterator for $update<$($type),+> {
+            type Item = ($(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+);
+            fn next(&mut self) -> Option<Self::Item> {
+                while self.current < self.end {
+                    // SAFE at this point there are no mutable reference to sparse or dense
+                    // and self.indices can't access out of bounds
+                    let index = unsafe { std::ptr::read(self.indices.add(self.current)) };
+                    self.current += 1;
+                    let data_indices = ($(
+                        if $index == self.array {
+                            self.current - 1
+                        } else {
+                            if let Some(index) = self.data.$index.index_of(index) {
+                                index
+                            } else {
+                                continue
+                            }
+                        },
+                    )+);
+                    unsafe {
+                        return Some(($(self.data.$index.mark_modified(data_indices.$index),)+))
+                    }
+                }
+                None
+            }
+        }
     }
 }
 
@@ -1295,9 +1369,10 @@ macro_rules! iterators {
         $($par_loose: ident)*; $par_loose1: ident $($queue_par_loose: ident)+;
         $($par_non_packed: ident)*; $par_non_packed1: ident $($queue_par_non_packed: ident)+;
         $($filter: ident)*; $filter1: ident $($queue_filter: ident)+;
+        $($update: ident)*; $update1: ident $($queue_update: ident)+;
         $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
-        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $update1 $(($type, $index))*];
         iterators![
             $($number)* $number1; $($queue_number)+;
             $($iter)* $iter1; $($queue_iter)+;
@@ -1311,6 +1386,7 @@ macro_rules! iterators {
             $($par_loose)* $par_loose1; $($queue_par_loose)+;
             $($par_non_packed)* $par_non_packed1; $($queue_par_non_packed)+;
             $($filter)* $filter1; $($queue_filter)+;
+            $($update)* $update1; $($queue_update)+;
             $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*
         ];
     };
@@ -1327,9 +1403,10 @@ macro_rules! iterators {
         $($par_loose: ident)*; $par_loose1: ident;
         $($par_non_packed: ident)*; $par_non_packed1: ident;
         $($filter: ident)*; $filter1: ident;
+        $($update: ident)*; $update1: ident;
         $(($type: ident, $index: tt))*;
     ) => {
-        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $update1 $(($type, $index))*];
     }
 }
 
@@ -1346,6 +1423,6 @@ iterators![
     ;ParLoose2 ParLoose3 ParLoose4 ParLoose5 ParLoose6 ParLoose7 ParLoose8 ParLoose9 ParLoose10;
     ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5 ParNonPacked6 ParNonPacked7 ParNonPacked8 ParNonPacked9 ParNonPacked10;
     ;Filter2 Filter3 Filter4 Filter5 Filter6 Filter7 Filter8 Filter9 Filter10;
-    //;Update2 Update3 Update4 Update5 Update6 Update7 Update8 Update9 Update10;
+    ;Update2 Update3 Update4 Update5 Update6 Update7 Update8 Update9 Update10;
     (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];

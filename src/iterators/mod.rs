@@ -387,6 +387,7 @@ pub trait AbstractMut: Clone + Send {
     fn indices(&self) -> *const Key;
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out;
     unsafe fn id_at(&self, index: usize) -> Key;
+    fn index_of(&self, entity: Key) -> Option<usize>;
 }
 
 impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
@@ -424,6 +425,13 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.dense.get_unchecked(index)
     }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        if self.contains(entity) {
+            Some(unsafe { *self.sparse.get_unchecked(entity.index()) })
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
@@ -460,6 +468,13 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
     }
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.dense.get_unchecked(index)
+    }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        if self.contains(entity) {
+            Some(unsafe { *self.sparse.get_unchecked(entity.index()) })
+        } else {
+            None
+        }
     }
 }
 
@@ -514,6 +529,15 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.dense.add(index)
     }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        unsafe {
+            if self.contains(entity) {
+                Some(*self.sparse.add(entity.index()))
+            } else {
+                None
+            }
+        }
+    }
 }
 
 impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
@@ -527,8 +551,10 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
         }
     }
     unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
-    unsafe fn get_data(&mut self, _: usize) -> Self::Out {
-        unreachable!()
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        if index != std::usize::MAX {
+            unreachable!()
+        }
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
@@ -541,6 +567,13 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
     }
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.get_unchecked(index)
+    }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        if self.0.contains(entity) {
+            None
+        } else {
+            Some(std::usize::MAX)
+        }
     }
 }
 
@@ -555,8 +588,10 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
         }
     }
     unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
-    unsafe fn get_data(&mut self, _: usize) -> Self::Out {
-        unreachable!()
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        if index != std::usize::MAX {
+            unreachable!()
+        }
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
@@ -569,6 +604,13 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
     }
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.get_unchecked(index)
+    }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        if self.0.contains(entity) {
+            None
+        } else {
+            Some(std::usize::MAX)
+        }
     }
 }
 
@@ -583,8 +625,10 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
         }
     }
     unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
-    unsafe fn get_data(&mut self, _: usize) -> Self::Out {
-        unreachable!()
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        if index != std::usize::MAX {
+            unreachable!()
+        }
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
@@ -597,6 +641,13 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
     }
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.get_unchecked(index)
+    }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        if self.0.contains(entity) {
+            None
+        } else {
+            Some(std::usize::MAX)
+        }
     }
 }
 
@@ -611,8 +662,10 @@ impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
         }
     }
     unsafe fn abs_get_unchecked(&mut self, _: Key) -> Self::Out {}
-    unsafe fn get_data(&mut self, _: usize) -> Self::Out {
-        unreachable!()
+    unsafe fn get_data(&mut self, index: usize) -> Self::Out {
+        if index != std::usize::MAX {
+            unreachable!()
+        }
     }
     unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
         unreachable!()
@@ -625,5 +678,12 @@ impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
     }
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.add(index)
+    }
+    fn index_of(&self, entity: Key) -> Option<usize> {
+        if unsafe { self.0.contains(entity) } {
+            None
+        } else {
+            Some(std::usize::MAX)
+        }
     }
 }
