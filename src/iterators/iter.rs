@@ -1328,9 +1328,53 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract,)+ P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool> Iterator for $filter<$($type,)+ P> {
             type Item = ($(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+);
             fn next(&mut self) -> Option<Self::Item> {
-                while let Some(item) = self.iter.next() {
-                    if (self.pred)($(&item.$index),+) {
-                        return Some(item);
+                match &mut self.iter {
+                    $iter::Tight(iter) => {
+                        for item in iter {
+                            if (self.pred)($(&item.$index),+) {
+                                return Some(item);
+                            }
+                        }
+                    }
+                    $iter::Loose(iter) => {
+                        for item in iter {
+                            if (self.pred)($(&item.$index),+) {
+                                return Some(item);
+                            }
+                        }
+                    }
+                    $iter::NonPacked(iter) => {
+                        for item in iter {
+                            if (self.pred)($(&item.$index),+) {
+                                return Some(item);
+                            }
+                        }
+                    }
+                    $iter::Update(iter) => {
+                        while iter.current < iter.end {
+                            let index = unsafe { std::ptr::read(iter.indices.add(iter.current)) };
+
+                            iter.current += 1;
+
+                            let data_indices = ($(
+                                if $index == iter.array {
+                                    iter.current - 1
+                                } else {
+                                    if let Some(index) = iter.data.$index.index_of(index) {
+                                        index
+                                    } else {
+                                        continue
+                                    }
+                                },
+                            )+);
+                            if (self.pred)($(unsafe {&iter.data.$index.get_data(data_indices.$index)}),+) {
+                                return Some(($(
+                                    unsafe {
+                                        iter.data.$index.mark_modified(data_indices.$index)
+                                    },
+                                )+))
+                            }
+                        }
                     }
                 }
                 None
@@ -1346,6 +1390,15 @@ macro_rules! impl_iterators {
         }
 
         unsafe impl<$($type: IntoAbstract),+> Send for $update<$($type),+> {}
+
+        impl<$($type: IntoAbstract),+> $update<$($type),+> {
+            pub fn filtered<P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool>(self, pred: P) -> $filter<$($type,)+ P> {
+                $filter {
+                    iter: $iter::Update(self),
+                    pred,
+                }
+            }
+        }
 
         impl<$($type: IntoAbstract,)+> Iterator for $update<$($type),+> {
             type Item = ($(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+);
