@@ -625,6 +625,9 @@ macro_rules! impl_iterators {
         $par_non_packed: ident
         $filter: ident
         $update: ident
+        $par_update: ident
+        $inner_par_update: ident
+        $par_seq_update: ident
         $(($type: ident, $index: tt))+
     ) => {
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
@@ -787,7 +790,7 @@ macro_rules! impl_iterators {
                 match self.iter() {
                     $iter::Tight(iter) => $par_iter::Tight($par_tight(iter)),
                     $iter::Loose(iter) => $par_iter::Loose($par_loose(iter)),
-                    $iter::Update(_) => unimplemented!(),
+                    $iter::Update(iter) => $par_iter::Update($par_update(iter)),
                     $iter::NonPacked(iter) => $par_iter::NonPacked($par_non_packed(iter)),
                 }
             }
@@ -859,6 +862,7 @@ macro_rules! impl_iterators {
         pub enum $par_iter<$($type: IntoAbstract),+> {
             Tight($par_tight<$($type),+>),
             Loose($par_loose<$($type),+>),
+            Update($par_update<$($type),+>),
             NonPacked($par_non_packed<$($type),+>),
         }
 
@@ -873,7 +877,8 @@ macro_rules! impl_iterators {
                 match self {
                     $par_iter::Tight(iter) => bridge(iter, consumer),
                     $par_iter::Loose(iter) => bridge(iter, consumer),
-                    $par_iter::NonPacked(iter) => bridge_unindexed(iter.0, consumer),
+                    $par_iter::Update(iter) => iter.drive_unindexed(consumer),
+                    $par_iter::NonPacked(iter) => iter.drive_unindexed(consumer),
                 }
             }
         }
@@ -1301,6 +1306,20 @@ macro_rules! impl_iterators {
         #[cfg(feature = "parallel")]
         pub struct $par_non_packed<$($type: IntoAbstract),+>($non_packed<$($type),+>);
 
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> ParallelIterator for $par_non_packed<$($type),+>
+        where
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
+        {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
+            fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
+            where
+                Cons: UnindexedConsumer<Self::Item>,
+            {
+                bridge_unindexed(self.0, consumer)
+            }
+        }
+
         pub struct $filter<$($type: IntoAbstract,)+ P: FnMut($(&<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+) -> bool> {
             iter: $iter<$($type,)+>,
             pred: P,
@@ -1325,6 +1344,8 @@ macro_rules! impl_iterators {
             end: usize,
             array: usize,
         }
+
+        unsafe impl<$($type: IntoAbstract),+> Send for $update<$($type),+> {}
 
         impl<$($type: IntoAbstract,)+> Iterator for $update<$($type),+> {
             type Item = ($(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+);
@@ -1352,6 +1373,133 @@ macro_rules! impl_iterators {
                 None
             }
         }
+
+        #[cfg(feature = "parallel")]
+        pub struct $par_update<$($type: IntoAbstract),+>($update<$($type),+>);
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> ParallelIterator for $par_update<$($type),+>
+        where
+            $(<$type::AbsView as AbstractMut>::Out: Send),+
+        {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
+            fn drive_unindexed<Cons>(self, consumer: Cons) -> Cons::Result
+            where
+                Cons: UnindexedConsumer<Self::Item>,
+            {
+                use std::sync::atomic::Ordering;
+
+                let mut data = self.0.data.clone();
+                let len = self.0.end - self.0.current;
+                let updated = ParBuf::new(len);
+
+                let inner = $inner_par_update {
+                    iter: self.0,
+                    updated: &updated,
+                };
+
+                let result = bridge_unindexed(inner, consumer);
+                let slice = unsafe {
+                    std::slice::from_raw_parts_mut(updated.buf, updated.len.load(Ordering::Relaxed))
+                };
+                for &mut index in slice {
+                    $(
+                        unsafe {data.$index.mark_id_modified(index)};
+                    )+
+                }
+                result
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        pub struct $inner_par_update<'a, $($type: IntoAbstract),+> {
+            iter: $update<$($type),+>,
+            updated: &'a ParBuf<Key>,
+        }
+
+        impl<'a, $($type: IntoAbstract),+> $inner_par_update<'a, $($type),+> {
+            fn clone(&self) -> Self {
+                let iter = $update {
+                    data: self.iter.data.clone(),
+                    indices: self.iter.indices,
+                    current: self.iter.current,
+                    end: self.iter.end,
+                    array: self.iter.array,
+                };
+
+                $inner_par_update {
+                    iter,
+                    updated: self.updated,
+                }
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<'a, $($type: IntoAbstract),+> UnindexedProducer for $inner_par_update<'a, $($type,)+> {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
+            fn split(mut self) -> (Self, Option<Self>) {
+                let len = self.iter.end - self.iter.current;
+                if len >= 2 {
+                    let mut clone = self.clone();
+                    clone.iter.current += len / 2;
+                    self.iter.end = clone.iter.current;
+                    (self, Some(clone))
+                } else {
+                    (self, None)
+                }
+            }
+            fn fold_with<Fold>(self, folder: Fold) -> Fold
+            where Fold: Folder<Self::Item> {
+                let iter: $par_seq_update<$($type),+> = $par_seq_update {
+                    updated: self.updated,
+                    data: self.iter.data,
+                    indices: self.iter.indices,
+                    current: self.iter.current,
+                    end: self.iter.end,
+                    array: self.iter.array,
+                };
+                folder.consume_iter(iter)
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        pub struct $par_seq_update<'a, $($type: IntoAbstract),+> {
+            data: ($($type::AbsView,)+),
+            current: usize,
+            end: usize,
+            indices: *const Key,
+            updated: &'a ParBuf<Key>,
+            array: usize,
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<'a, $($type: IntoAbstract),+> Iterator for $par_seq_update<'a, $($type),+> {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
+            fn next(&mut self) -> Option<Self::Item> {
+                while self.current < self.end {
+                    let index = unsafe { std::ptr::read(self.indices.add(self.current)) };
+                    self.current += 1;
+                    let data_indices = ($(
+                        if $index == self.array {
+                            self.current - 1
+                        } else {
+                            if let Some(index) = self.data.$index.index_of(index) {
+                                index
+                            } else {
+                                continue
+                            }
+                        },
+                    )+);
+
+                    self.updated.push(index);
+
+                    unsafe {
+                        return Some(($(self.data.$index.get_data(data_indices.$index),)+))
+                    }
+                }
+                None
+            }
+        }
     }
 }
 
@@ -1370,9 +1518,12 @@ macro_rules! iterators {
         $($par_non_packed: ident)*; $par_non_packed1: ident $($queue_par_non_packed: ident)+;
         $($filter: ident)*; $filter1: ident $($queue_filter: ident)+;
         $($update: ident)*; $update1: ident $($queue_update: ident)+;
+        $($par_update: ident)*; $par_update1: ident $($queue_par_update: ident)+;
+        $($inner_par_update: ident)*; $inner_par_update1: ident $($queue_inner_par_update: ident)+;
+        $($par_seq_update: ident)*; $par_seq_update1: ident $($queue_par_seq_update: ident)+;
         $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
-        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $update1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $update1 $par_update1 $inner_par_update1 $par_seq_update1 $(($type, $index))*];
         iterators![
             $($number)* $number1; $($queue_number)+;
             $($iter)* $iter1; $($queue_iter)+;
@@ -1387,6 +1538,9 @@ macro_rules! iterators {
             $($par_non_packed)* $par_non_packed1; $($queue_par_non_packed)+;
             $($filter)* $filter1; $($queue_filter)+;
             $($update)* $update1; $($queue_update)+;
+            $($par_update)* $par_update1; $($queue_par_update)+;
+            $($inner_par_update)* $inner_par_update1; $($queue_inner_par_update)+;
+            $($par_seq_update)* $par_seq_update1; $($queue_par_seq_update)+;
             $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*
         ];
     };
@@ -1404,9 +1558,12 @@ macro_rules! iterators {
         $($par_non_packed: ident)*; $par_non_packed1: ident;
         $($filter: ident)*; $filter1: ident;
         $($update: ident)*; $update1: ident;
+        $($par_update: ident)*; $par_update1: ident;
+        $($inner_par_update: ident)*; $inner_par_update1: ident;
+        $($par_seq_update: ident)*; $par_seq_update1: ident;
         $(($type: ident, $index: tt))*;
     ) => {
-        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $update1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $par_iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $par_tight1 $par_loose1 $par_non_packed1 $filter1 $update1 $par_update1 $inner_par_update1 $par_seq_update1 $(($type, $index))*];
     }
 }
 
@@ -1424,5 +1581,8 @@ iterators![
     ;ParNonPacked2 ParNonPacked3 ParNonPacked4 ParNonPacked5 ParNonPacked6 ParNonPacked7 ParNonPacked8 ParNonPacked9 ParNonPacked10;
     ;Filter2 Filter3 Filter4 Filter5 Filter6 Filter7 Filter8 Filter9 Filter10;
     ;Update2 Update3 Update4 Update5 Update6 Update7 Update8 Update9 Update10;
+    ;ParUpdate2 ParUpdate3 ParUpdate4 ParUpdate5 ParUpdate6 ParUpdate7 ParUpdate8 ParUpdate9 ParUpdate10;
+    ;InnerParUpdate2 InnerParUpdate3 InnerParUpdate4 InnerParUpdate5 InnerParUpdate6 InnerParUpdate7 InnerParUpdate8 InnerParUpdate9 InnerParUpdate10;
+    ;ParSeqUpdate2 ParSeqUpdate3 ParSeqUpdate4 ParSeqUpdate5 ParSeqUpdate6 ParSeqUpdate7 ParSeqUpdate8 ParSeqUpdate9 ParSeqUpdate10;
     (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];

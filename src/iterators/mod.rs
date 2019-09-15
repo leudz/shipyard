@@ -386,6 +386,7 @@ pub trait AbstractMut: Clone + Send {
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
     fn indices(&self) -> *const Key;
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out;
+    unsafe fn mark_id_modified(&mut self, entity: Key);
     unsafe fn id_at(&self, index: usize) -> Key;
     fn index_of(&self, entity: Key) -> Option<usize>;
 }
@@ -422,6 +423,7 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn mark_id_modified(&mut self, _: Key) {}
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.dense.get_unchecked(index)
     }
@@ -466,6 +468,7 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn mark_id_modified(&mut self, _: Key) {}
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.dense.get_unchecked(index)
     }
@@ -526,6 +529,27 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
             _ => self.get_data(index),
         }
     }
+    unsafe fn mark_id_modified(&mut self, entity: Key) {
+        if let Pack::Update(pack) = &mut (*self.pack_info).pack {
+            let dense_index = *self.sparse.add(entity.index());
+            if dense_index >= pack.inserted + pack.modified {
+                std::ptr::swap(
+                    self.dense.add(pack.inserted + pack.modified),
+                    self.dense.add(dense_index),
+                );
+                std::ptr::swap(
+                    self.data.add(pack.inserted + pack.modified),
+                    self.data.add(dense_index),
+                );
+                *self
+                    .sparse
+                    .add((*self.dense.add(pack.inserted + pack.modified)).index()) = dense_index;
+                *self.sparse.add((*self.dense.add(dense_index)).index()) =
+                    pack.inserted + pack.modified;
+                pack.modified += 1;
+            }
+        }
+    }
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.dense.add(index)
     }
@@ -565,6 +589,7 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn mark_id_modified(&mut self, _: Key) {}
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.get_unchecked(index)
     }
@@ -602,6 +627,7 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn mark_id_modified(&mut self, _: Key) {}
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.get_unchecked(index)
     }
@@ -639,6 +665,7 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn mark_id_modified(&mut self, _: Key) {}
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.get_unchecked(index)
     }
@@ -676,6 +703,7 @@ impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         self.get_data(index)
     }
+    unsafe fn mark_id_modified(&mut self, _: Key) {}
     unsafe fn id_at(&self, index: usize) -> Key {
         *self.0.dense.add(index)
     }

@@ -1552,3 +1552,55 @@ fn multiple_update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
+
+#[test]
+fn par_multiple_update_pack() {
+    use iterators::ParIter2;
+    use rayon::prelude::*;
+
+    let world = World::new::<(usize, u32)>();
+    world.update_pack::<u32>();
+
+    world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+        entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+        entities.add_entity(&mut usizes, 2usize);
+        entities.add_entity((&mut usizes, &mut u32s), (4usize, 5u32));
+        entities.add_entity(&mut u32s, 7u32);
+        entities.add_entity((&mut usizes, &mut u32s), (8usize, 9u32));
+        entities.add_entity((&mut usizes,), (10usize,));
+
+        u32s.clear_inserted();
+    });
+
+    world.run::<(&mut usize, &mut u32), _>(|(mut usizes, mut u32s)| {
+        if let ParIter2::Update(iter) = (&usizes, &u32s).par_iter() {
+            iter.for_each(|_| {});
+        } else {
+            panic!("not packed");
+        }
+
+        assert_eq!(u32s.modified().len(), 0);
+
+        if let ParIter2::Update(iter) = (&mut usizes, &u32s).par_iter() {
+            iter.for_each(|_| {});
+        } else {
+            panic!("not packed");
+        }
+
+        assert_eq!(u32s.modified().len(), 0);
+
+        if let ParIter2::Update(iter) = (&usizes, &mut u32s).par_iter() {
+            iter.for_each(|_| {});
+        } else {
+            panic!("not packed");
+        }
+
+        let mut modified: Vec<_> = u32s.modified().iter().collect();
+        modified.sort_unstable();
+        assert_eq!(modified, vec![&1, &5, &9]);
+
+        let mut iter: Vec<_> = (&u32s).iter().collect();
+        iter.sort_unstable();
+        assert_eq!(iter, vec![&1, &5, &7, &9]);
+    });
+}
