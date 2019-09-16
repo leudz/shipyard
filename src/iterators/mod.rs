@@ -60,6 +60,9 @@ pub trait IntoIter {
 }
 
 pub trait IteratorWithId: Iterator {
+    fn with_id(self) -> iter::WithId<Self>
+    where
+        Self: Sized;
     fn next_with_id(&mut self) -> Option<(Key, Self::Item)>;
 }
 

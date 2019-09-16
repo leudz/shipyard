@@ -86,9 +86,6 @@ impl<T: IntoAbstract> Iter1<T> {
     ) -> Filter1<T, P> {
         Filter1 { iter: self, pred }
     }
-    pub fn with_id(self) -> WithId<Self> {
-        WithId(self)
-    }
 }
 
 impl<T: IntoAbstract> Iterator for Iter1<T> {
@@ -102,6 +99,9 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
 }
 
 impl<T: IntoAbstract> IteratorWithId for Iter1<T> {
+    fn with_id(self) -> WithId<Self> {
+        WithId(self)
+    }
     fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
         match self {
             Iter1::Tight(iter) => iter.next_with_id(),
@@ -252,6 +252,9 @@ where
 }
 
 impl<T: IntoAbstract> IteratorWithId for Tight1<T> {
+    fn with_id(self) -> WithId<Self> {
+        WithId(self)
+    }
     fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
         self.next()
             .map(|item| (unsafe { self.data.id_at(self.current - 1) }, item))
@@ -401,6 +404,9 @@ impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::O
 impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>
     IteratorWithId for Filter1<T, P>
 {
+    fn with_id(self) -> WithId<Self> {
+        WithId(self)
+    }
     fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
         match &mut self.iter {
             Iter1::Tight(iter) => {
@@ -463,6 +469,9 @@ impl<T: IntoAbstract> Iterator for Update1<T> {
 }
 
 impl<T: IntoAbstract> IteratorWithId for Update1<T> {
+    fn with_id(self) -> WithId<Self> {
+        WithId(self)
+    }
     fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
         let current = self.current;
         if current < self.end {

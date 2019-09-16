@@ -115,7 +115,7 @@ pub use crate::run::System;
 pub use crate::run::SystemData;
 pub use crate::world::World;
 pub use entity::{Entities, EntitiesMut, EntitiesViewMut, Key};
-pub use iterators::IntoIter;
+pub use iterators::{IntoIter, IteratorWithId};
 #[doc(hidden)]
 #[cfg(feature = "proc")]
 pub use shipyard_proc::system;
