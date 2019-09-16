@@ -3,8 +3,8 @@ use crate::entity::Key;
 use crate::sparse_array::Pack;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{
-    bridge, bridge_producer_consumer, bridge_unindexed, Consumer, Folder, Producer,
-    ProducerCallback, UnindexedConsumer, UnindexedProducer,
+    bridge, bridge_unindexed, Consumer, Folder, Producer, ProducerCallback, UnindexedConsumer,
+    UnindexedProducer,
 };
 #[cfg(feature = "parallel")]
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
@@ -117,7 +117,7 @@ pub enum ParIter1<T: IntoAbstract> {
 }
 
 #[cfg(feature = "parallel")]
-impl<T: IntoAbstract + Send + Sync> ParallelIterator for ParIter1<T>
+impl<T: IntoAbstract> ParallelIterator for ParIter1<T>
 where
     <T::AbsView as AbstractMut>::Out: Send,
 {
@@ -126,9 +126,28 @@ where
     where
         C: UnindexedConsumer<Self::Item>,
     {
+        bridge(self, consumer)
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> IndexedParallelIterator for ParIter1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    fn len(&self) -> usize {
         match self {
-            ParIter1::Tight(iter) => bridge_producer_consumer(iter.0.len(), iter.0, consumer),
-            ParIter1::Update(iter) => bridge(iter, consumer),
+            ParIter1::Tight(iter) => iter.len(),
+            ParIter1::Update(iter) => iter.len(),
+        }
+    }
+    fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
+        bridge(self, consumer)
+    }
+    fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+        match self {
+            ParIter1::Tight(iter) => iter.with_producer(callback),
+            ParIter1::Update(iter) => iter.with_producer(callback),
         }
     }
 }
@@ -214,7 +233,6 @@ impl<T: IntoAbstract> ExactSizeIterator for Tight1<T> {
 #[cfg(feature = "parallel")]
 impl<T: IntoAbstract> Producer for Tight1<T>
 where
-    T::AbsView: AbstractMut,
     <T::AbsView as AbstractMut>::Out: Send,
 {
     type Item = <T::AbsView as AbstractMut>::Out;
@@ -245,17 +263,8 @@ impl<T: IntoAbstract> IteratorWithId for Tight1<T> {
 pub struct ParTight1<T: IntoAbstract>(Tight1<T>);
 
 #[cfg(feature = "parallel")]
-impl<T: IntoAbstract> ParTight1<T> {
-    /// Trasnform this parallel iterator into its sequential version.
-    pub fn into_seq(self) -> Tight1<T> {
-        self.0
-    }
-}
-
-#[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParallelIterator for ParTight1<T>
 where
-    T::AbsView: AbstractMut,
     <T::AbsView as AbstractMut>::Out: Send,
 {
     type Item = <T::AbsView as AbstractMut>::Out;
