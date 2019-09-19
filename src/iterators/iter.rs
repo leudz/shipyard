@@ -1,4 +1,6 @@
-use super::{AbstractMut, IntoAbstract, IntoIter, IteratorWithId, ParBuf};
+#[cfg(feature = "parallel")]
+use super::ParBuf;
+use super::{AbstractMut, IntoAbstract, IntoIter, IteratorWithId};
 use crate::entity::Key;
 use crate::sparse_array::Pack;
 #[cfg(feature = "parallel")]
@@ -17,16 +19,19 @@ impl<T: IntoAbstract> IntoIter for T {
         match &self.pack_info().pack {
             Pack::Update(_) => {
                 let end = self.len().unwrap_or(0);
+                // last_id is never read
                 Iter1::Update(Update1 {
                     end,
                     data: self.into_abstract(),
                     current: 0,
+                    last_id: Key::dead(),
                 })
             }
             _ => Iter1::Tight(Tight1 {
                 end: self.len().unwrap_or(0),
                 data: self.into_abstract(),
                 current: 0,
+                pred: |_| true,
             }),
         }
     }
@@ -84,7 +89,10 @@ impl<T: IntoAbstract> Iter1<T> {
         self,
         pred: P,
     ) -> Filter1<T, P> {
-        Filter1 { iter: self, pred }
+        match self {
+            Iter1::Tight(iter) => Filter1::Tight(iter.filtered(pred)),
+            Iter1::Update(iter) => Filter1::Update(iter.filtered(pred)),
+        }
     }
 }
 
@@ -96,16 +104,28 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
             Iter1::Update(iter) => iter.next(),
         }
     }
+    fn for_each<F>(self, f: F)
+    where
+        F: FnMut(Self::Item),
+    {
+        match self {
+            Iter1::Tight(iter) => iter.for_each(f),
+            Iter1::Update(iter) => iter.for_each(f),
+        }
+    }
+    fn filter<P>(self, _: P) -> std::iter::Filter<Self, P>
+    where
+        P: FnMut(&Self::Item) -> bool,
+    {
+        panic!("use filtered instead");
+    }
 }
 
 impl<T: IntoAbstract> IteratorWithId for Iter1<T> {
-    fn with_id(self) -> WithId<Self> {
-        WithId(self)
-    }
-    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
+    fn last_id(&self) -> Key {
         match self {
-            Iter1::Tight(iter) => iter.next_with_id(),
-            Iter1::Update(iter) => iter.next_with_id(),
+            Iter1::Tight(iter) => iter.last_id(),
+            Iter1::Update(iter) => iter.last_id(),
         }
     }
 }
@@ -114,6 +134,22 @@ impl<T: IntoAbstract> IteratorWithId for Iter1<T> {
 pub enum ParIter1<T: IntoAbstract> {
     Tight(ParTight1<T>),
     Update(ParUpdate1<T>),
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParIter1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    pub fn filtered<F: Fn(&<T::AbsView as AbstractMut>::Out) -> bool + Send + Sync>(
+        self,
+        pred: F,
+    ) -> ParFilter1<T, F> {
+        match self {
+            ParIter1::Tight(iter) => ParFilter1::Tight(iter.filtered(pred)),
+            ParIter1::Update(iter) => ParFilter1::Update(iter.filtered(pred)),
+        }
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -157,6 +193,7 @@ pub struct Tight1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,
     end: usize,
+    pred: fn(&<T::AbsView as AbstractMut>::Out) -> bool,
 }
 
 impl<T: IntoAbstract> Tight1<T> {
@@ -187,11 +224,8 @@ impl<T: IntoAbstract> Tight1<T> {
     pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
         self,
         pred: P,
-    ) -> Filter1<T, P> {
-        Filter1 {
-            iter: Iter1::Tight(self),
-            pred,
-        }
+    ) -> std::iter::Filter<Self, P> {
+        self.filter(pred)
     }
 }
 
@@ -201,8 +235,9 @@ impl<T: IntoAbstract> Iterator for Tight1<T> {
         let current = self.current;
         if current < self.end {
             self.current += 1;
+            let data = unsafe { self.data.get_data(current) };
             // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            Some(unsafe { self.data.get_data(current) })
+            Some(data)
         } else {
             None
         }
@@ -245,6 +280,7 @@ where
             data: self.data.clone(),
             current: self.current + index,
             end: self.end,
+            pred: self.pred,
         };
         self.end = clone.current;
         (self, clone)
@@ -252,18 +288,27 @@ where
 }
 
 impl<T: IntoAbstract> IteratorWithId for Tight1<T> {
-    fn with_id(self) -> WithId<Self> {
-        WithId(self)
-    }
-    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
-        self.next()
-            .map(|item| (unsafe { self.data.id_at(self.current - 1) }, item))
+    fn last_id(&self) -> Key {
+        unsafe { self.data.id_at(self.current - 1) }
     }
 }
 
 /// Parallel iterator over a single component.
 #[cfg(feature = "parallel")]
 pub struct ParTight1<T: IntoAbstract>(Tight1<T>);
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParTight1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    pub fn filtered<F: Fn(&<T::AbsView as AbstractMut>::Out) -> bool + Send + Sync>(
+        self,
+        pred: F,
+    ) -> rayon::iter::Filter<Self, F> {
+        self.filter(pred)
+    }
+}
 
 #[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParallelIterator for ParTight1<T>
@@ -365,12 +410,12 @@ impl<T: IntoAbstract> Iterator for ChunkExact1<T> {
     }
 }
 
-pub struct Filter1<
+pub enum Filter1<
     T: IntoAbstract,
     P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool,
 > {
-    iter: Iter1<T>,
-    pred: P,
+    Tight(std::iter::Filter<Tight1<T>, P>),
+    Update(UpdateFilter1<T, P>),
 }
 
 impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>
@@ -378,60 +423,36 @@ impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::O
 {
     type Item = <Tight1<T> as Iterator>::Item;
     fn next(&mut self) -> Option<Self::Item> {
-        match &mut self.iter {
-            Iter1::Tight(iter) => {
-                for item in iter {
-                    if (self.pred)(&item) {
-                        return Some(item);
-                    }
-                }
-                None
-            }
-            Iter1::Update(iter) => {
-                while iter.current < iter.end {
-                    iter.current += 1;
-                    // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                    if (self.pred)(unsafe { &iter.data.get_data(iter.current - 1) }) {
-                        return Some(unsafe { iter.data.mark_modified(iter.current - 1) });
-                    }
-                }
-                None
-            }
+        match self {
+            Filter1::Tight(iter) => iter.next(),
+            Filter1::Update(iter) => iter.next(),
         }
     }
 }
 
-impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>
-    IteratorWithId for Filter1<T, P>
+#[cfg(feature = "parallel")]
+pub enum ParFilter1<T: IntoAbstract, P>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
 {
-    fn with_id(self) -> WithId<Self> {
-        WithId(self)
-    }
-    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
-        match &mut self.iter {
-            Iter1::Tight(iter) => {
-                while let Some((id, item)) = iter.next_with_id() {
-                    if (self.pred)(&item) {
-                        return Some((id, item));
-                    }
-                }
-                None
-            }
-            Iter1::Update(iter) => {
-                while iter.current < iter.end {
-                    iter.current += 1;
-                    // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                    if (self.pred)(unsafe { &iter.data.get_data(iter.current - 1) }) {
-                        return Some(unsafe {
-                            (
-                                iter.data.id_at(iter.current - 1),
-                                iter.data.mark_modified(iter.current - 1),
-                            )
-                        });
-                    }
-                }
-                None
-            }
+    Tight(rayon::iter::Filter<ParTight1<T>, P>),
+    Update(ParUpdateFilter1<T, P>),
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract, P> ParallelIterator for ParFilter1<T, P>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+    P: Fn(&<T::AbsView as AbstractMut>::Out) -> bool + Send + Sync,
+{
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: UnindexedConsumer<Self::Item>,
+    {
+        match self {
+            ParFilter1::Tight(iter) => iter.drive_unindexed(consumer),
+            ParFilter1::Update(iter) => iter.drive_unindexed(consumer),
         }
     }
 }
@@ -440,15 +461,18 @@ pub struct Update1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,
     end: usize,
+    last_id: Key,
 }
 
 impl<T: IntoAbstract> Update1<T> {
     pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
         self,
         pred: P,
-    ) -> Filter1<T, P> {
-        Filter1 {
-            iter: Iter1::Update(self),
+    ) -> UpdateFilter1<T, P> {
+        UpdateFilter1 {
+            data: self.data,
+            current: self.current,
+            end: self.end,
             pred,
         }
     }
@@ -466,26 +490,32 @@ impl<T: IntoAbstract> Iterator for Update1<T> {
             None
         }
     }
+    fn filter<P>(self, _: P) -> std::iter::Filter<Self, P>
+    where
+        P: FnMut(&Self::Item) -> bool,
+    {
+        panic!("use filtered instead");
+    }
 }
 
 impl<T: IntoAbstract> IteratorWithId for Update1<T> {
-    fn with_id(self) -> WithId<Self> {
-        WithId(self)
-    }
-    fn next_with_id(&mut self) -> Option<(Key, Self::Item)> {
-        let current = self.current;
-        if current < self.end {
-            self.current += 1;
-            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            Some(unsafe { (self.data.id_at(current), self.data.mark_modified(current)) })
-        } else {
-            None
-        }
+    fn last_id(&self) -> Key {
+        self.last_id
     }
 }
 
 #[cfg(feature = "parallel")]
 pub struct ParUpdate1<T: IntoAbstract>(Update1<T>);
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParUpdate1<T> {
+    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
+        self,
+        pred: P,
+    ) -> ParUpdateFilter1<T, P> {
+        ParUpdateFilter1 { iter: self, pred }
+    }
+}
 
 #[cfg(feature = "parallel")]
 pub struct InnerParUpdate1<'a, T: IntoAbstract> {
@@ -507,10 +537,12 @@ impl<'a, T: IntoAbstract> Producer for InnerParUpdate1<'a, T> {
     }
     fn split_at(mut self, index: usize) -> (Self, Self) {
         let clone = InnerParUpdate1 {
+            // last_id is never read
             iter: Update1 {
                 data: self.iter.data.clone(),
                 current: self.iter.current + index,
                 end: self.iter.end,
+                last_id: Key::dead(),
             },
             indices: self.indices,
         };
@@ -619,12 +651,124 @@ where
     }
 }
 
-pub struct WithId<I>(I);
+#[cfg(feature = "parallel")]
+pub struct ParUpdateFilter1<T: IntoAbstract, P> {
+    iter: ParUpdate1<T>,
+    pred: P,
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract, P> ParallelIterator for ParUpdateFilter1<T, P>
+where
+    P: Fn(&<T::AbsView as AbstractMut>::Out) -> bool + Send + Sync,
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: UnindexedConsumer<Self::Item>,
+    {
+        use std::sync::atomic::Ordering;
+
+        let mut data = self.iter.0.data.clone();
+        let len = self.iter.0.end - self.iter.0.current;
+        let indices = ParBuf::new(len);
+
+        let producer = UpdateFilterProducer1 {
+            inner: InnerParUpdate1 {
+                iter: self.iter.0,
+                indices: &indices,
+            },
+            pred: &self.pred,
+        };
+
+        let result = bridge_unindexed(producer, consumer);
+
+        let slice = unsafe {
+            std::slice::from_raw_parts_mut(indices.buf, indices.len.load(Ordering::Relaxed))
+        };
+        slice.sort();
+        for &mut index in slice {
+            unsafe { data.mark_modified(index) };
+        }
+
+        result
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub struct UpdateFilterProducer1<'a, T: IntoAbstract, P> {
+    inner: InnerParUpdate1<'a, T>,
+    pred: &'a P,
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract, P> UnindexedProducer for UpdateFilterProducer1<'a, T, P>
+where
+    P: Fn(&<T::AbsView as AbstractMut>::Out) -> bool + Send + Sync,
+{
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn split(mut self) -> (Self, Option<Self>) {
+        let len = self.inner.iter.end - self.inner.iter.current;
+        if len >= 2 {
+            let (left, right) = self.inner.split_at(len / 2);
+            self.inner = left;
+            let clone = UpdateFilterProducer1 {
+                inner: right,
+                pred: self.pred,
+            };
+            (self, Some(clone))
+        } else {
+            (self, None)
+        }
+    }
+    fn fold_with<F>(mut self, mut folder: F) -> F
+    where
+        F: Folder<Self::Item>,
+    {
+        for index in self.inner.iter.current..self.inner.iter.end {
+            let item = unsafe { self.inner.iter.data.get_data(index) };
+            if (self.pred)(&item) {
+                self.inner.indices.push(index);
+                folder = folder.consume(item);
+            }
+        }
+        folder
+    }
+}
+
+pub struct UpdateFilter1<
+    T: IntoAbstract,
+    P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool,
+> {
+    data: T::AbsView,
+    current: usize,
+    end: usize,
+    pred: P,
+}
+
+impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>
+    Iterator for UpdateFilter1<T, P>
+{
+    type Item = <Tight1<T> as Iterator>::Item;
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.current < self.end {
+            self.current += 1;
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            if (self.pred)(unsafe { &self.data.get_data(self.current - 1) }) {
+                return Some(unsafe { self.data.mark_modified(self.current - 1) });
+            }
+        }
+        None
+    }
+}
+
+pub struct WithId<I>(pub(super) I);
 
 impl<I: IteratorWithId> Iterator for WithId<I> {
     type Item = (Key, I::Item);
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next_with_id()
+        self.0.next().map(|item| (self.0.last_id(), item))
     }
 }
 
@@ -1131,14 +1275,15 @@ macro_rules! impl_iterators {
                     // and self.indices can't access out of bounds
                     let index = unsafe { std::ptr::read(self.indices.add(self.current)) };
                     self.current += 1;
-                    Some(($({
+                    let indices = ($(
                         if (self.array >> $index) & 1 != 0 {
-                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                            unsafe { self.data.$index.get_data(self.current - 1) }
+                            self.current - 1
                         } else {
-                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                            unsafe { self.data.$index.abs_get_unchecked(index) }
-                        }
+                            unsafe { self.data.$index.index_of_unchecked(index) }
+                        },
+                    )+);
+                    Some(($({
+                        unsafe { self.data.$index.get_data(indices.$index) }
                     },)+))
                 } else {
                     None
@@ -1156,14 +1301,15 @@ macro_rules! impl_iterators {
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
                     let index = unsafe { std::ptr::read(self.indices.add(self.end)) };
-                    Some(($({
+                    let indices = ($(
                         if (self.array >> $index) & 1 != 0 {
-                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                            unsafe { self.data.$index.get_data(self.end) }
+                            self.end
                         } else {
-                            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-                            unsafe { self.data.$index.abs_get_unchecked(index) }
-                        }
+                            unsafe { self.data.$index.index_of_unchecked(index) }
+                        },
+                    )+);
+                    Some(($({
+                        unsafe { self.data.$index.get_data(indices.$index) }
                     },)+))
                 } else {
                     None
@@ -1488,6 +1634,7 @@ macro_rules! impl_iterators {
             updated: &'a ParBuf<Key>,
         }
 
+        #[cfg(feature = "parallel")]
         impl<'a, $($type: IntoAbstract),+> $inner_par_update<'a, $($type),+> {
             fn clone(&self) -> Self {
                 let iter = $update {

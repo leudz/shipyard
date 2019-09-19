@@ -1604,3 +1604,38 @@ fn par_multiple_update_pack() {
         assert_eq!(iter, vec![&1, &5, &7, &9]);
     });
 }
+
+#[test]
+fn par_update_filter() {
+    use rayon::prelude::*;
+
+    let world = World::new::<(usize,)>();
+    world.update_pack::<usize>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 0);
+        entities.add_entity(&mut usizes, 1);
+        entities.add_entity(&mut usizes, 2);
+        entities.add_entity(&mut usizes, 3);
+
+        usizes.clear_inserted();
+
+        (&mut usizes)
+            .par_iter()
+            .filtered(|x| **x % 2 == 0)
+            .for_each(|i| {
+                *i += 1;
+            });
+
+        let mut iter = usizes.inserted().iter();
+        assert_eq!(iter.next(), None);
+
+        let mut modified: Vec<_> = usizes.modified().iter().collect();
+        modified.sort_unstable();
+        assert_eq!(modified, vec![&1, &3]);
+
+        let mut iter: Vec<_> = (&usizes).iter().collect();
+        iter.sort_unstable();
+        assert_eq!(iter, vec![&1, &1, &3, &3]);
+    });
+}

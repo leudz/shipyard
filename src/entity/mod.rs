@@ -33,7 +33,7 @@ impl Key {
     }
     /// Make a new Key with the given index.
     #[inline]
-    fn new(index: usize) -> Self {
+    pub(crate) fn new(index: usize) -> Self {
         assert!(index <= Self::INDEX_MASK);
         Key(index)
     }
@@ -64,6 +64,9 @@ impl Key {
     #[cfg(test)]
     pub(crate) fn zero() -> Self {
         Key(0)
+    }
+    pub(crate) fn dead() -> Self {
+        Key(std::usize::MAX)
     }
 }
 
