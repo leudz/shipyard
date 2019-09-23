@@ -1,6 +1,6 @@
 #[cfg(feature = "parallel")]
 use super::ParBuf;
-use super::{AbstractMut, IntoAbstract, IntoIter, IteratorWithId};
+use super::{AbstractMut, IntoAbstract, IntoIter};
 use crate::entity::Key;
 use crate::sparse_array::Pack;
 #[cfg(feature = "parallel")]
@@ -31,7 +31,6 @@ impl<T: IntoAbstract> IntoIter for T {
                 end: self.len().unwrap_or(0),
                 data: self.into_abstract(),
                 current: 0,
-                pred: |_| true,
             }),
         }
     }
@@ -94,6 +93,12 @@ impl<T: IntoAbstract> Iter1<T> {
             Iter1::Update(iter) => Filter1::Update(iter.filtered(pred)),
         }
     }
+    pub fn with_id(self) -> WithId1<T> {
+        match self {
+            Iter1::Tight(iter) => WithId1::Tight(iter.with_id()),
+            Iter1::Update(iter) => WithId1::Update(iter.with_id()),
+        }
+    }
 }
 
 impl<T: IntoAbstract> Iterator for Iter1<T> {
@@ -118,15 +123,6 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
         P: FnMut(&Self::Item) -> bool,
     {
         panic!("use filtered instead");
-    }
-}
-
-impl<T: IntoAbstract> IteratorWithId for Iter1<T> {
-    fn last_id(&self) -> Key {
-        match self {
-            Iter1::Tight(iter) => iter.last_id(),
-            Iter1::Update(iter) => iter.last_id(),
-        }
     }
 }
 
@@ -193,7 +189,6 @@ pub struct Tight1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,
     end: usize,
-    pred: fn(&<T::AbsView as AbstractMut>::Out) -> bool,
 }
 
 impl<T: IntoAbstract> Tight1<T> {
@@ -226,6 +221,9 @@ impl<T: IntoAbstract> Tight1<T> {
         pred: P,
     ) -> std::iter::Filter<Self, P> {
         self.filter(pred)
+    }
+    pub fn with_id(self) -> TightWithId1<T> {
+        TightWithId1(self)
     }
 }
 
@@ -280,22 +278,22 @@ where
             data: self.data.clone(),
             current: self.current + index,
             end: self.end,
-            pred: self.pred,
         };
         self.end = clone.current;
         (self, clone)
     }
 }
 
-impl<T: IntoAbstract> IteratorWithId for Tight1<T> {
-    fn last_id(&self) -> Key {
-        unsafe { self.data.id_at(self.current - 1) }
-    }
-}
-
 /// Parallel iterator over a single component.
 #[cfg(feature = "parallel")]
-pub struct ParTight1<T: IntoAbstract>(Tight1<T>);
+pub struct ParTight1<T: IntoAbstract>(pub(super) Tight1<T>);
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParTight1<T> {
+    pub fn with_id(self) -> ParTightWithId1<T> {
+        ParTightWithId1(TightWithId1(self.0))
+    }
+}
 
 #[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParTight1<T>
@@ -333,7 +331,100 @@ where
     <T::AbsView as AbstractMut>::Out: Send,
 {
     fn len(&self) -> usize {
+        self.0.len()
+    }
+    fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
+        bridge(self, consumer)
+    }
+    fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
+        callback.callback(self.0)
+    }
+}
+
+pub struct TightWithId1<T: IntoAbstract>(Tight1<T>);
+
+impl<T: IntoAbstract> Iterator for TightWithId1<T> {
+    type Item = (Key, <T::AbsView as AbstractMut>::Out);
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.0.current;
+        if current < self.0.end {
+            self.0.current += 1;
+            let data = unsafe { self.0.data.get_data(current) };
+            let id = unsafe { self.0.data.id_at(current) };
+            Some((id, data))
+        } else {
+            None
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<T: IntoAbstract> DoubleEndedIterator for TightWithId1<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.0.end > self.0.current {
+            self.0.end -= 1;
+            let data = unsafe { self.0.data.get_data(self.0.end) };
+            let id = unsafe { self.0.data.id_at(self.0.end) };
+            Some((id, data))
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: IntoAbstract> ExactSizeIterator for TightWithId1<T> {
+    fn len(&self) -> usize {
         self.0.end - self.0.current
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> Producer for TightWithId1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    type Item = (Key, <T::AbsView as AbstractMut>::Out);
+    type IntoIter = Self;
+    fn into_iter(self) -> Self::IntoIter {
+        self
+    }
+    fn split_at(mut self, index: usize) -> (Self, Self) {
+        let (left, right) = self.0.split_at(index);
+        self.0 = left;
+        let clone = TightWithId1(right);
+        (self, clone)
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub struct ParTightWithId1<T: IntoAbstract>(TightWithId1<T>);
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParallelIterator for ParTightWithId1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    type Item = (Key, <T::AbsView as AbstractMut>::Out);
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: UnindexedConsumer<Self::Item>,
+    {
+        bridge(self, consumer)
+    }
+    fn opt_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> IndexedParallelIterator for ParTightWithId1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+{
+    fn len(&self) -> usize {
+        self.0.len()
     }
     fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
         bridge(self, consumer)
@@ -465,6 +556,12 @@ pub struct Update1<T: IntoAbstract> {
 }
 
 impl<T: IntoAbstract> Update1<T> {
+    pub fn with_id(self) -> UpdateWithId1<T> {
+        UpdateWithId1(self)
+    }
+}
+
+impl<T: IntoAbstract> Update1<T> {
     pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
         self,
         pred: P,
@@ -484,11 +581,14 @@ impl<T: IntoAbstract> Iterator for Update1<T> {
         let current = self.current;
         if current < self.end {
             self.current += 1;
-            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            self.last_id = unsafe { self.data.id_at(current) };
             Some(unsafe { self.data.mark_modified(current) })
         } else {
             None
         }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
     }
     fn filter<P>(self, _: P) -> std::iter::Filter<Self, P>
     where
@@ -498,14 +598,27 @@ impl<T: IntoAbstract> Iterator for Update1<T> {
     }
 }
 
-impl<T: IntoAbstract> IteratorWithId for Update1<T> {
-    fn last_id(&self) -> Key {
-        self.last_id
+impl<T: IntoAbstract> DoubleEndedIterator for Update1<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.end > self.current {
+            self.end -= 1;
+            self.last_id = unsafe { self.data.id_at(self.end) };
+            let data = unsafe { self.data.mark_modified(self.end) };
+            Some(data)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: IntoAbstract> ExactSizeIterator for Update1<T> {
+    fn len(&self) -> usize {
+        self.end - self.current
     }
 }
 
 #[cfg(feature = "parallel")]
-pub struct ParUpdate1<T: IntoAbstract>(Update1<T>);
+pub struct ParUpdate1<T: IntoAbstract>(pub(super) Update1<T>);
 
 #[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParUpdate1<T> {
@@ -763,12 +876,57 @@ impl<T: IntoAbstract, P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::O
     }
 }
 
-pub struct WithId<I>(pub(super) I);
+pub struct UpdateWithId1<T: IntoAbstract>(Update1<T>);
 
-impl<I: IteratorWithId> Iterator for WithId<I> {
-    type Item = (Key, I::Item);
+impl<T: IntoAbstract> Iterator for UpdateWithId1<T> {
+    type Item = (Key, <T::AbsView as AbstractMut>::Out);
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|item| (self.0.last_id(), item))
+        let current = self.0.current;
+        if current < self.0.end {
+            self.0.current += 1;
+            let id = unsafe { self.0.data.id_at(current) };
+            let data = unsafe { self.0.data.mark_modified(current) };
+            Some((id, data))
+        } else {
+            None
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+impl<T: IntoAbstract> DoubleEndedIterator for UpdateWithId1<T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.0.end > self.0.current {
+            self.0.end -= 1;
+            let id = unsafe { self.0.data.id_at(self.0.end) };
+            let data = unsafe { self.0.data.mark_modified(self.0.end) };
+            Some((id, data))
+        } else {
+            None
+        }
+    }
+}
+
+impl<T: IntoAbstract> ExactSizeIterator for UpdateWithId1<T> {
+    fn len(&self) -> usize {
+        self.0.end - self.0.current
+    }
+}
+
+pub enum WithId1<T: IntoAbstract> {
+    Tight(TightWithId1<T>),
+    Update(UpdateWithId1<T>),
+}
+
+impl<T: IntoAbstract> Iterator for WithId1<T> {
+    type Item = (Key, <<T as IntoAbstract>::AbsView as AbstractMut>::Out);
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            WithId1::Tight(iter) => iter.next(),
+            WithId1::Update(iter) => iter.next(),
+        }
     }
 }
 

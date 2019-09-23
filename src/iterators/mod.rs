@@ -61,16 +61,6 @@ pub trait IntoIter {
     fn par_iter(self) -> Self::IntoParIter;
 }
 
-pub trait IteratorWithId: Iterator {
-    fn with_id(self) -> WithId<Self>
-    where
-        Self: Sized,
-    {
-        WithId(self)
-    }
-    fn last_id(&self) -> Key;
-}
-
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them
 #[doc(hidden)]
