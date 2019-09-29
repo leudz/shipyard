@@ -1373,7 +1373,7 @@ fn simple_filter() {
         assert_eq!(iter.next(), None);
     });
 }
-
+/*
 #[test]
 fn tight_filter() {
     let world = World::new::<(usize, u32)>();
@@ -1389,7 +1389,7 @@ fn tight_filter() {
         assert_eq!(iter.next(), Some((&0, &1)));
         assert_eq!(iter.next(), None);
     });
-}
+}*/
 
 #[test]
 fn update_pack() {
