@@ -49,23 +49,12 @@ impl<T> View<'_, T> {
     }
     pub fn modified(&self) -> View<T> {
         match &self.pack_info.pack {
-            Pack::Update(pack) => {
-                if self.dense.len() >= pack.inserted + pack.modified {
-                    View {
-                        sparse: self.sparse,
-                        dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
-                        data: &self.data[pack.inserted..pack.inserted + pack.modified],
-                        pack_info: self.pack_info,
-                    }
-                } else {
-                    View {
-                        sparse: &[],
-                        dense: &[],
-                        data: &[],
-                        pack_info: self.pack_info,
-                    }
-                }
-            }
+            Pack::Update(pack) => View {
+                sparse: self.sparse,
+                dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
+                data: &self.data[pack.inserted..pack.inserted + pack.modified],
+                pack_info: self.pack_info,
+            },
             _ => View {
                 sparse: &[],
                 dense: &[],
@@ -76,23 +65,12 @@ impl<T> View<'_, T> {
     }
     pub fn inserted(&self) -> View<T> {
         match &self.pack_info.pack {
-            Pack::Update(pack) => {
-                if self.dense.len() >= pack.inserted {
-                    View {
-                        sparse: self.sparse,
-                        dense: &self.dense[0..pack.inserted],
-                        data: &self.data[0..pack.inserted],
-                        pack_info: self.pack_info,
-                    }
-                } else {
-                    View {
-                        sparse: &[],
-                        dense: &[],
-                        data: &[],
-                        pack_info: self.pack_info,
-                    }
-                }
-            }
+            Pack::Update(pack) => View {
+                sparse: self.sparse,
+                dense: &self.dense[0..pack.inserted],
+                data: &self.data[0..pack.inserted],
+                pack_info: self.pack_info,
+            },
             _ => View {
                 sparse: &[],
                 dense: &[],
@@ -328,23 +306,12 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     }
     pub fn modified(&self) -> View<T> {
         match &self.pack_info.pack {
-            Pack::Update(pack) => {
-                if self.dense.len() >= pack.inserted + pack.modified {
-                    View {
-                        sparse: self.sparse,
-                        dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
-                        data: &self.data[pack.inserted..pack.inserted + pack.modified],
-                        pack_info: self.pack_info,
-                    }
-                } else {
-                    View {
-                        sparse: &[],
-                        dense: &[],
-                        data: &[],
-                        pack_info: self.pack_info,
-                    }
-                }
-            }
+            Pack::Update(pack) => View {
+                sparse: self.sparse,
+                dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
+                data: &self.data[pack.inserted..pack.inserted + pack.modified],
+                pack_info: self.pack_info,
+            },
             _ => View {
                 sparse: &[],
                 dense: &[],
@@ -379,23 +346,12 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     }
     pub fn inserted(&self) -> View<T> {
         match &self.pack_info.pack {
-            Pack::Update(pack) => {
-                if self.dense.len() >= pack.inserted {
-                    View {
-                        sparse: self.sparse,
-                        dense: &self.dense[0..pack.inserted],
-                        data: &self.data[0..pack.inserted],
-                        pack_info: self.pack_info,
-                    }
-                } else {
-                    View {
-                        sparse: &[],
-                        dense: &[],
-                        data: &[],
-                        pack_info: self.pack_info,
-                    }
-                }
-            }
+            Pack::Update(pack) => View {
+                sparse: self.sparse,
+                dense: &self.dense[0..pack.inserted],
+                data: &self.data[0..pack.inserted],
+                pack_info: self.pack_info,
+            },
             _ => View {
                 sparse: &[],
                 dense: &[],
