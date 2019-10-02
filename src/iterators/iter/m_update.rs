@@ -1,4 +1,4 @@
-use super::{IntoAbstract, AbstractMut};
+use super::{AbstractMut, IntoAbstract};
 use crate::entity::Key;
 
 macro_rules! impl_iterators {

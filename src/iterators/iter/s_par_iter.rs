@@ -1,7 +1,5 @@
-use crate::iterators;
-use iterators::{AbstractMut, IntoAbstract};
 #[cfg(feature = "parallel")]
-use iterators::{ParFilter1, ParTight1, ParUpdate1};
+use super::{AbstractMut, IntoAbstract, ParFilter1, ParTight1, ParUpdate1, ParWithId1};
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 #[cfg(feature = "parallel")]
@@ -25,6 +23,12 @@ where
         match self {
             ParIter1::Tight(iter) => ParFilter1::Tight(iter.filtered(pred)),
             ParIter1::Update(iter) => ParFilter1::Update(iter.filtered(pred)),
+        }
+    }
+    pub fn with_id(self) -> ParWithId1<T> {
+        match self {
+            ParIter1::Tight(iter) => ParWithId1::Tight(iter.with_id()),
+            ParIter1::Update(iter) => ParWithId1::Update(iter.with_id()),
         }
     }
 }

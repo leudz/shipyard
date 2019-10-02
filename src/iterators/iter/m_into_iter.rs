@@ -1,21 +1,20 @@
-use super::{IntoAbstract, IntoIter, AbstractMut};
-use crate::sparse_array::Pack;
 use super::m_iter::*;
-#[cfg(feature = "parallel")]
-use super::m_par_iter::*;
-use super::m_tight::*;
 use super::m_loose::*;
 use super::m_non_packed::*;
 #[cfg(feature = "parallel")]
-use super::m_par_tight::*;
+use super::m_par_iter::*;
 #[cfg(feature = "parallel")]
 use super::m_par_loose::*;
 #[cfg(feature = "parallel")]
 use super::m_par_non_packed::*;
-use super::m_update::*;
+#[cfg(feature = "parallel")]
+use super::m_par_tight::*;
 #[cfg(feature = "parallel")]
 use super::m_par_update::*;
-
+use super::m_tight::*;
+use super::m_update::*;
+use super::{AbstractMut, IntoAbstract, IntoIter};
+use crate::sparse_array::Pack;
 
 macro_rules! impl_iterators {
     (

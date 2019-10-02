@@ -1,4 +1,4 @@
-use crate::iterators::{AbstractMut, IntoAbstract};
+use super::{AbstractMut, IntoAbstract};
 
 /// Chunk iterator over a single component.
 ///

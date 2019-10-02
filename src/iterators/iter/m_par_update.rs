@@ -1,10 +1,13 @@
-use super::{IntoAbstract, AbstractMut, ParBuf};
+#[cfg(feature = "parallel")]
+use super::m_update::*;
+#[cfg(feature = "parallel")]
+use super::{AbstractMut, IntoAbstract, ParBuf};
+#[cfg(feature = "parallel")]
 use crate::entity::Key;
 #[cfg(feature = "parallel")]
-use rayon::iter::ParallelIterator;
+use rayon::iter::plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer};
 #[cfg(feature = "parallel")]
-use rayon::iter::plumbing::{UnindexedConsumer, bridge_unindexed, UnindexedProducer, Folder};
-use super::m_update::*;
+use rayon::iter::ParallelIterator;
 
 macro_rules! impl_iterators {
     (
@@ -41,9 +44,9 @@ macro_rules! impl_iterators {
 
                 let result = bridge_unindexed(inner, consumer);
                 let slice = unsafe {
-                    std::slice::from_raw_parts_mut(updated.buf, updated.len.load(Ordering::Relaxed))
+                    std::slice::from_raw_parts(updated.buf, updated.len.load(Ordering::Relaxed))
                 };
-                for &mut index in slice {
+                for &index in slice {
                     $(
                         unsafe {data.$index.mark_id_modified(index)};
                     )+

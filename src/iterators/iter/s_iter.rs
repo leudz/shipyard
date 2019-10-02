@@ -1,7 +1,4 @@
-use crate::iterators;
-use iterators::{
-    AbstractMut, Chunk1, ChunkExact1, Filter1, IntoAbstract, Tight1, Update1, WithId1,
-};
+use super::{AbstractMut, Chunk1, ChunkExact1, Filter1, IntoAbstract, Tight1, Update1, WithId1};
 
 pub enum Iter1<T: IntoAbstract> {
     Tight(Tight1<T>),

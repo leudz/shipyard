@@ -1,8 +1,8 @@
-use super::{IntoAbstract, AbstractMut};
-#[cfg(feature = "parallel")]
-use rayon::iter::plumbing::{Producer};
 use super::m_chunk::*;
 use super::m_chunk_exact::*;
+use super::{AbstractMut, IntoAbstract};
+#[cfg(feature = "parallel")]
+use rayon::iter::plumbing::Producer;
 
 macro_rules! impl_iterators {
     (

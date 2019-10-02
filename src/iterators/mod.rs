@@ -467,22 +467,15 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
         match &mut (*self.pack_info).pack {
             Pack::Update(pack) => {
-                if index >= pack.inserted + pack.modified {
-                    std::ptr::swap(
-                        self.dense.add(pack.inserted + pack.modified),
-                        self.dense.add(index),
-                    );
-                    std::ptr::swap(
-                        self.data.add(pack.inserted + pack.modified),
-                        self.data.add(index),
-                    );
-                    *self
-                        .sparse
-                        .add((*self.dense.add(pack.inserted + pack.modified)).index()) = index;
-                    *self.sparse.add((*self.dense.add(index)).index()) =
-                        pack.inserted + pack.modified;
+                // index of the first element non modified
+                let non_mod = pack.inserted + pack.modified;
+                if index >= non_mod {
+                    std::ptr::swap(self.dense.add(non_mod), self.dense.add(index));
+                    std::ptr::swap(self.data.add(non_mod), self.data.add(index));
+                    *self.sparse.add((*self.dense.add(non_mod)).index()) = non_mod;
+                    *self.sparse.add((*self.dense.add(index)).index()) = index;
                     pack.modified += 1;
-                    &mut *self.data.add(pack.inserted + pack.modified - 1)
+                    &mut *self.data.add(non_mod)
                 } else {
                     self.get_data(index)
                 }
@@ -491,24 +484,9 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
         }
     }
     unsafe fn mark_id_modified(&mut self, entity: Key) {
-        if let Pack::Update(pack) = &mut (*self.pack_info).pack {
+        if let Pack::Update(_) = &mut (*self.pack_info).pack {
             let dense_index = *self.sparse.add(entity.index());
-            if dense_index >= pack.inserted + pack.modified {
-                std::ptr::swap(
-                    self.dense.add(pack.inserted + pack.modified),
-                    self.dense.add(dense_index),
-                );
-                std::ptr::swap(
-                    self.data.add(pack.inserted + pack.modified),
-                    self.data.add(dense_index),
-                );
-                *self
-                    .sparse
-                    .add((*self.dense.add(pack.inserted + pack.modified)).index()) = dense_index;
-                *self.sparse.add((*self.dense.add(dense_index)).index()) =
-                    pack.inserted + pack.modified;
-                pack.modified += 1;
-            }
+            self.mark_modified(dense_index);
         }
     }
     unsafe fn id_at(&self, index: usize) -> Key {

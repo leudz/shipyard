@@ -1,10 +1,10 @@
-use super::{IntoAbstract, AbstractMut};
-use super::m_tight::*;
-use super::m_loose::*;
-use super::m_non_packed::*;
-use super::m_update::*;
 use super::m_chunk::*;
 use super::m_chunk_exact::*;
+use super::m_loose::*;
+use super::m_non_packed::*;
+use super::m_tight::*;
+use super::m_update::*;
+use super::{AbstractMut, IntoAbstract};
 
 macro_rules! impl_iterators {
     (

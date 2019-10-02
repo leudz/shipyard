@@ -1,10 +1,7 @@
 #[cfg(feature = "parallel")]
-use super::{ParUpdateFilter1, Update1};
-use crate::entity::Key;
-use crate::iterators;
+use super::{AbstractMut, IntoAbstract, ParBuf, ParUpdateFilter1, ParUpdateWithId1, Update1};
 #[cfg(feature = "parallel")]
-use iterators::ParBuf;
-use iterators::{AbstractMut, IntoAbstract};
+use crate::entity::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
 #[cfg(feature = "parallel")]
@@ -15,93 +12,16 @@ pub struct ParUpdate1<T: IntoAbstract>(pub(super) Update1<T>);
 
 #[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParUpdate1<T> {
-    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
+    pub fn filtered<
+        P: Fn(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool + Send + Sync,
+    >(
         self,
         pred: P,
     ) -> ParUpdateFilter1<T, P> {
         ParUpdateFilter1 { iter: self, pred }
     }
-}
-
-#[cfg(feature = "parallel")]
-pub struct InnerParUpdate1<'a, T: IntoAbstract> {
-    pub(super) iter: Update1<T>,
-    pub(super) indices: &'a ParBuf<usize>,
-}
-
-#[cfg(feature = "parallel")]
-impl<'a, T: IntoAbstract> Producer for InnerParUpdate1<'a, T> {
-    type Item = <T::AbsView as AbstractMut>::Out;
-    type IntoIter = ParSeqUpdate1<'a, T>;
-    fn into_iter(self) -> Self::IntoIter {
-        ParSeqUpdate1 {
-            indices: self.indices,
-            data: self.iter.data,
-            current: self.iter.current,
-            end: self.iter.end,
-        }
-    }
-    fn split_at(mut self, index: usize) -> (Self, Self) {
-        let clone = InnerParUpdate1 {
-            // last_id is never read
-            iter: Update1 {
-                data: self.iter.data.clone(),
-                current: self.iter.current + index,
-                end: self.iter.end,
-                last_id: Key::dead(),
-            },
-            indices: self.indices,
-        };
-        self.iter.end = clone.iter.current;
-        (self, clone)
-    }
-}
-
-#[cfg(feature = "parallel")]
-pub struct ParSeqUpdate1<'a, T: IntoAbstract> {
-    indices: &'a ParBuf<usize>,
-    data: T::AbsView,
-    current: usize,
-    end: usize,
-}
-
-#[cfg(feature = "parallel")]
-impl<'a, T: IntoAbstract> Iterator for ParSeqUpdate1<'a, T> {
-    type Item = <T::AbsView as AbstractMut>::Out;
-    fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current;
-        if current < self.end {
-            self.current += 1;
-            self.indices.push(current);
-            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            Some(unsafe { self.data.get_data(current) })
-        } else {
-            None
-        }
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.len(), Some(self.len()))
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl<'a, T: IntoAbstract> DoubleEndedIterator for ParSeqUpdate1<'a, T> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        if self.end > self.current {
-            self.end -= 1;
-            self.indices.push(self.end);
-            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            Some(unsafe { self.data.get_data(self.end) })
-        } else {
-            None
-        }
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl<'a, T: IntoAbstract> ExactSizeIterator for ParSeqUpdate1<'a, T> {
-    fn len(&self) -> usize {
-        self.end - self.current
+    pub fn with_id(self) -> ParUpdateWithId1<T> {
+        ParUpdateWithId1(self)
     }
 }
 
@@ -154,5 +74,87 @@ where
             unsafe { data.mark_modified(index) };
         }
         result
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub struct InnerParUpdate1<'a, T: IntoAbstract> {
+    pub(super) iter: Update1<T>,
+    pub(super) indices: &'a ParBuf<usize>,
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> Producer for InnerParUpdate1<'a, T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    type IntoIter = ParSeqUpdate1<'a, T>;
+    fn into_iter(self) -> Self::IntoIter {
+        ParSeqUpdate1 {
+            indices: self.indices,
+            data: self.iter.data,
+            current: self.iter.current,
+            end: self.iter.end,
+        }
+    }
+    fn split_at(mut self, index: usize) -> (Self, Self) {
+        let clone = InnerParUpdate1 {
+            // last_id is never read
+            iter: Update1 {
+                data: self.iter.data.clone(),
+                current: self.iter.current + index,
+                end: self.iter.end,
+                last_id: Key::dead(),
+            },
+            indices: self.indices,
+        };
+        self.iter.end = clone.iter.current;
+        (self, clone)
+    }
+}
+
+#[cfg(feature = "parallel")]
+pub struct ParSeqUpdate1<'a, T: IntoAbstract> {
+    indices: &'a ParBuf<usize>,
+    pub(super) data: T::AbsView,
+    pub(super) current: usize,
+    pub(super) end: usize,
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> Iterator for ParSeqUpdate1<'a, T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current;
+        if current < self.end {
+            self.current += 1;
+            self.indices.push(current);
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { self.data.get_data(current) })
+        } else {
+            None
+        }
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len(), Some(self.len()))
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> DoubleEndedIterator for ParSeqUpdate1<'a, T> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.end > self.current {
+            self.end -= 1;
+            self.indices.push(self.end);
+            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
+            Some(unsafe { self.data.get_data(self.end) })
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<'a, T: IntoAbstract> ExactSizeIterator for ParSeqUpdate1<'a, T> {
+    fn len(&self) -> usize {
+        self.end - self.current
     }
 }

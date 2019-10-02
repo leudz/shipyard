@@ -1,16 +1,17 @@
-use super::{IntoAbstract, AbstractMut};
-#[cfg(feature = "parallel")]
-use rayon::iter::plumbing::{UnindexedConsumer, bridge};
-#[cfg(feature = "parallel")]
-use rayon::iter::ParallelIterator;
-#[cfg(feature = "parallel")]
-use super::m_par_tight::*;
 #[cfg(feature = "parallel")]
 use super::m_par_loose::*;
 #[cfg(feature = "parallel")]
 use super::m_par_non_packed::*;
 #[cfg(feature = "parallel")]
+use super::m_par_tight::*;
+#[cfg(feature = "parallel")]
 use super::m_par_update::*;
+#[cfg(feature = "parallel")]
+use super::{AbstractMut, IntoAbstract};
+#[cfg(feature = "parallel")]
+use rayon::iter::plumbing::{bridge, UnindexedConsumer};
+#[cfg(feature = "parallel")]
+use rayon::iter::ParallelIterator;
 
 macro_rules! impl_iterators {
     (

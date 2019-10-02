@@ -1,4 +1,4 @@
-use super::{IntoAbstract, AbstractMut};
+use super::{AbstractMut, IntoAbstract};
 
 macro_rules! impl_iterators {
     (

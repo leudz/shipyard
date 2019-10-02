@@ -1,11 +1,24 @@
+#[cfg(feature = "parallel")]
+use super::{AbstractMut, IntoAbstract, ParTightWithIdFilter1, TightWithId1};
+#[cfg(feature = "parallel")]
 use crate::entity::Key;
-use crate::iterators::{AbstractMut, IntoAbstract, TightWithId1};
+#[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 #[cfg(feature = "parallel")]
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 #[cfg(feature = "parallel")]
 pub struct ParTightWithId1<T: IntoAbstract>(pub(super) TightWithId1<T>);
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> ParTightWithId1<T> {
+    pub fn filtered<P: Fn(&(Key, <T::AbsView as AbstractMut>::Out)) -> bool + Send + Sync>(
+        self,
+        pred: P,
+    ) -> ParTightWithIdFilter1<T, P> {
+        ParTightWithIdFilter1 { iter: self, pred }
+    }
+}
 
 #[cfg(feature = "parallel")]
 impl<T: IntoAbstract> ParallelIterator for ParTightWithId1<T>

@@ -1639,3 +1639,89 @@ fn par_update_filter() {
         assert_eq!(iter, vec![&1, &1, &3, &3]);
     });
 }
+
+#[test]
+fn filter_with_id() {
+    let world = World::new::<(usize,)>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 5);
+        let entity1 = entities.add_entity(&mut usizes, 2);
+        let entity2 = entities.add_entity(&mut usizes, 4);
+        entities.add_entity(&mut usizes, 3);
+        entities.add_entity(&mut usizes, 1);
+
+        let mut iter = usizes.iter().filtered(|&&mut x| x % 2 == 0).with_id();
+
+        assert!(iter.next() == Some((entity1, &mut 2)));
+        assert!(iter.next() == Some((entity2, &mut 4)));
+        assert!(iter.next() == None);
+    });
+}
+
+#[test]
+fn par_filter_with_id() {
+    use rayon::iter::ParallelIterator;
+
+    let world = World::new::<(usize,)>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 5);
+        let entity1 = entities.add_entity(&mut usizes, 2);
+        let entity2 = entities.add_entity(&mut usizes, 4);
+        entities.add_entity(&mut usizes, 3);
+        entities.add_entity(&mut usizes, 1);
+
+        let mut result: Vec<_> = usizes
+            .par_iter()
+            .filtered(|&&mut x| x % 2 == 0)
+            .with_id()
+            .collect();
+        result.sort_by(|(_, x), (_, y)| x.cmp(y));
+
+        assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
+    });
+}
+
+#[test]
+fn with_id_filter() {
+    let world = World::new::<(usize,)>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 5);
+        let entity1 = entities.add_entity(&mut usizes, 2);
+        let entity2 = entities.add_entity(&mut usizes, 4);
+        entities.add_entity(&mut usizes, 3);
+        entities.add_entity(&mut usizes, 1);
+
+        let mut iter = usizes.iter().with_id().filtered(|&(_, &mut x)| x % 2 == 0);
+
+        assert!(iter.next() == Some((entity1, &mut 2)));
+        assert!(iter.next() == Some((entity2, &mut 4)));
+        assert!(iter.next() == None);
+    });
+}
+
+#[test]
+fn par_with_id_filter() {
+    use rayon::iter::ParallelIterator;
+
+    let world = World::new::<(usize,)>();
+
+    world.run::<(EntitiesMut, &mut usize), _>(|(mut entities, mut usizes)| {
+        entities.add_entity(&mut usizes, 5);
+        let entity1 = entities.add_entity(&mut usizes, 2);
+        let entity2 = entities.add_entity(&mut usizes, 4);
+        entities.add_entity(&mut usizes, 3);
+        entities.add_entity(&mut usizes, 1);
+
+        let mut result: Vec<_> = usizes
+            .par_iter()
+            .with_id()
+            .filtered(|&(_, &mut x)| x % 2 == 0)
+            .collect();
+        result.sort_by(|(_, x), (_, y)| x.cmp(y));
+
+        assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
+    });
+}

@@ -1,9 +1,18 @@
-use super::Update1;
+use super::{AbstractMut, IntoAbstract, Update1, UpdateWithIdFilter1};
 use crate::entity::Key;
-use crate::iterators;
-use iterators::{AbstractMut, IntoAbstract};
 
 pub struct UpdateWithId1<T: IntoAbstract>(pub(super) Update1<T>);
+
+impl<T: IntoAbstract> UpdateWithId1<T> {
+    pub fn filtered<
+        P: FnMut(&(Key, <<T as IntoAbstract>::AbsView as AbstractMut>::Out)) -> bool,
+    >(
+        self,
+        pred: P,
+    ) -> UpdateWithIdFilter1<T, P> {
+        UpdateWithIdFilter1 { iter: self, pred }
+    }
+}
 
 impl<T: IntoAbstract> Iterator for UpdateWithId1<T> {
     type Item = (Key, <T::AbsView as AbstractMut>::Out);

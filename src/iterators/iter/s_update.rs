@@ -1,7 +1,5 @@
-use super::{UpdateFilter1, UpdateWithId1};
+use super::{AbstractMut, IntoAbstract, UpdateFilter1, UpdateWithId1};
 use crate::entity::Key;
-use crate::iterators;
-use iterators::{AbstractMut, IntoAbstract};
 
 pub struct Update1<T: IntoAbstract> {
     pub(super) data: T::AbsView,
@@ -26,6 +24,7 @@ impl<T: IntoAbstract> Update1<T> {
             current: self.current,
             end: self.end,
             pred,
+            last_id: Key::dead(),
         }
     }
 }

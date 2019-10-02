@@ -1,5 +1,4 @@
-use super::{Chunk1, ChunkExact1, TightFilter1, TightWithId1};
-use crate::iterators::{AbstractMut, IntoAbstract};
+use super::{AbstractMut, Chunk1, ChunkExact1, IntoAbstract, TightFilter1, TightWithId1};
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 

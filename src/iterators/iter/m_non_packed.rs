@@ -1,7 +1,7 @@
-use super::{IntoAbstract, AbstractMut};
+use super::{AbstractMut, IntoAbstract};
+use crate::entity::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{Folder, UnindexedProducer};
-use crate::entity::Key;
 
 macro_rules! impl_iterators {
     (

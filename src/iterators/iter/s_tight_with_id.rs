@@ -1,6 +1,5 @@
+use super::{AbstractMut, IntoAbstract, Tight1, TightWithIdFilter1};
 use crate::entity::Key;
-use crate::iterators;
-use iterators::{AbstractMut, IntoAbstract, Tight1};
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 
@@ -10,8 +9,8 @@ impl<T: IntoAbstract> TightWithId1<T> {
     pub fn filtered<F: FnMut(&<Self as Iterator>::Item) -> bool>(
         self,
         pred: F,
-    ) -> std::iter::Filter<Self, F> {
-        self.filter(pred)
+    ) -> TightWithIdFilter1<T, F> {
+        TightWithIdFilter1 { iter: self, pred }
     }
 }
 

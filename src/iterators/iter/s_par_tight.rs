@@ -1,7 +1,5 @@
 #[cfg(feature = "parallel")]
-use super::ParTightWithId1;
-use super::{Tight1, TightWithId1};
-use crate::iterators::{AbstractMut, IntoAbstract};
+use super::{AbstractMut, IntoAbstract, ParTightFilter1, ParTightWithId1, Tight1, TightWithId1};
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 #[cfg(feature = "parallel")]
@@ -26,8 +24,8 @@ where
     pub fn filtered<F: Fn(&<T::AbsView as AbstractMut>::Out) -> bool + Send + Sync>(
         self,
         pred: F,
-    ) -> rayon::iter::Filter<Self, F> {
-        self.filter(pred)
+    ) -> ParTightFilter1<T, F> {
+        ParTightFilter1 { iter: self, pred }
     }
 }
 
