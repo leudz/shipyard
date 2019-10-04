@@ -1,6 +1,7 @@
 mod add_component;
 mod view;
 
+use std::num::NonZeroUsize;
 pub use view::{EntitiesView, EntitiesViewMut};
 
 /* A Key is a handle to an entity and has two parts, the index and the version.
@@ -9,7 +10,7 @@ pub use view::{EntitiesView, EntitiesViewMut};
 */
 #[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Key(usize);
+pub struct Key(NonZeroUsize);
 
 impl Key {
     // Number of bits used by the version
@@ -24,38 +25,47 @@ impl Key {
     /// Returns the index part of the Key.
     #[inline]
     pub(crate) fn index(self) -> usize {
-        self.0 & Self::INDEX_MASK
+        (self.0.get() & Self::INDEX_MASK) - 1
     }
     /// Returns the version part of the Key.
     #[inline]
     pub(crate) fn version(self) -> usize {
-        (self.0 & Self::VERSION_MASK) >> (0usize.count_zeros() as usize - Self::VERSION_LEN)
+        (self.0.get() & Self::VERSION_MASK) >> (0usize.count_zeros() as usize - Self::VERSION_LEN)
     }
     /// Make a new Key with the given index.
     #[inline]
     pub(crate) fn new(index: usize) -> Self {
-        assert!(index <= Self::INDEX_MASK);
-        Key(index)
+        assert!(index + 1 <= Self::INDEX_MASK);
+        Key(unsafe { NonZeroUsize::new_unchecked(index + 1) })
     }
     /// Modify the index.
     #[cfg(not(test))]
     #[inline]
     fn set_index(&mut self, index: usize) {
-        assert!(index <= Self::INDEX_MASK);
-        self.0 = (self.0 & Self::VERSION_MASK) | index
+        assert!(index + 1 <= Self::INDEX_MASK);
+        self.0 = unsafe {
+            NonZeroUsize::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1))
+        }
     }
     /// Modify the index.
     #[cfg(test)]
     pub(crate) fn set_index(&mut self, index: usize) {
-        assert!(index <= Self::INDEX_MASK);
-        self.0 = (self.0 & Self::VERSION_MASK) | index
+        assert!(index + 1 <= Self::INDEX_MASK);
+        self.0 = unsafe {
+            NonZeroUsize::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1))
+        }
     }
     /// Increments the version, returns Err if version + 1 == version::MAX().
     #[inline]
     fn bump_version(&mut self) -> Result<(), ()> {
-        if self.0 < !(!0 >> (Self::VERSION_LEN - 1)) {
-            self.0 = self.index()
-                | ((self.version() + 1) << (std::mem::size_of::<usize>() * 8 - Self::VERSION_LEN));
+        if self.0.get() < !(!0 >> (Self::VERSION_LEN - 1)) {
+            self.0 = unsafe {
+                NonZeroUsize::new_unchecked(
+                    self.index() + 1
+                        | ((self.version() + 1)
+                            << (std::mem::size_of::<usize>() * 8 - Self::VERSION_LEN)),
+                )
+            };
             Ok(())
         } else {
             Err(())
@@ -63,10 +73,10 @@ impl Key {
     }
     #[cfg(test)]
     pub(crate) fn zero() -> Self {
-        Key(0)
+        Key(NonZeroUsize::new(1).unwrap())
     }
     pub(crate) fn dead() -> Self {
-        Key(std::usize::MAX)
+        Key(unsafe { NonZeroUsize::new_unchecked(std::usize::MAX) })
     }
 }
 
@@ -162,7 +172,7 @@ fn entities() {
     assert_eq!(key02.index(), 0);
     assert_eq!(key02.version(), 2);
 
-    let last_key = Key(!(!0 >> 15));
+    let last_key = Key(NonZeroUsize::new(!(!0 >> 15) + 1).unwrap());
     entities.data[0] = last_key;
     assert!(entities.view_mut().delete_key(last_key));
     assert_eq!(entities.list, None);
