@@ -70,6 +70,7 @@ macro_rules! impl_iterators {
                     current: self.iter.current,
                     end: self.iter.end,
                     array: self.iter.array,
+                    last_id: Key::dead(),
                 };
 
                 $inner_par_update {

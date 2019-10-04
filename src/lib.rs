@@ -1373,7 +1373,7 @@ fn simple_filter() {
         assert_eq!(iter.next(), None);
     });
 }
-/*
+
 #[test]
 fn tight_filter() {
     let world = World::new::<(usize, u32)>();
@@ -1384,12 +1384,12 @@ fn tight_filter() {
         entities.add_entity((&mut usizes,), (2,));
         entities.add_entity((&mut usizes, &mut u32s), (3, 4));
 
-        let mut iter = (&usizes, &u32s).iter().filtered(|&&x, _| x % 2 == 0);
+        let mut iter = (&usizes, &u32s).iter().filtered(|&(x, _)| x % 2 == 0);
 
         assert_eq!(iter.next(), Some((&0, &1)));
         assert_eq!(iter.next(), None);
     });
-}*/
+}
 
 #[test]
 fn update_pack() {

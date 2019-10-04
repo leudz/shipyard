@@ -1,16 +1,26 @@
 mod m_chunk;
 mod m_chunk_exact;
+mod m_filter;
 mod m_into_iter;
 mod m_iter;
 mod m_loose;
+mod m_loose_filter;
+mod m_loose_with_id;
 mod m_non_packed;
+mod m_non_packed_filter;
+mod m_non_packed_with_id;
 mod m_par_iter;
 mod m_par_loose;
 mod m_par_non_packed;
 mod m_par_tight;
 mod m_par_update;
 mod m_tight;
+mod m_tight_filter;
+mod m_tight_with_id;
 mod m_update;
+mod m_update_filter;
+mod m_update_with_id;
+mod m_with_id;
 mod s_chunk;
 mod s_chunk_exact;
 mod s_filter;
@@ -47,9 +57,14 @@ mod s_with_id_filter;
 
 pub use m_chunk::*;
 pub use m_chunk_exact::*;
+pub use m_filter::*;
 pub use m_iter::*;
 pub use m_loose::*;
+pub use m_loose_filter::*;
+pub use m_loose_with_id::*;
 pub use m_non_packed::*;
+pub use m_non_packed_filter::*;
+pub use m_non_packed_with_id::*;
 #[cfg(feature = "parallel")]
 pub use m_par_iter::*;
 #[cfg(feature = "parallel")]
@@ -61,7 +76,12 @@ pub use m_par_tight::*;
 #[cfg(feature = "parallel")]
 pub use m_par_update::*;
 pub use m_tight::*;
+pub use m_tight_filter::*;
+pub use m_tight_with_id::*;
 pub use m_update::*;
+pub use m_update_filter::*;
+pub use m_update_with_id::*;
+pub use m_with_id::*;
 pub use s_chunk::Chunk1;
 pub use s_chunk_exact::ChunkExact1;
 pub use s_filter::Filter1;

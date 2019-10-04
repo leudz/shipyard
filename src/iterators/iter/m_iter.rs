@@ -1,9 +1,11 @@
 use super::m_chunk::*;
 use super::m_chunk_exact::*;
+use super::m_filter::*;
 use super::m_loose::*;
 use super::m_non_packed::*;
 use super::m_tight::*;
 use super::m_update::*;
+use super::m_with_id::*;
 use super::{AbstractMut, IntoAbstract};
 
 macro_rules! impl_iterators {
@@ -16,6 +18,8 @@ macro_rules! impl_iterators {
         $chunk: ident
         $chunk_exact: ident
         $update: ident
+        $filter: ident
+        $with_id: ident
         $(($type: ident, $index: tt))+
     ) => {
         #[doc = "Iterator over"]
@@ -56,6 +60,22 @@ macro_rules! impl_iterators {
                     $iter::NonPacked(_) => Err(self),
                 }
             }
+            pub fn filtered<P: FnMut(&<Self as Iterator>::Item) -> bool>(self, pred: P) -> $filter<$($type),+, P> {
+                match self {
+                    $iter::Tight(iter) => $filter::Tight(iter.filtered(pred)),
+                    $iter::Loose(iter) => $filter::Loose(iter.filtered(pred)),
+                    $iter::Update(iter) => $filter::Update(iter.filtered(pred)),
+                    $iter::NonPacked(iter) => $filter::NonPacked(iter.filtered(pred)),
+                }
+            }
+            pub fn with_id(self) -> $with_id<$($type),+> {
+                match self {
+                    $iter::Tight(iter) => $with_id::Tight(iter.with_id()),
+                    $iter::Loose(iter) => $with_id::Loose(iter.with_id()),
+                    $iter::Update(iter) => $with_id::Update(iter.with_id()),
+                    $iter::NonPacked(iter) => $with_id::NonPacked(iter.with_id()),
+                }
+            }
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $iter<$($type),+> {
@@ -82,9 +102,11 @@ macro_rules! iterators {
         $($chunk: ident)*; $chunk1: ident $($queue_chunk: ident)+;
         $($chunk_exact: ident)*; $chunk_exact1: ident $($queue_chunk_exact: ident)+;
         $($update: ident)*; $update1: ident $($queue_update: ident)+;
+        $($filter: ident)*; $filter1: ident $($queue_filter: ident)+;
+        $($with_id: ident)*; $with_id1: ident $($queue_with_id: ident)+;
         $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
-        impl_iterators![$number1 $iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $update1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $update1 $filter1 $with_id1 $(($type, $index))*];
         iterators![
             $($number)* $number1; $($queue_number)+;
             $($iter)* $iter1; $($queue_iter)+;
@@ -94,6 +116,8 @@ macro_rules! iterators {
             $($chunk)* $chunk1; $($queue_chunk)+;
             $($chunk_exact)* $chunk_exact1; $($queue_chunk_exact)+;
             $($update)* $update1; $($queue_update)+;
+            $($filter)* $filter1; $($queue_filter)+;
+            $($with_id)* $with_id1; $($queue_with_id)+;
             $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*
         ];
     };
@@ -106,9 +130,11 @@ macro_rules! iterators {
         $($chunk: ident)*; $chunk1: ident;
         $($chunk_exact: ident)*; $chunk_exact1: ident;
         $($update: ident)*; $update1: ident;
+        $($filter: ident)*; $filter1: ident;
+        $($with_id: ident)*; $with_id1: ident;
         $(($type: ident, $index: tt))*;
     ) => {
-        impl_iterators![$number1 $iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $update1 $(($type, $index))*];
+        impl_iterators![$number1 $iter1 $tight1 $loose1 $non_packed1 $chunk1 $chunk_exact1 $update1 $filter1 $with_id1 $(($type, $index))*];
     }
 }
 
@@ -121,5 +147,7 @@ iterators![
     ;Chunk2 Chunk3 Chunk4 Chunk5 Chunk6 Chunk7 Chunk8 Chunk9 Chunk10;
     ;ChunkExact2 ChunkExact3 ChunkExact4 ChunkExact5 ChunkExact6 ChunkExact7 ChunkExact8 ChunkExact9 ChunkExact10;
     ;Update2 Update3 Update4 Update5 Update6 Update7 Update8 Update9 Update10;
+    ;Filter2 Filter3 Filter4 Filter5 Filter6 Filter7 Filter8 Filter9 Filter10;
+    ;WithId2 WithId3 WithId4 WithId5 WithId6 WithId7 WithId8 WithId9 WithId10;
     (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];

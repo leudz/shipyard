@@ -14,6 +14,7 @@ use super::m_par_update::*;
 use super::m_tight::*;
 use super::m_update::*;
 use super::{AbstractMut, IntoAbstract, IntoIter};
+use crate::entity::Key;
 use crate::sparse_array::Pack;
 
 macro_rules! impl_iterators {
@@ -159,6 +160,7 @@ macro_rules! impl_iterators {
                             current: 0,
                             end: smallest,
                             array: smallest_index,
+                            last_id: Key::dead(),
                         })
                     }
                     PackIter::None => {
