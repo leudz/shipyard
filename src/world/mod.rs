@@ -101,19 +101,19 @@ impl World {
     }
     /// Register a new component type and create a unique storage for it.
     /// Does nothing if the storage already exists.
-    /// 
+    ///
     /// Unique storages store exactly one `T` at any time.
     /// To access a unique storage value, use [Unique].
     ///
     /// Unwraps errors.
-    /// 
+    ///
     /// [Unique]: struct.Unique.html
     pub fn register_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.try_register_unique(component).unwrap();
     }
     /// Register a new component type and create a unique storage for it.
     /// Does nothing if the storage already exists.
-    /// 
+    ///
     /// Unique storages store exactly one `T` at any time.
     /// To access a unique storage value, use [Unique].
     ///
