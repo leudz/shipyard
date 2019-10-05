@@ -128,14 +128,15 @@ impl Display for AddComponent {
 }
 
 /// Error occuring when a pack can't be made.
-/// It can be a borrow issue or one of the storage can alreadyhave
-/// an incompatible pack.
+/// It could be a borrow issue or one of the storage could already have
+/// an incompatible pack or the storage could be unique.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Pack {
     GetStorage(GetStorage),
     AlreadyTightPack(TypeId),
     AlreadyLoosePack(TypeId),
     AlreadyUpdatePack(TypeId),
+    UniqueStorage(&'static str),
 }
 
 impl From<GetStorage> for Pack {
@@ -159,6 +160,10 @@ impl Debug for Pack {
             Pack::AlreadyUpdatePack(type_id) => fmt.write_fmt(format_args!(
                 "The storage of type ({:?}) is already has an update pack.",
                 type_id
+            )),
+            Pack::UniqueStorage(name) => fmt.write_fmt(format_args!(
+                "The storage of type \"{:?}\" is a unique storage and can't be packed.",
+                name
             )),
         }
     }

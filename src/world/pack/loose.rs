@@ -49,6 +49,18 @@ macro_rules! impl_loose_pack {
                 let loose_types: Arc<[_]> = loose_types.into();
 
                 $(
+                    if storages.$tight_index.0.is_unique() {
+                        return Err(error::Pack::UniqueStorage(std::any::type_name::<$tight>()));
+                    }
+                )+
+
+                $(
+                    if storages.$loose_index.0.is_unique() {
+                        return Err(error::Pack::UniqueStorage(std::any::type_name::<$loose>()));
+                    }
+                )+
+
+                $(
                     match storages.$tight_index.0.pack_info.pack {
                         Pack::Tight(_) => {
                             return Err(error::Pack::AlreadyTightPack(TypeId::of::<$tight>()));

@@ -99,6 +99,32 @@ impl World {
         self.storages.try_borrow_mut()?.register::<T>();
         Ok(())
     }
+    /// Register a new component type and create a unique storage for it.
+    /// Does nothing if the storage already exists.
+    /// 
+    /// Unique storages store exactly one `T` at any time.
+    /// To access a unique storage value, use [Unique].
+    ///
+    /// Unwraps errors.
+    /// 
+    /// [Unique]: struct.Unique.html
+    pub fn register_unique<T: 'static + Send + Sync>(&self, component: T) {
+        self.try_register_unique(component).unwrap();
+    }
+    /// Register a new component type and create a unique storage for it.
+    /// Does nothing if the storage already exists.
+    /// 
+    /// Unique storages store exactly one `T` at any time.
+    /// To access a unique storage value, use [Unique].
+    ///
+    /// [Unique]: struct.Unique.html
+    pub fn try_register_unique<T: 'static + Send + Sync>(
+        &self,
+        component: T,
+    ) -> Result<(), error::Borrow> {
+        self.storages.try_borrow_mut()?.register_unique(component);
+        Ok(())
+    }
     /// Allows to perform some actions not possible otherwise like iteration.
     /// This is basically an unnamed system.
     ///
@@ -180,6 +206,9 @@ impl World {
             let mut array = storage
                 .array_mut::<T>()
                 .map_err(error::GetStorage::StorageBorrow)?;
+            if array.is_unique() {
+                return Err(error::Pack::UniqueStorage(std::any::type_name::<T>()));
+            }
             match array.pack_info.pack {
                 Pack::NoPack => {
                     array.pack_info.pack = Pack::Update(UpdatePack {

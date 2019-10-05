@@ -125,6 +125,19 @@ pub use sparse_array::{sort, sort::Sortable};
 #[cfg(feature = "parallel")]
 pub struct ThreadPool;
 
+/// Type used to access the value of a unique storage.
+/// # Example:
+/// ```
+/// # use shipyard::*;
+/// let world = World::default();
+/// world.register_unique(0usize);
+///
+/// world.run::<Unique<&mut usize>, _>(|x| {
+///     *x += 1;
+/// });
+/// ```
+pub struct Unique<T: ?Sized>(T);
+
 #[test]
 fn add_entity() {
     let world = World::default();
@@ -1724,4 +1737,71 @@ fn par_with_id_filter() {
 
         assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
     });
+}
+
+#[test]
+fn unique_storage() {
+    let world = World::default();
+    world.register_unique(0usize);
+
+    world.run::<Unique<&mut usize>, _>(|x| {
+        *x += 1;
+    });
+    world.run::<Unique<&usize>, _>(|x| {
+        assert_eq!(x, &1);
+    });
+}
+
+#[test]
+fn not_unique_storage() {
+    match std::panic::catch_unwind(|| {
+        let world = World::new::<(usize,)>();
+
+        world.run::<Unique<&usize>, _>(|x| {
+            assert_eq!(x, &1);
+        });
+    }) {
+        Ok(_) => panic!(),
+        Err(err) => assert_eq!(
+            format!("{}", err.downcast::<String>().unwrap()),
+            format!("{} storage isn't unique.", std::any::type_name::<usize>())
+        ),
+    }
+
+    match std::panic::catch_unwind(|| {
+        let world = World::new::<(usize,)>();
+
+        world.run::<Unique<&mut usize>, _>(|x| {
+            assert_eq!(x, &1);
+        });
+    }) {
+        Ok(_) => panic!(),
+        Err(err) => assert_eq!(
+            format!("{}", err.downcast::<String>().unwrap()),
+            format!("{} storage isn't unique.", std::any::type_name::<usize>())
+        ),
+    }
+}
+
+#[test]
+fn unique_storage_pack() {
+    let world = World::new::<(u32,)>();
+    world.register_unique(0usize);
+
+    assert_eq!(
+        world.try_tight_pack::<(u32, usize)>(),
+        Err(error::Pack::UniqueStorage(std::any::type_name::<usize>()))
+    );
+    assert_eq!(
+        world.try_loose_pack::<(u32,), (usize,)>(),
+        Err(error::Pack::UniqueStorage(std::any::type_name::<usize>()))
+    );
+    assert_eq!(
+        world.try_loose_pack::<(usize,), (u32,)>(),
+        Err(error::Pack::UniqueStorage(std::any::type_name::<usize>()))
+    );
+    assert_eq!(
+        world.try_update_pack::<usize>(),
+        Err(error::Pack::UniqueStorage(std::any::type_name::<usize>()))
+    );
 }

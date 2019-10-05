@@ -34,6 +34,12 @@ macro_rules! impl_tight_pack {
                 let type_ids: Arc<[_]> = type_ids.into();
 
                 $(
+                    if storages.$index.0.is_unique() {
+                        return Err(error::Pack::UniqueStorage(std::any::type_name::<$type>()));
+                    }
+                )+
+
+                $(
                     match storages.$index.0.pack_info.pack {
                         Pack::Tight(_) => {
                             return Err(error::Pack::AlreadyTightPack(TypeId::of::<$type>()));

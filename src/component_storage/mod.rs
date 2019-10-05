@@ -89,6 +89,16 @@ impl AllStorages {
             .entry(TypeId::of::<T>())
             .or_insert_with(ComponentStorage::new::<T>);
     }
+    /// Register a new unique component and create a storage for it.
+    /// Does nothing if a storage already exists.
+    pub(crate) fn register_unique<T: 'static + Send + Sync>(&mut self, componnent: T) {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(ComponentStorage::new::<T>)
+            .array_mut()
+            .unwrap()
+            .insert_unique(componnent);
+    }
     pub(crate) fn view_mut(&mut self) -> AllStoragesViewMut {
         AllStoragesViewMut(&mut self.0)
     }
