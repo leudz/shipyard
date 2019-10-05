@@ -61,7 +61,7 @@ impl Key {
         if self.0.get() < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = unsafe {
                 NonZeroUsize::new_unchecked(
-                    self.index() + 1
+                    (self.index() + 1)
                         | ((self.version() + 1)
                             << (std::mem::size_of::<usize>() * 8 - Self::VERSION_LEN)),
                 )
