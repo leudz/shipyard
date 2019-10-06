@@ -14,11 +14,11 @@ macro_rules! impl_iterators {
         pub struct $non_packed_with_id<$($type: IntoAbstract),+>(pub(super) $non_packed<$($type),+>);
 
         impl<$($type: IntoAbstract),+> Iterator for $non_packed_with_id<$($type),+> {
-            type Item = (Key, ($(<$type::AbsView as AbstractMut>::Out,)+));
+            type Item = (Key, $(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 self.0.next().map(|item| {
                     let id = unsafe { self.0.data.0.id_at(self.0.current - 1) };
-                    (id, item)
+                    (id, $(item.$index),+)
                 })
             }
         }
@@ -35,7 +35,7 @@ macro_rules! impl_iterators {
         where
             $(<$type::AbsView as AbstractMut>::Out: Send),+
         {
-            type Item = (Key, ($(<$type::AbsView as AbstractMut>::Out,)+));
+            type Item = (Key, $(<$type::AbsView as AbstractMut>::Out,)+);
             fn split(mut self) -> (Self, Option<Self>) {
                 let len = self.0.end - self.0.current;
                 if len >= 2 {

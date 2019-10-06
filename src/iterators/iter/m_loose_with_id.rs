@@ -14,11 +14,11 @@ macro_rules! impl_iterators {
         pub struct $loose_with_id<$($type: IntoAbstract),+>(pub(super) $loose<$($type),+>);
 
         impl<$($type: IntoAbstract),+> Iterator for $loose_with_id<$($type,)+> {
-            type Item = (Key, ($(<$type::AbsView as AbstractMut>::Out,)+));
+            type Item = (Key, $(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 self.0.next().map(|item| {
                     let id = unsafe { self.0.data.0.id_at(self.0.current - 1) };
-                    (id, item)
+                    (id, $(item.$index),+)
                 })
             }
             fn size_hint(&self) -> (usize, Option<usize>) {
@@ -30,7 +30,7 @@ macro_rules! impl_iterators {
             fn next_back(&mut self) -> Option<Self::Item> {
                 self.0.next_back().map(|item| {
                     let id = unsafe { self.0.data.0.id_at(self.0.end) };
-                    (id, item)
+                    (id, $(item.$index),+)
                 })
             }
         }
@@ -46,7 +46,7 @@ macro_rules! impl_iterators {
         where
             $(<$type::AbsView as AbstractMut>::Out: Send),+
         {
-            type Item = (Key, ($(<$type::AbsView as AbstractMut>::Out,)+));
+            type Item = (Key, $(<$type::AbsView as AbstractMut>::Out,)+);
             type IntoIter = Self;
             fn into_iter(self) -> Self::IntoIter {
                 self

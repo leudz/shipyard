@@ -23,7 +23,7 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> Iterator for $with_id<$($type),+> {
-            type Item = (Key, ($(<$type::AbsView as AbstractMut>::Out,)+));
+            type Item = (Key, $(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 match self {
                     $with_id::Tight(iter) => iter.next(),

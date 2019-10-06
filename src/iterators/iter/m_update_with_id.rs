@@ -12,11 +12,11 @@ macro_rules! impl_iterators {
         pub struct $update_with_id<$($type: IntoAbstract),+>(pub(super) $update<$($type),+>);
 
         impl<$($type: IntoAbstract),+> Iterator for $update_with_id<$($type),+> {
-            type Item = (Key, ($(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+));
+            type Item = (Key, $(<<$type as IntoAbstract>::AbsView as AbstractMut>::Out),+);
             fn next(&mut self) -> Option<Self::Item> {
                 self.0.next().map(|item| {
                     let id = self.0.last_id;
-                    (id, item)
+                    (id, $(item.$index),+)
                 })
             }
         }
