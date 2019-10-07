@@ -1,11 +1,10 @@
-mod iter;
+pub mod iterators;
 #[cfg(feature = "parallel")]
 mod parallel_buffer;
 
 use crate::entity::Key;
 use crate::not::Not;
 use crate::sparse_array::{Pack, PackInfo, RawViewMut, View, ViewMut};
-pub use iter::*;
 #[cfg(feature = "parallel")]
 use parallel_buffer::ParBuf;
 use std::any::TypeId;
