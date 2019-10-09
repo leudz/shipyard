@@ -6,8 +6,8 @@ mod view_add_entity;
 use crate::entity::Key;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view::RawViewMut;
-pub(crate) use view_add_entity::ViewAddEntity;
 pub use view::{View, ViewMut};
+pub(crate) use view_add_entity::ViewAddEntity;
 
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
 // Only usize can be added. On insertion, the number is pushed into the dense vector
