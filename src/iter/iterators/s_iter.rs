@@ -1,4 +1,5 @@
-use super::{AbstractMut, Chunk1, ChunkExact1, Filter1, IntoAbstract, Tight1, Update1, WithId1};
+use super::{AbstractMut, Chunk1, ChunkExact1, InnerShiperator, IntoAbstract, Tight1, Update1};
+use crate::entity::Key;
 
 pub enum Iter1<T: IntoAbstract> {
     Tight(Tight1<T>),
@@ -28,21 +29,6 @@ impl<T: IntoAbstract> Iter1<T> {
             Iter1::Update(_) => Err(self),
         }
     }
-    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
-        self,
-        pred: P,
-    ) -> Filter1<T, P> {
-        match self {
-            Iter1::Tight(iter) => Filter1::Tight(iter.filtered(pred)),
-            Iter1::Update(iter) => Filter1::Update(iter.filtered(pred)),
-        }
-    }
-    pub fn with_id(self) -> WithId1<T> {
-        match self {
-            Iter1::Tight(iter) => WithId1::Tight(iter.with_id()),
-            Iter1::Update(iter) => WithId1::Update(iter.with_id()),
-        }
-    }
 }
 
 impl<T: IntoAbstract> Iterator for Iter1<T> {
@@ -67,5 +53,29 @@ impl<T: IntoAbstract> Iterator for Iter1<T> {
         P: FnMut(&Self::Item) -> bool,
     {
         panic!("use filtered instead");
+    }
+}
+
+impl<T: IntoAbstract> InnerShiperator for Iter1<T> {
+    type Item = <Tight1<T> as InnerShiperator>::Item;
+    type Index = <Tight1<T> as InnerShiperator>::Index;
+    fn first_pass(&mut self) -> Option<(Self::Index, Self::Item)> {
+        match self {
+            Iter1::Tight(iter) => iter.first_pass(),
+            Iter1::Update(iter) => iter.first_pass(),
+        }
+    }
+    #[inline]
+    fn post_process(&mut self, data: (Self::Index, Self::Item)) -> Option<Self::Item> {
+        match self {
+            Iter1::Tight(iter) => iter.post_process(data),
+            Iter1::Update(iter) => iter.post_process(data),
+        }
+    }
+    fn last_id(&self) -> Key {
+        match self {
+            Iter1::Tight(iter) => iter.last_id(),
+            Iter1::Update(iter) => iter.last_id(),
+        }
     }
 }

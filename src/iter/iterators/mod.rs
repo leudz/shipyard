@@ -1,3 +1,4 @@
+mod filter;
 mod m_chunk;
 mod m_chunk_exact;
 mod m_filter;
@@ -54,7 +55,9 @@ mod s_update_with_id;
 mod s_update_with_id_filter;
 mod s_with_id;
 mod s_with_id_filter;
+mod with_id;
 
+pub use filter::Filter;
 pub use m_chunk::*;
 pub use m_chunk_exact::*;
 pub use m_filter::*;
@@ -129,7 +132,8 @@ pub use s_update_with_id::UpdateWithId1;
 pub use s_update_with_id_filter::UpdateWithIdFilter1;
 pub use s_with_id::WithId1;
 pub use s_with_id_filter::WithIdFilter1;
+pub use with_id::WithId;
 
 #[cfg(feature = "parallel")]
 use super::ParBuf;
-use super::{AbstractMut, IntoAbstract, IntoIter};
+use super::{AbstractMut, InnerShiperator, IntoAbstract, IntoIter};

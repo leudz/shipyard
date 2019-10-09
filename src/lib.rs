@@ -115,12 +115,11 @@ pub use crate::run::System;
 pub use crate::run::SystemData;
 pub use crate::world::World;
 pub use entity::{Entities, EntitiesMut, EntitiesViewMut, Key};
-pub use iter::IntoIter;
+pub use iter::{iterators, IntoIter, Shiperator};
 #[doc(hidden)]
 #[cfg(feature = "proc")]
 pub use shipyard_proc::system;
 pub use sparse_array::{sort, sort::Sortable, View, ViewMut};
-pub use iter::iterators;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
 #[cfg(feature = "parallel")]

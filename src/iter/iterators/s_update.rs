@@ -1,4 +1,4 @@
-use super::{AbstractMut, IntoAbstract, UpdateFilter1, UpdateWithId1};
+use super::{AbstractMut, InnerShiperator, IntoAbstract};
 use crate::entity::Key;
 
 pub struct Update1<T: IntoAbstract> {
@@ -8,38 +8,11 @@ pub struct Update1<T: IntoAbstract> {
     pub(super) last_id: Key,
 }
 
-impl<T: IntoAbstract> Update1<T> {
-    pub fn with_id(self) -> UpdateWithId1<T> {
-        UpdateWithId1(self)
-    }
-}
-
-impl<T: IntoAbstract> Update1<T> {
-    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
-        self,
-        pred: P,
-    ) -> UpdateFilter1<T, P> {
-        UpdateFilter1 {
-            data: self.data,
-            current: self.current,
-            end: self.end,
-            pred,
-            last_id: Key::dead(),
-        }
-    }
-}
-
 impl<T: IntoAbstract> Iterator for Update1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
     fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current;
-        if current < self.end {
-            self.current += 1;
-            self.last_id = unsafe { self.data.id_at(current) };
-            Some(unsafe { self.data.mark_modified(current) })
-        } else {
-            None
-        }
+        let first = self.first_pass()?;
+        self.post_process(first)
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.len(), Some(self.len()))
@@ -68,5 +41,28 @@ impl<T: IntoAbstract> DoubleEndedIterator for Update1<T> {
 impl<T: IntoAbstract> ExactSizeIterator for Update1<T> {
     fn len(&self) -> usize {
         self.end - self.current
+    }
+}
+
+impl<T: IntoAbstract> InnerShiperator for Update1<T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    type Index = usize;
+    fn first_pass(&mut self) -> Option<(Self::Index, Self::Item)> {
+        let current = self.current;
+        if current < self.end {
+            self.current += 1;
+            Some((current, unsafe { self.data.get_data(current) }))
+        } else {
+            None
+        }
+    }
+    #[inline]
+    fn post_process(&mut self, (index, _): (Self::Index, Self::Item)) -> Option<Self::Item> {
+        self.last_id = unsafe { self.data.id_at(index) };
+        Some(unsafe { self.data.mark_modified(index) })
+    }
+    #[inline]
+    fn last_id(&self) -> Key {
+        self.last_id
     }
 }

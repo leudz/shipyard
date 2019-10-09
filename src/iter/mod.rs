@@ -5,6 +5,7 @@ mod parallel_buffer;
 use crate::entity::Key;
 use crate::not::Not;
 use crate::sparse_array::{Pack, PackInfo, RawViewMut, View, ViewMut};
+use iterators::{Filter, WithId};
 #[cfg(feature = "parallel")]
 use parallel_buffer::ParBuf;
 use std::any::TypeId;
@@ -59,6 +60,31 @@ pub trait IntoIter {
     #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter;
 }
+
+pub trait InnerShiperator {
+    type Item;
+    type Index;
+    fn first_pass(&mut self) -> Option<(Self::Index, Self::Item)>;
+    fn post_process(&mut self, index: (Self::Index, Self::Item)) -> Option<Self::Item>;
+    fn last_id(&self) -> Key;
+}
+
+pub trait Shiperator: InnerShiperator {
+    fn with_id(self) -> WithId<Self>
+    where
+        Self: Sized,
+    {
+        WithId(self)
+    }
+    fn filtered<P: FnMut(&Self::Item) -> bool>(self, pred: P) -> Filter<Self, P>
+    where
+        Self: Sized,
+    {
+        Filter { iter: self, pred }
+    }
+}
+
+impl<T: InnerShiperator> Shiperator for T {}
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them

@@ -1,4 +1,5 @@
-use super::{AbstractMut, Chunk1, ChunkExact1, IntoAbstract, TightFilter1, TightWithId1};
+use super::{AbstractMut, Chunk1, ChunkExact1, InnerShiperator, IntoAbstract};
+use crate::entity::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 
@@ -34,29 +35,13 @@ impl<T: IntoAbstract> Tight1<T> {
             step: size,
         }
     }
-    pub fn filtered<P: FnMut(&<<T as IntoAbstract>::AbsView as AbstractMut>::Out) -> bool>(
-        self,
-        pred: P,
-    ) -> TightFilter1<T, P> {
-        TightFilter1 { iter: self, pred }
-    }
-    pub fn with_id(self) -> TightWithId1<T> {
-        TightWithId1(self)
-    }
 }
 
 impl<T: IntoAbstract> Iterator for Tight1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
     fn next(&mut self) -> Option<Self::Item> {
-        let current = self.current;
-        if current < self.end {
-            self.current += 1;
-            let data = unsafe { self.data.get_data(current) };
-            // SAFE the index is valid and the iterator can only be created where the lifetime is valid
-            Some(data)
-        } else {
-            None
-        }
+        let first = self.first_pass()?;
+        self.post_process(first)
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         (self.len(), Some(self.len()))
@@ -99,5 +84,28 @@ where
         };
         self.end = clone.current;
         (self, clone)
+    }
+}
+
+impl<T: IntoAbstract> InnerShiperator for Tight1<T> {
+    type Item = <T::AbsView as AbstractMut>::Out;
+    type Index = usize;
+    fn first_pass(&mut self) -> Option<(Self::Index, Self::Item)> {
+        let current = self.current;
+        if current < self.end {
+            self.current += 1;
+            let data = unsafe { self.data.get_data(current) };
+            Some((current, data))
+        } else {
+            None
+        }
+    }
+    #[inline]
+    fn post_process(&mut self, (_, item): (usize, Self::Item)) -> Option<Self::Item> {
+        Some(item)
+    }
+    #[inline]
+    fn last_id(&self) -> Key {
+        unsafe { self.data.id_at(self.current - 1) }
     }
 }
