@@ -1,11 +1,10 @@
 error: A system will only accept a type of this list:
-
-            &T for an immutable reference to T storage
-            &mut T for a mutable reference to T storage
-            &Entities for an immutable reference to the entity storage
-            &mut EntitiesMut for a mutable reference to the entity storage
-            AllStorages for a mutable reference to the storage of all components
-            ThreadPool for an immutable reference to the rayon::ThreadPool used by the World
+        - &T for an immutable reference to T storage
+        - &mut T for a mutable reference to T storage
+        - &Entities for an immutable reference to the entity storage
+        - &mut EntitiesMut for a mutable reference to the entity storage
+        - AllStorages for a mutable reference to the storage of all components
+        - ThreadPool for an immutable reference to the rayon::ThreadPool used by the World
  --> $DIR/wrong_type.rs:4:11
   |
 4 | fn run(_: fn()) {}

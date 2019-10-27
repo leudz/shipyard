@@ -112,13 +112,13 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                 _ => {
                     return Err(Error::new_spanned(
                         ty,
-                        "A system will only accept a type of this list:\n\n\
-                            \t\t\t&T for an immutable reference to T storage\n\
-                            \t\t\t&mut T for a mutable reference to T storage\n\
-                            \t\t\t&Entities for an immutable reference to the entity storage\n\
-                            \t\t\t&mut EntitiesMut for a mutable reference to the entity storage\n\
-                            \t\t\tAllStorages for a mutable reference to the storage of all components\n\
-                            \t\t\tThreadPool for an immutable reference to the rayon::ThreadPool used by the World",
+                        "A system will only accept a type of this list:\n\
+                            \t\t- &T for an immutable reference to T storage\n\
+                            \t\t- &mut T for a mutable reference to T storage\n\
+                            \t\t- &Entities for an immutable reference to the entity storage\n\
+                            \t\t- &mut EntitiesMut for a mutable reference to the entity storage\n\
+                            \t\t- AllStorages for a mutable reference to the storage of all components\n\
+                            \t\t- ThreadPool for an immutable reference to the rayon::ThreadPool used by the World",
                     ));
                 }
             }
