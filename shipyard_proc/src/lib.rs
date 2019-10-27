@@ -52,17 +52,11 @@ pub fn system(
                             } else {
                                 **ty = parse_quote!(::shipyard::EntitiesMut);
                             }
-                        } else {
-                            reference.lifetime = reference.lifetime.clone().or(Some(syn::Lifetime::new(
-                                "'a",
-                                proc_macro::Span::call_site().into(),
-                            )));
+                        } else if reference.lifetime.is_none() {
+                            reference.lifetime = parse_quote!('a);
                         }
-                    } else {
-                        reference.lifetime = reference.lifetime.clone().or(Some(syn::Lifetime::new(
-                            "'a",
-                            proc_macro::Span::call_site().into(),
-                        )));
+                    } else if reference.lifetime.is_none() {
+                        reference.lifetime = parse_quote!('a);
                     }
                 }
                 syn::Type::Path(ref mut path) => {
@@ -75,10 +69,9 @@ pub fn system(
                             let arg = inner_type.args.iter_mut().next().unwrap();
                             if let syn::GenericArgument::Type(inner_type) = arg {
                                 if let syn::Type::Reference(reference) = inner_type {
-                                    reference.lifetime = reference.lifetime.clone().or(Some(syn::Lifetime::new(
-                                        "'a",
-                                        proc_macro::Span::call_site().into(),
-                                    )));
+                                    if reference.lifetime.is_none() {
+                                        reference.lifetime = parse_quote!('a);
+                                    }
                                 } else {
                                     panic!("Not will only work with component storages refered by &T or &mut T.")
                                 }
