@@ -1,5 +1,6 @@
 extern crate proc_macro;
 use quote::quote;
+use syn::parse_quote;
 
 const MAX_TYPES: usize = 10;
 
@@ -47,9 +48,9 @@ pub fn system(
                         // transform &Entities into Entites and &mut Entities into EntitiesMut
                         if path.path.segments.last().unwrap().ident == "Entities" {
                             if reference.mutability.is_none() {
-                                **ty = quote!(::shipyard::Entities).into();
+                                **ty = parse_quote!(::shipyard::Entities);
                             } else {
-                                **ty = quote!(::shipyard::EntitiesMut).into();
+                                **ty = parse_quote!(::shipyard::EntitiesMut);
                             }
                         } else {
                             reference.lifetime = reference.lifetime.clone().or(Some(syn::Lifetime::new(
@@ -111,11 +112,11 @@ pub fn system(
     while data.len() > MAX_TYPES {
         for i in 0..(data.len() / MAX_TYPES) {
             let ten = &data[(i * MAX_TYPES)..((i + 1) * MAX_TYPES)];
-            *data[i] = quote!((#(#ten,)*)).into();
+            *data[i] = parse_quote!((#(#ten,)*));
             data.drain((i + 1)..((i + 1) * MAX_TYPES));
 
             let ten = &binding[i..(i + 10)];
-            binding[i] = quote!((#(#ten,)*)).into();
+            binding[i] = parse_quote!((#(#ten,)*));
             binding.drain((i + 1)..((i + 1) * MAX_TYPES));
         }
     }
