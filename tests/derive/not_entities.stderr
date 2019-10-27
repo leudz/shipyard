@@ -1,7 +1,5 @@
-error: custom attribute panicked
- --> $DIR/not_entities.rs:3:1
+error: Not will only work with component storages refered by &T or &mut T
+ --> $DIR/not_entities.rs:4:15
   |
-3 | #[system(Test)]
-  | ^^^^^^^^^^^^^^^
-  |
-  = help: message: Not will only work with component storages refered by &T or &mut T.
+4 | fn run(_: Not<Entities>) {}
+  |               ^^^^^^^^

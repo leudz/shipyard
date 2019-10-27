@@ -1,7 +1,5 @@
-error: custom attribute panicked
- --> $DIR/generic_type.rs:3:1
+error: run should not take generic arguments
+ --> $DIR/generic_type.rs:4:7
   |
-3 | #[system(Test)]
-  | ^^^^^^^^^^^^^^^
-  |
-  = help: message: run should not take generic arguments nor where clause.
+4 | fn run<T>() {}
+  |       ^^^
