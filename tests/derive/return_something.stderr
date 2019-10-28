@@ -1,7 +1,5 @@
-error: custom attribute panicked
- --> $DIR/return_something.rs:3:1
+error: run should not return anything
+ --> $DIR/return_something.rs:4:10
   |
-3 | #[system(Test)]
-  | ^^^^^^^^^^^^^^^
-  |
-  = help: message: run should not return anything.
+4 | fn run() -> usize { 0 }
+  |          ^^^^^^^^
