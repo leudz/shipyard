@@ -15,7 +15,7 @@
 //! }
 //!
 //! fn is_in_acid(pos: &Position) -> bool {
-//!     // well... it's wet season
+//!     // it's wet season
 //!      
 //!     true
 //! }
