@@ -3,7 +3,7 @@ use super::m_non_packed_with_id::*;
 use super::m_tight_with_id::*;
 use super::m_update_with_id::*;
 use super::{AbstractMut, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 
 macro_rules! impl_iterators {
     (

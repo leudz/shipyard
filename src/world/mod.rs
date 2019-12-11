@@ -3,10 +3,10 @@ mod pipeline;
 mod register;
 
 use crate::atomic_refcell::AtomicRefCell;
-use crate::component_storage::AllStorages;
 use crate::error;
 use crate::run::Run;
 use crate::sparse_set::{Pack, UpdatePack};
+use crate::storage::AllStorages;
 use pack::{LoosePack, TightPack};
 use pipeline::{Pipeline, Workload};
 #[cfg(feature = "parallel")]

@@ -1,5 +1,4 @@
-use super::{hasher::TypeIdHasher, Storage};
-use crate::entity::Key;
+use super::{Key, Storage, TypeIdHasher};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;

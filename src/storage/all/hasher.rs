@@ -1,7 +1,7 @@
 use std::hash::Hasher;
 
-/// Since `TypeId`s are unique no need to hash them.
-/// This is the purpose of this hasher, not doing anything.
+/// Since `TypeId`s are unique no need to hash them.  
+/// This is the purpose of this hasher, not doing anything.  
 /// It will get bytes, check if the number is right and return a `u64`.
 #[derive(Default)]
 pub(crate) struct TypeIdHasher(u64);

@@ -1,6 +1,5 @@
 use super::add_component::AddComponent;
-use super::Key;
-use crate::component_storage::AllStoragesViewMut;
+use super::{super::AllStoragesViewMut, Key};
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
 

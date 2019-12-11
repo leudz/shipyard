@@ -1,5 +1,5 @@
 use super::{Pack, PackInfo};
-use crate::entity::Key;
+use crate::storage::Key;
 use std::marker::PhantomData;
 
 /// Immutable view into a `Storage`.

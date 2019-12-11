@@ -1,5 +1,5 @@
 use super::{AbstractMut, InnerShiperator, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub struct Update1<T: IntoAbstract> {
     pub(super) data: T::AbsView,

@@ -1,7 +1,7 @@
 use super::m_non_packed_filter::*;
 use super::m_non_packed_with_id::*;
 use super::{AbstractMut, InnerShiperator, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{Folder, UnindexedProducer};
 

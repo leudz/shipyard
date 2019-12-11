@@ -1,5 +1,5 @@
 use super::{AbstractMut, IntoAbstract, UpdateFilter1};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub struct UpdateFilterWithId1<T: IntoAbstract, P>(pub(super) UpdateFilter1<T, P>);
 

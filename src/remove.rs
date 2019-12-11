@@ -1,6 +1,6 @@
-use crate::entity::Key;
 use crate::error;
 use crate::sparse_set::{Pack, ViewMut};
+use crate::storage::Key;
 use std::any::TypeId;
 
 pub trait Removable {

@@ -1,5 +1,5 @@
 use super::{AbstractMut, Chunk1, ChunkExact1, InnerShiperator, IntoAbstract, Tight1, Update1};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub enum Iter1<T: IntoAbstract> {
     Tight(Tight1<T>),

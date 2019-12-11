@@ -1,4 +1,4 @@
-use crate::entity::Key;
+use crate::storage::Key;
 use std::any::TypeId;
 use std::cmp::Ordering;
 use std::sync::Arc;

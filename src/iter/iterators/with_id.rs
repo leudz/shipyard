@@ -1,5 +1,5 @@
 use super::InnerShiperator;
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub struct WithId<I>(pub(crate) I);
 

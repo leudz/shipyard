@@ -1,4 +1,4 @@
-use crate::entity::{EntitiesView, Key};
+use super::{EntitiesView, Key};
 use crate::error;
 use crate::sparse_set::{Pack, ViewMut};
 use std::any::TypeId;

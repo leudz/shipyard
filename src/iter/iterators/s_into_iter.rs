@@ -1,8 +1,8 @@
 use super::{IntoAbstract, IntoIter, Iter1, Tight1, Update1};
 #[cfg(feature = "parallel")]
 use super::{ParIter1, ParTight1, ParUpdate1};
-use crate::entity::Key;
 use crate::sparse_set::Pack;
+use crate::storage::Key;
 
 impl<T: IntoAbstract> IntoIter for T {
     type IntoIter = Iter1<Self>;

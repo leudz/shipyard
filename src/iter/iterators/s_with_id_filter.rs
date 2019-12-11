@@ -1,5 +1,5 @@
 use super::{AbstractMut, IntoAbstract, TightWithIdFilter1, UpdateWithIdFilter1};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub enum WithIdFilter1<T: IntoAbstract, P: FnMut(&(Key, <T::AbsView as AbstractMut>::Out)) -> bool>
 {

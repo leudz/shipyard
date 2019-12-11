@@ -2,9 +2,9 @@ pub mod iterators;
 #[cfg(feature = "parallel")]
 mod parallel_buffer;
 
-use crate::entity::Key;
 use crate::not::Not;
 use crate::sparse_set::{Pack, PackInfo, RawViewMut, View, ViewMut};
+use crate::storage::Key;
 use iterators::{Filter, WithId};
 #[cfg(feature = "parallel")]
 use parallel_buffer::ParBuf;

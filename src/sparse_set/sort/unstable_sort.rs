@@ -227,7 +227,7 @@ fn unstable_sort() {
     let mut array = crate::sparse_set::SparseSet::default();
 
     for i in (0..100).rev() {
-        let mut key = crate::entity::Key::zero();
+        let mut key = crate::storage::Key::zero();
         key.set_index(100 - i);
         array.view_mut().insert(i, key);
     }
@@ -241,7 +241,7 @@ fn unstable_sort() {
         assert!(window[0] < window[1]);
     }
     for i in 0..100 {
-        let mut key = crate::entity::Key::zero();
+        let mut key = crate::storage::Key::zero();
         key.set_index(100 - i);
         assert_eq!(array.get(key), Some(&i));
     }
@@ -252,12 +252,12 @@ fn partially_sorted_unstable_sort() {
     let mut array = crate::sparse_set::SparseSet::default();
 
     for i in 0..20 {
-        let mut key = crate::entity::Key::zero();
+        let mut key = crate::storage::Key::zero();
         key.set_index(i);
         assert!(array.view_mut().insert(i, key).is_none());
     }
     for i in (20..100).rev() {
-        let mut key = crate::entity::Key::zero();
+        let mut key = crate::storage::Key::zero();
         key.set_index(100 - i + 20);
         assert!(array.view_mut().insert(i, key).is_none());
     }
@@ -271,12 +271,12 @@ fn partially_sorted_unstable_sort() {
         assert!(window[0] < window[1]);
     }
     for i in 0..20 {
-        let mut key = crate::entity::Key::zero();
+        let mut key = crate::storage::Key::zero();
         key.set_index(i);
         assert_eq!(array.get(key), Some(&i));
     }
     for i in 20..100 {
-        let mut key = crate::entity::Key::zero();
+        let mut key = crate::storage::Key::zero();
         key.set_index(100 - i + 20);
         assert_eq!(array.get(key), Some(&i));
     }

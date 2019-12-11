@@ -3,7 +3,7 @@ use super::m_update::*;
 #[cfg(feature = "parallel")]
 use super::{AbstractMut, IntoAbstract, ParBuf};
 #[cfg(feature = "parallel")]
-use crate::entity::Key;
+use crate::storage::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer};
 #[cfg(feature = "parallel")]

@@ -1,5 +1,5 @@
 use super::{AbstractMut, IntoAbstract, TightWithId1};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub struct TightWithIdFilter1<T: IntoAbstract, P> {
     pub(super) iter: TightWithId1<T>,

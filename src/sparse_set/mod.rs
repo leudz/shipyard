@@ -3,7 +3,7 @@ pub mod sort;
 mod view;
 mod view_add_entity;
 
-use crate::entity::Key;
+use crate::storage::Key;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view::RawViewMut;
 pub use view::{View, ViewMut};

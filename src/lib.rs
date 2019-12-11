@@ -94,8 +94,6 @@
 #![deny(bare_trait_objects)]
 
 mod atomic_refcell;
-mod component_storage;
-mod entity;
 pub mod error;
 mod get;
 pub mod internal;
@@ -105,6 +103,7 @@ pub mod prelude;
 mod remove;
 mod run;
 mod sparse_set;
+mod storage;
 mod unknown_storage;
 mod world;
 

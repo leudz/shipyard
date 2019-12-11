@@ -1,6 +1,5 @@
-use crate::component_storage::AllStorages;
-use crate::entity::Entities;
 use crate::run::{Dispatch, Mutation, System, SystemData};
+use crate::storage::{AllStorages, Entities};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::ops::Range;

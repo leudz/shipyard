@@ -1,8 +1,8 @@
 use crate::atomic_refcell::{AtomicRefCell, Borrow};
 use crate::atomic_refcell::{Ref, RefMut};
-use crate::component_storage::AllStorages;
 use crate::error;
 use crate::sparse_set::{Pack, SparseSet, TightPack as TightPackInfo};
+use crate::storage::AllStorages;
 use std::any::TypeId;
 use std::sync::Arc;
 

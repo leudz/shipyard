@@ -1,4 +1,4 @@
-use crate::component_storage::Storage;
+use crate::storage::Storage;
 use crate::world::World;
 use std::any::TypeId;
 

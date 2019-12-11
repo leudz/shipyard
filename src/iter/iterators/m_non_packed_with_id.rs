@@ -1,6 +1,6 @@
 use super::m_non_packed::*;
 use super::{AbstractMut, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{Folder, UnindexedProducer};
 

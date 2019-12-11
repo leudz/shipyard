@@ -1,5 +1,5 @@
-use crate::entity::Key;
 use crate::sparse_set::SparseSet;
+use crate::storage::Key;
 use std::any::TypeId;
 
 // When removing an entity all its components have to be removed.

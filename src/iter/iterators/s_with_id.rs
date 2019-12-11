@@ -1,5 +1,5 @@
 use super::{AbstractMut, IntoAbstract, TightWithId1, UpdateWithId1, WithIdFilter1};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub enum WithId1<T: IntoAbstract> {
     Tight(TightWithId1<T>),

@@ -1,10 +1,11 @@
 mod system;
 
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
-use crate::component_storage::{AllStorages, AllStoragesViewMut};
-use crate::entity::{Entities, EntitiesMut, EntitiesView, EntitiesViewMut};
 use crate::not::Not;
 use crate::sparse_set::{View, ViewMut};
+use crate::storage::{
+    AllStorages, AllStoragesViewMut, Entities, EntitiesMut, EntitiesView, EntitiesViewMut,
+};
 use crate::Unique;
 #[cfg(feature = "parallel")]
 use rayon::ThreadPool;

@@ -1,5 +1,5 @@
-use crate::entity::Key;
 use crate::sparse_set::{View, ViewMut};
+use crate::storage::Key;
 
 /// Retrives components based on their type and entity key.
 pub trait GetComponent {

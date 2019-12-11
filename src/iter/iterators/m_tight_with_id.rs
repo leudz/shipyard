@@ -1,6 +1,6 @@
 use super::m_tight::*;
 use super::{AbstractMut, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 

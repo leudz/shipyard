@@ -1,7 +1,7 @@
 #[cfg(feature = "parallel")]
 use super::{AbstractMut, InnerParUpdate1, IntoAbstract, ParBuf, ParUpdateFilter1};
 #[cfg(feature = "parallel")]
-use crate::entity::Key;
+use crate::storage::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer};
 #[cfg(feature = "parallel")]

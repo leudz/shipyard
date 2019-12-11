@@ -1,5 +1,5 @@
 use super::{AbstractMut, IntoAbstract, UpdateFilterWithId1};
-use crate::entity::Key;
+use crate::storage::Key;
 
 pub struct UpdateFilter1<T: IntoAbstract, P> {
     pub(super) data: T::AbsView,

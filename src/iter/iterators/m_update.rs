@@ -1,7 +1,7 @@
 use super::m_update_filter::*;
 use super::m_update_with_id::*;
 use super::{AbstractMut, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 
 macro_rules! impl_iterators {
     (

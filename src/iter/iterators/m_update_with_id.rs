@@ -1,6 +1,6 @@
 use super::m_update::*;
 use super::{AbstractMut, IntoAbstract};
-use crate::entity::Key;
+use crate::storage::Key;
 
 macro_rules! impl_iterators {
     (

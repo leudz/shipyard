@@ -1,1 +1,1 @@
-pub use crate::entity::EntitiesViewMut;
+pub use crate::storage::EntitiesViewMut;
