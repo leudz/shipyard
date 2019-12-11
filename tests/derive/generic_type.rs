@@ -1,4 +1,4 @@
-use shipyard::*;
+use shipyard::prelude::*;
 
 #[system(Test)]
 fn run<T>() {}

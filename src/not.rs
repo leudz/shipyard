@@ -8,12 +8,12 @@ use std::ops::Not as NotOps;
 /// # use shipyard::prelude::*;
 /// let world = World::new::<(usize, u32)>();
 ///
-/// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+/// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
 ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
 ///     entities.add_entity((&mut usizes,), (2usize,));
 /// });
 ///
-/// world.run::<(&usize, Not<&u32>), _>(|(usizes, not_u32s)| {
+/// world.run::<(&usize, Not<&u32>), _, _>(|(usizes, not_u32s)| {
 ///     let mut iter = (&usizes, &not_u32s).iter();
 ///     assert_eq!(iter.next(), Some((&2, ())));
 ///     assert_eq!(iter.next(), None);

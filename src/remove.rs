@@ -23,7 +23,7 @@ pub trait Remove<T: Removable> {
     /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     ///     assert_eq!(old, (Some(0), Some(1)));
@@ -37,7 +37,7 @@ pub trait Remove<T: Removable> {
     /// let world = World::new::<(usize, u32)>();
     /// world.tight_pack::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     ///     assert_eq!(old, (Some(0),));
@@ -60,7 +60,7 @@ pub trait Remove<T: Removable> {
     /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity1);
     ///     assert_eq!(old, (Some(0), Some(1)));
@@ -74,7 +74,7 @@ pub trait Remove<T: Removable> {
     /// let world = World::new::<(usize, u32)>();
     /// world.tight_pack::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
     ///     assert_eq!(old, (Some(0),));

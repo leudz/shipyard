@@ -29,14 +29,17 @@ pub enum Mutation {
 pub trait Run<'a> {
     type Storage;
     #[cfg(feature = "parallel")]
-    fn run<F: FnOnce(Self::Storage)>(
+    fn run<R: 'static, F: FnOnce(Self::Storage) -> R>(
         storages: &'a AtomicRefCell<AllStorages>,
         thread_pool: &'a ThreadPool,
         f: F,
-    );
+    ) -> R;
 
     #[cfg(not(feature = "parallel"))]
-    fn run<F: FnOnce(Self::Storage)>(storages: &'a AtomicRefCell<AllStorages>, f: F);
+    fn run<R: 'static, F: FnOnce(Self::Storage) -> R>(
+        storages: &'a AtomicRefCell<AllStorages>,
+        f: F,
+    ) -> R;
 }
 
 pub trait SystemData<'a> {
@@ -423,23 +426,26 @@ impl<'a, T: 'static> SystemData<'a> for Unique<&mut T> {
 impl<'a, T: SystemData<'a>> Run<'a> for T {
     type Storage = T::View;
     #[cfg(feature = "parallel")]
-    fn run<F: FnOnce(Self::Storage)>(
+    fn run<R: 'static, F: FnOnce(Self::Storage) -> R>(
         storages: &'a AtomicRefCell<AllStorages>,
         thread_pool: &'a ThreadPool,
         f: F,
-    ) {
+    ) -> R {
         let mut borrows = Vec::new();
         // SAFE storage is dropped before borrows
         let storage = unsafe { T::borrow(&mut borrows, storages, thread_pool) };
-        f(storage);
+        f(storage)
     }
 
     #[cfg(not(feature = "parallel"))]
-    fn run<F: FnOnce(Self::Storage)>(storages: &'a AtomicRefCell<AllStorages>, f: F) {
+    fn run<R: 'static, F: FnOnce(Self::Storage) -> R>(
+        storages: &'a AtomicRefCell<AllStorages>,
+        f: F,
+    ) -> R {
         let mut borrows = Vec::new();
         // SAFE storage is dropped before borrow
         let storage = unsafe { T::borrow(&mut borrows, storages) };
-        f(storage);
+        f(storage)
     }
 }
 

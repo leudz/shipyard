@@ -22,7 +22,7 @@
 //!
 //! let world = World::new::<(Position, Health)>();
 //!
-//! world.run::<(EntitiesMut, &mut Position, &mut Health), _>(|(mut entities, mut pos, mut health)| {
+//! world.run::<(EntitiesMut, &mut Position, &mut Health), _, _>(|(mut entities, mut pos, mut health)| {
 //!     entities.add_entity((&mut pos, &mut health), (Position { x: 0.0, y: 0.0 }, Health(1000.0)));
 //! });
 //!
@@ -68,7 +68,7 @@
 //!
 //! let world = World::new::<(Health, Fat)>();
 //!
-//! world.run::<(EntitiesMut, &mut Health, &mut Fat), _>(|(mut entities, mut health, mut fat)| {
+//! world.run::<(EntitiesMut, &mut Health, &mut Fat), _, _>(|(mut entities, mut health, mut fat)| {
 //!     (0..100).for_each(|_| {
 //!         entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
 //!     })
@@ -84,7 +84,7 @@
 //!     world.run_default();
 //! }
 //!
-//! world.run::<&Health, _>(|health| {
+//! world.run::<&Health, _, _>(|health| {
 //!     // we've got some new pigs
 //!     assert_eq!(health.len(), 900);
 //! });
@@ -118,7 +118,7 @@ pub struct ThreadPool;
 /// let world = World::default();
 /// world.register_unique(0usize);
 ///
-/// world.run::<Unique<&mut usize>, _>(|x| {
+/// world.run::<Unique<&mut usize>, _, _>(|x| {
 ///     *x += 1;
 /// });
 /// ```

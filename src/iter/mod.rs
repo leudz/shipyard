@@ -27,7 +27,7 @@ pub trait IntoIter {
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     ///     for (x, &y) in (usizes, &u32s).iter() {
@@ -46,7 +46,7 @@ pub trait IntoIter {
     /// use rayon::prelude::ParallelIterator;
     ///
     /// let world = World::new::<(usize, u32)>();
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32, ThreadPool), _>(|(mut entities, mut usizes, mut u32s, thread_pool)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32, ThreadPool), _, _>(|(mut entities, mut usizes, mut u32s, thread_pool)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     ///     thread_pool.install(|| {

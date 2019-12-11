@@ -19,16 +19,16 @@ impl AllStoragesViewMut<'_> {
     ///
     /// let mut entity1 = None;
     /// let mut entity2 = None;
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entity1 = Some(entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)));
     ///     entity2 = Some(entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)));
     /// });
     ///
-    /// world.run::<AllStorages, _>(|mut all_storages| {
+    /// world.run::<AllStorages, _, _>(|mut all_storages| {
     ///     all_storages.delete(entity1.unwrap());
     /// });
     ///
-    /// world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
+    /// world.run::<(&usize, &u32), _, _>(|(usizes, u32s)| {
     ///     assert_eq!((&usizes).get(entity1.unwrap()), None);
     ///     assert_eq!((&u32s).get(entity1.unwrap()), None);
     ///     assert_eq!(usizes.get(entity2.unwrap()), Some(&2));

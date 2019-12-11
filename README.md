@@ -17,7 +17,7 @@ the `World` will do the rest.
 
 ## Simple Example
 ```rust
-use shipyard::*;
+use shipyard::prelude::*;
 
 struct Health(f32);
 struct Position { x: f32, y: f32 };
@@ -39,7 +39,7 @@ fn is_in_acid(pos: &Position) -> bool {
 
 let world = World::new::<(Position, Health)>();
 
-world.run::<(EntitiesMut, &mut Position, &mut Health), _>(|mut entities, mut pos, mut health| {
+world.run::<(EntitiesMut, &mut Position, &mut Health), _, _>(|mut entities, mut pos, mut health| {
     entities.add_entity((&mut pos, &mut health), Position { x: 0.0, y: 0.0 }, Health(1000.0));
 });
 

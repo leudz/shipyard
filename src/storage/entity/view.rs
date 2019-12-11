@@ -90,7 +90,7 @@ impl EntitiesViewMut<'_> {
     /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///
     ///     assert_eq!(usizes.get(entity), Some(&0));

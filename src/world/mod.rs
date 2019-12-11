@@ -147,7 +147,7 @@ impl World {
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
-    /// world.run::<(&usize, &mut u32), _>(|(usizes, u32s)| {
+    /// world.run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///     // -- snip --
     /// });
     /// ```
@@ -156,14 +156,14 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
-    pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
+    pub fn run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
         #[cfg(feature = "parallel")]
         {
-            T::run(&self.storages, &self.thread_pool, f);
+            T::run(&self.storages, &self.thread_pool, f)
         }
         #[cfg(not(feature = "parallel"))]
         {
-            T::run(&self.storages, f);
+            T::run(&self.storages, f)
         }
     }
     /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
@@ -284,7 +284,7 @@ impl World {
     ///
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2, 3));
     ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
@@ -336,7 +336,7 @@ impl World {
     ///
     /// let world = World::new::<(usize, u32)>();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2, 3));
     ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
