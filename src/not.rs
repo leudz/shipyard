@@ -1,11 +1,11 @@
-use crate::sparse_array::{View, ViewMut};
+use crate::sparse_set::{View, ViewMut};
 use std::ops::Not as NotOps;
 
 /// Used to filter out components.
 /// Get and iterators will skip entities that have this component.
 /// # Example
 /// ```
-/// # use shipyard::*;
+/// # use shipyard::prelude::*;
 /// let world = World::new::<(usize, u32)>();
 ///
 /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {

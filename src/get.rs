@@ -1,5 +1,5 @@
 use crate::entity::Key;
-use crate::sparse_array::{View, ViewMut};
+use crate::sparse_set::{View, ViewMut};
 
 /// Retrives components based on their type and entity key.
 pub trait GetComponent {
@@ -9,7 +9,7 @@ pub trait GetComponent {
     /// Multiple components can be queried at the same time using a tuple.
     /// #Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {

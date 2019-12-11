@@ -15,7 +15,7 @@ use crate::world::World;
 /// A tuple will allow multiple references.
 /// # Example
 /// ```
-/// # use shipyard::*;
+/// # use shipyard::prelude::*;
 /// struct Single;
 /// impl<'a> System<'a> for Single {
 ///     type Data = &'a usize;
@@ -51,7 +51,6 @@ where
     T: for<'a> System<'a> + Send + Sync,
 {
     fn dispatch(&self, world: &World) {
-        let entities = &world.entities;
         let storages = &world.storages;
 
         let mut borrows = Vec::new();
@@ -62,17 +61,12 @@ where
                 let thread_pool = &world.thread_pool;
                 // SAFE data is dropped before borrow
                 unsafe {
-                    <T::Data as SystemData<'_>>::borrow(
-                        &mut borrows,
-                        &entities,
-                        &storages,
-                        &thread_pool,
-                    )
+                    <T::Data as SystemData<'_>>::borrow(&mut borrows, &storages, &thread_pool)
                 }
             }
             #[cfg(not(feature = "parallel"))]
             {
-                unsafe { <T::Data as SystemData<'_>>::borrow(&mut borrows, &entities, &storages) }
+                unsafe { <T::Data as SystemData<'_>>::borrow(&mut borrows, &storages) }
             }
         };
         self.run(data);

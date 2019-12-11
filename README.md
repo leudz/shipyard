@@ -8,14 +8,12 @@ Shipyard is an Entity Component System. While usable it is far from finished.
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![Gitter](https://badges.gitter.im/leudz-shipyard/community.svg)](https://gitter.im/leudz-shipyard/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-## Ongoing
-The library is being almost completely rewritten, some parts of the api will change drastically.
-
-Most of the ideas are discussed on Gitter and not in the issues. If you want to follow the development or ask a question that's a good place to do it.
-
 ## Interesting features
-- **Packing** can enable perfect components alignment, allowing fast iteration but also SIMD instructions. To learn how it's done read Michele **skypjack** Caini's [great blog article](https://skypjack.github.io/2019-03-21-ecs-baf-part-2-insights/).
-- **Automatic scheduling** you just have to tell which systems you want to run and the `World` will do the rest.
+- **Packing** can enable perfect components alignment, allowing fast iteration
+but also SIMD instructions. To learn how it's done read Michele **skypjack** Caini's
+[great blog article](https://skypjack.github.io/2019-03-21-ecs-baf-part-2-insights/).
+- **Automatic scheduling** you just have to tell which systems you want to run and
+the `World` will do the rest.
 
 ## Simple Example
 ```rust
@@ -35,7 +33,7 @@ fn run(pos: &Position, health: &mut Health) {
 
 fn is_in_acid(pos: &Position) -> bool {
     // it's wet season
-     
+
     true
 }
 

@@ -1,4 +1,4 @@
-use super::{hasher::TypeIdHasher, ComponentStorage};
+use super::{hasher::TypeIdHasher, Storage};
 use crate::entity::Key;
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -7,7 +7,7 @@ use std::hash::BuildHasherDefault;
 /// View of all component storages.
 /// Let you remove entities.
 pub struct AllStoragesViewMut<'a>(
-    pub(super) &'a mut HashMap<TypeId, ComponentStorage, BuildHasherDefault<TypeIdHasher>>,
+    pub(super) &'a mut HashMap<TypeId, Storage, BuildHasherDefault<TypeIdHasher>>,
 );
 
 impl AllStoragesViewMut<'_> {

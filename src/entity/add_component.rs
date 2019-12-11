@@ -1,6 +1,6 @@
 use crate::entity::{EntitiesView, Key};
 use crate::error;
-use crate::sparse_array::{Pack, ViewMut};
+use crate::sparse_set::{Pack, ViewMut};
 use std::any::TypeId;
 
 // No new storage will be created

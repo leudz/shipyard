@@ -17,16 +17,16 @@ pub(crate) use view_add_entity::ViewAddEntity;
 // and if set dense[sparse[number]] != number.
 // We can't be limited to store solely integers, this is why there is a third vector.
 // It mimics the dense vector in regard to insertion/deletion.
-pub struct SparseArray<T> {
+pub struct SparseSet<T> {
     sparse: Vec<usize>,
     dense: Vec<Key>,
     data: Vec<T>,
     pub(crate) pack_info: PackInfo<T>,
 }
 
-impl<T> Default for SparseArray<T> {
+impl<T> Default for SparseSet<T> {
     fn default() -> Self {
-        SparseArray {
+        SparseSet {
             sparse: Vec::new(),
             dense: Vec::new(),
             data: Vec::new(),
@@ -35,7 +35,7 @@ impl<T> Default for SparseArray<T> {
     }
 }
 
-impl<T: 'static> SparseArray<T> {
+impl<T: 'static> SparseSet<T> {
     /// Returns true if the sparse array contains data at this index.
     pub(crate) fn contains(&self, entity: Key) -> bool {
         self.view().contains(entity)
@@ -57,7 +57,7 @@ impl<T: 'static> SparseArray<T> {
     }
     /// Returns the number of element present in the sparse array.
     pub fn len(&self) -> usize {
-        self.dense.len()
+        self.data.len()
     }
     pub(crate) fn view(&self) -> View<T> {
         View {
@@ -93,9 +93,7 @@ impl<T: 'static> SparseArray<T> {
     /// Place the unique component in the storage.
     /// The storage has to be completely empty.
     pub(crate) fn insert_unique(&mut self, component: T) {
-        if self.sparse.len() != 0 || self.dense.len() != 0 || self.data.len() != 0 {
-            unreachable!()
-        }
+        assert!(self.sparse.is_empty() && self.dense.is_empty() && self.data.is_empty());
         self.data.push(component)
     }
     /// Returns a reference to the single element of the unique storage if it's one.
@@ -116,11 +114,11 @@ impl<T: 'static> SparseArray<T> {
     }
     /// Returns true if this storage is a unique storage.
     pub(crate) fn is_unique(&self) -> bool {
-        self.sparse.len() == 0 && self.dense.len() == 0 && self.data.len() == 1
+        self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
     }
 }
 
-impl<T: 'static> std::ops::Index<Key> for SparseArray<T> {
+impl<T: 'static> std::ops::Index<Key> for SparseSet<T> {
     type Output = T;
     fn index(&self, index: Key) -> &Self::Output {
         self.get(index).unwrap()
@@ -129,7 +127,7 @@ impl<T: 'static> std::ops::Index<Key> for SparseArray<T> {
 
 #[test]
 fn insert() {
-    let mut array = SparseArray::default();
+    let mut array = SparseSet::default();
     let mut key = Key::zero();
     key.set_index(0);
     assert!(array.view_mut().insert("0", key).is_none());
@@ -157,7 +155,7 @@ fn insert() {
 }
 #[test]
 fn remove() {
-    let mut array = SparseArray::default();
+    let mut array = SparseSet::default();
     let mut key = Key::zero();
     key.set_index(0);
     array.view_mut().insert("0", key);

@@ -4,7 +4,7 @@ mod parallel_buffer;
 
 use crate::entity::Key;
 use crate::not::Not;
-use crate::sparse_array::{Pack, PackInfo, RawViewMut, View, ViewMut};
+use crate::sparse_set::{Pack, PackInfo, RawViewMut, View, ViewMut};
 use iterators::{Filter, WithId};
 #[cfg(feature = "parallel")]
 use parallel_buffer::ParBuf;
@@ -25,7 +25,7 @@ pub trait IntoIter {
     /// Iterators can only be made inside [run] closure and systems.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
@@ -42,7 +42,7 @@ pub trait IntoIter {
     /// Iterators can only be made inside [run] closure and systems.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// use rayon::prelude::ParallelIterator;
     ///
     /// let world = World::new::<(usize, u32)>();

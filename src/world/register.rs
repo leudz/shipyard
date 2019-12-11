@@ -1,4 +1,4 @@
-use crate::component_storage::ComponentStorage;
+use crate::component_storage::Storage;
 use crate::world::World;
 use std::any::TypeId;
 
@@ -19,7 +19,7 @@ macro_rules! impl_register {
                 $({
                     let type_id = TypeId::of::<$type>();
                     all_storages.0.entry(type_id).or_insert_with(|| {
-                        ComponentStorage::new::<$type>()
+                        Storage::new::<$type>()
                     });
                 })+
             }

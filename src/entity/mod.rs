@@ -1,69 +1,64 @@
 mod add_component;
 mod view;
 
-use std::num::NonZeroUsize;
+use crate::unknown_storage::UnknownStorage;
+use std::any::TypeId;
+use std::num::NonZeroU64;
 pub use view::{EntitiesView, EntitiesViewMut};
 
-/* A Key is a handle to an entity and has two parts, the index and the version.
- * The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
- * Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
-*/
+/// A Key is a handle to an entity and has two parts, the index and the version.
+/// The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
+/// Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
 #[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Key(NonZeroUsize);
+pub struct Key(NonZeroU64);
 
 impl Key {
     // Number of bits used by the version
-    #[cfg(target_pointer_width = "64")]
-    const VERSION_LEN: usize = 16;
-    #[cfg(not(target_pointer_width = "64"))]
-    const VERSION_LEN: usize = 12;
-
-    const INDEX_MASK: usize = !0 >> Self::VERSION_LEN;
-    const VERSION_MASK: usize = !Self::INDEX_MASK;
+    const VERSION_LEN: u64 = 16;
+    const INDEX_MASK: u64 = !0 >> Self::VERSION_LEN;
+    const VERSION_MASK: u64 = !Self::INDEX_MASK;
 
     /// Returns the index part of the Key.
     #[inline]
     pub(crate) fn index(self) -> usize {
-        (self.0.get() & Self::INDEX_MASK) - 1
+        ((self.0.get() & Self::INDEX_MASK) - 1) as usize
     }
     /// Returns the version part of the Key.
     #[inline]
     pub(crate) fn version(self) -> usize {
-        (self.0.get() & Self::VERSION_MASK) >> (0usize.count_zeros() as usize - Self::VERSION_LEN)
+        ((self.0.get() & Self::VERSION_MASK) >> (0usize.count_zeros() as u64 - Self::VERSION_LEN))
+            as usize
     }
     /// Make a new Key with the given index.
     #[inline]
-    pub(crate) fn new(index: usize) -> Self {
-        assert!(index + 1 <= Self::INDEX_MASK);
-        Key(unsafe { NonZeroUsize::new_unchecked(index + 1) })
+    pub(crate) fn new(index: u64) -> Self {
+        assert!(index < Self::INDEX_MASK);
+        Key(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
     /// Modify the index.
     #[cfg(not(test))]
     #[inline]
-    fn set_index(&mut self, index: usize) {
-        assert!(index + 1 <= Self::INDEX_MASK);
-        self.0 = unsafe {
-            NonZeroUsize::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1))
-        }
+    fn set_index(&mut self, index: u64) {
+        assert!(index < Self::INDEX_MASK);
+        self.0 =
+            unsafe { NonZeroU64::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1)) }
     }
     /// Modify the index.
     #[cfg(test)]
-    pub(crate) fn set_index(&mut self, index: usize) {
+    pub(crate) fn set_index(&mut self, index: u64) {
         assert!(index + 1 <= Self::INDEX_MASK);
-        self.0 = unsafe {
-            NonZeroUsize::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1))
-        }
+        self.0 =
+            unsafe { NonZeroU64::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1)) }
     }
     /// Increments the version, returns Err if version + 1 == version::MAX().
     #[inline]
     fn bump_version(&mut self) -> Result<(), ()> {
         if self.0.get() < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = unsafe {
-                NonZeroUsize::new_unchecked(
-                    (self.index() + 1)
-                        | ((self.version() + 1)
-                            << (std::mem::size_of::<usize>() * 8 - Self::VERSION_LEN)),
+                NonZeroU64::new_unchecked(
+                    (self.index() + 1) as u64
+                        | (((self.version() + 1) as u64) << (64 - Self::VERSION_LEN)),
                 )
             };
             Ok(())
@@ -73,10 +68,10 @@ impl Key {
     }
     #[cfg(test)]
     pub(crate) fn zero() -> Self {
-        Key(NonZeroUsize::new(1).unwrap())
+        Key(NonZeroU64::new(1).unwrap())
     }
     pub(crate) fn dead() -> Self {
-        Key(unsafe { NonZeroUsize::new_unchecked(std::usize::MAX) })
+        Key(unsafe { NonZeroU64::new_unchecked(std::u64::MAX) })
     }
 }
 
@@ -126,6 +121,13 @@ impl Entities {
     }
 }
 
+impl UnknownStorage for Entities {
+    fn delete(&mut self, _entity: Key) -> &[TypeId] {
+        unimplemented!()
+    }
+    fn unpack(&mut self, _entity: Key) {}
+}
+
 #[test]
 fn key() {
     let mut key = Key::new(0);
@@ -172,7 +174,7 @@ fn entities() {
     assert_eq!(key02.index(), 0);
     assert_eq!(key02.version(), 2);
 
-    let last_key = Key(NonZeroUsize::new(!(!0 >> 15) + 1).unwrap());
+    let last_key = Key(NonZeroU64::new(!(!0 >> 15) + 1).unwrap());
     entities.data[0] = last_key;
     assert!(entities.view_mut().delete_key(last_key));
     assert_eq!(entities.list, None);

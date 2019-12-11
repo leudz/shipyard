@@ -2,7 +2,7 @@ use crate::atomic_refcell::{AtomicRefCell, Borrow};
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::component_storage::AllStorages;
 use crate::error;
-use crate::sparse_array::{Pack, SparseArray, TightPack as TightPackInfo};
+use crate::sparse_set::{Pack, SparseSet, TightPack as TightPackInfo};
 use std::any::TypeId;
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ macro_rules! impl_tight_pack {
                 let all_storages = all_storages.try_borrow().map_err(error::GetStorage::AllStoragesBorrow)?;
 
                 let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<$type>(),)+]);
-                let mut storages: ($((RefMut<SparseArray<$type>>, Borrow),)+) = ($({
+                let mut storages: ($((RefMut<SparseSet<$type>>, Borrow),)+) = ($({
                     // SAFE borrow is dropped after storage
                     let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
                         match all_storages.0.get(&type_ids[$index]) {
@@ -26,7 +26,7 @@ macro_rules! impl_tight_pack {
                             None => Err(error::GetStorage::MissingComponent),
                         }
                     })?)};
-                    (storage.array_mut()
+                    (storage.sparse_set_mut()
                     .map_err(|err| error::Pack::GetStorage(error::GetStorage::StorageBorrow(err)))?, borrow)
                 },)+);
 

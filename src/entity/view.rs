@@ -2,7 +2,7 @@ use super::add_component::AddComponent;
 use super::Key;
 use crate::component_storage::AllStoragesViewMut;
 use crate::error;
-use crate::sparse_array::ViewAddEntity;
+use crate::sparse_set::ViewAddEntity;
 
 /// View into the entities.
 pub struct EntitiesView<'a> {
@@ -46,10 +46,10 @@ impl EntitiesViewMut<'_> {
             }
         }
         if let Some(index) = index {
-            unsafe { self.data.get_unchecked_mut(index).set_index(index) };
+            unsafe { self.data.get_unchecked_mut(index).set_index(index as u64) };
             unsafe { *self.data.get_unchecked(index) }
         } else {
-            let key = Key::new(self.data.len());
+            let key = Key::new(self.data.len() as u64);
             self.data.push(key);
             key
         }
@@ -68,7 +68,11 @@ impl EntitiesViewMut<'_> {
                     .is_ok()
             } {
                 if let Some((ref mut new, _)) = self.list {
-                    unsafe { self.data.get_unchecked_mut(*new).set_index(key.index()) };
+                    unsafe {
+                        self.data
+                            .get_unchecked_mut(*new)
+                            .set_index(key.index() as u64)
+                    };
                     *new = key.index();
                 } else {
                     *self.list = Some((key.index(), key.index()));
@@ -84,7 +88,7 @@ impl EntitiesViewMut<'_> {
     /// Multiple components can be added at the same time using a tuple.
     /// # Example:
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
@@ -103,7 +107,7 @@ impl EntitiesViewMut<'_> {
     /// Returns true if the entity was alive.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     ///
     /// let mut entity1 = None;

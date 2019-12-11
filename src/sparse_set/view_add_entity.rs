@@ -1,5 +1,5 @@
 use crate::entity::Key;
-use crate::sparse_array::{Pack, ViewMut};
+use crate::sparse_set::{Pack, ViewMut};
 use std::any::TypeId;
 
 pub trait ViewAddEntity {

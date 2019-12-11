@@ -15,7 +15,7 @@ use super::m_tight::*;
 use super::m_update::*;
 use super::{AbstractMut, IntoAbstract, IntoIter};
 use crate::entity::Key;
-use crate::sparse_array::Pack;
+use crate::sparse_set::Pack;
 
 macro_rules! impl_iterators {
     (

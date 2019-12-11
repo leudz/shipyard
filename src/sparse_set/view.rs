@@ -2,7 +2,7 @@ use super::{Pack, PackInfo};
 use crate::entity::Key;
 use std::marker::PhantomData;
 
-/// Immutable view into a `ComponentStorage`.
+/// Immutable view into a `Storage`.
 pub struct View<'a, T> {
     pub(crate) sparse: &'a [usize],
     pub(crate) dense: &'a [Key],
@@ -45,7 +45,10 @@ impl<T> View<'_, T> {
     }
     /// Returns the number of components in the view.
     pub fn len(&self) -> usize {
-        self.dense.len()
+        self.data.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
     pub fn modified(&self) -> View<T> {
         match &self.pack_info.pack {
@@ -81,7 +84,7 @@ impl<T> View<'_, T> {
     }
 }
 
-/// Mutable view into a `ComponentStorage`.
+/// Mutable view into a `Storage`.
 pub struct ViewMut<'a, T> {
     pub(crate) sparse: &'a mut Vec<usize>,
     pub(crate) dense: &'a mut Vec<Key>,
@@ -207,7 +210,10 @@ impl<'a, T: 'static> ViewMut<'a, T> {
     }
     /// Returns the number of components in the view.
     pub fn len(&self) -> usize {
-        self.dense.len()
+        self.data.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
     }
     /// Consumes the ViewMut and returns a RawViewMut.
     pub(crate) fn into_raw(self) -> RawViewMut<'a, T> {

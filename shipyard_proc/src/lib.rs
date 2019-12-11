@@ -68,9 +68,9 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                         // transform &Entities into Entites and &mut Entities into EntitiesMut
                         if path.path.segments.last().unwrap().ident == "Entities" {
                             if reference.mutability.is_none() {
-                                **ty = parse_quote!(::shipyard::Entities);
+                                **ty = parse_quote!(::shipyard::prelude::Entities);
                             } else {
-                                **ty = parse_quote!(::shipyard::EntitiesMut);
+                                **ty = parse_quote!(::shipyard::prelude::EntitiesMut);
                             }
                         } else if reference.lifetime.is_none() {
                             reference.lifetime = parse_quote!('a);
@@ -146,9 +146,9 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
 
     Ok(quote! {
         #vis struct #name;
-        impl<'a> ::shipyard::System<'a> for #name {
+        impl<'a> ::shipyard::prelude::System<'a> for #name {
             type Data = (#(#data,)*);
-            fn run(&self, (#(#binding,)*): <Self::Data as ::shipyard::SystemData<'a>>::View) #body
+            fn run(&self, (#(#binding,)*): <Self::Data as ::shipyard::prelude::SystemData<'a>>::View) #body
         }
     })
 }

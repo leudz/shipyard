@@ -4,30 +4,32 @@ mod register;
 
 use crate::atomic_refcell::AtomicRefCell;
 use crate::component_storage::AllStorages;
-use crate::entity::Entities;
 use crate::error;
 use crate::run::Run;
-use crate::sparse_array::{Pack, UpdatePack};
+use crate::sparse_set::{Pack, UpdatePack};
 use pack::{LoosePack, TightPack};
 use pipeline::{Pipeline, Workload};
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use register::Register;
+use std::marker::PhantomData;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
-    pub(crate) entities: AtomicRefCell<Entities>,
     pub(crate) storages: AtomicRefCell<AllStorages>,
     #[cfg(feature = "parallel")]
     pub(crate) thread_pool: ThreadPool,
     pipeline: AtomicRefCell<Pipeline>,
+    _not_send: PhantomData<*const ()>,
 }
+
+// World can't be Send because it can contain !Send types which shouldn't be dropped on a different thread
+unsafe impl Sync for World {}
 
 impl Default for World {
     /// Create an empty `World` without any storage.
     fn default() -> Self {
         World {
-            entities: AtomicRefCell::new(Default::default()),
             storages: AtomicRefCell::new(Default::default()),
             #[cfg(feature = "parallel")]
             thread_pool: ThreadPoolBuilder::new()
@@ -35,6 +37,7 @@ impl Default for World {
                 .build()
                 .unwrap(),
             pipeline: AtomicRefCell::new(Default::default()),
+            _not_send: PhantomData,
         }
     }
 }
@@ -49,7 +52,7 @@ impl World {
     /// `World` is never used mutably.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize,)>();
     /// let world = World::new::<(usize, u32)>();
     /// ```
@@ -76,7 +79,6 @@ impl World {
         f: F,
     ) -> Self {
         World {
-            entities: AtomicRefCell::new(Default::default()),
             storages: AtomicRefCell::new(Default::default()),
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
@@ -84,6 +86,7 @@ impl World {
                 .build()
                 .unwrap(),
             pipeline: AtomicRefCell::new(Default::default()),
+            _not_send: PhantomData,
         }
     }
     /// Register a new component type and create a storage for it.
@@ -142,7 +145,7 @@ impl World {
     /// Unwraps errors.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     /// world.run::<(&usize, &mut u32), _>(|(usizes, u32s)| {
     ///     // -- snip --
@@ -156,17 +159,17 @@ impl World {
     pub fn run<'a, T: Run<'a>, F: FnOnce(T::Storage)>(&'a self, f: F) {
         #[cfg(feature = "parallel")]
         {
-            T::run(&self.entities, &self.storages, &self.thread_pool, f);
+            T::run(&self.storages, &self.thread_pool, f);
         }
         #[cfg(not(feature = "parallel"))]
         {
-            T::run(&self.entities, &self.storages, f);
+            T::run(&self.storages, f);
         }
     }
     /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     /// world.try_tight_pack::<(usize, u32)>().unwrap();
     /// ```
@@ -178,7 +181,7 @@ impl World {
     /// Unwraps errors.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// let world = World::new::<(usize, u32)>();
     /// world.tight_pack::<(usize, u32)>();
     /// ```
@@ -203,16 +206,16 @@ impl World {
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?;
         if let Some(storage) = all_storages.0.get(&std::any::TypeId::of::<T>()) {
-            let mut array = storage
-                .array_mut::<T>()
+            let mut sparse_set = storage
+                .sparse_set_mut::<T>()
                 .map_err(error::GetStorage::StorageBorrow)?;
-            if array.is_unique() {
+            if sparse_set.is_unique() {
                 return Err(error::Pack::UniqueStorage(std::any::type_name::<T>()));
             }
-            match array.pack_info.pack {
+            match sparse_set.pack_info.pack {
                 Pack::NoPack => {
-                    array.pack_info.pack = Pack::Update(UpdatePack {
-                        inserted: array.len(),
+                    sparse_set.pack_info.pack = Pack::Update(UpdatePack {
+                        inserted: sparse_set.len(),
                         modified: 0,
                         removed: Vec::new(),
                     });
@@ -223,7 +226,7 @@ impl World {
                 Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(std::any::TypeId::of::<T>())),
             }
         } else {
-            Err(error::GetStorage::MissingComponent)?
+            Err(error::GetStorage::MissingComponent.into())
         }
     }
     pub fn update_pack<T: 'static>(&self) {
@@ -257,7 +260,7 @@ impl World {
     /// The default workload will automatically be set to the first workload added.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// struct Adder;
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
@@ -309,7 +312,7 @@ impl World {
     /// Unwraps errors.
     /// # Example
     /// ```
-    /// # use shipyard::*;
+    /// # use shipyard::prelude::*;
     /// struct Adder;
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);

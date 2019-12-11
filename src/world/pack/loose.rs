@@ -2,7 +2,7 @@ use crate::atomic_refcell::{AtomicRefCell, Borrow};
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::component_storage::AllStorages;
 use crate::error;
-use crate::sparse_array::{LoosePack as LoosePackInfo, Pack, SparseArray};
+use crate::sparse_set::{LoosePack as LoosePackInfo, Pack, SparseSet};
 use std::any::TypeId;
 use std::sync::Arc;
 
@@ -19,7 +19,7 @@ macro_rules! impl_loose_pack {
 
                 let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<$tight>()),+]);
                 let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<$loose>()),+]);
-                let mut storages: ($((RefMut<SparseArray<$tight>>, Borrow),)+ $((RefMut<SparseArray<$loose>>, Borrow),)+) = ($({
+                let mut storages: ($((RefMut<SparseSet<$tight>>, Borrow),)+ $((RefMut<SparseSet<$loose>>, Borrow),)+) = ($({
                     // SAFE borrow is dropped after storage
                     let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
                         match all_storages.0.get(&tight_types[$tight_index]) {
@@ -27,7 +27,7 @@ macro_rules! impl_loose_pack {
                             None => Err(error::GetStorage::MissingComponent),
                         }
                     })?)};
-                    (storage.array_mut()
+                    (storage.sparse_set_mut()
                     .map_err(|err| error::Pack::GetStorage(error::GetStorage::StorageBorrow(err)))?, borrow)
                 },)+
                 $({
@@ -38,7 +38,7 @@ macro_rules! impl_loose_pack {
                             None => Err(error::GetStorage::MissingComponent),
                         }
                     })?)};
-                    (storage.array_mut()
+                    (storage.sparse_set_mut()
                     .map_err(|err| error::Pack::GetStorage(error::GetStorage::StorageBorrow(err)))?, borrow)
                 },)+
                 );

@@ -1,5 +1,5 @@
 use crate::error;
-use crate::sparse_array::{Key, Pack, ViewMut};
+use crate::sparse_set::{Key, Pack, ViewMut};
 use std::any::TypeId;
 use std::cmp::Ordering;
 
@@ -224,7 +224,7 @@ unstable_sort![;Sort2 Sort3 Sort4 Sort5 Sort6 Sort7 Sort8 Sort9 Sort10;(A, 0) (B
 
 #[test]
 fn unstable_sort() {
-    let mut array = crate::sparse_array::SparseArray::default();
+    let mut array = crate::sparse_set::SparseSet::default();
 
     for i in (0..100).rev() {
         let mut key = crate::entity::Key::zero();
@@ -235,7 +235,7 @@ fn unstable_sort() {
     array
         .view_mut()
         .as_sortable()
-        .sort_unstable(|x: &usize, y: &usize| x.cmp(&y));
+        .sort_unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
@@ -249,7 +249,7 @@ fn unstable_sort() {
 
 #[test]
 fn partially_sorted_unstable_sort() {
-    let mut array = crate::sparse_array::SparseArray::default();
+    let mut array = crate::sparse_set::SparseSet::default();
 
     for i in 0..20 {
         let mut key = crate::entity::Key::zero();
@@ -265,7 +265,7 @@ fn partially_sorted_unstable_sort() {
     array
         .view_mut()
         .as_sortable()
-        .sort_unstable(|x: &usize, y: &usize| x.cmp(&y));
+        .sort_unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
