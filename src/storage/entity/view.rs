@@ -1,5 +1,5 @@
 use super::add_component::AddComponent;
-use super::{super::AllStoragesViewMut, Key};
+use super::Key;
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
 
@@ -101,43 +101,6 @@ impl EntitiesViewMut<'_> {
         let key = self.generate();
         storages.add_entity(component, key);
         key
-    }
-    /// Delete an entity and all its components.
-    /// Returns true if the entity was alive.
-    /// # Example
-    /// ```
-    /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
-    ///
-    /// let mut entity1 = None;
-    /// let mut entity2 = None;
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _>(|(mut entities, mut usizes, mut u32s)| {
-    ///     entity1 = Some(entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)));
-    ///     entity2 = Some(entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)));
-    /// });
-    ///
-    /// world.run::<(EntitiesMut, AllStorages), _>(|(mut entities, mut all_storages)| {
-    ///     entities.delete(&mut all_storages, entity1.unwrap());
-    /// });
-    ///
-    /// world.run::<(&usize, &u32), _>(|(usizes, u32s)| {
-    ///     assert_eq!((&usizes).get(entity1.unwrap()), None);
-    ///     assert_eq!((&u32s).get(entity1.unwrap()), None);
-    ///     assert_eq!(usizes.get(entity2.unwrap()), Some(&2));
-    ///     assert_eq!(u32s.get(entity2.unwrap()), Some(&3));
-    /// });
-    /// ```
-    ///
-    /// [World::delete]: struct.World.html#method.delete
-    /// [Entities]: struct.Entities.html
-    /// [AllStorages]: struct.AllStorages.html
-    pub fn delete(&mut self, storages: &mut AllStoragesViewMut, entity: Key) -> bool {
-        if self.delete_key(entity) {
-            storages.delete(entity);
-            true
-        } else {
-            false
-        }
     }
     fn as_non_mut(&self) -> EntitiesView {
         EntitiesView { data: self.data }
