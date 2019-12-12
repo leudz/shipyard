@@ -96,25 +96,9 @@ impl<T: 'static> SparseSet<T> {
         assert!(self.sparse.is_empty() && self.dense.is_empty() && self.data.is_empty());
         self.data.push(component)
     }
-    /// Returns a reference to the single element of the unique storage if it's one.
-    pub(crate) fn get_unique(&self) -> Option<&T> {
-        if self.is_unique() {
-            Some(&self.data[0])
-        } else {
-            None
-        }
-    }
-    /// Returns a mutable reference to the single element of the unique storage if it's one.
-    pub(crate) fn get_mut_unique(&mut self) -> Option<&mut T> {
-        if self.is_unique() {
-            Some(&mut self.data[0])
-        } else {
-            None
-        }
-    }
     /// Returns true if this storage is a unique storage.
     pub(crate) fn is_unique(&self) -> bool {
-        self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
+        self.view().is_unique()
     }
 }
 

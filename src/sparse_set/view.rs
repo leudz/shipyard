@@ -82,6 +82,10 @@ impl<T> View<'_, T> {
             },
         }
     }
+    /// Returns true if this storage is a unique storage.
+    pub(crate) fn is_unique(&self) -> bool {
+        self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
+    }
 }
 
 /// Mutable view into a `Storage`.
@@ -425,6 +429,10 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                 }
             }
         }
+    }
+    /// Returns true if this storage is a unique storage.
+    pub(crate) fn is_unique(&self) -> bool {
+        self.as_non_mut().is_unique()
     }
 }
 
