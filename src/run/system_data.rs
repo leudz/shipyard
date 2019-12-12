@@ -5,6 +5,7 @@ use crate::storage::{
     AllStorages, AllStoragesViewMut, Entities, EntitiesMut, EntitiesView, EntitiesViewMut,
 };
 use crate::{error, Unique};
+#[cfg(feature = "parallel")]
 use rayon::ThreadPool;
 use std::any::{type_name, TypeId};
 

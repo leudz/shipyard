@@ -9,6 +9,7 @@ pub use system_data::SystemData;
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
 use crate::storage::AllStorages;
+#[cfg(feature = "parallel")]
 use rayon::ThreadPool;
 
 pub trait Run<'a> {
