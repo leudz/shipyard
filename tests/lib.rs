@@ -736,8 +736,10 @@ fn delete_tight_loose() {
 
     let (entity1, entity2) = world.run::<(EntitiesMut, &mut usize, &mut u64, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u64s, mut u32s)| {
-            (entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2)),
-            entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (3, 4, 5)))
+            (
+                entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2)),
+                entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (3, 4, 5)),
+            )
         },
     );
 
@@ -781,7 +783,7 @@ fn system() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize, &'a u32);
-        fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+        fn run((usizes, u32s): <Self::Data as SystemData>::View) {
             for (x, y) in (usizes, u32s).iter() {
                 *x += *y as usize;
             }
@@ -812,7 +814,7 @@ fn systems() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize, &'a u32);
-        fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+        fn run((usizes, u32s): <Self::Data as SystemData>::View) {
             for (x, y) in (usizes, u32s).iter() {
                 *x += *y as usize;
             }
@@ -821,7 +823,7 @@ fn systems() {
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a mut usize,);
-        fn run(&self, (usizes,): <Self::Data as SystemData>::View) {
+        fn run((usizes,): <Self::Data as SystemData>::View) {
             for x in (usizes,).iter() {
                 *x += 1;
             }
@@ -977,7 +979,7 @@ fn two_workloads() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {
+        fn run(_: <Self::Data as SystemData>::View) {
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
     }
@@ -994,13 +996,13 @@ fn two_workloads() {
 #[cfg(feature = "parallel")]
 #[test]
 #[should_panic(
-    expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow while already borrowed."
+    expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow \"usize\" storage while it's already borrowed."
 )]
 fn two_bad_workloads() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {
+        fn run(_: <Self::Data as SystemData>::View) {
             std::thread::sleep(std::time::Duration::from_millis(200));
         }
     }
@@ -1711,7 +1713,9 @@ fn not_unique_storage() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             format!("{}", err.downcast::<String>().unwrap()),
-            format!("{} storage isn't unique.", std::any::type_name::<usize>())
+            "called `Result::unwrap()` on an `Err` value: usize's storage isn't unique.\n\
+            You might have forgotten to declare it, replace world.register::<usize>() by world.register_unique(/* your_storage */).\n\
+            If it isn't supposed to be a unique storage, replace Unique<&usize> by &usize."
         ),
     }
 
@@ -1725,7 +1729,9 @@ fn not_unique_storage() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             format!("{}", err.downcast::<String>().unwrap()),
-            format!("{} storage isn't unique.", std::any::type_name::<usize>())
+            "called `Result::unwrap()` on an `Err` value: usize's storage isn't unique.\n\
+            You might have forgotten to declare it, replace world.register::<usize>() by world.register_unique(/* your_storage */).\n\
+            If it isn't supposed to be a unique storage, replace Unique<&mut usize> by &mut usize."
         ),
     }
 }

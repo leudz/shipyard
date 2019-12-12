@@ -3,7 +3,7 @@ use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
 use crate::sparse_set::{LoosePack as LoosePackInfo, Pack, SparseSet};
 use crate::storage::AllStorages;
-use std::any::TypeId;
+use std::any::{type_name, TypeId};
 use std::sync::Arc;
 
 pub trait LoosePack {
@@ -15,32 +15,48 @@ macro_rules! impl_loose_pack {
         #[allow(clippy::useless_let_if_seq)]
         impl<$($tight: 'static,)+ $($loose: 'static),+> LoosePack for (($($tight,)+), ($($loose,)+)) {
             fn try_loose_pack(all_storages: &AtomicRefCell<AllStorages>) -> Result<(), error::Pack> {
-                let all_storages = all_storages.try_borrow().map_err(error::GetStorage::AllStoragesBorrow)?;
+                let all_storages = all_storages
+                    .try_borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?;
 
                 let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<$tight>()),+]);
                 let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<$loose>()),+]);
-                let mut storages: ($((RefMut<SparseSet<$tight>>, Borrow),)+ $((RefMut<SparseSet<$loose>>, Borrow),)+) = ($({
-                    // SAFE borrow is dropped after storage
-                    let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
-                        match all_storages.0.get(&tight_types[$tight_index]) {
-                            Some(storage) => Ok(storage),
-                            None => Err(error::GetStorage::MissingComponent),
-                        }
-                    })?)};
-                    (storage.sparse_set_mut()
-                    .map_err(|err| error::Pack::GetStorage(error::GetStorage::StorageBorrow(err)))?, borrow)
-                },)+
-                $({
-                    // SAFE borrow is dropped after storage
-                    let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
-                        match all_storages.0.get(&loose_types[$loose_index - tight_types.len()]) {
-                            Some(storage) => Ok(storage),
-                            None => Err(error::GetStorage::MissingComponent),
-                        }
-                    })?)};
-                    (storage.sparse_set_mut()
-                    .map_err(|err| error::Pack::GetStorage(error::GetStorage::StorageBorrow(err)))?, borrow)
-                },)+
+                let mut storages: ($((RefMut<SparseSet<$tight>>, Borrow),)+ $((RefMut<SparseSet<$loose>>, Borrow),)+) =
+                (
+                    $({
+                        // SAFE borrow is dropped after storage
+                        let (storage, borrow) = unsafe {
+                            Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
+                                match all_storages.0.get(&tight_types[$tight_index]) {
+                                    Some(storage) => Ok(storage),
+                                    None => Err(error::GetStorage::MissingComponent(type_name::<$tight>())),
+                                }
+                            })?)
+                        };
+                        (storage.sparse_set_mut()
+                        .map_err(|err| error::GetStorage::StorageBorrow((type_name::<$tight>(), err)))?, borrow)
+                    },)+
+                    $({
+                        // SAFE borrow is dropped after storage
+                        let (storage, borrow) = unsafe {
+                            Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
+                                match all_storages.0.get(&loose_types[$loose_index - tight_types.len()]) {
+                                    Some(storage) => Ok(storage),
+                                    None => Err(error::GetStorage::MissingComponent(type_name::<$loose>())),
+                                }
+                            })?)
+                        };
+                        (
+                            storage
+                                .sparse_set_mut()
+                                .map_err(|err| error::Pack::GetStorage(
+                                    error::GetStorage::StorageBorrow(
+                                        (type_name::<$loose>(), err)
+                                    )
+                                ))?,
+                            borrow
+                        )
+                    },)+
                 );
 
                 tight_types.sort_unstable();
@@ -72,16 +88,30 @@ macro_rules! impl_loose_pack {
                             return Err(error::Pack::AlreadyUpdatePack(TypeId::of::<$tight>()))
                         },
                         Pack::NoPack => {
-                            storages.$tight_index.0.pack_info.pack = Pack::Loose(LoosePackInfo::new(Arc::clone(&tight_types), Arc::clone(&loose_types)));
+                            storages.$tight_index.0.pack_info.pack = Pack::Loose(
+                                LoosePackInfo::new(
+                                    Arc::clone(&tight_types), Arc::clone(&loose_types)
+                                )
+                            );
                         }
                     }
                 )+
 
                 $(
                     for tight_type in tight_types.iter().copied() {
-                        match storages.$loose_index.0.pack_info.observer_types.binary_search(&tight_type) {
-                            Ok(_) => {},
-                            Err(index) => storages.$loose_index.0.pack_info.observer_types.insert(index, tight_type),
+                        match storages
+                            .$loose_index
+                            .0
+                            .pack_info
+                            .observer_types
+                            .binary_search(&tight_type) {
+                                Ok(_) => {},
+                                Err(index) => storages
+                                    .$loose_index
+                                    .0
+                                    .pack_info
+                                    .observer_types
+                                    .insert(index, tight_type),
                         }
                     }
                 )+

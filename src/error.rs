@@ -1,4 +1,5 @@
 use std::any::TypeId;
+use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 
 /// AtomicRefCell's borrow error.
@@ -11,6 +12,8 @@ pub enum Borrow {
     Unique,
     Shared,
 }
+
+impl Error for Borrow {}
 
 impl Debug for Borrow {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
@@ -30,35 +33,45 @@ impl Display for Borrow {
 }
 
 /// Error related to acquiring a storage.
-///
-/// AllStoragesBorrow means an add_storage operation is in progress.
-///
-/// StorageBorrow means this storage is already borrowed.
-///
-/// MissingComponent signify no storage exists for this type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
-    StorageBorrow(Borrow),
-    MissingComponent,
+    StorageBorrow((&'static str, Borrow)),
+    MissingComponent(&'static str),
+    NonUnique((&'static str, Borrow)),
+    MissingUnique(&'static str),
+    Entities(Borrow),
 }
+
+impl Error for GetStorage {}
 
 impl Debug for GetStorage {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
             GetStorage::AllStoragesBorrow(borrow) => match borrow {
-                Borrow::Unique => fmt.write_str("Cannot mutably borrow all storages while it's already borrowed (this include component storage)."),
+                Borrow::Unique => fmt.write_str("Cannot mutably borrow AllStorages while it's already borrowed (AllStorages is borrowed to access any storage)."),
                 Borrow::Shared => {
-                    fmt.write_str("Cannot immutably borrow all storages while it's already mutably borrowed.")
+                    fmt.write_str("Cannot immutably borrow AllStorages while it's already mutably borrowed.")
                 }
             },
-            GetStorage::StorageBorrow(borrow) => match borrow {
-                Borrow::Unique => fmt.write_str("Cannot mutably borrow a storage while it's already borrowed."),
+            GetStorage::StorageBorrow((name, borrow)) => match borrow {
+                Borrow::Unique => fmt.write_fmt(format_args!("Cannot mutably borrow {:?} storage while it's already borrowed.", name)),
                 Borrow::Shared => {
-                    fmt.write_str("Cannot immutably borrow a storage while it's already mutably borrowed.")
+                    fmt.write_fmt(format_args!("Cannot immutably borrow {:?} storage while it's already mutably borrowed.", name))
                 }
             },
-            GetStorage::MissingComponent => fmt.write_str("No storage with this type exists.")
+            GetStorage::MissingComponent(name) => fmt.write_fmt(format_args!("No storage exists for {name}.\nConsider adding this line after the creation of World: world.register::<{name}>();", name = name)),
+            GetStorage::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {name}.\nConsider adding this line after the creation of World: world.register_unique::<{name}>(/* your_storage */);", name = name)),
+            GetStorage::NonUnique((name, mutation)) => match mutation {
+                Borrow::Shared => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, replace world.register::<{name}>() by world.register_unique(/* your_storage */).\nIf it isn't supposed to be a unique storage, replace Unique<&{name}> by &{name}.", name = name)),
+                Borrow::Unique => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, replace world.register::<{name}>() by world.register_unique(/* your_storage */).\nIf it isn't supposed to be a unique storage, replace Unique<&mut {name}> by &mut {name}.", name = name)),
+            },
+            GetStorage::Entities(borrow) => match borrow {
+                Borrow::Unique => fmt.write_str("Cannot mutably borrow Entities storage while it's already borrowed."),
+                Borrow::Shared => {
+                    fmt.write_str("Cannot immutably borrow Entities storage while it's already mutably borrowed.")
+                }
+            },
         }
     }
 }
@@ -79,6 +92,8 @@ pub enum NewEntity {
     AllStoragesBorrow(Borrow),
     Entities(Borrow),
 }
+
+impl Error for NewEntity {}
 
 impl Debug for NewEntity {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
@@ -112,6 +127,8 @@ pub enum AddComponent {
     EntityIsNotAlive,
 }
 
+impl Error for AddComponent {}
+
 impl Debug for AddComponent {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
@@ -138,6 +155,8 @@ pub enum Pack {
     AlreadyUpdatePack(TypeId),
     UniqueStorage(&'static str),
 }
+
+impl Error for Pack {}
 
 impl From<GetStorage> for Pack {
     fn from(get_storage: GetStorage) -> Self {
@@ -184,6 +203,8 @@ pub enum Remove {
     MissingPackStorage(TypeId),
 }
 
+impl Error for Remove {}
+
 impl Debug for Remove {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
         match self {
@@ -204,6 +225,8 @@ pub enum SetDefaultWorkload {
     Borrow(Borrow),
     MissingWorkload,
 }
+
+impl Error for SetDefaultWorkload {}
 
 impl From<Borrow> for SetDefaultWorkload {
     fn from(borrow: Borrow) -> Self {
@@ -240,6 +263,8 @@ pub enum RunWorkload {
     MissingWorkload,
 }
 
+impl Error for RunWorkload {}
+
 impl From<Borrow> for RunWorkload {
     fn from(borrow: Borrow) -> Self {
         RunWorkload::Borrow(borrow)
@@ -272,6 +297,8 @@ pub enum Sort {
     MissingPackStorage,
     TooManyStorages,
 }
+
+impl Error for Sort {}
 
 impl Debug for Sort {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {

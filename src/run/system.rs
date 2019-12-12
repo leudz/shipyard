@@ -1,4 +1,5 @@
 use super::SystemData;
+use crate::error;
 use crate::world::World;
 
 /// Trait to define systems.
@@ -19,7 +20,7 @@ use crate::world::World;
 /// struct Single;
 /// impl<'a> System<'a> for Single {
 ///     type Data = &'a usize;
-///     fn run(&self, usizes: <Self::Data as SystemData>::View) {
+///     fn run(usizes: <Self::Data as SystemData>::View) {
 ///         // -- snip --
 ///     }
 /// }
@@ -27,7 +28,7 @@ use crate::world::World;
 /// struct Double;
 /// impl<'a> System<'a> for Double {
 ///     type Data = (&'a usize, &'a mut u32);
-///     fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
 ///         // -- snip --
 ///     }
 /// }
@@ -39,18 +40,18 @@ use crate::world::World;
 /// [Not]: struct.Not.html
 pub trait System<'a> {
     type Data: SystemData<'a>;
-    fn run(&self, storage: <Self::Data as SystemData<'a>>::View);
+    fn run(storage: <Self::Data as SystemData<'a>>::View);
 }
 
 pub(crate) trait Dispatch: Send + Sync {
-    fn dispatch(&self, world: &World);
+    fn try_dispatch(world: &World) -> Result<(), error::GetStorage>;
 }
 
 impl<T> Dispatch for T
 where
     T: for<'a> System<'a> + Send + Sync,
 {
-    fn dispatch(&self, world: &World) {
+    fn try_dispatch(world: &World) -> Result<(), error::GetStorage> {
         let storages = &world.storages;
 
         let mut borrows = Vec::new();
@@ -61,14 +62,17 @@ where
                 let thread_pool = &world.thread_pool;
                 // SAFE data is dropped before borrow
                 unsafe {
-                    <T::Data as SystemData<'_>>::borrow(&mut borrows, &storages, &thread_pool)
+                    <T::Data as SystemData>::try_borrow(&mut borrows, &storages, &thread_pool)?
                 }
             }
             #[cfg(not(feature = "parallel"))]
             {
-                unsafe { <T::Data as SystemData<'_>>::borrow(&mut borrows, &storages) }
+                unsafe { <T::Data as SystemData>::try_borrow(&mut borrows, &storages)? }
             }
         };
-        self.run(data);
+
+        T::run(data);
+
+        Ok(())
     }
 }

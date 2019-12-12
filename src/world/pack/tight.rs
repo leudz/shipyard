@@ -3,7 +3,7 @@ use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
 use crate::sparse_set::{Pack, SparseSet, TightPack as TightPackInfo};
 use crate::storage::AllStorages;
-use std::any::TypeId;
+use std::any::{type_name, TypeId};
 use std::sync::Arc;
 
 pub trait TightPack {
@@ -23,11 +23,15 @@ macro_rules! impl_tight_pack {
                     let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
                         match all_storages.0.get(&type_ids[$index]) {
                             Some(storage) => Ok(storage),
-                            None => Err(error::GetStorage::MissingComponent),
+                            None => Err(error::GetStorage::MissingComponent(type_name::<$type>())),
                         }
                     })?)};
-                    (storage.sparse_set_mut()
-                    .map_err(|err| error::Pack::GetStorage(error::GetStorage::StorageBorrow(err)))?, borrow)
+                    (
+                        storage
+                            .sparse_set_mut()
+                            .map_err(|err| error::GetStorage::StorageBorrow((type_name::<$type>(), err)))?,
+                        borrow,
+                    )
                 },)+);
 
                 type_ids.sort_unstable();
@@ -35,7 +39,7 @@ macro_rules! impl_tight_pack {
 
                 $(
                     if storages.$index.0.is_unique() {
-                        return Err(error::Pack::UniqueStorage(std::any::type_name::<$type>()));
+                        return Err(error::Pack::UniqueStorage(type_name::<$type>()));
                     }
                 )+
 

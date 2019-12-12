@@ -157,13 +157,45 @@ impl World {
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
     pub fn run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
+        self.try_run::<T, _, _>(f).unwrap()
+    }
+    /// Allows to perform some actions not possible otherwise like iteration.
+    /// This is basically an unnamed system.
+    ///
+    /// `T` can be:
+    /// * `&T` for an immutable reference to `T` storage
+    /// * `&mut T` for a mutable reference to `T` storage
+    /// * [Entities] for an immutable reference to the entity storage
+    /// * [EntitiesMut] for a mutable reference to the entity storage
+    /// * [AllStorages] for a mutable reference to the storage of all components
+    /// * [ThreadPool] for an immutable reference to the `rayon::ThreadPool` used by the [World]
+    /// * [Not] can be used to filter out a component type
+    ///
+    /// A tuple will allow multiple references.
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new::<(usize, u32)>();
+    /// world.run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
+    ///     // -- snip --
+    /// });
+    /// ```
+    /// [Entities]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
+    /// [ThreadPool]: struct.ThreadPool.html
+    /// [World]: struct.World.html
+    /// [Not]: struct.Not.html
+    pub fn try_run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R>(
+        &'a self,
+        f: F,
+    ) -> Result<R, error::GetStorage> {
         #[cfg(feature = "parallel")]
         {
-            T::run(&self.storages, &self.thread_pool, f)
+            T::try_run(&self.storages, &self.thread_pool, f)
         }
         #[cfg(not(feature = "parallel"))]
         {
-            T::run(&self.storages, f)
+            T::try_run(&self.storages, f)
         }
     }
     /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
@@ -201,6 +233,8 @@ impl World {
         <(T, L)>::try_loose_pack(&self.storages).unwrap()
     }
     pub fn try_update_pack<T: 'static>(&self) -> Result<(), error::Pack> {
+        use std::any::{type_name, TypeId};
+
         let all_storages = self
             .storages
             .try_borrow()
@@ -208,9 +242,9 @@ impl World {
         if let Some(storage) = all_storages.0.get(&std::any::TypeId::of::<T>()) {
             let mut sparse_set = storage
                 .sparse_set_mut::<T>()
-                .map_err(error::GetStorage::StorageBorrow)?;
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?;
             if sparse_set.is_unique() {
-                return Err(error::Pack::UniqueStorage(std::any::type_name::<T>()));
+                return Err(error::Pack::UniqueStorage(type_name::<T>()));
             }
             match sparse_set.pack_info.pack {
                 Pack::NoPack => {
@@ -221,12 +255,12 @@ impl World {
                     });
                     Ok(())
                 }
-                Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(std::any::TypeId::of::<T>())),
-                Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(std::any::TypeId::of::<T>())),
-                Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(std::any::TypeId::of::<T>())),
+                Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(TypeId::of::<T>())),
+                Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(TypeId::of::<T>())),
+                Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(TypeId::of::<T>())),
             }
         } else {
-            Err(error::GetStorage::MissingComponent.into())
+            Err(error::GetStorage::MissingComponent(type_name::<T>()).into())
         }
     }
     pub fn update_pack<T: 'static>(&self) {
@@ -264,7 +298,7 @@ impl World {
     /// struct Adder;
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
-    ///     fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+    ///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
     ///         for (x, &y) in (usizes, u32s).iter() {
     ///             *x += y as usize;
     ///         }
@@ -274,7 +308,7 @@ impl World {
     /// struct Checker;
     /// impl<'a> System<'a> for Checker {
     ///     type Data = &'a usize;
-    ///     fn run(&self, usizes: <Self::Data as SystemData>::View) {
+    ///     fn run(usizes: <Self::Data as SystemData>::View) {
     ///         let mut iter = usizes.iter();
     ///         assert_eq!(iter.next(), Some(&1));
     ///         assert_eq!(iter.next(), Some(&5));
@@ -316,7 +350,7 @@ impl World {
     /// struct Adder;
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
-    ///     fn run(&self, (usizes, u32s): <Self::Data as SystemData>::View) {
+    ///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
     ///         for (x, &y) in (usizes, u32s).iter() {
     ///             *x += y as usize;
     ///         }
@@ -326,7 +360,7 @@ impl World {
     /// struct Checker;
     /// impl<'a> System<'a> for Checker {
     ///     type Data = &'a usize;
-    ///     fn run(&self, usizes: <Self::Data as SystemData>::View) {
+    ///     fn run(usizes: <Self::Data as SystemData>::View) {
     ///         let mut iter = usizes.iter();
     ///         assert_eq!(iter.next(), Some(&1));
     ///         assert_eq!(iter.next(), Some(&5));
@@ -359,14 +393,14 @@ impl World {
 
                     self.thread_pool.install(|| {
                         batch.into_par_iter().for_each(|&index| {
-                            pipeline.systems[index].dispatch(&self);
+                            (pipeline.systems[index])(&self);
                         });
                     })
                 }
                 #[cfg(not(feature = "parallel"))]
                 {
                     batch.iter().for_each(|&index| {
-                        pipeline.systems[index].dispatch(&self);
+                        (pipeline.systems[index])(&self);
                     });
                 }
             }
@@ -391,14 +425,14 @@ impl World {
 
                 self.thread_pool.install(|| {
                     batch.into_par_iter().for_each(|&index| {
-                        pipeline.systems[index].dispatch(&self);
+                        (pipeline.systems[index])(&self);
                     });
                 })
             }
             #[cfg(not(feature = "parallel"))]
             {
                 batch.iter().for_each(|&index| {
-                    pipeline.systems[index].dispatch(&self);
+                    (pipeline.systems[index])(&self);
                 });
             }
         }

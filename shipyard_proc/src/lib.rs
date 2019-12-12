@@ -148,7 +148,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
         #vis struct #name;
         impl<'a> ::shipyard::prelude::System<'a> for #name {
             type Data = (#(#data,)*);
-            fn run(&self, (#(#binding,)*): <Self::Data as ::shipyard::prelude::SystemData<'a>>::View) #body
+            fn run((#(#binding,)*): <Self::Data as ::shipyard::prelude::SystemData<'a>>::View) #body
         }
     })
 }

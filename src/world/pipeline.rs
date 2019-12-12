@@ -1,11 +1,13 @@
 use crate::run::{Dispatch, Mutation, System, SystemData};
 use crate::storage::{AllStorages, Entities};
+use crate::world::World;
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::ops::Range;
 
+#[allow(clippy::type_complexity)]
 pub struct Pipeline {
-    pub(super) systems: Vec<Box<dyn Dispatch + Send + Sync>>,
+    pub(super) systems: Vec<Box<dyn for<'a> Fn(&'a World) + Send + Sync>>,
     // a batch list systems running in parallel
     pub(super) batch: Vec<Box<[usize]>>,
     // first usize is the index where the workload begins
@@ -39,7 +41,9 @@ impl<T: for<'a> System<'a> + Send + Sync + 'static> Workload for T {
             .workloads
             .insert(name, pipeline.batch.len()..(pipeline.batch.len() + 1));
         pipeline.batch.push(Box::new([pipeline.systems.len()]));
-        pipeline.systems.push(Box::new(self));
+        pipeline
+            .systems
+            .push(Box::new(|world| T::try_dispatch(world).unwrap()));
     }
 }
 
@@ -59,19 +63,19 @@ macro_rules! impl_pipeline {
 
 
                 $({
-                    let mut borrow_status = Vec::new();
-                    $type::Data::borrow_status(&mut borrow_status);
+                    let mut borrow_infos = Vec::new();
+                    $type::Data::borrow_infos(&mut borrow_infos);
                     let mut batch_index = batch_info.len();
                     for batch in batch_info.iter().rev() {
                         let mut conflict = false;
 
-                        for &(type_id, mutation) in &borrow_status {
+                        for &(type_id, mutation) in &borrow_infos {
                             match mutation {
-                                Mutation::Immutable => {
+                                Mutation::Shared => {
                                     for &(batch_type_id, mutation) in batch.iter() {
                                         #[cfg(feature = "parallel")]
                                         {
-                                            if type_id == batch_type_id && mutation == Mutation::Mutable
+                                            if type_id == batch_type_id && mutation == Mutation::Unique
                                             || (batch_type_id == TypeId::of::<AllStorages>() && type_id != TypeId::of::<crate::ThreadPool>()) {
                                                 conflict = true;
                                                 break;
@@ -79,7 +83,7 @@ macro_rules! impl_pipeline {
                                         }
                                         #[cfg(not(feature = "parallel"))]
                                         {
-                                            if type_id == batch_type_id && mutation == Mutation::Mutable
+                                            if type_id == batch_type_id && mutation == Mutation::Unique
                                             || batch_type_id == TypeId::of::<AllStorages>() {
                                                 conflict = true;
                                                 break;
@@ -89,7 +93,7 @@ macro_rules! impl_pipeline {
 
 
                                 },
-                                Mutation::Mutable => {
+                                Mutation::Unique => {
                                     for &(batch_type_id, _) in batch.iter() {
                                         #[cfg(feature = "parallel")]
                                         {
@@ -125,13 +129,15 @@ macro_rules! impl_pipeline {
 
                     if batch_index == batch_info.len() {
                         new_batch.push(vec![pipeline.systems.len()]);
-                        batch_info.push(borrow_status);
+                        batch_info.push(borrow_infos);
                     } else {
                         new_batch[batch_index].push(pipeline.systems.len());
-                        batch_info[batch_index].append(&mut borrow_status);
+                        batch_info[batch_index].append(&mut borrow_infos);
                     }
 
-                    pipeline.systems.push(Box::new(self.$index));
+                    pipeline.systems.push(Box::new(|world| {
+                        $type::try_dispatch(world).unwrap()
+                    }));
                 })+
 
                 pipeline.batch.extend(new_batch.into_iter().map(|batch| batch.into_boxed_slice()));
@@ -163,7 +169,7 @@ fn single_immutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
 
     let mut pipeline = Pipeline::default();
@@ -180,7 +186,7 @@ fn single_mutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
 
     let mut pipeline = Pipeline::default();
@@ -197,12 +203,12 @@ fn multiple_immutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
 
     let mut pipeline = Pipeline::default();
@@ -219,12 +225,12 @@ fn multiple_mutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a mut usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
 
     let mut pipeline = Pipeline::default();
@@ -242,12 +248,12 @@ fn multiple_mixed() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
 
     let mut pipeline = Pipeline::default();
@@ -275,12 +281,12 @@ fn all_storages() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (AllStorages,);
-        fn run(&self, _: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData>::View) {}
     }
 
     let mut pipeline = Pipeline::default();

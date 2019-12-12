@@ -72,8 +72,7 @@ impl BorrowState {
             .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
         {
             Ok(_) => Ok(Borrow::Unique(self)),
-            Err(x) if x & HIGH_BIT != 0 => Err(error::Borrow::Unique),
-            _ => Err(error::Borrow::Shared),
+            _ => Err(error::Borrow::Unique),
         }
     }
     // In case of a failled shared borrow, check all possible causes and recover from it when possible
@@ -93,7 +92,7 @@ impl BorrowState {
             let _ = self
                 .0
                 .compare_exchange(new, new - 1, Ordering::Release, Ordering::Relaxed);
-            error::Borrow::Unique
+            error::Borrow::Shared
         }
     }
 }
@@ -245,10 +244,10 @@ fn reborrow() {
     let refcell = AtomicRefCell::new(0);
     let _first_borrow = refcell.try_borrow().unwrap();
 
-    assert!(&refcell.try_borrow().is_ok());
+    assert!(refcell.try_borrow().is_ok());
     assert_eq!(
         std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
-        std::mem::discriminant(&error::Borrow::Shared)
+        std::mem::discriminant(&error::Borrow::Unique)
     );
 }
 #[test]
@@ -258,7 +257,7 @@ fn unique_reborrow() {
 
     assert_eq!(
         std::mem::discriminant(&refcell.try_borrow().err().unwrap()),
-        std::mem::discriminant(&error::Borrow::Unique)
+        std::mem::discriminant(&error::Borrow::Shared)
     );
     assert_eq!(
         std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
