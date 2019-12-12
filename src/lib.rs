@@ -123,3 +123,6 @@ pub struct ThreadPool;
 /// });
 /// ```
 pub struct Unique<T: ?Sized>(T);
+
+pub use storage::{AllStorages, Entities, EntitiesMut, Key};
+pub use world::World;
