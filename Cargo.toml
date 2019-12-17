@@ -17,6 +17,7 @@ members = ["shipyard_proc"]
 num_cpus = {version = "1.11.1", optional = true}
 rayon = {version = "1.2.1", optional = true}
 shipyard_proc = { path = "./shipyard_proc", optional = true }
+serde = {version = "1.0.104", optional = true}
 
 [features]
 default = ["parallel", "proc"]
@@ -25,3 +26,4 @@ proc = ["shipyard_proc"]
 
 [dev-dependencies]
 trybuild = "1.0.18"
+serde_json = "1.0.44"

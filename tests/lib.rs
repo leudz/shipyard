@@ -1,3 +1,5 @@
+#[cfg(feature = "serde")]
+mod serde;
 use shipyard::prelude::*;
 
 #[test]
