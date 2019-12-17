@@ -30,6 +30,17 @@ impl Key {
         assert!(index < Self::INDEX_MASK);
         Key(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
+
+    /// Make a new Key with the given version and index.
+    #[inline]
+    pub(crate) fn new_from_pair(version: u64, index: u64) -> Self {
+        assert!(index < Self::INDEX_MASK);
+        //TODO: assert version is the right length
+        Key(unsafe {
+            NonZeroU64::new_unchecked((index+1) | (((version)) << (64 - Self::VERSION_LEN)))
+        }) 
+    }
+
     /// Modify the index.
     #[cfg(not(test))]
     #[inline]
