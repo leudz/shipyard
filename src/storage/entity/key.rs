@@ -80,6 +80,13 @@ impl Key {
     }
 }
 
+#[cfg(any(feature = "serde", test))]
+impl std::fmt::Debug for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}-{}", self.version(), self.index())
+    }
+}
+
 #[test]
 fn key() {
     let mut key = Key::new(0);

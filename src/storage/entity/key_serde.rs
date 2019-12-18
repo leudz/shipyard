@@ -23,9 +23,3 @@ where {
         Ok(Key::new_from_pair(values.0,values.1))
     }
 }
-
-impl std::fmt::Debug for Key {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}-{}", self.version(), self.index())
-    }
-}
