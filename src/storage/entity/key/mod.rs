@@ -1,3 +1,6 @@
+#[cfg(feature = "serialization")]
+mod serialization;
+
 use std::num::NonZeroU64;
 
 /// A Key is a handle to an entity and has two parts, the index and the version.
@@ -30,6 +33,17 @@ impl Key {
         assert!(index < Self::INDEX_MASK);
         Key(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
+
+    /// Make a new Key with the given version and index.
+    #[cfg(feature = "serialization")]
+    #[inline]
+    pub(crate) fn new_from_pair(index: u64, version: u16) -> Self {
+        assert!(index < Self::INDEX_MASK);
+        Key(unsafe {
+            NonZeroU64::new_unchecked((index + 1) | ((version as u64) << (64 - Self::VERSION_LEN)))
+        })
+    }
+
     /// Modify the index.
     #[cfg(not(test))]
     #[inline]
@@ -66,6 +80,17 @@ impl Key {
     }
     pub(crate) fn dead() -> Self {
         Key(unsafe { NonZeroU64::new_unchecked(std::u64::MAX) })
+    }
+}
+
+impl std::fmt::Debug for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Key {{ index: {}, version: {} }}",
+            self.index(),
+            self.version()
+        )
     }
 }
 
