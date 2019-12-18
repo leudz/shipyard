@@ -1,8 +1,6 @@
 mod add_component;
 mod key;
 mod view;
-#[cfg(feature = "serde")]
-mod key_serde;
 
 use crate::unknown_storage::UnknownStorage;
 pub use key::Key;

@@ -1,5 +1,6 @@
 use super::m_non_packed::*;
 use super::{AbstractMut, IntoAbstract};
+use crate::iter::InnerShiperator;
 use crate::storage::Key;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{Folder, UnindexedProducer};
@@ -17,7 +18,7 @@ macro_rules! impl_iterators {
             type Item = (Key, $(<$type::AbsView as AbstractMut>::Out,)+);
             fn next(&mut self) -> Option<Self::Item> {
                 self.0.next().map(|item| {
-                    let id = unsafe { self.0.data.0.id_at(self.0.current - 1) };
+                    let id = self.0.last_id();
                     (id, $(item.$index),+)
                 })
             }

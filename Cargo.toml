@@ -23,6 +23,7 @@ serde = {version = "1.0.104", optional = true}
 default = ["parallel", "proc"]
 parallel = ["rayon", "num_cpus"]
 proc = ["shipyard_proc"]
+serialization = ["serde"]
 
 [dev-dependencies]
 trybuild = "1.0.18"
