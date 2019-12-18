@@ -7,7 +7,7 @@ use std::num::NonZeroU64;
 /// The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
 /// Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
 #[doc(hidden)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Key(pub(super) NonZeroU64);
 
 impl Key {
