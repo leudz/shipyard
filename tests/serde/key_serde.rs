@@ -1,7 +1,7 @@
 use shipyard::prelude::*;
 
 #[test]
-fn serialize() {
+fn key_serde() {
     let world = World::default();
     world.register::<u32>();
 
