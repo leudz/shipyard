@@ -1,15 +1,19 @@
 use super::Key;
-use serde::{ser::SerializeTuple, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{ser::SerializeTupleStruct, Deserialize, Deserializer, Serialize, Serializer};
 
 impl Serialize for Key {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut tup = serializer.serialize_tuple(2)?;
-        tup.serialize_element(&(self.index() as u64))?;
-        tup.serialize_element(&(self.version() as u16))?;
-        tup.end()
+        if serializer.is_human_readable() {
+            let mut tup = serializer.serialize_tuple_struct("Key", 2)?;
+            tup.serialize_field(&(self.index() as u64))?;
+            tup.serialize_field(&(self.version() as u16))?;
+            tup.end()
+        } else {
+            serializer.serialize_u64(self.0.get())
+        }
     }
 }
 
@@ -18,7 +22,11 @@ impl<'de> Deserialize<'de> for Key {
     where
         D: Deserializer<'de>,
     {
-        let values: (u64, u16) = Deserialize::deserialize(deserializer)?;
-        Ok(Key::new_from_pair(values.0, values.1))
+        if deserializer.is_human_readable() {
+            let (index, version): (u64, u16) = Deserialize::deserialize(deserializer)?;
+            Ok(Key::new_from_pair(index, version))
+        } else {
+            Ok(Key(Deserialize::deserialize(deserializer)?))
+        }
     }
 }
