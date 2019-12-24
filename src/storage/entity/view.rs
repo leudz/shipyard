@@ -1,27 +1,33 @@
 use super::add_component::AddComponent;
-use super::Key;
+use super::EntityId;
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
 
 /// View into the entities.
 pub struct EntitiesView<'a> {
-    pub(super) data: &'a [Key],
+    pub(super) data: &'a [EntityId],
 }
 
 impl EntitiesView<'_> {
-    /// Returns true if the key matches a living entity.
-    pub(crate) fn is_alive(&self, key: Key) -> bool {
-        key.index() < self.data.len() && key == unsafe { *self.data.get_unchecked(key.index()) }
+    /// Returns true if the EntityId matches a living entity.
+    pub(crate) fn is_alive(&self, entity_id: EntityId) -> bool {
+        entity_id.index() < self.data.len()
+            && entity_id == unsafe { *self.data.get_unchecked(entity_id.index()) }
     }
     pub fn try_add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,
         component: C,
-        entity: Key,
+        entity: EntityId,
     ) -> Result<(), error::AddComponent> {
         storages.try_add_component(component, entity, &self)
     }
-    pub fn add_component<C, S: AddComponent<C>>(&self, storages: S, component: C, entity: Key) {
+    pub fn add_component<C, S: AddComponent<C>>(
+        &self,
+        storages: S,
+        component: C,
+        entity: EntityId,
+    ) {
         storages
             .try_add_component(component, entity, &self)
             .unwrap()
@@ -30,12 +36,12 @@ impl EntitiesView<'_> {
 
 /// View into the entities, this allows to add and remove entities.
 pub struct EntitiesViewMut<'a> {
-    pub(super) data: &'a mut Vec<Key>,
+    pub(super) data: &'a mut Vec<EntityId>,
     pub(crate) list: &'a mut Option<(usize, usize)>,
 }
 
 impl EntitiesViewMut<'_> {
-    pub(super) fn generate(&mut self) -> Key {
+    pub(super) fn generate(&mut self) -> EntityId {
         let index = self.list.map(|(_, old)| old);
         if let Some((new, ref mut old)) = self.list {
             if *new == *old {
@@ -48,21 +54,21 @@ impl EntitiesViewMut<'_> {
             unsafe { self.data.get_unchecked_mut(index).set_index(index as u64) };
             unsafe { *self.data.get_unchecked(index) }
         } else {
-            let key = Key::new(self.data.len() as u64);
-            self.data.push(key);
-            key
+            let entity_id = EntityId::new(self.data.len() as u64);
+            self.data.push(entity_id);
+            entity_id
         }
     }
-    /// Returns true if the key matches a living entity.
-    fn is_alive(&self, key: Key) -> bool {
-        self.as_non_mut().is_alive(key)
+    /// Returns true if the EntityId matches a living entity.
+    fn is_alive(&self, entity_id: EntityId) -> bool {
+        self.as_non_mut().is_alive(entity_id)
     }
     /// Delete an entity, returns true if the entity was alive.
-    pub(super) fn delete_key(&mut self, key: Key) -> bool {
-        if self.is_alive(key) {
+    pub(super) fn delete(&mut self, entity_id: EntityId) -> bool {
+        if self.is_alive(entity_id) {
             if unsafe {
                 self.data
-                    .get_unchecked_mut(key.index())
+                    .get_unchecked_mut(entity_id.index())
                     .bump_version()
                     .is_ok()
             } {
@@ -70,11 +76,11 @@ impl EntitiesViewMut<'_> {
                     unsafe {
                         self.data
                             .get_unchecked_mut(*new)
-                            .set_index(key.index() as u64)
+                            .set_index(entity_id.index() as u64)
                     };
-                    *new = key.index();
+                    *new = entity_id.index();
                 } else {
-                    *self.list = Some((key.index(), key.index()));
+                    *self.list = Some((entity_id.index(), entity_id.index()));
                 }
             }
             true
@@ -82,7 +88,7 @@ impl EntitiesViewMut<'_> {
             false
         }
     }
-    /// Stores `component` in a new entity, the `Key` to this entity is returned.
+    /// Stores `component` in a new entity, the `EntityId` to this entity is returned.
     ///
     /// Multiple components can be added at the same time using a tuple.
     /// # Example:
@@ -97,10 +103,14 @@ impl EntitiesViewMut<'_> {
     ///     assert_eq!(u32s.get(entity), Some(&1));
     /// });
     /// ```
-    pub fn add_entity<T: ViewAddEntity>(&mut self, storages: T, component: T::Component) -> Key {
-        let key = self.generate();
-        storages.add_entity(component, key);
-        key
+    pub fn add_entity<T: ViewAddEntity>(
+        &mut self,
+        storages: T,
+        component: T::Component,
+    ) -> EntityId {
+        let entity_id = self.generate();
+        storages.add_entity(component, entity_id);
+        entity_id
     }
     fn as_non_mut(&self) -> EntitiesView {
         EntitiesView { data: self.data }
@@ -109,11 +119,16 @@ impl EntitiesViewMut<'_> {
         &self,
         storages: S,
         component: C,
-        entity: Key,
+        entity: EntityId,
     ) -> Result<(), error::AddComponent> {
         storages.try_add_component(component, entity, &self.as_non_mut())
     }
-    pub fn add_component<C, S: AddComponent<C>>(&self, storages: S, component: C, entity: Key) {
+    pub fn add_component<C, S: AddComponent<C>>(
+        &self,
+        storages: S,
+        component: C,
+        entity: EntityId,
+    ) {
         storages
             .try_add_component(component, entity, &self.as_non_mut())
             .unwrap()

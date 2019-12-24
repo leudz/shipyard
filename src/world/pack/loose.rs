@@ -1,5 +1,4 @@
-use crate::atomic_refcell::{AtomicRefCell, Borrow};
-use crate::atomic_refcell::{Ref, RefMut};
+use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::error;
 use crate::sparse_set::{LoosePack as LoosePackInfo, Pack, SparseSet};
 use crate::storage::AllStorages;

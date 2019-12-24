@@ -1,4 +1,4 @@
-use super::{Entities, Key, Storage, TypeIdHasher};
+use super::{Entities, EntityId, Storage, TypeIdHasher};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
@@ -35,10 +35,10 @@ impl AllStoragesViewMut<'_> {
     ///     assert_eq!(u32s.get(entity2.unwrap()), Some(&3));
     /// });
     /// ```
-    pub fn delete(&mut self, entity: Key) -> bool {
+    pub fn delete(&mut self, entity: EntityId) -> bool {
         let mut entities = self.0[&TypeId::of::<Entities>()].entities_mut().unwrap();
 
-        if entities.delete_key(entity) {
+        if entities.delete(entity) {
             drop(entities);
 
             let mut storage_to_unpack = Vec::new();

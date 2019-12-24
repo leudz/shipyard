@@ -1,11 +1,11 @@
 use super::{Pack, PackInfo};
-use crate::storage::Key;
+use crate::storage::EntityId;
 use std::marker::PhantomData;
 
 /// Immutable view into a `Storage`.
 pub struct View<'a, T> {
     pub(crate) sparse: &'a [usize],
-    pub(crate) dense: &'a [Key],
+    pub(crate) dense: &'a [EntityId],
     pub(crate) data: &'a [T],
     pub(crate) pack_info: &'a PackInfo<T>,
 }
@@ -22,7 +22,7 @@ impl<'a, T> Clone for View<'a, T> {
 }
 
 impl<T> View<'_, T> {
-    pub(crate) fn contains(&self, entity: Key) -> bool {
+    pub(crate) fn contains(&self, entity: EntityId) -> bool {
         entity.index() < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
             && unsafe {
@@ -33,7 +33,7 @@ impl<T> View<'_, T> {
             }
     }
     /// Returns a reference to the component if the `entity` has it.
-    pub(crate) fn get(&self, entity: Key) -> Option<&T> {
+    pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
@@ -91,14 +91,14 @@ impl<T> View<'_, T> {
 /// Mutable view into a `Storage`.
 pub struct ViewMut<'a, T> {
     pub(crate) sparse: &'a mut Vec<usize>,
-    pub(crate) dense: &'a mut Vec<Key>,
+    pub(crate) dense: &'a mut Vec<EntityId>,
     pub(crate) data: &'a mut Vec<T>,
     pub(crate) pack_info: &'a mut PackInfo<T>,
 }
 
 impl<'a, T: 'static> ViewMut<'a, T> {
     /// Add the component to the `entity`.
-    pub(crate) fn insert(&mut self, mut value: T, entity: Key) -> Option<T> {
+    pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
         if entity.index() >= self.sparse.len() {
             self.sparse.resize(entity.index() + 1, 0);
         }
@@ -112,11 +112,11 @@ impl<'a, T: 'static> ViewMut<'a, T> {
             None
         }
     }
-    pub(crate) fn contains(&self, entity: Key) -> bool {
+    pub(crate) fn contains(&self, entity: EntityId) -> bool {
         self.as_non_mut().contains(entity)
     }
     /// Returns a reference to the component if the `entity` has it.
-    pub(crate) fn get(&self, entity: Key) -> Option<&T> {
+    pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
@@ -127,7 +127,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
         }
     }
     /// Returns a mutable reference to the component if the `entity` has it.
-    pub(crate) fn get_mut(&mut self, entity: Key) -> Option<&mut T> {
+    pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
@@ -138,7 +138,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
         }
     }
     /// Remove the component if the `entity` has it and returns it.
-    pub(crate) fn remove(&mut self, entity: Key) -> Option<T> {
+    pub(crate) fn remove(&mut self, entity: EntityId) -> Option<T> {
         if self.contains(entity) {
             let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
             match &mut self.pack_info.pack {
@@ -252,7 +252,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
             pack_info: self.pack_info,
         }
     }
-    pub(crate) fn pack(&mut self, entity: Key) {
+    pub(crate) fn pack(&mut self, entity: EntityId) {
         if self.contains(entity) {
             let dense_index = self.sparse[entity.index()];
             match &mut self.pack_info.pack {
@@ -279,7 +279,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
             }
         }
     }
-    pub(crate) fn unpack(&mut self, entity: Key) {
+    pub(crate) fn unpack(&mut self, entity: EntityId) {
         let dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
         match &mut self.pack_info.pack {
             Pack::Tight(pack) => {
@@ -391,7 +391,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
             }
         }
     }
-    pub fn take_removed(&mut self) -> Option<Vec<(Key, T)>> {
+    pub fn take_removed(&mut self) -> Option<Vec<(EntityId, T)>> {
         match &mut self.pack_info.pack {
             Pack::Update(pack) => {
                 let mut vec = Vec::with_capacity(pack.removed.capacity());
@@ -440,7 +440,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
 pub struct RawViewMut<'a, T> {
     pub(crate) sparse: *mut usize,
     pub(crate) sparse_len: usize,
-    pub(crate) dense: *mut Key,
+    pub(crate) dense: *mut EntityId,
     pub(crate) len: usize,
     pub(crate) data: *mut T,
     pub(crate) pack_info: *mut PackInfo<T>,
@@ -450,7 +450,7 @@ pub struct RawViewMut<'a, T> {
 unsafe impl<T: Send + Sync> Send for RawViewMut<'_, T> {}
 
 impl<'a, T> RawViewMut<'a, T> {
-    pub(crate) unsafe fn contains(&self, entity: Key) -> bool {
+    pub(crate) unsafe fn contains(&self, entity: EntityId) -> bool {
         entity.index() < self.sparse_len
             && *self.sparse.add(entity.index()) < self.len
             && *self.dense.add(*self.sparse.add(entity.index())) == entity

@@ -1,16 +1,16 @@
 mod add_component;
-mod key;
+mod entity_id;
 mod view;
 
 use crate::unknown_storage::UnknownStorage;
-pub use key::Key;
+pub use entity_id::EntityId;
 use std::any::TypeId;
 pub use view::{EntitiesView, EntitiesViewMut};
 
 /// Type used to borrow `Entities` mutably.
 pub struct EntitiesMut;
 
-/// Entities holds the Keys to all entities: living, removed and dead.
+/// Entities holds the EntityIds to all entities: living, removed and dead.
 ///
 /// A living entity is an entity currently present, with or without component.
 ///
@@ -28,7 +28,7 @@ pub struct EntitiesMut;
 // Removed entities are added to one end and removed from the other.
 // Dead entities are simply never added to the linked list.
 pub struct Entities {
-    data: Vec<Key>,
+    data: Vec<EntityId>,
     list: Option<(usize, usize)>,
 }
 
@@ -51,16 +51,16 @@ impl Entities {
             list: &mut self.list,
         }
     }
-    pub(super) fn delete_key(&mut self, entity: Key) -> bool {
-        self.view_mut().delete_key(entity)
+    pub(super) fn delete(&mut self, entity: EntityId) -> bool {
+        self.view_mut().delete(entity)
     }
 }
 
 impl UnknownStorage for Entities {
-    fn delete(&mut self, _entity: Key) -> &[TypeId] {
+    fn delete(&mut self, _entity: EntityId) -> &[TypeId] {
         &[]
     }
-    fn unpack(&mut self, _entity: Key) {}
+    fn unpack(&mut self, _entity: EntityId) {}
 }
 
 #[test]
@@ -77,15 +77,15 @@ fn entities() {
     assert_eq!(key10.index(), 1);
     assert_eq!(key10.version(), 0);
 
-    assert!(entities.view_mut().delete_key(key00));
-    assert!(!entities.view_mut().delete_key(key00));
+    assert!(entities.view_mut().delete(key00));
+    assert!(!entities.view_mut().delete(key00));
     let key01 = entities.view_mut().generate();
 
     assert_eq!(key01.index(), 0);
     assert_eq!(key01.version(), 1);
 
-    assert!(entities.view_mut().delete_key(key10));
-    assert!(entities.view_mut().delete_key(key01));
+    assert!(entities.view_mut().delete(key10));
+    assert!(entities.view_mut().delete(key01));
     let key11 = entities.view_mut().generate();
     let key02 = entities.view_mut().generate();
 
@@ -94,9 +94,9 @@ fn entities() {
     assert_eq!(key02.index(), 0);
     assert_eq!(key02.version(), 2);
 
-    let last_key = Key(NonZeroU64::new(!(!0 >> 15) + 1).unwrap());
+    let last_key = EntityId(NonZeroU64::new(!(!0 >> 15) + 1).unwrap());
     entities.data[0] = last_key;
-    assert!(entities.view_mut().delete_key(last_key));
+    assert!(entities.view_mut().delete(last_key));
     assert_eq!(entities.list, None);
     let dead = entities.view_mut().generate();
     assert_eq!(dead.index(), 2);

@@ -2,7 +2,7 @@ mod all;
 mod entity;
 
 pub use all::{AllStorages, AllStoragesViewMut};
-pub use entity::{Entities, EntitiesMut, EntitiesView, EntitiesViewMut, Key};
+pub use entity::{Entities, EntitiesMut, EntitiesView, EntitiesViewMut, EntityId};
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
@@ -59,7 +59,7 @@ impl Storage {
         }))
     }
     /// Mutably borrows the container and delete `index`.
-    pub(crate) fn delete(&mut self, entity: Key) -> Result<&[TypeId], error::Borrow> {
+    pub(crate) fn delete(&mut self, entity: EntityId) -> Result<&[TypeId], error::Borrow> {
         // reconstruct a `dyn UnknownStorage` from two pointers
         // for a full explanation see UnknownStorage documentation
         let container: RefMut<Box<dyn Any + Send + Sync>> = self.container.try_borrow_mut()?;
@@ -69,7 +69,7 @@ impl Storage {
         };
         Ok(unknown.delete(entity))
     }
-    pub(crate) fn unpack(&mut self, entity: Key) -> Result<(), error::Borrow> {
+    pub(crate) fn unpack(&mut self, entity: EntityId) -> Result<(), error::Borrow> {
         // reconstruct a `dyn UnknownStorage` from two pointers
         // for a full explanation see UnknownStorage documentation
         let container: RefMut<Box<dyn Any + Send + Sync>> = self.container.try_borrow_mut()?;
@@ -85,46 +85,46 @@ impl Storage {
 #[test]
 fn delete() {
     let mut storage = Storage::new::<&'static str>();
-    let mut key = Key::zero();
-    key.set_index(5);
+    let mut entity_id = EntityId::zero();
+    entity_id.set_index(5);
     storage
         .sparse_set_mut()
         .unwrap()
         .view_mut()
-        .insert("test5", key);
-    key.set_index(10);
+        .insert("test5", entity_id);
+    entity_id.set_index(10);
     storage
         .sparse_set_mut()
         .unwrap()
         .view_mut()
-        .insert("test10", key);
-    key.set_index(1);
+        .insert("test10", entity_id);
+    entity_id.set_index(1);
     storage
         .sparse_set_mut()
         .unwrap()
         .view_mut()
-        .insert("test1", key);
-    key.set_index(5);
-    storage.delete(key).unwrap();
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(key), None);
-    key.set_index(10);
+        .insert("test1", entity_id);
+    entity_id.set_index(5);
+    storage.delete(entity_id).unwrap();
+    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    entity_id.set_index(10);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().get(key),
+        storage.sparse_set::<&str>().unwrap().get(entity_id),
         Some(&"test10")
     );
-    key.set_index(1);
+    entity_id.set_index(1);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().get(key),
+        storage.sparse_set::<&str>().unwrap().get(entity_id),
         Some(&"test1")
     );
-    key.set_index(10);
-    storage.delete(key).unwrap();
-    key.set_index(1);
-    storage.delete(key).unwrap();
-    key.set_index(5);
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(key), None);
-    key.set_index(10);
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(key), None);
-    key.set_index(1);
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(key), None);
+    entity_id.set_index(10);
+    storage.delete(entity_id).unwrap();
+    entity_id.set_index(1);
+    storage.delete(entity_id).unwrap();
+    entity_id.set_index(5);
+    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    entity_id.set_index(10);
+    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    entity_id.set_index(1);
+    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
 }

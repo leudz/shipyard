@@ -1,5 +1,5 @@
 use crate::error;
-use crate::sparse_set::{Key, Pack, ViewMut};
+use crate::sparse_set::{EntityId, Pack, ViewMut};
 use std::any::TypeId;
 use std::cmp::Ordering;
 
@@ -141,7 +141,7 @@ macro_rules! impl_unstable_sort {
                         Ok(())
                     }
                     PackSort::Loose(len) => {
-                        let mut dense: &[Key] = &[];
+                        let mut dense: &[EntityId] = &[];
                         let mut packed = 0;
                         $(
                             if self.$index.pack_info.pack.is_loose() {
@@ -227,9 +227,9 @@ fn unstable_sort() {
     let mut array = crate::sparse_set::SparseSet::default();
 
     for i in (0..100).rev() {
-        let mut key = crate::storage::Key::zero();
-        key.set_index(100 - i);
-        array.view_mut().insert(i, key);
+        let mut entity_id = crate::storage::EntityId::zero();
+        entity_id.set_index(100 - i);
+        array.view_mut().insert(i, entity_id);
     }
 
     array
@@ -241,9 +241,9 @@ fn unstable_sort() {
         assert!(window[0] < window[1]);
     }
     for i in 0..100 {
-        let mut key = crate::storage::Key::zero();
-        key.set_index(100 - i);
-        assert_eq!(array.get(key), Some(&i));
+        let mut entity_id = crate::storage::EntityId::zero();
+        entity_id.set_index(100 - i);
+        assert_eq!(array.get(entity_id), Some(&i));
     }
 }
 
@@ -252,14 +252,14 @@ fn partially_sorted_unstable_sort() {
     let mut array = crate::sparse_set::SparseSet::default();
 
     for i in 0..20 {
-        let mut key = crate::storage::Key::zero();
-        key.set_index(i);
-        assert!(array.view_mut().insert(i, key).is_none());
+        let mut entity_id = crate::storage::EntityId::zero();
+        entity_id.set_index(i);
+        assert!(array.view_mut().insert(i, entity_id).is_none());
     }
     for i in (20..100).rev() {
-        let mut key = crate::storage::Key::zero();
-        key.set_index(100 - i + 20);
-        assert!(array.view_mut().insert(i, key).is_none());
+        let mut entity_id = crate::storage::EntityId::zero();
+        entity_id.set_index(100 - i + 20);
+        assert!(array.view_mut().insert(i, entity_id).is_none());
     }
 
     array
@@ -271,13 +271,13 @@ fn partially_sorted_unstable_sort() {
         assert!(window[0] < window[1]);
     }
     for i in 0..20 {
-        let mut key = crate::storage::Key::zero();
-        key.set_index(i);
-        assert_eq!(array.get(key), Some(&i));
+        let mut entity_id = crate::storage::EntityId::zero();
+        entity_id.set_index(i);
+        assert_eq!(array.get(entity_id), Some(&i));
     }
     for i in 20..100 {
-        let mut key = crate::storage::Key::zero();
-        key.set_index(100 - i + 20);
-        assert_eq!(array.get(key), Some(&i));
+        let mut entity_id = crate::storage::EntityId::zero();
+        entity_id.set_index(100 - i + 20);
+        assert_eq!(array.get(entity_id), Some(&i));
     }
 }

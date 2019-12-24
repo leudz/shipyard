@@ -7,11 +7,11 @@
 //!
 //! #[system(InAcid)]
 //! fn run(pos: &Position, mut health: &mut Health) {
-//!     for (pos, health) in (pos, health).iter() {
+//!     (pos, health).iter().for_each(|(pos, health)| {
 //!         if is_in_acid(pos) {
 //!             health.0 -= 1.0;
 //!         }
-//!     }
+//!     });
 //! }
 //!
 //! fn is_in_acid(pos: &Position) -> bool {
@@ -48,11 +48,11 @@
 //!
 //! #[system(Meal)]
 //! fn run(fat: &mut Fat) {
-//!     for slice in fat.iter().into_chunk(8).ok().unwrap() {
+//!     fat.iter().into_chunk(8).ok().unwrap().for_each(|slice| {
 //!         for fat in slice {
 //!             fat.0 += 3.0;
 //!         }
-//!     }
+//!     });
 //! }
 //!
 //! #[system(Age)]
@@ -124,5 +124,5 @@ pub struct ThreadPool;
 /// ```
 pub struct Unique<T: ?Sized>(T);
 
-pub use storage::{AllStorages, Entities, EntitiesMut, Key};
+pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
 pub use world::World;

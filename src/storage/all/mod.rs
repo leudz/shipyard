@@ -1,7 +1,7 @@
 mod hasher;
 mod view;
 
-use super::{Entities, Key, Storage};
+use super::{Entities, EntityId, Storage};
 use crate::atomic_refcell::AtomicRefCell;
 use crate::unknown_storage::UnknownStorage;
 pub(crate) use hasher::TypeIdHasher;

@@ -1,6 +1,6 @@
 use crate::error;
 use crate::sparse_set::{Pack, ViewMut};
-use crate::storage::Key;
+use crate::storage::EntityId;
 use std::any::TypeId;
 
 pub trait Removable {
@@ -43,7 +43,7 @@ pub trait Remove<T: Removable> {
     ///     assert_eq!(old, (Some(0),));
     /// });
     /// ```
-    fn try_remove(self, entity: Key) -> Result<T::Out, error::Remove>;
+    fn try_remove(self, entity: EntityId) -> Result<T::Out, error::Remove>;
     /// Removes component in `entity`, if the entity had them, they will be returned.
     ///
     /// Multiple components can be removed at the same time using a tuple.
@@ -80,11 +80,11 @@ pub trait Remove<T: Removable> {
     ///     assert_eq!(old, (Some(0),));
     /// });
     /// ```
-    fn remove(self, entity: Key) -> T::Out;
+    fn remove(self, entity: EntityId) -> T::Out;
 }
 
 impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
-    fn try_remove(self, entity: Key) -> Result<<(T,) as Removable>::Out, error::Remove> {
+    fn try_remove(self, entity: EntityId) -> Result<<(T,) as Removable>::Out, error::Remove> {
         match self.pack_info.pack {
             Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
             Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
@@ -104,7 +104,7 @@ impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
             }
         }
     }
-    fn remove(self, entity: Key) -> <(T,) as Removable>::Out {
+    fn remove(self, entity: EntityId) -> <(T,) as Removable>::Out {
         self.try_remove(entity).unwrap()
     }
 }
@@ -122,7 +122,7 @@ macro_rules! impl_remove {
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
 
         impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
-            fn try_remove(self, entity: Key) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
+            fn try_remove(self, entity: EntityId) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
                 // non packed storages should not pay the price of pack
                 if $(std::mem::discriminant(&self.$index.pack_info.pack) != std::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
                     let mut types = [$(TypeId::of::<$type>()),+];
@@ -160,7 +160,7 @@ macro_rules! impl_remove {
                     self.$index.remove(entity),
                 )+))
             }
-            fn remove(self, entity: Key) -> <($($type,)+) as Removable>::Out {
+            fn remove(self, entity: EntityId) -> <($($type,)+) as Removable>::Out {
                 Remove::<($($type,)+)>::try_remove(self, entity).unwrap()
             }
         }

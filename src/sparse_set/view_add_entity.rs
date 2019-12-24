@@ -1,49 +1,27 @@
 use crate::sparse_set::{Pack, ViewMut};
-use crate::storage::Key;
+use crate::storage::EntityId;
 use std::any::TypeId;
 
 pub trait ViewAddEntity {
     type Component;
-    fn add_entity(self, component: Self::Component, entity: Key);
+    fn add_entity(self, component: Self::Component, entity: EntityId);
 }
 
 impl ViewAddEntity for () {
     type Component = ();
-    fn add_entity(self, _: Self::Component, _: Key) {}
+    fn add_entity(self, _: Self::Component, _: EntityId) {}
 }
 
 impl<T: 'static> ViewAddEntity for ViewMut<'_, T> {
     type Component = T;
-    fn add_entity(mut self, component: Self::Component, entity: Key) {
-        self.insert(component, entity);
-
-        if let Pack::Update(pack) = &mut self.pack_info.pack {
-            let len = self.dense.len() - 1;
-            unsafe {
-                *self.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
-                *self.sparse.get_unchecked_mut(
-                    self.dense
-                        .get_unchecked(pack.inserted + pack.modified)
-                        .index(),
-                ) = len;
-                *self
-                    .sparse
-                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).index()) =
-                    pack.inserted + pack.modified;
-            }
-            self.dense.swap(pack.inserted + pack.modified, len);
-            self.dense
-                .swap(pack.inserted, pack.inserted + pack.modified);
-            self.data.swap(pack.inserted + pack.modified, len);
-            self.data.swap(pack.inserted, pack.inserted + pack.modified);
-            pack.inserted += 1;
-        }
+    fn add_entity(mut self, component: Self::Component, entity: EntityId) {
+        (&mut self).add_entity(component, entity)
     }
 }
 
 impl<T: 'static> ViewAddEntity for &mut ViewMut<'_, T> {
     type Component = T;
-    fn add_entity(self, component: Self::Component, entity: Key) {
+    fn add_entity(self, component: Self::Component, entity: EntityId) {
         self.insert(component, entity);
 
         if let Pack::Update(pack) = &mut self.pack_info.pack {
@@ -72,14 +50,14 @@ impl<T: 'static> ViewAddEntity for &mut ViewMut<'_, T> {
 
 impl<T: 'static> ViewAddEntity for (ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(self, component: Self::Component, entity: Key) {
+    fn add_entity(self, component: Self::Component, entity: EntityId) {
         self.0.add_entity(component.0, entity);
     }
 }
 
 impl<T: 'static> ViewAddEntity for (&mut ViewMut<'_, T>,) {
     type Component = (T,);
-    fn add_entity(self, component: Self::Component, entity: Key) {
+    fn add_entity(self, component: Self::Component, entity: EntityId) {
         self.0.add_entity(component.0, entity);
     }
 }
@@ -88,13 +66,13 @@ macro_rules! impl_view_add_entity {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: 'static + Send + Sync),+> ViewAddEntity for ($(ViewMut<'_, $type>,)+) {
             type Component = ($($type,)+);
-            fn add_entity(mut self, component: Self::Component, entity: Key) {
+            fn add_entity(mut self, component: Self::Component, entity: EntityId) {
                 ($(&mut self.$index,)+).add_entity(component, entity);
             }
         }
         impl<'a, $($type: 'static + Send + Sync),+> ViewAddEntity for ($(&mut ViewMut<'_, $type>,)+) {
             type Component = ($($type,)+);
-            fn add_entity(self, component: Self::Component, entity: Key) {
+            fn add_entity(self, component: Self::Component, entity: EntityId) {
                 $(
                     self.$index.insert(component.$index, entity);
                 )+

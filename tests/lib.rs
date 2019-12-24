@@ -1,5 +1,8 @@
+mod iteration;
+
 #[cfg(feature = "serialization")]
 mod serialization;
+use shipyard::internal::iterators;
 use shipyard::prelude::*;
 
 #[test]
@@ -430,7 +433,9 @@ fn chunk_iterator() {
             panic!("not packed");
         }
         if let Iter2::Tight(mut iter) = (&usizes, &u32s).iter() {
-            iter.nth(3);
+            for _ in 0..=3 {
+                iter.next();
+            }
             let mut iter = iter.into_chunk_exact(2);
             assert_eq!(iter.next(), None);
             assert_eq!(iter.remainder(), (&[8][..], &[9][..]));
@@ -786,9 +791,9 @@ fn system() {
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize, &'a u32);
         fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-            for (x, y) in (usizes, u32s).iter() {
+            (usizes, u32s).iter().for_each(|(x, y)| {
                 *x += *y as usize;
-            }
+            });
         }
     }
 
@@ -817,18 +822,18 @@ fn systems() {
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize, &'a u32);
         fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-            for (x, y) in (usizes, u32s).iter() {
+            (usizes, u32s).iter().for_each(|(x, y)| {
                 *x += *y as usize;
-            }
+            });
         }
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a mut usize,);
         fn run((usizes,): <Self::Data as SystemData>::View) {
-            for x in (usizes,).iter() {
+            (usizes,).iter().for_each(|x| {
                 *x += 1;
-            }
+            });
         }
     }
 
@@ -850,7 +855,7 @@ fn systems() {
         assert_eq!(iter.next(), None);
     });
 }
-
+/*
 #[cfg(feature = "parallel")]
 #[test]
 fn simple_parallel_sum() {
@@ -974,7 +979,7 @@ fn loose_parallel_iterator() {
         assert_eq!(iter.next(), None);
     });
 }
-
+*/
 #[cfg(feature = "parallel")]
 #[test]
 fn two_workloads() {
@@ -1162,10 +1167,10 @@ fn simple_sort() {
         usizes.as_sortable().sort_unstable(Ord::cmp);
 
         let mut prev = 0;
-        for &mut x in usizes.iter() {
+        usizes.iter().for_each(|&mut x| {
             assert!(prev <= x);
             prev = x;
-        }
+        });
     });
 }
 
@@ -1188,10 +1193,12 @@ fn tight_sort() {
                 });
 
             let mut prev = 0;
-            for (&mut x, &mut y) in (&mut usizes, &mut u32s).iter() {
-                assert!(prev <= x + y as usize);
-                prev = x + y as usize;
-            }
+            (&mut usizes, &mut u32s)
+                .iter()
+                .for_each(|(&mut x, &mut y)| {
+                    assert!(prev <= x + y as usize);
+                    prev = x + y as usize;
+                });
         },
     );
 }
@@ -1215,10 +1222,12 @@ fn loose_sort() {
                 });
 
             let mut prev = 0;
-            for (&mut x, &mut y) in (&mut usizes, &mut u32s).iter() {
-                assert!(prev <= x + y as usize);
-                prev = x + y as usize;
-            }
+            (&mut usizes, &mut u32s)
+                .iter()
+                .for_each(|(&mut x, &mut y)| {
+                    assert!(prev <= x + y as usize);
+                    prev = x + y as usize;
+                });
         },
     );
 }
@@ -1322,7 +1331,7 @@ fn simple_filter() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().filtered(|&&mut x| x % 2 == 0);
+        let mut iter = usizes.iter().filter(|&&mut x| x % 2 == 0);
 
         assert_eq!(iter.next(), Some(&mut 2));
         assert_eq!(iter.next(), Some(&mut 4));
@@ -1341,7 +1350,7 @@ fn tight_filter() {
             entities.add_entity((&mut usizes,), (2,));
             entities.add_entity((&mut usizes, &mut u32s), (3, 4));
 
-            let mut iter = (&usizes, &u32s).iter().filtered(|&(x, _)| x % 2 == 0);
+            let mut iter = (&usizes, &u32s).iter().filter(|&(x, _)| x % 2 == 0);
 
             assert_eq!(iter.next(), Some((&0, &1)));
             assert_eq!(iter.next(), None);
@@ -1372,7 +1381,7 @@ fn update_pack() {
 
         usizes.clear_inserted();
 
-        let mut iter = (&mut usizes).iter().filtered(|&&mut x| x % 2 == 0);
+        let mut iter = (&mut usizes).iter().filter(|&&mut x| x % 2 == 0);
         assert_eq!(iter.next(), Some(&mut 0));
         assert_eq!(iter.next(), Some(&mut 2));
         assert_eq!(iter.next(), None);
@@ -1388,7 +1397,8 @@ fn update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
-
+/*
+#[cfg(feature = "parallel")]
 #[test]
 fn par_update_pack() {
     use rayon::prelude::*;
@@ -1423,7 +1433,7 @@ fn par_update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
-
+*/
 #[test]
 fn simple_with_id() {
     let world = World::new::<(usize, u32)>();
@@ -1514,7 +1524,8 @@ fn multiple_update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
-
+/*
+#[cfg(feature = "parallel")]
 #[test]
 fn par_multiple_update_pack() {
     use iterators::ParIter2;
@@ -1569,6 +1580,7 @@ fn par_multiple_update_pack() {
     });
 }
 
+#[cfg(feature = "parallel")]
 #[test]
 fn par_update_filter() {
     use rayon::prelude::*;
@@ -1603,7 +1615,7 @@ fn par_update_filter() {
         assert_eq!(iter, vec![&1, &1, &3, &3]);
     });
 }
-
+*/
 #[test]
 fn filter_with_id() {
     let world = World::new::<(usize,)>();
@@ -1615,14 +1627,15 @@ fn filter_with_id() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().filtered(|&&mut x| x % 2 == 0).with_id();
+        let mut iter = usizes.iter().filter(|&&mut x| x % 2 == 0).with_id();
 
         assert!(iter.next() == Some((entity1, &mut 2)));
         assert!(iter.next() == Some((entity2, &mut 4)));
         assert!(iter.next() == None);
     });
 }
-
+/*
+#[cfg(feature = "parallel")]
 #[test]
 fn par_filter_with_id() {
     use rayon::iter::ParallelIterator;
@@ -1646,7 +1659,7 @@ fn par_filter_with_id() {
         assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
     });
 }
-
+*/
 #[test]
 fn with_id_filter() {
     let world = World::new::<(usize,)>();
@@ -1658,14 +1671,15 @@ fn with_id_filter() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().with_id().filtered(|&(_, &mut x)| x % 2 == 0);
+        let mut iter = usizes.iter().with_id().filter(|&(_, &mut x)| x % 2 == 0);
 
         assert!(iter.next() == Some((entity1, &mut 2)));
         assert!(iter.next() == Some((entity2, &mut 4)));
         assert!(iter.next() == None);
     });
 }
-
+/*
+#[cfg(feature = "parallel")]
 #[test]
 fn par_with_id_filter() {
     use rayon::iter::ParallelIterator;
@@ -1689,7 +1703,7 @@ fn par_with_id_filter() {
         assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
     });
 }
-
+*/
 #[test]
 fn unique_storage() {
     let world = World::default();
@@ -1764,22 +1778,26 @@ fn key_equality() {
         //sanity check
         assert_eq!((&usizes).iter().with_id().count(), 3);
 
-        let keys: Vec<Key> = (&usizes)
-            .iter()
-            .with_id()
-            .map(|(entity, _)| entity)
-            .collect();
+        let keys: Vec<EntityId> =
+            (&usizes)
+                .iter()
+                .with_id()
+                .map(|(entity, _)| entity)
+                .fold(Vec::new(), |mut vec, x| {
+                    vec.push(x);
+                    vec
+                });
 
         assert_eq!(keys, vec![e0, e1, e2]);
     });
 
-    //confirm that the entity key for (usize) is the same as (usize, u32)
+    //confirm that the entity id for (usize) is the same as (usize, u32)
     //in other words that the entity itself did not somehow change from adding a component
     world.run::<(&usize, &u32), _, _>(|(usizes, u32s)| {
         //sanity check
         assert_eq!((&usizes, &u32s).iter().with_id().count(), 1);
 
-        let (entity, _, _) = (&usizes, &u32s).iter().with_id().next().unwrap();
+        let (entity, (_, _)) = (&usizes, &u32s).iter().with_id().find(|_| true).unwrap();
         assert_eq!(entity, e1);
     });
 }

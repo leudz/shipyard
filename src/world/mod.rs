@@ -299,9 +299,9 @@ impl World {
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
     ///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-    ///         for (x, &y) in (usizes, u32s).iter() {
+    ///         (usizes, u32s).iter().for_each(|(x, &y)| {
     ///             *x += y as usize;
-    ///         }
+    ///         });
     ///     }
     /// }
     ///
@@ -351,9 +351,9 @@ impl World {
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
     ///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-    ///         for (x, &y) in (usizes, u32s).iter() {
+    ///         (usizes, u32s).iter().for_each(|(x, &y)| {
     ///             *x += y as usize;
-    ///         }
+    ///         });
     ///     }
     /// }
     ///

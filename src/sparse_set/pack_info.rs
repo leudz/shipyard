@@ -1,4 +1,4 @@
-use crate::storage::Key;
+use crate::storage::EntityId;
 use std::any::TypeId;
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -129,7 +129,7 @@ impl LoosePack {
 pub(crate) struct UpdatePack<T> {
     pub(crate) inserted: usize,
     pub(crate) modified: usize,
-    pub(crate) removed: Vec<(Key, T)>,
+    pub(crate) removed: Vec<(EntityId, T)>,
 }
 
 /// The first returned `bool` is true if all packed types are present.

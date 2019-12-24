@@ -1,5 +1,5 @@
 use crate::sparse_set::SparseSet;
-use crate::storage::Key;
+use crate::storage::EntityId;
 use std::any::TypeId;
 
 // When removing an entity all its components have to be removed.
@@ -21,16 +21,16 @@ use std::any::TypeId;
 // in the future. Until then this hack works as long as trait objects' fat pointer don't
 // change representation.
 pub(super) trait UnknownStorage {
-    fn delete(&mut self, entity: Key) -> &[TypeId];
-    fn unpack(&mut self, entitiy: Key);
+    fn delete(&mut self, entity: EntityId) -> &[TypeId];
+    fn unpack(&mut self, entitiy: EntityId);
 }
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
-    fn delete(&mut self, entity: Key) -> &[TypeId] {
+    fn delete(&mut self, entity: EntityId) -> &[TypeId] {
         self.remove(entity);
         &self.pack_info.observer_types
     }
-    fn unpack(&mut self, entity: Key) {
+    fn unpack(&mut self, entity: EntityId) {
         Self::unpack(self, entity);
     }
 }

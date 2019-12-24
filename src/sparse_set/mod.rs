@@ -3,7 +3,7 @@ pub mod sort;
 mod view;
 mod view_add_entity;
 
-use crate::storage::Key;
+use crate::storage::EntityId;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view::RawViewMut;
 pub use view::{View, ViewMut};
@@ -19,7 +19,7 @@ pub(crate) use view_add_entity::ViewAddEntity;
 // It mimics the dense vector in regard to insertion/deletion.
 pub struct SparseSet<T> {
     sparse: Vec<usize>,
-    dense: Vec<Key>,
+    dense: Vec<EntityId>,
     data: Vec<T>,
     pub(crate) pack_info: PackInfo<T>,
 }
@@ -37,11 +37,11 @@ impl<T> Default for SparseSet<T> {
 
 impl<T: 'static> SparseSet<T> {
     /// Returns true if the sparse array contains data at this index.
-    pub(crate) fn contains(&self, entity: Key) -> bool {
+    pub(crate) fn contains(&self, entity: EntityId) -> bool {
         self.view().contains(entity)
     }
     /// Returns a reference to the element at this index if present.
-    pub(crate) fn get(&self, entity: Key) -> Option<&T> {
+    pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
@@ -52,7 +52,7 @@ impl<T: 'static> SparseSet<T> {
         }
     }
     /// Removes and returns the element at index if present.
-    pub(crate) fn remove(&mut self, entity: Key) -> Option<T> {
+    pub(crate) fn remove(&mut self, entity: EntityId) -> Option<T> {
         self.view_mut().remove(entity)
     }
     /// Returns the number of element present in the sparse array.
@@ -81,13 +81,13 @@ impl<T: 'static> SparseSet<T> {
     //            ▲       ▼
     //            ---------
     //              pack
-    pub(crate) fn pack(&mut self, entity: Key) {
+    pub(crate) fn pack(&mut self, entity: EntityId) {
         self.view_mut().pack(entity)
     }
-    pub(crate) fn clone_indices(&self) -> Vec<Key> {
+    pub(crate) fn clone_indices(&self) -> Vec<EntityId> {
         self.dense.clone()
     }
-    pub(crate) fn unpack(&mut self, entity: Key) {
+    pub(crate) fn unpack(&mut self, entity: EntityId) {
         self.view_mut().unpack(entity)
     }
     /// Place the unique component in the storage.
@@ -102,9 +102,9 @@ impl<T: 'static> SparseSet<T> {
     }
 }
 
-impl<T: 'static> std::ops::Index<Key> for SparseSet<T> {
+impl<T: 'static> std::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
-    fn index(&self, index: Key) -> &Self::Output {
+    fn index(&self, index: EntityId) -> &Self::Output {
         self.get(index).unwrap()
     }
 }
@@ -112,96 +112,96 @@ impl<T: 'static> std::ops::Index<Key> for SparseSet<T> {
 #[test]
 fn insert() {
     let mut array = SparseSet::default();
-    let mut key = Key::zero();
-    key.set_index(0);
-    assert!(array.view_mut().insert("0", key).is_none());
-    key.set_index(1);
-    assert!(array.view_mut().insert("1", key).is_none());
+    let mut entity_id = EntityId::zero();
+    entity_id.set_index(0);
+    assert!(array.view_mut().insert("0", entity_id).is_none());
+    entity_id.set_index(1);
+    assert!(array.view_mut().insert("1", entity_id).is_none());
     assert_eq!(array.len(), 2);
-    key.set_index(0);
-    assert_eq!(array.get(key), Some(&"0"));
-    key.set_index(1);
-    assert_eq!(array.get(key), Some(&"1"));
-    key.set_index(5);
-    assert!(array.view_mut().insert("5", key).is_none());
-    assert_eq!(array.view_mut().get_mut(key), Some(&mut "5"));
-    key.set_index(4);
-    assert_eq!(array.get(key), None);
-    key.set_index(6);
-    assert_eq!(array.get(key), None);
-    assert!(array.view_mut().insert("6", key).is_none());
-    key.set_index(5);
-    assert_eq!(array.get(key), Some(&"5"));
-    key.set_index(6);
-    assert_eq!(array.view_mut().get_mut(key), Some(&mut "6"));
-    key.set_index(4);
-    assert_eq!(array.get(key), None);
+    entity_id.set_index(0);
+    assert_eq!(array.get(entity_id), Some(&"0"));
+    entity_id.set_index(1);
+    assert_eq!(array.get(entity_id), Some(&"1"));
+    entity_id.set_index(5);
+    assert!(array.view_mut().insert("5", entity_id).is_none());
+    assert_eq!(array.view_mut().get_mut(entity_id), Some(&mut "5"));
+    entity_id.set_index(4);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(6);
+    assert_eq!(array.get(entity_id), None);
+    assert!(array.view_mut().insert("6", entity_id).is_none());
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), Some(&"5"));
+    entity_id.set_index(6);
+    assert_eq!(array.view_mut().get_mut(entity_id), Some(&mut "6"));
+    entity_id.set_index(4);
+    assert_eq!(array.get(entity_id), None);
 }
 #[test]
 fn remove() {
     let mut array = SparseSet::default();
-    let mut key = Key::zero();
-    key.set_index(0);
-    array.view_mut().insert("0", key);
-    key.set_index(5);
-    array.view_mut().insert("5", key);
-    key.set_index(10);
-    array.view_mut().insert("10", key);
-    key.set_index(0);
-    assert_eq!(array.remove(key), Some("0"));
-    assert_eq!(array.get(key), None);
-    key.set_index(5);
-    assert_eq!(array.get(key), Some(&"5"));
-    key.set_index(10);
-    assert_eq!(array.get(key), Some(&"10"));
-    assert_eq!(array.remove(key), Some("10"));
-    key.set_index(0);
-    assert_eq!(array.get(key), None);
-    key.set_index(5);
-    assert_eq!(array.get(key), Some(&"5"));
-    key.set_index(10);
-    assert_eq!(array.get(key), None);
+    let mut entity_id = EntityId::zero();
+    entity_id.set_index(0);
+    array.view_mut().insert("0", entity_id);
+    entity_id.set_index(5);
+    array.view_mut().insert("5", entity_id);
+    entity_id.set_index(10);
+    array.view_mut().insert("10", entity_id);
+    entity_id.set_index(0);
+    assert_eq!(array.remove(entity_id), Some("0"));
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), Some(&"5"));
+    entity_id.set_index(10);
+    assert_eq!(array.get(entity_id), Some(&"10"));
+    assert_eq!(array.remove(entity_id), Some("10"));
+    entity_id.set_index(0);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), Some(&"5"));
+    entity_id.set_index(10);
+    assert_eq!(array.get(entity_id), None);
     assert_eq!(array.len(), 1);
-    key.set_index(3);
-    array.view_mut().insert("3", key);
-    key.set_index(10);
-    array.view_mut().insert("100", key);
-    key.set_index(0);
-    assert_eq!(array.get(key), None);
-    key.set_index(3);
-    assert_eq!(array.get(key), Some(&"3"));
-    key.set_index(5);
-    assert_eq!(array.get(key), Some(&"5"));
-    key.set_index(10);
-    assert_eq!(array.get(key), Some(&"100"));
-    key.set_index(3);
-    assert_eq!(array.remove(key), Some("3"));
-    key.set_index(0);
-    assert_eq!(array.get(key), None);
-    key.set_index(3);
-    assert_eq!(array.get(key), None);
-    key.set_index(5);
-    assert_eq!(array.get(key), Some(&"5"));
-    key.set_index(10);
-    assert_eq!(array.get(key), Some(&"100"));
-    assert_eq!(array.remove(key), Some("100"));
-    key.set_index(0);
-    assert_eq!(array.get(key), None);
-    key.set_index(3);
-    assert_eq!(array.get(key), None);
-    key.set_index(5);
-    assert_eq!(array.get(key), Some(&"5"));
-    key.set_index(10);
-    assert_eq!(array.get(key), None);
-    key.set_index(5);
-    assert_eq!(array.remove(key), Some("5"));
-    key.set_index(0);
-    assert_eq!(array.get(key), None);
-    key.set_index(3);
-    assert_eq!(array.get(key), None);
-    key.set_index(5);
-    assert_eq!(array.get(key), None);
-    key.set_index(10);
-    assert_eq!(array.get(key), None);
+    entity_id.set_index(3);
+    array.view_mut().insert("3", entity_id);
+    entity_id.set_index(10);
+    array.view_mut().insert("100", entity_id);
+    entity_id.set_index(0);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(3);
+    assert_eq!(array.get(entity_id), Some(&"3"));
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), Some(&"5"));
+    entity_id.set_index(10);
+    assert_eq!(array.get(entity_id), Some(&"100"));
+    entity_id.set_index(3);
+    assert_eq!(array.remove(entity_id), Some("3"));
+    entity_id.set_index(0);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(3);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), Some(&"5"));
+    entity_id.set_index(10);
+    assert_eq!(array.get(entity_id), Some(&"100"));
+    assert_eq!(array.remove(entity_id), Some("100"));
+    entity_id.set_index(0);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(3);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), Some(&"5"));
+    entity_id.set_index(10);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(5);
+    assert_eq!(array.remove(entity_id), Some("5"));
+    entity_id.set_index(0);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(3);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(5);
+    assert_eq!(array.get(entity_id), None);
+    entity_id.set_index(10);
+    assert_eq!(array.get(entity_id), None);
     assert_eq!(array.len(), 0);
 }
