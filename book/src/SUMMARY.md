@@ -19,6 +19,7 @@
     - [Update Components](./how-to/update-components.md)
     - [Using Tag Components](./how-to/using-tag-components.md)
     - [Manage Workloads](./how-to/manage-workloads.md)
+    - [Multiple Entities](./how-to/multiple-entities.md)
     - [All Together Now](./how-to/all-together-now.md)
 - [Under the Hood](./under-the-hood.md)
     - [Different types of ECS](./under-the-hood/different-types-of-ecs.md)
