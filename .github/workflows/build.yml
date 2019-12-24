@@ -1,0 +1,19 @@
+name: Book 
+
+on: [push]
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout repo
+      uses: actions/checkout@v1
+    - name: install mdbook 
+      run: cargo install mdbook 
+    - name: build 
+      run: cd book && mdbook build
+    - name: deploy to gh_pages
+      uses: maxheld83/ghpages@master
+      env:
+        BUILD_DIR: "book/output/"
+        GH_PAT: ${{ secrets.GH_PAT }}

@@ -3,9 +3,8 @@ mod serialization;
 
 use std::num::NonZeroU64;
 
-/// A EntityId is a handle to an entity and has two parts, the index and the version.
-/// The length of the version can change but the index will always be size_of::<usize>() * 8 - version_len.
-/// Valid versions can't exceed version::MAX() - 1, version::MAX() being used as flag for dead entities.
+/// A Key is a handle to an entity and has two parts, the index and the version.
+/// The index is 48 bits long and the version 16.
 #[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EntityId(pub(super) NonZeroU64);
@@ -24,7 +23,7 @@ impl EntityId {
     /// Returns the version part of the EntityId.
     #[inline]
     pub(crate) fn version(self) -> usize {
-        ((self.0.get() & Self::VERSION_MASK) >> (0usize.count_zeros() as u64 - Self::VERSION_LEN))
+        ((self.0.get() & Self::VERSION_MASK) >> (64 - Self::VERSION_LEN))
             as usize
     }
     /// Make a new EntityId with the given index.
