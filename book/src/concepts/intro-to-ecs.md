@@ -10,7 +10,7 @@ There are two main benefits to using an ECS:
     - Array of Structures
 2. Optimal design for computers.
     - Structure of Arrays
-    - Data alignment
+    - Spatial locality
     - Less pointer chasing
 
 However, programming with an ECS requires thinking about data and logic in a different way than you might be used to. Also, the optimization techniques need explicit choice and tuning to get the greatest benefit (see [Optimization with Packs](./optimization-with-packs.md))

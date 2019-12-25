@@ -8,7 +8,7 @@ The most convenient is by using the `system` annotation and then registering it 
 TODO: example
 ```
 
-This is great because it's convenient, avoids a ton of boilerplate, and something about parallel processing (is it that each workload can run in parallel, or each system within a workload runs in parallel, or...?)
+This is great because it's convenient, avoids a ton of boilerplate, and provide outer-parallelism without having to do anything.
 
 However, sometimes a world needs to be run where it has access to variables that are not registered in the ECS.
 

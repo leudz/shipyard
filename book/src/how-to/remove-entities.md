@@ -1,6 +1,6 @@
 # Remove Entities
 
-Removing an entity means removing it both from the Entities container as well as removing all the component data that was associated with it. 
+Removing an entity means removing it both from the Entities container as well as removing all its components. 
 
 ### Remove a single Entity
 

@@ -7,6 +7,7 @@ use std::num::NonZeroU64;
 /// The index is 48 bits long and the version 16.
 #[doc(hidden)]
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct EntityId(pub(super) NonZeroU64);
 
 impl EntityId {
@@ -23,8 +24,7 @@ impl EntityId {
     /// Returns the version part of the EntityId.
     #[inline]
     pub(crate) fn version(self) -> usize {
-        ((self.0.get() & Self::VERSION_MASK) >> (64 - Self::VERSION_LEN))
-            as usize
+        ((self.0.get() & Self::VERSION_MASK) >> (64 - Self::VERSION_LEN)) as usize
     }
     /// Make a new EntityId with the given index.
     #[inline]
