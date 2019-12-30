@@ -6,7 +6,7 @@ There are two ways to operate on the world.
 
 The most convenient way is by using the `system` annotation and then registering it as a workload:
 
-```rust
+```rust,noplaypen
 // 1. Define a system
 #[system(CreateEmpty)]
 pub fn run (mut entities:&mut Entities, mut empties:&mut Empty) {
@@ -24,7 +24,7 @@ This is great because it avoids a ton of boilerplate and provides outer-parallel
 
 Adding multiple systems to a workload is only a matter of expanding the second argument to a tuple. For example: 
 
-```rust
+```rust,noplaypen
 // 1. Define another system
 #[system(CreateCount)]
 pub fn run (mut entities:&mut Entities, mut counts:&mut Count) {
