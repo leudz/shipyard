@@ -3,7 +3,7 @@
 In order to avoid needless repitition with demo code, the following is assumed to be predefined in all examples:
 
 ### Components
-```
+```rust
 pub struct Empty {}
 
 #[derive(Debug)]
