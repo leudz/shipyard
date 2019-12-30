@@ -2,6 +2,7 @@
 
 [Welcome](./welcome.md)
 - [Getting Started](./getting-started.md)
+- [Using this Guide](./using-this-guide.md)
 - [Concepts](./concepts.md)
     - [Intro to ECS](./concepts/intro-to-ecs.md)
     - [Storages, Views, and Entities](./concepts/storages-views-and-entities.md)
