@@ -4,7 +4,9 @@ There are two ways to operate on the world.
 
 ## Systems
 
-The most convenient way is by using the `system` annotation and then registering it as a workload:
+Systems are created by implementing the `System` trait. It's a bit involved- but don't worry, there's a helper macro we'll get to down below that makes this much simpler!
+
+First, implementing the trait directly. It looks like:
 
 1. Define a system
 ```rust, noplaypen
@@ -18,9 +20,9 @@ impl<'a> System<'a> for CreateEmpty {
 
 First we create a struct, it could be an enum, empty or not it doesn't really matter it's just here to attach the impl on. Note that even if you don't make it empty you won't have access to the struct inside the system.
 
-We then choose which storages we want with `Data`. We'll see in the next chapters what types can be used in detailed.
+We then choose which storages we want with the `Data` associated type. We'll see in the next chapters what types can be used in detailed.
 
-Finally we get a tuple containing views to the storages we asked with `Data`. You can use `<T::Data as SystemData>::View` as type, it's a bit esoteric but will work whatever you borrow. Or you could specify the exact types.
+Finally, we get a tuple as `run` argument containing views to the storages we asked with `Data`. You can use `<T::Data as SystemData>::View` as type, it's a bit esoteric but will work with whatever you borrow. Or you could specify the exact types.
 
 2. Add the workload
 ```rust, noplaypen
@@ -34,13 +36,13 @@ world.run_workload("Creators");
 
 Adding multiple systems to a workload is only a matter of expanding the second argument to a tuple. For example: 
 
-1. Define another system
+1. Define another system - this time using the macro
 ```rust, noplaypen
 #[system(CreateCount)]
 fn run (entities: &mut Entities, counts: &mut Count) { ... }
 ```
 
-This time we use the macro, it'll make the struct and impl for you! And no tuple, the macro will also take care of it.
+It will also take care of transforming its arguments into tuple(s), no need to worry about it anymore.
 
 2. Add the workload
 ```rust, noplaypen
