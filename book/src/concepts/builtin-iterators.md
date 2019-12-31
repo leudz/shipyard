@@ -13,7 +13,7 @@ Shipyard uses Rust's trait system to create Iterators for any components that ar
 
 Once a system is registered and the storages are passed in (see [Storages, Views, and Entities](./storages-views-and-entities.md)), it's as simple as:
 
-```
+```rust,noplaypen
 (&mut positions, &velocities).iter().for_each(|(position, velocity)| {
     //...
 });
