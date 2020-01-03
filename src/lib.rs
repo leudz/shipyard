@@ -116,7 +116,7 @@ pub struct ThreadPool;
 /// ```
 /// # use shipyard::prelude::*;
 /// let world = World::default();
-/// world.register_unique(0usize);
+/// world.add_unique(0usize);
 ///
 /// world.run::<Unique<&mut usize>, _, _>(|x| {
 ///     *x += 1;
