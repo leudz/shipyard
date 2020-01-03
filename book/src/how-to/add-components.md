@@ -13,5 +13,3 @@ However there's no need to check for this - adding a component to an entity will
 ```code examples and explanation here```
 
 ----
-
-For working with multiple entities, see [Multiple Entities](./multiple-entities.md)

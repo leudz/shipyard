@@ -1,3 +1,0 @@
-# Different types of ECS
-
-Archetype, Sparse Array, whatever Specs is...

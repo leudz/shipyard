@@ -1,4 +1,4 @@
-# Builtin Iterators
+# Iterators
 
 Let's say we have a dozen or so components that we need to iterate over, but in separate groupings.
 
@@ -11,9 +11,9 @@ Note that in the first step, there is no need for Mesh and in the second step th
 
 Shipyard uses Rust's trait system to create Iterators for any components that are registered in the World.
 
-Once a system is registered and the storages are passed in (see [Storages, Views, and Entities](./storages-views-and-entities.md)), it's as simple as:
+Once a system is registered and the storages are passed in (see [Storages, Views, and Entities](../concepts/storages-views-and-entities.md)), it's as simple as:
 
-```
+```rust, noplaypen
 (&mut positions, &velocities).iter().for_each(|(position, velocity)| {
     //...
 });

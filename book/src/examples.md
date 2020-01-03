@@ -1,3 +1,0 @@
-# Examples
-
-Out in the wild...

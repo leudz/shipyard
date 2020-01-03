@@ -18,7 +18,3 @@ Note: this is different than deleting an entity and will cause the entity to sti
 
 
 ```code examples and explanation here```
-
-----
-
-For working with multiple entities, see [Multiple Entities](./multiple-entities.md)

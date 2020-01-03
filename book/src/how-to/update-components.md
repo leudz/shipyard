@@ -12,7 +12,3 @@
 ### Update a unique component
 
 ```code examples and explanation here```
-
-----
-
-For working with multiple entities, see [Multiple Entities](./multiple-entities.md)
