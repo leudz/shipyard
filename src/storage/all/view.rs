@@ -67,4 +67,24 @@ impl AllStoragesViewMut<'_> {
             false
         }
     }
+    pub fn register<T: 'static + Send + Sync>(&mut self) {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(Storage::new::<T>);
+    }
+    pub fn register_non_send_non_sync<T: 'static>(&mut self) {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(Storage::new_non_send_non_sync::<T>);
+    }
+    pub fn register_non_send<T: 'static + Sync>(&mut self) {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(Storage::new_non_send::<T>);
+    }
+    pub fn register_non_sync<T: 'static + Send>(&mut self) {
+        self.0
+            .entry(TypeId::of::<T>())
+            .or_insert_with(Storage::new_non_sync::<T>);
+    }
 }

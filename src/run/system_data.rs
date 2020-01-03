@@ -9,7 +9,7 @@ use crate::{error, Unique};
 use rayon::ThreadPool;
 use std::any::{type_name, TypeId};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutation {
     Shared,
     Unique,
@@ -28,6 +28,26 @@ pub trait SystemData<'a> {
     ) -> Result<Self::View, error::GetStorage>;
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>);
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload>;
+}
+
+impl<'a> SystemData<'a> for () {
+    type View = ();
+
+    unsafe fn try_borrow(
+        _: &mut Vec<Borrow<'a>>,
+        _: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] _: &'a ThreadPool,
+    ) -> Result<Self::View, error::GetStorage> {
+        Ok(())
+    }
+
+    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+
+    fn is_send_sync(_: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(true)
+    }
 }
 
 impl<'a> SystemData<'a> for AllStorages {
@@ -49,6 +69,10 @@ impl<'a> SystemData<'a> for AllStorages {
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         infos.push((TypeId::of::<AllStorages>(), Mutation::Unique));
+    }
+
+    fn is_send_sync(_: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(true)
     }
 }
 
@@ -78,6 +102,10 @@ impl<'a> SystemData<'a> for Entities {
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         infos.push((TypeId::of::<Entities>(), Mutation::Shared));
     }
+
+    fn is_send_sync(_: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(true)
+    }
 }
 
 impl<'a> SystemData<'a> for EntitiesMut {
@@ -106,6 +134,10 @@ impl<'a> SystemData<'a> for EntitiesMut {
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         infos.push((TypeId::of::<Entities>(), Mutation::Unique));
     }
+
+    fn is_send_sync(_: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(true)
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -121,6 +153,10 @@ impl<'a> SystemData<'a> for crate::ThreadPool {
     }
 
     fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+
+    fn is_send_sync(_: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(true)
+    }
 }
 
 impl<'a, T: 'static> SystemData<'a> for &T {
@@ -151,6 +187,14 @@ impl<'a, T: 'static> SystemData<'a> for &T {
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         infos.push((TypeId::of::<T>(), Mutation::Shared));
+    }
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(all_storages
+            .0
+            .get(&TypeId::of::<T>())
+            .ok_or_else(|| error::AddWorkload::MissingComponent(type_name::<T>()))?
+            .is_send_sync())
     }
 }
 
@@ -183,6 +227,14 @@ impl<'a, T: 'static> SystemData<'a> for &mut T {
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         infos.push((TypeId::of::<T>(), Mutation::Unique));
     }
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+        Ok(all_storages
+            .0
+            .get(&TypeId::of::<T>())
+            .ok_or_else(|| error::AddWorkload::MissingComponent(type_name::<T>()))?
+            .is_send_sync())
+    }
 }
 
 impl<'a, T: 'static> SystemData<'a> for Not<&T> {
@@ -209,6 +261,10 @@ impl<'a, T: 'static> SystemData<'a> for Not<&T> {
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         <&T as SystemData>::borrow_infos(infos)
     }
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+        <&T as SystemData>::is_send_sync(all_storages)
+    }
 }
 
 impl<'a, T: 'static> SystemData<'a> for Not<&mut T> {
@@ -234,6 +290,10 @@ impl<'a, T: 'static> SystemData<'a> for Not<&mut T> {
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         <&mut T as SystemData>::borrow_infos(infos)
+    }
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+        <&mut T as SystemData>::is_send_sync(all_storages)
     }
 }
 
@@ -269,6 +329,10 @@ impl<'a, T: 'static> SystemData<'a> for Unique<&T> {
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         <&T as SystemData>::borrow_infos(infos)
     }
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+        <&T as SystemData>::is_send_sync(all_storages)
+    }
 }
 
 impl<'a, T: 'static> SystemData<'a> for Unique<&mut T> {
@@ -303,6 +367,10 @@ impl<'a, T: 'static> SystemData<'a> for Unique<&mut T> {
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         <&mut T as SystemData>::borrow_infos(infos)
     }
+
+    fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+        <&mut T as SystemData>::is_send_sync(all_storages)
+    }
 }
 
 macro_rules! impl_system_data {
@@ -333,6 +401,10 @@ macro_rules! impl_system_data {
                 $(
                     $type::borrow_infos(infos);
                 )+
+            }
+
+            fn is_send_sync(all_storages: &AllStorages) -> Result<bool, error::AddWorkload> {
+                Ok($($type::is_send_sync(all_storages)?)&&+)
             }
         }
     }

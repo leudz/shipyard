@@ -1,27 +1,83 @@
-use crate::storage::Storage;
+use crate::error;
 use crate::world::World;
-use std::any::TypeId;
+use crate::AllStorages;
 
 // Register multiple storages at once
 pub trait Register {
-    fn register(world: &World);
+    fn try_register(world: &World) -> Result<(), error::Register>;
 }
 
-impl Register for () {
-    fn register(_: &World) {}
+pub trait RegisterNonSend {
+    fn try_register(world: &World) -> Result<(), error::Register>;
+}
+
+pub trait RegisterNonSync {
+    fn try_register(world: &World) -> Result<(), error::Register>;
+}
+
+pub trait RegisterNonSendNonSync {
+    fn try_register(world: &World) -> Result<(), error::Register>;
 }
 
 macro_rules! impl_register {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: 'static + Send + Sync),+> Register for ($($type,)+) {
-            fn register(world: &World) {
-                let mut all_storages = world.storages.try_borrow_mut().unwrap();
-                $({
-                    let type_id = TypeId::of::<$type>();
-                    all_storages.0.entry(type_id).or_insert_with(|| {
-                        Storage::new::<$type>()
-                    });
-                })+
+            fn try_register(world: &World) -> Result<(), error::Register> {
+                world.try_run::<AllStorages, _, _>(|mut all_storages| {
+                    $({
+                        all_storages.register::<$type>();
+                    })+
+                }).map_err(|err| match err {
+                    error::GetStorage::AllStoragesBorrow(borrow) => borrow.into(),
+                    _ => unreachable!()
+                })
+            }
+        }
+
+        impl<$($type: 'static + Sync),+> RegisterNonSend for ($($type,)+) {
+            fn try_register(world: &World) -> Result<(), error::Register> {
+                if world.thread_id != std::thread::current().id() {
+                    Err(error::Register::WrongThread)
+                } else {
+                    world.try_run::<AllStorages, _, _>(|mut all_storages| {
+                        $({
+                            all_storages.register_non_send::<$type>();
+                        })+
+                    }).map_err(|err| match err {
+                        error::GetStorage::AllStoragesBorrow(borrow) => borrow.into(),
+                        _ => unreachable!()
+                    })
+                }
+            }
+        }
+
+        impl<$($type: 'static + Send),+> RegisterNonSync for ($($type,)+) {
+            fn try_register(world: &World) -> Result<(), error::Register> {
+                world.try_run::<AllStorages, _, _>(|mut all_storages| {
+                    $({
+                        all_storages.register_non_sync::<$type>();
+                    })+
+                }).map_err(|err| match err {
+                    error::GetStorage::AllStoragesBorrow(borrow) => borrow.into(),
+                    _ => unreachable!()
+                })
+            }
+        }
+
+        impl<$($type: 'static),+> RegisterNonSendNonSync for ($($type,)+) {
+            fn try_register(world: &World) -> Result<(), error::Register> {
+                if world.thread_id != std::thread::current().id() {
+                    Err(error::Register::WrongThread)
+                } else {
+                    world.try_run::<AllStorages, _, _>(|mut all_storages| {
+                        $({
+                            all_storages.register_non_send_non_sync::<$type>();
+                        })+
+                    }).map_err(|err| match err {
+                        error::GetStorage::AllStoragesBorrow(borrow) => borrow.into(),
+                        _ => unreachable!()
+                    })
+                }
             }
         }
     }

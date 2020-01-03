@@ -1,24 +1,28 @@
 use crate::error;
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
+use thread::ThreadId;
 
 /// Threadsafe `RefCell`-like container.
-/// Can be shared across threads as long as the inner type is `Sync`.
 #[doc(hidden)]
 pub struct AtomicRefCell<T: ?Sized> {
     borrow_state: BorrowState,
+    send: Option<ThreadId>,
+    is_sync: bool,
     inner: UnsafeCell<T>,
 }
 
-unsafe impl<T: ?Sized + Send> Send for AtomicRefCell<T> {}
-unsafe impl<T: ?Sized + Send + Sync> Sync for AtomicRefCell<T> {}
+unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
 
 impl<T> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
-    pub(crate) fn new(value: T) -> Self {
+    pub(crate) fn new(value: T, send: Option<ThreadId>, is_sync: bool) -> Self {
         AtomicRefCell {
             inner: UnsafeCell::new(value),
             borrow_state: Default::default(),
+            is_sync,
+            send,
         }
     }
     /// Immutably borrows the wrapped value, returning an error if the value is currently mutably
@@ -28,8 +32,8 @@ impl<T> AtomicRefCell<T> {
     /// taken out at the same time.
     pub(crate) fn try_borrow(&self) -> Result<Ref<T>, error::Borrow> {
         Ok(Ref {
+            borrow: self.borrow_state.try_borrow(self.send, self.is_sync)?,
             inner: unsafe { &*self.inner.get() },
-            borrow: self.borrow_state.try_borrow()?,
         })
     }
     /// Mutably borrows the wrapped value, returning an error if the value is currently borrowed.
@@ -38,9 +42,16 @@ impl<T> AtomicRefCell<T> {
     /// active.
     pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<T>, error::Borrow> {
         Ok(RefMut {
+            borrow: self.borrow_state.try_borrow_mut(self.send, self.is_sync)?,
             inner: unsafe { &mut *self.inner.get() },
-            borrow: self.borrow_state.try_borrow_mut()?,
         })
+    }
+    pub(crate) fn is_send_sync(&self) -> bool {
+        if let (None, true) = (self.send, self.is_sync) {
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -55,24 +66,90 @@ const MAX_FAILED_BORROWS: usize = HIGH_BIT + (HIGH_BIT >> 1);
 impl BorrowState {
     // Each borrow will add one, check if no unique borrow is active before returning
     // Even in case of failure the incrementation leave the value in a valid state
-    pub(crate) fn try_borrow(&self) -> Result<Borrow, error::Borrow> {
-        let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
+    pub(crate) fn try_borrow(
+        &self,
+        send: Option<ThreadId>,
+        is_sync: bool,
+    ) -> Result<Borrow, error::Borrow> {
+        match (send, is_sync) {
+            (None, true) => {
+                // accessible from any thread, shared xor unique
+                let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
 
-        if new & HIGH_BIT != 0 {
-            Err(Self::try_recover(self, new))
-        } else {
-            Ok(Borrow::Shared(self))
+                if new & HIGH_BIT != 0 {
+                    Err(Self::try_recover(self, new))
+                } else {
+                    Ok(Borrow::Shared(self))
+                }
+            }
+            (None, false) => {
+                // accessible from one thread at a time
+                match self
+                    .0
+                    .compare_exchange(0, 1, Ordering::Acquire, Ordering::Relaxed)
+                {
+                    Ok(_) => Ok(Borrow::Shared(self)),
+                    _ => Err(error::Borrow::MultipleThreads),
+                }
+            }
+            (Some(_), true) => {
+                // accessible from any thread, shared only if not original thread
+                let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
+
+                if new & HIGH_BIT != 0 {
+                    Err(Self::try_recover(self, new))
+                } else {
+                    Ok(Borrow::Shared(self))
+                }
+            }
+            (Some(thread_id), false) => {
+                // accessible from origianl thread only
+                if thread_id == thread::current().id() {
+                    let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
+
+                    if new & HIGH_BIT != 0 {
+                        Err(Self::try_recover(self, new))
+                    } else {
+                        Ok(Borrow::Shared(self))
+                    }
+                } else {
+                    Err(error::Borrow::WrongThread)
+                }
+            }
         }
     }
     // Can only make a unique borrow when no borrows are active
     // Use `compare_exchange` to keep the value in a valid state even in case of failure
-    pub(crate) fn try_borrow_mut(&self) -> Result<Borrow, error::Borrow> {
-        match self
-            .0
-            .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
-        {
-            Ok(_) => Ok(Borrow::Unique(self)),
-            _ => Err(error::Borrow::Unique),
+    pub(crate) fn try_borrow_mut(
+        &self,
+        send: Option<ThreadId>,
+        is_sync: bool,
+    ) -> Result<Borrow, error::Borrow> {
+        match (send, is_sync) {
+            (None, true) | (None, false) => {
+                // accessible from one thread at a time
+                match self
+                    .0
+                    .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
+                {
+                    Ok(_) => Ok(Borrow::Unique(self)),
+                    _ => Err(error::Borrow::Unique),
+                }
+            }
+            (Some(thread_id), true) | (Some(thread_id), false) => {
+                // accessible from origianl thread only
+                if thread_id == thread::current().id() {
+                    match self
+                        .0
+                        .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
+                    {
+                        Ok(_) => Ok(Borrow::Unique(self)),
+                        _ => Err(error::Borrow::Unique),
+                    }
+                } else {
+                    Err(error::Borrow::WrongThread)
+                }
+            }
         }
     }
     // In case of a failled shared borrow, check all possible causes and recover from it when possible
@@ -112,7 +189,7 @@ pub enum Borrow<'a> {
 impl Clone for Borrow<'_> {
     fn clone(&self) -> Self {
         match self {
-            Borrow::Shared(borrow) => borrow.try_borrow().unwrap(),
+            Borrow::Shared(borrow) => borrow.try_borrow(None, true).unwrap(),
             Borrow::Unique(_) => panic!("Can't clone a unique borrow."),
         }
     }
@@ -169,7 +246,7 @@ impl<'a, T: 'a + Sized> Ref<'a, T> {
     /// Get the inner parts of the `Ref`.
     /// # Safety
     /// The reference has to be dropped before `Borrow`.
-    pub(crate) unsafe fn destructure(Ref { inner, borrow }: Self) -> (&'a T, Borrow<'a>) {
+    pub(crate) unsafe fn destructure(Ref { inner, borrow, .. }: Self) -> (&'a T, Borrow<'a>) {
         (inner, borrow)
     }
 }
@@ -241,7 +318,7 @@ impl<T: ?Sized> std::convert::AsMut<T> for RefMut<'_, T> {
 
 #[test]
 fn reborrow() {
-    let refcell = AtomicRefCell::new(0);
+    let refcell = AtomicRefCell::new(0, None, true);
     let _first_borrow = refcell.try_borrow().unwrap();
 
     assert!(refcell.try_borrow().is_ok());
@@ -252,7 +329,7 @@ fn reborrow() {
 }
 #[test]
 fn unique_reborrow() {
-    let refcell = AtomicRefCell::new(0);
+    let refcell = AtomicRefCell::new(0, None, true);
     let _first_borrow = refcell.try_borrow_mut().unwrap();
 
     assert_eq!(
@@ -263,4 +340,69 @@ fn unique_reborrow() {
         std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
         std::mem::discriminant(&error::Borrow::Unique)
     );
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn non_send_sync() {
+    struct Test(*const ());
+    unsafe impl Sync for Test {}
+
+    let refcell = AtomicRefCell::new(Test(&()), Some(thread::current().id()), true);
+    refcell.try_borrow_mut().unwrap();
+    let borrow = refcell.try_borrow();
+    rayon::scope(|_| {
+        refcell.try_borrow().unwrap();
+    });
+    drop(borrow);
+    rayon::scope(|_| {
+        assert_eq!(
+            refcell.try_borrow_mut().err(),
+            Some(error::Borrow::WrongThread)
+        );
+    });
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn non_sync_send() {
+    struct Test(*const ());
+    unsafe impl Send for Test {}
+
+    let refcell = AtomicRefCell::new(Test(&()), None, false);
+    refcell.try_borrow_mut().unwrap();
+    let borrow = refcell.try_borrow().unwrap();
+    rayon::scope(|_| {
+        assert_eq!(
+            refcell.try_borrow().err(),
+            Some(error::Borrow::MultipleThreads)
+        );
+    });
+    rayon::scope(|_| {
+        assert_eq!(refcell.try_borrow_mut().err(), Some(error::Borrow::Unique));
+    });
+    drop(borrow);
+    rayon::scope(|_| {
+        refcell.try_borrow().unwrap();
+        refcell.try_borrow_mut().unwrap();
+    });
+}
+
+#[cfg(feature = "parallel")]
+#[test]
+fn non_send_non_sync() {
+    struct Test(*const ());
+
+    let refcell = AtomicRefCell::new(Test(&()), Some(thread::current().id()), false);
+    refcell.try_borrow_mut().unwrap();
+    refcell.try_borrow().unwrap();
+    rayon::scope(|_| {
+        assert_eq!(refcell.try_borrow().err(), Some(error::Borrow::WrongThread));
+    });
+    rayon::scope(|_| {
+        assert_eq!(
+            refcell.try_borrow_mut().err(),
+            Some(error::Borrow::WrongThread)
+        );
+    });
 }

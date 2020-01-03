@@ -10,13 +10,32 @@ use crate::sparse_set::SparseSet;
 use crate::unknown_storage::UnknownStorage;
 use std::any::{Any, TypeId};
 
+pub enum StorageId {
+    TypeId(TypeId),
+    Custom(u64),
+}
+
+impl From<TypeId> for StorageId {
+    fn from(type_id: TypeId) -> Self {
+        StorageId::TypeId(type_id)
+    }
+}
+
+impl From<u64> for StorageId {
+    fn from(int: u64) -> Self {
+        StorageId::Custom(int)
+    }
+}
+
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.\
 /// `unknown` is the address of the vtable part of the storage's `UnknownStorage` implementation.
 pub(crate) struct Storage {
-    pub(super) container: AtomicRefCell<Box<dyn Any + Send + Sync>>,
+    pub(super) container: AtomicRefCell<Box<dyn Any>>,
     pub(super) unknown: *const (),
 }
+
+unsafe impl Sync for Storage {}
 
 impl Storage {
     /// Creates a new `Storage` storing elements of type T.
@@ -29,7 +48,54 @@ impl Storage {
                 as *const [*const _; 2])
         };
         Storage {
-            container: AtomicRefCell::new(Box::new(sparse_set)),
+            container: AtomicRefCell::new(Box::new(sparse_set), None, true),
+            unknown: unknown[1],
+        }
+    }
+    pub(crate) fn new_non_send<T: 'static + Sync>() -> Self {
+        let sparse_set = SparseSet::<T>::default();
+        // store the vtable of this trait object
+        // for a full explanation see UnknownStorage documentation
+        let unknown: [*const (); 2] = unsafe {
+            *(&(&sparse_set as &dyn UnknownStorage as *const _) as *const *const _
+                as *const [*const _; 2])
+        };
+        Storage {
+            container: AtomicRefCell::new(
+                Box::new(sparse_set),
+                Some(std::thread::current().id()),
+                true,
+            ),
+            unknown: unknown[1],
+        }
+    }
+    pub(crate) fn new_non_sync<T: 'static + Send>() -> Self {
+        let sparse_set = SparseSet::<T>::default();
+        // store the vtable of this trait object
+        // for a full explanation see UnknownStorage documentation
+        let unknown: [*const (); 2] = unsafe {
+            *(&(&sparse_set as &dyn UnknownStorage as *const _) as *const *const _
+                as *const [*const _; 2])
+        };
+        Storage {
+            container: AtomicRefCell::new(Box::new(sparse_set), None, false),
+            unknown: unknown[1],
+        }
+    }
+    pub(crate) fn new_non_send_non_sync<T: 'static>() -> Self {
+        let sparse_set = SparseSet::<T>::default();
+        // store the vtable of this trait object
+        // for a full explanation see UnknownStorage documentation
+        let unknown: [*const (); 2] = unsafe {
+            *(&(&sparse_set as &dyn UnknownStorage as *const _) as *const *const _
+                as *const [*const _; 2])
+        };
+        Storage {
+            container: AtomicRefCell::new(
+                Box::new(sparse_set),
+                Some(std::thread::current().id()),
+                false,
+            ),
             unknown: unknown[1],
         }
     }
@@ -62,7 +128,7 @@ impl Storage {
     pub(crate) fn delete(&mut self, entity: EntityId) -> Result<&[TypeId], error::Borrow> {
         // reconstruct a `dyn UnknownStorage` from two pointers
         // for a full explanation see UnknownStorage documentation
-        let container: RefMut<Box<dyn Any + Send + Sync>> = self.container.try_borrow_mut()?;
+        let container: RefMut<Box<dyn Any>> = self.container.try_borrow_mut()?;
         let container = &**container as *const dyn Any as *const ();
         let unknown: &mut dyn UnknownStorage = unsafe {
             &mut **(&[container, self.unknown] as *const _ as *const *mut dyn UnknownStorage)
@@ -72,13 +138,16 @@ impl Storage {
     pub(crate) fn unpack(&mut self, entity: EntityId) -> Result<(), error::Borrow> {
         // reconstruct a `dyn UnknownStorage` from two pointers
         // for a full explanation see UnknownStorage documentation
-        let container: RefMut<Box<dyn Any + Send + Sync>> = self.container.try_borrow_mut()?;
+        let container: RefMut<Box<dyn Any>> = self.container.try_borrow_mut()?;
         let container = &**container as *const dyn Any as *const ();
         let unknown: &mut dyn UnknownStorage = unsafe {
             &mut **(&[container, self.unknown] as *const _ as *const *mut dyn UnknownStorage)
         };
         unknown.unpack(entity);
         Ok(())
+    }
+    pub(crate) fn is_send_sync(&self) -> bool {
+        self.container.is_send_sync()
     }
 }
 

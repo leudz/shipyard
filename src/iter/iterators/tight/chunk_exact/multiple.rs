@@ -21,8 +21,6 @@ macro_rules! impl_iterators {
             unsafe fn first_pass(&mut self) -> Option<Self::Item> {
                 let current = self.current;
                 if current + self.step <= self.end {
-                    dbg!(self.current);
-                    dbg!(self.end);
                     self.current += self.step;
                     Some(($(self.data.$index.get_data_slice(current..(current + self.step)),)+))
                 } else {
@@ -38,9 +36,6 @@ macro_rules! impl_iterators {
             pub fn remainder(&mut self) -> ($(<$type::AbsView as AbstractMut>::Slice,)+) {
                 let end = self.end;
                 let remainder = std::cmp::min(self.end - self.current, self.end % self.step);
-                dbg!(self.current);
-                dbg!(self.end);
-                dbg!(remainder);
                 self.end -= remainder;
                 ($(
                     unsafe { self.data.$index.get_data_slice(self.end..end) },

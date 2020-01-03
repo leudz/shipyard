@@ -17,7 +17,7 @@ pub trait IntoAbstract {
     fn modified(&self) -> usize;
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for View<'a, T> {
+impl<'a, T: 'static> IntoAbstract for View<'a, T> {
     type AbsView = Self;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -37,7 +37,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for View<'a, T> {
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for &View<'a, T> {
+impl<'a, T: 'static> IntoAbstract for &View<'a, T> {
     type AbsView = Self;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -57,7 +57,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for &View<'a, T> {
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for ViewMut<'a, T> {
+impl<'a, T: 'static> IntoAbstract for ViewMut<'a, T> {
     type AbsView = RawViewMut<'a, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -80,7 +80,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
     type AbsView = View<'b, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -100,7 +100,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
     type AbsView = RawViewMut<'b, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -123,7 +123,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut ViewMut<'a, 
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<View<'a, T>> {
+impl<'a, T: 'static> IntoAbstract for Not<View<'a, T>> {
     type AbsView = Self;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -143,7 +143,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<View<'a, T>> {
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for &Not<View<'a, T>> {
+impl<'a, T: 'static> IntoAbstract for &Not<View<'a, T>> {
     type AbsView = Self;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -163,7 +163,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for &Not<View<'a, T>> {
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<&View<'a, T>> {
+impl<'a, T: 'static> IntoAbstract for Not<&View<'a, T>> {
     type AbsView = Self;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -183,7 +183,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<&View<'a, T>> {
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<ViewMut<'a, T>> {
+impl<'a, T: 'static> IntoAbstract for Not<ViewMut<'a, T>> {
     type AbsView = Not<RawViewMut<'a, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -203,7 +203,7 @@ impl<'a, T: 'static + Send + Sync> IntoAbstract for Not<ViewMut<'a, T>> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b Not<ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b Not<ViewMut<'a, T>> {
     type AbsView = Not<View<'b, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -223,7 +223,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b Not<ViewMut<'a, 
     }
 }
 
-impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
     type AbsView = Not<RawViewMut<'b, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -243,7 +243,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for &'b mut Not<ViewMut<
     }
 }
 
-impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     type AbsView = Not<View<'b, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -263,7 +263,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b ViewMut<'a, 
     }
 }
 
-impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
     type AbsView = Not<RawViewMut<'b, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
@@ -283,7 +283,7 @@ impl<'a: 'b, 'b, T: 'static + Send + Sync> IntoAbstract for Not<&'b mut ViewMut<
     }
 }
 
-impl<'a, T: 'static + Send + Sync> IntoAbstract for RawViewMut<'a, T> {
+impl<'a, T: 'static> IntoAbstract for RawViewMut<'a, T> {
     type AbsView = RawViewMut<'a, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {

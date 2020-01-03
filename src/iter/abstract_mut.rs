@@ -5,7 +5,7 @@ use crate::storage::EntityId;
 // Abstracts different types of view to iterate over
 // mutable and immutable views with the same iterator
 #[doc(hidden)]
-pub trait AbstractMut: Clone + Send {
+pub trait AbstractMut: Clone {
     type Out;
     type Slice;
     // # Safety
@@ -22,7 +22,7 @@ pub trait AbstractMut: Clone + Send {
     unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize;
 }
 
-impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
+impl<'a, T> AbstractMut for View<'a, T> {
     type Out = &'a T;
     type Slice = &'a [T];
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
@@ -58,7 +58,7 @@ impl<'a, T: Send + Sync> AbstractMut for View<'a, T> {
     }
 }
 
-impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
+impl<'a, T> AbstractMut for &View<'a, T> {
     type Out = &'a T;
     type Slice = &'a [T];
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
@@ -94,7 +94,7 @@ impl<'a, T: Send + Sync> AbstractMut for &View<'a, T> {
     }
 }
 
-impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
+impl<'a, T: 'a> AbstractMut for RawViewMut<'a, T> {
     type Out = &'a mut T;
     type Slice = &'a mut [T];
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
@@ -162,7 +162,7 @@ impl<'a, T: 'a + Send + Sync> AbstractMut for RawViewMut<'a, T> {
     }
 }
 
-impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
+impl<'a, T> AbstractMut for Not<View<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
@@ -195,7 +195,7 @@ impl<'a, T: Send + Sync> AbstractMut for Not<View<'a, T>> {
     }
 }
 
-impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
+impl<'a, T> AbstractMut for &Not<View<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
@@ -228,7 +228,7 @@ impl<'a, T: Send + Sync> AbstractMut for &Not<View<'a, T>> {
     }
 }
 
-impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
+impl<'a, T> AbstractMut for Not<&View<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {
@@ -261,7 +261,7 @@ impl<'a, T: Send + Sync> AbstractMut for Not<&View<'a, T>> {
     }
 }
 
-impl<'a, T: Send + Sync> AbstractMut for Not<RawViewMut<'a, T>> {
+impl<'a, T> AbstractMut for Not<RawViewMut<'a, T>> {
     type Out = ();
     type Slice = ();
     unsafe fn get_data(&mut self, index: usize) -> Self::Out {

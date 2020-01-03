@@ -2,6 +2,7 @@ use super::enumerate::Enumerate;
 use super::filter::Filter;
 use super::map::Map;
 use super::with_id::WithId;
+use std::iter::FromIterator;
 
 pub trait Shiperator {
     type Item;
@@ -15,10 +16,7 @@ pub trait Shiperator {
     /// `item` has to come from `first_pass`.
     unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item;
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let item = self.first_pass()?;
-            Some(self.post_process(item))
-        }
+        IntoIterator(self).next()
     }
     fn for_each<F>(self, f: F)
     where
@@ -122,6 +120,29 @@ pub trait Shiperator {
             Err(item) => Some(item),
         }
     }
+    fn into_iter(self) -> IntoIterator<Self>
+    where
+        Self: Sized,
+    {
+        IntoIterator(self)
+    }
+    fn collect<C: FromIterator<Self::Item>>(self) -> C
+    where
+        Self: Sized,
+    {
+        self.into_iter().collect()
+    }
+}
+
+impl<S: Shiperator + ?Sized> Shiperator for &mut S {
+    type Item = <S as Shiperator>::Item;
+
+    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+        (**self).first_pass()
+    }
+    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+        (**self).post_process(item)
+    }
 }
 
 pub trait CurrentId: Shiperator {
@@ -131,4 +152,17 @@ pub trait CurrentId: Shiperator {
     ///
     /// `first_pass` has to be called before calling it.
     unsafe fn current_id(&self) -> Self::Id;
+}
+
+pub struct IntoIterator<S: ?Sized>(S);
+
+impl<S: Shiperator + ?Sized> Iterator for IntoIterator<S> {
+    type Item = <S as Shiperator>::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            let item = self.0.first_pass()?;
+            Some(self.0.post_process(item))
+        }
+    }
 }

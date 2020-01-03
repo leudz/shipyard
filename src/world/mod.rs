@@ -1,6 +1,6 @@
 mod pack;
-mod pipeline;
 mod register;
+mod scheduler;
 
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
@@ -8,19 +8,23 @@ use crate::run::Run;
 use crate::sparse_set::{Pack, UpdatePack};
 use crate::storage::AllStorages;
 use pack::{LoosePack, TightPack};
-use pipeline::{Pipeline, Workload};
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use register::Register;
+use register::{Register, RegisterNonSend, RegisterNonSendNonSync, RegisterNonSync};
+use scheduler::{IntoWorkload, Scheduler};
+use std::borrow::Cow;
 use std::marker::PhantomData;
+use std::ops::Range;
+use std::thread::ThreadId;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
     pub(crate) storages: AtomicRefCell<AllStorages>,
     #[cfg(feature = "parallel")]
     pub(crate) thread_pool: ThreadPool,
-    pipeline: AtomicRefCell<Pipeline>,
+    scheduler: AtomicRefCell<Scheduler>,
     _not_send: PhantomData<*const ()>,
+    thread_id: ThreadId,
 }
 
 // World can't be Send because it can contain !Send types which shouldn't be dropped on a different thread
@@ -30,14 +34,15 @@ impl Default for World {
     /// Create an empty `World` without any storage.
     fn default() -> Self {
         World {
-            storages: AtomicRefCell::new(Default::default()),
+            storages: AtomicRefCell::new(Default::default(), None, true),
             #[cfg(feature = "parallel")]
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
                 .build()
                 .unwrap(),
-            pipeline: AtomicRefCell::new(Default::default()),
+            scheduler: AtomicRefCell::new(Default::default(), None, true),
             _not_send: PhantomData,
+            thread_id: std::thread::current().id(),
         }
     }
 }
@@ -58,7 +63,7 @@ impl World {
     /// ```
     pub fn new<T: Register>() -> Self {
         let world = World::default();
-        T::register(&world);
+        world.register::<T>();
         world
     }
     /// Returns a new `World` with storages based on `T` already created
@@ -79,28 +84,46 @@ impl World {
         f: F,
     ) -> Self {
         World {
-            storages: AtomicRefCell::new(Default::default()),
+            storages: AtomicRefCell::new(Default::default(), None, true),
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
                 .spawn_handler(f)
                 .build()
                 .unwrap(),
-            pipeline: AtomicRefCell::new(Default::default()),
+            scheduler: AtomicRefCell::new(Default::default(), None, true),
             _not_send: PhantomData,
+            thread_id: std::thread::current().id(),
         }
     }
     /// Register a new component type and create a storage for it.
     /// Does nothing if the storage already exists.
     ///
     /// Unwraps errors.
-    pub fn register<T: 'static + Send + Sync>(&self) {
+    pub fn register<T: Register>(&self) {
         self.try_register::<T>().unwrap()
     }
-    /// Register a new component type and create a storage for it.
-    /// Does nothing if the storage already exists.
-    pub fn try_register<T: 'static + Send + Sync>(&self) -> Result<(), error::Borrow> {
-        self.storages.try_borrow_mut()?.register::<T>();
-        Ok(())
+    pub fn try_register<T: Register>(&self) -> Result<(), error::Register> {
+        T::try_register(self)
+    }
+    pub fn register_non_send<T: RegisterNonSend>(&self) {
+        self.try_register_non_send::<T>().unwrap()
+    }
+    pub fn try_register_non_send<T: RegisterNonSend>(&self) -> Result<(), error::Register> {
+        T::try_register(self)
+    }
+    pub fn register_non_sync<T: RegisterNonSync>(&self) {
+        self.try_register_non_sync::<T>().unwrap()
+    }
+    pub fn try_register_non_sync<T: RegisterNonSync>(&self) -> Result<(), error::Register> {
+        T::try_register(self)
+    }
+    pub fn register_non_send_non_sync<T: RegisterNonSendNonSync>(&self) {
+        self.try_register_non_send_non_sync::<T>().unwrap()
+    }
+    pub fn try_register_non_send_non_sync<T: RegisterNonSendNonSync>(
+        &self,
+    ) -> Result<(), error::Register> {
+        T::try_register(self)
     }
     /// Register a new component type and create a unique storage for it.
     /// Does nothing if the storage already exists.
@@ -111,8 +134,8 @@ impl World {
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
-    pub fn register_unique<T: 'static + Send + Sync>(&self, component: T) {
-        self.try_register_unique(component).unwrap();
+    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
+        self.try_add_unique(component).unwrap();
     }
     /// Register a new component type and create a unique storage for it.
     /// Does nothing if the storage already exists.
@@ -121,7 +144,7 @@ impl World {
     /// To access a unique storage value, use [Unique].
     ///
     /// [Unique]: struct.Unique.html
-    pub fn try_register_unique<T: 'static + Send + Sync>(
+    pub fn try_add_unique<T: 'static + Send + Sync>(
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
@@ -269,12 +292,12 @@ impl World {
     /// Modifies the current default workload to `name`.
     pub fn try_set_default_workload(
         &self,
-        name: impl ToString,
+        name: impl Into<Cow<'static, str>>,
     ) -> Result<(), error::SetDefaultWorkload> {
-        let name = name.to_string();
-        let mut pipeline = self.pipeline.try_borrow_mut()?;
-        if let Some(workload) = pipeline.workloads.get(&name) {
-            pipeline.default = workload.clone();
+        let name = name.into();
+        let mut scheduler = self.scheduler.try_borrow_mut()?;
+        if let Some(workload) = scheduler.workloads.get(&name) {
+            scheduler.default = workload.clone();
             Ok(())
         } else {
             Err(error::SetDefaultWorkload::MissingWorkload)
@@ -283,7 +306,7 @@ impl World {
     /// Modifies the current default workload to `name`.
     ///
     /// Unwraps errors.
-    pub fn set_default_workload(&self, name: impl ToString) {
+    pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
         self.try_set_default_workload(name).unwrap();
     }
     /// A workload is a collection of systems.
@@ -327,14 +350,20 @@ impl World {
     /// world.try_add_workload("Add & Check", (Adder, Checker)).unwrap();
     /// world.run_default();
     /// ```
-    pub fn try_add_workload<T: Workload>(
+    pub fn try_add_workload<S: IntoWorkload>(
         &self,
-        name: impl ToString,
-        system: T,
-    ) -> Result<(), error::Borrow> {
-        let mut pipeline = self.pipeline.try_borrow_mut()?;
-        system.into_workload(name.to_string(), &mut *pipeline);
-        Ok(())
+        name: impl Into<Cow<'static, str>>,
+        systems: S,
+    ) -> Result<(), error::AddWorkload> {
+        let all_storages = self
+            .storages
+            .try_borrow()
+            .map_err(|_| error::AddWorkload::AllStorages)?;
+        let mut scheduler = self
+            .scheduler
+            .try_borrow_mut()
+            .map_err(|_| error::AddWorkload::Scheduler)?;
+        systems.try_into_workload(name, &mut *scheduler, &*all_storages)
     }
     /// A workload is a collection of systems.
     /// They will execute as much in parallel as possible.
@@ -379,32 +408,34 @@ impl World {
     /// world.add_workload("Add & Check", (Adder, Checker));
     /// world.run_default();
     /// ```
-    pub fn add_workload<T: Workload>(&self, name: impl ToString, system: T) {
-        self.try_add_workload(name, system).unwrap();
+    pub fn add_workload<S: IntoWorkload>(&self, name: impl Into<Cow<'static, str>>, systems: S) {
+        self.try_add_workload(name, systems).unwrap();
     }
+    /* WIP
+    pub fn try_add_workload_fn<S: IntoWorkloadFn>(
+        &self,
+        name: impl Into<Cow<'static, str>>,
+        systems: S,
+    ) -> Result<(), error::Borrow> {
+        let mut scheduler = self.scheduler.try_borrow_mut()?;
+        systems.into_workload(name, &mut *scheduler);
+        Ok(())
+    }
+    pub fn add_workload_fn<S: IntoWorkloadFn>(
+        &self,
+        name: impl Into<Cow<'static, str>>,
+        systems: S,
+    ) {
+        self.try_add_workload_fn(name, systems).unwrap()
+    }*/
     /// Runs the `name` workload.
     pub fn try_run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
-        let pipeline = self.pipeline.try_borrow()?;
-        if let Some(workload) = pipeline.workloads.get(name.as_ref()) {
-            for batch in &pipeline.batch[workload.clone()] {
-                #[cfg(feature = "parallel")]
-                {
-                    use rayon::prelude::*;
-
-                    self.thread_pool.install(|| {
-                        batch.into_par_iter().for_each(|&index| {
-                            (pipeline.systems[index])(&self);
-                        });
-                    })
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    batch.iter().for_each(|&index| {
-                        (pipeline.systems[index])(&self);
-                    });
-                }
-            }
-            Ok(())
+        let scheduler = self
+            .scheduler
+            .try_borrow()
+            .map_err(|_| error::RunWorkload::Scheduler)?;
+        if let Some(workload) = scheduler.workloads.get(name.as_ref()).cloned() {
+            self.try_run_workload_index(&*scheduler, workload)
         } else {
             Err(error::RunWorkload::MissingWorkload)
         }
@@ -415,27 +446,40 @@ impl World {
     pub fn run_workload(&self, name: impl AsRef<str>) {
         self.try_run_workload(name).unwrap();
     }
-    /// Run the default workload.
-    pub fn try_run_default(&self) -> Result<(), error::Borrow> {
-        let pipeline = self.pipeline.try_borrow()?;
-        for batch in &pipeline.batch[pipeline.default.clone()] {
-            #[cfg(feature = "parallel")]
-            {
-                use rayon::prelude::*;
+    fn try_run_workload_index(
+        &self,
+        scheduler: &Scheduler,
+        workload: Range<usize>,
+    ) -> Result<(), error::RunWorkload> {
+        for batch in &scheduler.batch[workload] {
+            if batch.len() == 1 {
+                scheduler.systems[batch[0]](&self)?;
+            } else {
+                #[cfg(feature = "parallel")]
+                {
+                    use rayon::prelude::*;
 
-                self.thread_pool.install(|| {
-                    batch.into_par_iter().for_each(|&index| {
-                        (pipeline.systems[index])(&self);
-                    });
-                })
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                batch.iter().for_each(|&index| {
-                    (pipeline.systems[index])(&self);
-                });
+                    self.thread_pool.install(|| {
+                        batch
+                            .into_par_iter()
+                            .try_for_each(|&index| (scheduler.systems[index])(&self))
+                    })?
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    batch
+                        .iter()
+                        .try_for_each(|&index| (scheduler.systems[index])(&self))?
+                }
             }
         }
+        Ok(())
+    }
+    /// Run the default workload.
+    pub fn try_run_default(&self) -> Result<(), error::Borrow> {
+        let scheduler = self.scheduler.try_borrow()?;
+        self.try_run_workload_index(&scheduler, scheduler.default.clone())
+            .unwrap();
         Ok(())
     }
     /// Run the default workload.

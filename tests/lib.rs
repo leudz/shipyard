@@ -1,4 +1,5 @@
 mod iteration;
+mod workload;
 
 #[cfg(feature = "serialization")]
 mod serialization;
@@ -8,8 +9,10 @@ use shipyard::prelude::*;
 #[test]
 fn add_entity() {
     let world = World::default();
-    world.register::<usize>();
-    world.register::<u32>();
+    world.run::<EntitiesMut, _, _>(|mut entities| {
+        entities.add_entity((), ());
+    });
+    world.register::<(usize, u32)>();
     world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
             let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
@@ -77,10 +80,10 @@ fn tight_add_component() {
         |(mut entities, mut usizes, mut u32s)| {
             let entity1 = entities.add_entity((), ());
             entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
-            entities.add_component((&mut u32s, &mut usizes), (3, 2), entity1);
-            assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&2, &3));
+            entities.add_component((&mut usizes, &mut u32s), (3usize,), entity1);
+            assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&3, &1));
             let mut iter = (&usizes, &u32s).iter();
-            assert_eq!(iter.next(), Some((&2, &3)));
+            assert_eq!(iter.next(), Some((&3, &1)));
             assert_eq!(iter.next(), None);
         },
     );
@@ -1003,7 +1006,7 @@ fn two_workloads() {
 #[cfg(feature = "parallel")]
 #[test]
 #[should_panic(
-    expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow \"usize\" storage while it's already borrowed."
+    expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow usize storage while it's already borrowed."
 )]
 fn two_bad_workloads() {
     struct System1;
@@ -1707,7 +1710,7 @@ fn par_with_id_filter() {
 #[test]
 fn unique_storage() {
     let world = World::default();
-    world.register_unique(0usize);
+    world.add_unique(0usize);
 
     world.run::<Unique<&mut usize>, _, _>(|x| {
         *x += 1;
@@ -1755,8 +1758,7 @@ fn not_unique_storage() {
 #[test]
 fn key_equality() {
     let world = World::default();
-    world.register::<usize>();
-    world.register::<u32>();
+    world.register::<(usize, u32)>();
 
     //create 3 entities
     let (e0, e1, e2) =
@@ -1805,7 +1807,7 @@ fn key_equality() {
 #[test]
 fn unique_storage_pack() {
     let world = World::new::<(u32,)>();
-    world.register_unique(0usize);
+    world.add_unique(0usize);
 
     assert_eq!(
         world.try_tight_pack::<(u32, usize)>(),

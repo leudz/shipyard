@@ -22,7 +22,7 @@ impl<'a, T> Clone for View<'a, T> {
 }
 
 impl<T> View<'_, T> {
-    pub(crate) fn contains(&self, entity: EntityId) -> bool {
+    pub fn contains(&self, entity: EntityId) -> bool {
         entity.index() < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
             && unsafe {
@@ -112,7 +112,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
             None
         }
     }
-    pub(crate) fn contains(&self, entity: EntityId) -> bool {
+    pub fn contains(&self, entity: EntityId) -> bool {
         self.as_non_mut().contains(entity)
     }
     /// Returns a reference to the component if the `entity` has it.

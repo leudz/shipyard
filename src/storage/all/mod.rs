@@ -27,7 +27,7 @@ impl Default for AllStorages {
         storages.insert(
             TypeId::of::<Entities>(),
             Storage {
-                container: AtomicRefCell::new(Box::new(entities)),
+                container: AtomicRefCell::new(Box::new(entities), None, true),
                 unknown: unknown[1],
             },
         );
@@ -37,13 +37,6 @@ impl Default for AllStorages {
 }
 
 impl AllStorages {
-    /// Register a new component type and create a storage for it.
-    /// Does nothing if a storage already exists.
-    pub(crate) fn register<T: 'static + Send + Sync>(&mut self) {
-        self.0
-            .entry(TypeId::of::<T>())
-            .or_insert_with(Storage::new::<T>);
-    }
     /// Register a new unique component and create a storage for it.
     /// Does nothing if a storage already exists.
     pub(crate) fn register_unique<T: 'static + Send + Sync>(&mut self, componnent: T) {
