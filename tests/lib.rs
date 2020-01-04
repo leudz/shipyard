@@ -1841,24 +1841,23 @@ fn strip() {
 
     let (entity1, entity2) = world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
-            (entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)),
-            entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)))
-
+            (
+                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)),
+                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)),
+            )
         },
     );
-    
+
     world.run::<AllStorages, _, _>(|mut all_storages| {
         all_storages.strip(entity1);
     });
-    
-    world.run::<(&mut usize, &mut u32), _, _>(
-        |(mut usizes, mut u32s)| {
-            assert_eq!((&mut usizes).get(entity1), None);
-            assert_eq!((&mut u32s).get(entity1), None);
-            assert_eq!(usizes.get(entity2), Some(&2));
-            assert_eq!(u32s.get(entity2), Some(&3));
-        },
-    );
+
+    world.run::<(&mut usize, &mut u32), _, _>(|(mut usizes, mut u32s)| {
+        assert_eq!((&mut usizes).get(entity1), None);
+        assert_eq!((&mut u32s).get(entity1), None);
+        assert_eq!(usizes.get(entity2), Some(&2));
+        assert_eq!(u32s.get(entity2), Some(&3));
+    });
 
     world.run::<AllStorages, _, _>(|mut all_storages| {
         assert!(all_storages.delete(entity1));
