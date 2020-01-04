@@ -52,7 +52,7 @@ impl Entities {
         }
     }
     pub(super) fn delete(&mut self, entity: EntityId) -> bool {
-        self.view_mut().delete(entity)
+        self.view_mut().delete_unchecked(entity)
     }
 }
 
@@ -77,15 +77,15 @@ fn entities() {
     assert_eq!(key10.index(), 1);
     assert_eq!(key10.version(), 0);
 
-    assert!(entities.view_mut().delete(key00));
-    assert!(!entities.view_mut().delete(key00));
+    assert!(entities.view_mut().delete_unchecked(key00));
+    assert!(!entities.view_mut().delete_unchecked(key00));
     let key01 = entities.view_mut().generate();
 
     assert_eq!(key01.index(), 0);
     assert_eq!(key01.version(), 1);
 
-    assert!(entities.view_mut().delete(key10));
-    assert!(entities.view_mut().delete(key01));
+    assert!(entities.view_mut().delete_unchecked(key10));
+    assert!(entities.view_mut().delete_unchecked(key01));
     let key11 = entities.view_mut().generate();
     let key02 = entities.view_mut().generate();
 
@@ -96,7 +96,7 @@ fn entities() {
 
     let last_key = EntityId(NonZeroU64::new(!(!0 >> 15) + 1).unwrap());
     entities.data[0] = last_key;
-    assert!(entities.view_mut().delete(last_key));
+    assert!(entities.view_mut().delete_unchecked(last_key));
     assert_eq!(entities.list, None);
     let dead = entities.view_mut().generate();
     assert_eq!(dead.index(), 2);

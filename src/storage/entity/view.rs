@@ -64,7 +64,7 @@ impl EntitiesViewMut<'_> {
         self.as_non_mut().is_alive(entity_id)
     }
     /// Delete an entity, returns true if the entity was alive.
-    pub(super) fn delete(&mut self, entity_id: EntityId) -> bool {
+    pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
         if self.is_alive(entity_id) {
             if unsafe {
                 self.data
