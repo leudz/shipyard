@@ -64,6 +64,8 @@ impl EntitiesViewMut<'_> {
         self.as_non_mut().is_alive(entity_id)
     }
     /// Delete an entity, returns true if the entity was alive.
+    ///
+    /// If the entity has components, they will not be deleted and still be accessible using this id.
     pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
         if self.is_alive(entity_id) {
             if unsafe {
