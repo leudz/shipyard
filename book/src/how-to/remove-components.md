@@ -1,20 +1,31 @@
-# Remove Components 
+# Remove Components
 
-### Remove a single component from an entity
+We use the word "remove" and not "delete", not because it would be repetitive but because these two operations have different meaning. A delete won't return anything while a remove will return the component(s).
 
-```code examples and explanation here```
+### Remove a single component
 
-### Remove a bunch of components an entity
+```rust, noplaypen
+world.run::<&mut Count, _, _>(|mut counts| {
+    let count = counts.remove(entity_id);
+});
+```
 
-```code examples and explanation here```
+No need for `Entities` here, you can call the method directly on the view and give the id of the entity.
 
-### Remove all components from an entity (if there's a shorthand for that)
+### Remove a bunch of components
 
-Note: this is different than deleting an entity and will cause the entity to still lurk around in memory
+```rust, noplaypen
+world.run::<(&mut Count, &mut Empties), _, _>(|(mut counts, mut empties)| {
+    let (count, empty) = (&mut counts, &mut empties).remove(entity_id);
+});
+```
 
-```code examples and explanation here```
+### Delete all components
 
-### Remove a component storage from the entire program 
+We're deleting again and not removing, note that the entity won't be deleted, you'll be able to attach components to it again.
 
-
-```code examples and explanation here```
+```rust, noplaypen
+world.run::<AllStorages, _, _>(|mut all_storages| {
+    all_storages.strip(entity_id);
+});
+```

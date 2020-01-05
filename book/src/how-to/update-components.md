@@ -1,14 +1,29 @@
 # Update Components 
 
+To access or update the components of a single entity you can use `get`. It'll work with both shared and unique views.
 
-### Update a single component in an entity
+### Update a single component
 
-```code examples and explanation here```
+```rust, noplaypen
+world.run::<&mut Position, _, _>(|mut positions| {
+    *(&mut positions).get(entity_id).unwrap() = Position {
+        x: 5.0,
+        y: 6.0,
+    };
+});
+```
 
-### Update a bunch of components in an entity
+`get` will return an `Option<&T>` when used with a `View<T>` and an `Option<&mut T>` with a `ViewMut<T>`. You can also get an `Option<&T>` from a `ViewMut<T>`, that's why we have to explicitly mutably borrow `positions`.
 
-```code examples and explanation here```
+### Update a bunch of components
 
-### Update a unique component
+We can also mix and match shared and unique:
 
-```code examples and explanation here```
+```rust, noplaypen
+world.run::<(&mut Position, &Velocity), _, _>(|(mut positions, velocities)| {
+    if let Some((pos, vel)) = (&mut positions, &velocities).get(entity_id) {
+        *pos.x += *vel.x;
+        *pos.y += *vel.y;
+    }
+});
+```

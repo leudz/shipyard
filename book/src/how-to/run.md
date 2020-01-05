@@ -38,4 +38,6 @@ The last underscore is the complete type of the closure, `run`'s single paramete
 
 When `run` executes it will borrow at runtime (like a `RefCell`) all the requested storages plus a shared access to `AllStorages`. This is why asking for `AllStorages` means you can't ask for anything else - otherwise you'd have a shared and a unique access to `AllStorages` at the same time. Importantly, this runtime borrow is cheap and will only happen once per call so only merge `run` calls if it makes sense not for gaining performance.
 
+What we get in the closure in called a view, it's most of the time the whole storage but can be just part of it in some situations.
+
 In the next chapter we'll find out what this mysterious `...` really is!

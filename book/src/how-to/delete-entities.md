@@ -1,7 +1,11 @@
 # Delete Entities
 
-Deleting an entity means take it away from the Entities container as well as deleting all its components. 
+Deleting an entity means take it away from the `Entities` storage as well as deleting all its components.
 
-### Deleting a single Entity
+```rust, noplaypen
+world.run::<AllStorages, _, _>(|mut all_storages| {
+    all_storages.delete(entity_id);
+});
+```
 
-```code examples and explanation here```
+`delete` takes a single `EntityId` of the entity you want to delete. `delete` returns a `bool`, `true` if the entity was present in the `Entities` storage before calling the method.
