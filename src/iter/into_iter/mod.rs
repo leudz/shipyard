@@ -55,3 +55,8 @@ pub trait IntoIter {
     #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter;
 }
+
+pub trait IntoIterIds {
+    type IntoIterIds;
+    fn iter_ids(self) -> Self::IntoIterIds;
+}

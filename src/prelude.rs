@@ -1,5 +1,5 @@
 pub use crate::get::GetComponent;
-pub use crate::iter::{IntoIter, Shiperator};
+pub use crate::iter::{IntoIter, IntoIterIds, Shiperator};
 pub use crate::not::Not;
 pub use crate::remove::Remove;
 pub use crate::run::System;
