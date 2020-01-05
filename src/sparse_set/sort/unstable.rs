@@ -1,20 +1,20 @@
+use super::IntoSortable;
 use crate::error;
 use crate::sparse_set::{EntityId, Pack, ViewMut};
 use std::any::TypeId;
 use std::cmp::Ordering;
 
-pub trait Sortable<'b> {
-    type Sortable;
-    fn as_sortable(self) -> Self::Sortable;
+pub struct UnstableSort1<'tmp, 'view: 'tmp, T>(&'tmp mut ViewMut<'view, T>);
+
+impl<'tmp, 'view: 'tmp, T> IntoSortable for &'tmp mut ViewMut<'view, T> {
+    type IntoSortable = UnstableSort1<'tmp, 'view, T>;
+    fn sort(self) -> Self::IntoSortable {
+        UnstableSort1(self)
+    }
 }
 
-pub struct Sort1<'a: 'b, 'b, T>(&'b mut ViewMut<'a, T>);
-
-impl<'a: 'b, 'b, T> Sort1<'a, 'b, T> {
-    pub fn try_sort_unstable(
-        self,
-        mut cmp: impl FnMut(&T, &T) -> Ordering,
-    ) -> Result<(), error::Sort> {
+impl<'tmp, 'view: 'tmp, T> UnstableSort1<'tmp, 'view, T> {
+    pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
         if std::mem::discriminant(&self.0.pack_info.pack) == std::mem::discriminant(&Pack::NoPack) {
             let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
 
@@ -48,24 +48,25 @@ impl<'a: 'b, 'b, T> Sort1<'a, 'b, T> {
             Err(error::Sort::MissingPackStorage)
         }
     }
-    pub fn sort_unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
-        self.try_sort_unstable(cmp).unwrap()
-    }
-}
-
-impl<'a: 'b, 'b, T> Sortable<'b> for &'b mut ViewMut<'a, T> {
-    type Sortable = Sort1<'a, 'b, T>;
-    fn as_sortable(self) -> Self::Sortable {
-        Sort1(self)
+    pub fn unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
+        self.try_unstable(cmp).unwrap()
     }
 }
 
 macro_rules! impl_unstable_sort {
     ($sort: ident; $(($type: ident, $index: tt))+) => {
-        pub struct $sort<'a: 'b, 'b, $($type),+>($(&'b mut ViewMut<'a, $type>,)+);
+        pub struct $sort<'tmp, 'view: 'tmp, $($type),+>($(&'tmp mut ViewMut<'view, $type>,)+);
 
-        impl<'a: 'b, 'b, $($type: 'static),+> $sort<'a, 'b, $($type),+> {
-            pub fn try_sort_unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, mut cmp: Cmp) -> Result<(), error::Sort> {
+        impl<'tmp, 'view: 'tmp, $($type),+> IntoSortable for ($(&'tmp mut ViewMut<'view, $type>,)+) {
+            type IntoSortable = $sort<'tmp, 'view, $($type,)+>;
+
+            fn sort(self) -> Self::IntoSortable {
+                $sort($(self.$index,)+)
+            }
+        }
+
+        impl<'tmp, 'view: 'tmp, $($type: 'static),+> $sort<'tmp, 'view, $($type),+> {
+            pub fn try_unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, mut cmp: Cmp) -> Result<(), error::Sort> {
                 enum PackSort {
                     Tight(usize),
                     Loose(usize),
@@ -196,15 +197,8 @@ macro_rules! impl_unstable_sort {
                     PackSort::None => unreachable!(),
                 }
             }
-            pub fn sort_unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, cmp: Cmp) {
-                self.try_sort_unstable(cmp).unwrap()
-            }
-        }
-
-        impl<'a: 'b, 'b, $($type),+> Sortable<'b> for ($(&'b mut ViewMut<'a, $type>,)+) {
-            type Sortable = $sort<'a, 'b, $($type,)+>;
-            fn as_sortable(self) -> Self::Sortable {
-                $sort($(self.$index,)+)
+            pub fn unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, cmp: Cmp) {
+                self.try_unstable(cmp).unwrap()
             }
         }
     }
@@ -220,7 +214,7 @@ macro_rules! unstable_sort {
     }
 }
 
-unstable_sort![;Sort2 Sort3 Sort4 Sort5 Sort6 Sort7 Sort8 Sort9 Sort10;(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+unstable_sort![;UnstableSort2 UnstableSort3 UnstableSort4 UnstableSort5 UnstableSort6 UnstableSort7 UnstableSort8 UnstableSort9 UnstableSort10;(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
 
 #[test]
 fn unstable_sort() {
@@ -234,8 +228,8 @@ fn unstable_sort() {
 
     array
         .view_mut()
-        .as_sortable()
-        .sort_unstable(|x: &u64, y: &u64| x.cmp(&y));
+        .sort()
+        .unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
@@ -264,8 +258,8 @@ fn partially_sorted_unstable_sort() {
 
     array
         .view_mut()
-        .as_sortable()
-        .sort_unstable(|x: &u64, y: &u64| x.cmp(&y));
+        .sort()
+        .unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);

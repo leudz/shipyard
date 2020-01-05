@@ -1,3 +1,9 @@
-mod unstable_sort;
+mod unstable;
 
-pub use unstable_sort::*;
+pub use unstable::*;
+
+pub trait IntoSortable {
+    type IntoSortable;
+
+    fn sort(self) -> Self::IntoSortable;
+}
