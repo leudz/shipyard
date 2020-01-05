@@ -82,6 +82,22 @@ impl<T> View<'_, T> {
             },
         }
     }
+    pub fn inserted_or_modified(&self) -> View<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => View {
+                sparse: self.sparse,
+                dense: &self.dense[0..(pack.inserted + pack.modified)],
+                data: &self.data[0..(pack.inserted + pack.modified)],
+                pack_info: self.pack_info,
+            },
+            _ => View {
+                sparse: &[],
+                dense: &[],
+                data: &[],
+                pack_info: self.pack_info,
+            },
+        }
+    }
     /// Returns true if this storage is a unique storage.
     pub(crate) fn is_unique(&self) -> bool {
         self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
@@ -377,6 +393,44 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                     let new = pack.inserted;
                     let mut raw = self.raw();
                     raw.len = new;
+                    raw
+                } else {
+                    let mut raw = self.raw();
+                    raw.len = 0;
+                    raw
+                }
+            }
+            _ => {
+                let mut raw = self.raw();
+                raw.len = 0;
+                raw
+            }
+        }
+    }
+    pub fn inserted_or_modified(&self) -> View<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => View {
+                sparse: self.sparse,
+                dense: &self.dense[0..pack.inserted + pack.modified],
+                data: &self.data[0..pack.inserted + pack.modified],
+                pack_info: self.pack_info,
+            },
+            _ => View {
+                sparse: &[],
+                dense: &[],
+                data: &[],
+                pack_info: self.pack_info,
+            },
+        }
+    }
+    pub fn inserted_or_modified_mut(&mut self) -> RawViewMut<T> {
+        match &self.pack_info.pack {
+            Pack::Update(pack) => {
+                if self.dense.len() >= pack.inserted + pack.modified {
+                    let new = pack.inserted;
+                    let modified = pack.modified;
+                    let mut raw = self.raw();
+                    raw.len = new + modified;
                     raw
                 } else {
                     let mut raw = self.raw();
