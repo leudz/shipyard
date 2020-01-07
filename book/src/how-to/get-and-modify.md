@@ -1,4 +1,4 @@
-# Update Components 
+# Get and Modify Components 
 
 To access or update the components of a single entity you can use `get`. It'll work with both shared and unique views.
 

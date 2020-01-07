@@ -9,7 +9,7 @@
     - [Delete Entities](./how-to/delete-entities.md)
     - [Add Components](./how-to/add-components.md)
     - [Remove Components](./how-to/remove-components.md)
-    - [Update Components](./how-to/update-components.md)
+    - [Get and Modify Components](./how-to/get-and-modify.md)
     - [Iterators](./how-to/iterators.md)
     - [Systems](./how-to/systems.md)
     - [All Together Now](./how-to/all-together-now.md)
