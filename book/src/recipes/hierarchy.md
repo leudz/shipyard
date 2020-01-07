@@ -50,7 +50,7 @@ Our entire hierarchy structure resides only in `Parent` and `Child` components â
 
 But it'd be a hassle to create them manually each time you want to insert an entity into the tree.
 
-# Let's make it convenient
+## Let's make it convenient
 
 We begin with two useful methods in a trait declaration:
 
@@ -186,4 +186,199 @@ world.run::<(EntitiesMut, &mut Parent, &mut Child), _, _>(|mut views| {
 
     views.attach(e3, root2);
 });
+```
+
+## Traversing the hierarchy
+
+There are different ways the hierarchy can be queried.
+
+For example, we may want to know the parent of a given entity. Doing this is simply done by inspecting its child component - if there is one.
+
+However, sometimes you might need
+
+- all children,
+- all ancestors,
+- or all descendants of a given entity.
+
+A perfect use case for iterators! An iterator has to implement the `next` method from the `Iterator` trait.
+
+We start with a `ChildrenIter`, which is pretty straightforward:
+
+```rust, noplaypen
+struct ChildrenIter<'a, C> {
+    get_child: &'a C,
+    cursor: (EntityId, usize),
+}
+
+impl<'a, C> Iterator for ChildrenIter<'a, C>
+where
+    &'a C: GetComponent<Out = &'a Child>,
+{
+    type Item = EntityId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.cursor.1 > 0 {
+            self.cursor.1 -= 1;
+            let ret = self.cursor.0;
+            self.cursor.0 = self.get_child.get(self.cursor.0).unwrap().next;
+            Some(ret)
+        } else {
+            None
+        }
+    }
+}
+```
+
+Note that we don't implement `Iterator` for `ViewMut<Child>` directly, but for a type that implements the `GetComponent` trait. This way, our iterator can be used with `View` as well as `ViewMut`.
+
+The next one is the `AncestorIter`:
+
+```rust, noplaypen
+struct AncestorIter<'a, C> {
+    get_child: &'a C,
+    cursor: EntityId,
+}
+
+impl<'a, C> Iterator for AncestorIter<'a, C>
+where
+    &'a C: GetComponent<Out = &'a Child>,
+{
+    type Item = EntityId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.get_child.get(self.cursor).map(|child| {
+            self.cursor = child.parent;
+            child.parent
+        })
+    }
+}
+```
+
+Easy.
+
+`DescendantIter` will be a bit more complicated. We choose to implement a depth-first variant using recursion.
+
+It is based on the code for the `ChildrenIter` but comes with an additional stack to keep track of the current level the cursor is in:
+- Push a new level to the stack if we encounter a `Parent` component.
+- Pop the last level from the stack whenever we run out of siblings, then carry on where we left off.
+
+```rust, noplaypen
+struct DescendantsIter<'a, P, C> {
+    get_parent: &'a P,
+    get_child: &'a C,
+    cursors: Vec<(EntityId, usize)>,
+}
+
+impl<'a, P, C> Iterator for DescendantsIter<'a, P, C>
+where
+    &'a P: GetComponent<Out = &'a Parent>,
+    &'a C: GetComponent<Out = &'a Child>,
+{
+    type Item = EntityId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(cursor) = self.cursors.last_mut() {
+            if cursor.1 > 0 {
+                cursor.1 -= 1;
+                let ret = cursor.0;
+                cursor.0 = self.get_child.get(cursor.0).unwrap().next;
+                if let Some(parent) = self.get_parent.get(ret) {
+                    self.cursors.push((parent.first_child, parent.num_children));
+                }
+                Some(ret)
+            } else {
+                self.cursors.pop();
+                self.next()
+            }
+        } else {
+            None
+        }
+    }
+}
+```
+
+What we still need to do is to implement a simple trait with methods that return nicely initialized `*Iter` structs for us:
+
+```rust, noplaypen
+trait HierarchyIter<'a, P: 'a, C: 'a>
+where
+    &'a P: GetComponent<Out = &'a Parent>,
+    &'a C: GetComponent<Out = &'a Child>,
+{
+    fn ancestors(&self, id: EntityId) -> AncestorIter<'a, C>;
+    fn children(&self, id: EntityId) -> ChildrenIter<'a, C>;
+    fn descendants(&self, id: EntityId) -> DescendantsIter<'a, P, C>;
+}
+
+impl<'a, P, C> HierarchyIter<'a, P, C> for (&'a P, &'a C)
+where
+    &'a P: GetComponent<Out = &'a Parent>,
+    &'a C: GetComponent<Out = &'a Child>,
+{
+    fn ancestors(&self, id: EntityId) -> AncestorIter<'a, C> {
+        AncestorIter {
+            get_child: self.1,
+            cursor: id,
+        }
+    }
+
+    fn children(&self, id: EntityId) -> ChildrenIter<'a, C> {
+        ChildrenIter {
+            get_child: self.1,
+            cursor: self
+                .0
+                .get(id)
+                .map_or((id, 0), |parent| (parent.first_child, parent.num_children)),
+        }
+    }
+
+    fn descendants(&self, id: EntityId) -> DescendantsIter<'a, P, C> {
+        DescendantsIter {
+            get_parent: self.0,
+            get_child: self.1,
+            cursors: self.0.get(id).map_or_else(Vec::new, |parent| {
+                vec![(parent.first_child, parent.num_children)]
+            }),
+        }
+    }
+}
+```
+
+Cool. Let's extend the former usage example into a little test.
+
+```rust, noplaypen
+#[test]
+fn test_hierarchy() {
+    let world = World::new::<(Parent, Child, usize)>();
+
+    world.run::<(EntitiesMut, &mut Parent, &mut Child), _, _>(|mut views| {
+        let root1 = views.0.add_entity((), ());
+        let root2 = views.0.add_entity((), ());
+
+        let e1 = views.attach_new(root1);
+        let e2 = views.attach_new(e1);
+        let e3 = views.attach_new(e1);
+        let e4 = views.attach_new(e3);
+
+        views.attach(e3, root2);
+
+        let e5 = views.attach_new(e3);
+
+        assert!((&views.1, &views.2)
+            .children(e3)
+            .eq([e4, e5].iter().cloned()));
+
+        assert!((&views.1, &views.2)
+            .ancestors(e4)
+            .eq([e3, root2].iter().cloned()));
+
+        assert!((&views.1, &views.2)
+            .descendants(root1)
+            .eq([e1, e2].iter().cloned()));
+
+        assert!((&views.1, &views.2)
+            .descendants(root2)
+            .eq([e3, e4, e5].iter().cloned()));
+    });
+}
 ```
