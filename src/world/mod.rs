@@ -179,7 +179,7 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
-    pub fn run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
+    pub fn run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R + 'a>(&'a self, f: F) -> R {
         self.try_run::<T, _, _>(f).unwrap()
     }
     /// Allows to perform some actions not possible otherwise like iteration.
@@ -208,7 +208,7 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
-    pub fn try_run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R>(
+    pub fn try_run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R + 'a>(
         &'a self,
         f: F,
     ) -> Result<R, error::GetStorage> {

@@ -1073,7 +1073,7 @@ fn remove_component_with_old_key() {
 }
 
 #[test]
-fn derive() {
+fn compile_err() {
     let t = trybuild::TestCases::new();
     t.pass("tests/derive/good.rs");
     t.pass("tests/derive/return_nothing.rs");
@@ -1084,6 +1084,7 @@ fn derive() {
     t.compile_fail("tests/derive/return_something.rs");
     t.compile_fail("tests/derive/where.rs");
     t.compile_fail("tests/derive/wrong_type.rs");
+    t.compile_fail("tests/compile_err/taken_from_run.rs");
 }
 
 #[test]

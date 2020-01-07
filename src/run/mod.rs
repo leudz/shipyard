@@ -15,7 +15,7 @@ use rayon::ThreadPool;
 pub trait Run<'a> {
     type Storage;
 
-    fn try_run<R: 'static, F: FnOnce(Self::Storage) -> R>(
+    fn try_run<R: 'static, F: FnOnce(Self::Storage) -> R + 'a>(
         storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
         f: F,
@@ -25,7 +25,7 @@ pub trait Run<'a> {
 impl<'a, T: SystemData<'a>> Run<'a> for T {
     type Storage = T::View;
 
-    fn try_run<R, F: FnOnce(Self::Storage) -> R>(
+    fn try_run<R, F: FnOnce(Self::Storage) -> R + 'a>(
         storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
         f: F,
