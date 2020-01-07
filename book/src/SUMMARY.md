@@ -20,7 +20,7 @@
     - [Syntactic Weirdness](./concepts/syntactic-weirdness.md)
 - [Recipes](./recipes.md)
     - [Tag Components](./recipes/tag-components.md)
-    - [Hierarchy](./recipes/hierarchy.md)
+    - [Hierarchy](./recipes/hierarchy/building-a-hierarchy.md)
 - [Pilgrimage](./pilgrimage.md)
     - [Different Types of ECS](./pilgrimage/different-types-of-ecs.md)
     - [More Resources](./pilgrimage/more-resources.md)
