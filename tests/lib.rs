@@ -1,6 +1,7 @@
 mod iteration;
-mod workload;
 mod sort;
+mod static_view;
+mod workload;
 
 #[cfg(feature = "serialization")]
 mod serialization;
