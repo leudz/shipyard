@@ -1,5 +1,5 @@
-use shipyard::prelude::*;
 use shipyard::internal::iterators;
+use shipyard::prelude::*;
 
 #[test]
 fn simple_sort() {
@@ -36,9 +36,7 @@ fn tight_sort() {
 
             (&mut usizes, &mut u32s)
                 .sort()
-                .unstable(|(&x1, &y1), (&x2, &y2)| {
-                    (x1 + y1 as usize).cmp(&(x2 + y2 as usize))
-                });
+                .unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)));
 
             let mut prev = 0;
             (&mut usizes, &mut u32s)
@@ -65,9 +63,7 @@ fn loose_sort() {
 
             (&mut usizes, &mut u32s)
                 .sort()
-                .unstable(|(&x1, &y1), (&x2, &y2)| {
-                    (x1 + y1 as usize).cmp(&(x2 + y2 as usize))
-                });
+                .unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)));
 
             let mut prev = 0;
             (&mut usizes, &mut u32s)
@@ -95,9 +91,7 @@ fn tight_loose_sort() {
 
             (&mut usizes, &mut u64s)
                 .sort()
-                .unstable(|(&x1, &y1), (&x2, &y2)| {
-                    (x1 + y1 as usize).cmp(&(x2 + y2 as usize))
-                });
+                .unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)));
         },
     );
 
@@ -169,7 +163,9 @@ fn tight_sort_too_many_storages() {
 }
 
 #[test]
-#[should_panic(expected = "Result::unwrap()` on an `Err` value: The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted.")]
+#[should_panic(
+    expected = "Result::unwrap()` on an `Err` value: The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."
+)]
 fn update_sort() {
     let world = World::new::<(usize,)>();
 
