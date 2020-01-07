@@ -28,7 +28,7 @@ let world = World::default();
 world.register::<(usize,)>();
 ```
 
-When registering with `World` you always have to give a tuple, even for a single type like in this case. This may feel a bit weird and your instincts would be right, there's a paragraph explaining why it has to be this way in [this chapter](../concepts/syntactic-weirdness.md).
+When registering with `World` you always have to give a tuple, even for a single type like in this case. This may feel a bit weird and your instincts would be right, there's a paragraph explaining why it has to be this way in [this chapter](../concepts/syntactic-peculiarities.md).
 
 ### Register with `AllStorages`
 

@@ -10,7 +10,7 @@ world.run::<(Entities, &mut Empties), _, _>(|(mut entities, mut empties)| {
 });
 ```
 
-There's a lot of `mut` in this `run` call, if you find it a bit weird there's a good explanation for it in [this chapter](../concepts/syntactic-weirdness.md).
+There's a lot of `mut` in this `run` call, if you find it a bit weird there's a good explanation for it in [this chapter](../concepts/syntactic-peculiarities.md).
 
 `add_entity` takes two arguments, a unique reference to the storage you want to add a component to and the component.
 

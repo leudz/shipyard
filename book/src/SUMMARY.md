@@ -17,7 +17,7 @@
     - [Storages, Views, and Entities](./concepts/storages-views-and-entities.md)
     - [Packs](./concepts/packs.md)
     - [Parallelism](./concepts/parallelism.md)
-    - [Syntactic Weirdness](./concepts/syntactic-weirdness.md)
+    - [Syntactic Peculiarities](./concepts/syntactic-peculiarities.md)
 - [Recipes](./recipes.md)
     - [Tag Components](./recipes/tag-components.md)
     - [Hierarchy](./recipes/hierarchy.md)

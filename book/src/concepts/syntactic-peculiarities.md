@@ -1,4 +1,4 @@
-# Syntactic Weirdness
+# Syntactic Peculiarities
 
 ## Tuples
 

@@ -8,7 +8,7 @@ We already saw it in last chapter but here's another invocation:
 world.run::<(EntitiesMut, &mut Empty), _, _>(|(entities, empties)| { ... });
 ```
 
-This time no `AllStorages` but a [tuple](../concepts/syntactic-weirdness.md) of `EntitiesMut` and what looks like a reference to `Empty` coming from nowhere. So let's take this method call apart!
+This time no `AllStorages` but a [tuple](../concepts/syntactic-peculiarities.md) of `EntitiesMut` and what looks like a reference to `Empty` coming from nowhere. So let's take this method call apart!
 
 As you can see it's a method on `World` and it takes 3 generic parameters but the compiler can almost always guess the last two.
 
