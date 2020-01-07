@@ -64,6 +64,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
             match **ty {
                 syn::Type::Reference(ref mut reference) => {
                     // references are added a 'a lifetime if they don't have one
+                    // if they have another lifetime, make it 'a
                     if let syn::Type::Path(path) = &*reference.elem {
                         // transform &Entities into Entites and &mut Entities into EntitiesMut
                         if path.path.segments.last().unwrap().ident == "Entities" {
@@ -72,10 +73,10 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             } else {
                                 **ty = parse_quote!(::shipyard::prelude::EntitiesMut);
                             }
-                        } else if reference.lifetime.is_none() {
+                        } else {
                             reference.lifetime = parse_quote!('a);
                         }
-                    } else if reference.lifetime.is_none() {
+                    } else {
                         reference.lifetime = parse_quote!('a);
                     }
                 }
@@ -94,9 +95,32 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             let arg = inner_type.args.iter_mut().next().unwrap();
                             if let syn::GenericArgument::Type(inner_type) = arg {
                                 if let syn::Type::Reference(reference) = inner_type {
-                                    if reference.lifetime.is_none() {
-                                        reference.lifetime = parse_quote!('a);
-                                    }
+                                    reference.lifetime = parse_quote!('a);
+                                } else {
+                                    return Err(Error::new_spanned(
+                                        inner_type,
+                                        "Not will only work with component storages refered by &T or &mut T",
+                                    ));
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        }
+                    }
+                    // Unique is in the same situation as Not
+                    else if last.ident == "Unique" {
+                        if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                        {
+                            if inner_type.args.len() != 1 {
+                                return Err(Error::new_spanned(
+                                    last,
+                                    "Not will only accept one type and nothing else",
+                                ));
+                            }
+                            let arg = inner_type.args.iter_mut().next().unwrap();
+                            if let syn::GenericArgument::Type(inner_type) = arg {
+                                if let syn::Type::Reference(reference) = inner_type {
+                                    reference.lifetime = parse_quote!('a);
                                 } else {
                                     return Err(Error::new_spanned(
                                         inner_type,
