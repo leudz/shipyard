@@ -382,3 +382,135 @@ fn test_hierarchy() {
     });
 }
 ```
+
+## Removing entities from the hierarchy
+
+Removing an entity from the hierarchy means removing its `Parent` and `Child` components.
+
+To remove an entity's `Child` component, we can simply reuse `detach`. Removing its `Parent` component must be done with caution. This entity's children now become orphans – we have to detach them as well.
+
+Both methods can be added to our `Hierarchy` trait:
+
+```rust, noplaypen
+fn remove(&mut self, id: EntityId) {
+    self.detach(id);
+    for child_id in (&self.1, &self.2).children(id) {
+        self.detach(child_id);
+    }
+    Remove::<(Parent,)>::remove(&mut self.1, id).0;
+}
+```
+
+A method that removes a whole subtree is easy to write by making use of recursion again:
+
+```rust, noplaypen
+fn remove_all(&mut self, id: EntityId) {
+    for child_id in (&self.1, &self.2).children(id) {
+        self.remove_all(child_id);
+    }
+    self.remove(id);
+}
+```
+
+That's it! We can now add the following code to the end of our test from the last chapter:
+
+```rust, noplaypen
+views.detach(e1);
+
+assert!((&views.1, &views.2).descendants(root1).eq(None));
+assert!((&views.1, &views.2).ancestors(e1).eq(None));
+assert!((&views.1, &views.2).children(e1).eq([e2].iter().cloned()));
+
+views.remove(e1);
+
+assert!((&views.1, &views.2).children(e1).eq(None));
+
+views.remove_all(root2);
+
+assert!((&views.1, &views.2).descendants(root2).eq(None));
+assert!((&views.1, &views.2).descendants(e3).eq(None));
+assert!((&views.1, &views.2).ancestors(e5).eq(None));
+```
+
+## Sorting
+
+The order between siblings may or may not play a role in your project.
+
+However, a simple sorting for children can be done in two steps:
+
+- Collect all children into a `Vec` and sort it.
+- Adjust the linking in the `Child` components according to the sorted list.
+
+We can add this method to the `Hierarchy` trait:
+
+```rust, noplaypen
+fn sort_children_by<F>(&mut self, id: EntityId, compare: F)
+where
+    F: FnMut(&EntityId, &EntityId) -> Ordering,
+{
+    let mut compare = compare;
+    let mut children = (&self.1, &self.2).children(id).collect::<Vec<EntityId>>();
+    if children.len() > 1 {
+        children.sort_by(|a, b| compare(a, b));
+        // set first_child in Parent component
+        (&mut self.1).get(id).unwrap().first_child = children[0];
+        // loop through children and relink them
+        for i in 0..children.len() - 1 {
+            (&mut self.2).get(children[i]).unwrap().next = children[i + 1];
+            (&mut self.2).get(children[i + 1]).unwrap().prev = children[i];
+        }
+        (&mut self.2).get(children[0]).unwrap().prev = *children.last().unwrap();
+        (&mut self.2).get(*children.last().unwrap()).unwrap().next = children[0];
+    }
+}
+```
+
+Again a small test demonstrates the usage:
+
+```rust, noplaypen
+#[test]
+fn test_sorting() {
+    let world = World::new::<(Parent, Child, usize)>();
+
+    world.run::<((EntitiesMut, &mut Parent, &mut Child), &mut usize), _, _>(|(mut views, mut value)| {
+        let root = views.0.add_entity((), ());
+
+        let e0 = views.attach_new(root);
+        let e1 = views.attach_new(root);
+        let e2 = views.attach_new(root);
+        let e3 = views.attach_new(root);
+        let e4 = views.attach_new(root);
+
+        (&views.0).add_component(&mut value, 7, e0);
+        (&views.0).add_component(&mut value, 5, e1);
+        (&views.0).add_component(&mut value, 6, e2);
+        (&views.0).add_component(&mut value, 1, e3);
+        (&views.0).add_component(&mut value, 3, e4);
+
+        assert!((&views.1, &views.2)
+            .children(root)
+            .eq([e0, e1, e2, e3, e4].iter().cloned()));
+
+        views.sort_children_by(root, |a, b| {
+            value.get(*a).unwrap().cmp(&value.get(*b).unwrap())
+        });
+
+        assert!((&views.1, &views.2)
+            .children(root)
+            .eq([e3, e4, e1, e2, e0].iter().cloned()));
+    });
+}
+```
+
+## Do it yourself!
+
+We recommend that you build your own hierarchy system fitted to your specific needs. In deviation of the above code examples you may want:
+
+- a single hierarchy component instead of two,
+- breadth-first instead of depth-first traversal,
+- different sorting methods,
+- etc.
+
+## Further reading
+
+These notes are based on ideas presented in a highly recommended article by skypjack: [ECS back and forth](https://skypjack.github.io/2019-06-25-ecs-baf-part-4/).
