@@ -394,7 +394,8 @@ Both methods can be added to our `Hierarchy` trait:
 ```rust, noplaypen
 fn remove(&mut self, id: EntityId) {
     self.detach(id);
-    for child_id in (&self.1, &self.2).children(id) {
+    let children = (&self.1, &self.2).children(id).collect::<Vec<_>>();
+    for child_id in children {
         self.detach(child_id);
     }
     Remove::<(Parent,)>::remove(&mut self.1, id).0;
@@ -405,7 +406,7 @@ A method that removes a whole subtree is easy to write by making use of recursio
 
 ```rust, noplaypen
 fn remove_all(&mut self, id: EntityId) {
-    for child_id in (&self.1, &self.2).children(id) {
+    for child_id in (&self.1, &self.2).children(id).collect::<Vec<_>>() {
         self.remove_all(child_id);
     }
     self.remove(id);
