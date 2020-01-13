@@ -7,7 +7,7 @@ Shipyard is an Entity Component System. While usable it is far from finished.
 [![Crates.io](https://img.shields.io/crates/v/shipyard.svg)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/)
-[![Gitter](https://badges.gitter.im/leudz-shipyard/community.svg)](https://gitter.im/leudz-shipyard/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
 
 ## Interesting features
 - **Packing** can enable perfect components alignment, allowing fast iteration
