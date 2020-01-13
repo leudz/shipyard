@@ -190,11 +190,11 @@ fn single_immutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     System1
         .try_into_workload("System1", &mut scheduler, &all_storages)
@@ -211,11 +211,11 @@ fn single_mutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     System1
         .try_into_workload("System1", &mut scheduler, &all_storages)
@@ -232,16 +232,16 @@ fn multiple_immutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     (System1, System2)
         .try_into_workload("Systems", &mut scheduler, &all_storages)
@@ -258,16 +258,16 @@ fn multiple_mutable() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a mut usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     (System1, System2)
         .try_into_workload("Systems", &mut scheduler, &all_storages)
@@ -285,16 +285,16 @@ fn multiple_mixed() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     (System1, System2)
         .try_into_workload("Systems", &mut scheduler, &all_storages)
@@ -324,16 +324,16 @@ fn all_storages() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (AllStorages,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     System2
         .try_into_workload("Systems", &mut scheduler, &all_storages)
@@ -346,7 +346,7 @@ fn all_storages() {
     assert_eq!(scheduler.default, 0..1);
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     (System2, System2)
         .try_into_workload("Systems", &mut scheduler, &all_storages)
@@ -360,7 +360,7 @@ fn all_storages() {
     assert_eq!(scheduler.default, 0..2);
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register::<usize>();
+    all_storages.register::<usize>();
     let mut scheduler = Scheduler::default();
     (System1, System2)
         .try_into_workload("Systems", &mut scheduler, &all_storages)
@@ -394,28 +394,28 @@ fn non_send() {
     struct Sys1;
     impl<'a> System<'a> for Sys1 {
         type Data = (&'a NonSend,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
     struct Sys2;
     impl<'a> System<'a> for Sys2 {
         type Data = (&'a mut NonSend,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     struct Sys3;
     impl<'a> System<'a> for Sys3 {
         type Data = (&'a usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     struct Sys4;
     impl<'a> System<'a> for Sys4 {
         type Data = (&'a mut usize,);
-        fn run(_: <Self::Data as SystemData>::View) {}
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
     let mut all_storages = AllStorages::default();
-    all_storages.view_mut().register_non_send::<NonSend>();
+    all_storages.register_non_send::<NonSend>();
     let mut scheduler = Scheduler::default();
     (Sys1, Sys1)
         .try_into_workload("Test", &mut scheduler, &all_storages)

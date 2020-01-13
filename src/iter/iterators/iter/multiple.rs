@@ -42,7 +42,7 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract),+> Shiperator for $iter<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 
-            unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+            fn first_pass(&mut self) -> Option<Self::Item> {
                 match self {
                     Self::Tight(tight) => tight.first_pass(),
                     Self::Loose(loose) => loose.first_pass(),
@@ -50,7 +50,7 @@ macro_rules! impl_iterators {
                     Self::NonPacked(non_packed) => non_packed.first_pass(),
                 }
             }
-            unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+            fn post_process(&mut self, item: Self::Item) -> Self::Item {
                 match self {
                     Self::Tight(tight) => tight.post_process(item),
                     Self::Loose(loose) => loose.post_process(item),

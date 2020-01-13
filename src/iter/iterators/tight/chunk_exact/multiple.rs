@@ -18,16 +18,16 @@ macro_rules! impl_iterators {
 
         impl<$($type: IntoAbstract),+> Shiperator for $chunk_exact<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Slice,)+);
-            unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+            fn first_pass(&mut self) -> Option<Self::Item> {
                 let current = self.current;
                 if current + self.step <= self.end {
                     self.current += self.step;
-                    Some(($(self.data.$index.get_data_slice(current..(current + self.step)),)+))
+                    Some(unsafe {($(self.data.$index.get_data_slice(current..(current + self.step)),)+)})
                 } else {
                     None
                 }
             }
-            unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+            fn post_process(&mut self, item: Self::Item) -> Self::Item {
                 item
             }
         }

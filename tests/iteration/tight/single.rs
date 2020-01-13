@@ -14,8 +14,8 @@ fn basic() {
     world.run::<&u32, _, _>(|u32s| {
         u32s.iter().for_each(|&x| vec.push(x));
     });
-    world.run::<&mut u32, _, _>(|u32s| {
-        u32s.iter().for_each(|&mut x| vec.push(x));
+    world.run::<&mut u32, _, _>(|mut u32s| {
+        (&mut u32s).iter().for_each(|&mut x| vec.push(x));
     });
 
     assert_eq!(vec, vec![0, 1, 2, 0, 1, 2]);
@@ -38,8 +38,9 @@ fn with_id() {
     world.run::<&u32, _, _>(|u32s| {
         u32s.iter().with_id().for_each(|(id, &x)| vec.push((id, x)));
     });
-    world.run::<&mut u32, _, _>(|u32s| {
-        u32s.iter()
+    world.run::<&mut u32, _, _>(|mut u32s| {
+        (&mut u32s)
+            .iter()
             .with_id()
             .for_each(|(id, &mut x)| vec.push((id, x)));
     });

@@ -25,7 +25,7 @@ pub trait IntoIter {
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-    ///     (usizes, &u32s).iter().for_each(|(x, &y)| {
+    ///     (&mut usizes, &u32s).iter().for_each(|(x, &y)| {
     ///         *x += y as usize;
     ///     });
     /// });
@@ -45,7 +45,7 @@ pub trait IntoIter {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     ///     thread_pool.install(|| {
-    ///         (usizes, &u32s).par_iter().for_each(|(x, &y)| {
+    ///         (&mut usizes, &u32s).par_iter().for_each(|(mut x, &y)| {
     ///             *x += y as usize;
     ///         });
     ///     })

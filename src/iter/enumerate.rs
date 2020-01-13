@@ -14,13 +14,13 @@ impl<I> Enumerate<I> {
 impl<I: Shiperator> Shiperator for Enumerate<I> {
     type Item = (usize, I::Item);
 
-    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+    fn first_pass(&mut self) -> Option<Self::Item> {
         let item = self.iter.first_pass()?;
         let current = self.count;
         self.count += 1;
         Some((current, item))
     }
-    unsafe fn post_process(&mut self, (current, item): Self::Item) -> Self::Item {
+    fn post_process(&mut self, (current, item): Self::Item) -> Self::Item {
         (current, self.iter.post_process(item))
     }
 }

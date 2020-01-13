@@ -20,7 +20,7 @@ macro_rules! impl_loose_pack {
 
                 let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<$tight>()),+]);
                 let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<$loose>()),+]);
-                let mut storages: ($((RefMut<SparseSet<$tight>>, Borrow),)+ $((RefMut<SparseSet<$loose>>, Borrow),)+) =
+                let mut storages: ($((RefMut<'_, SparseSet<$tight>>, Borrow<'_>),)+ $((RefMut<'_, SparseSet<$loose>>, Borrow<'_>),)+) =
                 (
                     $({
                         // SAFE borrow is dropped after storage
@@ -65,13 +65,13 @@ macro_rules! impl_loose_pack {
 
                 $(
                     if storages.$tight_index.0.is_unique() {
-                        return Err(error::Pack::UniqueStorage(std::any::type_name::<$tight>()));
+                        return Err(error::Pack::UniqueStorage(type_name::<$tight>()));
                     }
                 )+
 
                 $(
                     if storages.$loose_index.0.is_unique() {
-                        return Err(error::Pack::UniqueStorage(std::any::type_name::<$loose>()));
+                        return Err(error::Pack::UniqueStorage(type_name::<$loose>()));
                     }
                 )+
 

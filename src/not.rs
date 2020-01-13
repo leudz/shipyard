@@ -1,4 +1,4 @@
-use crate::sparse_set::{View, ViewMut};
+use crate::views::{View, ViewMut};
 use std::ops::Not as NotOps;
 
 /// Used to filter out components.

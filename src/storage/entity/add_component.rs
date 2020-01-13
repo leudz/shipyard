@@ -1,6 +1,7 @@
-use super::{EntitiesView, EntityId};
+use super::{Entities, EntityId};
 use crate::error;
-use crate::sparse_set::{Pack, ViewMut};
+use crate::sparse_set::Pack;
+use crate::views::ViewMut;
 use std::any::TypeId;
 
 // No new storage will be created
@@ -10,9 +11,9 @@ pub trait AddComponent<T> {
         self,
         component: T,
         entity: EntityId,
-        entities: &EntitiesView,
+        entities: &Entities,
     ) -> Result<(), error::AddComponent>;
-    fn add_component(self, component: T, entity: EntityId, entities: &EntitiesView);
+    fn add_component(self, component: T, entity: EntityId, entities: &Entities);
 }
 
 impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
@@ -20,7 +21,7 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
         self,
         component: T,
         entity: EntityId,
-        entities: &EntitiesView,
+        entities: &Entities,
     ) -> Result<(), error::AddComponent> {
         if entities.is_alive(entity) {
             match self.pack_info.pack {
@@ -47,7 +48,7 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
             Err(error::AddComponent::EntityIsNotAlive)
         }
     }
-    fn add_component(self, component: T, entity: EntityId, entities: &EntitiesView) {
+    fn add_component(self, component: T, entity: EntityId, entities: &Entities) {
         self.try_add_component(component, entity, entities).unwrap()
     }
 }
@@ -56,7 +57,7 @@ macro_rules! impl_add_component {
     // add is short for additional
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)+)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
-            fn try_add_component(self, component: ($($type,)+), entity: EntityId, entities: &EntitiesView) -> Result<(), error::AddComponent> {
+            fn try_add_component(self, component: ($($type,)+), entity: EntityId, entities: &Entities) -> Result<(), error::AddComponent> {
                 if entities.is_alive(entity) {
                     // checks if the caller has passed all necessary storages
                     // and list components we can pack
@@ -116,7 +117,7 @@ macro_rules! impl_add_component {
                     Err(error::AddComponent::EntityIsNotAlive)
                 }
             }
-            fn add_component(self, component: ($($type,)+), entity: EntityId, entities: &EntitiesView) {
+            fn add_component(self, component: ($($type,)+), entity: EntityId, entities: &Entities) {
                 self.try_add_component(component, entity, entities).unwrap()
             }
         }

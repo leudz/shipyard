@@ -18,7 +18,7 @@ macro_rules! impl_tight_pack {
                 let all_storages = all_storages.try_borrow().map_err(error::GetStorage::AllStoragesBorrow)?;
 
                 let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<$type>(),)+]);
-                let mut storages: ($((RefMut<SparseSet<$type>>, Borrow),)+) = ($({
+                let mut storages: ($((RefMut<'_, SparseSet<$type>>, Borrow<'_>),)+) = ($({
                     // SAFE borrow is dropped after storage
                     let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
                         match all_storages.0.get(&type_ids[$index]) {

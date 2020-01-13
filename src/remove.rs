@@ -1,6 +1,7 @@
 use crate::error;
-use crate::sparse_set::{Pack, ViewMut};
+use crate::sparse_set::Pack;
 use crate::storage::EntityId;
+use crate::views::ViewMut;
 use std::any::TypeId;
 
 pub trait Removable {
@@ -83,32 +84,6 @@ pub trait Remove<T: Removable> {
     fn remove(self, entity: EntityId) -> T::Out;
 }
 
-impl<T: 'static> Remove<(T,)> for &mut ViewMut<'_, T> {
-    fn try_remove(self, entity: EntityId) -> Result<<(T,) as Removable>::Out, error::Remove> {
-        match self.pack_info.pack {
-            Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-            Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-            Pack::Update(_) => {
-                if self.pack_info.observer_types.is_empty() {
-                    Ok((self.remove(entity),))
-                } else {
-                    Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
-                }
-            }
-            Pack::NoPack => {
-                if self.pack_info.observer_types.is_empty() {
-                    Ok((self.remove(entity),))
-                } else {
-                    Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
-                }
-            }
-        }
-    }
-    fn remove(self, entity: EntityId) -> <(T,) as Removable>::Out {
-        self.try_remove(entity).unwrap()
-    }
-}
-
 macro_rules! impl_removable {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type),+> Removable for ($($type,)+) {
@@ -120,7 +95,6 @@ macro_rules! impl_removable {
 macro_rules! impl_remove {
     // add is short for additional
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
-
         impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_remove(self, entity: EntityId) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
                 // non packed storages should not pay the price of pack

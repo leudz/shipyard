@@ -1,10 +1,8 @@
 mod iteration;
-mod sort;
-mod static_view;
-mod workload;
-
 #[cfg(feature = "serialization")]
 mod serialization;
+mod workload;
+
 use shipyard::internal::iterators;
 use shipyard::prelude::*;
 
@@ -324,7 +322,7 @@ fn tight_iterator() {
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity((&mut usizes,), (2usize,));
             // test for consuming version
-            entities.add_entity((usizes, u32s), (3usize, 4u32));
+            entities.add_entity((&mut usizes, &mut u32s), (3usize, 4u32));
         },
     );
 
@@ -350,7 +348,7 @@ fn post_tight_iterator() {
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity((&mut usizes,), (2usize,));
             // test for consuming version
-            entities.add_entity((usizes, u32s), (3usize, 4u32));
+            entities.add_entity((&mut usizes, &mut u32s), (3usize, 4u32));
         },
     );
 
@@ -464,7 +462,7 @@ fn loose_iterator() {
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity((&mut usizes,), (2usize,));
             // test for consuming version
-            entities.add_entity((usizes, u32s), (3usize, 4u32));
+            entities.add_entity((&mut usizes, &mut u32s), (3usize, 4u32));
         },
     );
 
@@ -490,7 +488,7 @@ fn post_loose_iterator() {
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity((&mut usizes,), (2usize,));
             // test for consuming version
-            entities.add_entity((usizes, u32s), (3usize, 4u32));
+            entities.add_entity((&mut usizes, &mut u32s), (3usize, 4u32));
         },
     );
 
@@ -519,7 +517,7 @@ fn tight_loose_iterator() {
             entities.add_entity((&mut usizes, &mut u64s), (3, 4));
             entities.add_entity((&mut usizes,), (5,));
             // test for consuming version
-            entities.add_entity((usizes, u64s, u32s), (6, 7, 8));
+            entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (6, 7, 8));
         },
     );
 
@@ -795,8 +793,8 @@ fn system() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize, &'a u32);
-        fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-            (usizes, u32s).iter().for_each(|(x, y)| {
+        fn run((mut usizes, u32s): <Self::Data as SystemData>::View) {
+            (&mut usizes, &u32s).iter().for_each(|(x, y)| {
                 *x += *y as usize;
             });
         }
@@ -826,8 +824,8 @@ fn systems() {
     struct System1;
     impl<'a> System<'a> for System1 {
         type Data = (&'a mut usize, &'a u32);
-        fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-            (usizes, u32s).iter().for_each(|(x, y)| {
+        fn run((mut usizes, u32s): <Self::Data as SystemData>::View) {
+            (&mut usizes, &u32s).iter().for_each(|(x, y)| {
                 *x += *y as usize;
             });
         }
@@ -835,8 +833,8 @@ fn systems() {
     struct System2;
     impl<'a> System<'a> for System2 {
         type Data = (&'a mut usize,);
-        fn run((usizes,): <Self::Data as SystemData>::View) {
-            (usizes,).iter().for_each(|x| {
+        fn run((mut usizes,): <Self::Data as SystemData>::View) {
+            (&mut usizes,).iter().for_each(|x| {
                 *x += 1;
             });
         }
@@ -1073,7 +1071,7 @@ fn remove_component_with_old_key() {
 }
 
 #[test]
-fn compile_err() {
+fn derive() {
     let t = trybuild::TestCases::new();
     t.pass("tests/derive/good.rs");
     t.pass("tests/derive/return_nothing.rs");
@@ -1084,7 +1082,6 @@ fn compile_err() {
     t.compile_fail("tests/derive/return_something.rs");
     t.compile_fail("tests/derive/where.rs");
     t.compile_fail("tests/derive/wrong_type.rs");
-    t.compile_fail("tests/compile_err/taken_from_run.rs");
 }
 
 #[test]
@@ -1170,7 +1167,7 @@ fn simple_filter() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().filter(|&&mut x| x % 2 == 0);
+        let mut iter = (&mut usizes).iter().filter(|&&mut x| x % 2 == 0);
 
         assert_eq!(iter.next(), Some(&mut 2));
         assert_eq!(iter.next(), Some(&mut 4));
@@ -1466,7 +1463,7 @@ fn filter_with_id() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().filter(|&&mut x| x % 2 == 0).with_id();
+        let mut iter = (&mut usizes).iter().filter(|&&mut x| x % 2 == 0).with_id();
 
         assert!(iter.next() == Some((entity1, &mut 2)));
         assert!(iter.next() == Some((entity2, &mut 4)));
@@ -1510,7 +1507,10 @@ fn with_id_filter() {
         entities.add_entity(&mut usizes, 3);
         entities.add_entity(&mut usizes, 1);
 
-        let mut iter = usizes.iter().with_id().filter(|&(_, &mut x)| x % 2 == 0);
+        let mut iter = (&mut usizes)
+            .iter()
+            .with_id()
+            .filter(|&(_, &mut x)| x % 2 == 0);
 
         assert!(iter.next() == Some((entity1, &mut 2)));
         assert!(iter.next() == Some((entity2, &mut 4)));
@@ -1548,11 +1548,11 @@ fn unique_storage() {
     let world = World::default();
     world.add_unique(0usize);
 
-    world.run::<Unique<&mut usize>, _, _>(|x| {
+    world.run::<Unique<&mut usize>, _, _>(|mut x| {
         *x += 1;
     });
     world.run::<Unique<&usize>, _, _>(|x| {
-        assert_eq!(x, &1);
+        assert_eq!(*x, 1);
     });
 }
 
@@ -1562,7 +1562,7 @@ fn not_unique_storage() {
         let world = World::new::<(usize,)>();
 
         world.run::<Unique<&usize>, _, _>(|x| {
-            assert_eq!(x, &1);
+            assert_eq!(*x, 1);
         });
     }) {
         Ok(_) => panic!(),
@@ -1578,7 +1578,7 @@ fn not_unique_storage() {
         let world = World::new::<(usize,)>();
 
         world.run::<Unique<&mut usize>, _, _>(|x| {
-            assert_eq!(x, &1);
+            assert_eq!(*x, 1);
         });
     }) {
         Ok(_) => panic!(),

@@ -1,19 +1,20 @@
-use super::IntoSortable;
+use super::{IntoSortable, SparseSet};
 use crate::error;
-use crate::sparse_set::{EntityId, Pack, ViewMut};
+use crate::sparse_set::{EntityId, Pack};
+use crate::views::ViewMut;
 use std::any::TypeId;
 use std::cmp::Ordering;
 
-pub struct UnstableSort1<'tmp, 'view: 'tmp, T>(&'tmp mut ViewMut<'view, T>);
+pub struct UnstableSort1<'tmp, T>(&'tmp mut SparseSet<T>);
 
-impl<'tmp, 'view: 'tmp, T> IntoSortable for &'tmp mut ViewMut<'view, T> {
-    type IntoSortable = UnstableSort1<'tmp, 'view, T>;
+impl<'tmp, T> IntoSortable for &'tmp mut SparseSet<T> {
+    type IntoSortable = UnstableSort1<'tmp, T>;
     fn sort(self) -> Self::IntoSortable {
         UnstableSort1(self)
     }
 }
 
-impl<'tmp, 'view: 'tmp, T> UnstableSort1<'tmp, 'view, T> {
+impl<'tmp, T> UnstableSort1<'tmp, T> {
     pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
         if std::mem::discriminant(&self.0.pack_info.pack) == std::mem::discriminant(&Pack::NoPack) {
             let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
@@ -36,10 +37,8 @@ impl<'tmp, 'view: 'tmp, T> UnstableSort1<'tmp, 'view, T> {
 
             for i in 0..self.0.dense.len() {
                 unsafe {
-                    *self
-                        .0
-                        .sparse
-                        .get_unchecked_mut(self.0.dense.get_unchecked(i).index()) = i;
+                    let dense_index = self.0.dense.get_unchecked(i).index();
+                    *self.0.sparse.get_unchecked_mut(dense_index) = i;
                 }
             }
 
@@ -55,17 +54,17 @@ impl<'tmp, 'view: 'tmp, T> UnstableSort1<'tmp, 'view, T> {
 
 macro_rules! impl_unstable_sort {
     ($sort: ident; $(($type: ident, $index: tt))+) => {
-        pub struct $sort<'tmp, 'view: 'tmp, $($type),+>($(&'tmp mut ViewMut<'view, $type>,)+);
+        pub struct $sort<'tmp, $($type),+>($(&'tmp mut SparseSet<$type>,)+);
 
-        impl<'tmp, 'view: 'tmp, $($type),+> IntoSortable for ($(&'tmp mut ViewMut<'view, $type>,)+) {
-            type IntoSortable = $sort<'tmp, 'view, $($type,)+>;
+        impl<'tmp, $($type),+> IntoSortable for ($(&'tmp mut ViewMut<'_, $type>,)+) {
+            type IntoSortable = $sort<'tmp, $($type,)+>;
 
             fn sort(self) -> Self::IntoSortable {
                 $sort($(self.$index,)+)
             }
         }
 
-        impl<'tmp, 'view: 'tmp, $($type: 'static),+> $sort<'tmp, 'view, $($type),+> {
+        impl<'tmp, 'view, $($type: 'static),+> $sort<'tmp, $($type),+> {
             pub fn try_unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, mut cmp: Cmp) -> Result<(), error::Sort> {
                 enum PackSort {
                     Tight(usize),
@@ -223,13 +222,10 @@ fn unstable_sort() {
     for i in (0..100).rev() {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(100 - i);
-        array.view_mut().insert(i, entity_id);
+        array.insert(i, entity_id);
     }
 
-    array
-        .view_mut()
-        .sort()
-        .unstable(|x: &u64, y: &u64| x.cmp(&y));
+    array.sort().unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
@@ -248,18 +244,15 @@ fn partially_sorted_unstable_sort() {
     for i in 0..20 {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(i);
-        assert!(array.view_mut().insert(i, entity_id).is_none());
+        assert!(array.insert(i, entity_id).is_none());
     }
     for i in (20..100).rev() {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(100 - i + 20);
-        assert!(array.view_mut().insert(i, entity_id).is_none());
+        assert!(array.insert(i, entity_id).is_none());
     }
 
-    array
-        .view_mut()
-        .sort()
-        .unstable(|x: &u64, y: &u64| x.cmp(&y));
+    array.sort().unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);

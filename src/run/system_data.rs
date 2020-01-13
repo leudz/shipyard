@@ -1,10 +1,11 @@
-use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
+use crate::atomic_refcell::AtomicRefCell;
 use crate::not::Not;
-use crate::sparse_set::{View, ViewMut};
-use crate::storage::{
-    AllStorages, AllStoragesViewMut, Entities, EntitiesMut, EntitiesView, EntitiesViewMut,
+use crate::storage::{AllStorages, Entities, EntitiesMut};
+use crate::views::{
+    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 use crate::{error, Unique};
+use core::convert::TryInto;
 #[cfg(feature = "parallel")]
 use rayon::ThreadPool;
 use std::any::{type_name, TypeId};
@@ -18,11 +19,7 @@ pub enum Mutation {
 pub trait SystemData<'a> {
     type View;
 
-    /// # Safety
-    ///
-    /// Borrow has to be dropped after Self::View.
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
+    fn try_borrow(
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage>;
@@ -35,8 +32,7 @@ pub trait SystemData<'a> {
 impl<'a> SystemData<'a> for () {
     type View = ();
 
-    unsafe fn try_borrow(
-        _: &mut Vec<Borrow<'a>>,
+    fn try_borrow(
         _: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
@@ -53,18 +49,11 @@ impl<'a> SystemData<'a> for () {
 impl<'a> SystemData<'a> for AllStorages {
     type View = AllStoragesViewMut<'a>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
+    fn try_borrow(
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let (all_storages, borrow) = RefMut::destructure(
-            all_storages
-                .try_borrow_mut()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        );
-        borrows.push(borrow);
-        Ok(all_storages.view_mut())
+        all_storages.try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -79,24 +68,14 @@ impl<'a> SystemData<'a> for AllStorages {
 impl<'a> SystemData<'a> for Entities {
     type View = EntitiesView<'a>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
-        storages: &'a AtomicRefCell<AllStorages>,
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let (all_storages, all_borrow) = Ref::destructure(
-            storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        );
-        let (entities, borrow) = Ref::destructure(
-            all_storages.0[&TypeId::of::<Entities>()]
-                .entities()
-                .map_err(error::GetStorage::Entities)?,
-        );
-        borrows.push(borrow);
-        borrows.push(all_borrow);
-        Ok(entities.view())
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -111,24 +90,14 @@ impl<'a> SystemData<'a> for Entities {
 impl<'a> SystemData<'a> for EntitiesMut {
     type View = EntitiesViewMut<'a>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
-        storages: &'a AtomicRefCell<AllStorages>,
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let (all_storages, all_borrow) = Ref::destructure(
-            storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        );
-        let (entities, borrow) = RefMut::destructure(
-            all_storages.0[&TypeId::of::<Entities>()]
-                .entities_mut()
-                .map_err(error::GetStorage::Entities)?,
-        );
-        borrows.push(borrow);
-        borrows.push(all_borrow);
-        Ok(entities.view_mut())
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -144,8 +113,7 @@ impl<'a> SystemData<'a> for EntitiesMut {
 impl<'a> SystemData<'a> for crate::ThreadPool {
     type View = &'a ThreadPool;
 
-    unsafe fn try_borrow(
-        _: &mut Vec<Borrow<'a>>,
+    fn try_borrow(
         _: &'a AtomicRefCell<AllStorages>,
         thread_pool: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
@@ -162,27 +130,14 @@ impl<'a> SystemData<'a> for crate::ThreadPool {
 impl<'a, T: 'static> SystemData<'a> for &T {
     type View = View<'a, T>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
-        storages: &'a AtomicRefCell<AllStorages>,
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let (all_storages, all_borrow) = Ref::destructure(
-            storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        );
-        let (array, borrow) = Ref::destructure(
-            all_storages
-                .0
-                .get(&TypeId::of::<T>())
-                .ok_or_else(|| error::GetStorage::MissingComponent(type_name::<T>()))?
-                .sparse_set()
-                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
-        );
-        borrows.push(borrow);
-        borrows.push(all_borrow);
-        Ok(array.view())
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -201,27 +156,14 @@ impl<'a, T: 'static> SystemData<'a> for &T {
 impl<'a, T: 'static> SystemData<'a> for &mut T {
     type View = ViewMut<'a, T>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
-        storages: &'a AtomicRefCell<AllStorages>,
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let (all_storages, all_borrow) = Ref::destructure(
-            storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        );
-        let (array, borrow) = RefMut::destructure(
-            all_storages
-                .0
-                .get(&TypeId::of::<T>())
-                .ok_or_else(|| error::GetStorage::MissingComponent(type_name::<T>()))?
-                .sparse_set_mut()
-                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
-        );
-        borrows.push(borrow);
-        borrows.push(all_borrow);
-        Ok(array.view_mut())
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -240,19 +182,18 @@ impl<'a, T: 'static> SystemData<'a> for &mut T {
 impl<'a, T: 'static> SystemData<'a> for Not<&T> {
     type View = Not<<&'a T as SystemData<'a>>::View>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
+    fn try_borrow(
         storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
         let view = {
             #[cfg(feature = "parallel")]
             {
-                <&T as SystemData>::try_borrow(borrows, storages, thread_pool)?
+                <&T as SystemData>::try_borrow(storages, thread_pool)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                <&T as SystemData>::try_borrow(borrows, storages)?
+                <&T as SystemData>::try_borrow(storages)?
             }
         };
         Ok(Not(view))
@@ -270,19 +211,18 @@ impl<'a, T: 'static> SystemData<'a> for Not<&T> {
 impl<'a, T: 'static> SystemData<'a> for Not<&mut T> {
     type View = Not<<&'a mut T as SystemData<'a>>::View>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
+    fn try_borrow(
         storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
         let view = {
             #[cfg(feature = "parallel")]
             {
-                <&mut T as SystemData>::try_borrow(borrows, storages, thread_pool)?
+                <&mut T as SystemData>::try_borrow(storages, thread_pool)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                <&mut T as SystemData>::try_borrow(borrows, storages)?
+                <&mut T as SystemData>::try_borrow(storages)?
             }
         };
         Ok(Not(view))
@@ -298,32 +238,16 @@ impl<'a, T: 'static> SystemData<'a> for Not<&mut T> {
 }
 
 impl<'a, T: 'static> SystemData<'a> for Unique<&T> {
-    type View = &'a T;
+    type View = UniqueView<'a, T>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <&T as SystemData>::try_borrow(borrows, storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <&T as SystemData>::try_borrow(borrows, storages)?
-            }
-        };
-
-        if view.is_unique() {
-            Ok(view.data.get_unchecked(0))
-        } else {
-            Err(error::GetStorage::NonUnique((
-                type_name::<T>(),
-                error::Borrow::Shared,
-            )))
-        }
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -336,32 +260,16 @@ impl<'a, T: 'static> SystemData<'a> for Unique<&T> {
 }
 
 impl<'a, T: 'static> SystemData<'a> for Unique<&mut T> {
-    type View = &'a mut T;
+    type View = UniqueViewMut<'a, T>;
 
-    unsafe fn try_borrow(
-        borrows: &mut Vec<Borrow<'a>>,
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] _: &'a ThreadPool,
     ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <&mut T as SystemData>::try_borrow(borrows, storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <&mut T as SystemData>::try_borrow(borrows, storages)?
-            }
-        };
-
-        if view.is_unique() {
-            Ok(view.data.get_unchecked_mut(0))
-        } else {
-            Err(error::GetStorage::NonUnique((
-                type_name::<T>(),
-                error::Borrow::Unique,
-            )))
-        }
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -378,21 +286,20 @@ macro_rules! impl_system_data {
         impl<'a, $($type: SystemData<'a>),+> SystemData<'a> for ($($type,)+) {
             type View = ($($type::View,)+);
 
-            unsafe fn try_borrow(
-                borrows: &mut Vec<Borrow<'a>>,
+            fn try_borrow(
                 storages: &'a AtomicRefCell<AllStorages>,
                 #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
             ) -> Result<Self::View, error::GetStorage> {
                 #[cfg(feature = "parallel")]
                 {
                     Ok(($(
-                        <$type as SystemData>::try_borrow(borrows, storages, thread_pool)?,
+                        <$type as SystemData>::try_borrow(storages, thread_pool)?,
                     )+))
                 }
                 #[cfg(not(feature = "parallel"))]
                 {
                     Ok(($(
-                        <$type as SystemData>::try_borrow(borrows, storages)?,
+                        <$type as SystemData>::try_borrow(storages)?,
                     )+))
                 }
             }

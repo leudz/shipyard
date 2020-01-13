@@ -1,5 +1,6 @@
-use crate::sparse_set::{View, ViewMut};
+use crate::sparse_set::{Window, WindowMut};
 use crate::storage::EntityId;
+use crate::views::{View, ViewMut};
 
 /// Retrives components based on their type and entity id.
 pub trait GetComponent {
@@ -20,17 +21,38 @@ pub trait GetComponent {
     fn get(self, entity: EntityId) -> Option<Self::Out>;
 }
 
-impl<'a: 'b, 'b, T: 'static> GetComponent for &'b View<'a, T> {
+impl<'a: 'b, 'b, T: 'static> GetComponent for &'b Window<'a, T> {
     type Out = &'b T;
     fn get(self, entity: EntityId) -> Option<Self::Out> {
         self.get(entity)
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> GetComponent for &'b ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: 'static> GetComponent for &'b WindowMut<'a, T> {
     type Out = &'b T;
     fn get(self, entity: EntityId) -> Option<Self::Out> {
         self.get(entity)
+    }
+}
+
+impl<'a: 'b, 'b, T: 'static> GetComponent for &'b mut WindowMut<'a, T> {
+    type Out = &'b mut T;
+    fn get(self, entity: EntityId) -> Option<Self::Out> {
+        self.get_mut(entity)
+    }
+}
+
+impl<'a: 'b, 'b, T: 'static> GetComponent for &'b View<'a, T> {
+    type Out = &'b T;
+    fn get(self, entity: EntityId) -> Option<Self::Out> {
+        (**self).get(entity)
+    }
+}
+
+impl<'a: 'b, 'b, T: 'static> GetComponent for &'b ViewMut<'a, T> {
+    type Out = &'b T;
+    fn get(self, entity: EntityId) -> Option<Self::Out> {
+        (**self).get(entity)
     }
 }
 

@@ -1,5 +1,6 @@
 mod unstable;
 
+use super::SparseSet;
 pub use unstable::*;
 
 pub trait IntoSortable {

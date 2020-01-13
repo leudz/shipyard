@@ -15,7 +15,7 @@ use rayon::ThreadPool;
 pub trait Run<'a> {
     type Storage;
 
-    fn try_run<R: 'static, F: FnOnce(Self::Storage) -> R + 'a>(
+    fn try_run<R, F: FnOnce(Self::Storage) -> R>(
         storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
         f: F,
@@ -25,22 +25,19 @@ pub trait Run<'a> {
 impl<'a, T: SystemData<'a>> Run<'a> for T {
     type Storage = T::View;
 
-    fn try_run<R, F: FnOnce(Self::Storage) -> R + 'a>(
+    fn try_run<R, F: FnOnce(Self::Storage) -> R>(
         storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
         f: F,
     ) -> Result<R, error::GetStorage> {
-        let mut borrows = Vec::default();
-
-        // SAFE borrows is dropped after storage
-        let storage = unsafe {
+        let storage = {
             #[cfg(feature = "parallel")]
             {
-                T::try_borrow(&mut borrows, storages, thread_pool)?
+                T::try_borrow(storages, thread_pool)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                T::try_borrow(&mut borrows, storages)?
+                T::try_borrow(storages)?
             }
         };
 

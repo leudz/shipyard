@@ -26,13 +26,13 @@ impl<T: IntoAbstract> Iter1<T> {
 impl<T: IntoAbstract> Shiperator for Iter1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
 
-    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+    fn first_pass(&mut self) -> Option<Self::Item> {
         match self {
             Self::Tight(tight) => tight.first_pass(),
             Self::Update(update) => update.first_pass(),
         }
     }
-    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+    fn post_process(&mut self, item: Self::Item) -> Self::Item {
         match self {
             Self::Tight(tight) => tight.post_process(item),
             Self::Update(update) => update.post_process(item),

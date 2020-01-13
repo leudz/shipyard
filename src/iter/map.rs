@@ -17,11 +17,11 @@ where
 {
     type Item = R;
 
-    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+    fn first_pass(&mut self) -> Option<Self::Item> {
         let item = self.iter.first_pass()?;
         Some((self.f)(self.iter.post_process(item)))
     }
-    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+    fn post_process(&mut self, item: Self::Item) -> Self::Item {
         item
     }
 }

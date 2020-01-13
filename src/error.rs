@@ -18,7 +18,7 @@ pub enum Borrow {
 impl Error for Borrow {}
 
 impl Debug for Borrow {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::Unique => fmt.write_str("Cannot mutably borrow while already borrowed."),
             Self::Shared => {
@@ -35,7 +35,7 @@ impl Debug for Borrow {
 }
 
 impl Display for Borrow {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -54,7 +54,7 @@ pub enum GetStorage {
 impl Error for GetStorage {}
 
 impl Debug for GetStorage {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::AllStoragesBorrow(borrow) => match borrow {
                 Borrow::Unique => fmt.write_str("Cannot mutably borrow AllStorages while it's already borrowed (AllStorages is borrowed to access any storage)."),
@@ -90,7 +90,7 @@ impl Debug for GetStorage {
 }
 
 impl Display for GetStorage {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -109,7 +109,7 @@ pub enum NewEntity {
 impl Error for NewEntity {}
 
 impl Debug for NewEntity {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::AllStoragesBorrow(borrow) => match borrow {
                 Borrow::Unique => fmt.write_str("Cannot mutably borrow all storages while it's already borrowed (this include component storage)."),
@@ -127,7 +127,7 @@ impl Debug for NewEntity {
 }
 
 impl Display for NewEntity {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -144,7 +144,7 @@ pub enum AddComponent {
 impl Error for AddComponent {}
 
 impl Debug for AddComponent {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage for type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
             Self::EntityIsNotAlive => fmt.write_str("Entity has to be alive to add component to it."),
@@ -153,7 +153,7 @@ impl Debug for AddComponent {
 }
 
 impl Display for AddComponent {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -179,7 +179,7 @@ impl From<GetStorage> for Pack {
 }
 
 impl Debug for Pack {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
             Self::AlreadyTightPack(type_id) => fmt.write_fmt(format_args!(
@@ -203,7 +203,7 @@ impl Debug for Pack {
 }
 
 impl Display for Pack {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -220,7 +220,7 @@ pub enum Remove {
 impl Error for Remove {}
 
 impl Debug for Remove {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage for type ({:?}). To remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
         }
@@ -228,7 +228,7 @@ impl Debug for Remove {
 }
 
 impl Display for Remove {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -249,7 +249,7 @@ impl From<Borrow> for SetDefaultWorkload {
 }
 
 impl Debug for SetDefaultWorkload {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::Borrow(borrow) => match borrow {
                 Borrow::Unique => {
@@ -263,7 +263,7 @@ impl Debug for SetDefaultWorkload {
 }
 
 impl Display for SetDefaultWorkload {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -285,7 +285,7 @@ impl From<GetStorage> for RunWorkload {
 }
 
 impl Debug for RunWorkload {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::Scheduler => {
                 fmt.write_str("Cannot borrow scheduler while it's already mutably borrowed.")
@@ -297,7 +297,7 @@ impl Debug for RunWorkload {
 }
 
 impl Display for RunWorkload {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -312,7 +312,7 @@ pub enum Sort {
 impl Error for Sort {}
 
 impl Debug for Sort {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::MissingPackStorage => fmt.write_str("The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."),
             Self::TooManyStorages => fmt.write_str("You provided too many storages non packed together. Only single storage and storages packed together can be sorted."),
@@ -321,7 +321,7 @@ impl Debug for Sort {
 }
 
 impl Display for Sort {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -335,7 +335,7 @@ pub enum Register {
 impl Error for Register {}
 
 impl Debug for Register {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::Borrow(borrow) => Debug::fmt(borrow, fmt),
             Self::WrongThread => fmt.write_str(
@@ -346,7 +346,7 @@ impl Debug for Register {
 }
 
 impl Display for Register {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }
@@ -366,7 +366,7 @@ pub enum AddWorkload {
 impl Error for AddWorkload {}
 
 impl Debug for AddWorkload {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::AllStorages => fmt.write_str("Cannot immutably borrow AllStorages while it's already mutably borrowed."),
             Self::Scheduler => fmt.write_str("Cannot mutably borrow Scheduler while it's already borrowed."),
@@ -376,7 +376,7 @@ impl Debug for AddWorkload {
 }
 
 impl Display for AddWorkload {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }
 }

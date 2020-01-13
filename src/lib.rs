@@ -7,7 +7,7 @@
 //!
 //! #[system(InAcid)]
 //! fn run(pos: &Position, mut health: &mut Health) {
-//!     (pos, health).iter().for_each(|(pos, health)| {
+//!     (&pos, &mut health).iter().for_each(|(pos, mut health)| {
 //!         if is_in_acid(pos) {
 //!             health.0 -= 1.0;
 //!         }
@@ -92,6 +92,10 @@
 //! ```
 
 #![deny(bare_trait_objects)]
+#![deny(elided_lifetimes_in_paths)]
+#![deny(trivial_casts)]
+#![deny(trivial_numeric_casts)]
+#![deny(unused_qualifications)]
 
 mod atomic_refcell;
 pub mod error;
@@ -105,7 +109,11 @@ mod run;
 mod sparse_set;
 mod storage;
 mod unknown_storage;
+mod views;
 mod world;
+
+pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
+pub use world::World;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
 #[cfg(feature = "parallel")]
@@ -118,11 +126,8 @@ pub struct ThreadPool;
 /// let world = World::default();
 /// world.add_unique(0usize);
 ///
-/// world.run::<Unique<&mut usize>, _, _>(|x| {
+/// world.run::<Unique<&mut usize>, _, _>(|mut x| {
 ///     *x += 1;
 /// });
 /// ```
 pub struct Unique<T: ?Sized>(T);
-
-pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
-pub use world::World;

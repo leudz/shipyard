@@ -15,7 +15,7 @@ fn simple_sort() {
         usizes.sort().unstable(Ord::cmp);
 
         let mut prev = 0;
-        usizes.iter().for_each(|&mut x| {
+        (&mut usizes).iter().for_each(|&mut x| {
             assert!(prev <= x);
             prev = x;
         });

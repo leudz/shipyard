@@ -54,20 +54,15 @@ where
     fn try_dispatch(world: &World) -> Result<(), error::GetStorage> {
         let storages = &world.storages;
 
-        let mut borrows = Vec::new();
-
         let data = {
             #[cfg(feature = "parallel")]
             {
                 let thread_pool = &world.thread_pool;
-                // SAFE data is dropped before borrow
-                unsafe {
-                    <T::Data as SystemData>::try_borrow(&mut borrows, &storages, &thread_pool)?
-                }
+                <T::Data as SystemData>::try_borrow(&storages, &thread_pool)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                unsafe { <T::Data as SystemData>::try_borrow(&mut borrows, &storages)? }
+                <T::Data as SystemData>::try_borrow(&storages)?
             }
         };
 

@@ -21,27 +21,27 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract),+> Shiperator for $loose<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 
-            unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+            fn first_pass(&mut self) -> Option<Self::Item> {
                 if self.current < self.end {
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
-                    let index = std::ptr::read(self.indices.add(self.current));
+                    let index = unsafe {std::ptr::read(self.indices.add(self.current))};
                     self.current += 1;
                     let indices = ($(
                         if (self.array >> $index) & 1 != 0 {
                             self.current - 1
                         } else {
-                            self.data.$index.index_of_unchecked(index)
+                            unsafe {self.data.$index.index_of_unchecked(index)}
                         },
                     )+);
-                    Some(($({
+                    Some(unsafe {($({
                         self.data.$index.get_data(indices.$index)
-                    },)+))
+                    },)+)})
                 } else {
                     None
                 }
             }
-            unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+            fn post_process(&mut self, item: Self::Item) -> Self::Item {
                 item
             }
         }

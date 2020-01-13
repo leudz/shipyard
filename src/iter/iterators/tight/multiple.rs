@@ -42,16 +42,16 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract),+> Shiperator for $tight<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 
-            unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+            fn first_pass(&mut self) -> Option<Self::Item> {
                 let current = self.current;
                 if current < self.end {
                     self.current += 1;
-                    Some(($(self.data.$index.get_data(current),)+))
+                    Some(unsafe {($(self.data.$index.get_data(current),)+)})
                 } else {
                     None
                 }
             }
-            unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+            fn post_process(&mut self, item: Self::Item) -> Self::Item {
                 item
             }
         }

@@ -17,7 +17,7 @@ where
 {
     type Item = I::Item;
 
-    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+    fn first_pass(&mut self) -> Option<Self::Item> {
         while let Some(item) = self.iter.first_pass() {
             if (self.pred)(&item) {
                 return Some(item);
@@ -25,7 +25,7 @@ where
         }
         None
     }
-    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+    fn post_process(&mut self, item: Self::Item) -> Self::Item {
         self.iter.post_process(item)
     }
 }

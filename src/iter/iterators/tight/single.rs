@@ -29,17 +29,17 @@ impl<T: IntoAbstract> Tight1<T> {
 impl<T: IntoAbstract> Shiperator for Tight1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
 
-    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+    fn first_pass(&mut self) -> Option<Self::Item> {
         let current = self.current;
         if current < self.end {
             self.current += 1;
-            let data = self.data.get_data(current);
+            let data = unsafe { self.data.get_data(current) };
             Some(data)
         } else {
             None
         }
     }
-    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+    fn post_process(&mut self, item: Self::Item) -> Self::Item {
         item
     }
 }

@@ -25,7 +25,7 @@ struct Position { x: f32, y: f32 };
 
 #[system(InAcid)]
 fn run(pos: &Position, health: &mut Health) {
-    (pos, health).iter().for_each(|(pos, health)| {
+    (&pos, &mut health).iter().for_each(|(pos, mut health)| {
         if is_in_acid(pos) {
             health.0 -= 1.0;
         }

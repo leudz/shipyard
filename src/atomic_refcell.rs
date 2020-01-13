@@ -30,7 +30,7 @@ impl<T> AtomicRefCell<T> {
     ///
     /// The borrow lasts until the returned `Ref` exits scope. Multiple shared borrows can be
     /// taken out at the same time.
-    pub(crate) fn try_borrow(&self) -> Result<Ref<T>, error::Borrow> {
+    pub(crate) fn try_borrow(&self) -> Result<Ref<'_, T>, error::Borrow> {
         Ok(Ref {
             borrow: self.borrow_state.try_borrow(self.send, self.is_sync)?,
             inner: unsafe { &*self.inner.get() },
@@ -40,7 +40,7 @@ impl<T> AtomicRefCell<T> {
     ///
     /// The borrow lasts until the returned `RefMut` exits scope. The value cannot be borrowed while this borrow is
     /// active.
-    pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<T>, error::Borrow> {
+    pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<'_, T>, error::Borrow> {
         Ok(RefMut {
             borrow: self.borrow_state.try_borrow_mut(self.send, self.is_sync)?,
             inner: unsafe { &mut *self.inner.get() },
@@ -70,7 +70,7 @@ impl BorrowState {
         &self,
         send: Option<ThreadId>,
         is_sync: bool,
-    ) -> Result<Borrow, error::Borrow> {
+    ) -> Result<Borrow<'_>, error::Borrow> {
         match (send, is_sync) {
             (None, true) => {
                 // accessible from any thread, shared xor unique
@@ -124,7 +124,7 @@ impl BorrowState {
         &self,
         send: Option<ThreadId>,
         is_sync: bool,
-    ) -> Result<Borrow, error::Borrow> {
+    ) -> Result<Borrow<'_>, error::Borrow> {
         match (send, is_sync) {
             (None, true) | (None, false) => {
                 // accessible from one thread at a time
@@ -215,7 +215,7 @@ pub struct Ref<'a, T: ?Sized> {
     pub(crate) borrow: Borrow<'a>,
 }
 
-impl<'a, T: 'a + Sized> Ref<'a, T> {
+impl<'a, T: 'a> Ref<'a, T> {
     /// Make a clone, the value is already borrowed so it can't fail.
     pub(crate) fn clone(origin: &Self) -> Self {
         Ref {
@@ -259,7 +259,7 @@ impl<T: ?Sized> std::ops::Deref for Ref<'_, T> {
     }
 }
 
-impl<T: ?Sized> std::convert::AsRef<T> for Ref<'_, T> {
+impl<T: ?Sized> AsRef<T> for Ref<'_, T> {
     fn as_ref(&self) -> &T {
         self.inner
     }
@@ -271,7 +271,7 @@ pub struct RefMut<'a, T: ?Sized> {
     pub(crate) borrow: Borrow<'a>,
 }
 
-impl<'a, T: 'a + Sized> RefMut<'a, T> {
+impl<'a, T: 'a> RefMut<'a, T> {
     /// Makes a new `RefMut` for a component of the borrowed data.
     pub(crate) fn map<U, F>(origin: Self, f: F) -> RefMut<'a, U>
     where
@@ -282,12 +282,23 @@ impl<'a, T: 'a + Sized> RefMut<'a, T> {
             borrow: origin.borrow,
         }
     }
+    /// Makes a new `RefMut` for a component of the borrowed data, the operation can fail.
+    pub(crate) fn try_map<U, E, F>(origin: Self, f: F) -> Result<RefMut<'a, U>, E>
+    where
+        F: FnOnce(&mut T) -> Result<&mut U, E>,
+    {
+        Ok(RefMut {
+            inner: f(origin.inner)?,
+            borrow: origin.borrow,
+        })
+    }
+    /*
     /// Get the inner parts of the `RefMut`.
     /// # Safety
     /// The reference has to be dropped before `Borrow`
     pub(crate) unsafe fn destructure(RefMut { inner, borrow }: Self) -> (&'a mut T, Borrow<'a>) {
         (inner, borrow)
-    }
+    }*/
 }
 
 impl<T: ?Sized> std::ops::Deref for RefMut<'_, T> {
@@ -304,13 +315,13 @@ impl<T: ?Sized> std::ops::DerefMut for RefMut<'_, T> {
     }
 }
 
-impl<T: ?Sized> std::convert::AsRef<T> for RefMut<'_, T> {
+impl<T: ?Sized> AsRef<T> for RefMut<'_, T> {
     fn as_ref(&self) -> &T {
         self.inner
     }
 }
 
-impl<T: ?Sized> std::convert::AsMut<T> for RefMut<'_, T> {
+impl<T: ?Sized> AsMut<T> for RefMut<'_, T> {
     fn as_mut(&mut self) -> &mut T {
         self.inner
     }

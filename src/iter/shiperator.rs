@@ -7,14 +7,9 @@ use std::iter::FromIterator;
 pub trait Shiperator {
     type Item;
 
-    /// # Safety
-    ///
-    /// `post_process` has to be called with its returned value.
-    unsafe fn first_pass(&mut self) -> Option<Self::Item>;
-    /// # Safety
-    ///
-    /// `item` has to come from `first_pass`.
-    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item;
+    /// `post_process` should be called with its returned value.
+    fn first_pass(&mut self) -> Option<Self::Item>;
+    fn post_process(&mut self, item: Self::Item) -> Self::Item;
     fn next(&mut self) -> Option<Self::Item> {
         IntoIterator(self).next()
     }
@@ -47,8 +42,8 @@ pub trait Shiperator {
         Self: Sized,
         F: FnMut(Acc, Self::Item) -> Acc,
     {
-        while let Some(item) = unsafe { self.first_pass() } {
-            acc = f(acc, unsafe { self.post_process(item) });
+        while let Some(item) = self.first_pass() {
+            acc = f(acc, self.post_process(item));
         }
         acc
     }
@@ -57,8 +52,8 @@ pub trait Shiperator {
         Self: Sized,
         F: FnMut(Acc, Self::Item) -> Result<Acc, E>,
     {
-        while let Some(item) = unsafe { self.first_pass() } {
-            acc = f(acc, unsafe { self.post_process(item) })?;
+        while let Some(item) = self.first_pass() {
+            acc = f(acc, self.post_process(item))?;
         }
         Ok(acc)
     }
@@ -137,10 +132,10 @@ pub trait Shiperator {
 impl<S: Shiperator + ?Sized> Shiperator for &mut S {
     type Item = <S as Shiperator>::Item;
 
-    unsafe fn first_pass(&mut self) -> Option<Self::Item> {
+    fn first_pass(&mut self) -> Option<Self::Item> {
         (**self).first_pass()
     }
-    unsafe fn post_process(&mut self, item: Self::Item) -> Self::Item {
+    fn post_process(&mut self, item: Self::Item) -> Self::Item {
         (**self).post_process(item)
     }
 }
@@ -160,9 +155,7 @@ impl<S: Shiperator + ?Sized> Iterator for IntoIterator<S> {
     type Item = <S as Shiperator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe {
-            let item = self.0.first_pass()?;
-            Some(self.0.post_process(item))
-        }
+        let item = self.0.first_pass()?;
+        Some(self.0.post_process(item))
     }
 }

@@ -179,7 +179,7 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
-    pub fn run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R + 'a>(&'a self, f: F) -> R {
+    pub fn run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
         self.try_run::<T, _, _>(f).unwrap()
     }
     /// Allows to perform some actions not possible otherwise like iteration.
@@ -208,7 +208,7 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Not]: struct.Not.html
-    pub fn try_run<'a, T: Run<'a>, R: 'static, F: FnOnce(T::Storage) -> R + 'a>(
+    pub fn try_run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(
         &'a self,
         f: F,
     ) -> Result<R, error::GetStorage> {
@@ -321,8 +321,8 @@ impl World {
     /// struct Adder;
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
-    ///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-    ///         (usizes, u32s).iter().for_each(|(x, &y)| {
+    ///     fn run((mut usizes, u32s): <Self::Data as SystemData>::View) {
+    ///         (&mut usizes, &u32s).iter().for_each(|(x, &y)| {
     ///             *x += y as usize;
     ///         });
     ///     }
@@ -379,8 +379,8 @@ impl World {
     /// struct Adder;
     /// impl<'a> System<'a> for Adder {
     ///     type Data = (&'a mut usize, &'a u32);
-    ///     fn run((usizes, u32s): <Self::Data as SystemData>::View) {
-    ///         (usizes, u32s).iter().for_each(|(x, &y)| {
+    ///     fn run((mut usizes, u32s): <Self::Data as SystemData>::View) {
+    ///         (&mut usizes, &u32s).iter().for_each(|(x, &y)| {
     ///             *x += y as usize;
     ///         });
     ///     }

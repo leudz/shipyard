@@ -49,14 +49,14 @@ fn basic() {
     });
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter();
+        let mut iter = (&u32s, &i16s).iter();
         assert_eq!(iter.next().unwrap(), (&0, &10));
         assert_eq!(iter.next().unwrap(), (&2, &12));
         assert_eq!(iter.next().unwrap(), (&4, &14));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter();
+    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+        let mut iter = (&mut u32s, &mut i16s).iter();
         assert_eq!(iter.next().unwrap(), (&mut 0, &mut 10));
         assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
         assert_eq!(iter.next().unwrap(), (&mut 4, &mut 14));
@@ -64,14 +64,14 @@ fn basic() {
     });
 
     world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter();
+        let mut iter = (&i16s, &u32s).iter();
         assert_eq!(iter.next().unwrap(), (&10, &0));
         assert_eq!(iter.next().unwrap(), (&12, &2));
         assert_eq!(iter.next().unwrap(), (&14, &4));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter();
+    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+        let mut iter = (&mut i16s, &mut u32s).iter();
         assert_eq!(iter.next().unwrap(), (&mut 10, &mut 0));
         assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
         assert_eq!(iter.next().unwrap(), (&mut 14, &mut 4));
@@ -105,8 +105,8 @@ fn with_id() {
         assert_eq!(iter.next().unwrap(), (key1, &1));
         assert!(iter.next().is_none());
     });
-    world.run::<&mut u32, _, _>(|u32s| {
-        let mut iter = u32s.iter().with_id();
+    world.run::<&mut u32, _, _>(|mut u32s| {
+        let mut iter = (&mut u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &mut 0));
         assert_eq!(iter.next().unwrap(), (key2, &mut 2));
         assert_eq!(iter.next().unwrap(), (key4, &mut 4));
@@ -122,8 +122,8 @@ fn with_id() {
         assert_eq!(iter.next().unwrap(), (key4, &14));
         assert!(iter.next().is_none());
     });
-    world.run::<&mut i16, _, _>(|i16s| {
-        let mut iter = i16s.iter().with_id();
+    world.run::<&mut i16, _, _>(|mut i16s| {
+        let mut iter = (&mut i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &mut 10));
         assert_eq!(iter.next().unwrap(), (key2, &mut 12));
         assert_eq!(iter.next().unwrap(), (key3, &mut 13));
@@ -132,14 +132,14 @@ fn with_id() {
     });
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter().with_id();
+        let mut iter = (&u32s, &i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&0, &10)));
         assert_eq!(iter.next().unwrap(), (key2, (&2, &12)));
         assert_eq!(iter.next().unwrap(), (key4, (&4, &14)));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter().with_id();
+    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+        let mut iter = (&mut u32s, &mut i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&mut 0, &mut 10)));
         assert_eq!(iter.next().unwrap(), (key2, (&mut 2, &mut 12)));
         assert_eq!(iter.next().unwrap(), (key4, (&mut 4, &mut 14)));
@@ -147,14 +147,14 @@ fn with_id() {
     });
 
     world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter().with_id();
+        let mut iter = (&i16s, &u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&10, &0)));
         assert_eq!(iter.next().unwrap(), (key2, (&12, &2)));
         assert_eq!(iter.next().unwrap(), (key4, (&14, &4)));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter().with_id();
+    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+        let mut iter = (&mut i16s, &mut u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&mut 10, &mut 0)));
         assert_eq!(iter.next().unwrap(), (key2, (&mut 12, &mut 2)));
         assert_eq!(iter.next().unwrap(), (key4, (&mut 14, &mut 4)));
@@ -211,14 +211,14 @@ fn map() {
     });
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter().map(|(x, y)| (*x, *y));
+        let mut iter = (&u32s, &i16s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (0, 10));
         assert_eq!(iter.next().unwrap(), (2, 12));
         assert_eq!(iter.next().unwrap(), (4, 14));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter().map(|(x, y)| (*x, *y));
+    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+        let mut iter = (&mut u32s, &mut i16s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (0, 10));
         assert_eq!(iter.next().unwrap(), (2, 12));
         assert_eq!(iter.next().unwrap(), (4, 14));
@@ -226,14 +226,14 @@ fn map() {
     });
 
     world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter().map(|(x, y)| (*x, *y));
+        let mut iter = (&i16s, &u32s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (10, 0));
         assert_eq!(iter.next().unwrap(), (12, 2));
         assert_eq!(iter.next().unwrap(), (14, 4));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter().map(|(x, y)| (*x, *y));
+    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+        let mut iter = (&mut i16s, &mut u32s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (10, 0));
         assert_eq!(iter.next().unwrap(), (12, 2));
         assert_eq!(iter.next().unwrap(), (14, 4));
@@ -282,24 +282,24 @@ fn filter() {
     });
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter().filter(|(_, y)| **y % 5 == 0);
+        let mut iter = (&u32s, &i16s).iter().filter(|(_, y)| **y % 5 == 0);
         assert_eq!(iter.next().unwrap(), (&0, &10));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s).iter().filter(|(_, y)| **y % 5 != 0);
+    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+        let mut iter = (&mut u32s, &mut i16s).iter().filter(|(_, y)| **y % 5 != 0);
         assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
         assert_eq!(iter.next().unwrap(), (&mut 4, &mut 14));
         assert!(iter.next().is_none());
     });
 
     world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter().filter(|(x, _)| **x % 5 == 0);
+        let mut iter = (&i16s, &u32s).iter().filter(|(x, _)| **x % 5 == 0);
         assert_eq!(iter.next().unwrap(), (&10, &0));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s).iter().filter(|(x, _)| **x % 5 != 0);
+    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+        let mut iter = (&mut i16s, &mut u32s).iter().filter(|(x, _)| **x % 5 != 0);
         assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
         assert_eq!(iter.next().unwrap(), (&mut 14, &mut 4));
         assert!(iter.next().is_none());
@@ -337,8 +337,8 @@ fn enumerate_map_filter_with_id() {
         assert_eq!(iter.next().unwrap(), (key4, (6, &4)));
         assert!(iter.next().is_none());
     });
-    world.run::<&mut u32, _, _>(|u32s| {
-        let mut iter = u32s
+    world.run::<&mut u32, _, _>(|mut u32s| {
+        let mut iter = (&mut u32s)
             .iter()
             .enumerate()
             .map(|(i, x)| (i * 3, x))
@@ -362,8 +362,8 @@ fn enumerate_map_filter_with_id() {
         assert_eq!(iter.next().unwrap(), (key4, (9, &14)));
         assert!(iter.next().is_none());
     });
-    world.run::<&mut i16, _, _>(|i16s| {
-        let mut iter = i16s
+    world.run::<&mut i16, _, _>(|mut i16s| {
+        let mut iter = (&mut i16s)
             .iter()
             .enumerate()
             .map(|(i, x)| (i * 3, x))
@@ -375,7 +375,7 @@ fn enumerate_map_filter_with_id() {
     });
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s)
+        let mut iter = (&u32s, &i16s)
             .iter()
             .enumerate()
             .map(|(i, x)| (i * 3, x))
@@ -386,8 +386,8 @@ fn enumerate_map_filter_with_id() {
         assert_eq!(iter.next().unwrap(), (key4, (6, (&4, &14))));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s)
+    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+        let mut iter = (&mut i16s, &mut u32s)
             .iter()
             .enumerate()
             .map(|(i, x)| (i * 3, x))
@@ -430,8 +430,8 @@ fn enumerate_filter_map_with_id() {
         assert_eq!(iter.next().unwrap(), (key4, (6, &4)));
         assert!(iter.next().is_none());
     });
-    world.run::<&mut u32, _, _>(|u32s| {
-        let mut iter = u32s
+    world.run::<&mut u32, _, _>(|mut u32s| {
+        let mut iter = (&mut u32s)
             .iter()
             .enumerate()
             .filter(|(_, x)| **x % 2 != 0)
@@ -455,8 +455,8 @@ fn enumerate_filter_map_with_id() {
         assert_eq!(iter.next().unwrap(), (key4, (9, &14)));
         assert!(iter.next().is_none());
     });
-    world.run::<&mut i16, _, _>(|i16s| {
-        let mut iter = i16s
+    world.run::<&mut i16, _, _>(|mut i16s| {
+        let mut iter = (&mut i16s)
             .iter()
             .enumerate()
             .filter(|(_, x)| **x % 2 != 0)
@@ -468,7 +468,7 @@ fn enumerate_filter_map_with_id() {
     });
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
-        let mut iter = (u32s, i16s)
+        let mut iter = (&u32s, &i16s)
             .iter()
             .enumerate()
             .filter(|&(i, _)| i % 2 == 0)
@@ -479,8 +479,8 @@ fn enumerate_filter_map_with_id() {
         assert_eq!(iter.next().unwrap(), (key4, (6, (&4, &14))));
         assert!(iter.next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(i16s, u32s)| {
-        let mut iter = (i16s, u32s)
+    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+        let mut iter = (&mut i16s, &mut u32s)
             .iter()
             .enumerate()
             .filter(|&(i, _)| i % 2 != 0)
