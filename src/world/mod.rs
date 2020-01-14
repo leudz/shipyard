@@ -5,6 +5,7 @@ mod scheduler;
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
 use crate::run::Run;
+use crate::run::System;
 use crate::sparse_set::{Pack, UpdatePack};
 use crate::storage::AllStorages;
 use pack::{LoosePack, TightPack};
@@ -288,6 +289,49 @@ impl World {
     }
     pub fn update_pack<T: 'static>(&self) {
         self.try_update_pack::<T>().unwrap();
+    }
+    pub fn try_add_system<S: for<'a> System<'a> + Send + Sync + 'static>(
+        &self,
+    ) -> Result<(), error::AddWorkload> {
+        use crate::run::Dispatch;
+        use core::any::TypeId;
+        use std::collections::hash_map::Entry;
+
+        let mut scheduler = self
+            .scheduler
+            .try_borrow_mut()
+            .map_err(|_| error::AddWorkload::Scheduler)?;
+        let systems_count = scheduler.systems.len();
+
+        if let Entry::Vacant(vacant) = scheduler.lookup_table.entry(TypeId::of::<S>()) {
+            vacant.insert(systems_count);
+            scheduler
+                .systems
+                .push(Box::new(|world| S::try_dispatch(world)));
+        }
+        Ok(())
+    }
+    pub fn add_system<S: for<'a> System<'a> + Send + Sync + 'static>(&self) {
+        self.try_add_system::<S>().unwrap()
+    }
+    pub fn try_run_system<S: for<'a> System<'a> + Send + Sync + 'static>(
+        &self,
+    ) -> Result<(), error::RunWorkload> {
+        use core::any::TypeId;
+
+        let scheduler = self
+            .scheduler
+            .try_borrow()
+            .map_err(|_| error::RunWorkload::Scheduler)?;
+
+        let system_index = scheduler
+            .lookup_table
+            .get(&TypeId::of::<S>())
+            .ok_or(error::RunWorkload::MissingWorkload)?;
+        Ok((scheduler.systems[*system_index])(self)?)
+    }
+    pub fn run_system<S: for<'a> System<'a> + Send + Sync + 'static>(&self) {
+        self.try_run_system::<S>().unwrap()
     }
     /// Modifies the current default workload to `name`.
     pub fn try_set_default_workload(

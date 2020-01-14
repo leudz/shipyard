@@ -17,7 +17,7 @@ use std::ops::Range;
 pub struct Scheduler {
     pub(super) systems:
         Vec<Box<dyn for<'a> Fn(&'a World) -> Result<(), error::GetStorage> + Send + Sync>>,
-    lookup_table: HashMap<TypeId, usize>,
+    pub(super) lookup_table: HashMap<TypeId, usize>,
     // a batch list systems running in parallel
     pub(super) batch: Vec<Box<[usize]>>,
     // first usize is the index where the workload begins
