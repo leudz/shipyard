@@ -347,13 +347,12 @@ impl World {
     ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
     /// });
     ///
-    /// world.try_add_workload("Add & Check", (Adder, Checker)).unwrap();
+    /// world.try_add_workload::<(Adder, Checker), _>("Add & Check").unwrap();
     /// world.run_default();
     /// ```
-    pub fn try_add_workload<S: IntoWorkload>(
+    pub fn try_add_workload<S: IntoWorkload, N: Into<Cow<'static, str>>>(
         &self,
-        name: impl Into<Cow<'static, str>>,
-        systems: S,
+        name: N,
     ) -> Result<(), error::AddWorkload> {
         let all_storages = self
             .storages
@@ -363,7 +362,7 @@ impl World {
             .scheduler
             .try_borrow_mut()
             .map_err(|_| error::AddWorkload::Scheduler)?;
-        systems.try_into_workload(name, &mut *scheduler, &*all_storages)
+        S::try_into_workload(name, &mut *scheduler, &*all_storages)
     }
     /// A workload is a collection of systems.
     /// They will execute as much in parallel as possible.
@@ -405,11 +404,11 @@ impl World {
     ///     entities.add_entity((&mut usizes, &mut u32s), (4, 5));
     /// });
     ///
-    /// world.add_workload("Add & Check", (Adder, Checker));
+    /// world.add_workload::<(Adder, Checker), _>("Add & Check");
     /// world.run_default();
     /// ```
-    pub fn add_workload<S: IntoWorkload>(&self, name: impl Into<Cow<'static, str>>, systems: S) {
-        self.try_add_workload(name, systems).unwrap();
+    pub fn add_workload<S: IntoWorkload, N: Into<Cow<'static, str>>>(&self, name: N) {
+        self.try_add_workload::<S, _>(name).unwrap();
     }
     /* WIP
     pub fn try_add_workload_fn<S: IntoWorkloadFn>(

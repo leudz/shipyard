@@ -14,7 +14,7 @@ fn basic() {
     world.run::<(EntitiesMut, &mut Rc<RefCell<Vec<u32>>>), _, _>(|(mut entities, mut vecs)| {
         entities.add_entity(&mut vecs, Rc::new(RefCell::new(Vec::new())));
     });
-    world.add_workload("Push", Push);
+    world.add_workload::<Push, _>("Push");
     world.run_default();
 
     world.run::<&Rc<RefCell<Vec<u32>>>, _, _>(|vecs| {

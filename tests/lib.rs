@@ -809,7 +809,7 @@ fn system() {
         },
     );
 
-    world.add_workload("sys1", System1);
+    world.add_workload::<System1, _>("sys1");
     world.run_default();
     world.run::<(&usize,), _, _>(|(usizes,)| {
         let mut iter = usizes.iter();
@@ -849,7 +849,7 @@ fn systems() {
         },
     );
 
-    world.add_workload("sys1", (System1, System2));
+    world.add_workload::<(System1, System2), _>("sys1");
     world.run_default();
     world.run::<(&usize,), _, _>(|(usizes,)| {
         let mut iter = usizes.iter();
@@ -995,7 +995,7 @@ fn two_workloads() {
     }
 
     let world = World::new::<(usize, u32)>();
-    world.add_workload("default", (System1,));
+    world.add_workload::<(System1,), _>("default");
 
     rayon::scope(|s| {
         s.spawn(|_| world.run_default());
@@ -1018,7 +1018,7 @@ fn two_bad_workloads() {
     }
 
     let world = World::new::<(usize, u32)>();
-    world.add_workload("default", (System1,));
+    world.add_workload::<(System1,), _>("default");
 
     rayon::scope(|s| {
         s.spawn(|_| world.run_default());

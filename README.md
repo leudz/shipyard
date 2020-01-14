@@ -44,7 +44,7 @@ world.run::<(EntitiesMut, &mut Position, &mut Health), _, _>(|mut entities, mut 
     entities.add_entity((&mut pos, &mut health), Position { x: 0.0, y: 0.0 }, Health(1000.0));
 });
 
-world.add_workload("In acid", InAcid);
+world.add_workload::<InAcid, _>("In acid");
 world.run_default();
 ```
 
