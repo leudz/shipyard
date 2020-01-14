@@ -23,6 +23,7 @@ where
     T: IntoIter,
     <T as IntoIter>::IntoIter: CurrentId,
 {
+    #[allow(clippy::type_complexity)]
     type IntoIterIds = Map<
         WithId<<T as IntoIter>::IntoIter>,
         fn(
