@@ -1,0 +1,5 @@
+error: Unique will only work with component storages refered by &T or &mut T
+ --> $DIR/unique_entities.rs:4:18
+  |
+4 | fn run(_: Unique<Entities>) {}
+  |                  ^^^^^^^^

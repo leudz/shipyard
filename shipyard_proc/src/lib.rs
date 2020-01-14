@@ -114,7 +114,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             if inner_type.args.len() != 1 {
                                 return Err(Error::new_spanned(
                                     last,
-                                    "Not will only accept one type and nothing else",
+                                    "Unique will only accept one type and nothing else",
                                 ));
                             }
                             let arg = inner_type.args.iter_mut().next().unwrap();
@@ -124,7 +124,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                                 } else {
                                     return Err(Error::new_spanned(
                                         inner_type,
-                                        "Not will only work with component storages refered by &T or &mut T",
+                                        "Unique will only work with component storages refered by &T or &mut T",
                                     ));
                                 }
                             } else {

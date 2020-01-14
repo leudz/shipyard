@@ -1078,6 +1078,7 @@ fn derive() {
     t.compile_fail("tests/derive/generic_lifetime.rs");
     t.compile_fail("tests/derive/generic_type.rs");
     t.compile_fail("tests/derive/not_entities.rs");
+    t.compile_fail("tests/derive/unique_entities.rs");
     t.compile_fail("tests/derive/not_run.rs");
     t.compile_fail("tests/derive/return_something.rs");
     t.compile_fail("tests/derive/where.rs");
