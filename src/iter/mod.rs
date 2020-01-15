@@ -5,8 +5,8 @@ mod into_abstract;
 mod into_iter;
 pub mod iterators;
 mod map;
-#[cfg(feature = "parallel")]
-mod parallel_buffer;
+//#[cfg(feature = "parallel")]
+//mod parallel_buffer;
 mod shiperator;
 mod with_id;
 

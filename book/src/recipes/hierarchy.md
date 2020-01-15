@@ -70,30 +70,25 @@ Since we need access to `EntitiesViewMut` as well as our hierarchy component sto
 
 ```rust, noplaypen
 fn detach(&mut self, id: EntityId) {
-    // remove the Child component - if nonexistent, do nothing (return)
-    let child = match Remove::<(Child,)>::remove(&mut self.2, id) {
-        (Some(c),) => c,
-        _ => return,
-    };
+    // remove the Child component - if nonexistent, do nothing
+    if let (Some(child),) = (&mut self.2,).remove(id) {
+        // retrieve and update Parent component from ancestor
+        let parent = &mut self.1[child.parent];
+        parent.num_children -= 1;
 
-    // retrieve and update Parent component from ancestor
-    let parent = (&mut self.1).get(child.parent).unwrap();
-    parent.num_children -= 1;
-
-    if parent.num_children == 0 {
-        // if the number of children is zero, the Parent component must be removed
-        Remove::<(Parent,)>::remove(&mut self.1, child.parent)
-            .0
-            .unwrap();
-    } else {
-        // the ancestor still has children, and we have to change some linking
-        // check if we have to change first_child
-        if parent.first_child == id {
-            parent.first_child = child.next;
+        if parent.num_children == 0 {
+            // if the number of children is zero, the Parent component must be removed
+            (&mut self.1,).remove(child.parent);
+        } else {
+            // the ancestor still has children, and we have to change some linking
+            // check if we have to change first_child
+            if parent.first_child == id {
+                parent.first_child = child.next;
+            }
+            // remove the detached child from the sibling chain
+            self.2[child.prev].next = child.next;
+            self.2[child.next].prev = child.prev;
         }
-        // remove the detached child from the sibling chain
-        (&mut self.2).get(child.prev).unwrap().next = child.next;
-        (&mut self.2).get(child.next).unwrap().prev = child.prev;
     }
 }
 ```
@@ -121,12 +116,12 @@ fn attach(&mut self, id: EntityId, parent: EntityId) {
         p.num_children += 1;
 
         // get the ids of the new previous and next siblings of our new child
-        let prev = self.2.get(p.first_child).unwrap().prev;
+        let prev = self.2[p.first_child].prev;
         let next = p.first_child;
 
         // change the linking
-        (&mut self.2).get(prev).unwrap().next = id;
-        (&mut self.2).get(next).unwrap().prev = id;
+        self.2[prev].next = id;
+        self.2[next].prev = id;
 
         // add the Child component to the new entity
         self.0
@@ -205,14 +200,14 @@ A perfect use case for iterators! An iterator has to implement the `next` method
 We start with a `ChildrenIter`, which is pretty straightforward:
 
 ```rust, noplaypen
-struct ChildrenIter<'a, C> {
-    get_child: &'a C,
+struct ChildrenIter<C> {
+    get_child: C,
     cursor: (EntityId, usize),
 }
 
-impl<'a, C> Iterator for ChildrenIter<'a, C>
+impl<'a, C> Iterator for ChildrenIter<C>
 where
-    &'a C: GetComponent<Out = &'a Child>,
+    C: GetComponent<Out = &'a Child> + Copy,
 {
     type Item = EntityId;
 
@@ -234,14 +229,14 @@ Note that we don't implement `Iterator` for `ViewMut<Child>` directly, but for a
 The next one is the `AncestorIter`:
 
 ```rust, noplaypen
-struct AncestorIter<'a, C> {
-    get_child: &'a C,
+struct AncestorIter<C> {
+    get_child: C,
     cursor: EntityId,
 }
 
-impl<'a, C> Iterator for AncestorIter<'a, C>
+impl<'a, C> Iterator for AncestorIter<C>
 where
-    &'a C: GetComponent<Out = &'a Child>,
+    C: GetComponent<Out = &'a Child> + Copy,
 {
     type Item = EntityId;
 
@@ -263,16 +258,16 @@ It is based on the code for the `ChildrenIter` but comes with an additional stac
 - Pop the last level from the stack whenever we run out of siblings, then carry on where we left off.
 
 ```rust, noplaypen
-struct DescendantsIter<'a, P, C> {
-    get_parent: &'a P,
-    get_child: &'a C,
+struct DescendantsIter<P, C> {
+    get_parent: P,
+    get_child: C,
     cursors: Vec<(EntityId, usize)>,
 }
 
-impl<'a, P, C> Iterator for DescendantsIter<'a, P, C>
+impl<'a, P, C> Iterator for DescendantsIter<P, C>
 where
-    &'a P: GetComponent<Out = &'a Parent>,
-    &'a C: GetComponent<Out = &'a Child>,
+    P: GetComponent<Out = &'a Parent> + Copy,
+    C: GetComponent<Out = &'a Child> + Copy,
 {
     type Item = EntityId;
 
@@ -300,29 +295,25 @@ where
 What we still need to do is to implement a simple trait with methods that return nicely initialized `*Iter` structs for us:
 
 ```rust, noplaypen
-trait HierarchyIter<'a, P: 'a, C: 'a>
-where
-    &'a P: GetComponent<Out = &'a Parent>,
-    &'a C: GetComponent<Out = &'a Child>,
-{
-    fn ancestors(&self, id: EntityId) -> AncestorIter<'a, C>;
-    fn children(&self, id: EntityId) -> ChildrenIter<'a, C>;
-    fn descendants(&self, id: EntityId) -> DescendantsIter<'a, P, C>;
+trait HierarchyIter<'a, P, C> {
+    fn ancestors(&self, id: EntityId) -> AncestorIter<C>;
+    fn children(&self, id: EntityId) -> ChildrenIter<C>;
+    fn descendants(&self, id: EntityId) -> DescendantsIter<P, C>;
 }
 
-impl<'a, P, C> HierarchyIter<'a, P, C> for (&'a P, &'a C)
+impl<'a, P, C> HierarchyIter<'a, P, C> for (P, C)
 where
-    &'a P: GetComponent<Out = &'a Parent>,
-    &'a C: GetComponent<Out = &'a Child>,
+    P: GetComponent<Out = &'a Parent> + Copy,
+    C: GetComponent<Out = &'a Child> + Copy,
 {
-    fn ancestors(&self, id: EntityId) -> AncestorIter<'a, C> {
+    fn ancestors(&self, id: EntityId) -> AncestorIter<C> {
         AncestorIter {
             get_child: self.1,
             cursor: id,
         }
     }
 
-    fn children(&self, id: EntityId) -> ChildrenIter<'a, C> {
+    fn children(&self, id: EntityId) -> ChildrenIter<C> {
         ChildrenIter {
             get_child: self.1,
             cursor: self
@@ -332,7 +323,7 @@ where
         }
     }
 
-    fn descendants(&self, id: EntityId) -> DescendantsIter<'a, P, C> {
+    fn descendants(&self, id: EntityId) -> DescendantsIter<P, C> {
         DescendantsIter {
             get_parent: self.0,
             get_child: self.1,
@@ -398,7 +389,7 @@ fn remove(&mut self, id: EntityId) {
     for child_id in children {
         self.detach(child_id);
     }
-    Remove::<(Parent,)>::remove(&mut self.1, id).0;
+    (&mut self.1,).remove(id);
 }
 ```
 
@@ -445,23 +436,22 @@ However, a simple sorting for children can be done in two steps:
 We can add this method to the `Hierarchy` trait:
 
 ```rust, noplaypen
-fn sort_children_by<F>(&mut self, id: EntityId, compare: F)
+fn sort_children_by<F>(&mut self, id: EntityId, mut compare: F)
 where
-    F: FnMut(&EntityId, &EntityId) -> Ordering,
+    F: FnMut(&EntityId, &EntityId) -> std::cmp::Ordering,
 {
-    let mut compare = compare;
     let mut children = (&self.1, &self.2).children(id).collect::<Vec<EntityId>>();
     if children.len() > 1 {
         children.sort_by(|a, b| compare(a, b));
         // set first_child in Parent component
-        (&mut self.1).get(id).unwrap().first_child = children[0];
+        self.1[id].first_child = children[0];
         // loop through children and relink them
         for i in 0..children.len() - 1 {
-            (&mut self.2).get(children[i]).unwrap().next = children[i + 1];
-            (&mut self.2).get(children[i + 1]).unwrap().prev = children[i];
+            self.2[children[i]].next = children[i + 1];
+            self.2[children[i + 1]].prev = children[i];
         }
-        (&mut self.2).get(children[0]).unwrap().prev = *children.last().unwrap();
-        (&mut self.2).get(*children.last().unwrap()).unwrap().next = children[0];
+        self.2[children[0]].prev = *children.last().unwrap();
+        self.2[*children.last().unwrap()].next = children[0];
     }
 }
 ```
@@ -473,33 +463,33 @@ Again a small test demonstrates the usage:
 fn test_sorting() {
     let world = World::new::<(Parent, Child, usize)>();
 
-    world.run::<((EntitiesMut, &mut Parent, &mut Child), &mut usize), _, _>(|(mut views, mut value)| {
-        let root = views.0.add_entity((), ());
+    world.run::<((EntitiesMut, &mut Parent, &mut Child), &mut usize), _, _>(
+        |(mut views, mut value)| {
+            let root = views.0.add_entity((), ());
 
-        let e0 = views.attach_new(root);
-        let e1 = views.attach_new(root);
-        let e2 = views.attach_new(root);
-        let e3 = views.attach_new(root);
-        let e4 = views.attach_new(root);
+            let e0 = views.attach_new(root);
+            let e1 = views.attach_new(root);
+            let e2 = views.attach_new(root);
+            let e3 = views.attach_new(root);
+            let e4 = views.attach_new(root);
 
-        (&views.0).add_component(&mut value, 7, e0);
-        (&views.0).add_component(&mut value, 5, e1);
-        (&views.0).add_component(&mut value, 6, e2);
-        (&views.0).add_component(&mut value, 1, e3);
-        (&views.0).add_component(&mut value, 3, e4);
+            (&views.0).add_component(&mut value, 7, e0);
+            (&views.0).add_component(&mut value, 5, e1);
+            (&views.0).add_component(&mut value, 6, e2);
+            (&views.0).add_component(&mut value, 1, e3);
+            (&views.0).add_component(&mut value, 3, e4);
 
-        assert!((&views.1, &views.2)
-            .children(root)
-            .eq([e0, e1, e2, e3, e4].iter().cloned()));
+            assert!((&views.1, &views.2)
+                .children(root)
+                .eq([e0, e1, e2, e3, e4].iter().cloned()));
 
-        views.sort_children_by(root, |a, b| {
-            value.get(*a).unwrap().cmp(&value.get(*b).unwrap())
-        });
+            views.sort_children_by(root, |a, b| value[*a].cmp(&value[*b]));
 
-        assert!((&views.1, &views.2)
-            .children(root)
-            .eq([e3, e4, e1, e2, e0].iter().cloned()));
-    });
+            assert!((&views.1, &views.2)
+                .children(root)
+                .eq([e3, e4, e1, e2, e0].iter().cloned()));
+        },
+    );
 }
 ```
 
