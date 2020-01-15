@@ -1,3 +1,4 @@
+mod borrow;
 mod iteration;
 #[cfg(feature = "serialization")]
 mod serialization;

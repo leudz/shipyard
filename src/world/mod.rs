@@ -6,6 +6,7 @@ use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
 use crate::run::Run;
 use crate::run::System;
+use crate::run::SystemData;
 use crate::sparse_set::{Pack, UpdatePack};
 use crate::storage::AllStorages;
 use pack::{LoosePack, TightPack};
@@ -151,6 +152,21 @@ impl World {
     ) -> Result<(), error::Borrow> {
         self.storages.try_borrow_mut()?.register_unique(component);
         Ok(())
+    }
+    pub fn try_borrow<'s, C: SystemData<'s>>(
+        &'s self,
+    ) -> Result<<C as SystemData<'s>>::View, error::GetStorage> {
+        #[cfg(feature = "parallel")]
+        {
+            <C as SystemData<'s>>::try_borrow(&self.storages, &self.thread_pool)
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            <C as SystemData<'s>>::try_borrow(&self.storages)
+        }
+    }
+    pub fn borrow<'s, C: SystemData<'s>>(&'s self) -> <C as SystemData<'s>>::View {
+        self.try_borrow::<C>().unwrap()
     }
     /// Allows to perform some actions not possible otherwise like iteration.
     /// This is basically an unnamed system.
