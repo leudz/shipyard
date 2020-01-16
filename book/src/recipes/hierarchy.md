@@ -170,17 +170,17 @@ And lastly a simple usage example:
 ```rust, noplaypen
 let world = World::new::<(Parent, Child, usize)>();
 
-world.run::<(EntitiesMut, &mut Parent, &mut Child), _, _>(|mut views| {
-    let root1 = views.0.add_entity((), ());
-    let root2 = views.0.add_entity((), ());
+let mut hierarchy = world.borrow::<(EntitiesMut, &mut Parent, &mut Child)>();
 
-    let e1 = views.attach_new(root1);
-    let e2 = views.attach_new(e1);
-    let e3 = views.attach_new(e1);
-    let e4 = views.attach_new(e3);
+let root1 = hierarchy.0.add_entity((), ());
+let root2 = hierarchy.0.add_entity((), ());
 
-    views.attach(e3, root2);
-});
+let e1 = hierarchy.attach_new(root1);
+let e2 = hierarchy.attach_new(e1);
+let e3 = hierarchy.attach_new(e1);
+let e4 = hierarchy.attach_new(e3);
+
+hierarchy.attach(e3, root2);
 ```
 
 ## Traversing the hierarchy
@@ -342,35 +342,35 @@ Cool. Let's extend the former usage example into a little test.
 fn test_hierarchy() {
     let world = World::new::<(Parent, Child, usize)>();
 
-    world.run::<(EntitiesMut, &mut Parent, &mut Child), _, _>(|mut views| {
-        let root1 = views.0.add_entity((), ());
-        let root2 = views.0.add_entity((), ());
+    let mut hierarchy = world.borrow::<(EntitiesMut, &mut Parent, &mut Child)>();
 
-        let e1 = views.attach_new(root1);
-        let e2 = views.attach_new(e1);
-        let e3 = views.attach_new(e1);
-        let e4 = views.attach_new(e3);
+    let root1 = hierarchy.0.add_entity((), ());
+    let root2 = hierarchy.0.add_entity((), ());
 
-        views.attach(e3, root2);
+    let e1 = hierarchy.attach_new(root1);
+    let e2 = hierarchy.attach_new(e1);
+    let e3 = hierarchy.attach_new(e1);
+    let e4 = hierarchy.attach_new(e3);
 
-        let e5 = views.attach_new(e3);
+    hierarchy.attach(e3, root2);
 
-        assert!((&views.1, &views.2)
-            .children(e3)
-            .eq([e4, e5].iter().cloned()));
+    let e5 = hierarchy.attach_new(e3);
 
-        assert!((&views.1, &views.2)
-            .ancestors(e4)
-            .eq([e3, root2].iter().cloned()));
+    assert!((&hierarchy.1, &hierarchy.2)
+        .children(e3)
+        .eq([e4, e5].iter().cloned()));
 
-        assert!((&views.1, &views.2)
-            .descendants(root1)
-            .eq([e1, e2].iter().cloned()));
+    assert!((&hierarchy.1, &hierarchy.2)
+        .ancestors(e4)
+        .eq([e3, root2].iter().cloned()));
 
-        assert!((&views.1, &views.2)
-            .descendants(root2)
-            .eq([e3, e4, e5].iter().cloned()));
-    });
+    assert!((&hierarchy.1, &hierarchy.2)
+        .descendants(root1)
+        .eq([e1, e2].iter().cloned()));
+
+    assert!((&hierarchy.1, &hierarchy.2)
+        .descendants(root2)
+        .eq([e3, e4, e5].iter().cloned()));
 }
 ```
 
@@ -407,21 +407,21 @@ fn remove_all(&mut self, id: EntityId) {
 That's it! We can now add the following code to the end of our test from the last chapter:
 
 ```rust, noplaypen
-views.detach(e1);
+hierarchy.detach(e1);
 
-assert!((&views.1, &views.2).descendants(root1).eq(None));
-assert!((&views.1, &views.2).ancestors(e1).eq(None));
-assert!((&views.1, &views.2).children(e1).eq([e2].iter().cloned()));
+assert!((&hierarchy.1, &hierarchy.2).descendants(root1).eq(None));
+assert!((&hierarchy.1, &hierarchy.2).ancestors(e1).eq(None));
+assert!((&hierarchy.1, &hierarchy.2).children(e1).eq([e2].iter().cloned()));
 
-views.remove(e1);
+hierarchy.remove(e1);
 
-assert!((&views.1, &views.2).children(e1).eq(None));
+assert!((&hierarchy.1, &hierarchy.2).children(e1).eq(None));
 
-views.remove_all(root2);
+hierarchy.remove_all(root2);
 
-assert!((&views.1, &views.2).descendants(root2).eq(None));
-assert!((&views.1, &views.2).descendants(e3).eq(None));
-assert!((&views.1, &views.2).ancestors(e5).eq(None));
+assert!((&hierarchy.1, &hierarchy.2).descendants(root2).eq(None));
+assert!((&hierarchy.1, &hierarchy.2).descendants(e3).eq(None));
+assert!((&hierarchy.1, &hierarchy.2).ancestors(e5).eq(None));
 ```
 
 ## Sorting
@@ -463,33 +463,31 @@ Again a small test demonstrates the usage:
 fn test_sorting() {
     let world = World::new::<(Parent, Child, usize)>();
 
-    world.run::<((EntitiesMut, &mut Parent, &mut Child), &mut usize), _, _>(
-        |(mut views, mut value)| {
-            let root = views.0.add_entity((), ());
+    let (mut hierarchy, mut usizes) = world.borrow::<((EntitiesMut, &mut Parent, &mut Child), &mut usize)>();
 
-            let e0 = views.attach_new(root);
-            let e1 = views.attach_new(root);
-            let e2 = views.attach_new(root);
-            let e3 = views.attach_new(root);
-            let e4 = views.attach_new(root);
+    let root = hierarchy.0.add_entity((), ());
 
-            (&views.0).add_component(&mut value, 7, e0);
-            (&views.0).add_component(&mut value, 5, e1);
-            (&views.0).add_component(&mut value, 6, e2);
-            (&views.0).add_component(&mut value, 1, e3);
-            (&views.0).add_component(&mut value, 3, e4);
+    let e0 = hierarchy.attach_new(root);
+    let e1 = hierarchy.attach_new(root);
+    let e2 = hierarchy.attach_new(root);
+    let e3 = hierarchy.attach_new(root);
+    let e4 = hierarchy.attach_new(root);
 
-            assert!((&views.1, &views.2)
-                .children(root)
-                .eq([e0, e1, e2, e3, e4].iter().cloned()));
+    hierarchy.0.add_component(&mut usizes, 7, e0);
+    hierarchy.0.add_component(&mut usizes, 5, e1);
+    hierarchy.0.add_component(&mut usizes, 6, e2);
+    hierarchy.0.add_component(&mut usizes, 1, e3);
+    hierarchy.0.add_component(&mut usizes, 3, e4);
 
-            views.sort_children_by(root, |a, b| value[*a].cmp(&value[*b]));
+    assert!((&hierarchy.1, &hierarchy.2)
+        .children(root)
+        .eq([e0, e1, e2, e3, e4].iter().cloned()));
 
-            assert!((&views.1, &views.2)
-                .children(root)
-                .eq([e3, e4, e1, e2, e0].iter().cloned()));
-        },
-    );
+    hierarchy.sort_children_by(root, |a, b| usizes[*a].cmp(&usizes[*b]));
+
+    assert!((&hierarchy.1, &hierarchy.2)
+        .children(root)
+        .eq([e3, e4, e1, e2, e0].iter().cloned()));
 }
 ```
 

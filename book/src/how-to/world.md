@@ -32,16 +32,16 @@ When registering with `World` you always have to give a tuple, even for a single
 
 ### Register with `AllStorages`
 
-`AllStorages` is what holds all components inside `World`. You can access it with a system or `run` like in the following example:
+`AllStorages` is what holds all components inside `World`. You can access it with `borrow` like in the following example:
 
 ```rust, noplaypen
 let world = World::default();
 
-world.run::<AllStorages, _, _>(|mut all_storages| {
-    all_storages.register::<usize>();
-});
+world.borrow::<AllStorages>().register::<usize>();
 ```
 
 This time no tuple, `register` when used with `AllStorages` takes only a single type.
 
-The `run` method is intimidating but don't worry at the end of next chapter you'll know everything about it!
+---
+
+In the next chapter you'll learn everything about it!
