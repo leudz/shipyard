@@ -7,10 +7,10 @@ We use the word "remove" and not "delete", not because it would be repetitive bu
 ```rust, noplaypen
 let mut counts = world.borrow::<&mut Count>();
 
-let (count,) = (&mut counts,).remove(entity_id);
+let count = counts.remove(entity_id);
 ```
 
-No need for `Entities` here, you can call the method directly on the view and give the id of the entity. But we always have to use a tuple, see the [syntactic peculiarities chapter](../concepts/syntactic-peculiarities.md) if you want to know why.
+No need for `Entities` here, you can call the method directly on the view and give the id of the entity.
 
 ### Remove a bunch of components
 

@@ -71,14 +71,14 @@ Since we need access to `EntitiesViewMut` as well as our hierarchy component sto
 ```rust, noplaypen
 fn detach(&mut self, id: EntityId) {
     // remove the Child component - if nonexistent, do nothing
-    if let (Some(child),) = (&mut self.2,).remove(id) {
+    if let Some(child) = self.2.remove(id) {
         // retrieve and update Parent component from ancestor
         let parent = &mut self.1[child.parent];
         parent.num_children -= 1;
 
         if parent.num_children == 0 {
             // if the number of children is zero, the Parent component must be removed
-            (&mut self.1,).remove(child.parent);
+            self.1.remove(child.parent);
         } else {
             // the ancestor still has children, and we have to change some linking
             // check if we have to change first_child
@@ -389,7 +389,7 @@ fn remove(&mut self, id: EntityId) {
     for child_id in children {
         self.detach(child_id);
     }
-    (&mut self.1,).remove(id);
+    self.1.remove(id);
 }
 ```
 
