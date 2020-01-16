@@ -131,7 +131,7 @@ macro_rules! impl_remove {
                 }
 
                 Ok(($(
-                    self.$index.remove(entity),
+                    self.$index.actual_remove(entity),
                 )+))
             }
             fn remove(self, entity: EntityId) -> <($($type,)+) as Removable>::Out {

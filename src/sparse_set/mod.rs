@@ -8,6 +8,8 @@ pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 use std::ptr;
 pub(crate) use view_add_entity::ViewAddEntity;
 //pub(crate) use windows::RawWindowMut;
+use crate::error;
+use core::any::TypeId;
 pub use windows::{Window, WindowMut};
 
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
@@ -92,7 +94,27 @@ impl<T> SparseSet<T> {
 
         result
     }
-    pub(crate) fn remove(&mut self, entity: EntityId) -> Option<T> {
+    pub fn try_remove(&mut self, entity: EntityId) -> Result<Option<T>, error::Remove>
+    where
+        T: 'static,
+    {
+        if self.pack_info.observer_types.is_empty() {
+            match self.pack_info.pack {
+                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+                _ => Ok(self.actual_remove(entity)),
+            }
+        } else {
+            Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+        }
+    }
+    pub fn remove(&mut self, entity: EntityId) -> Option<T>
+    where
+        T: 'static,
+    {
+        self.try_remove(entity).unwrap()
+    }
+    pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
         if self.contains(entity) {
             let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
             match &mut self.pack_info.pack {
@@ -441,13 +463,13 @@ fn remove() {
     entity_id.set_index(10);
     array.insert("10", entity_id);
     entity_id.set_index(0);
-    assert_eq!(array.remove(entity_id), Some("0"));
+    assert_eq!(array.actual_remove(entity_id), Some("0"));
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(5);
     assert_eq!(array.get(entity_id), Some(&"5"));
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), Some(&"10"));
-    assert_eq!(array.remove(entity_id), Some("10"));
+    assert_eq!(array.actual_remove(entity_id), Some("10"));
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(5);
@@ -468,7 +490,7 @@ fn remove() {
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), Some(&"100"));
     entity_id.set_index(3);
-    assert_eq!(array.remove(entity_id), Some("3"));
+    assert_eq!(array.actual_remove(entity_id), Some("3"));
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(3);
@@ -477,7 +499,7 @@ fn remove() {
     assert_eq!(array.get(entity_id), Some(&"5"));
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), Some(&"100"));
-    assert_eq!(array.remove(entity_id), Some("100"));
+    assert_eq!(array.actual_remove(entity_id), Some("100"));
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(3);
@@ -487,7 +509,7 @@ fn remove() {
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(5);
-    assert_eq!(array.remove(entity_id), Some("5"));
+    assert_eq!(array.actual_remove(entity_id), Some("5"));
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(3);

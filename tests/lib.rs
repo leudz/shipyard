@@ -578,8 +578,8 @@ fn remove() {
         |(mut entities, mut usizes, mut u32s)| {
             let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-            let component = Remove::<(usize,)>::remove((&mut usizes,), entity1);
-            assert_eq!(component, (Some(0usize),));
+            let component = usizes.remove(entity1);
+            assert_eq!(component, Some(0usize));
             assert_eq!((&mut usizes).get(entity1), None);
             assert_eq!((&mut u32s).get(entity1), Some(&mut 1));
             assert_eq!(usizes.get(entity2), Some(&2));
