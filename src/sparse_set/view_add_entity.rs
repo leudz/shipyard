@@ -1,4 +1,3 @@
-use super::SparseSet;
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
 use crate::views::ViewMut;
@@ -18,30 +17,6 @@ impl<T: 'static> ViewAddEntity for &mut ViewMut<'_, T> {
     type Component = T;
     fn add_entity(self, component: Self::Component, entity: EntityId) {
         self.insert(component, entity);
-
-        let SparseSet {
-            sparse,
-            dense,
-            data,
-            pack_info,
-        } = &mut **self;
-
-        if let Pack::Update(pack) = &mut pack_info.pack {
-            let len = dense.len() - 1;
-            unsafe {
-                *sparse.get_unchecked_mut(entity.index()) = pack.inserted;
-                *sparse.get_unchecked_mut(
-                    dense.get_unchecked(pack.inserted + pack.modified).index(),
-                ) = len;
-                *sparse.get_unchecked_mut(dense.get_unchecked(pack.inserted).index()) =
-                    pack.inserted + pack.modified;
-            }
-            dense.swap(pack.inserted + pack.modified, len);
-            dense.swap(pack.inserted, pack.inserted + pack.modified);
-            data.swap(pack.inserted + pack.modified, len);
-            data.swap(pack.inserted, pack.inserted + pack.modified);
-            pack.inserted += 1;
-        }
     }
 }
 
@@ -86,19 +61,7 @@ macro_rules! impl_view_add_entity {
                                     sparse_sets.$index.pack(entity);
                                 }
                             }
-                            Pack::Update(pack) => {
-                                let len = sparse_sets.$index.dense.len() - 1;
-                                unsafe {
-                                    *sparse_sets.$index.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
-                                    *sparse_sets.$index.sparse.get_unchecked_mut(sparse_sets.$index.dense.get_unchecked(pack.inserted + pack.modified).index()) = len;
-                                    *sparse_sets.$index.sparse.get_unchecked_mut(sparse_sets.$index.dense.get_unchecked(pack.inserted).index()) = pack.inserted + pack.modified;
-                                }
-                                sparse_sets.$index.dense.swap(pack.inserted + pack.modified, len);
-                                sparse_sets.$index.dense.swap(pack.inserted, pack.inserted + pack.modified);
-                                sparse_sets.$index.data.swap(pack.inserted + pack.modified, len);
-                                sparse_sets.$index.data.swap(pack.inserted, pack.inserted + pack.modified);
-                                pack.inserted += 1;
-                            }
+                            Pack::Update(_) => {}
                             Pack::NoPack => {}
                         }
                     }

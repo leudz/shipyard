@@ -57,7 +57,8 @@ impl<T> SparseSet<T> {
         if entity.index() >= self.sparse.len() {
             self.sparse.resize(entity.index() + 1, 0);
         }
-        if let Some(data) = self.get_mut(entity) {
+
+        let result = if let Some(data) = self.get_mut(entity) {
             std::mem::swap(data, &mut value);
             Some(value)
         } else {
@@ -65,7 +66,31 @@ impl<T> SparseSet<T> {
             self.dense.push(entity);
             self.data.push(value);
             None
+        };
+
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            let len = self.data.len() - 1;
+            unsafe {
+                *self.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
+                *self.sparse.get_unchecked_mut(
+                    self.dense
+                        .get_unchecked(pack.inserted + pack.modified)
+                        .index(),
+                ) = len;
+                *self
+                    .sparse
+                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).index()) =
+                    pack.inserted + pack.modified;
+            }
+            self.dense.swap(pack.inserted + pack.modified, len);
+            self.dense
+                .swap(pack.inserted, pack.inserted + pack.modified);
+            self.data.swap(pack.inserted + pack.modified, len);
+            self.data.swap(pack.inserted, pack.inserted + pack.modified);
+            pack.inserted += 1;
         }
+
+        result
     }
     pub(crate) fn remove(&mut self, entity: EntityId) -> Option<T> {
         if self.contains(entity) {

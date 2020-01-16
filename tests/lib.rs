@@ -130,6 +130,30 @@ fn tight_loose_add_component() {
 }
 
 #[test]
+fn update_pack_add_component() {
+    let world = World::new::<(usize,)>();
+    world.update_pack::<usize>();
+
+    world.run::<(EntitiesMut, &mut usize), _, _>(|(mut entities, mut value)| {
+        let e0 = entities.add_entity((), ());
+        let e1 = entities.add_entity((), ());
+        let e2 = entities.add_entity((), ());
+
+        entities.add_component(&mut value, 1, e0);
+        entities.add_component(&mut value, 2, e1);
+        entities.add_component(&mut value, 3, e2);
+
+        let mut iter = value.inserted().iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), None);
+
+        assert_eq!(value.inserted().len(), 3);
+    });
+}
+
+#[test]
 fn add_additional_component() {
     let world = World::new::<(usize, u32, String)>();
     world.run::<(EntitiesMut, &mut usize, &mut u32, &mut String), _, _>(
@@ -1206,6 +1230,8 @@ fn update_pack() {
         entities.add_entity(&mut usizes, 1);
         entities.add_entity(&mut usizes, 2);
         entities.add_entity(&mut usizes, 3);
+
+        assert_eq!(usizes.inserted().len(), 4);
 
         let mut iter = usizes.inserted().iter();
         assert_eq!(iter.next(), Some(&0));
