@@ -2,7 +2,7 @@ use shipyard::prelude::*;
 
 #[test]
 fn basic() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
         entities.add_entity(&mut u32s, 0);
@@ -23,7 +23,7 @@ fn basic() {
 
 #[test]
 fn with_id() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
 
     let (key0, key1, key2) =
         world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
@@ -60,15 +60,12 @@ fn with_id() {
 
 #[test]
 fn map() {
-    let world = World::new::<(u32,)>();
-
-    world.update_pack::<u32>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
         entities.add_entity(&mut u32s, 0);
         entities.add_entity(&mut u32s, 1);
         entities.add_entity(&mut u32s, 2);
-        u32s.clear_inserted();
     });
 
     let mut vec = Vec::new();
@@ -84,15 +81,12 @@ fn map() {
 
 #[test]
 fn filter() {
-    let world = World::new::<(u32,)>();
-
-    world.update_pack::<u32>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
         entities.add_entity(&mut u32s, 0);
         entities.add_entity(&mut u32s, 1);
         entities.add_entity(&mut u32s, 2);
-        u32s.clear_inserted();
     });
 
     let mut vec = Vec::new();
@@ -113,7 +107,7 @@ fn filter() {
 
 #[test]
 fn enumerate_map_filter_with_id() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
 
     let (key0, _, key2) = world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
         let result = (
@@ -121,7 +115,6 @@ fn enumerate_map_filter_with_id() {
             entities.add_entity(&mut u32s, 11),
             entities.add_entity(&mut u32s, 12),
         );
-        u32s.clear_inserted();
         result
     });
 
@@ -141,7 +134,7 @@ fn enumerate_map_filter_with_id() {
 
 #[test]
 fn enumerate_filter_map_with_id() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
 
     let (key0, _, key2) = world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
         let result = (
@@ -149,7 +142,6 @@ fn enumerate_filter_map_with_id() {
             entities.add_entity(&mut u32s, 11),
             entities.add_entity(&mut u32s, 12),
         );
-        u32s.clear_inserted();
         result
     });
 

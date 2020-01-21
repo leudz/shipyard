@@ -17,6 +17,14 @@ pub use crate::Unique;
 #[cfg(feature = "proc")]
 pub use shipyard_proc::system;
 
+pub use crate::delete::Delete;
+pub use crate::pack::{LoosePack, TightPack};
 pub use crate::sparse_set::{Window, WindowMut};
+#[cfg(feature = "non_send")]
+pub use crate::NonSend;
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+pub use crate::NonSendSync;
+#[cfg(feature = "non_sync")]
+pub use crate::NonSync;
 #[cfg(feature = "parallel")]
 pub use crate::ThreadPool;

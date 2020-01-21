@@ -1,6 +1,6 @@
 # Shipyard
 
-Shipyard is an Entity Component System. While usable it is far from finished.
+Shipyard is an Entity Component System focused on usability and speed.
 
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg)](LICENSE-APACHE)
@@ -9,12 +9,11 @@ Shipyard is an Entity Component System. While usable it is far from finished.
 [![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/)
 [![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
 
-## Interesting features
-- **Packing** can enable perfect components alignment, allowing fast iteration
-but also SIMD instructions. To learn how it's done read Michele **skypjack** Caini's
-[great blog article](https://skypjack.github.io/2019-03-21-ecs-baf-part-2-insights/).
-- **Automatic scheduling** you just have to tell which systems you want to run and
-the `World` will do the rest.
+While usable it is far from finished, there's enough planned features to fill [an entire Cave](https://github.com/leudz/shipyard/issues/31), nearly all being backward compatible additions.
+
+Most discussions about current and future features happen on zulip, feel free to join to follow the development or ask any question.
+
+If you are new here, the [user guide](https://leudz.github.io/shipyard/) is a great place to learn all about Shipyard!
 
 ## Simple Example
 ```rust
@@ -34,19 +33,51 @@ fn run(pos: &Position, health: &mut Health) {
 
 fn is_in_acid(pos: &Position) -> bool {
     // it's wet season
-
     true
 }
 
-let world = World::new::<(Position, Health)>();
+let world = World::new();
 
-world.run::<(EntitiesMut, &mut Position, &mut Health), _, _>(|mut entities, mut pos, mut health| {
-    entities.add_entity((&mut pos, &mut health), Position { x: 0.0, y: 0.0 }, Health(1000.0));
-});
+let (mut entities, mut positions, mut healths) = 
+    world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
+
+entities.add_entity(
+    (&mut positions, &mut healths),
+    Position { x: 0.0, y: 0.0 },
+    Health(1000.0)
+);
 
 world.add_workload::<InAcid, _>("In acid");
 world.run_default();
 ```
+
+## Past, Present and Future
+
+I initially started to make an ECS to learn how it works. After a failed attempt and learning a lot from it and other ECS out there I started to work on Shipyard.
+
+[Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: sparse sets.
+
+It turned out to be extremely flexible and is still the core of Shipyard. You can pay for what you want: iteration speed, memory, ease of use,...
+
+And it allowed amazing features:
+- No component boilerplate
+- Very simple systems
+- Powerful inner and outer system parallelism
+- Ability to add/remove components while adding/removing entities
+- Chunk iteration
+- And a lot more!
+
+Today I wouldn't say Shipyard is better or worse than Specs, it's just different. I'm really happy with it and the future looks very promising, especially:
+- Pipeline
+- Nested packs
+- Shared components
+- Iterator blueprint
+
+## Unsafe
+
+This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.\
+Releases should have all invocation of `unsafe` explained.\
+If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) feel free to open an issue or a PR.
 
 ## License
 

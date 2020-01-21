@@ -1,50 +1,26 @@
-use crate::atomic_refcell::{AtomicRefCell, Borrow};
-use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
-use crate::sparse_set::{Pack, SparseSet, TightPack as TightPackInfo};
-use crate::storage::AllStorages;
-use std::any::{type_name, TypeId};
+use crate::sparse_set::{Pack, TightPack as TightPackInfo};
+use crate::views::ViewMut;
+use std::any::TypeId;
 use std::sync::Arc;
 
 pub trait TightPack {
-    fn try_tight_pack(all_storages: &AtomicRefCell<AllStorages>) -> Result<(), error::Pack>;
+    fn try_tight_pack(self) -> Result<(), error::Pack>;
+    fn tight_pack(self);
 }
 
 macro_rules! impl_tight_pack {
     ($(($type: ident, $index: tt))+) => {
         #[allow(clippy::useless_let_if_seq)]
-        impl<$($type: 'static),+> TightPack for ($($type,)+) {
-            fn try_tight_pack(all_storages: &AtomicRefCell<AllStorages>) -> Result<(), error::Pack> {
-                let all_storages = all_storages.try_borrow().map_err(error::GetStorage::AllStoragesBorrow)?;
-
+        impl<$($type: 'static),+> TightPack for ($(&mut ViewMut<'_, $type>,)+) {
+            fn try_tight_pack(self) -> Result<(), error::Pack> {
                 let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<$type>(),)+]);
-                let mut storages: ($((RefMut<'_, SparseSet<$type>>, Borrow<'_>),)+) = ($({
-                    // SAFE borrow is dropped after storage
-                    let (storage, borrow) = unsafe {Ref::destructure(Ref::try_map(Ref::clone(&all_storages), |all_storages| {
-                        match all_storages.0.get(&type_ids[$index]) {
-                            Some(storage) => Ok(storage),
-                            None => Err(error::GetStorage::MissingComponent(type_name::<$type>())),
-                        }
-                    })?)};
-                    (
-                        storage
-                            .sparse_set_mut()
-                            .map_err(|err| error::GetStorage::StorageBorrow((type_name::<$type>(), err)))?,
-                        borrow,
-                    )
-                },)+);
 
                 type_ids.sort_unstable();
                 let type_ids: Arc<[_]> = type_ids.into();
 
                 $(
-                    if storages.$index.0.is_unique() {
-                        return Err(error::Pack::UniqueStorage(type_name::<$type>()));
-                    }
-                )+
-
-                $(
-                    match storages.$index.0.pack_info.pack {
+                    match self.$index.pack_info.pack {
                         Pack::Tight(_) => {
                             return Err(error::Pack::AlreadyTightPack(TypeId::of::<$type>()));
                         },
@@ -55,7 +31,7 @@ macro_rules! impl_tight_pack {
                             return Err(error::Pack::AlreadyUpdatePack(TypeId::of::<$type>()))
                         },
                         Pack::NoPack => {
-                            storages.$index.0.pack_info.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
+                            self.$index.pack_info.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
                         }
                     }
                 )+
@@ -65,8 +41,8 @@ macro_rules! impl_tight_pack {
                 let mut i = 0;
 
                 $(
-                    if storages.$index.0.len() < smallest {
-                        smallest = storages.$index.0.len();
+                    if self.$index.len() < smallest {
+                        smallest = self.$index.len();
                         smallest_index = i;
                     }
                     i += 1;
@@ -78,22 +54,25 @@ macro_rules! impl_tight_pack {
 
                 $(
                     if $index == smallest_index {
-                        indices = storages.$index.0.clone_indices();
+                        indices = self.$index.clone_indices();
                     }
                 )+
 
                 for index in indices {
                     $(
-                        if !storages.$index.0.contains(index) {
+                        if !self.$index.contains(index) {
                             continue
                         }
                     )+
                     $(
-                        storages.$index.0.pack(index);
+                        self.$index.pack(index);
                     )+
                 }
 
                 Ok(())
+            }
+            fn tight_pack(self) {
+                self.try_tight_pack().unwrap()
             }
         }
     }

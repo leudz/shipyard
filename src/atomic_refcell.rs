@@ -15,9 +15,12 @@ pub struct AtomicRefCell<T: ?Sized> {
 
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
 
-impl<T> AtomicRefCell<T> {
+impl<T: ?Sized> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
-    pub(crate) fn new(value: T, send: Option<ThreadId>, is_sync: bool) -> Self {
+    pub(crate) fn new(value: T, send: Option<ThreadId>, is_sync: bool) -> Self
+    where
+        T: Sized,
+    {
         AtomicRefCell {
             inner: UnsafeCell::new(value),
             borrow_state: Default::default(),
@@ -45,13 +48,6 @@ impl<T> AtomicRefCell<T> {
             borrow: self.borrow_state.try_borrow_mut(self.send, self.is_sync)?,
             inner: unsafe { &mut *self.inner.get() },
         })
-    }
-    pub(crate) fn is_send_sync(&self) -> bool {
-        if let (None, true) = (self.send, self.is_sync) {
-            true
-        } else {
-            false
-        }
     }
 }
 
@@ -215,14 +211,7 @@ pub struct Ref<'a, T: ?Sized> {
     pub(crate) borrow: Borrow<'a>,
 }
 
-impl<'a, T: 'a> Ref<'a, T> {
-    /// Make a clone, the value is already borrowed so it can't fail.
-    pub(crate) fn clone(origin: &Self) -> Self {
-        Ref {
-            inner: origin.inner,
-            borrow: origin.borrow.clone(),
-        }
-    }
+impl<'a, T: 'a + ?Sized> Ref<'a, T> {
     /// Makes a new `Ref` for a component of the borrowed data.
     pub(crate) fn map<U, F>(origin: Self, f: F) -> Ref<'a, U>
     where
@@ -244,7 +233,9 @@ impl<'a, T: 'a> Ref<'a, T> {
         })
     }
     /// Get the inner parts of the `Ref`.
+    ///
     /// # Safety
+    ///
     /// The reference has to be dropped before `Borrow`.
     pub(crate) unsafe fn destructure(Ref { inner, borrow, .. }: Self) -> (&'a T, Borrow<'a>) {
         (inner, borrow)
@@ -271,7 +262,7 @@ pub struct RefMut<'a, T: ?Sized> {
     pub(crate) borrow: Borrow<'a>,
 }
 
-impl<'a, T: 'a> RefMut<'a, T> {
+impl<'a, T: 'a + ?Sized> RefMut<'a, T> {
     /// Makes a new `RefMut` for a component of the borrowed data.
     pub(crate) fn map<U, F>(origin: Self, f: F) -> RefMut<'a, U>
     where

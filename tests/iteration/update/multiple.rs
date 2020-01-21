@@ -2,22 +2,21 @@ use shipyard::prelude::*;
 
 #[test]
 fn basic() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
 
-    world.update_pack::<u32>();
-    world.update_pack::<i16>();
+    u32s.update_pack();
+    i16s.update_pack();
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+    entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(|(mut entities, mut u32s, mut i16s)| {
-        entities.add_entity((&mut u32s, &mut i16s), (0, 10));
-        entities.add_entity(&mut u32s, 1);
-        entities.add_entity((&mut u32s, &mut i16s), (2, 12));
-        entities.add_entity(&mut i16s, 13);
-        entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+    u32s.clear_inserted();
+    i16s.clear_inserted();
 
-        u32s.clear_inserted();
-        i16s.clear_inserted();
-    });
-
+    drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s).iter();
         assert_eq!(iter.next().unwrap(), &0);
@@ -138,28 +137,20 @@ fn basic() {
 
 #[test]
 fn with_id() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
 
-    world.update_pack::<u32>();
-    world.update_pack::<i16>();
+    u32s.update_pack();
+    i16s.update_pack();
+    let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    let key1 = entities.add_entity(&mut u32s, 1);
+    let key2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    let key3 = entities.add_entity(&mut i16s, 13);
+    let key4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+    u32s.clear_inserted();
+    i16s.clear_inserted();
 
-    let (key0, key1, key2, key3, key4) = world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(
-        |(mut entities, mut u32s, mut i16s)| {
-            let result = (
-                entities.add_entity((&mut u32s, &mut i16s), (0, 10)),
-                entities.add_entity(&mut u32s, 1),
-                entities.add_entity((&mut u32s, &mut i16s), (2, 12)),
-                entities.add_entity(&mut i16s, 13),
-                entities.add_entity((&mut u32s, &mut i16s), (4, 14)),
-            );
-
-            u32s.clear_inserted();
-            i16s.clear_inserted();
-
-            result
-        },
-    );
-
+    drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &0));
@@ -280,22 +271,21 @@ fn with_id() {
 
 #[test]
 fn map() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
 
-    world.update_pack::<u32>();
-    world.update_pack::<i16>();
+    u32s.update_pack();
+    i16s.update_pack();
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+    entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(|(mut entities, mut u32s, mut i16s)| {
-        entities.add_entity((&mut u32s, &mut i16s), (0, 10));
-        entities.add_entity(&mut u32s, 1);
-        entities.add_entity((&mut u32s, &mut i16s), (2, 12));
-        entities.add_entity(&mut i16s, 13);
-        entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+    u32s.clear_inserted();
+    i16s.clear_inserted();
 
-        u32s.clear_inserted();
-        i16s.clear_inserted();
-    });
-
+    drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s).iter().map(Clone::clone);
         assert_eq!(iter.next().unwrap(), 0);
@@ -416,22 +406,21 @@ fn map() {
 
 #[test]
 fn filter() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
 
-    world.update_pack::<u32>();
-    world.update_pack::<i16>();
+    u32s.update_pack();
+    i16s.update_pack();
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+    entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(|(mut entities, mut u32s, mut i16s)| {
-        entities.add_entity((&mut u32s, &mut i16s), (0, 10));
-        entities.add_entity(&mut u32s, 1);
-        entities.add_entity((&mut u32s, &mut i16s), (2, 12));
-        entities.add_entity(&mut i16s, 13);
-        entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+    u32s.clear_inserted();
+    i16s.clear_inserted();
 
-        u32s.clear_inserted();
-        i16s.clear_inserted();
-    });
-
+    drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s).iter().filter(|x| **x % 2 == 0);
         assert_eq!(iter.next().unwrap(), &0);
@@ -528,28 +517,20 @@ fn filter() {
 
 #[test]
 fn enumerate_map_filter_with_id() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
 
-    world.update_pack::<u32>();
-    world.update_pack::<i16>();
+    u32s.update_pack();
+    i16s.update_pack();
+    let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    let key1 = entities.add_entity(&mut u32s, 1);
+    let key2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    let key3 = entities.add_entity(&mut i16s, 13);
+    let key4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+    u32s.clear_inserted();
+    i16s.clear_inserted();
 
-    let (key0, key1, key2, key3, key4) = world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(
-        |(mut entities, mut u32s, mut i16s)| {
-            let result = (
-                entities.add_entity((&mut u32s, &mut i16s), (0, 10)),
-                entities.add_entity(&mut u32s, 1),
-                entities.add_entity((&mut u32s, &mut i16s), (2, 12)),
-                entities.add_entity(&mut i16s, 13),
-                entities.add_entity((&mut u32s, &mut i16s), (4, 14)),
-            );
-
-            u32s.clear_inserted();
-            i16s.clear_inserted();
-
-            result
-        },
-    );
-
+    drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s)
             .iter()
@@ -666,28 +647,20 @@ fn enumerate_map_filter_with_id() {
 
 #[test]
 fn enumerate_filter_map_with_id() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
 
-    world.update_pack::<u32>();
-    world.update_pack::<i16>();
+    u32s.update_pack();
+    i16s.update_pack();
+    let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    let key1 = entities.add_entity(&mut u32s, 1);
+    let key2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    let key3 = entities.add_entity(&mut i16s, 13);
+    let key4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+    u32s.clear_inserted();
+    i16s.clear_inserted();
 
-    let (key0, key1, key2, key3, key4) = world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(
-        |(mut entities, mut u32s, mut i16s)| {
-            let result = (
-                entities.add_entity((&mut u32s, &mut i16s), (0, 10)),
-                entities.add_entity(&mut u32s, 1),
-                entities.add_entity((&mut u32s, &mut i16s), (2, 12)),
-                entities.add_entity(&mut i16s, 13),
-                entities.add_entity((&mut u32s, &mut i16s), (4, 14)),
-            );
-
-            u32s.clear_inserted();
-            i16s.clear_inserted();
-
-            result
-        },
-    );
-
+    drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s)
             .iter()

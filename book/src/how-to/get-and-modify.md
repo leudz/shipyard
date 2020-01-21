@@ -34,7 +34,7 @@ We can also mix and match shared and unique:
 let (positions, velocities) = world.borrow::<(&mut Position, &mut Velocity)>();
 
 if let Some((pos, vel)) = (&mut positions, &velocities).get(entity_id) {
-    *pos.x += *vel.x;
-    *pos.y += *vel.y;
+    pos.x += vel.x;
+    pos.y += vel.y;
 }
 ```

@@ -52,7 +52,7 @@ where
     T: for<'a> System<'a> + Send + Sync,
 {
     fn try_dispatch(world: &World) -> Result<(), error::GetStorage> {
-        let storages = &world.storages;
+        let storages = &world.all_storages;
 
         let data = {
             #[cfg(feature = "parallel")]

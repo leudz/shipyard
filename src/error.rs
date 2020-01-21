@@ -45,7 +45,6 @@ impl Display for Borrow {
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
     StorageBorrow((&'static str, Borrow)),
-    MissingComponent(&'static str),
     NonUnique((&'static str, Borrow)),
     MissingUnique(&'static str),
     Entities(Borrow),
@@ -71,7 +70,6 @@ impl Debug for GetStorage {
                 Borrow::MultipleThreads => fmt.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
                 Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
             },
-            Self::MissingComponent(name) => fmt.write_fmt(format_args!("No storage exists for {name}.\nConsider adding this line after the creation of World: world.register::<{name}>();", name = name)),
             Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {name}.\nConsider adding this line after the creation of World: world.register_unique::<{name}>(/* your_storage */);", name = name)),
             Self::NonUnique((name, mutation)) => match mutation {
                 Borrow::Shared => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, replace world.register::<{name}>() by world.register_unique(/* your_storage */).\nIf it isn't supposed to be a unique storage, replace Unique<&{name}> by &{name}.", name = name)),
@@ -167,7 +165,6 @@ pub enum Pack {
     AlreadyTightPack(TypeId),
     AlreadyLoosePack(TypeId),
     AlreadyUpdatePack(TypeId),
-    UniqueStorage(&'static str),
 }
 
 impl Error for Pack {}
@@ -193,10 +190,6 @@ impl Debug for Pack {
             Self::AlreadyUpdatePack(type_id) => fmt.write_fmt(format_args!(
                 "The storage of type ({:?}) is already has an update pack.",
                 type_id
-            )),
-            Self::UniqueStorage(name) => fmt.write_fmt(format_args!(
-                "The storage of type \"{:?}\" is a unique storage and can't be packed.",
-                name
             )),
         }
     }
@@ -357,25 +350,18 @@ impl From<Borrow> for Register {
     }
 }
 
-pub enum AddWorkload {
-    AllStorages,
-    Scheduler,
-    MissingComponent(&'static str),
-}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct NotUpdatePack;
 
-impl Error for AddWorkload {}
+impl Error for NotUpdatePack {}
 
-impl Debug for AddWorkload {
+impl Debug for NotUpdatePack {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match self {
-            Self::AllStorages => fmt.write_str("Cannot immutably borrow AllStorages while it's already mutably borrowed."),
-            Self::Scheduler => fmt.write_str("Cannot mutably borrow Scheduler while it's already borrowed."),
-            Self::MissingComponent(name) => fmt.write_fmt(format_args!("No storage exists for {name}.\nConsider adding this line after the creation of World: world.register::<{name}>();", name = name)),
-        }
+        fmt.write_str("The storage isn't update packed. Use `view.update_pack()` to pack it.")
     }
 }
 
-impl Display for AddWorkload {
+impl Display for NotUpdatePack {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         Debug::fmt(self, fmt)
     }

@@ -188,6 +188,33 @@ impl<T> SparseSet<T> {
             None
         }
     }
+    pub fn try_delete(&mut self, entity: EntityId) -> Result<(), error::Remove>
+    where
+        T: 'static,
+    {
+        if self.pack_info.observer_types.is_empty() {
+            match self.pack_info.pack {
+                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+                _ => Ok(self.actual_delete(entity)),
+            }
+        } else {
+            Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+        }
+    }
+    pub fn delete(&mut self, entity: EntityId)
+    where
+        T: 'static,
+    {
+        self.try_delete(entity).unwrap()
+    }
+    pub fn actual_delete(&mut self, entity: EntityId) {
+        if let Some(component) = self.actual_remove(entity) {
+            if let Pack::Update(pack) = &mut self.pack_info.pack {
+                pack.deleted.push((entity, component));
+            }
+        }
+    }
     pub fn contains(&self, entity: EntityId) -> bool {
         self.window().contains(entity)
     }
@@ -245,113 +272,121 @@ impl<T> SparseSet<T> {
     pub fn is_empty(&self) -> bool {
         self.window().is_empty()
     }
-    pub fn inserted(&self) -> Window<'_, T> {
-        match &self.pack_info.pack {
-            Pack::Update(pack) => Window {
+    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(Window {
                 sparse: &self.sparse,
                 dense: &self.dense[0..pack.inserted],
                 data: &self.data[0..pack.inserted],
                 pack_info: &self.pack_info,
-            },
-            _ => Window {
-                sparse: &[],
-                dense: &[],
-                data: &[],
-                pack_info: &self.pack_info,
-            },
+            })
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
-        match &self.pack_info.pack {
-            Pack::Update(pack) => WindowMut {
+    pub fn inserted(&self) -> Window<'_, T> {
+        self.try_inserted().unwrap()
+    }
+    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(WindowMut {
                 sparse: &mut self.sparse,
                 dense: &mut self.dense[0..pack.inserted],
                 data: &mut self.data[0..pack.inserted],
                 pack_info: &mut self.pack_info,
-            },
-            _ => WindowMut {
-                sparse: &mut [],
-                dense: &mut [],
-                data: &mut [],
-                pack_info: &mut self.pack_info,
-            },
+            })
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn modified(&self) -> Window<'_, T> {
-        match &self.pack_info.pack {
-            Pack::Update(pack) => Window {
+    pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
+        self.try_inserted_mut().unwrap()
+    }
+    pub fn try_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(Window {
                 sparse: &self.sparse,
                 dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
                 data: &self.data[pack.inserted..pack.inserted + pack.modified],
                 pack_info: &self.pack_info,
-            },
-            _ => Window {
-                sparse: &[],
-                dense: &[],
-                data: &[],
-                pack_info: &self.pack_info,
-            },
+            })
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
-        match &self.pack_info.pack {
-            Pack::Update(pack) => WindowMut {
+    pub fn modified(&self) -> Window<'_, T> {
+        self.try_modified().unwrap()
+    }
+    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(WindowMut {
                 sparse: &mut self.sparse,
                 dense: &mut self.dense[pack.inserted..pack.inserted + pack.modified],
                 data: &mut self.data[pack.inserted..pack.inserted + pack.modified],
                 pack_info: &mut self.pack_info,
-            },
-            _ => WindowMut {
-                sparse: &mut [],
-                dense: &mut [],
-                data: &mut [],
-                pack_info: &mut self.pack_info,
-            },
+            })
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn inserted_or_modified(&self) -> Window<'_, T> {
-        match &self.pack_info.pack {
-            Pack::Update(pack) => Window {
+    pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
+        self.try_modified_mut().unwrap()
+    }
+    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(Window {
                 sparse: &self.sparse,
                 dense: &self.dense[0..pack.inserted + pack.modified],
                 data: &self.data[0..pack.inserted + pack.modified],
                 pack_info: &self.pack_info,
-            },
-            _ => Window {
-                sparse: &[],
-                dense: &[],
-                data: &[],
-                pack_info: &self.pack_info,
-            },
+            })
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
-        match &self.pack_info.pack {
-            Pack::Update(pack) => WindowMut {
+    pub fn inserted_or_modified(&self) -> Window<'_, T> {
+        self.try_inserted_or_modified().unwrap()
+    }
+    pub fn try_inserted_or_modified_mut(
+        &mut self,
+    ) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(WindowMut {
                 sparse: &mut self.sparse,
                 dense: &mut self.dense[0..pack.inserted + pack.modified],
                 data: &mut self.data[0..pack.inserted + pack.modified],
                 pack_info: &mut self.pack_info,
-            },
-            _ => WindowMut {
-                sparse: &mut [],
-                dense: &mut [],
-                data: &mut [],
-                pack_info: &mut self.pack_info,
-            },
+            })
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn take_removed(&mut self) -> Option<Vec<(EntityId, T)>> {
-        match &mut self.pack_info.pack {
-            Pack::Update(pack) => {
-                let mut vec = Vec::with_capacity(pack.removed.capacity());
-                std::mem::swap(&mut vec, &mut pack.removed);
-                Some(vec)
-            }
-            _ => None,
+    pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
+        self.try_inserted_or_modified_mut().unwrap()
+    }
+    pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(&pack.deleted)
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
-    pub fn clear_inserted(&mut self) {
+    pub fn deleted(&self) -> &[(EntityId, T)] {
+        self.try_deleted().unwrap()
+    }
+    pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            let mut vec = Vec::with_capacity(pack.deleted.capacity());
+            std::mem::swap(&mut vec, &mut pack.deleted);
+            Ok(vec)
+        } else {
+            Err(error::NotUpdatePack)
+        }
+    }
+    pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
+        self.try_take_deleted().unwrap()
+    }
+    pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             if pack.modified == 0 {
                 pack.inserted = 0;
@@ -372,18 +407,36 @@ impl<T> SparseSet<T> {
                     }
                 }
             }
+            Ok(())
+        } else {
+            Err(error::NotUpdatePack)
+        }
+    }
+    pub fn clear_inserted(&mut self) {
+        self.try_clear_inserted().unwrap()
+    }
+    pub fn try_clear_modified(&mut self) -> Result<(), error::NotUpdatePack> {
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            pack.modified = 0;
+            Ok(())
+        } else {
+            Err(error::NotUpdatePack)
         }
     }
     pub fn clear_modified(&mut self) {
-        if let Pack::Update(pack) = &mut self.pack_info.pack {
-            pack.modified = 0;
-        }
+        self.try_clear_modified().unwrap()
     }
-    pub fn clear_inserted_and_modified(&mut self) {
+    pub fn try_clear_inserted_and_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             pack.inserted = 0;
             pack.modified = 0;
+            Ok(())
+        } else {
+            Err(error::NotUpdatePack)
         }
+    }
+    pub fn clear_inserted_and_modified(&mut self) {
+        self.try_clear_inserted_and_modified().unwrap()
     }
     pub(crate) fn is_unique(&self) -> bool {
         self.window().is_unique()
@@ -403,11 +456,36 @@ impl<T> SparseSet<T> {
     /// Place the unique component in the storage.
     /// The storage has to be completely empty.
     pub(crate) fn insert_unique(&mut self, component: T) {
-        assert!(self.sparse.is_empty() && self.dense.is_empty() && self.data.is_empty());
-        self.data.push(component)
+        if self.sparse.is_empty() && self.dense.is_empty() && self.data.is_empty() {
+            self.data.push(component)
+        }
     }
     pub(crate) fn clone_indices(&self) -> Vec<EntityId> {
         self.dense.clone()
+    }
+    pub fn try_update_pack(&mut self) -> Result<(), error::Pack>
+    where
+        T: 'static,
+    {
+        match self.pack_info.pack {
+            Pack::NoPack => {
+                self.pack_info.pack = Pack::Update(UpdatePack {
+                    inserted: self.len(),
+                    modified: 0,
+                    deleted: Vec::new(),
+                });
+                Ok(())
+            }
+            Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(TypeId::of::<T>())),
+            Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(TypeId::of::<T>())),
+            Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(TypeId::of::<T>())),
+        }
+    }
+    pub fn update_pack(&mut self)
+    where
+        T: 'static,
+    {
+        self.try_update_pack().unwrap()
     }
 }
 

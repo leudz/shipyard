@@ -2,17 +2,16 @@ use shipyard::prelude::*;
 
 #[test]
 fn basic() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
 
-    world.update_pack::<u32>();
+    u32s.update_pack();
+    entities.add_entity(&mut u32s, 0);
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity(&mut u32s, 2);
+    u32s.clear_inserted();
 
-    world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
-        entities.add_entity(&mut u32s, 0);
-        entities.add_entity(&mut u32s, 1);
-        entities.add_entity(&mut u32s, 2);
-        u32s.clear_inserted();
-    });
-
+    drop(u32s);
     let mut vec = Vec::new();
     world.run::<&u32, _, _>(|u32s| {
         u32s.iter().for_each(|&x| vec.push(x));
@@ -27,21 +26,16 @@ fn basic() {
 
 #[test]
 fn with_id() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
 
-    world.update_pack::<u32>();
+    u32s.update_pack();
+    let key0 = entities.add_entity(&mut u32s, 0);
+    let key1 = entities.add_entity(&mut u32s, 1);
+    let key2 = entities.add_entity(&mut u32s, 2);
+    u32s.clear_inserted();
 
-    let (key0, key1, key2) =
-        world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
-            let result = (
-                entities.add_entity(&mut u32s, 0),
-                entities.add_entity(&mut u32s, 1),
-                entities.add_entity(&mut u32s, 2),
-            );
-            u32s.clear_inserted();
-            result
-        });
-
+    drop(u32s);
     let mut vec = Vec::new();
     world.run::<&u32, _, _>(|u32s| {
         u32s.iter().with_id().for_each(|(id, &x)| vec.push((id, x)));
@@ -75,17 +69,16 @@ fn with_id() {
 
 #[test]
 fn map() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
 
-    world.update_pack::<u32>();
+    u32s.update_pack();
+    entities.add_entity(&mut u32s, 0);
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity(&mut u32s, 2);
+    u32s.clear_inserted();
 
-    world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
-        entities.add_entity(&mut u32s, 0);
-        entities.add_entity(&mut u32s, 1);
-        entities.add_entity(&mut u32s, 2);
-        u32s.clear_inserted();
-    });
-
+    drop(u32s);
     let mut vec = Vec::new();
     world.run::<&u32, _, _>(|u32s| {
         u32s.iter().map(|x| *x + 10).for_each(|x| vec.push(x));
@@ -100,17 +93,16 @@ fn map() {
 
 #[test]
 fn filter() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
 
-    world.update_pack::<u32>();
+    u32s.update_pack();
+    entities.add_entity(&mut u32s, 0);
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity(&mut u32s, 2);
+    u32s.clear_inserted();
 
-    world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
-        entities.add_entity(&mut u32s, 0);
-        entities.add_entity(&mut u32s, 1);
-        entities.add_entity(&mut u32s, 2);
-        u32s.clear_inserted();
-    });
-
+    drop(u32s);
     let mut vec = Vec::new();
     world.run::<&u32, _, _>(|u32s| {
         u32s.iter()
@@ -130,20 +122,16 @@ fn filter() {
 
 #[test]
 fn enumerate_map_filter_with_id() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
 
-    world.update_pack::<u32>();
+    u32s.update_pack();
+    let key0 = entities.add_entity(&mut u32s, 10);
+    entities.add_entity(&mut u32s, 11);
+    let key2 = entities.add_entity(&mut u32s, 12);
+    u32s.clear_inserted();
 
-    let (key0, _, key2) = world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
-        let result = (
-            entities.add_entity(&mut u32s, 10),
-            entities.add_entity(&mut u32s, 11),
-            entities.add_entity(&mut u32s, 12),
-        );
-        u32s.clear_inserted();
-        result
-    });
-
+    drop(u32s);
     let mut vec = Vec::new();
     let mut modified = Vec::new();
     world.run::<&mut u32, _, _>(|mut u32s| {
@@ -163,20 +151,16 @@ fn enumerate_map_filter_with_id() {
 
 #[test]
 fn enumerate_filter_map_with_id() {
-    let world = World::new::<(u32,)>();
+    let world = World::new();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
 
-    world.update_pack::<u32>();
+    u32s.update_pack();
+    let key0 = entities.add_entity(&mut u32s, 10);
+    entities.add_entity(&mut u32s, 11);
+    let key2 = entities.add_entity(&mut u32s, 12);
+    u32s.clear_inserted();
 
-    let (key0, _, key2) = world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {
-        let result = (
-            entities.add_entity(&mut u32s, 10),
-            entities.add_entity(&mut u32s, 11),
-            entities.add_entity(&mut u32s, 12),
-        );
-        u32s.clear_inserted();
-        result
-    });
-
+    drop(u32s);
     let mut vec = Vec::new();
     let mut modified = Vec::new();
     world.run::<&mut u32, _, _>(|mut u32s| {

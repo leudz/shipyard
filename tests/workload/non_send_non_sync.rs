@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+/*use shipyard::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -21,3 +21,4 @@ fn basic() {
         assert_eq!(&**vecs.iter().next().unwrap().borrow(), &[0][..]);
     });
 }
+*/

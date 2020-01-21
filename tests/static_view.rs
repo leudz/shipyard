@@ -5,7 +5,7 @@ use shipyard::prelude::*;
 fn returned() {
     static mut WORLD: Option<World> = None;
 
-    unsafe { WORLD = Some(World::new::<(usize,)>()) };
+    unsafe { WORLD = Some(World::new()) };
 
     let _view: ViewMut<'static, usize> =
         unsafe { WORLD.as_ref().unwrap() }.run::<&mut usize, _, _>(|usizes| usizes);
@@ -18,7 +18,7 @@ fn returned() {
 fn taken_from_run() {
     static mut WORLD: Option<World> = None;
 
-    unsafe { WORLD = Some(World::new::<(usize,)>()) };
+    unsafe { WORLD = Some(World::new()) };
 
     fn test() -> ViewMut<'static, usize> {
         let mut result = None;

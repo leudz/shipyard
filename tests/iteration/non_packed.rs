@@ -2,7 +2,7 @@ use shipyard::prelude::*;
 
 #[test]
 fn basic() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(|(mut entities, mut u32s, mut i16s)| {
         entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -79,7 +79,7 @@ fn basic() {
 
 #[test]
 fn with_id() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
 
     let (key0, key1, key2, key3, key4) = world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(
         |(mut entities, mut u32s, mut i16s)| {
@@ -160,7 +160,7 @@ fn with_id() {
 
 #[test]
 fn map() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(|(mut entities, mut u32s, mut i16s)| {
         entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -237,7 +237,7 @@ fn map() {
 
 #[test]
 fn filter() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(|(mut entities, mut u32s, mut i16s)| {
         entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -300,7 +300,7 @@ fn filter() {
 
 #[test]
 fn enumerate_map_filter_with_id() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
 
     let (key0, key1, key2, key3, key4) = world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(
         |(mut entities, mut u32s, mut i16s)| {
@@ -391,7 +391,7 @@ fn enumerate_map_filter_with_id() {
 
 #[test]
 fn enumerate_filter_map_with_id() {
-    let world = World::new::<(u32, i16)>();
+    let world = World::new();
 
     let (key0, key1, key2, key3, key4) = world.run::<(EntitiesMut, &mut u32, &mut i16), _, _>(
         |(mut entities, mut u32s, mut i16s)| {

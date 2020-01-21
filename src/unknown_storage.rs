@@ -27,7 +27,7 @@ pub(super) trait UnknownStorage {
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
     fn delete(&mut self, entity: EntityId) -> &[TypeId] {
-        self.actual_remove(entity);
+        self.actual_delete(entity);
         &self.pack_info.observer_types
     }
     fn unpack(&mut self, entity: EntityId) {

@@ -22,9 +22,9 @@
 //!
 //! let world = World::new::<(Position, Health)>();
 //!
-//! world.run::<(EntitiesMut, &mut Position, &mut Health), _, _>(|(mut entities, mut pos, mut health)| {
-//!     entities.add_entity((&mut pos, &mut health), (Position { x: 0.0, y: 0.0 }, Health(1000.0)));
-//! });
+//! let (mut entities, mut positions, mut healths) = world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
+//!
+//! entities.add_entity((&mut positions, &mut healths), Position { x: 0.0, y: 0.0 }, Health(1000.0));
 //!
 //! world.add_workload::<InAcid, _>("In acid");
 //! world.run_default();
@@ -98,11 +98,13 @@
 #![deny(unused_qualifications)]
 
 mod atomic_refcell;
+mod delete;
 pub mod error;
 mod get;
 pub mod internal;
 mod iter;
 mod not;
+mod pack;
 pub mod prelude;
 mod remove;
 mod run;
@@ -131,3 +133,7 @@ pub struct ThreadPool;
 /// });
 /// ```
 pub struct Unique<T: ?Sized>(T);
+
+pub struct NonSend<T: ?Sized>(T);
+pub struct NonSync<T: ?Sized>(T);
+pub struct NonSendSync<T: ?Sized>(T);

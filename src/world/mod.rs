@@ -1,5 +1,3 @@
-mod pack;
-mod register;
 mod scheduler;
 
 use crate::atomic_refcell::AtomicRefCell;
@@ -8,12 +6,9 @@ use crate::run::Dispatch;
 use crate::run::Run;
 use crate::run::System;
 use crate::run::SystemData;
-use crate::sparse_set::{Pack, UpdatePack};
 use crate::storage::AllStorages;
-use pack::{LoosePack, TightPack};
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use register::{Register, RegisterNonSend, RegisterNonSendNonSync, RegisterNonSync};
 use scheduler::{IntoWorkload, Scheduler};
 use std::borrow::Cow;
 use std::marker::PhantomData;
@@ -22,22 +17,25 @@ use std::thread::ThreadId;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
-    pub(crate) storages: AtomicRefCell<AllStorages>,
+    pub(crate) all_storages: AtomicRefCell<AllStorages>,
     #[cfg(feature = "parallel")]
     pub(crate) thread_pool: ThreadPool,
     scheduler: AtomicRefCell<Scheduler>,
     _not_send: PhantomData<*const ()>,
-    thread_id: ThreadId,
+    _thread_id: ThreadId,
 }
 
-// World can't be Send because it can contain !Send types which shouldn't be dropped on a different thread
+// World can't be Send if it contains !Send components
+#[cfg(not(feature = "non_send"))]
+unsafe impl Send for World {}
+
 unsafe impl Sync for World {}
 
 impl Default for World {
     /// Create an empty `World` without any storage.
     fn default() -> Self {
         World {
-            storages: AtomicRefCell::new(Default::default(), None, true),
+            all_storages: AtomicRefCell::new(Default::default(), None, true),
             #[cfg(feature = "parallel")]
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
@@ -45,29 +43,14 @@ impl Default for World {
                 .unwrap(),
             scheduler: AtomicRefCell::new(Default::default(), None, true),
             _not_send: PhantomData,
-            thread_id: std::thread::current().id(),
+            _thread_id: std::thread::current().id(),
         }
     }
 }
 
 impl World {
-    /// Returns a new `World` with storages based on `T` already created.
-    /// More storages can be added latter.
-    ///
-    /// `T` has to be a tuple even for a single type.
-    /// In this case use (T,).
-    ///
-    /// `World` is never used mutably.
-    /// # Example
-    /// ```
-    /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize,)>();
-    /// let world = World::new::<(usize, u32)>();
-    /// ```
-    pub fn new<T: Register>() -> Self {
-        let world = World::default();
-        world.register::<T>();
-        world
+    pub fn new() -> Self {
+        World::default()
     }
     /// Returns a new `World` with storages based on `T` already created
     /// and custom threads.
@@ -80,14 +63,11 @@ impl World {
     ///
     /// `World` is never used mutably.
     #[cfg(feature = "parallel")]
-    pub fn new_with_custom_threads<
-        T: Register,
-        F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>,
-    >(
+    pub fn new_with_custom_threads<F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>>(
         f: F,
     ) -> Self {
         World {
-            storages: AtomicRefCell::new(Default::default(), None, true),
+            all_storages: AtomicRefCell::new(Default::default(), None, true),
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
                 .spawn_handler(f)
@@ -95,38 +75,8 @@ impl World {
                 .unwrap(),
             scheduler: AtomicRefCell::new(Default::default(), None, true),
             _not_send: PhantomData,
-            thread_id: std::thread::current().id(),
+            _thread_id: std::thread::current().id(),
         }
-    }
-    /// Register a new component type and create a storage for it.
-    /// Does nothing if the storage already exists.
-    ///
-    /// Unwraps errors.
-    pub fn register<T: Register>(&self) {
-        self.try_register::<T>().unwrap()
-    }
-    pub fn try_register<T: Register>(&self) -> Result<(), error::Register> {
-        T::try_register(self)
-    }
-    pub fn register_non_send<T: RegisterNonSend>(&self) {
-        self.try_register_non_send::<T>().unwrap()
-    }
-    pub fn try_register_non_send<T: RegisterNonSend>(&self) -> Result<(), error::Register> {
-        T::try_register(self)
-    }
-    pub fn register_non_sync<T: RegisterNonSync>(&self) {
-        self.try_register_non_sync::<T>().unwrap()
-    }
-    pub fn try_register_non_sync<T: RegisterNonSync>(&self) -> Result<(), error::Register> {
-        T::try_register(self)
-    }
-    pub fn register_non_send_non_sync<T: RegisterNonSendNonSync>(&self) {
-        self.try_register_non_send_non_sync::<T>().unwrap()
-    }
-    pub fn try_register_non_send_non_sync<T: RegisterNonSendNonSync>(
-        &self,
-    ) -> Result<(), error::Register> {
-        T::try_register(self)
     }
     /// Register a new component type and create a unique storage for it.
     /// Does nothing if the storage already exists.
@@ -151,7 +101,9 @@ impl World {
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
-        self.storages.try_borrow_mut()?.register_unique(component);
+        self.all_storages
+            .try_borrow_mut()?
+            .register_unique(component);
         Ok(())
     }
     pub fn try_borrow<'s, C: SystemData<'s>>(
@@ -159,11 +111,11 @@ impl World {
     ) -> Result<<C as SystemData<'s>>::View, error::GetStorage> {
         #[cfg(feature = "parallel")]
         {
-            <C as SystemData<'s>>::try_borrow(&self.storages, &self.thread_pool)
+            <C as SystemData<'s>>::try_borrow(&self.all_storages, &self.thread_pool)
         }
         #[cfg(not(feature = "parallel"))]
         {
-            <C as SystemData<'s>>::try_borrow(&self.storages)
+            <C as SystemData<'s>>::try_borrow(&self.all_storages)
         }
     }
     pub fn borrow<'s, C: SystemData<'s>>(&'s self) -> <C as SystemData<'s>>::View {
@@ -232,80 +184,12 @@ impl World {
     ) -> Result<R, error::GetStorage> {
         #[cfg(feature = "parallel")]
         {
-            T::try_run(&self.storages, &self.thread_pool, f)
+            T::try_run(&self.all_storages, &self.thread_pool, f)
         }
         #[cfg(not(feature = "parallel"))]
         {
-            T::try_run(&self.storages, f)
+            T::try_run(&self.all_storages, f)
         }
-    }
-    /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
-    /// # Example
-    /// ```
-    /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// world.try_tight_pack::<(usize, u32)>().unwrap();
-    /// ```
-    pub fn try_tight_pack<T: TightPack>(&self) -> Result<(), error::Pack> {
-        T::try_tight_pack(&self.storages)
-    }
-    /// Pack multiple storages together, it can speed up iteration at a small cost on insertion/removal.
-    ///
-    /// Unwraps errors.
-    /// # Example
-    /// ```
-    /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// world.tight_pack::<(usize, u32)>();
-    /// ```
-    pub fn tight_pack<T: TightPack>(&self) {
-        self.try_tight_pack::<T>().unwrap()
-    }
-    pub fn try_loose_pack<T, L>(&self) -> Result<(), error::Pack>
-    where
-        (T, L): LoosePack,
-    {
-        <(T, L)>::try_loose_pack(&self.storages)
-    }
-    pub fn loose_pack<T, L>(&self)
-    where
-        (T, L): LoosePack,
-    {
-        <(T, L)>::try_loose_pack(&self.storages).unwrap()
-    }
-    pub fn try_update_pack<T: 'static>(&self) -> Result<(), error::Pack> {
-        use std::any::{type_name, TypeId};
-
-        let all_storages = self
-            .storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?;
-        if let Some(storage) = all_storages.0.get(&std::any::TypeId::of::<T>()) {
-            let mut sparse_set = storage
-                .sparse_set_mut::<T>()
-                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?;
-            if sparse_set.is_unique() {
-                return Err(error::Pack::UniqueStorage(type_name::<T>()));
-            }
-            match sparse_set.pack_info.pack {
-                Pack::NoPack => {
-                    sparse_set.pack_info.pack = Pack::Update(UpdatePack {
-                        inserted: sparse_set.len(),
-                        modified: 0,
-                        removed: Vec::new(),
-                    });
-                    Ok(())
-                }
-                Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(TypeId::of::<T>())),
-                Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(TypeId::of::<T>())),
-                Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(TypeId::of::<T>())),
-            }
-        } else {
-            Err(error::GetStorage::MissingComponent(type_name::<T>()).into())
-        }
-    }
-    pub fn update_pack<T: 'static>(&self) {
-        self.try_update_pack::<T>().unwrap();
     }
     pub fn try_run_system<S: for<'a> System<'a> + Send + Sync + 'static>(
         &self,
@@ -379,16 +263,10 @@ impl World {
     pub fn try_add_workload<S: IntoWorkload, N: Into<Cow<'static, str>>>(
         &self,
         name: N,
-    ) -> Result<(), error::AddWorkload> {
-        let all_storages = self
-            .storages
-            .try_borrow()
-            .map_err(|_| error::AddWorkload::AllStorages)?;
-        let mut scheduler = self
-            .scheduler
-            .try_borrow_mut()
-            .map_err(|_| error::AddWorkload::Scheduler)?;
-        S::try_into_workload(name, &mut *scheduler, &*all_storages)
+    ) -> Result<(), error::Borrow> {
+        let mut scheduler = self.scheduler.try_borrow_mut()?;
+        S::into_workload(name, &mut *scheduler);
+        Ok(())
     }
     /// A workload is a collection of systems.
     /// They will execute as much in parallel as possible.
