@@ -1,4 +1,4 @@
-# Create a World and Storages
+# Create a World
 
 `World` is Shipyard's core data-structure, it holds all data, knows how to process systems and all operations originate from one (or more).
 

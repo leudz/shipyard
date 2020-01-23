@@ -3,7 +3,7 @@
 [Welcome](./welcome.md)
 - [Getting Started](./getting-started.md)
 - [How To](./how-to.md)
-    - [Create a World and Storages](./how-to/world.md)
+    - [Create a World](./how-to/world.md)
     - [Borrow the World](./how-to/borrow.md)
     - [Add Entities](./how-to/add-entities.md)
     - [Delete Entities](./how-to/delete-entities.md)
