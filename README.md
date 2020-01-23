@@ -6,14 +6,15 @@ Shipyard is an Entity Component System focused on usability and speed.
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg)](LICENSE-APACHE)
 [![Crates.io](https://img.shields.io/crates/v/shipyard.svg)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
-[![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/)
+[![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/book)
+[![Demo](https://img.shields.io/badge/demo-yellow)](https://leudz.github.io/shipyard/demo)
 [![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
 
 While usable it is far from finished, there's enough planned features to fill [an entire Cave](https://github.com/leudz/shipyard/issues/31), nearly all being backward compatible additions.
 
 Most discussions about current and future features happen on zulip, feel free to join to follow the development or ask any question.
 
-If you are new here, the [user guide](https://leudz.github.io/shipyard/) is a great place to learn all about Shipyard!
+If you are new here, the [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!
 
 ## Simple Example
 ```rust
