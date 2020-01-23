@@ -1,0 +1,70 @@
+[config]
+skip_core_tasks = true
+
+##################
+## Main Entries ##
+##################
+
+[tasks.build]
+run_task = [
+    {name = "build-development", condition = { profiles = [ "development"] } },
+    {name = "build-production", condition = { profiles = [ "production"] } },
+]
+
+[tasks.watch]
+command = "watchexec"
+args = ["-w", "./src", "-w", "../../rust-dominator/src", "makers", "build-development"]
+
+[tasks.clean]
+script_runner = "@shell"
+ignore_errors = true
+script = [ 
+    "rm -rf ../target/wasm32-unknown-unknown",
+    "rm -rf ./pkg",
+    "rm -rf ./_static/wasm/shipyard_demo"
+]
+
+#################
+## Development ##
+#################
+
+[tasks.build-development]
+run_task = [{name = [
+    "compile-development", 
+    "bindgen-development"
+]}]
+
+[tasks.compile-development]
+command = "cargo"
+args = ["build","--features","dev","--target","wasm32-unknown-unknown"]
+toolchain = "nightly"
+
+[tasks.bindgen-development]
+command = "wasm-bindgen"
+args = ["../target/wasm32-unknown-unknown/debug/shipyard_demo.wasm","--debug", "--keep-debug", "--target","web","--out-dir","./_static/wasm/shipyard_demo/pkg"]
+
+
+################
+## Production ##
+################
+
+[tasks.build-production]
+run_task = [{name = [
+    "compile-production", 
+    "bindgen-production",
+    "wasmopt-production",
+]}]
+
+[tasks.compile-production]
+command = "cargo"
+args = ["build","--release","--target","wasm32-unknown-unknown"]
+toolchain = "nightly"
+
+[tasks.bindgen-production]
+command = "wasm-bindgen"
+args = ["../target/wasm32-unknown-unknown/release/shipyard_demo.wasm", "--target","web","--out-dir","./_static/wasm/shipyard_demo/pkg"]
+
+[tasks.wasmopt-production]
+command = "wasm-opt"
+# if CI fails, try with BINARYEN_CORES=1 in an env
+args = ["-O3","-o","./_static/wasm/shipyard_demo/pkg/shipyard_demo_bg.wasm", "./_static/wasm/shipyard_demo/pkg/shipyard_demo_bg.wasm"]
