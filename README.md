@@ -7,7 +7,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 [![Crates.io](https://img.shields.io/crates/v/shipyard.svg)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/book)
-[![Demo](https://img.shields.io/badge/demo-yellow)](https://leudz.github.io/shipyard/demo)
+[![Demo](https://img.shields.io/badge/demo-launch-yellow)](https://leudz.github.io/shipyard/demo)
 [![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
 
 While usable it is far from finished, there's enough planned features to fill [an entire Cave](https://github.com/leudz/shipyard/issues/31), nearly all being backward compatible additions.
