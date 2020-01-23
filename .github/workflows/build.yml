@@ -8,12 +8,21 @@ jobs:
     steps:
     - name: checkout repo
       uses: actions/checkout@v1
+
     - name: install mdbook 
       run: cargo install mdbook 
-    - name: build 
+
+    - name: create dist directory 
+      run: mkdir dist
+
+    - name: build book
       run: cd book && mdbook build
+
+    - name: copy book to dist
+      run: cp -R ./book/output ./dist/book
+
     - name: deploy to gh_pages
       uses: maxheld83/ghpages@master
       env:
-        BUILD_DIR: "book/output/"
+        BUILD_DIR: "dist/"
         GH_PAT: ${{ secrets.GH_PAT }}
