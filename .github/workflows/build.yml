@@ -59,7 +59,7 @@ jobs:
       uses: actions/setup-node@v1
 
     - name: install npm deps
-      run: npm ci
+      run: cd demo && npm ci
 
     - name: install rust nightly
       run: rustup toolchain install nightly
