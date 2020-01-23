@@ -1,8 +1,9 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+* @returns {any} 
 */
-export function run(): void;
+export function run(): any;
 
 /**
 * If `module_or_path` is {RequestInfo}, makes a request and

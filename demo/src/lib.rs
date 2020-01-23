@@ -1,3 +1,14 @@
+mod config;
+mod hud;
+mod world;
+mod components;
+mod geometry;
+mod renderer;
+mod fps;
+mod input;
+mod init;
+mod systems;
+
 use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
 
@@ -24,10 +35,7 @@ cfg_if! {
 
 // Called by our JS entry point to run the example.
 #[wasm_bindgen]
-pub fn run() -> Result<(), JsValue> {
+pub fn run() -> Result<js_sys::Promise, JsValue> {
     setup();
-
-    log::info!("logging enabled!");
-
-    Ok(())
+    init::start()
 }
