@@ -7,27 +7,32 @@
 //!
 //! #[system(InAcid)]
 //! fn run(pos: &Position, mut health: &mut Health) {
-//!     (&pos, &mut health).iter().for_each(|(pos, mut health)| {
-//!         if is_in_acid(pos) {
+//!     (&pos, &mut health).iter()
+//!         .filter(|(pos, _)| is_in_acid(pos))
+//!         .for_each(|(pos, mut health)| {
 //!             health.0 -= 1.0;
-//!         }
-//!     });
+//!         });
 //! }
 //!
 //! fn is_in_acid(pos: &Position) -> bool {
 //!     // it's wet season
-//!      
 //!     true
 //! }
 //!
-//! let world = World::new::<(Position, Health)>();
+//! let world = World::new();
 //!
-//! let (mut entities, mut positions, mut healths) = world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
+//! {
+//!     let (mut entities, mut positions, mut healths) =
+//!         world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
+//!    
+//!     entities.add_entity(
+//!         (&mut positions, &mut healths),
+//!         (Position { x: 0.0, y: 0.0 },
+//!         Health(1000.0))
+//!     );
+//! }
 //!
-//! entities.add_entity((&mut positions, &mut healths), Position { x: 0.0, y: 0.0 }, Health(1000.0));
-//!
-//! world.add_workload::<InAcid, _>("In acid");
-//! world.run_default();
+//! world.run_system::<InAcid>();
 //! ```
 //! # Let's make some pigs!
 //! ```
@@ -66,11 +71,14 @@
 //!     });
 //! }
 //!
-//! let world = World::new::<(Health, Fat)>();
+//! let world = World::new();
 //!
 //! world.run::<(EntitiesMut, &mut Health, &mut Fat), _, _>(|(mut entities, mut health, mut fat)| {
 //!     (0..100).for_each(|_| {
-//!         entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
+//!         entities.add_entity(
+//!             (&mut health, &mut fat),
+//!             (Health(100.0), Fat(0.0))
+//!         );
 //!     })
 //! });
 //!
@@ -134,6 +142,11 @@ pub struct ThreadPool;
 /// ```
 pub struct Unique<T: ?Sized>(T);
 
+#[cfg(feature = "non_send")]
 pub struct NonSend<T: ?Sized>(T);
+
+#[cfg(feature = "non_sync")]
 pub struct NonSync<T: ?Sized>(T);
+
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
 pub struct NonSendSync<T: ?Sized>(T);

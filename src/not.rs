@@ -6,7 +6,7 @@ use std::ops::Not as NotOps;
 /// # Example
 /// ```
 /// # use shipyard::prelude::*;
-/// let world = World::new::<(usize, u32)>();
+/// let world = World::new();
 ///
 /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
 ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));

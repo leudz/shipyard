@@ -3,7 +3,6 @@ use shipyard::prelude::*;
 #[test]
 fn entity_id_serde() {
     let world = World::default();
-    world.register::<(u32,)>();
 
     //create and check a couple entities
     let (entity_id0, _) = world.run::<(EntitiesMut, &mut u32), _, _>(|(mut entities, mut u32s)| {

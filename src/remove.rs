@@ -22,7 +22,7 @@ pub trait Remove<T: Removable> {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
@@ -35,10 +35,10 @@ pub trait Remove<T: Removable> {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// world.tight_pack::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     (&mut usizes, &mut u32s).tight_pack();
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     ///     assert_eq!(old, (Some(0),));
@@ -59,7 +59,7 @@ pub trait Remove<T: Removable> {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
@@ -72,10 +72,10 @@ pub trait Remove<T: Removable> {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
-    /// world.tight_pack::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
+    ///     (&mut usizes, &mut u32s).tight_pack();
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
     ///     assert_eq!(old, (Some(0),));

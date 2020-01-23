@@ -21,7 +21,8 @@ pub trait IntoIter {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
+    ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
@@ -40,7 +41,8 @@ pub trait IntoIter {
     /// # use shipyard::prelude::*;
     /// use rayon::prelude::ParallelIterator;
     ///
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
+    ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32, ThreadPool), _, _>(|(mut entities, mut usizes, mut u32s, thread_pool)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));

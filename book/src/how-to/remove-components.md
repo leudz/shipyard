@@ -17,15 +17,7 @@ No need for `Entities` here, you can call the method directly on the view and gi
 ```rust, noplaypen
 let (mut counts, mut empties) = world.borrow::<(&mut Count, &mut Empty)>();
 
-let (count, empty) = (&mut counts, &mut empties).remove(entity_id);
+let (_count, _empty) = Remove::<(Count, Empty)>::remove((&mut counts, &mut empties), entity_id);
 ```
 
-### Delete all components
-
-We're deleting again and not removing, note that the entity won't be deleted, you'll be able to attach components to it again.
-
-```rust, noplaypen
-let all_storages = world.borrow::<AllStorages>();
-
-all_storages.strip(entity_id);
-```
+We have to use the explicit syntax in this case because we could be trying to remove just `Count`. We'll see later why we'd want that.

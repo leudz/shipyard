@@ -63,8 +63,8 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
         if let syn::FnArg::Typed(syn::PatType { pat, ty, .. }) = arg {
             match **ty {
                 syn::Type::Reference(ref mut reference) => {
-                    // references are added a 'a lifetime if they don't have one
-                    // if they have another lifetime, make it 'a
+                    // references are added a 'sys lifetime if they don't have one
+                    // if they have another lifetime, make it 'sys
                     if let syn::Type::Path(path) = &*reference.elem {
                         // transform &Entities into Entites and &mut Entities into EntitiesMut
                         if path.path.segments.last().unwrap().ident == "Entities" {
@@ -73,11 +73,29 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             } else {
                                 **ty = parse_quote!(::shipyard::prelude::EntitiesMut);
                             }
+                        } else if path.path.segments.last().unwrap().ident == "AllStorages" {
+                            if reference.mutability.is_none() {
+                                return Err(Error::new_spanned(
+                                    path,
+                                    "You probably forgot a mut, &AllStorages isn't a valid storage access"
+                                ));
+                            } else {
+                                **ty = parse_quote!(::shipyard::prelude::AllStorages);
+                            }
+                        } else if path.path.segments.last().unwrap().ident == "ThreadPool" {
+                            if reference.mutability.is_none() {
+                                **ty = parse_quote!(::shipyard::prelude::ThreadPool);
+                            } else {
+                                return Err(Error::new_spanned(
+                                    path,
+                                    "ThreadPool can't be accessed mutably but there's no need to, it's Sync and works perfectly with a shared access"
+                                ));
+                            }
                         } else {
-                            reference.lifetime = parse_quote!('a);
+                            reference.lifetime = parse_quote!('sys);
                         }
                     } else {
-                        reference.lifetime = parse_quote!('a);
+                        reference.lifetime = parse_quote!('sys);
                     }
                 }
                 syn::Type::Path(ref mut path) => {
@@ -86,21 +104,75 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                     if last.ident == "Not" {
                         if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
                         {
-                            if inner_type.args.len() != 1 {
-                                return Err(Error::new_spanned(
-                                    last,
-                                    "Not will only accept one type and nothing else",
-                                ));
-                            }
                             let arg = inner_type.args.iter_mut().next().unwrap();
                             if let syn::GenericArgument::Type(inner_type) = arg {
-                                if let syn::Type::Reference(reference) = inner_type {
-                                    reference.lifetime = parse_quote!('a);
-                                } else {
-                                    return Err(Error::new_spanned(
-                                        inner_type,
-                                        "Not will only work with component storages refered by &T or &mut T",
-                                    ));
+                                match inner_type {
+                                    syn::Type::Reference(reference) => {
+                                        reference.lifetime = parse_quote!('sys);
+                                    },
+                                    syn::Type::Path(ref mut path) => {
+                                        let last = path.path.segments.last_mut().unwrap();
+                                        if last.ident == "NonSend" {
+                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                                            {
+                                                let arg = inner_type.args.iter_mut().next().unwrap();
+                                                if let syn::GenericArgument::Type(inner_type) = arg {
+                                                    if let syn::Type::Reference(reference) = inner_type {
+                                                        reference.lifetime = parse_quote!('sys);
+                                                    } else {
+                                                        return Err(Error::new_spanned(
+                                                            inner_type,
+                                                            "NonSend will only work with component storages reffered by &T or &mut T",
+                                                        ));
+                                                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
+                                        }
+                                        else if last.ident == "NonSync" {
+                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                                            {
+                                                let arg = inner_type.args.iter_mut().next().unwrap();
+                                                if let syn::GenericArgument::Type(inner_type) = arg {
+                                                    if let syn::Type::Reference(reference) = inner_type {
+                                                        reference.lifetime = parse_quote!('sys);
+                                                    } else {
+                                                        return Err(Error::new_spanned(
+                                                            inner_type,
+                                                            "NonSync will only work with component storages reffered by &T or &mut T",
+                                                        ));
+                                                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
+                                        }
+                                        else if last.ident == "NonSendSync" {
+                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                                            {
+                                                let arg = inner_type.args.iter_mut().next().unwrap();
+                                                if let syn::GenericArgument::Type(inner_type) = arg {
+                                                    if let syn::Type::Reference(reference) = inner_type {
+                                                        reference.lifetime = parse_quote!('sys);
+                                                    } else {
+                                                        return Err(Error::new_spanned(
+                                                            inner_type,
+                                                            "NonSendSync will only work with component storages reffered by &T or &mut T",
+                                                        ));
+                                                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
+                                        }
+                                    },
+                                    _ => {
+                                        return Err(Error::new_spanned(
+                                            inner_type,
+                                            "Not will only work with component storages referred by &T or &mut T",
+                                        ));
+                                    }
                                 }
                             } else {
                                 unreachable!()
@@ -111,20 +183,68 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                     else if last.ident == "Unique" {
                         if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
                         {
-                            if inner_type.args.len() != 1 {
-                                return Err(Error::new_spanned(
-                                    last,
-                                    "Unique will only accept one type and nothing else",
-                                ));
-                            }
                             let arg = inner_type.args.iter_mut().next().unwrap();
                             if let syn::GenericArgument::Type(inner_type) = arg {
                                 if let syn::Type::Reference(reference) = inner_type {
-                                    reference.lifetime = parse_quote!('a);
+                                    reference.lifetime = parse_quote!('sys);
                                 } else {
                                     return Err(Error::new_spanned(
                                         inner_type,
-                                        "Unique will only work with component storages refered by &T or &mut T",
+                                        "Unique will only work with component storages referred by &T or &mut T",
+                                    ));
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        }
+                    }
+                    else if last.ident == "NonSend" {
+                        if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                        {
+                            let arg = inner_type.args.iter_mut().next().unwrap();
+                            if let syn::GenericArgument::Type(inner_type) = arg {
+                                if let syn::Type::Reference(reference) = inner_type {
+                                    reference.lifetime = parse_quote!('sys);
+                                } else {
+                                    return Err(Error::new_spanned(
+                                        inner_type,
+                                        "NonSend will only work with component storages referred by &T or &mut T",
+                                    ));
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        }
+                    }
+                    else if last.ident == "NonSync" {
+                        if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                        {
+                            let arg = inner_type.args.iter_mut().next().unwrap();
+                            if let syn::GenericArgument::Type(inner_type) = arg {
+                                if let syn::Type::Reference(reference) = inner_type {
+                                    reference.lifetime = parse_quote!('sys);
+                                } else {
+                                    return Err(Error::new_spanned(
+                                        inner_type,
+                                        "NonSync will only work with component storages referred by &T or &mut T",
+                                    ));
+                                }
+                            } else {
+                                unreachable!()
+                            }
+                        }
+                    }
+                    else if last.ident == "NonSendSync" {
+                        if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                        {
+                            let arg = inner_type.args.iter_mut().next().unwrap();
+                            if let syn::GenericArgument::Type(inner_type) = arg {
+                                if let syn::Type::Reference(reference) = inner_type {
+                                    reference.lifetime = parse_quote!('sys);
+                                } else {
+                                    return Err(Error::new_spanned(
+                                        inner_type,
+                                        "NonSendSync will only work with component storages referred by &T or &mut T",
                                     ));
                                 }
                             } else {
@@ -141,8 +261,8 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             \t\t- &mut T for a mutable reference to T storage\n\
                             \t\t- &Entities for an immutable reference to the entity storage\n\
                             \t\t- &mut EntitiesMut for a mutable reference to the entity storage\n\
-                            \t\t- AllStorages for a mutable reference to the storage of all components\n\
-                            \t\t- ThreadPool for an immutable reference to the rayon::ThreadPool used by the World",
+                            \t\t- &mut AllStorages for a mutable reference to the storage of all components\n\
+                            \t\t- &ThreadPool for an immutable reference to the rayon::ThreadPool used by the World",
                     ));
                 }
             }
@@ -170,9 +290,9 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
 
     Ok(quote! {
         #vis struct #name;
-        impl<'a> ::shipyard::prelude::System<'a> for #name {
+        impl<'sys> ::shipyard::prelude::System<'sys> for #name {
             type Data = (#(#data,)*);
-            fn run((#(#binding,)*): <Self::Data as ::shipyard::prelude::SystemData<'a>>::View) #body
+            fn run((#(#binding,)*): <Self::Data as ::shipyard::prelude::SystemData<'sys>>::View) #body
         }
     })
 }

@@ -196,7 +196,10 @@ impl<T> SparseSet<T> {
             match self.pack_info.pack {
                 Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
                 Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-                _ => Ok(self.actual_delete(entity)),
+                _ => {
+                    self.actual_delete(entity);
+                    Ok(())
+                }
             }
         } else {
             Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))

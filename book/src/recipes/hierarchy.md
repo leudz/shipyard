@@ -66,7 +66,7 @@ trait Hierarchy {
 
 With these, you'll be able to not only insert new entities into the tree but also move a whole subtree – a child with all its descendants – to another parent.
 
-Since we need access to `EntitiesViewMut` as well as our hierarchy component storages, we implement the `Hierarchy` trait for the type `(EntitiesViewMut<'a>, ViewMut<'a, Parent>, ViewMut<'a, Child>)`.
+Since we need access to `EntitiesViewMut` as well as our hierarchy component storages, we implement the `Hierarchy` trait for the type `(EntitiesViewMut<'_>, ViewMut<'_, Parent>, ViewMut<'_, Child>)`.
 
 ```rust, noplaypen
 fn detach(&mut self, id: EntityId) {
@@ -168,7 +168,7 @@ fn attach_new(&mut self, parent: EntityId) -> EntityId {
 And lastly a simple usage example:
 
 ```rust, noplaypen
-let world = World::new::<(Parent, Child, usize)>();
+let world = World::new();
 
 let mut hierarchy = world.borrow::<(EntitiesMut, &mut Parent, &mut Child)>();
 
@@ -340,7 +340,7 @@ Cool. Let's extend the former usage example into a little test.
 ```rust, noplaypen
 #[test]
 fn test_hierarchy() {
-    let world = World::new::<(Parent, Child, usize)>();
+    let world = World::new();
 
     let mut hierarchy = world.borrow::<(EntitiesMut, &mut Parent, &mut Child)>();
 
@@ -461,7 +461,7 @@ Again a small test demonstrates the usage:
 ```rust, noplaypen
 #[test]
 fn test_sorting() {
-    let world = World::new::<(Parent, Child, usize)>();
+    let world = World::new();
 
     let (mut hierarchy, mut usizes) = world.borrow::<((EntitiesMut, &mut Parent, &mut Child), &mut usize)>();
 

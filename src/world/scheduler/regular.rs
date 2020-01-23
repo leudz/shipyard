@@ -331,7 +331,8 @@ fn all_storages() {
     assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
     assert_eq!(scheduler.default, 0..2);
 }
-/*
+
+#[cfg(feature = "non_send")]
 #[test]
 fn non_send() {
     struct NonSend(*const ());
@@ -339,12 +340,12 @@ fn non_send() {
 
     struct Sys1;
     impl<'a> System<'a> for Sys1 {
-        type Data = (&'a NonSend,);
+        type Data = (crate::NonSend<&'a NonSend>,);
         fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
     struct Sys2;
     impl<'a> System<'a> for Sys2 {
-        type Data = (&'a mut NonSend,);
+        type Data = (crate::NonSend<&'a mut NonSend>,);
         fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
@@ -360,10 +361,8 @@ fn non_send() {
         fn run(_: <Self::Data as SystemData<'_>>::View) {}
     }
 
-    let mut all_storages = AllStorages::default();
-    all_storages.register_non_send::<NonSend>();
     let mut scheduler = Scheduler::default();
-    <(Sys1, Sys1)>::try_into_workload("Test", &mut scheduler, &all_storages).unwrap();
+    <(Sys1, Sys1)>::into_workload("Test", &mut scheduler);
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.batch.len(), 2);
     assert_eq!(&*scheduler.batch[0], &[0]);
@@ -373,7 +372,7 @@ fn non_send() {
     assert_eq!(scheduler.default, 0..2);
 
     let mut scheduler = Scheduler::default();
-    <(Sys1, Sys2)>::try_into_workload("Test", &mut scheduler, &all_storages).unwrap();
+    <(Sys1, Sys2)>::into_workload("Test", &mut scheduler);
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.batch.len(), 2);
     assert_eq!(&*scheduler.batch[0], &[0]);
@@ -383,7 +382,7 @@ fn non_send() {
     assert_eq!(scheduler.default, 0..2);
 
     let mut scheduler = Scheduler::default();
-    <(Sys2, Sys1)>::try_into_workload("Test", &mut scheduler, &all_storages).unwrap();
+    <(Sys2, Sys1)>::into_workload("Test", &mut scheduler);
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.batch.len(), 2);
     assert_eq!(&*scheduler.batch[0], &[0]);
@@ -393,7 +392,7 @@ fn non_send() {
     assert_eq!(scheduler.default, 0..2);
 
     let mut scheduler = Scheduler::default();
-    <(Sys1, Sys2)>::try_into_workload("Test", &mut scheduler, &all_storages).unwrap();
+    <(Sys1, Sys2)>::into_workload("Test", &mut scheduler);
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.batch.len(), 2);
     assert_eq!(&*scheduler.batch[0], &[0]);
@@ -403,7 +402,7 @@ fn non_send() {
     assert_eq!(scheduler.default, 0..2);
 
     let mut scheduler = Scheduler::default();
-    <(Sys1, Sys2)>::try_into_workload("Test", &mut scheduler, &all_storages).unwrap();
+    <(Sys1, Sys2)>::into_workload("Test", &mut scheduler);
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.batch.len(), 2);
     assert_eq!(&*scheduler.batch[0], &[0]);
@@ -412,4 +411,3 @@ fn non_send() {
     assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
     assert_eq!(scheduler.default, 0..2);
 }
-*/

@@ -23,12 +23,12 @@ struct Health(f32);
 struct Position { x: f32, y: f32 };
 
 #[system(InAcid)]
-fn run(pos: &Position, health: &mut Health) {
-    (&pos, &mut health).iter().for_each(|(pos, mut health)| {
-        if is_in_acid(pos) {
+fn run(pos: &Position, mut health: &mut Health) {
+    (&pos, &mut health).iter()
+        .filter(|(pos, _)| is_in_acid(pos))
+        .for_each(|(pos, mut health)| {
             health.0 -= 1.0;
-        }
-    });
+        });
 }
 
 fn is_in_acid(pos: &Position) -> bool {
@@ -38,17 +38,18 @@ fn is_in_acid(pos: &Position) -> bool {
 
 let world = World::new();
 
-let (mut entities, mut positions, mut healths) = 
-    world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
+{
+    let (mut entities, mut positions, mut healths) =
+        world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
+   
+    entities.add_entity(
+        (&mut positions, &mut healths),
+        (Position { x: 0.0, y: 0.0 },
+        Health(1000.0))
+    );
+}
 
-entities.add_entity(
-    (&mut positions, &mut healths),
-    Position { x: 0.0, y: 0.0 },
-    Health(1000.0)
-);
-
-world.add_workload::<InAcid, _>("In acid");
-world.run_default();
+world.run_system::<InAcid>();
 ```
 
 ## Past, Present and Future

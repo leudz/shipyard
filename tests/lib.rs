@@ -1,3 +1,4 @@
+mod book;
 mod borrow;
 mod iteration;
 #[cfg(feature = "serialization")]
@@ -324,12 +325,27 @@ fn derive() {
     t.pass("tests/derive/return_nothing.rs");
     t.compile_fail("tests/derive/generic_lifetime.rs");
     t.compile_fail("tests/derive/generic_type.rs");
-    t.compile_fail("tests/derive/not_entities.rs");
+    #[cfg(not(any(feature = "non_send", feature = "non_sync")))]
+    {
+        t.compile_fail("tests/derive/not_entities.rs");
+    }
     t.compile_fail("tests/derive/unique_entities.rs");
     t.compile_fail("tests/derive/not_run.rs");
     t.compile_fail("tests/derive/return_something.rs");
     t.compile_fail("tests/derive/where.rs");
     t.compile_fail("tests/derive/wrong_type.rs");
+    #[cfg(feature = "non_send")]
+    {
+        t.pass("tests/derive/good_non_send.rs");
+    }
+    #[cfg(feature = "non_sync")]
+    {
+        t.pass("tests/derive/good_non_sync.rs");
+    }
+    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    {
+        t.pass("tests/derive/good_non_send_sync.rs");
+    }
 }
 
 /*

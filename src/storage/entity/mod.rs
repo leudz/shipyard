@@ -120,7 +120,7 @@ impl Entities {
     /// # Example:
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));

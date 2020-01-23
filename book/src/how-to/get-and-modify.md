@@ -5,7 +5,7 @@ To access or update the components of a single entity you can use `get`. It'll w
 ### Update a single component
 
 ```rust, noplaypen
-let mut position = world.borrow::<&mut Position>();
+let mut positions = world.borrow::<&mut Position>();
 
 *(&mut positions).get(entity_id).unwrap() = Position {
     x: 5.0,
@@ -18,7 +18,7 @@ let mut position = world.borrow::<&mut Position>();
 For single views and if you're sure the entity has the component you want, you can index into it:
 
 ```rust, noplaypen
-let mut position = world.borrow::<&mut Position>();
+let mut positions = world.borrow::<&mut Position>();
 
 positions[entity_id] = Position {
     x: 5.0,
@@ -31,7 +31,7 @@ positions[entity_id] = Position {
 We can also mix and match shared and unique:
 
 ```rust, noplaypen
-let (positions, velocities) = world.borrow::<(&mut Position, &mut Velocity)>();
+let (mut positions, velocities) = world.borrow::<(&mut Position, &Velocity)>();
 
 if let Some((pos, vel)) = (&mut positions, &velocities).get(entity_id) {
     pos.x += vel.x;

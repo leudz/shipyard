@@ -13,7 +13,6 @@ use scheduler::{IntoWorkload, Scheduler};
 use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::ops::Range;
-use std::thread::ThreadId;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
@@ -22,7 +21,6 @@ pub struct World {
     pub(crate) thread_pool: ThreadPool,
     scheduler: AtomicRefCell<Scheduler>,
     _not_send: PhantomData<*const ()>,
-    _thread_id: ThreadId,
 }
 
 // World can't be Send if it contains !Send components
@@ -43,7 +41,6 @@ impl Default for World {
                 .unwrap(),
             scheduler: AtomicRefCell::new(Default::default(), None, true),
             _not_send: PhantomData,
-            _thread_id: std::thread::current().id(),
         }
     }
 }
@@ -75,7 +72,6 @@ impl World {
                 .unwrap(),
             scheduler: AtomicRefCell::new(Default::default(), None, true),
             _not_send: PhantomData,
-            _thread_id: std::thread::current().id(),
         }
     }
     /// Register a new component type and create a unique storage for it.
@@ -139,7 +135,7 @@ impl World {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     /// world.run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///     // -- snip --
     /// });
@@ -168,7 +164,7 @@ impl World {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     /// world.run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///     // -- snip --
     /// });
@@ -249,7 +245,7 @@ impl World {
     ///     }
     /// }
     ///
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));
@@ -300,7 +296,7 @@ impl World {
     ///     }
     /// }
     ///
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     entities.add_entity((&mut usizes, &mut u32s), (0, 1));

@@ -77,7 +77,7 @@ impl EntityId {
     pub(crate) fn zero() -> Self {
         EntityId(NonZeroU64::new(1).unwrap())
     }
-    pub(crate) fn dead() -> Self {
+    pub fn dead() -> Self {
         EntityId(unsafe { NonZeroU64::new_unchecked(std::u64::MAX) })
     }
 }

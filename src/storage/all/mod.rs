@@ -319,24 +319,23 @@ impl AllStorages {
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
-    /// let world = World::new::<(usize, u32)>();
+    /// let world = World::new();
     ///
-    /// let mut entity1 = None;
-    /// let mut entity2 = None;
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
-    ///     entity1 = Some(entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)));
-    ///     entity2 = Some(entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)));
-    /// });
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
     ///
+    /// let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    /// let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    /// drop((entities, usizes, u32s));
     /// world.run::<AllStorages, _, _>(|mut all_storages| {
-    ///     all_storages.delete(entity1.unwrap());
+    ///     all_storages.delete(entity1);
     /// });
     ///
     /// world.run::<(&usize, &u32), _, _>(|(usizes, u32s)| {
-    ///     assert_eq!((&usizes).get(entity1.unwrap()), None);
-    ///     assert_eq!((&u32s).get(entity1.unwrap()), None);
-    ///     assert_eq!(usizes.get(entity2.unwrap()), Some(&2));
-    ///     assert_eq!(u32s.get(entity2.unwrap()), Some(&3));
+    ///     assert_eq!((&usizes).get(entity1), None);
+    ///     assert_eq!((&u32s).get(entity1), None);
+    ///     assert_eq!(usizes.get(entity2), Some(&2));
+    ///     assert_eq!(u32s.get(entity2), Some(&3));
     /// });
     /// ```
     pub fn delete(&mut self, entity: EntityId) -> bool {
