@@ -101,7 +101,7 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
             }
         });
 
-        input::start(world.clone(), &canvas);
+        input::start(world, &canvas);
 
         std::mem::forget(Box::new(tick));
         Ok(JsValue::null())

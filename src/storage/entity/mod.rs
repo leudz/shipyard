@@ -6,7 +6,7 @@ use crate::sparse_set::ViewAddEntity;
 use crate::unknown_storage::UnknownStorage;
 use add_component::AddComponent;
 pub use entity_id::EntityId;
-use std::any::TypeId;
+use std::any::{TypeId, Any};
 
 /// Type used to borrow `Entities` mutably.
 pub struct EntitiesMut;
@@ -143,6 +143,12 @@ impl Entities {
 impl UnknownStorage for Entities {
     fn delete(&mut self, _entity: EntityId, _: &mut Vec<TypeId>) {}
     fn unpack(&mut self, _entity: EntityId) {}
+    fn any(&self) -> &dyn Any {
+        self
+    }
+    fn any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[test]

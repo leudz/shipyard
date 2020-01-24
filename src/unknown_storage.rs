@@ -1,18 +1,14 @@
 use crate::sparse_set::SparseSet;
 use crate::storage::Entities;
 use crate::storage::EntityId;
-use core::any::TypeId;
+use core::any::{TypeId, Any};
 
 pub(super) trait UnknownStorage {
     fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>);
     fn unpack(&mut self, entitiy: EntityId);
-    fn type_id(&self) -> TypeId
-    where
-        Self: 'static,
-    {
-        TypeId::of::<Self>()
+    fn any(&self) -> &dyn Any;
+    fn any_mut(&mut self) -> &mut dyn Any;
     }
-}
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
     fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
@@ -33,58 +29,25 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     fn unpack(&mut self, entity: EntityId) {
         Self::unpack(self, entity);
     }
+    fn any(&self) -> &dyn Any {
+        self
+    }
+    fn any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 impl dyn UnknownStorage {
-    pub(crate) fn is<T: 'static>(&self) -> bool {
-        TypeId::of::<T>() == self.type_id()
-    }
     pub(crate) fn sparse_set<T: 'static>(&self) -> Option<&SparseSet<T>> {
-        if self.is::<SparseSet<T>>() {
-            // SAFE type matches
-            unsafe {
-                let ptr: *const _ = self;
-                let ptr: *const SparseSet<T> = ptr as _;
-                Some(&*ptr)
-            }
-        } else {
-            None
-        }
+        self.any().downcast_ref()
     }
     pub(crate) fn sparse_set_mut<T: 'static>(&mut self) -> Option<&mut SparseSet<T>> {
-        if self.is::<SparseSet<T>>() {
-            // SAFE type matches
-            unsafe {
-                let ptr: *mut _ = self;
-                let ptr: *mut SparseSet<T> = ptr as _;
-                Some(&mut *ptr)
-            }
-        } else {
-            None
-        }
+        self.any_mut().downcast_mut()
     }
     pub(crate) fn entities(&self) -> Option<&Entities> {
-        if self.is::<Entities>() {
-            // SAFE type matches
-            unsafe {
-                let ptr: *const _ = self;
-                let ptr: *const Entities = ptr as _;
-                Some(&*ptr)
-            }
-        } else {
-            None
-        }
+        self.any().downcast_ref()
     }
     pub(crate) fn entities_mut(&mut self) -> Option<&mut Entities> {
-        if self.is::<Entities>() {
-            // SAFE type matches
-            unsafe {
-                let ptr: *mut _ = self;
-                let ptr: *mut Entities = ptr as _;
-                Some(&mut *ptr)
-            }
-        } else {
-            None
-        }
+        self.any_mut().downcast_mut()
     }
 }

@@ -4,7 +4,7 @@ use crate::geometry::*;
 use rand::prelude::*;
 use shipyard::prelude::*;
 
-pub const TICK: &'static str = "TICK";
+pub const TICK: &str = "TICK";
 
 pub fn register_workloads(world: &World) {
     world.add_workload::<(Start, HandleController, Update, Commit, Render, End), _>(TICK);
