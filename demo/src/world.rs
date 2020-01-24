@@ -17,7 +17,10 @@ pub fn init_world(img_area:Area, stage_area:Area, hud:Hud, renderer:SceneRendere
     world.add_unique_non_send_sync(renderer);
     world.add_unique_non_send_sync(hud);
 
-    //world.tight_pack::<(Position, Speed, Gravity)>();
+    {
+        let (mut positions, mut speeds, mut gravities) = world.borrow::<(&mut Position, &mut Speed, &mut Gravity)>();
+        (&mut positions, &mut speeds, &mut gravities).tight_pack();
+    }
 
     world
 }
