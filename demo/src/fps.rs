@@ -1,5 +1,3 @@
-use web_sys::{Performance};
-
 pub struct FpsCounter {
     begin_time: f64,
     prev_time: f64,

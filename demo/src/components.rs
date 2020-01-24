@@ -1,8 +1,8 @@
 use crate::geometry::*;
-use std::sync::{Arc, Mutex};
+//re-exported so its easier to just use components::*
 pub use crate::fps::FpsCounter;
-use crate::hud::Hud;
-use crate::renderer::SceneRenderer;
+pub use crate::hud::Hud;
+pub use crate::renderer::SceneRenderer;
 
 pub struct ImageArea(pub Area);
 pub struct StageArea(pub Area);
@@ -14,8 +14,6 @@ pub enum Controller {
     Adding,
     Waiting
 }
-
-pub struct Renderer(pub Arc<Mutex<SceneRenderer>>);
 
 //the bunnies
 pub struct Position(pub Point);

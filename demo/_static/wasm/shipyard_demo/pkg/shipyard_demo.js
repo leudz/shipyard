@@ -213,10 +213,16 @@ function logError(e) {
     console.error("wasm-bindgen: imported JS function that was not marked as `catch` threw an error:", error);
     throw e;
 }
-function __wbg_adapter_28(arg0, arg1) {
+function __wbg_adapter_28(arg0, arg1, arg2) {
     _assertNum(arg0);
     _assertNum(arg1);
-    wasm._dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hb4884a25ad42d845(arg0, arg1);
+    wasm._dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h11e069d64f03e03b(arg0, arg1, addHeapObject(arg2));
+}
+
+function __wbg_adapter_31(arg0, arg1, arg2) {
+    _assertNum(arg0);
+    _assertNum(arg1);
+    wasm._dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h10026a2db627f39d(arg0, arg1, arg2);
 }
 
 let stack_pointer = 32;
@@ -226,7 +232,7 @@ function addBorrowedObject(obj) {
     heap[--stack_pointer] = obj;
     return stack_pointer;
 }
-function __wbg_adapter_31(arg0, arg1, arg2) {
+function __wbg_adapter_34(arg0, arg1, arg2) {
     try {
         _assertNum(arg0);
         _assertNum(arg1);
@@ -236,16 +242,10 @@ function __wbg_adapter_31(arg0, arg1, arg2) {
     }
 }
 
-function __wbg_adapter_34(arg0, arg1, arg2) {
+function __wbg_adapter_37(arg0, arg1) {
     _assertNum(arg0);
     _assertNum(arg1);
-    wasm._dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h10026a2db627f39d(arg0, arg1, arg2);
-}
-
-function __wbg_adapter_37(arg0, arg1, arg2) {
-    _assertNum(arg0);
-    _assertNum(arg1);
-    wasm._dyn_core__ops__function__FnMut__A____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__h11e069d64f03e03b(arg0, arg1, addHeapObject(arg2));
+    wasm._dyn_core__ops__function__FnMut_____Output___R_as_wasm_bindgen__closure__WasmClosure___describe__invoke__hb4884a25ad42d845(arg0, arg1);
 }
 
 /**
@@ -263,7 +263,19 @@ function handleError(e) {
 function getArrayU8FromWasm0(ptr, len) {
     return getUint8Memory0().subarray(ptr / 1, ptr / 1 + len);
 }
-function __wbg_adapter_263(arg0, arg1, arg2, arg3) {
+
+let cachegetFloat32Memory0 = null;
+function getFloat32Memory0() {
+    if (cachegetFloat32Memory0 === null || cachegetFloat32Memory0.buffer !== wasm.memory.buffer) {
+        cachegetFloat32Memory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachegetFloat32Memory0;
+}
+
+function getArrayF32FromWasm0(ptr, len) {
+    return getFloat32Memory0().subarray(ptr / 4, ptr / 4 + len);
+}
+function __wbg_adapter_297(arg0, arg1, arg2, arg3) {
     _assertNum(arg0);
     _assertNum(arg1);
     wasm.wasm_bindgen__convert__closures__invoke2_mut__h01471411c11fcb8e(arg0, arg1, addHeapObject(arg2), addHeapObject(arg3));
@@ -396,6 +408,20 @@ function init(module) {
     imports.wbg.__wbg_randomFillSync_d5bd2d655fdf256a = function(arg0, arg1, arg2) {
         try {
             getObject(arg0).randomFillSync(getArrayU8FromWasm0(arg1, arg2));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_draw_arrays_instanced_angle_ANGLE_instanced_arrays = function(arg0, arg1, arg2, arg3, arg4) {
+        try {
+            getObject(arg0).drawArraysInstancedANGLE(arg1 >>> 0, arg2, arg3, arg4);
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_vertex_attrib_divisor_angle_ANGLE_instanced_arrays = function(arg0, arg1, arg2) {
+        try {
+            getObject(arg0).vertexAttribDivisorANGLE(arg1 >>> 0, arg2 >>> 0);
         } catch (e) {
             logError(e)
         }
@@ -859,6 +885,62 @@ function init(module) {
             logError(e)
         }
     };
+    imports.wbg.__widl_f_uniform1fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3) {
+        try {
+            getObject(arg0).uniform1fv(getObject(arg1), getArrayF32FromWasm0(arg2, arg3));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform2fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3) {
+        try {
+            getObject(arg0).uniform2fv(getObject(arg1), getArrayF32FromWasm0(arg2, arg3));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform3fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3) {
+        try {
+            getObject(arg0).uniform3fv(getObject(arg1), getArrayF32FromWasm0(arg2, arg3));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform4fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3) {
+        try {
+            getObject(arg0).uniform4fv(getObject(arg1), getArrayF32FromWasm0(arg2, arg3));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform_matrix2fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3, arg4) {
+        try {
+            getObject(arg0).uniformMatrix2fv(getObject(arg1), arg2 !== 0, getArrayF32FromWasm0(arg3, arg4));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform_matrix3fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3, arg4) {
+        try {
+            getObject(arg0).uniformMatrix3fv(getObject(arg1), arg2 !== 0, getArrayF32FromWasm0(arg3, arg4));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform_matrix4fv_with_f32_array_WebGLRenderingContext = function(arg0, arg1, arg2, arg3, arg4) {
+        try {
+            getObject(arg0).uniformMatrix4fv(getObject(arg1), arg2 !== 0, getArrayF32FromWasm0(arg3, arg4));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_active_texture_WebGLRenderingContext = function(arg0, arg1) {
+        try {
+            getObject(arg0).activeTexture(arg1 >>> 0);
+        } catch (e) {
+            logError(e)
+        }
+    };
     imports.wbg.__widl_f_attach_shader_WebGLRenderingContext = function(arg0, arg1, arg2) {
         try {
             getObject(arg0).attachShader(getObject(arg1), getObject(arg2));
@@ -876,6 +958,13 @@ function init(module) {
     imports.wbg.__widl_f_bind_texture_WebGLRenderingContext = function(arg0, arg1, arg2) {
         try {
             getObject(arg0).bindTexture(arg1 >>> 0, getObject(arg2));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_blend_func_WebGLRenderingContext = function(arg0, arg1, arg2) {
+        try {
+            getObject(arg0).blendFunc(arg1 >>> 0, arg2 >>> 0);
         } catch (e) {
             logError(e)
         }
@@ -950,6 +1039,20 @@ function init(module) {
     imports.wbg.__widl_f_detach_shader_WebGLRenderingContext = function(arg0, arg1, arg2) {
         try {
             getObject(arg0).detachShader(getObject(arg1), getObject(arg2));
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_disable_WebGLRenderingContext = function(arg0, arg1) {
+        try {
+            getObject(arg0).disable(arg1 >>> 0);
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_enable_WebGLRenderingContext = function(arg0, arg1) {
+        try {
+            getObject(arg0).enable(arg1 >>> 0);
         } catch (e) {
             logError(e)
         }
@@ -1091,9 +1194,37 @@ function init(module) {
             logError(e)
         }
     };
+    imports.wbg.__widl_f_uniform1f_WebGLRenderingContext = function(arg0, arg1, arg2) {
+        try {
+            getObject(arg0).uniform1f(getObject(arg1), arg2);
+        } catch (e) {
+            logError(e)
+        }
+    };
     imports.wbg.__widl_f_uniform1i_WebGLRenderingContext = function(arg0, arg1, arg2) {
         try {
             getObject(arg0).uniform1i(getObject(arg1), arg2);
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform2f_WebGLRenderingContext = function(arg0, arg1, arg2, arg3) {
+        try {
+            getObject(arg0).uniform2f(getObject(arg1), arg2, arg3);
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform3f_WebGLRenderingContext = function(arg0, arg1, arg2, arg3, arg4) {
+        try {
+            getObject(arg0).uniform3f(getObject(arg1), arg2, arg3, arg4);
+        } catch (e) {
+            logError(e)
+        }
+    };
+    imports.wbg.__widl_f_uniform4f_WebGLRenderingContext = function(arg0, arg1, arg2, arg3, arg4, arg5) {
+        try {
+            getObject(arg0).uniform4f(getObject(arg1), arg2, arg3, arg4, arg5);
         } catch (e) {
             logError(e)
         }
@@ -1313,7 +1444,7 @@ function init(module) {
                     const a = state0.a;
                     state0.a = 0;
                     try {
-                        return __wbg_adapter_263(a, state0.b, arg0, arg1);
+                        return __wbg_adapter_297(a, state0.b, arg0, arg1);
                     } finally {
                         state0.a = a;
                     }
@@ -1492,7 +1623,7 @@ function init(module) {
         var ret = wasm.memory;
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper3253 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper3576 = function(arg0, arg1, arg2) {
         try {
 
             const state = { a: arg0, b: arg1, cnt: 1 };
@@ -1503,7 +1634,7 @@ function init(module) {
                 try {
                     return __wbg_adapter_34(a, state.b, arg0);
                 } finally {
-                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(93)(a, state.b);
+                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(67)(a, state.b);
                     else state.a = a;
                 }
             }
@@ -1515,7 +1646,7 @@ function init(module) {
             logError(e)
         }
     };
-    imports.wbg.__wbindgen_closure_wrapper4423 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper5104 = function(arg0, arg1, arg2) {
         try {
 
             const state = { a: arg0, b: arg1, cnt: 1 };
@@ -1524,9 +1655,9 @@ function init(module) {
                 const a = state.a;
                 state.a = 0;
                 try {
-                    return __wbg_adapter_28(a, state.b, );
+                    return __wbg_adapter_37(a, state.b, );
                 } finally {
-                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(139)(a, state.b);
+                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(160)(a, state.b);
                     else state.a = a;
                 }
             }
@@ -1538,7 +1669,7 @@ function init(module) {
             logError(e)
         }
     };
-    imports.wbg.__wbindgen_closure_wrapper3251 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper3578 = function(arg0, arg1, arg2) {
         try {
 
             const state = { a: arg0, b: arg1, cnt: 1 };
@@ -1549,7 +1680,7 @@ function init(module) {
                 try {
                     return __wbg_adapter_31(a, state.b, arg0);
                 } finally {
-                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(95)(a, state.b);
+                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(65)(a, state.b);
                     else state.a = a;
                 }
             }
@@ -1561,7 +1692,7 @@ function init(module) {
             logError(e)
         }
     };
-    imports.wbg.__wbindgen_closure_wrapper6071 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper6776 = function(arg0, arg1, arg2) {
         try {
 
             const state = { a: arg0, b: arg1, cnt: 1 };
@@ -1570,9 +1701,9 @@ function init(module) {
                 const a = state.a;
                 state.a = 0;
                 try {
-                    return __wbg_adapter_37(a, state.b, arg0);
+                    return __wbg_adapter_28(a, state.b, arg0);
                 } finally {
-                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(182)(a, state.b);
+                    if (--state.cnt === 0) wasm.__wbindgen_export_2.get(203)(a, state.b);
                     else state.a = a;
                 }
             }

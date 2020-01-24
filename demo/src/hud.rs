@@ -1,6 +1,3 @@
-use crate::components::*;
-
-use shipyard::prelude::*;
 use web_sys::{HtmlElement, Document};
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::{JsValue};

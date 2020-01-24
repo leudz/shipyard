@@ -1,7 +1,4 @@
 use crate::geometry::*;
-use std::rc::Rc;
-use std::cell::RefCell;
-use lazy_static::lazy_static;
 use web_sys::{HtmlImageElement};
 use nalgebra::{Matrix4, Vector3};
 
@@ -24,7 +21,7 @@ use awsm_web::webgl::{
 };
 
 pub struct SceneRenderer {
-    renderer: WebGl1Renderer,
+    pub renderer: WebGl1Renderer,
     ids: SceneIds,
 }
 
@@ -75,23 +72,26 @@ impl SceneRenderer {
             SceneIds {program_id, texture_id, instance_id }
         };
 
+        renderer.gl.clear_color(0.3, 0.3, 0.3, 1.0);
+
         Ok(Self { renderer, ids} )
     }
 
-    pub fn render(&mut self, len:usize, img_area:Area, stage_area:Area, instance_positions:&[f32]) -> Result<(), awsm_web::errors::Error> {
+    pub fn clear(&mut self) {
+        self.renderer.clear(&[
+            ClearBufferMask::ColorBufferBit,
+            ClearBufferMask::DepthBufferBit,
+        ]);
+    }
+    pub fn render(&mut self, len:usize, img_area:&Area, stage_area:&Area, instance_positions:&[f32]) -> Result<(), awsm_web::errors::Error> {
+        self.clear();
+
         if len == 0 {
             return Ok(());
         }
 
         let renderer = &mut self.renderer;
         let SceneIds {program_id, texture_id, instance_id, ..} = self.ids;
-
-
-        //Clear the screen buffers
-        renderer.clear(&[
-                ClearBufferMask::ColorBufferBit,
-                ClearBufferMask::DepthBufferBit,
-        ]);
 
         //set blend mode. this will be a noop internally if already set
         renderer.toggle(GlToggle::Blend, true);

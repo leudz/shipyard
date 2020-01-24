@@ -20,7 +20,6 @@ use awsm_web::loaders::fetch;
 use awsm_web::webgl::{
     get_webgl_context_1, 
     WebGlContextOptions, 
-    ClearBufferMask,
     WebGl1Renderer,
     get_texture_size,
     WebGlTextureSource
@@ -60,11 +59,6 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
         }))?;
 
         let renderer = WebGl1Renderer::new(gl)?;
-        renderer.gl.clear_color(0.3, 0.3, 0.3, 1.0);
-        renderer.clear(&[
-            ClearBufferMask::ColorBufferBit,
-            ClearBufferMask::DepthBufferBit,
-        ]);
 
         let scene_renderer = SceneRenderer::new(renderer, &vertex, &fragment, &img)?;
 
@@ -81,7 +75,7 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
             let world = Rc::clone(&world);
             move |_: &web_sys::Event| {
                 let (width, height) = get_window_size(&window).unwrap();
-                world.borrow::<Unique<&mut Renderer>>().resize(width, height);
+                world.borrow::<Unique<NonSendSync<&mut SceneRenderer>>>().renderer.resize(width, height);
                 let mut stage_area = world.borrow::<Unique<&mut StageArea>>();
                 stage_area.0.width = width;
                 stage_area.0.height = height;

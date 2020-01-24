@@ -1,6 +1,6 @@
 use rand::prelude::*;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Point {
     pub x: f64,
     pub y: f64
@@ -17,7 +17,7 @@ impl Point {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Area {
     pub width: u32,
     pub height: u32 
