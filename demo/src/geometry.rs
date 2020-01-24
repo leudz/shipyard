@@ -3,11 +3,10 @@ use rand::prelude::*;
 #[derive(Debug, Clone)]
 pub struct Point {
     pub x: f64,
-    pub y: f64
+    pub y: f64,
 }
 
 impl Point {
-
     pub fn new_random() -> Self {
         let mut rng = thread_rng();
         let x: f64 = rng.gen(); // random number in range [0, 1)
@@ -20,7 +19,7 @@ impl Point {
 #[derive(Debug, Clone)]
 pub struct Area {
     pub width: u32,
-    pub height: u32 
+    pub height: u32,
 }
 
 pub const QUAD_GEOM_UNIT: [f32; 8] = [

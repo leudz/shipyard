@@ -1,10 +1,10 @@
-use shipyard::prelude::*;
 use crate::components::*;
 use crate::geometry::*;
 use crate::hud::Hud;
 use crate::renderer::SceneRenderer;
+use shipyard::prelude::*;
 
-pub fn init_world(img_area:Area, stage_area:Area, hud:Hud, renderer:SceneRenderer) -> World {
+pub fn init_world(img_area: Area, stage_area: Area, hud: Hud, renderer: SceneRenderer) -> World {
     let world = World::default();
 
     world.add_unique(ImageArea(img_area));
@@ -18,7 +18,8 @@ pub fn init_world(img_area:Area, stage_area:Area, hud:Hud, renderer:SceneRendere
     world.add_unique_non_send_sync(hud);
 
     {
-        let (mut positions, mut speeds, mut gravities) = world.borrow::<(&mut Position, &mut Speed, &mut Gravity)>();
+        let (mut positions, mut speeds, mut gravities) =
+            world.borrow::<(&mut Position, &mut Speed, &mut Gravity)>();
         (&mut positions, &mut speeds, &mut gravities).tight_pack();
     }
 

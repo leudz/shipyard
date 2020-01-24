@@ -1,23 +1,11 @@
 use crate::geometry::*;
-use web_sys::{HtmlImageElement};
 use nalgebra::{Matrix4, Vector3};
+use web_sys::HtmlImageElement;
 
 use awsm_web::webgl::{
-    ClearBufferMask,
-    WebGl1Renderer,
-    AttributeOptions,
-    BufferData,
-    BufferTarget,
-    BufferUsage,
-    DataType,
-    TextureTarget,
-    PixelFormat,
-    SimpleTextureOptions,
-    WebGlTextureSource,
-    Id,
-    BeginMode,
-    GlToggle,
-    BlendFactor,
+    AttributeOptions, BeginMode, BlendFactor, BufferData, BufferTarget, BufferUsage,
+    ClearBufferMask, DataType, GlToggle, Id, PixelFormat, SimpleTextureOptions, TextureTarget,
+    WebGl1Renderer, WebGlTextureSource,
 };
 
 pub struct SceneRenderer {
@@ -31,7 +19,12 @@ struct SceneIds {
     instance_id: Id,
 }
 impl SceneRenderer {
-    pub fn new (mut renderer:WebGl1Renderer, vertex:&str, fragment:&str, img:&HtmlImageElement) -> Result<Self, awsm_web::errors::Error> {
+    pub fn new(
+        mut renderer: WebGl1Renderer,
+        vertex: &str,
+        fragment: &str,
+        img: &HtmlImageElement,
+    ) -> Result<Self, awsm_web::errors::Error> {
         let ids = {
             //This demo is specifically using webgl1, which needs to register the extension
             //Everything else is the same API as webgl2 :)
@@ -49,10 +42,10 @@ impl SceneRenderer {
                     &QUAD_GEOM_UNIT,
                     BufferTarget::ArrayBuffer,
                     BufferUsage::StaticDraw,
-                    ),
-                    "a_vertex",
-                    &AttributeOptions::new(2, DataType::Float),
-                    )?;
+                ),
+                "a_vertex",
+                &AttributeOptions::new(2, DataType::Float),
+            )?;
 
             //create texture data and get a texture id
             let texture_id = renderer.create_texture()?;
@@ -64,17 +57,21 @@ impl SceneRenderer {
                     ..SimpleTextureOptions::default()
                 },
                 &WebGlTextureSource::ImageElement(&img),
-                )?;
+            )?;
 
             //create an instance buffer and get the id
             let instance_id = renderer.create_buffer()?;
 
-            SceneIds {program_id, texture_id, instance_id }
+            SceneIds {
+                program_id,
+                texture_id,
+                instance_id,
+            }
         };
 
         renderer.gl.clear_color(0.3, 0.3, 0.3, 1.0);
 
-        Ok(Self { renderer, ids} )
+        Ok(Self { renderer, ids })
     }
 
     pub fn clear(&mut self) {
@@ -83,7 +80,13 @@ impl SceneRenderer {
             ClearBufferMask::DepthBufferBit,
         ]);
     }
-    pub fn render(&mut self, len:usize, img_area:&Area, stage_area:&Area, instance_positions:&[f32]) -> Result<(), awsm_web::errors::Error> {
+    pub fn render(
+        &mut self,
+        len: usize,
+        img_area: &Area,
+        stage_area: &Area,
+        instance_positions: &[f32],
+    ) -> Result<(), awsm_web::errors::Error> {
         self.clear();
 
         if len == 0 {
@@ -91,7 +94,12 @@ impl SceneRenderer {
         }
 
         let renderer = &mut self.renderer;
-        let SceneIds {program_id, texture_id, instance_id, ..} = self.ids;
+        let SceneIds {
+            program_id,
+            texture_id,
+            instance_id,
+            ..
+        } = self.ids;
 
         //set blend mode. this will be a noop internally if already set
         renderer.toggle(GlToggle::Blend, true);
@@ -105,22 +113,35 @@ impl SceneRenderer {
         renderer.activate_texture_for_sampler(texture_id, "u_sampler")?;
 
         //Build our matrices (must cast to f32)
-        let scaling_mat = Matrix4::new_nonuniform_scaling(&Vector3::new(img_area.width as f32, img_area.height as f32, 0.0));
-        let camera_mat = Matrix4::new_orthographic( 0.0, stage_area.width as f32, 0.0, stage_area.height as f32, 0.0, 1.0);
+        let scaling_mat = Matrix4::new_nonuniform_scaling(&Vector3::new(
+            img_area.width as f32,
+            img_area.height as f32,
+            0.0,
+        ));
+        let camera_mat = Matrix4::new_orthographic(
+            0.0,
+            stage_area.width as f32,
+            0.0,
+            stage_area.height as f32,
+            0.0,
+            1.0,
+        );
 
         //Upload them to the GPU
         renderer.upload_uniform_mat_4("u_size", &scaling_mat.as_slice())?;
         renderer.upload_uniform_mat_4("u_camera", &camera_mat.as_slice())?;
 
-
         //need the location for the attrib_divisor below
         let loc = renderer.get_attribute_location_value("a_position")?;
         //upload instance positions
-        renderer.upload_buffer( instance_id, BufferData::new(
+        renderer.upload_buffer(
+            instance_id,
+            BufferData::new(
                 &instance_positions,
                 BufferTarget::ArrayBuffer,
                 BufferUsage::StaticDraw,
-        ))?;
+            ),
+        )?;
 
         renderer.activate_attribute_loc(loc, &AttributeOptions::new(2, DataType::Float));
 
@@ -129,5 +150,4 @@ impl SceneRenderer {
 
         Ok(())
     }
-
 }

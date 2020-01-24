@@ -12,7 +12,7 @@ pub struct Timestamp(pub f64);
 #[derive(PartialEq)]
 pub enum Controller {
     Adding,
-    Waiting
+    Waiting,
 }
 
 //the bunnies

@@ -1,32 +1,27 @@
-use crate::renderer::SceneRenderer;
-use crate::world::init_world;
-use crate::config::get_media_href;
-use crate::hud::Hud;
-use crate::geometry::*;
 use crate::components::*;
-use crate::systems::{self, TICK};
+use crate::config::get_media_href;
+use crate::geometry::*;
+use crate::hud::Hud;
 use crate::input;
+use crate::renderer::SceneRenderer;
+use crate::systems::{self, TICK};
+use crate::world::init_world;
 
-use std::rc::{Rc};
-use std::cell::{RefCell};
-use gloo_events::{EventListener};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-use shipyard::prelude::*;
-use web_sys::{HtmlElement, HtmlCanvasElement};
-use wasm_bindgen_futures::future_to_promise;
-use awsm_web::window::{get_window_size};
 use awsm_web::loaders::fetch;
 use awsm_web::webgl::{
-    get_webgl_context_1, 
-    WebGlContextOptions, 
-    WebGl1Renderer,
-    get_texture_size,
-    WebGlTextureSource
+    get_texture_size, get_webgl_context_1, WebGl1Renderer, WebGlContextOptions, WebGlTextureSource,
 };
+use awsm_web::window::get_window_size;
+use gloo_events::EventListener;
+use shipyard::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::future_to_promise;
+use web_sys::{HtmlCanvasElement, HtmlElement};
 
 pub fn start() -> Result<js_sys::Promise, JsValue> {
-
     let window = web_sys::window().ok_or("should have a Window")?;
     let document = window.document().ok_or("should have a Document")?;
     let body = document.body().ok_or("should have a Body")?;
@@ -36,12 +31,10 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
     loading.set_text_content(Some("Loading..."));
     body.append_child(&loading)?;
 
-
     let future = async move {
         let img = fetch::image(&get_media_href("bunny.png")).await?;
         let vertex = fetch::text(&get_media_href("vertex.glsl")).await?;
         let fragment = fetch::text(&get_media_href("fragment.glsl")).await?;
-
 
         let (stage_width, stage_height) = get_window_size(&window).unwrap();
         let (img_width, img_height, _) = get_texture_size(&WebGlTextureSource::ImageElement(&img));
@@ -53,20 +46,29 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
         let hud = Hud::new(&document, &body)?;
 
         //not using any webgl2 features so might as well stick with v1
-        let gl = get_webgl_context_1(&canvas, Some(&WebGlContextOptions {
-            alpha: false,
-            ..WebGlContextOptions::default()
-        }))?;
+        let gl = get_webgl_context_1(
+            &canvas,
+            Some(&WebGlContextOptions {
+                alpha: false,
+                ..WebGlContextOptions::default()
+            }),
+        )?;
 
         let renderer = WebGl1Renderer::new(gl)?;
 
         let scene_renderer = SceneRenderer::new(renderer, &vertex, &fragment, &img)?;
 
         let world = Rc::new(init_world(
-            Area{width: img_width, height: img_height}, 
-            Area{width: stage_width, height: stage_height},
-            hud, 
-            scene_renderer
+            Area {
+                width: img_width,
+                height: img_height,
+            },
+            Area {
+                width: stage_width,
+                height: stage_height,
+            },
+            hud,
+            scene_renderer,
         ));
 
         systems::register_workloads(&world);
@@ -75,7 +77,10 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
             let world = Rc::clone(&world);
             move |_: &web_sys::Event| {
                 let (width, height) = get_window_size(&window).unwrap();
-                world.borrow::<Unique<NonSendSync<&mut SceneRenderer>>>().renderer.resize(width, height);
+                world
+                    .borrow::<Unique<NonSendSync<&mut SceneRenderer>>>()
+                    .renderer
+                    .resize(width, height);
                 let mut stage_area = world.borrow::<Unique<&mut StageArea>>();
                 stage_area.0.width = width;
                 stage_area.0.height = height;
@@ -85,7 +90,6 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
         on_resize(&web_sys::Event::new("").unwrap());
 
         EventListener::new(&window, "resize", on_resize).forget();
-
 
         //start the game loop!
         let tick = Raf::new({
@@ -106,7 +110,6 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
     Ok(future_to_promise(future))
 }
 
-
 /// Until Raf is availble in gloo...
 struct Raf {
     state: Rc<RefCell<Option<RafState>>>,
@@ -118,7 +121,10 @@ struct RafState {
 }
 
 impl Raf {
-    fn new<F>(mut callback: F) -> Self where F: FnMut(f64) + 'static {
+    fn new<F>(mut callback: F) -> Self
+    where
+        F: FnMut(f64) + 'static,
+    {
         let state: Rc<RefCell<Option<RafState>>> = Rc::new(RefCell::new(None));
 
         fn schedule(callback: &Closure<dyn FnMut(f64)>) -> i32 {
@@ -144,7 +150,7 @@ impl Raf {
 
         *state.borrow_mut() = Some(RafState {
             id: schedule(&closure),
-            closure
+            closure,
         });
 
         Self { state }

@@ -1,13 +1,13 @@
-mod config;
-mod hud;
-mod world;
 mod components;
-mod geometry;
-mod renderer;
+mod config;
 mod fps;
-mod input;
+mod geometry;
+mod hud;
 mod init;
+mod input;
+mod renderer;
 mod systems;
+mod world;
 
 use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;

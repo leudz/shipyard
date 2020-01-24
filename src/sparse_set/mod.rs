@@ -490,6 +490,10 @@ impl<T> SparseSet<T> {
     {
         self.try_update_pack().unwrap()
     }
+    pub fn reserve(&mut self, additional: usize) {
+        self.dense.reserve(additional);
+        self.data.reserve(additional);
+    }
 }
 
 impl<T> std::ops::Index<EntityId> for SparseSet<T> {
