@@ -328,8 +328,8 @@ fn derive() {
     #[cfg(not(any(feature = "non_send", feature = "non_sync")))]
     {
         t.compile_fail("tests/derive/not_entities.rs");
+        t.compile_fail("tests/derive/unique_entities.rs");
     }
-    t.compile_fail("tests/derive/unique_entities.rs");
     t.compile_fail("tests/derive/not_run.rs");
     t.compile_fail("tests/derive/return_something.rs");
     t.compile_fail("tests/derive/where.rs");
