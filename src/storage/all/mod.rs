@@ -314,6 +314,24 @@ impl AllStorages {
     pub(crate) fn register_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.get_mut::<T>().unwrap().insert_unique(component)
     }
+    #[cfg(feature = "non_send")]
+    pub(crate) fn register_unique_non_send<T: 'static + Sync>(&self, component: T) {
+        self.get_non_send_mut::<T>()
+            .unwrap()
+            .insert_unique(component)
+    }
+    #[cfg(feature = "non_sync")]
+    pub(crate) fn register_unique_non_sync<T: 'static + Send>(&self, component: T) {
+        self.get_non_sync_mut::<T>()
+            .unwrap()
+            .insert_unique(component)
+    }
+    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    pub(crate) fn register_unique_non_send_sync<T: 'static>(&self, component: T) {
+        self.get_non_send_sync_mut::<T>()
+            .unwrap()
+            .insert_unique(component)
+    }
     /// Delete an entity and all its components.
     /// Returns `true` if `entity` was alive.
     /// # Example

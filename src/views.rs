@@ -347,7 +347,9 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for UniqueView<
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> UniqueView<'a, T> {
-    pub(crate) fn try_from_non_send(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+    pub(crate) fn try_from_non_send(
+        all_storages: Ref<'a, AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
         let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
         let unique = Ref::try_map(
@@ -375,7 +377,9 @@ impl<'a, T: 'static + Sync> UniqueView<'a, T> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> UniqueView<'a, T> {
-    pub(crate) fn try_from_non_sync(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+    pub(crate) fn try_from_non_sync(
+        all_storages: Ref<'a, AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
         let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
         let unique = Ref::try_map(
@@ -403,7 +407,9 @@ impl<'a, T: 'static + Send> UniqueView<'a, T> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> UniqueView<'a, T> {
-    pub(crate) fn try_from_non_send_sync(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+    pub(crate) fn try_from_non_send_sync(
+        all_storages: Ref<'a, AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
         let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
         let unique = Ref::try_map(
@@ -471,7 +477,9 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for UniqueViewM
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> UniqueViewMut<'a, T> {
-    pub(crate) fn try_from_non_send(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+    pub(crate) fn try_from_non_send(
+        all_storages: Ref<'a, AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
         let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
         let unique = RefMut::try_map(
@@ -499,7 +507,9 @@ impl<'a, T: 'static + Sync> UniqueViewMut<'a, T> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> UniqueViewMut<'a, T> {
-    pub(crate) fn try_from_non_sync(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+    pub(crate) fn try_from_non_sync(
+        all_storages: Ref<'a, AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
         let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
         let unique = RefMut::try_map(
@@ -527,7 +537,9 @@ impl<'a, T: 'static + Send> UniqueViewMut<'a, T> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> UniqueViewMut<'a, T> {
-    pub(crate) fn try_from_non_send_sync(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+    pub(crate) fn try_from_non_send_sync(
+        all_storages: Ref<'a, AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
         let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
         let unique = RefMut::try_map(

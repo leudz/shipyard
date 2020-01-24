@@ -102,6 +102,48 @@ impl World {
             .register_unique(component);
         Ok(())
     }
+    #[cfg(feature = "non_send")]
+    pub fn try_add_unique_non_send<T: 'static + Sync>(
+        &self,
+        component: T,
+    ) -> Result<(), error::Borrow> {
+        self.all_storages
+            .try_borrow_mut()?
+            .register_unique_non_send(component);
+        Ok(())
+    }
+    #[cfg(feature = "non_send")]
+    pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
+        self.try_add_unique_non_send::<T>(component).unwrap()
+    }
+    #[cfg(feature = "non_sync")]
+    pub fn try_add_unique_non_sync<T: 'static + Send>(
+        &self,
+        component: T,
+    ) -> Result<(), error::Borrow> {
+        self.all_storages
+            .try_borrow_mut()?
+            .register_unique_non_sync(component);
+        Ok(())
+    }
+    #[cfg(feature = "non_sync")]
+    pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
+        self.try_add_unique_non_sync::<T>(component).unwrap()
+    }
+    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    pub fn try_add_unique_non_send_sync<T: 'static>(
+        &self,
+        component: T,
+    ) -> Result<(), error::Borrow> {
+        self.all_storages
+            .try_borrow_mut()?
+            .register_unique_non_send_sync(component);
+        Ok(())
+    }
+    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
+        self.try_add_unique_non_send_sync::<T>(component).unwrap()
+    }
     pub fn try_borrow<'s, C: SystemData<'s>>(
         &'s self,
     ) -> Result<<C as SystemData<'s>>::View, error::GetStorage> {
