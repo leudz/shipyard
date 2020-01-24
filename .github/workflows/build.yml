@@ -1,9 +1,9 @@
-name: Book 
+name: Book and Demo
 
 on: [push]
 
 jobs:
-  book:
+  build:
     runs-on: ubuntu-latest
     steps:
     - name: checkout repo
