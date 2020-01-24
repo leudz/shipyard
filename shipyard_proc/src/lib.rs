@@ -185,13 +185,73 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                         {
                             let arg = inner_type.args.iter_mut().next().unwrap();
                             if let syn::GenericArgument::Type(inner_type) = arg {
-                                if let syn::Type::Reference(reference) = inner_type {
-                                    reference.lifetime = parse_quote!('sys);
-                                } else {
-                                    return Err(Error::new_spanned(
-                                        inner_type,
-                                        "Unique will only work with component storages referred by &T or &mut T",
-                                    ));
+                                match inner_type {
+                                    syn::Type::Reference(reference) => {
+                                        reference.lifetime = parse_quote!('sys);
+                                    },
+                                    syn::Type::Path(ref mut path) => {
+                                        let last = path.path.segments.last_mut().unwrap();
+                                        if last.ident == "NonSend" {
+                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                                            {
+                                                let arg = inner_type.args.iter_mut().next().unwrap();
+                                                if let syn::GenericArgument::Type(inner_type) = arg {
+                                                    if let syn::Type::Reference(reference) = inner_type {
+                                                        reference.lifetime = parse_quote!('sys);
+                                                    } else {
+                                                        return Err(Error::new_spanned(
+                                                            inner_type,
+                                                            "NonSend will only work with component storages reffered by &T or &mut T",
+                                                        ));
+                                                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
+                                        }
+                                        else if last.ident == "NonSync" {
+                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                                            {
+                                                let arg = inner_type.args.iter_mut().next().unwrap();
+                                                if let syn::GenericArgument::Type(inner_type) = arg {
+                                                    if let syn::Type::Reference(reference) = inner_type {
+                                                        reference.lifetime = parse_quote!('sys);
+                                                    } else {
+                                                        return Err(Error::new_spanned(
+                                                            inner_type,
+                                                            "NonSync will only work with component storages reffered by &T or &mut T",
+                                                        ));
+                                                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
+                                        }
+                                        else if last.ident == "NonSendSync" {
+                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
+                                            {
+                                                let arg = inner_type.args.iter_mut().next().unwrap();
+                                                if let syn::GenericArgument::Type(inner_type) = arg {
+                                                    if let syn::Type::Reference(reference) = inner_type {
+                                                        reference.lifetime = parse_quote!('sys);
+                                                    } else {
+                                                        return Err(Error::new_spanned(
+                                                            inner_type,
+                                                            "NonSendSync will only work with component storages reffered by &T or &mut T",
+                                                        ));
+                                                    }
+                                                } else {
+                                                    unreachable!()
+                                                }
+                                            }
+                                        }
+                                    },
+                                    _ => {
+                                        return Err(Error::new_spanned(
+                                            inner_type,
+                                            "Unique will only work with component storages referred by &T or &mut T",
+                                        ));
+                                    }
                                 }
                             } else {
                                 unreachable!()
