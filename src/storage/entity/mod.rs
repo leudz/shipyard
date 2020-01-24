@@ -141,9 +141,7 @@ impl Entities {
 }
 
 impl UnknownStorage for Entities {
-    fn delete(&mut self, _entity: EntityId) -> &[TypeId] {
-        &[]
-    }
+    fn delete(&mut self, _entity: EntityId, _: &mut Vec<TypeId>) {}
     fn unpack(&mut self, _entity: EntityId) {}
 }
 

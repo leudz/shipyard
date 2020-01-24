@@ -4,7 +4,6 @@ use super::{Entities, EntityId, Storage};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 use crate::sparse_set::SparseSet;
-use crate::unknown_storage::UnknownStorage;
 use core::cell::UnsafeCell;
 pub(crate) use hasher::TypeIdHasher;
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
@@ -30,19 +29,10 @@ impl Default for AllStorages {
         let mut storages = HashMap::default();
 
         let entities = Entities::default();
-        let unknown: [*const (); 2] = unsafe {
-            let unknown: &dyn UnknownStorage = &entities;
-            let unknown: *const _ = unknown;
-            let unknown: *const *const _ = &unknown;
-            *(unknown as *const [*const (); 2])
-        };
 
         storages.insert(
             TypeId::of::<Entities>(),
-            Storage {
-                container: Box::new(AtomicRefCell::new(entities, None, true)),
-                unknown: unknown[1],
-            },
+            Storage(Box::new(AtomicRefCell::new(entities, None, true))),
         );
 
         AllStorages {
@@ -378,18 +368,8 @@ impl AllStorages {
         let storages = unsafe { &mut *self.storages.get() };
 
         for storage in storages.values_mut() {
-            let observers = storage.delete(entity).unwrap();
-            storage_to_unpack.reserve(observers.len());
-
-            let mut i = 0;
-            for observer in observers.iter().copied() {
-                while i < storage_to_unpack.len() && observer < storage_to_unpack[i] {
-                    i += 1;
-                }
-                if storage_to_unpack.is_empty() || observer != storage_to_unpack[i] {
-                    storage_to_unpack.insert(i, observer);
-                }
-            }
+            // we have unique access to all storages so we can unwrap
+            storage.delete(entity, &mut storage_to_unpack).unwrap();
         }
 
         for storage in storage_to_unpack {

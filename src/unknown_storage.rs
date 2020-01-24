@@ -1,36 +1,90 @@
 use crate::sparse_set::SparseSet;
+use crate::storage::Entities;
 use crate::storage::EntityId;
-use std::any::TypeId;
+use core::any::TypeId;
 
-// When removing an entity all its components have to be removed.
-// These components are stored in HashMap<TypeId, Box<dyn Any>> to be able to store multiple types in the HashMap.
-// However we can't get back the concrete type of Any and delete the component.
-// This is where this trait comes into play.
-// It is implemented for all SparseSet and a specific version will be created by the compiler when needed.
-// We then store the vtable part of the trait object specific for the type added to the World.
-// We do so by taking a pointer to the trait object's fat pointer,
-// cast it to *const [usize; 2] and storring the second usize.
-// This happens in Storage::new.
-// Then when we want to delete a component we re-assemble the trait object at runtime.
-// We do so by taking a reference to the SparseSet, cast it to a thin pointer.
-// Put it in an array with the stored vtable pointer and take a pointer to this array.
-// The pointer is then cast to a reference to the fat pointer of a Delete trait object.
-// This happens in Storage::delete.
-//
-// All of this is temporary, the std will provide a way to get the vtable of a trait object
-// in the future. Until then this hack works as long as trait objects' fat pointer don't
-// change representation.
 pub(super) trait UnknownStorage {
-    fn delete(&mut self, entity: EntityId) -> &[TypeId];
+    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>);
     fn unpack(&mut self, entitiy: EntityId);
+    fn type_id(&self) -> TypeId
+    where
+        Self: 'static,
+    {
+        TypeId::of::<Self>()
+    }
 }
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
-    fn delete(&mut self, entity: EntityId) -> &[TypeId] {
+    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
         self.actual_delete(entity);
-        &self.pack_info.observer_types
+
+        storage_to_unpack.reserve(self.pack_info.observer_types.len());
+
+        let mut i = 0;
+        for observer in self.pack_info.observer_types.iter().copied() {
+            while i < storage_to_unpack.len() && observer < storage_to_unpack[i] {
+                i += 1;
+            }
+            if storage_to_unpack.is_empty() || observer != storage_to_unpack[i] {
+                storage_to_unpack.insert(i, observer);
+            }
+        }
     }
     fn unpack(&mut self, entity: EntityId) {
         Self::unpack(self, entity);
+    }
+}
+
+impl dyn UnknownStorage {
+    pub(crate) fn is<T: 'static>(&self) -> bool {
+        TypeId::of::<T>() == self.type_id()
+    }
+    pub(crate) fn sparse_set<T: 'static>(&self) -> Option<&SparseSet<T>> {
+        if self.is::<SparseSet<T>>() {
+            // SAFE type matches
+            unsafe {
+                let ptr: *const _ = self;
+                let ptr: *const SparseSet<T> = ptr as _;
+                Some(&*ptr)
+            }
+        } else {
+            None
+        }
+    }
+    pub(crate) fn sparse_set_mut<T: 'static>(&mut self) -> Option<&mut SparseSet<T>> {
+        if self.is::<SparseSet<T>>() {
+            // SAFE type matches
+            unsafe {
+                let ptr: *mut _ = self;
+                let ptr: *mut SparseSet<T> = ptr as _;
+                Some(&mut *ptr)
+            }
+        } else {
+            None
+        }
+    }
+    pub(crate) fn entities(&self) -> Option<&Entities> {
+        if self.is::<Entities>() {
+            // SAFE type matches
+            unsafe {
+                let ptr: *const _ = self;
+                let ptr: *const Entities = ptr as _;
+                Some(&*ptr)
+            }
+        } else {
+            None
+        }
+    }
+    pub(crate) fn entities_mut(&mut self) -> Option<&mut Entities> {
+        if self.is::<Entities>() {
+            // SAFE type matches
+            unsafe {
+                let ptr: *mut _ = self;
+                let ptr: *mut Entities = ptr as _;
+                Some(&mut *ptr)
+            }
+        } else {
+            None
+        }
     }
 }
