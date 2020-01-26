@@ -12,7 +12,7 @@ pub struct EntityId(pub(super) NonZeroU64);
 
 impl EntityId {
     // Number of bits used by the version
-    const VERSION_LEN: u64 = 16;
+    pub(crate) const VERSION_LEN: u64 = 16;
     const INDEX_MASK: u64 = !0 >> Self::VERSION_LEN;
     const VERSION_MASK: u64 = !Self::INDEX_MASK;
 

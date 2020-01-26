@@ -105,6 +105,10 @@ impl Storage {
         self.0.try_borrow_mut()?.unpack(entity);
         Ok(())
     }
+    pub(crate) fn clear(&mut self) -> Result<(), error::Borrow> {
+        self.0.try_borrow_mut()?.clear();
+        Ok(())
+    }
 }
 
 #[test]

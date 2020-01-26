@@ -376,4 +376,13 @@ impl AllStorages {
             storages.get_mut(&storage).unwrap().unpack(entity).unwrap();
         }
     }
+    pub fn clear(&mut self) {
+        // SAFE we have unique access
+        let storages = unsafe { &mut *self.storages.get() };
+
+        for storage in storages.values_mut() {
+            // we have unique access to all storages so we can unwrap
+            storage.clear().unwrap()
+        }
+    }
 }

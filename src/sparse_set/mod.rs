@@ -9,7 +9,8 @@ use std::ptr;
 pub(crate) use view_add_entity::ViewAddEntity;
 //pub(crate) use windows::RawWindowMut;
 use crate::error;
-use core::any::TypeId;
+use crate::unknown_storage::UnknownStorage;
+use core::any::{Any, TypeId};
 pub use windows::{Window, WindowMut};
 
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
@@ -494,6 +495,20 @@ impl<T> SparseSet<T> {
         self.dense.reserve(additional);
         self.data.reserve(additional);
     }
+    pub fn clear(&mut self) {
+        if !self.is_unique() {
+            match &mut self.pack_info.pack {
+                Pack::Tight(tight) => tight.len = 0,
+                Pack::Loose(loose) => loose.len = 0,
+                Pack::Update(update) => update
+                    .deleted
+                    .extend(self.dense.drain(..).zip(self.data.drain(..))),
+                Pack::NoPack => {}
+            }
+            self.dense.clear();
+            self.data.clear();
+        }
+    }
 }
 
 impl<T> std::ops::Index<EntityId> for SparseSet<T> {
@@ -506,6 +521,36 @@ impl<T> std::ops::Index<EntityId> for SparseSet<T> {
 impl<T> std::ops::IndexMut<EntityId> for SparseSet<T> {
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
         self.get_mut(entity).unwrap()
+    }
+}
+
+impl<T: 'static> UnknownStorage for SparseSet<T> {
+    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
+        self.actual_delete(entity);
+
+        storage_to_unpack.reserve(self.pack_info.observer_types.len());
+
+        let mut i = 0;
+        for observer in self.pack_info.observer_types.iter().copied() {
+            while i < storage_to_unpack.len() && observer < storage_to_unpack[i] {
+                i += 1;
+            }
+            if storage_to_unpack.is_empty() || observer != storage_to_unpack[i] {
+                storage_to_unpack.insert(i, observer);
+            }
+        }
+    }
+    fn clear(&mut self) {
+        <Self>::clear(self)
+    }
+    fn unpack(&mut self, entity: EntityId) {
+        Self::unpack(self, entity);
+    }
+    fn any(&self) -> &dyn Any {
+        self
+    }
+    fn any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
