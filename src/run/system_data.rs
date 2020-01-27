@@ -1,3 +1,4 @@
+use super::FakeBorrow;
 use crate::atomic_refcell::AtomicRefCell;
 use crate::storage::{AllStorages, Entities, EntitiesMut};
 use crate::views::{
@@ -505,6 +506,25 @@ impl<'a, T: 'static> SystemData<'a> for Unique<NonSendSync<&mut T>> {
 
     fn is_send_sync() -> bool {
         <NonSendSync<&mut T> as SystemData>::is_send_sync()
+    }
+}
+
+impl<'a, T: 'static> SystemData<'a> for FakeBorrow<T> {
+    type View = ();
+
+    fn try_borrow(
+        _: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] _: &'a ThreadPool,
+    ) -> Result<Self::View, error::GetStorage> {
+        Ok(())
+    }
+
+    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+        infos.push((TypeId::of::<T>(), Mutation::Unique))
+    }
+
+    fn is_send_sync() -> bool {
+        true
     }
 }
 

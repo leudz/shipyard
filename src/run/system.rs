@@ -43,13 +43,13 @@ pub trait System<'a> {
     fn run(storage: <Self::Data as SystemData<'a>>::View);
 }
 
-pub(crate) trait Dispatch: Send + Sync {
+pub(crate) trait Dispatch {
     fn try_dispatch(world: &World) -> Result<(), error::GetStorage>;
 }
 
 impl<T> Dispatch for T
 where
-    T: for<'a> System<'a> + Send + Sync,
+    T: for<'a> System<'a>,
 {
     fn try_dispatch(world: &World) -> Result<(), error::GetStorage> {
         let storages = &world.all_storages;

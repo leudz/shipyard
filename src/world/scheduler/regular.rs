@@ -9,7 +9,7 @@ pub trait IntoWorkload {
     fn into_workload(name: impl Into<Cow<'static, str>>, scheduler: &mut Scheduler);
 }
 
-impl<T: for<'a> System<'a> + Send + Sync + 'static> IntoWorkload for T {
+impl<T: for<'a> System<'a> + 'static> IntoWorkload for T {
     #[allow(clippy::range_plus_one)]
     fn into_workload(name: impl Into<Cow<'static, str>>, scheduler: &mut Scheduler) {
         let range = scheduler.batch.len()..(scheduler.batch.len() + 1);
@@ -27,7 +27,7 @@ impl<T: for<'a> System<'a> + Send + Sync + 'static> IntoWorkload for T {
     }
 }
 
-impl<T: for<'a> System<'a> + Send + Sync + 'static> IntoWorkload for (T,) {
+impl<T: for<'a> System<'a> + 'static> IntoWorkload for (T,) {
     fn into_workload(name: impl Into<Cow<'static, str>>, scheduler: &mut Scheduler) {
         T::into_workload(name, scheduler)
     }
@@ -35,7 +35,7 @@ impl<T: for<'a> System<'a> + Send + Sync + 'static> IntoWorkload for (T,) {
 
 macro_rules! impl_scheduler {
     ($(($system: ident, $index: tt))+) => {
-        impl<$($system: for<'a> System<'a> + Send + Sync + 'static),+> IntoWorkload for ($($system,)+) {
+        impl<$($system: for<'a> System<'a> + 'static),+> IntoWorkload for ($($system,)+) {
             fn into_workload(name: impl Into<Cow<'static, str>>, scheduler: &mut Scheduler) {
                 let batch_start = scheduler.batch.len();
                 // new batch added by this workload
@@ -410,4 +410,31 @@ fn non_send() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
     assert_eq!(scheduler.default, 0..2);
+}
+
+#[test]
+fn fake_borrow() {
+    use crate::run::FakeBorrow;
+
+    struct System1;
+    impl<'a> System<'a> for System1 {
+        type Data = (&'a usize,);
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
+    }
+    struct System2;
+    impl<'a> System<'a> for System2 {
+        type Data = (&'a usize,);
+        fn run(_: <Self::Data as SystemData<'_>>::View) {}
+    }
+
+    let mut scheduler = Scheduler::default();
+    <(System1, FakeBorrow<usize>, System2)>::into_workload("Systems", &mut scheduler);
+    assert_eq!(scheduler.systems.len(), 3);
+    assert_eq!(scheduler.batch.len(), 3);
+    assert_eq!(&*scheduler.batch[0], &[0]);
+    assert_eq!(&*scheduler.batch[1], &[1]);
+    assert_eq!(&*scheduler.batch[2], &[2]);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..3)));
+    assert_eq!(scheduler.default, 0..3);
 }

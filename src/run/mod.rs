@@ -46,3 +46,10 @@ impl<'a, T: SystemData<'a>> Run<'a> for T {
         Ok(f(storage))
     }
 }
+
+pub struct FakeBorrow<T: ?Sized>(T);
+
+impl<'a, T: 'static> System<'a> for FakeBorrow<T> {
+    type Data = FakeBorrow<T>;
+    fn run(_: <Self::Data as SystemData<'a>>::View) {}
+}
