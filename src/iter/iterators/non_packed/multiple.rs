@@ -45,6 +45,9 @@ macro_rules! impl_iterators {
             fn post_process(&mut self, item: Self::Item) -> Self::Item {
                 item
             }
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (0, Some(self.end - self.current))
+            }
         }
 
         impl<$($type: IntoAbstract),+> CurrentId for $non_packed<$($type),+> {

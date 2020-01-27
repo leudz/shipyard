@@ -23,6 +23,9 @@ impl<I: Shiperator> Shiperator for Enumerate<I> {
     fn post_process(&mut self, (current, item): Self::Item) -> Self::Item {
         (current, self.iter.post_process(item))
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
 }
 
 impl<I: CurrentId> CurrentId for Enumerate<I> {

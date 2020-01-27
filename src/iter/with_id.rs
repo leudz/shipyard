@@ -22,6 +22,9 @@ impl<I: CurrentId> Shiperator for WithId<I> {
         let item = self.iter.post_process(item);
         (id, item)
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
 }
 
 impl<I: CurrentId> CurrentId for WithId<I> {

@@ -24,6 +24,10 @@ impl<T: IntoAbstract> Shiperator for Update1<T> {
     fn post_process(&mut self, _: Self::Item) -> Self::Item {
         unsafe { self.data.mark_id_modified(self.current_id) }
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.end - self.current;
+        (len, Some(len))
+    }
 }
 
 impl<T: IntoAbstract> CurrentId for Update1<T> {

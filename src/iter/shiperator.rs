@@ -10,6 +10,7 @@ pub trait Shiperator {
     /// `post_process` should be called with its returned value.
     fn first_pass(&mut self) -> Option<Self::Item>;
     fn post_process(&mut self, item: Self::Item) -> Self::Item;
+    fn size_hint(&self) -> (usize, Option<usize>);
     fn next(&mut self) -> Option<Self::Item> {
         IntoIterator(self).next()
     }
@@ -138,6 +139,9 @@ impl<S: Shiperator + ?Sized> Shiperator for &mut S {
     fn post_process(&mut self, item: Self::Item) -> Self::Item {
         (**self).post_process(item)
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (**self).size_hint()
+    }
 }
 
 pub trait CurrentId: Shiperator {
@@ -157,5 +161,8 @@ impl<S: Shiperator + ?Sized> Iterator for IntoIterator<S> {
     fn next(&mut self) -> Option<Self::Item> {
         let item = self.0.first_pass()?;
         Some(self.0.post_process(item))
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
     }
 }

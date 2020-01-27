@@ -42,6 +42,10 @@ impl<T: IntoAbstract> Shiperator for Tight1<T> {
     fn post_process(&mut self, item: Self::Item) -> Self::Item {
         item
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.end - self.current;
+        (len, Some(len))
+    }
 }
 
 impl<T: IntoAbstract> CurrentId for Tight1<T> {

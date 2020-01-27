@@ -44,6 +44,9 @@ macro_rules! impl_iterators {
             fn post_process(&mut self, _: Self::Item) -> Self::Item {
                 unsafe {($(self.data.$index.mark_id_modified(self.current_id),)+)}
             }
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (0, Some(self.end - self.current))
+            }
         }
 
         impl<$($type: IntoAbstract),+> CurrentId for $update<$($type),+> {

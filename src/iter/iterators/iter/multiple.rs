@@ -58,6 +58,14 @@ macro_rules! impl_iterators {
                     Self::NonPacked(non_packed) => non_packed.post_process(item),
                 }
             }
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                match self {
+                    Self::Tight(tight) => tight.size_hint(),
+                    Self::Loose(loose) => loose.size_hint(),
+                    Self::Update(update) => update.size_hint(),
+                    Self::NonPacked(non_packed) => non_packed.size_hint(),
+                }
+            }
         }
         impl<$($type: IntoAbstract),+> CurrentId for $iter<$($type),+> {
             type Id = EntityId;

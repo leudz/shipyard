@@ -38,6 +38,12 @@ impl<T: IntoAbstract> Shiperator for Iter1<T> {
             Self::Update(update) => update.post_process(item),
         }
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            Self::Tight(tight) => tight.size_hint(),
+            Self::Update(update) => update.size_hint(),
+        }
+    }
 }
 
 impl<T: IntoAbstract> CurrentId for Iter1<T> {

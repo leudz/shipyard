@@ -14,7 +14,9 @@ fn basic() {
     drop(u32s);
     let mut vec = Vec::new();
     world.run::<&u32, _, _>(|u32s| {
-        u32s.iter().for_each(|&x| vec.push(x));
+        let iter = u32s.iter();
+        assert_eq!(iter.size_hint(), (3, Some(3)));
+        iter.for_each(|&x| vec.push(x));
     });
     world.run::<&mut u32, _, _>(|mut u32s| {
         (&mut u32s).iter().for_each(|&mut x| vec.push(x));
@@ -105,9 +107,9 @@ fn filter() {
     drop(u32s);
     let mut vec = Vec::new();
     world.run::<&u32, _, _>(|u32s| {
-        u32s.iter()
-            .filter(|&&x| x % 2 == 0)
-            .for_each(|&x| vec.push(x));
+        let iter = u32s.iter();
+        assert_eq!(iter.size_hint(), (3, Some(3)));
+        iter.filter(|&&x| x % 2 == 0).for_each(|&x| vec.push(x));
     });
     world.run::<&mut u32, _, _>(|mut u32s| {
         (&mut u32s)

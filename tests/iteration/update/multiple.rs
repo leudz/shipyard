@@ -19,6 +19,7 @@ fn basic() {
     drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s).iter();
+        assert_eq!(iter.size_hint(), (4, Some(4)));
         assert_eq!(iter.next().unwrap(), &0);
         assert_eq!(iter.next().unwrap(), &1);
         assert_eq!(iter.next().unwrap(), &2);
@@ -75,6 +76,7 @@ fn basic() {
 
     world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
         let mut iter = (&u32s, &i16s).iter();
+        assert_eq!(iter.size_hint(), (0, Some(4)));
         assert_eq!(iter.next().unwrap(), (&0, &10));
         assert_eq!(iter.next().unwrap(), (&2, &12));
         assert_eq!(iter.next().unwrap(), (&4, &14));
@@ -423,6 +425,7 @@ fn filter() {
     drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
         let mut iter = (&u32s).iter().filter(|x| **x % 2 == 0);
+        assert_eq!(iter.size_hint(), (0, Some(4)));
         assert_eq!(iter.next().unwrap(), &0);
         assert_eq!(iter.next().unwrap(), &2);
         assert_eq!(iter.next().unwrap(), &4);

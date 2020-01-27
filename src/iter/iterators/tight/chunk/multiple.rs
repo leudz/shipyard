@@ -34,6 +34,10 @@ macro_rules! impl_iterators {
             fn post_process(&mut self, item: Self::Item) -> Self::Item {
                 item
             }
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                let len = (self.end - self.current + self.step - 1) / self.step;
+                (len, Some(len))
+            }
         }
     }
 }
