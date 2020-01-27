@@ -3,6 +3,7 @@ mod hasher;
 use super::{Entities, EntityId, Storage};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
+use crate::run::StorageBorrow;
 use crate::sparse_set::SparseSet;
 use core::cell::UnsafeCell;
 pub(crate) use hasher::TypeIdHasher;
@@ -384,5 +385,13 @@ impl AllStorages {
             // we have unique access to all storages so we can unwrap
             storage.clear().unwrap()
         }
+    }
+    pub fn try_borrow<'a, C: StorageBorrow<'a>>(
+        &'a self,
+    ) -> Result<<C as StorageBorrow<'a>>::View, error::GetStorage> {
+        <C as StorageBorrow<'a>>::try_borrow(self)
+    }
+    pub fn borrow<'a, C: StorageBorrow<'a>>(&'a self) -> <C as StorageBorrow<'a>>::View {
+        self.try_borrow::<C>().unwrap()
     }
 }

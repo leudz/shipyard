@@ -72,6 +72,18 @@ impl<'a> TryFrom<Ref<'a, AllStorages>> for EntitiesView<'a> {
     }
 }
 
+impl<'a> TryFrom<&'a AllStorages> for EntitiesView<'a> {
+    type Error = error::GetStorage;
+    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+        Ok(EntitiesView {
+            entities: all_storages
+                .entities()
+                .map_err(error::GetStorage::Entities)?,
+            _all_borrow: Borrow::None,
+        })
+    }
+}
+
 impl Deref for EntitiesView<'_> {
     type Target = Entities;
     fn deref(&self) -> &Self::Target {
@@ -94,6 +106,18 @@ impl<'a> TryFrom<Ref<'a, AllStorages>> for EntitiesViewMut<'a> {
                 .entities_mut()
                 .map_err(error::GetStorage::Entities)?,
             _all_borrow: all_borrow,
+        })
+    }
+}
+
+impl<'a> TryFrom<&'a AllStorages> for EntitiesViewMut<'a> {
+    type Error = error::GetStorage;
+    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+        Ok(EntitiesViewMut {
+            entities: all_storages
+                .entities_mut()
+                .map_err(error::GetStorage::Entities)?,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -138,6 +162,25 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for View<'a, T>
     }
 }
 
+impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for View<'a, T> {
+    type Error = error::GetStorage;
+    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+        // SAFE window is dropped before borrow
+        let (sparse_set, borrow) = unsafe {
+            Ref::destructure(
+                all_storages
+                    .get::<T>()
+                    .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            )
+        };
+        Ok(View {
+            window: sparse_set.window(),
+            _borrow: borrow,
+            _all_borrow: Borrow::None,
+        })
+    }
+}
+
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> View<'a, T> {
     pub(crate) fn try_from_non_send(
@@ -157,6 +200,23 @@ impl<'a, T: 'static + Sync> View<'a, T> {
             window: sparse_set.window(),
             _borrow: borrow,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        // SAFE window is dropped before borrow
+        let (sparse_set, borrow) = unsafe {
+            Ref::destructure(
+                all_storages
+                    .get_non_send::<T>()
+                    .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            )
+        };
+        Ok(View {
+            window: sparse_set.window(),
+            _borrow: borrow,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -182,6 +242,23 @@ impl<'a, T: 'static + Send> View<'a, T> {
             _all_borrow: all_borrow,
         })
     }
+    pub(crate) fn try_storage_from_non_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        // SAFE window is dropped before borrow
+        let (sparse_set, borrow) = unsafe {
+            Ref::destructure(
+                all_storages
+                    .get_non_sync::<T>()
+                    .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            )
+        };
+        Ok(View {
+            window: sparse_set.window(),
+            _borrow: borrow,
+            _all_borrow: Borrow::None,
+        })
+    }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -203,6 +280,23 @@ impl<'a, T: 'static> View<'a, T> {
             window: sparse_set.window(),
             _borrow: borrow,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        // SAFE window is dropped before borrow
+        let (sparse_set, borrow) = unsafe {
+            Ref::destructure(
+                all_storages
+                    .get_non_send_sync::<T>()
+                    .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            )
+        };
+        Ok(View {
+            window: sparse_set.window(),
+            _borrow: borrow,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -239,6 +333,18 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for ViewMut<'a,
     }
 }
 
+impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for ViewMut<'a, T> {
+    type Error = error::GetStorage;
+    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+        Ok(ViewMut {
+            sparse_set: all_storages
+                .get_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            _all_borrow: Borrow::None,
+        })
+    }
+}
+
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> ViewMut<'a, T> {
     pub(crate) fn try_from_non_send(
@@ -251,6 +357,16 @@ impl<'a, T: 'static + Sync> ViewMut<'a, T> {
                 .get_non_send_mut::<T>()
                 .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        Ok(ViewMut {
+            sparse_set: all_storages
+                .get_non_send_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -269,6 +385,16 @@ impl<'a, T: 'static + Send> ViewMut<'a, T> {
             _all_borrow: all_borrow,
         })
     }
+    pub(crate) fn try_storage_from_non_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        Ok(ViewMut {
+            sparse_set: all_storages
+                .get_non_sync_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            _all_borrow: Borrow::None,
+        })
+    }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -283,6 +409,16 @@ impl<'a, T: 'static> ViewMut<'a, T> {
                 .get_non_send_sync_mut::<T>()
                 .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        Ok(ViewMut {
+            sparse_set: all_storages
+                .get_non_send_sync_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -345,6 +481,32 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for UniqueView<
     }
 }
 
+impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for UniqueView<'a, T> {
+    type Error = error::GetStorage;
+    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+        let unique = Ref::try_map(
+            all_storages
+                .get::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Shared,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueView {
+            unique,
+            _all_borrow: Borrow::None,
+        })
+    }
+}
+
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> UniqueView<'a, T> {
     pub(crate) fn try_from_non_send(
@@ -371,6 +533,30 @@ impl<'a, T: 'static + Sync> UniqueView<'a, T> {
         Ok(UniqueView {
             unique,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        let unique = Ref::try_map(
+            all_storages
+                .get_non_send::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Shared,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueView {
+            unique,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -403,6 +589,30 @@ impl<'a, T: 'static + Send> UniqueView<'a, T> {
             _all_borrow: all_borrow,
         })
     }
+    pub(crate) fn try_storage_from_non_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        let unique = Ref::try_map(
+            all_storages
+                .get_non_sync::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Shared,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueView {
+            unique,
+            _all_borrow: Borrow::None,
+        })
+    }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -431,6 +641,30 @@ impl<'a, T: 'static> UniqueView<'a, T> {
         Ok(UniqueView {
             unique,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        let unique = Ref::try_map(
+            all_storages
+                .get_non_send_sync::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Shared,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueView {
+            unique,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -475,6 +709,32 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for UniqueViewM
     }
 }
 
+impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for UniqueViewMut<'a, T> {
+    type Error = error::GetStorage;
+    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+        let unique = RefMut::try_map(
+            all_storages
+                .get_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked_mut(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Unique,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueViewMut {
+            unique,
+            _all_borrow: Borrow::None,
+        })
+    }
+}
+
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> UniqueViewMut<'a, T> {
     pub(crate) fn try_from_non_send(
@@ -501,6 +761,30 @@ impl<'a, T: 'static + Sync> UniqueViewMut<'a, T> {
         Ok(UniqueViewMut {
             unique,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        let unique = RefMut::try_map(
+            all_storages
+                .get_non_send_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked_mut(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Unique,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueViewMut {
+            unique,
+            _all_borrow: Borrow::None,
         })
     }
 }
@@ -533,6 +817,30 @@ impl<'a, T: 'static + Send> UniqueViewMut<'a, T> {
             _all_borrow: all_borrow,
         })
     }
+    pub(crate) fn try_storage_from_non_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        let unique = RefMut::try_map(
+            all_storages
+                .get_non_sync_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked_mut(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Unique,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueViewMut {
+            unique,
+            _all_borrow: Borrow::None,
+        })
+    }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -561,6 +869,30 @@ impl<'a, T: 'static> UniqueViewMut<'a, T> {
         Ok(UniqueViewMut {
             unique,
             _all_borrow: all_borrow,
+        })
+    }
+    pub(crate) fn try_storage_from_non_send_sync(
+        all_storages: &'a AllStorages,
+    ) -> Result<Self, error::GetStorage> {
+        let unique = RefMut::try_map(
+            all_storages
+                .get_non_send_sync_mut::<T>()
+                .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
+            |sparse_set| {
+                if sparse_set.is_unique() {
+                    // SAFE unique storage have data there
+                    Ok(unsafe { sparse_set.data.get_unchecked_mut(0) })
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        type_name::<T>(),
+                        error::Borrow::Unique,
+                    )))
+                }
+            },
+        )?;
+        Ok(UniqueViewMut {
+            unique,
+            _all_borrow: Borrow::None,
         })
     }
 }

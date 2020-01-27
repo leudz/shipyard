@@ -100,87 +100,8 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                 }
                 syn::Type::Path(ref mut path) => {
                     let last = path.path.segments.last_mut().unwrap();
-                    // Not has to be handled separately since its lifetime is inside the type
-                    if last.ident == "Not" {
-                        if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
-                        {
-                            let arg = inner_type.args.iter_mut().next().unwrap();
-                            if let syn::GenericArgument::Type(inner_type) = arg {
-                                match inner_type {
-                                    syn::Type::Reference(reference) => {
-                                        reference.lifetime = parse_quote!('sys);
-                                    },
-                                    syn::Type::Path(ref mut path) => {
-                                        let last = path.path.segments.last_mut().unwrap();
-                                        if last.ident == "NonSend" {
-                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
-                                            {
-                                                let arg = inner_type.args.iter_mut().next().unwrap();
-                                                if let syn::GenericArgument::Type(inner_type) = arg {
-                                                    if let syn::Type::Reference(reference) = inner_type {
-                                                        reference.lifetime = parse_quote!('sys);
-                                                    } else {
-                                                        return Err(Error::new_spanned(
-                                                            inner_type,
-                                                            "NonSend will only work with component storages reffered by &T or &mut T",
-                                                        ));
-                                                    }
-                                                } else {
-                                                    unreachable!()
-                                                }
-                                            }
-                                        }
-                                        else if last.ident == "NonSync" {
-                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
-                                            {
-                                                let arg = inner_type.args.iter_mut().next().unwrap();
-                                                if let syn::GenericArgument::Type(inner_type) = arg {
-                                                    if let syn::Type::Reference(reference) = inner_type {
-                                                        reference.lifetime = parse_quote!('sys);
-                                                    } else {
-                                                        return Err(Error::new_spanned(
-                                                            inner_type,
-                                                            "NonSync will only work with component storages reffered by &T or &mut T",
-                                                        ));
-                                                    }
-                                                } else {
-                                                    unreachable!()
-                                                }
-                                            }
-                                        }
-                                        else if last.ident == "NonSendSync" {
-                                            if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
-                                            {
-                                                let arg = inner_type.args.iter_mut().next().unwrap();
-                                                if let syn::GenericArgument::Type(inner_type) = arg {
-                                                    if let syn::Type::Reference(reference) = inner_type {
-                                                        reference.lifetime = parse_quote!('sys);
-                                                    } else {
-                                                        return Err(Error::new_spanned(
-                                                            inner_type,
-                                                            "NonSendSync will only work with component storages reffered by &T or &mut T",
-                                                        ));
-                                                    }
-                                                } else {
-                                                    unreachable!()
-                                                }
-                                            }
-                                        }
-                                    },
-                                    _ => {
-                                        return Err(Error::new_spanned(
-                                            inner_type,
-                                            "Not will only work with component storages referred by &T or &mut T",
-                                        ));
-                                    }
-                                }
-                            } else {
-                                unreachable!()
-                            }
-                        }
-                    }
-                    // Unique is in the same situation as Not
-                    else if last.ident == "Unique" {
+                    // Unique has to be handled separatly because the lifetime is inside it
+                    if last.ident == "Unique" {
                         if let syn::PathArguments::AngleBracketed(inner_type) = &mut last.arguments
                         {
                             let arg = inner_type.args.iter_mut().next().unwrap();

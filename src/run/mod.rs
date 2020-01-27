@@ -1,6 +1,8 @@
+mod storage_borrow;
 mod system;
 mod system_data;
 
+pub use storage_borrow::StorageBorrow;
 pub(crate) use system::Dispatch;
 pub use system::System;
 pub(crate) use system_data::Mutation;

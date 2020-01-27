@@ -180,6 +180,7 @@ impl Default for BorrowState {
 pub enum Borrow<'a> {
     Shared(&'a BorrowState),
     Unique(&'a BorrowState),
+    None,
 }
 
 impl Clone for Borrow<'_> {
@@ -187,6 +188,7 @@ impl Clone for Borrow<'_> {
         match self {
             Borrow::Shared(borrow) => borrow.try_borrow(None, true).unwrap(),
             Borrow::Unique(_) => panic!("Can't clone a unique borrow."),
+            Borrow::None => Borrow::None,
         }
     }
 }
@@ -201,6 +203,7 @@ impl<'a> Drop for Borrow<'a> {
             Borrow::Unique(borrow) => {
                 borrow.0.store(0, Ordering::Release);
             }
+            Borrow::None => {}
         }
     }
 }

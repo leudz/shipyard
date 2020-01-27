@@ -1,5 +1,4 @@
 use crate::atomic_refcell::AtomicRefCell;
-use crate::not::Not;
 use crate::storage::{AllStorages, Entities, EntitiesMut};
 use crate::views::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
@@ -177,64 +176,6 @@ impl<'a, T: 'static + Send + Sync> SystemData<'a> for &mut T {
     }
 }
 
-impl<'a, T: 'static + Send + Sync> SystemData<'a> for Not<&T> {
-    type View = Not<<&'a T as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <&T as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <&T as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <&T as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <&T as SystemData>::is_send_sync()
-    }
-}
-
-impl<'a, T: 'static + Send + Sync> SystemData<'a> for Not<&mut T> {
-    type View = Not<<&'a mut T as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <&mut T as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <&mut T as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <&mut T as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <&mut T as SystemData>::is_send_sync()
-    }
-}
-
 impl<'a, T: 'static + Send + Sync> SystemData<'a> for Unique<&T> {
     type View = UniqueView<'a, T>;
 
@@ -324,66 +265,6 @@ impl<'a, T: 'static + Sync> SystemData<'a> for NonSend<&mut T> {
 
     fn is_send_sync() -> bool {
         false
-    }
-}
-
-#[cfg(feature = "non_send")]
-impl<'a, T: 'static + Sync> SystemData<'a> for Not<NonSend<&T>> {
-    type View = Not<<NonSend<&'a T> as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <NonSend<&T> as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <NonSend<&T> as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSend<&T> as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <NonSend<&T> as SystemData>::is_send_sync()
-    }
-}
-
-#[cfg(feature = "non_send")]
-impl<'a, T: 'static + Sync> SystemData<'a> for Not<NonSend<&mut T>> {
-    type View = Not<<NonSend<&'a mut T> as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <NonSend<&mut T> as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <NonSend<&mut T> as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSend<&mut T> as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <NonSend<&mut T> as SystemData>::is_send_sync()
     }
 }
 
@@ -484,66 +365,6 @@ impl<'a, T: 'static + Send> SystemData<'a> for NonSync<&mut T> {
 }
 
 #[cfg(feature = "non_sync")]
-impl<'a, T: 'static + Send> SystemData<'a> for Not<NonSync<&T>> {
-    type View = Not<<NonSync<&'a T> as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <NonSync<&T> as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <NonSync<&T> as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSync<&T> as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <NonSync<&T> as SystemData>::is_send_sync()
-    }
-}
-
-#[cfg(feature = "non_sync")]
-impl<'a, T: 'static + Send> SystemData<'a> for Not<NonSync<&mut T>> {
-    type View = Not<<NonSync<&'a mut T> as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <NonSync<&mut T> as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <NonSync<&mut T> as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSync<&mut T> as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <NonSync<&mut T> as SystemData>::is_send_sync()
-    }
-}
-
-#[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> SystemData<'a> for Unique<NonSync<&T>> {
     type View = UniqueView<'a, T>;
 
@@ -636,66 +457,6 @@ impl<'a, T: 'static> SystemData<'a> for NonSendSync<&mut T> {
 
     fn is_send_sync() -> bool {
         false
-    }
-}
-
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
-impl<'a, T: 'static> SystemData<'a> for Not<NonSendSync<&T>> {
-    type View = Not<<NonSendSync<&'a T> as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <NonSendSync<&T> as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <NonSendSync<&T> as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSendSync<&T> as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <NonSendSync<&T> as SystemData>::is_send_sync()
-    }
-}
-
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
-impl<'a, T: 'static> SystemData<'a> for Not<NonSendSync<&mut T>> {
-    type View = Not<<NonSendSync<&'a mut T> as SystemData<'a>>::View>;
-
-    fn try_borrow(
-        storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a ThreadPool,
-    ) -> Result<Self::View, error::GetStorage> {
-        let view = {
-            #[cfg(feature = "parallel")]
-            {
-                <NonSendSync<&mut T> as SystemData>::try_borrow(storages, thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                <NonSendSync<&mut T> as SystemData>::try_borrow(storages)?
-            }
-        };
-        Ok(Not(view))
-    }
-
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSendSync<&mut T> as SystemData>::borrow_infos(infos)
-    }
-
-    fn is_send_sync() -> bool {
-        <NonSendSync<&mut T> as SystemData>::is_send_sync()
     }
 }
 
