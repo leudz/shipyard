@@ -1,13 +1,27 @@
-use super::{AbstractMut, Chunk1, ChunkExact1, CurrentId, IntoAbstract, Shiperator};
+use super::{
+    AbstractMut, Chunk1, ChunkExact1, CurrentId, DoubleEndedShiperator, ExactSizeShiperator,
+    IntoAbstract, Shiperator,
+};
+#[cfg(feature = "parallel")]
+use crate::iter::shiperator::IntoIterator;
 use crate::EntityId;
+#[cfg(feature = "parallel")]
+use rayon::iter::plumbing::Producer;
 
 pub struct Tight1<T: IntoAbstract> {
-    pub(crate) data: T::AbsView,
-    pub(crate) current: usize,
-    pub(crate) end: usize,
+    data: T::AbsView,
+    current: usize,
+    end: usize,
 }
 
 impl<T: IntoAbstract> Tight1<T> {
+    pub(crate) fn new(data: T) -> Self {
+        Tight1 {
+            current: 0,
+            end: data.len().unwrap_or(0),
+            data: data.into_abstract(),
+        }
+    }
     pub fn into_chunk(self, step: usize) -> Chunk1<T> {
         Chunk1 {
             data: self.data,
@@ -53,5 +67,41 @@ impl<T: IntoAbstract> CurrentId for Tight1<T> {
 
     unsafe fn current_id(&self) -> Self::Id {
         self.data.id_at(self.current - 1)
+    }
+}
+
+impl<T: IntoAbstract> ExactSizeShiperator for Tight1<T> {}
+
+impl<T: IntoAbstract> DoubleEndedShiperator for Tight1<T> {
+    fn first_pass_back(&mut self) -> Option<Self::Item> {
+        if self.current < self.end {
+            self.end -= 1;
+            let data = unsafe { self.data.get_data(self.end) };
+            Some(data)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl<T: IntoAbstract> Producer for Tight1<T>
+where
+    <T::AbsView as AbstractMut>::Out: Send,
+    T::AbsView: Clone + Send,
+{
+    type Item = <T::AbsView as AbstractMut>::Out;
+    type IntoIter = IntoIterator<Self>;
+    fn into_iter(self) -> Self::IntoIter {
+        <Self as Shiperator>::into_iter(self)
+    }
+    fn split_at(mut self, index: usize) -> (Self, Self) {
+        let clone = Tight1 {
+            data: self.data.clone(),
+            current: self.current + index,
+            end: self.end,
+        };
+        self.end = clone.current;
+        (self, clone)
     }
 }

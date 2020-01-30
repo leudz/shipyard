@@ -1,8 +1,9 @@
 use super::{Pack, PackInfo};
 use crate::error;
 use crate::EntityId;
+use core::marker::PhantomData;
+use core::ops::{Index, IndexMut};
 use core::ptr;
-use std::ops::{Index, IndexMut};
 
 pub struct Window<'a, T> {
     pub(crate) sparse: &'a [usize],
@@ -117,20 +118,42 @@ impl<T> Index<EntityId> for Window<'_, T> {
     }
 }
 
-pub struct WindowMut<'a, T> {
-    pub(crate) sparse: &'a mut [usize],
-    pub(crate) dense: &'a mut [EntityId],
-    pub(crate) data: &'a mut [T],
-    pub(crate) pack_info: &'a mut PackInfo<T>,
+pub struct WindowMut<'w, T> {
+    pub(crate) sparse: &'w mut [usize],
+    pub(crate) dense: &'w mut [EntityId],
+    pub(crate) data: &'w mut [T],
+    pub(crate) pack_info: &'w mut PackInfo<T>,
 }
 
-impl<T> WindowMut<'_, T> {
+impl<'w, T> WindowMut<'w, T> {
     pub(crate) fn as_non_mut(&self) -> Window<'_, T> {
         Window {
             sparse: self.sparse,
             dense: self.dense,
             data: self.data,
             pack_info: self.pack_info,
+        }
+    }
+    pub(crate) fn as_raw(&mut self) -> RawWindowMut<'_, T> {
+        RawWindowMut {
+            sparse: self.sparse.as_mut_ptr(),
+            sparse_len: self.sparse.len(),
+            dense: self.dense.as_mut_ptr(),
+            dense_len: self.dense.len(),
+            data: self.data.as_mut_ptr(),
+            pack_info: self.pack_info,
+            _phantom: PhantomData,
+        }
+    }
+    pub(crate) fn into_raw(self) -> RawWindowMut<'w, T> {
+        RawWindowMut {
+            sparse: self.sparse.as_mut_ptr(),
+            sparse_len: self.sparse.len(),
+            dense: self.dense.as_mut_ptr(),
+            dense_len: self.dense.len(),
+            data: self.data.as_mut_ptr(),
+            pack_info: self.pack_info,
+            _phantom: PhantomData,
         }
     }
     pub fn contains(&self, entity: EntityId) -> bool {
@@ -433,8 +456,39 @@ impl<T> IndexMut<EntityId> for WindowMut<'_, T> {
         self.get_mut(entity).unwrap()
     }
 }
-/*
-pub(crate) struct RawWindowMut<'a, T> {
-    _phantom: PhantomData<&'a mut T>,
+
+pub struct RawWindowMut<'a, T> {
+    pub(crate) sparse: *mut usize,
+    pub(crate) sparse_len: usize,
+    pub(crate) dense: *mut EntityId,
+    pub(crate) dense_len: usize,
+    pub(crate) data: *mut T,
+    pub(crate) pack_info: *mut PackInfo<T>,
+    pub(super) _phantom: PhantomData<&'a mut T>,
 }
-*/
+
+unsafe impl<T: Send> Send for RawWindowMut<'_, T> {}
+
+impl<T> RawWindowMut<'_, T> {
+    pub(crate) fn contains(&self, entity: EntityId) -> bool {
+        use core::ptr::read;
+
+        entity.index() < self.sparse_len
+            && unsafe { read(self.sparse.add(entity.index())) } < self.dense_len
+            && unsafe { read(self.dense.add(read(self.sparse.add(entity.index())))) == entity }
+    }
+}
+
+impl<T> Clone for RawWindowMut<'_, T> {
+    fn clone(&self) -> Self {
+        RawWindowMut {
+            sparse: self.sparse,
+            sparse_len: self.sparse_len,
+            dense: self.dense,
+            dense_len: self.dense_len,
+            data: self.data,
+            pack_info: self.pack_info,
+            _phantom: PhantomData,
+        }
+    }
+}

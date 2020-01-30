@@ -3,14 +3,15 @@ pub mod sort;
 mod view_add_entity;
 mod windows;
 
-use crate::storage::EntityId;
-pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
-use std::ptr;
-pub(crate) use view_add_entity::ViewAddEntity;
-//pub(crate) use windows::RawWindowMut;
 use crate::error;
+use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
 use core::any::{Any, TypeId};
+use core::marker::PhantomData;
+use core::ptr;
+pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
+pub(crate) use view_add_entity::ViewAddEntity;
+pub(crate) use windows::RawWindowMut;
 pub use windows::{Window, WindowMut};
 
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
@@ -54,6 +55,17 @@ impl<T> SparseSet<T> {
             dense: &mut self.dense,
             data: &mut self.data,
             pack_info: &mut self.pack_info,
+        }
+    }
+    pub(crate) fn raw_window_mut(&mut self) -> RawWindowMut<'_, T> {
+        RawWindowMut {
+            sparse: self.sparse.as_mut_ptr(),
+            sparse_len: self.sparse.len(),
+            dense: self.dense.as_mut_ptr(),
+            dense_len: self.dense.len(),
+            data: self.data.as_mut_ptr(),
+            pack_info: &mut self.pack_info,
+            _phantom: PhantomData,
         }
     }
     pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {

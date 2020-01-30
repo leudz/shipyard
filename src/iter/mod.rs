@@ -15,7 +15,7 @@ pub use filter::Filter;
 pub use into_iter::{IntoIter, IntoIterIds};
 pub use iterators::*;
 pub use map::Map;
-pub use shiperator::{CurrentId, Shiperator};
+pub use shiperator::{CurrentId, DoubleEndedShiperator, ExactSizeShiperator, Shiperator};
 pub use with_id::WithId;
 
 impl<T> IntoIterIds for T

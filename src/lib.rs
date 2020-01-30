@@ -52,8 +52,8 @@
 //! }
 //!
 //! #[system(Meal)]
-//! fn run(fat: &mut Fat) {
-//!     fat.iter().into_chunk(8).ok().unwrap().for_each(|slice| {
+//! fn run(mut fat: &mut Fat) {
+//!     (&mut fat).iter().into_chunk(8).ok().unwrap().for_each(|slice| {
 //!         for fat in slice {
 //!             fat.0 += 3.0;
 //!         }
@@ -61,11 +61,11 @@
 //! }
 //!
 //! #[system(Age)]
-//! fn run(health: &mut Health, thread_pool: ThreadPool) {
+//! fn run(mut health: &mut Health, thread_pool: ThreadPool) {
 //!     use rayon::prelude::ParallelIterator;
 //!
 //!     thread_pool.install(|| {
-//!         health.par_iter().for_each(|health| {
+//!         (&mut health).par_iter().for_each(|health| {
 //!             health.0 -= 4.0;
 //!         });
 //!     });

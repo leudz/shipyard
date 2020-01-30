@@ -1,4 +1,6 @@
 mod multiple;
+#[cfg(feature = "parallel")]
+mod par_single;
 mod single;
 
 use super::{
@@ -6,4 +8,6 @@ use super::{
 };
 
 pub use multiple::*;
+#[cfg(feature = "parallel")]
+pub use par_single::ParIter1;
 pub use single::Iter1;

@@ -2,10 +2,21 @@ use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
 use crate::EntityId;
 
 pub struct Update1<T: IntoAbstract> {
-    pub(crate) data: T::AbsView,
-    pub(crate) current: usize,
-    pub(crate) end: usize,
-    pub(crate) current_id: EntityId,
+    data: T::AbsView,
+    current: usize,
+    end: usize,
+    current_id: EntityId,
+}
+
+impl<T: IntoAbstract> Update1<T> {
+    pub(crate) fn new(data: T) -> Self {
+        Update1 {
+            current: 0,
+            end: data.len().unwrap_or(0),
+            current_id: EntityId::dead(),
+            data: data.into_abstract(),
+        }
+    }
 }
 
 impl<T: IntoAbstract> Shiperator for Update1<T> {

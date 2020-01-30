@@ -6,7 +6,7 @@ mod update;
 
 use super::abstract_mut::AbstractMut;
 use super::into_abstract::IntoAbstract;
-use super::{CurrentId, Shiperator};
+use super::{CurrentId, DoubleEndedShiperator, ExactSizeShiperator, Shiperator};
 
 pub use iter::*;
 pub use loose::*;

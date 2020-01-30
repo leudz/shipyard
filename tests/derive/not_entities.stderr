@@ -4,7 +4,4 @@ error[E0277]: the trait bound `shipyard::not::Not<shipyard::storage::entity::Ent
 3 | #[system(Test)]
   | ^^^^^^^^^^^^^^^ the trait `shipyard::run::system_data::SystemData<'_>` is not implemented for `shipyard::not::Not<shipyard::storage::entity::Entities>`
   |
-  = help: the following implementations were found:
-            <shipyard::not::Not<&T> as shipyard::run::system_data::SystemData<'a>>
-            <shipyard::not::Not<&mut T> as shipyard::run::system_data::SystemData<'a>>
   = note: required because of the requirements on the impl of `shipyard::run::system_data::SystemData<'sys>` for `(shipyard::not::Not<shipyard::storage::entity::Entities>,)`

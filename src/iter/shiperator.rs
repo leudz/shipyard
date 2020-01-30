@@ -12,7 +12,8 @@ pub trait Shiperator {
     fn post_process(&mut self, item: Self::Item) -> Self::Item;
     fn size_hint(&self) -> (usize, Option<usize>);
     fn next(&mut self) -> Option<Self::Item> {
-        IntoIterator(self).next()
+        let item = self.first_pass()?;
+        Some(self.post_process(item))
     }
     fn for_each<F>(self, f: F)
     where
@@ -153,16 +154,52 @@ pub trait CurrentId: Shiperator {
     unsafe fn current_id(&self) -> Self::Id;
 }
 
+#[allow(clippy::len_without_is_empty)]
+pub trait ExactSizeShiperator: Shiperator {
+    fn len(&self) -> usize {
+        let (lower, upper) = self.size_hint();
+        debug_assert!(Some(lower) == upper);
+        lower
+    }
+}
+
+impl<S: ExactSizeShiperator> ExactSizeShiperator for &mut S {}
+
+pub trait DoubleEndedShiperator: Shiperator {
+    fn first_pass_back(&mut self) -> Option<Self::Item>;
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let item = self.first_pass_back()?;
+        Some(self.post_process(item))
+    }
+}
+
+impl<S: DoubleEndedShiperator> DoubleEndedShiperator for &mut S {
+    fn first_pass_back(&mut self) -> Option<Self::Item> {
+        (**self).first_pass_back()
+    }
+}
+
 pub struct IntoIterator<S: ?Sized>(S);
 
 impl<S: Shiperator + ?Sized> Iterator for IntoIterator<S> {
     type Item = <S as Shiperator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = self.0.first_pass()?;
-        Some(self.0.post_process(item))
+        self.0.next()
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
+    }
+}
+
+impl<S: ExactSizeShiperator + ?Sized> ExactSizeIterator for IntoIterator<S> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<S: DoubleEndedShiperator + ?Sized> DoubleEndedIterator for IntoIterator<S> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.next_back()
     }
 }

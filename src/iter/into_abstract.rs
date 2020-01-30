@@ -1,8 +1,8 @@
 use super::abstract_mut::AbstractMut;
 use crate::not::Not;
-use crate::sparse_set::{Pack, PackInfo, Window, WindowMut};
+use crate::sparse_set::{Pack, PackInfo, RawWindowMut, Window, WindowMut};
 use crate::views::{View, ViewMut};
-use std::any::TypeId;
+use core::any::TypeId;
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them
@@ -99,10 +99,10 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
 }
 
 impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
-    type AbsView = WindowMut<'b, T>;
+    type AbsView = RawWindowMut<'b, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
-        self.window_mut()
+        self.raw_window_mut()
     }
     fn len(&self) -> Option<usize> {
         Some((**self).len())
@@ -122,10 +122,10 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
 }
 
 impl<'a, T: 'static> IntoAbstract for WindowMut<'a, T> {
-    type AbsView = WindowMut<'a, T>;
+    type AbsView = RawWindowMut<'a, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
-        self
+        self.into_raw()
     }
     fn len(&self) -> Option<usize> {
         Some((*self).len())
@@ -165,10 +165,10 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b WindowMut<'a, T> {
 }
 
 impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut WindowMut<'a, T> {
-    type AbsView = &'b mut WindowMut<'a, T>;
+    type AbsView = RawWindowMut<'b, T>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
-        self
+        self.as_raw()
     }
     fn len(&self) -> Option<usize> {
         Some((**self).len())
@@ -187,71 +187,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut WindowMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b Not<View<'a, T>> {
-    type AbsView = Not<&'b Window<'a, T>>;
-    type PackType = T;
-    fn into_abstract(self) -> Self::AbsView {
-        Not(&*self.0)
-    }
-    fn len(&self) -> Option<usize> {
-        None
-    }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.0.pack_info
-    }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
-    }
-    fn modified(&self) -> usize {
-        std::usize::MAX
-    }
-}
-
 impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
     type AbsView = Not<&'b Window<'a, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
         Not(&**self.0)
-    }
-    fn len(&self) -> Option<usize> {
-        None
-    }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.0.pack_info
-    }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
-    }
-    fn modified(&self) -> usize {
-        std::usize::MAX
-    }
-}
-
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b Not<ViewMut<'a, T>> {
-    type AbsView = Not<Window<'b, T>>;
-    type PackType = T;
-    fn into_abstract(self) -> Self::AbsView {
-        Not(self.0.window())
-    }
-    fn len(&self) -> Option<usize> {
-        None
-    }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.0.pack_info
-    }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
-    }
-    fn modified(&self) -> usize {
-        std::usize::MAX
-    }
-}
-
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut Not<ViewMut<'a, T>> {
-    type AbsView = Not<WindowMut<'b, T>>;
-    type PackType = T;
-    fn into_abstract(self) -> Self::AbsView {
-        Not(self.0.window_mut())
     }
     fn len(&self) -> Option<usize> {
         None
@@ -288,10 +228,10 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
 }
 
 impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
-    type AbsView = Not<WindowMut<'b, T>>;
+    type AbsView = Not<RawWindowMut<'b, T>>;
     type PackType = T;
     fn into_abstract(self) -> Self::AbsView {
-        Not(self.0.window_mut())
+        Not(self.0.raw_window_mut())
     }
     fn len(&self) -> Option<usize> {
         None
@@ -306,27 +246,3 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
         std::usize::MAX
     }
 }
-/*
-impl<'a, T: 'static> IntoAbstract for RawViewMut<'a, T> {
-    type AbsView = RawViewMut<'a, T>;
-    type PackType = T;
-    fn into_abstract(self) -> Self::AbsView {
-        self
-    }
-    fn len(&self) -> Option<usize> {
-        Some(self.len)
-    }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        unsafe { &*self.pack_info }
-    }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
-    }
-    fn modified(&self) -> usize {
-        match unsafe { &(*self.pack_info).pack } {
-            Pack::Update(pack) => pack.inserted + pack.modified - 1,
-            _ => std::usize::MAX,
-        }
-    }
-}
-*/

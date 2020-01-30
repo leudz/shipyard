@@ -1,5 +1,5 @@
 use crate::not::Not;
-use crate::sparse_set::{Pack, Window, WindowMut};
+use crate::sparse_set::{Pack, RawWindowMut, Window};
 use crate::storage::EntityId;
 use std::ptr;
 
@@ -74,42 +74,40 @@ macro_rules! window_mut {
                 type Out = &'a mut T;
                 type Slice = &'a mut [T];
                 unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    let data: *mut _ = self.data.get_unchecked_mut(index);
-                    &mut *data
+                    &mut *self.data.add(index)
                 }
                 unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
                     std::slice::from_raw_parts_mut(
-                        self.data.get_unchecked_mut(indices.start),
+                        self.data.add(indices.start),
                         indices.end - indices.start,
                     )
                 }
                 fn indices(&self) -> *const EntityId {
-                    self.dense.as_ptr()
+                    self.dense
                 }
                 unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
-                    match &mut self.pack_info.pack {
+                    match &mut (*self.pack_info).pack {
                         Pack::Update(pack) => {
                             // index of the first element non modified
                             let non_mod = pack.inserted + pack.modified;
                             if index >= non_mod {
-                                let dense_non_mod: *mut _ = self.dense.get_unchecked_mut(non_mod);
-                                let dense_index: *mut _ = self.dense.get_unchecked_mut(index);
+                                let dense_non_mod: *mut _ = self.dense.add(non_mod);
+                                let dense_index: *mut _ = self.dense.add(index);
                                 ptr::swap(dense_non_mod, dense_index);
 
-                                let data_non_mod: *mut _ = self.data.get_unchecked_mut(non_mod);
-                                let data_index: *mut _ = self.data.get_unchecked_mut(index);
+                                let data_non_mod: *mut _ = self.data.add(non_mod);
+                                let data_index: *mut _ = self.data.add(index);
                                 ptr::swap(data_non_mod, data_index);
 
-                                let non_mod_index = self.dense.get_unchecked(non_mod).index();
-                                *self.sparse.get_unchecked_mut(non_mod_index) = non_mod;
+                                let non_mod_index = (*self.dense.add(non_mod)).index();
+                                *self.sparse.add(non_mod_index) = non_mod;
 
-                                let index_index = self.dense.get_unchecked(index).index();
-                                *self.sparse.get_unchecked_mut(index_index) = index;
+                                let index_index = (*self.dense.add(index)).index();
+                                *self.sparse.add(index_index) = index;
 
                                 pack.modified += 1;
 
-                                let data: *mut _ = self.data.get_unchecked_mut(non_mod);
-                                &mut *data
+                                &mut *self.data.add(non_mod)
                             } else {
                                 self.get_data(index)
                             }
@@ -118,26 +116,26 @@ macro_rules! window_mut {
                     }
                 }
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    *self.dense.get_unchecked(index)
+                    *self.dense.add(index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     unsafe {
                         if self.contains(entity) {
-                            Some(*self.sparse.get_unchecked(entity.index()))
+                            Some(*self.sparse.add(entity.index()))
                         } else {
                             None
                         }
                     }
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *self.sparse.get_unchecked(entity.index())
+                    *self.sparse.add(entity.index())
                 }
             }
         )+
     }
 }
 
-window_mut![WindowMut<'a, T>; &mut WindowMut<'a, T>];
+window_mut![RawWindowMut<'a, T>; &mut RawWindowMut<'a, T>];
 
 macro_rules! not_window {
     ($($not_window: ty);+) => {
@@ -202,7 +200,7 @@ macro_rules! not_window_mut {
                 }
                 unsafe fn mark_id_modified(&mut self, _: EntityId) {}
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    *self.0.dense.get_unchecked(index)
+                    *self.0.dense.add(index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.0.contains(entity) {
@@ -219,4 +217,4 @@ macro_rules! not_window_mut {
     }
 }
 
-not_window_mut![Not<WindowMut<'a, T>>; Not<&mut WindowMut<'a, T>>];
+not_window_mut![Not<RawWindowMut<'a, T>>; Not<&mut RawWindowMut<'a, T>>];
