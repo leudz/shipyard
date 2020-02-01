@@ -15,7 +15,7 @@ pub trait AbstractMut {
     // # Safety
     // The lifetime has to be valid
     unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
-    fn indices(&self) -> *const EntityId;
+    fn dense(&self) -> *const EntityId;
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out;
     unsafe fn mark_id_modified(&mut self, entity: EntityId) -> Self::Out {
         let index = self.index_of_unchecked(entity);
@@ -24,6 +24,7 @@ pub trait AbstractMut {
     unsafe fn id_at(&self, index: usize) -> EntityId;
     fn index_of(&self, entity: EntityId) -> Option<usize>;
     unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize;
+    unsafe fn flag_all(&mut self);
 }
 
 macro_rules! window {
@@ -41,7 +42,7 @@ macro_rules! window {
                         indices.end - indices.start,
                     )
                 }
-                fn indices(&self) -> *const EntityId {
+                fn dense(&self) -> *const EntityId {
                     self.dense.as_ptr()
                 }
                 unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
@@ -60,6 +61,7 @@ macro_rules! window {
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
                     *self.sparse.get_unchecked(entity.index())
                 }
+                unsafe fn flag_all(&mut self) {}
             }
         )+
     }
@@ -82,7 +84,7 @@ macro_rules! window_mut {
                         indices.end - indices.start,
                     )
                 }
-                fn indices(&self) -> *const EntityId {
+                fn dense(&self) -> *const EntityId {
                     self.dense
                 }
                 unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
@@ -130,6 +132,11 @@ macro_rules! window_mut {
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
                     *self.sparse.add(entity.index())
                 }
+                unsafe fn flag_all(&mut self) {
+                    if let Pack::Update(update) = &mut (*self.pack_info).pack {
+                        update.modified = self.dense_len;
+                    }
+                }
             }
         )+
     }
@@ -151,7 +158,7 @@ macro_rules! not_window {
                 unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
                     unreachable!()
                 }
-                fn indices(&self) -> *const EntityId {
+                fn dense(&self) -> *const EntityId {
                     unreachable!()
                 }
                 unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
@@ -171,6 +178,7 @@ macro_rules! not_window {
                 unsafe fn index_of_unchecked(&self, _: EntityId) -> usize {
                     std::usize::MAX
                 }
+                unsafe fn flag_all(&mut self) {}
             }
         )+
     }
@@ -192,7 +200,7 @@ macro_rules! not_window_mut {
                 unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
                     unreachable!()
                 }
-                fn indices(&self) -> *const EntityId {
+                fn dense(&self) -> *const EntityId {
                     unreachable!()
                 }
                 unsafe fn mark_modified(&mut self, index: usize) -> Self::Out {
@@ -212,6 +220,7 @@ macro_rules! not_window_mut {
                 unsafe fn index_of_unchecked(&self, _: EntityId) -> usize {
                     std::usize::MAX
                 }
+                unsafe fn flag_all(&mut self) {}
             }
         )+
     }

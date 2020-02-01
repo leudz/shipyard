@@ -1,6 +1,6 @@
 use super::{IntoAbstract, IntoIter, Iter1, Tight1, Update1};
 #[cfg(feature = "parallel")]
-use super::{ParIter1, ParTight1};
+use super::{ParIter1, ParTight1, ParUpdate1};
 use crate::sparse_set::Pack;
 
 impl<T: IntoAbstract> IntoIter for T {
@@ -17,7 +17,7 @@ impl<T: IntoAbstract> IntoIter for T {
     fn par_iter(self) -> Self::IntoParIter {
         match self.iter() {
             Iter1::Tight(tight) => ParTight1::from(tight).into(),
-            Iter1::Update(_iter) => todo!(), //ParIter1::Update(ParUpdate1(iter)),
+            Iter1::Update(update) => ParUpdate1::from(update).into(),
         }
     }
 }

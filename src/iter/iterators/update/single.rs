@@ -1,10 +1,12 @@
-use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
+use super::{
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
+};
 use crate::EntityId;
 
 pub struct Update1<T: IntoAbstract> {
-    data: T::AbsView,
-    current: usize,
-    end: usize,
+    pub(super) data: T::AbsView,
+    pub(super) current: usize,
+    pub(super) end: usize,
     current_id: EntityId,
 }
 
@@ -46,5 +48,19 @@ impl<T: IntoAbstract> CurrentId for Update1<T> {
 
     unsafe fn current_id(&self) -> Self::Id {
         self.current_id
+    }
+}
+
+impl<T: IntoAbstract> ExactSizeShiperator for Update1<T> {}
+
+impl<T: IntoAbstract> DoubleEndedShiperator for Update1<T> {
+    fn first_pass_back(&mut self) -> Option<Self::Item> {
+        if self.current < self.end {
+            self.end -= 1;
+            self.current_id = unsafe { self.data.id_at(self.end) };
+            Some(unsafe { self.data.get_data(self.end) })
+        } else {
+            None
+        }
     }
 }

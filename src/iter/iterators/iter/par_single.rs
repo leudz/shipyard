@@ -1,14 +1,21 @@
-use super::{AbstractMut, IntoAbstract, ParTight1};
+use super::{AbstractMut, IntoAbstract, ParTight1, ParUpdate1};
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 pub enum ParIter1<T: IntoAbstract> {
     Tight(ParTight1<T>),
+    Update(ParUpdate1<T>),
 }
 
 impl<T: IntoAbstract> From<ParTight1<T>> for ParIter1<T> {
     fn from(par_iter: ParTight1<T>) -> Self {
         ParIter1::Tight(par_iter)
+    }
+}
+
+impl<T: IntoAbstract> From<ParUpdate1<T>> for ParIter1<T> {
+    fn from(par_iter: ParUpdate1<T>) -> Self {
+        ParIter1::Update(par_iter)
     }
 }
 
@@ -36,7 +43,8 @@ where
 {
     fn len(&self) -> usize {
         match self {
-            ParIter1::Tight(tight) => tight.len(),
+            Self::Tight(tight) => tight.len(),
+            Self::Update(update) => update.len(),
         }
     }
     fn drive<C>(self, consumer: C) -> C::Result
@@ -51,6 +59,7 @@ where
     {
         match self {
             Self::Tight(tight) => tight.with_producer(callback),
+            Self::Update(update) => update.with_producer(callback),
         }
     }
 }

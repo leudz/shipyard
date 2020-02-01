@@ -1,9 +1,9 @@
+#[cfg(feature = "parallel")]
+use super::IntoIterator;
 use super::{
     AbstractMut, Chunk1, ChunkExact1, CurrentId, DoubleEndedShiperator, ExactSizeShiperator,
     IntoAbstract, Shiperator,
 };
-#[cfg(feature = "parallel")]
-use crate::iter::shiperator::IntoIterator;
 use crate::EntityId;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;

@@ -115,7 +115,7 @@ macro_rules! impl_iterators {
                         let data = ($(self.$index.into_abstract(),)+);
                         $(
                             if $index == smallest_index {
-                                indices = Some(data.$index.indices());
+                                indices = Some(data.$index.dense());
                             }
                         )+
                         $iter::Loose($loose {
@@ -135,7 +135,7 @@ macro_rules! impl_iterators {
                         } else {
                             $(
                                 if $index == smallest_index {
-                                    indices = Some(data.$index.indices());
+                                    indices = Some(data.$index.dense());
                                 }
                             )+
                         }
@@ -158,7 +158,7 @@ macro_rules! impl_iterators {
                         } else {
                             $(
                                 if $index == smallest_index {
-                                    indices = Some(data.$index.indices());
+                                    indices = Some(data.$index.dense());
                                 }
                             )+
                         }

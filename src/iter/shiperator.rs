@@ -179,7 +179,7 @@ impl<S: DoubleEndedShiperator> DoubleEndedShiperator for &mut S {
     }
 }
 
-pub struct IntoIterator<S: ?Sized>(S);
+pub struct IntoIterator<S: ?Sized>(pub(crate) S);
 
 impl<S: Shiperator + ?Sized> Iterator for IntoIterator<S> {
     type Item = <S as Shiperator>::Item;
