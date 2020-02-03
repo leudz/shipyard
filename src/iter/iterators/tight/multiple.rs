@@ -1,7 +1,12 @@
 use super::chunk::multiple::*;
 use super::chunk_exact::multiple::*;
-use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
+use super::{
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
+};
 use crate::EntityId;
+#[cfg(feature = "parallel")]
+use rayon::iter::plumbing::Producer;
 
 macro_rules! impl_iterators {
     (
@@ -68,6 +73,37 @@ macro_rules! impl_iterators {
             }
         }
 
+        impl<$($type: IntoAbstract),+> ExactSizeShiperator for $tight<$($type),+> {}
+
+        impl<$($type: IntoAbstract),+> DoubleEndedShiperator for $tight<$($type),+> {
+            fn first_pass_back(&mut self) -> Option<Self::Item> {
+                if self.current < self.end {
+                    self.end -= 1;
+                    Some(unsafe { ($(self.data.$index.get_data(self.end),)+) })
+                } else {
+                    None
+                }
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> Producer for $tight<$($type),+>
+        where $($type::AbsView: Clone + Send,)+ $(<$type::AbsView as AbstractMut>::Out: Send),+ {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out),+);
+            type IntoIter = IntoIterator<Self>;
+            fn into_iter(self) -> Self::IntoIter {
+                <Self as Shiperator>::into_iter(self)
+            }
+            fn split_at(mut self, index: usize) -> (Self, Self) {
+                let clone = $tight {
+                    data: ($(self.data.$index.clone(),)+),
+                    current: self.current + index,
+                    end: self.end,
+                };
+                self.end = clone.current;
+                (self, clone)
+            }
+        }
     }
 }
 

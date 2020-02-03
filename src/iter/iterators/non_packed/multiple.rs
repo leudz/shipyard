@@ -5,7 +5,7 @@ macro_rules! impl_iterators {
     (
         $number: literal
         $non_packed: ident
-        $(($type: ident, $index: tt, $index_type: ident))+
+        $(($type: ident, $index: tt))+
     ) => {
         #[doc = "Non packed iterator over"]
         #[doc = $number]
@@ -65,26 +65,26 @@ macro_rules! iterators {
     (
         $($number: literal)*; $number1: literal $($queue_number: literal)+;
         $($non_packed: ident)*; $non_packed1: ident $($queue_non_packed: ident)+;
-        $(($type: ident, $index: tt, $index_type: ident))*;($type1: ident, $index1: tt, $index_type1: ident) $(($queue_type: ident, $queue_index: tt, $queue_index_type: ident))*
+        $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
         impl_iterators![$number1 $non_packed1 $(($type, $index, $index_type))*];
         iterators![
             $($number)* $number1; $($queue_number)+;
             $($non_packed)* $non_packed1; $($queue_non_packed)+;
-            $(($type, $index, $index_type))* ($type1, $index1, $index_type1); $(($queue_type, $queue_index, $queue_index_type))*
+            $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*
         ];
     };
     (
         $($number: literal)*; $number1: literal;
         $($non_packed: ident)*; $non_packed1: ident;
-        $(($type: ident, $index: tt, $index_type: ident))*;
+        $(($type: ident, $index: tt))*;
     ) => {
-        impl_iterators![$number1 $non_packed1 $(($type, $index, $index_type))*];
+        impl_iterators![$number1 $non_packed1 $(($type, $index))*];
     }
 }
 
 iterators![
     ;"2" "3" "4" "5" "6" "7" "8" "9" "10";
     ;NonPacked2 NonPacked3 NonPacked4 NonPacked5 NonPacked6 NonPacked7 NonPacked8 NonPacked9 NonPacked10;
-    (A, 0, usize) (B, 1, usize); (C, 2, usize) (D, 3, usize) (E, 4, usize) (F, 5, usize) (G, 6, usize) (H, 7, usize) (I, 8, usize) (J, 9, usize)
+    (A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
 ];
