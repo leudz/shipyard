@@ -67,7 +67,7 @@ macro_rules! iterators {
         $($non_packed: ident)*; $non_packed1: ident $($queue_non_packed: ident)+;
         $(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*
     ) => {
-        impl_iterators![$number1 $non_packed1 $(($type, $index, $index_type))*];
+        impl_iterators![$number1 $non_packed1 $(($type, $index))*];
         iterators![
             $($number)* $number1; $($queue_number)+;
             $($non_packed)* $non_packed1; $($queue_non_packed)+;
