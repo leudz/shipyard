@@ -1,5 +1,11 @@
-use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
+use super::{
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
+};
 use crate::EntityId;
+use core::ptr;
+#[cfg(feature = "parallel")]
+use rayon::iter::plumbing::Producer;
 
 macro_rules! impl_iterators {
     (
@@ -18,18 +24,22 @@ macro_rules! impl_iterators {
             pub(crate) array: u32,
         }
 
+        unsafe impl<$($type: IntoAbstract),+> Send for $loose<$($type),+>
+        where $($type::AbsView: Clone + Send,)+ $(<$type::AbsView as AbstractMut>::Out: Send),+ {}
+
         impl<$($type: IntoAbstract),+> Shiperator for $loose<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 
             fn first_pass(&mut self) -> Option<Self::Item> {
-                if self.current < self.end {
+                let current = self.current;
+                if current < self.end {
+                    self.current += 1;
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
-                    let index = unsafe {std::ptr::read(self.indices.add(self.current))};
-                    self.current += 1;
+                    let index = unsafe {ptr::read(self.indices.add(current))};
                     let indices = ($(
                         if (self.array >> $index) & 1 != 0 {
-                            self.current - 1
+                            current
                         } else {
                             unsafe {self.data.$index.index_of_unchecked(index)}
                         },
@@ -54,10 +64,53 @@ macro_rules! impl_iterators {
             type Id = EntityId;
 
             unsafe fn current_id(&self) -> Self::Id {
-                std::ptr::read(self.indices.add(self.current - 1))
+                ptr::read(self.indices.add(self.current - 1))
             }
         }
 
+        impl<$($type: IntoAbstract),+> ExactSizeShiperator for $loose<$($type),+> {}
+
+        impl<$($type: IntoAbstract),+> DoubleEndedShiperator for $loose<$($type),+> {
+            fn first_pass_back(&mut self) -> Option<Self::Item> {
+                if self.current < self.end {
+                    self.end -= 1;
+                    let index = unsafe {ptr::read(self.indices.add(self.current))};
+                    let indices = ($(
+                        if (self.array >> $index) & 1 != 0 {
+                            self.end
+                        } else {
+                            unsafe {self.data.$index.index_of_unchecked(index)}
+                        },
+                    )+);
+                    Some(unsafe {($({
+                        self.data.$index.get_data(indices.$index)
+                    },)+)})
+                } else {
+                    None
+                }
+            }
+        }
+
+        #[cfg(feature = "parallel")]
+        impl<$($type: IntoAbstract),+> Producer for $loose<$($type),+>
+        where $($type::AbsView: Clone + Send,)+ $(<$type::AbsView as AbstractMut>::Out: Send),+ {
+            type Item = ($(<$type::AbsView as AbstractMut>::Out),+);
+            type IntoIter = IntoIterator<Self>;
+            fn into_iter(self) -> Self::IntoIter {
+                <Self as Shiperator>::into_iter(self)
+            }
+            fn split_at(mut self, index: usize) -> (Self, Self) {
+                let clone = $loose {
+                    data: ($(self.data.$index.clone(),)+),
+                    indices: self.indices,
+                    current: self.current + index,
+                    end: self.end,
+                    array: self.array,
+                };
+                self.end = clone.current;
+                (self, clone)
+            }
+        }
     }
 }
 

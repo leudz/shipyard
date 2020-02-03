@@ -42,14 +42,14 @@ macro_rules! impl_iterators {
             fn drive_unindexed<Con>(self, consumer: Con) -> Con::Result where Con: UnindexedConsumer<Self::Item> {
                 match self {
                     Self::Tight(tight) => bridge(tight, consumer),
-                    Self::Loose(_loose) => todo!(),
+                    Self::Loose(loose) => bridge(loose, consumer),
                     Self::NonPacked(_non_packed) => todo!(),
                 }
             }
             fn opt_len(&self) -> Option<usize> {
                 match self {
                     Self::Tight(tight) => tight.opt_len(),
-                    Self::Loose(_loose) => todo!(),
+                    Self::Loose(loose) => loose.opt_len(),
                     Self::NonPacked(_non_packed) => todo!(),
                 }
             }
