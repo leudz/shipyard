@@ -6,7 +6,9 @@ mod update;
 
 use super::abstract_mut::AbstractMut;
 use super::into_abstract::IntoAbstract;
-use super::{CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoIterator, Shiperator};
+#[cfg(feature = "parallel")]
+use super::IntoIterator;
+use super::{CurrentId, DoubleEndedShiperator, ExactSizeShiperator, Shiperator};
 
 pub use iter::*;
 pub use loose::*;

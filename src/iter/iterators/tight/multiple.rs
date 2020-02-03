@@ -1,8 +1,9 @@
 use super::chunk::multiple::*;
 use super::chunk_exact::multiple::*;
+#[cfg(feature = "parallel")]
+use super::IntoIterator;
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
-    Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
 };
 use crate::EntityId;
 #[cfg(feature = "parallel")]

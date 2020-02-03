@@ -1,7 +1,6 @@
 use super::*;
-use crate::EntityId;
-use rayon::iter::plumbing::{bridge, bridge_unindexed, UnindexedConsumer};
-use rayon::iter::ParallelIterator;
+use rayon::iter::plumbing::UnindexedConsumer;
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 macro_rules! impl_iterators {
     (
@@ -18,39 +17,21 @@ macro_rules! impl_iterators {
             NonPacked($non_packed<$($type),+>),
         }
 
-        impl<$($type: IntoAbstract),+> From<$tight<$($type),+>> for $iter<$($type),+> {
-            fn from(tight: $tight<$($type),+>) -> Self {
-                $iter::Tight(tight)
-            }
-        }
-
-        impl<$($type: IntoAbstract),+> From<$loose<$($type),+>> for $iter<$($type),+> {
-            fn from(loose: $loose<$($type),+>) -> Self {
-                $iter::Loose(loose)
-            }
-        }
-
-        impl<$($type: IntoAbstract),+> From<$non_packed<$($type),+>> for $iter<$($type),+> {
-            fn from(non_packed: $non_packed<$($type),+>) -> Self {
-                $iter::NonPacked(non_packed)
-            }
-        }
-
         impl<$($type: IntoAbstract),+> ParallelIterator for $iter<$($type),+>
         where $($type::AbsView: Clone + Send,)+ $(<$type::AbsView as AbstractMut>::Out: Send),+ {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
             fn drive_unindexed<Con>(self, consumer: Con) -> Con::Result where Con: UnindexedConsumer<Self::Item> {
                 match self {
-                    Self::Tight(tight) => bridge(tight, consumer),
-                    Self::Loose(loose) => bridge(loose, consumer),
-                    Self::NonPacked(_non_packed) => todo!(),
+                    Self::Tight(tight) => tight.drive(consumer),
+                    Self::Loose(loose) => loose.drive(consumer),
+                    Self::NonPacked(non_packed) => non_packed.drive_unindexed(consumer),
                 }
             }
             fn opt_len(&self) -> Option<usize> {
                 match self {
                     Self::Tight(tight) => tight.opt_len(),
                     Self::Loose(loose) => loose.opt_len(),
-                    Self::NonPacked(_non_packed) => todo!(),
+                    Self::NonPacked(non_packed) => non_packed.opt_len(),
                 }
             }
         }

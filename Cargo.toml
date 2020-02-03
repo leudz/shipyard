@@ -29,5 +29,5 @@ non_send = []
 non_sync = []
 
 [dev-dependencies]
-trybuild = "1.0.20"
-serde_json = "1.0.45"
+trybuild = "1.0.21"
+serde_json = "1.0.46"

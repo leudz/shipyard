@@ -7,9 +7,10 @@ mod par_multiple;
 mod par_single;
 mod single;
 
+#[cfg(feature = "parallel")]
+use super::IntoIterator;
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
-    Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
 };
 
 pub use chunk::*;

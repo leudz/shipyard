@@ -1,7 +1,4 @@
-use super::{
-    multiple::*, AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract,
-    Shiperator,
-};
+use super::{multiple::*, AbstractMut, ExactSizeShiperator, IntoAbstract};
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 

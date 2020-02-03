@@ -1,6 +1,7 @@
+#[cfg(feature = "parallel")]
+use super::IntoIterator;
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
-    Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
 };
 use crate::EntityId;
 use core::ptr;

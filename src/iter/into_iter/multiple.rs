@@ -12,11 +12,6 @@ macro_rules! impl_iterators {
         $update: ident
         $(($type: ident, $index: tt))+
     ) => {
-        #[allow(dead_code)]
-        pub enum $par_iter<$($type),+>{
-            None(($($type,)+))
-        }
-
         impl<$($type: IntoAbstract),+> IntoIter for ($($type,)+) {
             type IntoIter = $iter<$($type,)+>;
             #[cfg(feature = "parallel")]
@@ -175,13 +170,12 @@ macro_rules! impl_iterators {
             }
             #[cfg(feature = "parallel")]
             fn par_iter(self) -> Self::IntoParIter {
-                todo!()
-                /*match self.iter() {
-                    $iter::Tight(iter) => $par_iter::Tight($par_tight(iter)),
-                    $iter::Loose(iter) => $par_iter::Loose($par_loose(iter)),
-                    $iter::Update(iter) => $par_iter::Update($par_update(iter)),
-                    $iter::NonPacked(iter) => $par_iter::NonPacked($par_non_packed(iter)),
-                }*/
+                match self.iter() {
+                    $iter::Tight(tight) => $par_iter::Tight(tight.into()),
+                    $iter::Loose(loose) => $par_iter::Loose(loose.into()),
+                    $iter::Update(update) => $par_iter::NonPacked(update.into()),
+                    $iter::NonPacked(non_packed) => $par_iter::NonPacked(non_packed.into()),
+                }
             }
         }
     }
