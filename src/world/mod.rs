@@ -195,7 +195,7 @@ impl World {
     /// let world = World::new();
     ///
     /// let u32s = world.borrow::<&u32>();
-    /// let (entities, mut usizes) = world.borrow::<(Entities, &mut usize)>();
+    /// let (entities, mut usizes) = world.try_borrow::<(Entities, &mut usize)>().unwrap();
     /// ```
     /// [Entities]: struct.Entities.html
     /// [EntitiesMut]: struct.Entities.html
@@ -327,9 +327,9 @@ impl World {
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
-    /// world.run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
+    /// world.try_run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///     // -- snip --
-    /// });
+    /// }).unwrap();
     /// ```
     /// [Entities]: struct.Entities.html
     /// [EntitiesMut]: struct.Entities.html
@@ -368,7 +368,7 @@ impl World {
     /// }
     ///
     /// let world = World::default();
-    /// world.run_system::<Tick>();
+    /// world.try_run_system::<Tick>().unwrap();
     /// ```
     pub fn try_run_system<S: for<'a> System<'a> + 'static>(&self) -> Result<(), error::GetStorage> {
         S::try_dispatch(self)

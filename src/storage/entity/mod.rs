@@ -51,6 +51,19 @@ impl Entities {
         entity_id.index() < self.data.len()
             && entity_id == unsafe { *self.data.get_unchecked(entity_id.index()) }
     }
+    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.\
+    /// `Entities` is only borrowed immutably.
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let entity = world.run::<EntitiesMut, _, _>(|mut entities| {
+    ///     entities.add_entity((), ())
+    /// });
+    /// let (entities, mut u32s) = world.borrow::<(Entities, &mut u32)>();
+    /// entities.try_add_component(&mut u32s, 0, entity).unwrap();
+    /// ```
     pub fn try_add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,
@@ -59,6 +72,20 @@ impl Entities {
     ) -> Result<(), error::AddComponent> {
         storages.try_add_component(component, entity, &self)
     }
+    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.\
+    /// `Entities` is only borrowed immutably.\
+    /// Unwraps errors.
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let entity = world.run::<EntitiesMut, _, _>(|mut entities| {
+    ///     entities.add_entity((), ())
+    /// });
+    /// let (entities, mut u32s) = world.borrow::<(Entities, &mut u32)>();
+    /// entities.add_component(&mut u32s, 0, entity);
+    /// ```
     pub fn add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,
@@ -87,8 +114,7 @@ impl Entities {
             entity_id
         }
     }
-    /// Delete an entity, returns true if the entity was alive.
-    ///
+    /// Delete an entity, returns true if the entity was alive.\
     /// If the entity has components, they will not be deleted and still be accessible using this id.
     pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
         if self.is_alive(entity_id) {
@@ -114,8 +140,7 @@ impl Entities {
             false
         }
     }
-    /// Stores `component` in a new entity, the `EntityId` to this entity is returned.
-    ///
+    /// Stores `component` in a new entity, the `EntityId` to this entity is returned.\
     /// Multiple components can be added at the same time using a tuple.
     /// # Example:
     /// ```

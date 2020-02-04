@@ -377,6 +377,7 @@ impl AllStorages {
             storages.get_mut(&storage).unwrap().unpack(entity).unwrap();
         }
     }
+    /// Deletes all entities and their components.
     pub fn clear(&mut self) {
         // SAFE we have unique access
         let storages = unsafe { &mut *self.storages.get() };
@@ -386,11 +387,86 @@ impl AllStorages {
             storage.clear().unwrap()
         }
     }
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
+    /// You can use a tuple to get multiple storages at once.
+    ///
+    /// You can use:
+    /// * `&T` for a shared access to `T` storage
+    /// * `&mut T` for an exclusive access to `T` storage
+    /// * [Entities] for a shared access to the entity storage
+    /// * [EntitiesMut] for an exclusive reference to the entity storage
+    /// * [AllStorages] for an exclusive access to the storage of all components
+    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+    /// * [Unique]<&T> for a shared access to a `T` unique storage
+    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    ///
+    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let all_storages = world.borrow::<AllStorages>();
+    /// let u32s = all_storages.try_borrow::<&u32>().unwrap();
+    /// ```
+    /// [Entities]: struct.Entities.html
+    /// [EntitiesMut]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
+    /// [ThreadPool]: struct.ThreadPool.html
+    /// [World]: struct.World.html
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
+    /// [NonSync]: struct.NonSync.html
+    /// [NonSendSync]: struct.NonSendSync.html
     pub fn try_borrow<'a, C: StorageBorrow<'a>>(
         &'a self,
     ) -> Result<<C as StorageBorrow<'a>>::View, error::GetStorage> {
         <C as StorageBorrow<'a>>::try_borrow(self)
     }
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
+    /// You can use a tuple to get multiple storages at once.\
+    /// Unwraps errors.
+    ///
+    /// You can use:
+    /// * `&T` for a shared access to `T` storage
+    /// * `&mut T` for an exclusive access to `T` storage
+    /// * [Entities] for a shared access to the entity storage
+    /// * [EntitiesMut] for an exclusive reference to the entity storage
+    /// * [AllStorages] for an exclusive access to the storage of all components
+    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+    /// * [Unique]<&T> for a shared access to a `T` unique storage
+    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    ///
+    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let all_storages = world.borrow::<AllStorages>();
+    /// let u32s = all_storages.borrow::<&u32>();
+    /// ```
+    /// [Entities]: struct.Entities.html
+    /// [EntitiesMut]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
+    /// [ThreadPool]: struct.ThreadPool.html
+    /// [World]: struct.World.html
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
+    /// [NonSync]: struct.NonSync.html
+    /// [NonSendSync]: struct.NonSendSync.html
     pub fn borrow<'a, C: StorageBorrow<'a>>(&'a self) -> <C as StorageBorrow<'a>>::View {
         self.try_borrow::<C>().unwrap()
     }
