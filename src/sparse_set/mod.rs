@@ -128,75 +128,89 @@ impl<T> SparseSet<T> {
         self.try_remove(entity).unwrap()
     }
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
-        if self.contains(entity) {
+        if entity.index() < self.sparse.len() {
+            // SAFE we're inbound
             let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
-            match &mut self.pack_info.pack {
-                Pack::Tight(pack_info) => {
-                    let pack_len = pack_info.len;
-                    if dense_index < pack_len {
-                        pack_info.len -= 1;
-                        // swap index and last packed element (can be the same)
-                        unsafe {
-                            *self.sparse.get_unchecked_mut(
-                                self.dense.get_unchecked(pack_len - 1).index(),
-                            ) = dense_index;
+            if dense_index < self.dense.len() {
+                // SAFE we're inbound
+                let dense_id = unsafe { *self.dense.get_unchecked(dense_index) };
+                if dense_id.index() == entity.index() && dense_id.version() <= entity.version() {
+                    match &mut self.pack_info.pack {
+                        Pack::Tight(pack_info) => {
+                            let pack_len = pack_info.len;
+                            if dense_index < pack_len {
+                                pack_info.len -= 1;
+                                // swap index and last packed element (can be the same)
+                                unsafe {
+                                    *self.sparse.get_unchecked_mut(
+                                        self.dense.get_unchecked(pack_len - 1).index(),
+                                    ) = dense_index;
+                                }
+                                self.dense.swap(dense_index, pack_len - 1);
+                                self.data.swap(dense_index, pack_len - 1);
+                                dense_index = pack_len - 1;
+                            }
                         }
-                        self.dense.swap(dense_index, pack_len - 1);
-                        self.data.swap(dense_index, pack_len - 1);
-                        dense_index = pack_len - 1;
+                        Pack::Loose(pack_info) => {
+                            let pack_len = pack_info.len;
+                            if dense_index < pack_len {
+                                pack_info.len -= 1;
+                                // swap index and last packed element (can be the same)
+                                unsafe {
+                                    *self.sparse.get_unchecked_mut(
+                                        self.dense.get_unchecked(pack_len - 1).index(),
+                                    ) = dense_index;
+                                }
+                                self.dense.swap(dense_index, pack_len - 1);
+                                self.data.swap(dense_index, pack_len - 1);
+                                dense_index = pack_len - 1;
+                            }
+                        }
+                        Pack::Update(pack) => {
+                            if dense_index < pack.inserted {
+                                pack.inserted -= 1;
+                                unsafe {
+                                    *self.sparse.get_unchecked_mut(
+                                        self.dense.get_unchecked(pack.inserted).index(),
+                                    ) = dense_index;
+                                }
+                                self.dense.swap(dense_index, pack.inserted);
+                                self.data.swap(dense_index, pack.inserted);
+                                dense_index = pack.inserted;
+                            }
+                            if dense_index < pack.inserted + pack.modified {
+                                pack.modified -= 1;
+                                unsafe {
+                                    *self.sparse.get_unchecked_mut(
+                                        self.dense
+                                            .get_unchecked(pack.inserted + pack.modified)
+                                            .index(),
+                                    ) = dense_index;
+                                }
+                                self.dense.swap(dense_index, pack.inserted + pack.modified);
+                                self.data.swap(dense_index, pack.inserted + pack.modified);
+                                dense_index = pack.inserted + pack.modified;
+                            }
+                        }
+                        Pack::NoPack => {}
                     }
+                    unsafe {
+                        *self.sparse.get_unchecked_mut(
+                            self.dense.get_unchecked(self.dense.len() - 1).index(),
+                        ) = dense_index;
+                    }
+                    self.dense.swap_remove(dense_index);
+                    if dense_id.version() == entity.version() {
+                        Some(self.data.swap_remove(dense_index))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
                 }
-                Pack::Loose(pack_info) => {
-                    let pack_len = pack_info.len;
-                    if dense_index < pack_len {
-                        pack_info.len -= 1;
-                        // swap index and last packed element (can be the same)
-                        unsafe {
-                            *self.sparse.get_unchecked_mut(
-                                self.dense.get_unchecked(pack_len - 1).index(),
-                            ) = dense_index;
-                        }
-                        self.dense.swap(dense_index, pack_len - 1);
-                        self.data.swap(dense_index, pack_len - 1);
-                        dense_index = pack_len - 1;
-                    }
-                }
-                Pack::Update(pack) => {
-                    if dense_index < pack.inserted {
-                        pack.inserted -= 1;
-                        unsafe {
-                            *self.sparse.get_unchecked_mut(
-                                self.dense.get_unchecked(pack.inserted).index(),
-                            ) = dense_index;
-                        }
-                        self.dense.swap(dense_index, pack.inserted);
-                        self.data.swap(dense_index, pack.inserted);
-                        dense_index = pack.inserted;
-                    }
-                    if dense_index < pack.inserted + pack.modified {
-                        pack.modified -= 1;
-                        unsafe {
-                            *self.sparse.get_unchecked_mut(
-                                self.dense
-                                    .get_unchecked(pack.inserted + pack.modified)
-                                    .index(),
-                            ) = dense_index;
-                        }
-                        self.dense.swap(dense_index, pack.inserted + pack.modified);
-                        self.data.swap(dense_index, pack.inserted + pack.modified);
-                        dense_index = pack.inserted + pack.modified;
-                    }
-                }
-                Pack::NoPack => {}
+            } else {
+                None
             }
-            unsafe {
-                *self
-                    .sparse
-                    .get_unchecked_mut(self.dense.get_unchecked(self.dense.len() - 1).index()) =
-                    dense_index;
-            }
-            self.dense.swap_remove(dense_index);
-            Some(self.data.swap_remove(dense_index))
         } else {
             None
         }

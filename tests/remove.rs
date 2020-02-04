@@ -138,3 +138,31 @@ fn old_key() {
         },
     );
 }
+
+#[test]
+fn newer_key() {
+    let world = World::new();
+
+    let entity = world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
+        |(mut entities, mut usizes, mut u32s)| {
+            entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32))
+        },
+    );
+
+    world.run::<EntitiesMut, _, _>(|mut entities| {
+        entities.delete_unchecked(entity);
+    });
+
+    world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
+        |(mut entities, mut usizes, mut u32s)| {
+            assert_eq!(usizes.len(), 1);
+            assert_eq!(u32s.len(), 1);
+            let new_entity = entities.add_entity((), ());
+            let (old_usize, old_u32) =
+                Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), new_entity);
+            assert!(old_usize.is_none() && old_u32.is_none());
+            assert_eq!(usizes.len(), 1);
+            assert_eq!(u32s.len(), 1);
+        },
+    );
+}
