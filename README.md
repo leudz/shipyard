@@ -10,7 +10,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 [![Demo](https://img.shields.io/badge/demo-launch-yellow)](https://leudz.github.io/shipyard/demo)
 [![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
 
-While usable it is far from finished, there's enough planned features to fill [an entire Cave](https://github.com/leudz/shipyard/issues/31), nearly all being backward compatible additions.
+While usable it is far from finished, there's a lot of planned features, nearly all being backward compatible additions.
 
 Most discussions about current and future features happen on zulip, feel free to join to follow the development or ask any question.
 
@@ -70,10 +70,11 @@ And it allowed amazing features:
 - And a lot more!
 
 Today I wouldn't say Shipyard is better or worse than Specs, it's just different. I'm really happy with it and the future looks very promising, especially:
-- Pipeline
-- Nested packs
-- Shared components
-- Iterator blueprint
+- [Pipeline](https://github.com/leudz/shipyard/issues/44)
+- [Events](https://github.com/leudz/shipyard/issues/22)
+- [Nested packs](https://github.com/leudz/shipyard/issues/47)
+- [Shared components](https://github.com/leudz/shipyard/issues/38)
+- [Iterator blueprint](https://github.com/leudz/shipyard/issues/41)
 
 ## Unsafe
 
