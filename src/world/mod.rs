@@ -2,17 +2,14 @@ mod scheduler;
 
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
-use crate::run::Dispatch;
-use crate::run::Run;
-use crate::run::System;
-use crate::run::SystemData;
+use crate::run::{Dispatch, Run, System, SystemData};
 use crate::storage::AllStorages;
+use core::marker::PhantomData;
+use core::ops::Range;
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use scheduler::{IntoWorkload, Scheduler};
 use std::borrow::Cow;
-use std::marker::PhantomData;
-use std::ops::Range;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
@@ -30,7 +27,7 @@ unsafe impl Send for World {}
 unsafe impl Sync for World {}
 
 impl Default for World {
-    /// Create an empty `World` without any storage.
+    /// Create an empty `World`.
     fn default() -> Self {
         World {
             all_storages: AtomicRefCell::new(Default::default(), None, true),
@@ -46,19 +43,12 @@ impl Default for World {
 }
 
 impl World {
+    /// Create an empty `World`.
     pub fn new() -> Self {
         World::default()
     }
-    /// Returns a new `World` with storages based on `T` already created
-    /// and custom threads.
-    /// More storages can be added latter.
-    ///
-    /// `T` has to be a tuple even for a single type.
-    /// In this case use (T,).
-    ///
+    /// Returns a new `World` with custom threads.\
     /// Custom threads can be useful when working with wasm for example.
-    ///
-    /// `World` is never used mutably.
     #[cfg(feature = "parallel")]
     pub fn new_with_custom_threads<F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>>(
         f: F,
@@ -74,11 +64,9 @@ impl World {
             _not_send: PhantomData,
         }
     }
-    /// Register a new component type and create a unique storage for it.
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique].\
     /// Does nothing if the storage already exists.
-    ///
-    /// Unique storages store exactly one `T` at any time.
-    /// To access a unique storage value, use [Unique].
     ///
     /// Unwraps errors.
     ///
@@ -86,11 +74,9 @@ impl World {
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.try_add_unique(component).unwrap();
     }
-    /// Register a new component type and create a unique storage for it.
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique].\
     /// Does nothing if the storage already exists.
-    ///
-    /// Unique storages store exactly one `T` at any time.
-    /// To access a unique storage value, use [Unique].
     ///
     /// [Unique]: struct.Unique.html
     pub fn try_add_unique<T: 'static + Send + Sync>(
@@ -102,6 +88,14 @@ impl World {
             .register_unique(component);
         Ok(())
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique] and [NonSend].\
+    /// Does nothing if the storage already exists.
+    ///
+    /// Unwraps errors.
+    ///
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
     pub fn try_add_unique_non_send<T: 'static + Sync>(
         &self,
@@ -112,10 +106,26 @@ impl World {
             .register_unique_non_send(component);
         Ok(())
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique] and [NonSend].\
+    /// Does nothing if the storage already exists.
+    ///
+    /// Unwraps errors.
+    ///
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique] and [NonSync].\
+    /// Does nothing if the storage already exists.
+    ///
+    /// Unwraps errors.
+    ///
+    /// [Unique]: struct.Unique.html
+    /// [NonSync]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
     pub fn try_add_unique_non_sync<T: 'static + Send>(
         &self,
@@ -126,10 +136,24 @@ impl World {
             .register_unique_non_sync(component);
         Ok(())
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique] and [NonSync].\
+    /// Does nothing if the storage already exists.
+    ///
+    /// [Unique]: struct.Unique.html
+    /// [NonSync]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique] and [NonSendSync].\
+    /// Does nothing if the storage already exists.
+    ///
+    /// Unwraps errors.
+    ///
+    /// [Unique]: struct.Unique.html
+    /// [NonSendSync]: struct.NonSendSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     pub fn try_add_unique_non_send_sync<T: 'static>(
         &self,
@@ -140,10 +164,29 @@ impl World {
             .register_unique_non_send_sync(component);
         Ok(())
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [Unique] and [NonSendSync].\
+    /// Does nothing if the storage already exists.
+    ///
+    /// Unwraps errors.
+    ///
+    /// [Unique]: struct.Unique.html
+    /// [NonSendSync]: struct.NonSendSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
+    /// Borrows the requested storage(s), if it doesn't exist it'll get created.\
+    /// You can use a tuple to get multiple storages at once.
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    ///
+    /// let u32s = world.borrow::<&u32>();
+    /// let (entities, mut usizes) = world.borrow::<(Entities, &mut usize)>();
+    /// ```
     pub fn try_borrow<'s, C: SystemData<'s>>(
         &'s self,
     ) -> Result<<C as SystemData<'s>>::View, error::GetStorage> {
@@ -156,11 +199,23 @@ impl World {
             <C as SystemData<'s>>::try_borrow(&self.all_storages)
         }
     }
+    /// Borrows the requested storage(s), if it doesn't exist it'll get created.\
+    /// You can use a tuple to get multiple storages at once.
+    ///
+    /// Unwraps errors.
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    ///
+    /// let u32s = world.borrow::<&u32>();
+    /// let (entities, mut usizes) = world.borrow::<(Entities, &mut usize)>();
+    /// ```
     pub fn borrow<'s, C: SystemData<'s>>(&'s self) -> <C as SystemData<'s>>::View {
         self.try_borrow::<C>().unwrap()
     }
-    /// Allows to perform some actions not possible otherwise like iteration.
-    /// This is basically an unnamed system.
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.
     ///
     /// `T` can be:
     /// * `&T` for an immutable reference to `T` storage
