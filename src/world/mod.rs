@@ -66,8 +66,7 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
     /// To access a unique storage value, use [Unique].\
-    /// Does nothing if the storage already exists.
-    ///
+    /// Does nothing if the storage already exists.\
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
@@ -92,8 +91,6 @@ impl World {
     /// To access a unique storage value, use [Unique] and [NonSend].\
     /// Does nothing if the storage already exists.
     ///
-    /// Unwraps errors.
-    ///
     /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
@@ -108,8 +105,7 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
     /// To access a unique storage value, use [Unique] and [NonSend].\
-    /// Does nothing if the storage already exists.
-    ///
+    /// Does nothing if the storage already exists.\
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
@@ -121,8 +117,6 @@ impl World {
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
     /// To access a unique storage value, use [Unique] and [NonSync].\
     /// Does nothing if the storage already exists.
-    ///
-    /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
@@ -138,7 +132,8 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
     /// To access a unique storage value, use [Unique] and [NonSync].\
-    /// Does nothing if the storage already exists.
+    /// Does nothing if the storage already exists.\
+    /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
@@ -149,8 +144,6 @@ impl World {
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
     /// To access a unique storage value, use [Unique] and [NonSendSync].\
     /// Does nothing if the storage already exists.
-    ///
-    /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
@@ -166,8 +159,7 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
     /// To access a unique storage value, use [Unique] and [NonSendSync].\
-    /// Does nothing if the storage already exists.
-    ///
+    /// Does nothing if the storage already exists.\
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
@@ -179,6 +171,24 @@ impl World {
     /// Borrows the requested storage(s), if it doesn't exist it'll get created.\
     /// You can use a tuple to get multiple storages at once.
     ///
+    /// You can use:
+    /// * `&T` for a shared access to `T` storage
+    /// * `&mut T` for an exclusive access to `T` storage
+    /// * [Entities] for a shared access to the entity storage
+    /// * [EntitiesMut] for an exclusive reference to the entity storage
+    /// * [AllStorages] for an exclusive access to the storage of all components
+    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+    /// * [Unique]<&T> for a shared access to a `T` unique storage
+    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    ///
+    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    ///
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
@@ -187,6 +197,15 @@ impl World {
     /// let u32s = world.borrow::<&u32>();
     /// let (entities, mut usizes) = world.borrow::<(Entities, &mut usize)>();
     /// ```
+    /// [Entities]: struct.Entities.html
+    /// [EntitiesMut]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
+    /// [ThreadPool]: struct.ThreadPool.html
+    /// [World]: struct.World.html
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
+    /// [NonSync]: struct.NonSync.html
+    /// [NonSendSync]: struct.NonSendSync.html
     pub fn try_borrow<'s, C: SystemData<'s>>(
         &'s self,
     ) -> Result<<C as SystemData<'s>>::View, error::GetStorage> {
@@ -200,9 +219,26 @@ impl World {
         }
     }
     /// Borrows the requested storage(s), if it doesn't exist it'll get created.\
-    /// You can use a tuple to get multiple storages at once.
-    ///
+    /// You can use a tuple to get multiple storages at once.\
     /// Unwraps errors.
+    ///
+    /// You can use:
+    /// * `&T` for a shared access to `T` storage
+    /// * `&mut T` for an exclusive access to `T` storage
+    /// * [Entities] for a shared access to the entity storage
+    /// * [EntitiesMut] for an exclusive reference to the entity storage
+    /// * [AllStorages] for an exclusive access to the storage of all components
+    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+    /// * [Unique]<&T> for a shared access to a `T` unique storage
+    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    ///
+    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
     /// # Example
     /// ```
@@ -212,23 +248,40 @@ impl World {
     /// let u32s = world.borrow::<&u32>();
     /// let (entities, mut usizes) = world.borrow::<(Entities, &mut usize)>();
     /// ```
+    /// [Entities]: struct.Entities.html
+    /// [EntitiesMut]: struct.Entities.html
+    /// [AllStorages]: struct.AllStorages.html
+    /// [ThreadPool]: struct.ThreadPool.html
+    /// [World]: struct.World.html
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
+    /// [NonSync]: struct.NonSync.html
+    /// [NonSendSync]: struct.NonSendSync.html
     pub fn borrow<'s, C: SystemData<'s>>(&'s self) -> <C as SystemData<'s>>::View {
         self.try_borrow::<C>().unwrap()
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.
-    ///
-    /// `T` can be:
-    /// * `&T` for an immutable reference to `T` storage
-    /// * `&mut T` for a mutable reference to `T` storage
-    /// * [Entities] for an immutable reference to the entity storage
-    /// * [EntitiesMut] for a mutable reference to the entity storage
-    /// * [AllStorages] for a mutable reference to the storage of all components
-    /// * [ThreadPool] for an immutable reference to the `rayon::ThreadPool` used by the [World]
-    /// * [Not] can be used to filter out a component type
-    ///
-    /// A tuple will allow multiple references.
-    ///
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
+    /// You can use a tuple to get multiple storages at once.\
     /// Unwraps errors.
+    ///
+    /// You can use:
+    /// * `&T` for a shared access to `T` storage
+    /// * `&mut T` for an exclusive access to `T` storage
+    /// * [Entities] for a shared access to the entity storage
+    /// * [EntitiesMut] for an exclusive reference to the entity storage
+    /// * [AllStorages] for an exclusive access to the storage of all components
+    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+    /// * [Unique]<&T> for a shared access to a `T` unique storage
+    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    ///
+    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    ///
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
@@ -238,26 +291,38 @@ impl World {
     /// });
     /// ```
     /// [Entities]: struct.Entities.html
+    /// [EntitiesMut]: struct.Entities.html
     /// [AllStorages]: struct.AllStorages.html
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
-    /// [Not]: struct.Not.html
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
+    /// [NonSync]: struct.NonSync.html
+    /// [NonSendSync]: struct.NonSendSync.html
     pub fn run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
         self.try_run::<T, _, _>(f).unwrap()
     }
-    /// Allows to perform some actions not possible otherwise like iteration.
-    /// This is basically an unnamed system.
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
+    /// You can use a tuple to get multiple storages at once.
     ///
-    /// `T` can be:
-    /// * `&T` for an immutable reference to `T` storage
-    /// * `&mut T` for a mutable reference to `T` storage
-    /// * [Entities] for an immutable reference to the entity storage
-    /// * [EntitiesMut] for a mutable reference to the entity storage
-    /// * [AllStorages] for a mutable reference to the storage of all components
-    /// * [ThreadPool] for an immutable reference to the `rayon::ThreadPool` used by the [World]
-    /// * [Not] can be used to filter out a component type
+    /// You can use:
+    /// * `&T` for a shared access to `T` storage
+    /// * `&mut T` for an exclusive access to `T` storage
+    /// * [Entities] for a shared access to the entity storage
+    /// * [EntitiesMut] for an exclusive reference to the entity storage
+    /// * [AllStorages] for an exclusive access to the storage of all components
+    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+    /// * [Unique]<&T> for a shared access to a `T` unique storage
+    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// A tuple will allow multiple references.
+    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    ///
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
@@ -267,10 +332,14 @@ impl World {
     /// });
     /// ```
     /// [Entities]: struct.Entities.html
+    /// [EntitiesMut]: struct.Entities.html
     /// [AllStorages]: struct.AllStorages.html
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
-    /// [Not]: struct.Not.html
+    /// [Unique]: struct.Unique.html
+    /// [NonSend]: struct.NonSend.html
+    /// [NonSync]: struct.NonSync.html
+    /// [NonSendSync]: struct.NonSendSync.html
     pub fn try_run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(
         &'a self,
         f: F,
@@ -284,12 +353,45 @@ impl World {
             T::try_run(&self.all_storages, f)
         }
     }
-    pub fn try_run_system<S: for<'a> System<'a> + Send + Sync + 'static>(
-        &self,
-    ) -> Result<(), error::GetStorage> {
+    /// Runs the `S` system immediately, borrowing the storages necessary to do so.
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// struct Clock(u32);
+    ///
+    /// #[system(Tick)]
+    /// fn run(mut clocks: &mut Clock) {
+    ///     (&mut clocks).iter().for_each(|clock| {
+    ///         clock.0 += 1;
+    ///     });
+    /// }
+    ///
+    /// let world = World::default();
+    /// world.run_system::<Tick>();
+    /// ```
+    pub fn try_run_system<S: for<'a> System<'a> + 'static>(&self) -> Result<(), error::GetStorage> {
         S::try_dispatch(self)
     }
-    pub fn run_system<S: for<'a> System<'a> + Send + Sync + 'static>(&self) {
+    /// Runs the `S` system immediately, borrowing the storages necessary to do so.\
+    /// Unwraps errors.
+    ///
+    /// # Example
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// struct Clock(u32);
+    ///
+    /// #[system(Tick)]
+    /// fn run(mut clocks: &mut Clock) {
+    ///     (&mut clocks).iter().for_each(|clock| {
+    ///         clock.0 += 1;
+    ///     });
+    /// }
+    ///
+    /// let world = World::default();
+    /// world.run_system::<Tick>();
+    /// ```
+    pub fn run_system<S: for<'a> System<'a> + 'static>(&self) {
         self.try_run_system::<S>().unwrap()
     }
     /// Modifies the current default workload to `name`.
@@ -306,18 +408,15 @@ impl World {
             Err(error::SetDefaultWorkload::MissingWorkload)
         }
     }
-    /// Modifies the current default workload to `name`.
-    ///
+    /// Modifies the current default workload to `name`.\
     /// Unwraps errors.
     pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
         self.try_set_default_workload(name).unwrap();
     }
-    /// A workload is a collection of systems.
-    /// They will execute as much in parallel as possible.
-    ///
-    /// They are evaluated left to right when they can't be parallelized.
-    ///
+    /// A workload is a collection of systems. They will execute as much in parallel as possible.\
+    /// They are evaluated left to right when they can't be parallelized.\
     /// The default workload will automatically be set to the first workload added.
+    ///
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
@@ -361,14 +460,11 @@ impl World {
         S::into_workload(name, &mut *scheduler);
         Ok(())
     }
-    /// A workload is a collection of systems.
-    /// They will execute as much in parallel as possible.
-    ///
-    /// They are evaluated left to right when they can't be parallelized.
-    ///
-    /// The default workload will automatically be set to the first workload added.
-    ///
+    /// A workload is a collection of systems. They will execute as much in parallel as possible.\
+    /// They are evaluated left to right when they can't be parallelized.\
+    /// The default workload will automatically be set to the first workload added.\
     /// Unwraps errors.
+    ///
     /// # Example
     /// ```
     /// # use shipyard::prelude::*;
@@ -436,8 +532,7 @@ impl World {
             Err(error::RunWorkload::MissingWorkload)
         }
     }
-    /// Runs the `name` workload.
-    ///
+    /// Runs the `name` workload.\
     /// Unwraps error.
     pub fn run_workload(&self, name: impl AsRef<str>) {
         self.try_run_workload(name).unwrap();
@@ -478,8 +573,7 @@ impl World {
             .unwrap();
         Ok(())
     }
-    /// Run the default workload.
-    ///
+    /// Run the default workload.\
     /// Unwraps error.
     pub fn run_default(&self) {
         self.try_run_default().unwrap();
