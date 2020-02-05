@@ -50,7 +50,7 @@ world.add_workload("Creators", (CreateEmpty, CreateCount));
 world.run_workload("Creators");
 ```
 
-This is great because it avoids a ton of boilerplate and provides [outer-parallelism](../concepts/parallelism.md) without having to do anything.
+This is great because it avoids a ton of boilerplate and provides [outer-parallelism](../going-further/parallelism.md) without having to do anything.
 
 There's a few points to keep in mind about workloads:
 1. Workloads will run its systems in parallel where possible. If they can't be run in parallel, then systems run sequentially left-to-right.

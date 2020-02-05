@@ -12,7 +12,7 @@ There are two main benefits to using an ECS:
     - Spatial locality
     - Less pointer chasing
 
-However, programming with an ECS requires thinking about data and logic in a different way than you might be used to. Also, the optimization techniques need explicit choice and tuning to get the greatest benefit (see [Packs](./concepts/packs.md))
+However, programming with an ECS requires thinking about data and logic in a different way than you might be used to. Also, the optimization techniques need explicit choice and tuning to get the greatest benefit (see [Packs](./going-further/packs.md))
 
 # How does it work?
 
