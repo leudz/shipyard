@@ -387,7 +387,7 @@ impl AllStorages {
             storage.clear().unwrap()
         }
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.  
     /// You can use a tuple to get multiple storages at once.
     ///
     /// You can use:
@@ -429,8 +429,8 @@ impl AllStorages {
     ) -> Result<<C as StorageBorrow<'a>>::View, error::GetStorage> {
         <C as StorageBorrow<'a>>::try_borrow(self)
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
-    /// You can use a tuple to get multiple storages at once.\
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.  
+    /// You can use a tuple to get multiple storages at once.  
     /// Unwraps errors.
     ///
     /// You can use:

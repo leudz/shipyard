@@ -28,7 +28,7 @@ impl From<u64> for StorageId {
 }
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
-/// different types in a `HashMap<TypeId, Storage>`.\
+/// different types in a `HashMap<TypeId, Storage>`.  
 /// and box the `AtomicRefCell` so it doesn't move when the `HashMap` reallocates
 pub(crate) struct Storage(pub(super) Box<AtomicRefCell<dyn UnknownStorage>>);
 

@@ -78,8 +78,8 @@ Today I wouldn't say Shipyard is better or worse than Specs, it's just different
 
 ## Unsafe
 
-This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.\
-Releases should have all invocation of `unsafe` explained.\
+This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.  
+Releases should have all invocation of `unsafe` explained.  
 If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) feel free to open an issue or a PR.
 
 ## License

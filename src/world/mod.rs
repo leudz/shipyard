@@ -47,7 +47,7 @@ impl World {
     pub fn new() -> Self {
         World::default()
     }
-    /// Returns a new `World` with custom threads.\
+    /// Returns a new `World` with custom threads.  
     /// Custom threads can be useful when working with wasm for example.
     #[cfg(feature = "parallel")]
     pub fn new_with_custom_threads<F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>>(
@@ -64,17 +64,17 @@ impl World {
             _not_send: PhantomData,
         }
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique].\
-    /// Does nothing if the storage already exists.\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique].  
+    /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.try_add_unique(component).unwrap();
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique].\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique].  
     /// Does nothing if the storage already exists.
     ///
     /// [Unique]: struct.Unique.html
@@ -87,8 +87,8 @@ impl World {
             .register_unique(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique] and [NonSend].\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique] and [NonSend].  
     /// Does nothing if the storage already exists.
     ///
     /// [Unique]: struct.Unique.html
@@ -103,9 +103,9 @@ impl World {
             .register_unique_non_send(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique] and [NonSend].\
-    /// Does nothing if the storage already exists.\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique] and [NonSend].  
+    /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
@@ -114,8 +114,8 @@ impl World {
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique] and [NonSync].\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique] and [NonSync].  
     /// Does nothing if the storage already exists.
     ///
     /// [Unique]: struct.Unique.html
@@ -130,9 +130,9 @@ impl World {
             .register_unique_non_sync(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique] and [NonSync].\
-    /// Does nothing if the storage already exists.\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique] and [NonSync].  
+    /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
@@ -141,8 +141,8 @@ impl World {
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique] and [NonSendSync].\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique] and [NonSendSync].  
     /// Does nothing if the storage already exists.
     ///
     /// [Unique]: struct.Unique.html
@@ -157,9 +157,9 @@ impl World {
             .register_unique_non_send_sync(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
-    /// To access a unique storage value, use [Unique] and [NonSendSync].\
-    /// Does nothing if the storage already exists.\
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [Unique] and [NonSendSync].  
+    /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// [Unique]: struct.Unique.html
@@ -168,7 +168,7 @@ impl World {
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
-    /// Borrows the requested storage(s), if it doesn't exist it'll get created.\
+    /// Borrows the requested storage(s), if it doesn't exist it'll get created.  
     /// You can use a tuple to get multiple storages at once.
     ///
     /// You can use:
@@ -218,8 +218,8 @@ impl World {
             <C as SystemData<'s>>::try_borrow(&self.all_storages)
         }
     }
-    /// Borrows the requested storage(s), if it doesn't exist it'll get created.\
-    /// You can use a tuple to get multiple storages at once.\
+    /// Borrows the requested storage(s), if it doesn't exist it'll get created.  
+    /// You can use a tuple to get multiple storages at once.  
     /// Unwraps errors.
     ///
     /// You can use:
@@ -260,8 +260,8 @@ impl World {
     pub fn borrow<'s, C: SystemData<'s>>(&'s self) -> <C as SystemData<'s>>::View {
         self.try_borrow::<C>().unwrap()
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
-    /// You can use a tuple to get multiple storages at once.\
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.  
+    /// You can use a tuple to get multiple storages at once.  
     /// Unwraps errors.
     ///
     /// You can use:
@@ -302,7 +302,7 @@ impl World {
     pub fn run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
         self.try_run::<T, _, _>(f).unwrap()
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.\
+    /// Borrows the requested storages and runs `f`, this is an unnamed system.  
     /// You can use a tuple to get multiple storages at once.
     ///
     /// You can use:
@@ -373,7 +373,7 @@ impl World {
     pub fn try_run_system<S: for<'a> System<'a> + 'static>(&self) -> Result<(), error::GetStorage> {
         S::try_dispatch(self)
     }
-    /// Runs the `S` system immediately, borrowing the storages necessary to do so.\
+    /// Runs the `S` system immediately, borrowing the storages necessary to do so.  
     /// Unwraps errors.
     ///
     /// # Example
@@ -408,13 +408,13 @@ impl World {
             Err(error::SetDefaultWorkload::MissingWorkload)
         }
     }
-    /// Modifies the current default workload to `name`.\
+    /// Modifies the current default workload to `name`.  
     /// Unwraps errors.
     pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
         self.try_set_default_workload(name).unwrap();
     }
-    /// A workload is a collection of systems. They will execute as much in parallel as possible.\
-    /// They are evaluated left to right when they can't be parallelized.\
+    /// A workload is a collection of systems. They will execute as much in parallel as possible.  
+    /// They are evaluated left to right when they can't be parallelized.  
     /// The default workload will automatically be set to the first workload added.
     ///
     /// # Example
@@ -460,9 +460,9 @@ impl World {
         S::into_workload(name, &mut *scheduler);
         Ok(())
     }
-    /// A workload is a collection of systems. They will execute as much in parallel as possible.\
-    /// They are evaluated left to right when they can't be parallelized.\
-    /// The default workload will automatically be set to the first workload added.\
+    /// A workload is a collection of systems. They will execute as much in parallel as possible.  
+    /// They are evaluated left to right when they can't be parallelized.  
+    /// The default workload will automatically be set to the first workload added.  
     /// Unwraps errors.
     ///
     /// # Example
@@ -532,7 +532,7 @@ impl World {
             Err(error::RunWorkload::MissingWorkload)
         }
     }
-    /// Runs the `name` workload.\
+    /// Runs the `name` workload.  
     /// Unwraps error.
     pub fn run_workload(&self, name: impl AsRef<str>) {
         self.try_run_workload(name).unwrap();
@@ -573,7 +573,7 @@ impl World {
             .unwrap();
         Ok(())
     }
-    /// Run the default workload.\
+    /// Run the default workload.  
     /// Unwraps error.
     pub fn run_default(&self) {
         self.try_run_default().unwrap();

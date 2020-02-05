@@ -1,6 +1,6 @@
 # Borrow the World
 
-`borrow` is one of three ways to modify components and entities.\
+`borrow` is one of three ways to modify components and entities.  
 It has a single generic argument that let us request access to storage(s):
 
 ```rust, noplaypen

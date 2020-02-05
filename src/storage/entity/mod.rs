@@ -21,8 +21,9 @@ pub struct EntitiesMut;
 ///
 /// The life cycle of an entity looks like this:
 ///
-/// Generation -> Deletion -> Dead\
-///           ⬑----------↵
+/// Generation -> Deletion -> Dead  
+/// &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+///       ⬑----------↵
 // An entity starts with a generation at 0, each removal will increase it by 1
 // until version::MAX() where the entity is considered dead.
 // Removed entities form a linked list inside the vector, using their index part to point to the next.
@@ -51,7 +52,7 @@ impl Entities {
         entity_id.index() < self.data.len()
             && entity_id == unsafe { *self.data.get_unchecked(entity_id.index()) }
     }
-    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.\
+    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.
     ///
     /// # Example
@@ -72,8 +73,8 @@ impl Entities {
     ) -> Result<(), error::AddComponent> {
         storages.try_add_component(component, entity, &self)
     }
-    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.\
-    /// `Entities` is only borrowed immutably.\
+    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
+    /// `Entities` is only borrowed immutably.  
     /// Unwraps errors.
     ///
     /// # Example
@@ -114,7 +115,7 @@ impl Entities {
             entity_id
         }
     }
-    /// Delete an entity, returns true if the entity was alive.\
+    /// Delete an entity, returns true if the entity was alive.  
     /// If the entity has components, they will not be deleted and still be accessible using this id.
     pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
         if self.is_alive(entity_id) {
@@ -140,7 +141,7 @@ impl Entities {
             false
         }
     }
-    /// Stores `component` in a new entity, the `EntityId` to this entity is returned.\
+    /// Stores `component` in a new entity, the `EntityId` to this entity is returned.  
     /// Multiple components can be added at the same time using a tuple.
     /// # Example:
     /// ```
