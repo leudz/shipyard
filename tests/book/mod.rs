@@ -7,6 +7,7 @@ mod get;
 mod hierarchy;
 mod iterators;
 mod remove_components;
+mod systems;
 mod world;
 
 use shipyard::prelude::*;

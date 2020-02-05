@@ -1,58 +1,79 @@
 # Systems
 
-## Systems
+Systems are a great way to organize code.
 
-The most convenient way is by using the `system` annotation and then registering it as a workload:
-
-1. Define a system
+Here's an example:
 ```rust, noplaypen
 struct CreateEmpty;
 impl<'a> System<'a> for CreateEmpty {
     type Data = (EntitiesMut, &'a mut Empty);
     
-    fn run((entities, empties): <T::Data as SystemData>::View) { ... }
+    fn run((entities, empties): <Self::Data as SystemData>::View) { ... }
 }
 ```
 
-First we create a struct, it could be an enum, empty or not it doesn't really matter it's just here to attach the impl on. Note that even if you don't make it empty you won't have access to the struct inside the system.
+We start with an empty struct to attach the implementation on.  
+We then implement `System`, using its `Data` associated type to specify which storages we want to access, just like `borrow`.  
+Lastly `run` will let us act on these storages. It has a single parameter: the views of the storages we requested. You can specify the parameter's type or use `<Self::Data as SystemData>::View` as it'll always work.  
+Note that there is no `self` of any kind, so even if `CreateEmpty` wasn't empty we couldn't access any of its fields.
 
-We then choose which storages we want with `Data`. We'll see in the next chapters what types can be used in detailed.
+This syntax however isn't pretty, now that we've seen what they look like under the hood, we can use the macro:
 
-Finally we get a tuple containing views to the storages we asked with `Data`. You can use `<T::Data as SystemData>::View` as type, it's a bit esoteric but will work whatever you borrow. Or you could specify the exact types.
-
-2. Add the workload
 ```rust, noplaypen
-world.add_workload("Creators", CreateEmpty);
+#[system(CreateEmpty)]
+fn run(entities: &mut Entities, empties: &mut Empty) { ... }
 ```
 
-3. Run the workload (which will run its systems)
+In addition to creating the struct and implementation for us, it'll take care of lifetimes and allow us to use `&mut Entities` instead of `EntitiesMut` for example.
+
+We have a system, let's run it!
+
 ```rust, noplaypen
-world.run_workload("Creators");
+world.run_system::<CreateEmpty>();
 ```
 
-Adding multiple systems to a workload is only a matter of expanding the second argument to a tuple. For example: 
+### Workloads
 
-1. Define another system
+Running systems one by one works but a system carries a lot of information and it would be a shame not to take advantage of it.  
+A workload is a group of one or multiple systems that with a name.
+
 ```rust, noplaypen
-#[system(CreateCount)]
-fn run (entities: &mut Entities, counts: &mut Count) { ... }
+#[system(CreateEmpty)]
+fn run(entities: &mut Entities, empties: &mut Empty) { ... }
+
+#[system(DestroyEmpty)]
+fn run(entities: &mut Entities, empties: &mut Empty) { ... }
+
+world.add_workload<(CreateEmpty, DestroyEmpty), _>("Empty Cycle");
 ```
 
-This time we use the macro, it'll make the struct and impl for you! And no tuple, the macro will also take care of it.
+As opposite to `run_system`, workloads won't execute until we ask them to. They are instead stored in the `World` ready to be run again and again.
 
-2. Add the workload
 ```rust, noplaypen
-world.add_workload("Creators", (CreateEmpty, CreateCount));
+world.run_workload("Empty Cycle");
+// or
+world.run_default();
 ```
 
-3. Run the workload
-```rust, noplaypen
-world.run_workload("Creators");
-```
-
-This is great because it avoids a ton of boilerplate and provides [outer-parallelism](../going-further/parallelism.md) without having to do anything.
+`run_default` will run the first workload added in the `World` or the one you choose with `set_default_workload`.
 
 There's a few points to keep in mind about workloads:
-1. Workloads will run its systems in parallel where possible. If they can't be run in parallel, then systems run sequentially left-to-right.
-2. A workload cannot be modified once its defined. Think of it more as a one-time-setup thing than something you do dynamically at runtime. Workloads are cheap so even if you make a few with similar systems it's ok.
-3. Adding a workload with a name that already exists will replace it.
+1. Workloads will run their systems left-to-right or at the same time when possible. We call this systems parallelism: outer-parallelism, you can learn more about it in [this chapter](../going-further/parallelism.md).
+2. A workload cannot be modified once its defined. Think of it more as a one-time-setup thing than something you do dynamically at runtime. Workloads don't take up much memory so even if you make a few with similar systems it's not a problem.
+
+### Anonymous system
+
+We've seen `borrow` and systems, there's a third (and last) way to modify the `World`: `run`.
+
+```rust, noplaypen
+world.run::<(EntitiesMut, &mut Empty), _, _>(|(entities, empties)| { ... });
+```
+
+It's kind of a mix between `borrow` and systems. We request the storages access, just like `borrow` and there's two additional generics.  
+The first one is for the returned value, as opposed to systems, `run` can return.  
+The second one is just the full type of the closure. This closure has just one parameter: the views of the requested storages.
+
+---
+
+That's it for the fundamentals, congratulations!  
+In the next chapter we'll use everything we learned so far to make a small game.
