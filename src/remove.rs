@@ -2,7 +2,8 @@ use crate::error;
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
 use crate::views::ViewMut;
-use std::any::TypeId;
+use alloc::vec::Vec;
+use core::any::TypeId;
 
 pub trait Removable {
     type Out;
@@ -98,7 +99,7 @@ macro_rules! impl_remove {
         impl<$($type: 'static,)+ $($add_type: 'static),*> Remove<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_remove(self, entity: EntityId) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
                 // non packed storages should not pay the price of pack
-                if $(std::mem::discriminant(&self.$index.pack_info.pack) != std::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
+                if $(core::mem::discriminant(&self.$index.pack_info.pack) != core::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
                     let mut types = [$(TypeId::of::<$type>()),+];
                     types.sort_unstable();
                     let mut add_types = [$(TypeId::of::<$add_type>()),*];

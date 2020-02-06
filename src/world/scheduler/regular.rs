@@ -1,9 +1,11 @@
 use super::Scheduler;
 use crate::run::{Dispatch, Mutation, System, SystemData};
 use crate::storage::AllStorages;
-use std::any::TypeId;
-use std::borrow::Cow;
-use std::collections::hash_map::Entry;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::any::TypeId;
+use hashbrown::hash_map::Entry;
 
 pub trait IntoWorkload {
     fn into_workload(name: impl Into<Cow<'static, str>>, scheduler: &mut Scheduler);

@@ -2,7 +2,7 @@ use super::enumerate::Enumerate;
 use super::filter::Filter;
 use super::map::Map;
 use super::with_id::WithId;
-use std::iter::FromIterator;
+use core::iter::FromIterator;
 
 pub trait Shiperator {
     type Item;
@@ -84,7 +84,7 @@ pub trait Shiperator {
     {
         #[inline]
         fn add1<T>(count: usize, _: T) -> usize {
-            std::ops::Add::add(count, 1)
+            core::ops::Add::add(count, 1)
         }
 
         self.fold(0, add1)

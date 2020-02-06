@@ -1,8 +1,10 @@
 use crate::error;
 use crate::sparse_set::{Pack, TightPack as TightPackInfo};
 use crate::views::ViewMut;
-use std::any::TypeId;
-use std::sync::Arc;
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::any::TypeId;
 
 pub trait TightPack {
     fn try_tight_pack(self) -> Result<(), error::Pack>;
@@ -36,7 +38,7 @@ macro_rules! impl_tight_pack {
                     }
                 )+
 
-                let mut smallest = std::usize::MAX;
+                let mut smallest = core::usize::MAX;
                 let mut smallest_index = 0;
                 let mut i = 0;
 
@@ -50,7 +52,7 @@ macro_rules! impl_tight_pack {
                 let _ = smallest;
                 let _ = i;
 
-                let mut indices = vec![];
+                let mut indices = Vec::new();
 
                 $(
                     if $index == smallest_index {

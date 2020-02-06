@@ -4,8 +4,8 @@ use crate::error;
 use crate::sparse_set::{SparseSet, Window};
 use crate::{AllStorages, Entities};
 use core::any::type_name;
-use std::convert::TryFrom;
-use std::ops::{Deref, DerefMut};
+use core::convert::TryFrom;
+use core::ops::{Deref, DerefMut};
 
 pub struct AllStoragesView<'a>(Ref<'a, AllStorages>);
 

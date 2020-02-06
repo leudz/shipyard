@@ -39,7 +39,7 @@ macro_rules! impl_iterators {
         impl<$($type: IntoAbstract),+> $chunk_exact<$($type),+> {
             pub fn remainder(&mut self) -> ($(<$type::AbsView as AbstractMut>::Slice,)+) {
                 let end = self.end;
-                let remainder = std::cmp::min(self.end - self.current, self.end % self.step);
+                let remainder = core::cmp::min(self.end - self.current, self.end % self.step);
                 self.end -= remainder;
                 ($(
                     unsafe { self.data.$index.get_data_slice(self.end..end) },

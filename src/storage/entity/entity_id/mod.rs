@@ -1,7 +1,7 @@
 #[cfg(feature = "serialization")]
 mod serialization;
 
-use std::num::NonZeroU64;
+use core::num::NonZeroU64;
 
 /// A Key is a handle to an entity and has two parts, the index and the version.
 /// The index is 48 bits long and the version 16.
@@ -78,12 +78,12 @@ impl EntityId {
         EntityId(NonZeroU64::new(1).unwrap())
     }
     pub fn dead() -> Self {
-        EntityId(unsafe { NonZeroU64::new_unchecked(std::u64::MAX) })
+        EntityId(unsafe { NonZeroU64::new_unchecked(core::u64::MAX) })
     }
 }
 
-impl std::fmt::Debug for EntityId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for EntityId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
             "EntityId {{ index: {}, version: {} }}",

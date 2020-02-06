@@ -14,19 +14,21 @@ repository = "https://github.com/leudz/shipyard"
 members = ["shipyard_proc", "demo"]
 
 [dependencies]
-num_cpus = {version = "1.12.0", optional = true}
-rayon = {version = "1.3.0", optional = true}
+num_cpus = { version = "1.12.0", optional = true }
+rayon = { version = "1.3.0", optional = true }
 shipyard_proc = { path = "./shipyard_proc", optional = true }
-serde = {version = "1.0.104", optional = true}
-parking_lot = {version = "0.10.0"}
+serde = { version = "1.0.104", optional = true }
+parking_lot = { version = "0.10.0" }
+hashbrown = "0.7.0"
 
 [features]
 default = ["parallel", "proc"]
-parallel = ["rayon", "num_cpus"]
+parallel = ["rayon", "num_cpus", "std"]
 proc = ["shipyard_proc"]
 serialization = ["serde"]
-non_send = []
-non_sync = []
+non_send = ["std"]
+non_sync = ["std"]
+std = []
 
 [dev-dependencies]
 trybuild = "1.0.21"

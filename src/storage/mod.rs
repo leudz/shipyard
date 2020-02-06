@@ -8,6 +8,8 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 use crate::sparse_set::SparseSet;
 use crate::unknown_storage::UnknownStorage;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::any::TypeId;
 
 pub enum StorageId {
@@ -41,7 +43,14 @@ impl Storage {
     /// Creates a new `Storage` storing elements of type T.
     pub(crate) fn new<T: 'static + Send + Sync>() -> Self {
         let sparse_set = SparseSet::<T>::default();
-        Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
+        #[cfg(feature = "std")]
+        {
+            Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            Storage(Box::new(AtomicRefCell::new(sparse_set)))
+        }
     }
     #[cfg(feature = "non_send")]
     pub(crate) fn new_non_send<T: 'static + Sync>() -> Self {

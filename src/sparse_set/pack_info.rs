@@ -1,7 +1,8 @@
 use crate::storage::EntityId;
-use std::any::TypeId;
-use std::cmp::Ordering;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::any::TypeId;
+use core::cmp::Ordering;
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum Pack<T> {

@@ -2,8 +2,10 @@ use crate::error;
 use crate::iter::{IntoIterIds, Shiperator};
 use crate::sparse_set::{LoosePack as LoosePackInfo, Pack};
 use crate::views::ViewMut;
-use std::any::TypeId;
-use std::sync::Arc;
+use alloc::boxed::Box;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::any::TypeId;
 
 pub trait LoosePack<T> {
     fn try_loose_pack(self) -> Result<(), error::Pack>;

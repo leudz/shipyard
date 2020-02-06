@@ -8,10 +8,12 @@ pub(super) use regular::IntoWorkload;
 
 use crate::error;
 use crate::World;
-use std::any::TypeId;
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::ops::Range;
+use alloc::borrow::Cow;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::any::TypeId;
+use core::ops::Range;
+use hashbrown::HashMap;
 
 #[allow(clippy::type_complexity)]
 pub struct Scheduler {

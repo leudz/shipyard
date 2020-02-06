@@ -34,7 +34,7 @@ impl<'a, T: 'static> IntoAbstract for &'a View<'_, T> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -54,7 +54,7 @@ impl<'a, T: 'static> IntoAbstract for Window<'a, T> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -74,7 +74,7 @@ impl<'a, T: 'static> IntoAbstract for &'a Window<'a, T> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -94,7 +94,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -116,7 +116,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
     fn modified(&self) -> usize {
         match &self.pack_info.pack {
             Pack::Update(pack) => pack.inserted + pack.modified - 1,
-            _ => std::usize::MAX,
+            _ => core::usize::MAX,
         }
     }
 }
@@ -139,7 +139,7 @@ impl<'a, T: 'static> IntoAbstract for WindowMut<'a, T> {
     fn modified(&self) -> usize {
         match &self.pack_info.pack {
             Pack::Update(pack) => pack.inserted + pack.modified - 1,
-            _ => std::usize::MAX,
+            _ => core::usize::MAX,
         }
     }
 }
@@ -160,7 +160,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b WindowMut<'a, T> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -182,7 +182,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut WindowMut<'a, T> {
     fn modified(&self) -> usize {
         match &self.pack_info.pack {
             Pack::Update(pack) => pack.inserted + pack.modified - 1,
-            _ => std::usize::MAX,
+            _ => core::usize::MAX,
         }
     }
 }
@@ -203,7 +203,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -223,7 +223,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }
 
@@ -243,6 +243,6 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        std::usize::MAX
+        core::usize::MAX
     }
 }

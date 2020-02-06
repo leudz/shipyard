@@ -5,8 +5,9 @@ use crate::error;
 use crate::sparse_set::ViewAddEntity;
 use crate::unknown_storage::UnknownStorage;
 use add_component::AddComponent;
+use alloc::vec::Vec;
+use core::any::{Any, TypeId};
 pub use entity_id::EntityId;
-use std::any::{Any, TypeId};
 
 /// Type used to borrow `Entities` mutably.
 pub struct EntitiesMut;
@@ -207,7 +208,7 @@ impl UnknownStorage for Entities {
 
 #[test]
 fn entities() {
-    use std::num::NonZeroU64;
+    use core::num::NonZeroU64;
 
     let mut entities = Entities::default();
 

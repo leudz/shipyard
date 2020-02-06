@@ -1,4 +1,4 @@
-use std::hash::Hasher;
+use core::hash::Hasher;
 
 /// Since `TypeId`s are unique no need to hash them.  
 /// This is the purpose of this hasher, not doing anything.  
@@ -8,7 +8,7 @@ pub(crate) struct TypeIdHasher(u64);
 
 impl Hasher for TypeIdHasher {
     fn write(&mut self, bytes: &[u8]) {
-        use std::convert::TryInto;
+        use core::convert::TryInto;
 
         self.0 = u64::from_ne_bytes(bytes.try_into().unwrap());
     }
@@ -20,14 +20,14 @@ impl Hasher for TypeIdHasher {
 #[test]
 fn hasher() {
     fn verify<T: 'static + ?Sized>() {
-        use std::any::TypeId;
-        use std::hash::Hash;
+        use core::any::TypeId;
+        use core::hash::Hash;
 
         let mut hasher = TypeIdHasher::default();
         let type_id = TypeId::of::<T>();
         type_id.hash(&mut hasher);
         assert_eq!(hasher.finish(), unsafe {
-            std::mem::transmute::<TypeId, u64>(type_id)
+            core::mem::transmute::<TypeId, u64>(type_id)
         });
     }
 

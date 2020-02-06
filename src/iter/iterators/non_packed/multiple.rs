@@ -1,6 +1,7 @@
 use super::super::update::*;
 use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
 use crate::EntityId;
+use core::ptr;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::{Folder, UnindexedProducer};
 
@@ -44,7 +45,7 @@ macro_rules! impl_iterators {
                 while self.current < self.end {
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
-                    let index = unsafe {std::ptr::read(self.indices.add(self.current))};
+                    let index = unsafe {ptr::read(self.indices.add(self.current))};
                     self.current += 1;
                     let data_indices = ($(
                         if $index == self.array {
@@ -73,7 +74,7 @@ macro_rules! impl_iterators {
             type Id = EntityId;
 
             unsafe fn current_id(&self) -> Self::Id {
-                std::ptr::read(self.indices.add(self.current - 1))
+                ptr::read(self.indices.add(self.current - 1))
             }
         }
 

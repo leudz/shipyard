@@ -1,6 +1,7 @@
 use super::{Pack, PackInfo};
 use crate::error;
 use crate::EntityId;
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::ptr;
@@ -319,7 +320,7 @@ impl<'w, T> WindowMut<'w, T> {
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             let mut vec = Vec::with_capacity(pack.deleted.capacity());
-            std::mem::swap(&mut vec, &mut pack.deleted);
+            core::mem::swap(&mut vec, &mut pack.deleted);
             Ok(vec)
         } else {
             Err(error::NotUpdatePack)
@@ -336,7 +337,7 @@ impl<'w, T> WindowMut<'w, T> {
                 let new_len = pack.inserted;
                 while pack.inserted > 0 {
                     let new_end =
-                        std::cmp::min(pack.inserted + pack.modified - 1, self.dense.len());
+                        core::cmp::min(pack.inserted + pack.modified - 1, self.dense.len());
                     self.dense.swap(new_end, pack.inserted - 1);
                     self.data.swap(new_end, pack.inserted - 1);
                     pack.inserted -= 1;

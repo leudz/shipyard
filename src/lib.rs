@@ -104,6 +104,10 @@
 #![deny(trivial_casts)]
 #![deny(trivial_numeric_casts)]
 #![deny(unused_qualifications)]
+#![cfg_attr(not(any(feature = "std", test)), no_std)]
+
+#[macro_use]
+extern crate alloc;
 
 mod atomic_refcell;
 mod delete;

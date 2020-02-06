@@ -9,7 +9,7 @@ pub struct ChunkExact1<T: IntoAbstract> {
 
 impl<T: IntoAbstract> ChunkExact1<T> {
     pub fn remainder(&mut self) -> <T::AbsView as AbstractMut>::Slice {
-        let remainder = std::cmp::min(self.end - self.current, self.end % self.step);
+        let remainder = core::cmp::min(self.end - self.current, self.end % self.step);
         let old_end = self.end;
         self.end -= remainder;
         unsafe { self.data.get_data_slice(self.end..old_end) }

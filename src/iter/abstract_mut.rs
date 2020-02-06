@@ -1,7 +1,7 @@
 use crate::not::Not;
 use crate::sparse_set::{Pack, RawWindowMut, Window};
 use crate::storage::EntityId;
-use std::ptr;
+use core::ptr;
 
 // Abstracts different types of view to iterate over
 // mutable and immutable views with the same iterator
@@ -9,12 +9,13 @@ use std::ptr;
 pub trait AbstractMut {
     type Out;
     type Slice;
-    // # Safety
-    // The lifetime has to be valid
+    /// # Safety
+    ///
+    /// The lifetime has to be valid
     unsafe fn get_data(&mut self, index: usize) -> Self::Out;
     // # Safety
     // The lifetime has to be valid
-    unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice;
+    unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice;
     fn dense(&self) -> *const EntityId;
     unsafe fn mark_modified(&mut self, index: usize) -> Self::Out;
     unsafe fn mark_id_modified(&mut self, entity: EntityId) -> Self::Out {
@@ -36,8 +37,8 @@ macro_rules! window {
                 unsafe fn get_data(&mut self, index: usize) -> Self::Out {
                     self.data.get_unchecked(index)
                 }
-                unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
-                    std::slice::from_raw_parts(
+                unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice {
+                    core::slice::from_raw_parts(
                         self.data.get_unchecked(indices.start),
                         indices.end - indices.start,
                     )
@@ -78,8 +79,8 @@ macro_rules! window_mut {
                 unsafe fn get_data(&mut self, index: usize) -> Self::Out {
                     &mut *self.data.add(index)
                 }
-                unsafe fn get_data_slice(&mut self, indices: std::ops::Range<usize>) -> Self::Slice {
-                    std::slice::from_raw_parts_mut(
+                unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice {
+                    core::slice::from_raw_parts_mut(
                         self.data.add(indices.start),
                         indices.end - indices.start,
                     )
@@ -151,11 +152,11 @@ macro_rules! not_window {
                 type Out = ();
                 type Slice = ();
                 unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    if index != std::usize::MAX {
+                    if index != core::usize::MAX {
                         unreachable!()
                     }
                 }
-                unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
+                unsafe fn get_data_slice(&mut self, _: core::ops::Range<usize>) -> Self::Slice {
                     unreachable!()
                 }
                 fn dense(&self) -> *const EntityId {
@@ -172,11 +173,11 @@ macro_rules! not_window {
                     if self.0.contains(entity) {
                         None
                     } else {
-                        Some(std::usize::MAX)
+                        Some(core::usize::MAX)
                     }
                 }
                 unsafe fn index_of_unchecked(&self, _: EntityId) -> usize {
-                    std::usize::MAX
+                    core::usize::MAX
                 }
                 unsafe fn flag_all(&mut self) {}
             }
@@ -193,11 +194,11 @@ macro_rules! not_window_mut {
                 type Out = ();
                 type Slice = ();
                 unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    if index != std::usize::MAX {
+                    if index != core::usize::MAX {
                         unreachable!()
                     }
                 }
-                unsafe fn get_data_slice(&mut self, _: std::ops::Range<usize>) -> Self::Slice {
+                unsafe fn get_data_slice(&mut self, _: core::ops::Range<usize>) -> Self::Slice {
                     unreachable!()
                 }
                 fn dense(&self) -> *const EntityId {
@@ -214,11 +215,11 @@ macro_rules! not_window_mut {
                     if self.0.contains(entity) {
                         None
                     } else {
-                        Some(std::usize::MAX)
+                        Some(core::usize::MAX)
                     }
                 }
                 unsafe fn index_of_unchecked(&self, _: EntityId) -> usize {
-                    std::usize::MAX
+                    core::usize::MAX
                 }
                 unsafe fn flag_all(&mut self) {}
             }

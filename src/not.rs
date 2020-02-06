@@ -1,5 +1,5 @@
 use crate::views::{View, ViewMut};
-use std::ops::Not as NotOps;
+use core::ops::Not as NotOps;
 
 /// Used to filter out components.
 /// Get and iterators will skip entities that have this component.

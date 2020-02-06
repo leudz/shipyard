@@ -1,6 +1,7 @@
 use crate::sparse_set::SparseSet;
 use crate::storage::Entities;
 use crate::storage::EntityId;
+use alloc::vec::Vec;
 use core::any::{Any, TypeId};
 
 pub(super) trait UnknownStorage {

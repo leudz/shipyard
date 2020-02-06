@@ -2,7 +2,8 @@ use super::{Entities, EntityId};
 use crate::error;
 use crate::sparse_set::Pack;
 use crate::views::ViewMut;
-use std::any::TypeId;
+use alloc::vec::Vec;
+use core::any::TypeId;
 
 // No new storage will be created
 /// Adds components to an existing entity without creating new storage.
@@ -63,7 +64,7 @@ macro_rules! impl_add_component {
                     // and list components we can pack
                     let mut should_pack = Vec::new();
                     // non packed storages should not pay the price of pack
-                    if $(std::mem::discriminant(&self.$index.pack_info.pack) != std::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
+                    if $(core::mem::discriminant(&self.$index.pack_info.pack) != core::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
                         let mut type_ids = [$(TypeId::of::<$type>()),+];
                         type_ids.sort_unstable();
                         let mut add_types = [$(TypeId::of::<$add_type>()),*];

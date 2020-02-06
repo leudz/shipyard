@@ -11,10 +11,11 @@ use crate::NonSendSync;
 #[cfg(feature = "non_sync")]
 use crate::NonSync;
 use crate::{error, Unique};
+use alloc::vec::Vec;
+use core::any::TypeId;
 use core::convert::TryInto;
 #[cfg(feature = "parallel")]
 use rayon::ThreadPool;
-use std::any::TypeId;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutation {

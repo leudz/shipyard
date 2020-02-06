@@ -6,6 +6,7 @@ mod windows;
 use crate::error;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
+use alloc::vec::Vec;
 use core::any::{Any, TypeId};
 use core::marker::PhantomData;
 use core::ptr;
@@ -74,7 +75,7 @@ impl<T> SparseSet<T> {
         }
 
         let result = if let Some(data) = self.get_mut(entity) {
-            std::mem::swap(data, &mut value);
+            core::mem::swap(data, &mut value);
             Some(value)
         } else {
             unsafe { *self.sparse.get_unchecked_mut(entity.index()) = self.dense.len() };
@@ -407,7 +408,7 @@ impl<T> SparseSet<T> {
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             let mut vec = Vec::with_capacity(pack.deleted.capacity());
-            std::mem::swap(&mut vec, &mut pack.deleted);
+            core::mem::swap(&mut vec, &mut pack.deleted);
             Ok(vec)
         } else {
             Err(error::NotUpdatePack)
@@ -424,7 +425,7 @@ impl<T> SparseSet<T> {
                 let new_len = pack.inserted;
                 while pack.inserted > 0 {
                     let new_end =
-                        std::cmp::min(pack.inserted + pack.modified - 1, self.dense.len());
+                        core::cmp::min(pack.inserted + pack.modified - 1, self.dense.len());
                     self.dense.swap(new_end, pack.inserted - 1);
                     self.data.swap(new_end, pack.inserted - 1);
                     pack.inserted -= 1;
@@ -537,14 +538,14 @@ impl<T> SparseSet<T> {
     }
 }
 
-impl<T> std::ops::Index<EntityId> for SparseSet<T> {
+impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
     fn index(&self, entity: EntityId) -> &Self::Output {
         self.get(entity).unwrap()
     }
 }
 
-impl<T> std::ops::IndexMut<EntityId> for SparseSet<T> {
+impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
         self.get_mut(entity).unwrap()
     }

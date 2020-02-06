@@ -2,8 +2,9 @@ use super::{IntoSortable, SparseSet};
 use crate::error;
 use crate::sparse_set::{EntityId, Pack};
 use crate::views::ViewMut;
-use std::any::TypeId;
-use std::cmp::Ordering;
+use alloc::vec::Vec;
+use core::any::TypeId;
+use core::cmp::Ordering;
 
 pub struct UnstableSort1<'tmp, T>(&'tmp mut SparseSet<T>);
 
@@ -16,7 +17,8 @@ impl<'tmp, T> IntoSortable for &'tmp mut SparseSet<T> {
 
 impl<'tmp, T> UnstableSort1<'tmp, T> {
     pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
-        if std::mem::discriminant(&self.0.pack_info.pack) == std::mem::discriminant(&Pack::NoPack) {
+        if core::mem::discriminant(&self.0.pack_info.pack) == core::mem::discriminant(&Pack::NoPack)
+        {
             let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
 
             transform.sort_unstable_by(|&i, &j| {

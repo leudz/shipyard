@@ -322,6 +322,10 @@ fn add_component_with_old_key() {
 fn derive() {
     let t = trybuild::TestCases::new();
     t.pass("tests/derive/good.rs");
+    #[cfg(feature = "parallel")]
+    {
+        t.pass("tests/derive/good_parallel.rs");
+    }
     t.pass("tests/derive/return_nothing.rs");
     t.compile_fail("tests/derive/generic_lifetime.rs");
     t.compile_fail("tests/derive/generic_type.rs");

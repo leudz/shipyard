@@ -5,12 +5,14 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 use crate::run::StorageBorrow;
 use crate::sparse_set::SparseSet;
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+use core::any::TypeId;
 use core::cell::UnsafeCell;
+use core::hash::BuildHasherDefault;
+use hashbrown::HashMap;
 pub(crate) use hasher::TypeIdHasher;
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
-use std::any::TypeId;
-use std::collections::HashMap;
-use std::hash::BuildHasherDefault;
 
 /// Contains all components present in the World.
 // The lock is held very briefly:
@@ -31,10 +33,20 @@ impl Default for AllStorages {
 
         let entities = Entities::default();
 
-        storages.insert(
-            TypeId::of::<Entities>(),
-            Storage(Box::new(AtomicRefCell::new(entities, None, true))),
-        );
+        #[cfg(feature = "std")]
+        {
+            storages.insert(
+                TypeId::of::<Entities>(),
+                Storage(Box::new(AtomicRefCell::new(entities, None, true))),
+            );
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            storages.insert(
+                TypeId::of::<Entities>(),
+                Storage(Box::new(AtomicRefCell::new(entities))),
+            );
+        }
 
         AllStorages {
             storages: UnsafeCell::new(storages),

@@ -4,12 +4,12 @@ use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
 use crate::run::{Dispatch, Run, System, SystemData};
 use crate::storage::AllStorages;
+use alloc::borrow::Cow;
 use core::marker::PhantomData;
 use core::ops::Range;
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use scheduler::{IntoWorkload, Scheduler};
-use std::borrow::Cow;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
@@ -29,15 +29,31 @@ unsafe impl Sync for World {}
 impl Default for World {
     /// Create an empty `World`.
     fn default() -> Self {
-        World {
-            all_storages: AtomicRefCell::new(Default::default(), None, true),
-            #[cfg(feature = "parallel")]
-            thread_pool: ThreadPoolBuilder::new()
-                .num_threads(num_cpus::get_physical())
-                .build()
-                .unwrap(),
-            scheduler: AtomicRefCell::new(Default::default(), None, true),
-            _not_send: PhantomData,
+        #[cfg(feature = "std")]
+        {
+            World {
+                all_storages: AtomicRefCell::new(Default::default(), None, true),
+                #[cfg(feature = "parallel")]
+                thread_pool: ThreadPoolBuilder::new()
+                    .num_threads(num_cpus::get_physical())
+                    .build()
+                    .unwrap(),
+                scheduler: AtomicRefCell::new(Default::default(), None, true),
+                _not_send: PhantomData,
+            }
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            World {
+                all_storages: AtomicRefCell::new(Default::default()),
+                #[cfg(feature = "parallel")]
+                thread_pool: ThreadPoolBuilder::new()
+                    .num_threads(num_cpus::get_physical())
+                    .build()
+                    .unwrap(),
+                scheduler: AtomicRefCell::new(Default::default()),
+                _not_send: PhantomData,
+            }
         }
     }
 }

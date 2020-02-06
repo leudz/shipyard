@@ -1,6 +1,7 @@
 use super::*;
 use crate::sparse_set::Pack;
 use crate::EntityId;
+use core::ptr;
 
 macro_rules! impl_iterators {
     (
@@ -27,8 +28,8 @@ macro_rules! impl_iterators {
 
                 let mut type_ids = [$(self.$index.type_id()),+];
                 type_ids.sort_unstable();
-                let mut smallest_index = std::usize::MAX;
-                let mut smallest = std::usize::MAX;
+                let mut smallest_index = core::usize::MAX;
+                let mut smallest = core::usize::MAX;
                 let mut i = 0;
                 let mut pack_iter = PackIter::None;
 
@@ -125,7 +126,7 @@ macro_rules! impl_iterators {
                         let mut indices = None;
                         let data = ($(self.$index.into_abstract(),)+);
                         // if the user is trying to iterate over Not containers only
-                        if smallest == std::usize::MAX {
+                        if smallest == core::usize::MAX {
                             smallest = 0;
                         } else {
                             $(
@@ -137,7 +138,7 @@ macro_rules! impl_iterators {
 
                         $iter::Update($update {
                             data,
-                            indices: indices.unwrap_or(std::ptr::null()),
+                            indices: indices.unwrap_or(ptr::null()),
                             current: 0,
                             end: smallest,
                             array: smallest_index,
@@ -148,7 +149,7 @@ macro_rules! impl_iterators {
                         let mut indices = None;
                         let data = ($(self.$index.into_abstract(),)+);
                         // if the user is trying to iterate over Not containers only
-                        if smallest == std::usize::MAX {
+                        if smallest == core::usize::MAX {
                             smallest = 0;
                         } else {
                             $(
@@ -160,7 +161,7 @@ macro_rules! impl_iterators {
 
                         $iter::NonPacked($non_packed {
                             data,
-                            indices: indices.unwrap_or(std::ptr::null()),
+                            indices: indices.unwrap_or(ptr::null()),
                             current: 0,
                             end: smallest,
                             array: smallest_index,
