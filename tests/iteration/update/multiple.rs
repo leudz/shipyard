@@ -476,17 +476,17 @@ fn filter() {
     });
     world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
         let mut iter = (&mut u32s, &mut i16s).iter().filter(|(_, y)| **y % 5 != 0);
-        assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
         assert_eq!(iter.next().unwrap(), (&mut 4, &mut 14));
+        assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
         assert!(iter.next().is_none());
 
         let mut iter = (&mut u32s).modified().iter();
-        assert_eq!(iter.next().unwrap(), &2);
         assert_eq!(iter.next().unwrap(), &4);
+        assert_eq!(iter.next().unwrap(), &2);
         assert!(iter.next().is_none());
         let mut iter = (&mut i16s).modified().iter();
-        assert_eq!(iter.next().unwrap(), &12);
         assert_eq!(iter.next().unwrap(), &14);
+        assert_eq!(iter.next().unwrap(), &12);
         assert!(iter.next().is_none());
 
         u32s.clear_modified();
@@ -503,17 +503,17 @@ fn filter() {
     });
     world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
         let mut iter = (&mut i16s, &mut u32s).iter().filter(|(x, _)| **x % 5 != 0);
-        assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
         assert_eq!(iter.next().unwrap(), (&mut 14, &mut 4));
+        assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
         assert!(iter.next().is_none());
 
         let mut iter = (&mut i16s).modified().iter();
-        assert_eq!(iter.next().unwrap(), &12);
         assert_eq!(iter.next().unwrap(), &14);
+        assert_eq!(iter.next().unwrap(), &12);
         assert!(iter.next().is_none());
         let mut iter = (&mut u32s).modified().iter();
-        assert_eq!(iter.next().unwrap(), &2);
         assert_eq!(iter.next().unwrap(), &4);
+        assert_eq!(iter.next().unwrap(), &2);
         assert!(iter.next().is_none());
     });
 }
@@ -738,8 +738,8 @@ fn enumerate_filter_map_with_id() {
             .map(|(i, x)| (i * 3, x))
             .with_id();
 
-        assert_eq!(iter.next().unwrap(), (key0, (0, (&0, &10))));
-        assert_eq!(iter.next().unwrap(), (key4, (6, (&4, &14))));
+        assert_eq!(iter.next().unwrap(), (key4, (0, (&4, &14))));
+        assert_eq!(iter.next().unwrap(), (key2, (6, (&2, &12))));
         assert!(iter.next().is_none());
 
         assert!(u32s.modified().iter().next().is_none());
@@ -753,14 +753,14 @@ fn enumerate_filter_map_with_id() {
             .map(|(i, x)| (i * 3, x))
             .with_id();
 
-        assert_eq!(iter.next().unwrap(), (key0, (3, (&mut 10, &mut 0))));
+        assert_eq!(iter.next().unwrap(), (key2, (3, (&mut 12, &mut 2))));
         assert!(iter.next().is_none());
 
         let mut iter = (&mut u32s).modified().iter();
-        assert_eq!(iter.next().unwrap(), &0);
+        assert_eq!(iter.next().unwrap(), &2);
         assert!(iter.next().is_none());
         let mut iter = (&mut i16s).modified().iter();
-        assert_eq!(iter.next().unwrap(), &10);
+        assert_eq!(iter.next().unwrap(), &12);
         assert!(iter.next().is_none());
 
         u32s.clear_modified();

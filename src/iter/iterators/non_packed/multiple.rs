@@ -62,9 +62,7 @@ macro_rules! impl_iterators {
                 }
                 None
             }
-            fn post_process(&mut self, item: Self::Item) -> Self::Item {
-                item
-            }
+            fn post_process(&mut self) {}
             fn size_hint(&self) -> (usize, Option<usize>) {
                 (0, Some(self.end - self.current))
             }

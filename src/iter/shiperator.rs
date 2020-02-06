@@ -9,11 +9,12 @@ pub trait Shiperator {
 
     /// `post_process` should be called with its returned value.
     fn first_pass(&mut self) -> Option<Self::Item>;
-    fn post_process(&mut self, item: Self::Item) -> Self::Item;
+    fn post_process(&mut self);
     fn size_hint(&self) -> (usize, Option<usize>);
     fn next(&mut self) -> Option<Self::Item> {
         let item = self.first_pass()?;
-        Some(self.post_process(item))
+        self.post_process();
+        Some(item)
     }
     fn for_each<F>(self, f: F)
     where
@@ -45,7 +46,8 @@ pub trait Shiperator {
         F: FnMut(Acc, Self::Item) -> Acc,
     {
         while let Some(item) = self.first_pass() {
-            acc = f(acc, self.post_process(item));
+            self.post_process();
+            acc = f(acc, item);
         }
         acc
     }
@@ -55,7 +57,8 @@ pub trait Shiperator {
         F: FnMut(Acc, Self::Item) -> Result<Acc, E>,
     {
         while let Some(item) = self.first_pass() {
-            acc = f(acc, self.post_process(item))?;
+            self.post_process();
+            acc = f(acc, item)?;
         }
         Ok(acc)
     }
@@ -137,8 +140,8 @@ impl<S: Shiperator + ?Sized> Shiperator for &mut S {
     fn first_pass(&mut self) -> Option<Self::Item> {
         (**self).first_pass()
     }
-    fn post_process(&mut self, item: Self::Item) -> Self::Item {
-        (**self).post_process(item)
+    fn post_process(&mut self) {
+        (**self).post_process()
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         (**self).size_hint()
@@ -169,7 +172,8 @@ pub trait DoubleEndedShiperator: Shiperator {
     fn first_pass_back(&mut self) -> Option<Self::Item>;
     fn next_back(&mut self) -> Option<Self::Item> {
         let item = self.first_pass_back()?;
-        Some(self.post_process(item))
+        self.post_process();
+        Some(item)
     }
 }
 

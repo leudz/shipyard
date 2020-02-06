@@ -20,8 +20,8 @@ impl<I: Shiperator> Shiperator for Enumerate<I> {
         self.count += 1;
         Some((current, item))
     }
-    fn post_process(&mut self, (current, item): Self::Item) -> Self::Item {
-        (current, self.iter.post_process(item))
+    fn post_process(&mut self) {
+        self.iter.post_process()
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()

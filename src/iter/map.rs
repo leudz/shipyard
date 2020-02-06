@@ -19,11 +19,10 @@ where
 
     fn first_pass(&mut self) -> Option<Self::Item> {
         let item = self.iter.first_pass()?;
-        Some((self.f)(self.iter.post_process(item)))
+        self.iter.post_process();
+        Some((self.f)(item))
     }
-    fn post_process(&mut self, item: Self::Item) -> Self::Item {
-        item
-    }
+    fn post_process(&mut self) {}
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
     }

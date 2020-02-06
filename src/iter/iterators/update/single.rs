@@ -29,13 +29,13 @@ impl<T: IntoAbstract> Shiperator for Update1<T> {
         if current < self.end {
             self.current += 1;
             self.current_id = unsafe { self.data.id_at(current) };
-            Some(unsafe { self.data.get_data(current) })
+            Some(unsafe { self.data.get_update_data(current) })
         } else {
             None
         }
     }
-    fn post_process(&mut self, _: Self::Item) -> Self::Item {
-        unsafe { self.data.mark_id_modified(self.current_id) }
+    fn post_process(&mut self) {
+        unsafe { self.data.flag_last() }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         let len = self.end - self.current;
@@ -58,7 +58,7 @@ impl<T: IntoAbstract> DoubleEndedShiperator for Update1<T> {
         if self.current < self.end {
             self.end -= 1;
             self.current_id = unsafe { self.data.id_at(self.end) };
-            Some(unsafe { self.data.get_data(self.end) })
+            Some(unsafe { self.data.get_update_data(self.end) })
         } else {
             None
         }

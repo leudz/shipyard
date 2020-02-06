@@ -32,10 +32,10 @@ impl<T: IntoAbstract> Shiperator for Iter1<T> {
             Self::Update(update) => update.first_pass(),
         }
     }
-    fn post_process(&mut self, item: Self::Item) -> Self::Item {
+    fn post_process(&mut self) {
         match self {
-            Self::Tight(tight) => tight.post_process(item),
-            Self::Update(update) => update.post_process(item),
+            Self::Tight(tight) => tight.post_process(),
+            Self::Update(update) => update.post_process(),
         }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {

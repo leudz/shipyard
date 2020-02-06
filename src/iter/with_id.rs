@@ -18,9 +18,8 @@ impl<I: CurrentId> Shiperator for WithId<I> {
         // SAFE first_pass is called before
         Some((unsafe { self.iter.current_id() }, item))
     }
-    fn post_process(&mut self, (id, item): Self::Item) -> Self::Item {
-        let item = self.iter.post_process(item);
-        (id, item)
+    fn post_process(&mut self) {
+        self.iter.post_process()
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()

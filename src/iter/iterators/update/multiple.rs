@@ -22,28 +22,33 @@ macro_rules! impl_iterators {
 
             fn first_pass(&mut self) -> Option<Self::Item> {
                 while self.current < self.end {
+                    let current = self.current;
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
-                    let index = unsafe {ptr::read(self.indices.add(self.current))};
+                    let current_id = unsafe {ptr::read(self.indices.add(current))};
                     self.current += 1;
                     let data_indices = ($(
                         if $index == self.array {
-                            self.current - 1
+                            current
                         } else {
-                            if let Some(index) = self.data.$index.index_of(index) {
+                            if let Some(index) = self.data.$index.index_of(current_id) {
                                 index
                             } else {
                                 continue
                             }
                         },
                     )+);
-                    self.current_id = index;
-                    return Some(unsafe {($(self.data.$index.get_data(data_indices.$index),)+)})
+                    self.current_id = current_id;
+                    return Some(unsafe {($(self.data.$index.get_update_data(data_indices.$index),)+)})
                 }
                 None
             }
-            fn post_process(&mut self, _: Self::Item) -> Self::Item {
-                unsafe {($(self.data.$index.mark_id_modified(self.current_id),)+)}
+            fn post_process(&mut self) {
+                unsafe {
+                    $(
+                        self.data.$index.flag_last();
+                    )+
+                }
             }
             fn size_hint(&self) -> (usize, Option<usize>) {
                 (0, Some(self.end - self.current))

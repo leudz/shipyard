@@ -25,8 +25,8 @@ where
         }
         None
     }
-    fn post_process(&mut self, item: Self::Item) -> Self::Item {
-        self.iter.post_process(item)
+    fn post_process(&mut self) {
+        self.iter.post_process()
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, self.iter.size_hint().1)

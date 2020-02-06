@@ -50,12 +50,12 @@ macro_rules! impl_iterators {
                     Self::NonPacked(non_packed) => non_packed.first_pass(),
                 }
             }
-            fn post_process(&mut self, item: Self::Item) -> Self::Item {
+            fn post_process(&mut self) {
                 match self {
-                    Self::Tight(tight) => tight.post_process(item),
-                    Self::Loose(loose) => loose.post_process(item),
-                    Self::Update(update) => update.post_process(item),
-                    Self::NonPacked(non_packed) => non_packed.post_process(item),
+                    Self::Tight(tight) => tight.post_process(),
+                    Self::Loose(loose) => loose.post_process(),
+                    Self::Update(update) => update.post_process(),
+                    Self::NonPacked(non_packed) => non_packed.post_process(),
                 }
             }
             fn size_hint(&self) -> (usize, Option<usize>) {
