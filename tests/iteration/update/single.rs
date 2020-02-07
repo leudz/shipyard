@@ -34,7 +34,7 @@ fn basic() {
     world.run::<&mut u32, _, _>(|mut u32s| {
         (&mut u32s).iter().for_each(|&mut x| vec.push(x));
         u32s.modified().iter().for_each(|&x| vec.push(x));
-        
+
         assert_eq!(u32s.inserted().len(), 0);
         assert_eq!(u32s.modified().len(), 3);
         assert_eq!(u32s.inserted_or_modified().len(), 3);

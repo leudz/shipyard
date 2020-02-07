@@ -378,3 +378,84 @@ impl Display for NotUpdatePack {
         Debug::fmt(self, fmt)
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Inserted {
+    NotUpdatePacked,
+    NotInbound,
+}
+
+#[cfg(feature = "std")]
+impl Error for Inserted {}
+
+impl Debug for Inserted {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::NotUpdatePacked => fmt
+                .write_str("The storage isn't update packed. Use `view.update_pack()` to pack it."),
+            Self::NotInbound => {
+                fmt.write_str("This window doesn't contain the inserted components.")
+            }
+        }
+    }
+}
+
+impl Display for Inserted {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Modified {
+    NotUpdatePacked,
+    NotInbound,
+}
+
+#[cfg(feature = "std")]
+impl Error for Modified {}
+
+impl Debug for Modified {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::NotUpdatePacked => fmt
+                .write_str("The storage isn't update packed. Use `view.update_pack()` to pack it."),
+            Self::NotInbound => {
+                fmt.write_str("This window doesn't contain the modified components.")
+            }
+        }
+    }
+}
+
+impl Display for Modified {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum InsertedOrModified {
+    NotUpdatePacked,
+    NotInbound,
+}
+
+#[cfg(feature = "std")]
+impl Error for InsertedOrModified {}
+
+impl Debug for InsertedOrModified {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::NotUpdatePacked => fmt
+                .write_str("The storage isn't update packed. Use `view.update_pack()` to pack it."),
+            Self::NotInbound => {
+                fmt.write_str("This window doesn't contain the inserted or modified components.")
+            }
+        }
+    }
+}
+
+impl Display for InsertedOrModified {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}

@@ -11,6 +11,7 @@ pub struct Window<'a, T> {
     pub(crate) dense: &'a [EntityId],
     pub(crate) data: &'a [T],
     pub(crate) pack_info: &'a PackInfo<T>,
+    pub(super) offset: usize,
 }
 
 impl<T> Clone for Window<'_, T> {
@@ -20,6 +21,7 @@ impl<T> Clone for Window<'_, T> {
             dense: self.dense,
             data: self.data,
             pack_info: self.pack_info,
+            offset: self.offset,
         }
     }
 }
@@ -51,46 +53,63 @@ impl<T> Window<'_, T> {
             None
         }
     }
-    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[0..pack.inserted],
-                data: &self.data[0..pack.inserted],
-                pack_info: &self.pack_info,
-            })
+            if self.offset == 0 && self.len() >= pack.inserted {
+                Ok(Window {
+                    sparse: &self.sparse,
+                    dense: &self.dense[0..pack.inserted],
+                    data: &self.data[0..pack.inserted],
+                    pack_info: &self.pack_info,
+                    offset: 0,
+                })
+            } else {
+                Err(error::Inserted::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::Inserted::NotUpdatePacked)
         }
     }
     pub fn inserted(&self) -> Window<'_, T> {
         self.try_inserted().unwrap()
     }
-    pub fn try_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+    pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
-                data: &self.data[pack.inserted..pack.inserted + pack.modified],
-                pack_info: &self.pack_info,
-            })
+            if self.offset <= pack.inserted && self.len() >= pack.modified {
+                Ok(Window {
+                    sparse: &self.sparse,
+                    dense: &self.dense[(pack.inserted - self.offset)
+                        ..(pack.inserted + pack.modified - self.offset)],
+                    data: &self.data[(pack.inserted - self.offset)
+                        ..(pack.inserted + pack.modified - self.offset)],
+                    pack_info: &self.pack_info,
+                    offset: (pack.inserted - self.offset),
+                })
+            } else {
+                Err(error::Modified::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::Modified::NotUpdatePacked)
         }
     }
     pub fn modified(&self) -> Window<'_, T> {
         self.try_modified().unwrap()
     }
-    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[0..pack.inserted + pack.modified],
-                data: &self.data[0..pack.inserted + pack.modified],
-                pack_info: &self.pack_info,
-            })
+            if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
+                Ok(Window {
+                    sparse: &self.sparse,
+                    dense: &self.dense[0..pack.inserted + pack.modified],
+                    data: &self.data[0..pack.inserted + pack.modified],
+                    pack_info: &self.pack_info,
+                    offset: 0,
+                })
+            } else {
+                Err(error::InsertedOrModified::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::InsertedOrModified::NotUpdatePacked)
         }
     }
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
@@ -123,6 +142,7 @@ pub struct WindowMut<'w, T> {
     pub(crate) dense: &'w mut [EntityId],
     pub(crate) data: &'w mut [T],
     pub(crate) pack_info: &'w mut PackInfo<T>,
+    pub(super) offset: usize,
 }
 
 impl<'w, T> WindowMut<'w, T> {
@@ -132,6 +152,7 @@ impl<'w, T> WindowMut<'w, T> {
             dense: self.dense,
             data: self.data,
             pack_info: self.pack_info,
+            offset: self.offset,
         }
     }
     pub(crate) fn as_raw(&mut self) -> RawWindowMut<'_, T> {
@@ -214,76 +235,105 @@ impl<'w, T> WindowMut<'w, T> {
         self.as_non_mut().is_empty()
     }
 
-    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[0..pack.inserted],
-                data: &self.data[0..pack.inserted],
-                pack_info: &self.pack_info,
-            })
+            if self.offset == 0 && self.len() >= pack.inserted {
+                Ok(Window {
+                    sparse: &self.sparse,
+                    dense: &self.dense[0..pack.inserted],
+                    data: &self.data[0..pack.inserted],
+                    pack_info: &self.pack_info,
+                    offset: 0,
+                })
+            } else {
+                Err(error::Inserted::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::Inserted::NotUpdatePacked)
         }
     }
     pub fn inserted(&self) -> Window<'_, T> {
         self.try_inserted().unwrap()
     }
-    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
+    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(WindowMut {
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[0..pack.inserted],
-                data: &mut self.data[0..pack.inserted],
-                pack_info: &mut self.pack_info,
-            })
+            if self.offset == 0 && self.len() >= pack.inserted {
+                Ok(WindowMut {
+                    sparse: &mut self.sparse,
+                    dense: &mut self.dense[0..pack.inserted],
+                    data: &mut self.data[0..pack.inserted],
+                    pack_info: &mut self.pack_info,
+                    offset: 0,
+                })
+            } else {
+                Err(error::Inserted::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::Inserted::NotUpdatePacked)
         }
     }
     pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_mut().unwrap()
     }
-    pub fn try_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+    pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
-                data: &self.data[pack.inserted..pack.inserted + pack.modified],
-                pack_info: &self.pack_info,
-            })
+            if self.offset <= pack.inserted && self.len() >= pack.modified {
+                Ok(Window {
+                    sparse: &self.sparse,
+                    dense: &self.dense[(pack.inserted - self.offset)
+                        ..(pack.inserted + pack.modified - self.offset)],
+                    data: &self.data[(pack.inserted - self.offset)
+                        ..(pack.inserted + pack.modified - self.offset)],
+                    pack_info: &self.pack_info,
+                    offset: (pack.inserted - self.offset),
+                })
+            } else {
+                Err(error::Modified::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::Modified::NotUpdatePacked)
         }
     }
     pub fn modified(&self) -> Window<'_, T> {
         self.try_modified().unwrap()
     }
-    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
+    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(WindowMut {
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[pack.inserted..pack.inserted + pack.modified],
-                data: &mut self.data[pack.inserted..pack.inserted + pack.modified],
-                pack_info: &mut self.pack_info,
-            })
+            if self.offset <= pack.inserted && self.len() >= pack.modified {
+                Ok(WindowMut {
+                    sparse: &mut self.sparse,
+                    dense: &mut self.dense[(pack.inserted - self.offset)
+                        ..(pack.inserted + pack.modified - self.offset)],
+                    data: &mut self.data[(pack.inserted - self.offset)
+                        ..(pack.inserted + pack.modified - self.offset)],
+                    offset: (pack.inserted - self.offset),
+                    pack_info: &mut self.pack_info,
+                })
+            } else {
+                Err(error::Modified::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::Modified::NotUpdatePacked)
         }
     }
     pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_modified_mut().unwrap()
     }
-    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
+    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[0..pack.inserted + pack.modified],
-                data: &self.data[0..pack.inserted + pack.modified],
-                pack_info: &self.pack_info,
-            })
+            if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
+                Ok(Window {
+                    sparse: &self.sparse,
+                    dense: &self.dense[0..pack.inserted + pack.modified],
+                    data: &self.data[0..pack.inserted + pack.modified],
+                    pack_info: &self.pack_info,
+                    offset: 0,
+                })
+            } else {
+                Err(error::InsertedOrModified::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::InsertedOrModified::NotUpdatePacked)
         }
     }
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
@@ -291,16 +341,21 @@ impl<'w, T> WindowMut<'w, T> {
     }
     pub fn try_inserted_or_modified_mut(
         &mut self,
-    ) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
+    ) -> Result<WindowMut<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(WindowMut {
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[0..pack.inserted + pack.modified],
-                data: &mut self.data[0..pack.inserted + pack.modified],
-                pack_info: &mut self.pack_info,
-            })
+            if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
+                Ok(WindowMut {
+                    sparse: &mut self.sparse,
+                    dense: &mut self.dense[0..pack.inserted + pack.modified],
+                    data: &mut self.data[0..pack.inserted + pack.modified],
+                    pack_info: &mut self.pack_info,
+                    offset: 0,
+                })
+            } else {
+                Err(error::InsertedOrModified::NotInbound)
+            }
         } else {
-            Err(error::NotUpdatePack)
+            Err(error::InsertedOrModified::NotUpdatePacked)
         }
     }
     pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {

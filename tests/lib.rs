@@ -3,8 +3,10 @@ mod borrow;
 mod iteration;
 #[cfg(feature = "serialization")]
 mod serialization;
+mod window;
 mod workload;
 
+use shipyard::internal::iterators;
 use shipyard::prelude::*;
 
 #[test]
@@ -130,13 +132,13 @@ fn systems() {
         assert_eq!(iter.next(), None);
     });
 }
-/*
+
 #[cfg(feature = "parallel")]
 #[test]
 fn simple_parallel_sum() {
     use rayon::prelude::*;
 
-    let world = World::new::<(usize, u32)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
@@ -159,11 +161,11 @@ fn tight_parallel_iterator() {
     use iterators::ParIter2;
     use rayon::prelude::*;
 
-    let world = World::new::<(usize, u32)>();
-    world.tight_pack::<(usize, u32)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
+            (&mut usizes, &mut u32s).tight_pack();
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
         },
@@ -182,7 +184,7 @@ fn tight_parallel_iterator() {
             }
         });
         assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-        let mut iter = usizes.iter();
+        let mut iter = (&mut usizes).iter();
         assert_eq!(iter.next(), Some(&mut 1));
         assert_eq!(iter.next(), Some(&mut 5));
         assert_eq!(iter.next(), None);
@@ -194,7 +196,7 @@ fn tight_parallel_iterator() {
 fn parallel_iterator() {
     use rayon::prelude::*;
 
-    let world = World::new::<(usize, u32)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
@@ -212,7 +214,7 @@ fn parallel_iterator() {
             });
         });
         assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-        let mut iter = usizes.iter();
+        let mut iter = (&mut usizes).iter();
         assert_eq!(iter.next(), Some(&mut 1));
         assert_eq!(iter.next(), Some(&mut 5));
         assert_eq!(iter.next(), None);
@@ -225,11 +227,11 @@ fn loose_parallel_iterator() {
     use iterators::ParIter2;
     use rayon::prelude::*;
 
-    let world = World::new::<(usize, u32)>();
-    world.loose_pack::<(usize,), (u32,)>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
+            LoosePack::<(usize,)>::loose_pack((&mut usizes, &mut u32s));
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
         },
@@ -248,13 +250,13 @@ fn loose_parallel_iterator() {
             }
         });
         assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-        let mut iter = usizes.iter();
+        let mut iter = (&mut usizes).iter();
         assert_eq!(iter.next(), Some(&mut 1));
         assert_eq!(iter.next(), Some(&mut 5));
         assert_eq!(iter.next(), None);
     });
 }
-*/
+
 #[cfg(feature = "parallel")]
 #[test]
 fn two_workloads() {
@@ -352,16 +354,15 @@ fn derive() {
     }
 }
 
-/*
 #[cfg(feature = "parallel")]
 #[test]
 fn par_update_pack() {
     use rayon::prelude::*;
 
-    let world = World::new::<(usize,)>();
-    world.update_pack::<usize>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize), _, _>(|(mut entities, mut usizes)| {
+        usizes.update_pack();
         entities.add_entity(&mut usizes, 0);
         entities.add_entity(&mut usizes, 1);
         entities.add_entity(&mut usizes, 2);
@@ -388,19 +389,18 @@ fn par_update_pack() {
         assert_eq!(iter.next(), None);
     });
 }
-*/
-/*
+
 #[cfg(feature = "parallel")]
 #[test]
 fn par_multiple_update_pack() {
     use iterators::ParIter2;
     use rayon::prelude::*;
 
-    let world = World::new::<(usize, u32)>();
-    world.update_pack::<u32>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
         |(mut entities, mut usizes, mut u32s)| {
+            u32s.update_pack();
             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
             entities.add_entity(&mut usizes, 2usize);
             entities.add_entity((&mut usizes, &mut u32s), (4usize, 5u32));
@@ -413,7 +413,7 @@ fn par_multiple_update_pack() {
     );
 
     world.run::<(&mut usize, &mut u32), _, _>(|(mut usizes, mut u32s)| {
-        if let ParIter2::Update(iter) = (&usizes, &u32s).par_iter() {
+        if let ParIter2::NonPacked(iter) = (&usizes, &u32s).par_iter() {
             iter.for_each(|_| {});
         } else {
             panic!("not packed");
@@ -421,7 +421,7 @@ fn par_multiple_update_pack() {
 
         assert_eq!(u32s.modified().len(), 0);
 
-        if let ParIter2::Update(iter) = (&mut usizes, &u32s).par_iter() {
+        if let ParIter2::NonPacked(iter) = (&mut usizes, &u32s).par_iter() {
             iter.for_each(|_| {});
         } else {
             panic!("not packed");
@@ -429,7 +429,7 @@ fn par_multiple_update_pack() {
 
         assert_eq!(u32s.modified().len(), 0);
 
-        if let ParIter2::Update(iter) = (&usizes, &mut u32s).par_iter() {
+        if let ParIter2::NonPacked(iter) = (&usizes, &mut u32s).par_iter() {
             iter.for_each(|_| {});
         } else {
             panic!("not packed");
@@ -437,7 +437,7 @@ fn par_multiple_update_pack() {
 
         let mut modified: Vec<_> = u32s.modified().iter().collect();
         modified.sort_unstable();
-        assert_eq!(modified, vec![&1, &5, &9]);
+        assert_eq!(modified, vec![&1, &5, &7, &9]);
 
         let mut iter: Vec<_> = (&u32s).iter().collect();
         iter.sort_unstable();
@@ -450,10 +450,10 @@ fn par_multiple_update_pack() {
 fn par_update_filter() {
     use rayon::prelude::*;
 
-    let world = World::new::<(usize,)>();
-    world.update_pack::<usize>();
+    let world = World::new();
 
     world.run::<(EntitiesMut, &mut usize), _, _>(|(mut entities, mut usizes)| {
+        usizes.update_pack();
         entities.add_entity(&mut usizes, 0);
         entities.add_entity(&mut usizes, 1);
         entities.add_entity(&mut usizes, 2);
@@ -463,7 +463,7 @@ fn par_update_filter() {
 
         (&mut usizes)
             .par_iter()
-            .filtered(|x| **x % 2 == 0)
+            .filter(|x| **x % 2 == 0)
             .for_each(|i| {
                 *i += 1;
             });
@@ -473,63 +473,10 @@ fn par_update_filter() {
 
         let mut modified: Vec<_> = usizes.modified().iter().collect();
         modified.sort_unstable();
-        assert_eq!(modified, vec![&1, &3]);
+        assert_eq!(modified, vec![&1, &1, &3, &3]);
 
         let mut iter: Vec<_> = (&usizes).iter().collect();
         iter.sort_unstable();
         assert_eq!(iter, vec![&1, &1, &3, &3]);
     });
 }
-*/
-/*
-#[cfg(feature = "parallel")]
-#[test]
-fn par_filter_with_id() {
-    use rayon::iter::ParallelIterator;
-
-    let world = World::new::<(usize,)>();
-
-    world.run::<(EntitiesMut, &mut usize), _, _>(|(mut entities, mut usizes)| {
-        entities.add_entity(&mut usizes, 5);
-        let entity1 = entities.add_entity(&mut usizes, 2);
-        let entity2 = entities.add_entity(&mut usizes, 4);
-        entities.add_entity(&mut usizes, 3);
-        entities.add_entity(&mut usizes, 1);
-
-        let mut result: Vec<_> = usizes
-            .par_iter()
-            .filtered(|&&mut x| x % 2 == 0)
-            .with_id()
-            .collect();
-        result.sort_by(|(_, x), (_, y)| x.cmp(y));
-
-        assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
-    });
-}
-*/
-/*
-#[cfg(feature = "parallel")]
-#[test]
-fn par_with_id_filter() {
-    use rayon::iter::ParallelIterator;
-
-    let world = World::new::<(usize,)>();
-
-    world.run::<(EntitiesMut, &mut usize), _, _>(|(mut entities, mut usizes)| {
-        entities.add_entity(&mut usizes, 5);
-        let entity1 = entities.add_entity(&mut usizes, 2);
-        let entity2 = entities.add_entity(&mut usizes, 4);
-        entities.add_entity(&mut usizes, 3);
-        entities.add_entity(&mut usizes, 1);
-
-        let mut result: Vec<_> = usizes
-            .par_iter()
-            .with_id()
-            .filtered(|&(_, &mut x)| x % 2 == 0)
-            .collect();
-        result.sort_by(|(_, x), (_, y)| x.cmp(y));
-
-        assert!(result == vec![(entity1, &mut 2), (entity2, &mut 4)]);
-    });
-}
-*/
