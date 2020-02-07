@@ -9,7 +9,16 @@ fn basic() {
     entities.add_entity(&mut u32s, 0);
     entities.add_entity(&mut u32s, 1);
     entities.add_entity(&mut u32s, 2);
+
+    assert_eq!(u32s.inserted().len(), 3);
+    assert_eq!(u32s.modified().len(), 0);
+    assert_eq!(u32s.inserted_or_modified().len(), 3);
+
     u32s.clear_inserted();
+
+    assert_eq!(u32s.inserted().len(), 0);
+    assert_eq!(u32s.modified().len(), 0);
+    assert_eq!(u32s.inserted_or_modified().len(), 0);
 
     drop(u32s);
     let mut vec = Vec::new();
@@ -17,10 +26,18 @@ fn basic() {
         let iter = u32s.iter();
         assert_eq!(iter.size_hint(), (3, Some(3)));
         iter.for_each(|&x| vec.push(x));
+
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 0);
+        assert_eq!(u32s.inserted_or_modified().len(), 0);
     });
     world.run::<&mut u32, _, _>(|mut u32s| {
         (&mut u32s).iter().for_each(|&mut x| vec.push(x));
         u32s.modified().iter().for_each(|&x| vec.push(x));
+        
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 3);
+        assert_eq!(u32s.inserted_or_modified().len(), 3);
     });
 
     assert_eq!(vec, vec![0, 1, 2, 0, 1, 2, 0, 1, 2]);

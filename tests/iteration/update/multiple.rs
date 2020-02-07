@@ -13,8 +13,22 @@ fn basic() {
     entities.add_entity(&mut i16s, 13);
     entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
+    assert_eq!(u32s.inserted().len(), 4);
+    assert_eq!(u32s.modified().len(), 0);
+    assert_eq!(u32s.inserted_or_modified().len(), 4);
+    assert_eq!(i16s.inserted().len(), 4);
+    assert_eq!(i16s.modified().len(), 0);
+    assert_eq!(i16s.inserted_or_modified().len(), 4);
+
     u32s.clear_inserted();
     i16s.clear_inserted();
+
+    assert_eq!(u32s.inserted().len(), 0);
+    assert_eq!(u32s.modified().len(), 0);
+    assert_eq!(u32s.inserted_or_modified().len(), 0);
+    assert_eq!(i16s.inserted().len(), 0);
+    assert_eq!(i16s.modified().len(), 0);
+    assert_eq!(i16s.inserted_or_modified().len(), 0);
 
     drop((u32s, i16s));
     world.run::<&u32, _, _>(|u32s| {
@@ -26,7 +40,9 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), &4);
         assert!(iter.next().is_none());
 
-        assert!(u32s.modified().iter().next().is_none());
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 0);
+        assert_eq!(u32s.inserted_or_modified().len(), 0);
     });
     world.run::<&mut u32, _, _>(|mut u32s| {
         let mut iter = (&mut u32s).iter();
@@ -35,6 +51,10 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), &mut 2);
         assert_eq!(iter.next().unwrap(), &mut 4);
         assert!(iter.next().is_none());
+
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 4);
+        assert_eq!(u32s.inserted_or_modified().len(), 4);
 
         let mut iter = (&mut u32s).modified().iter();
         assert_eq!(iter.next().unwrap(), &0);
@@ -54,6 +74,10 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), &14);
         assert!(iter.next().is_none());
 
+        assert_eq!(i16s.inserted().len(), 0);
+        assert_eq!(i16s.modified().len(), 0);
+        assert_eq!(i16s.inserted_or_modified().len(), 0);
+
         assert!(i16s.modified().iter().next().is_none());
     });
     world.run::<&mut i16, _, _>(|mut i16s| {
@@ -63,6 +87,10 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), &mut 13);
         assert_eq!(iter.next().unwrap(), &mut 14);
         assert!(iter.next().is_none());
+
+        assert_eq!(i16s.inserted().len(), 0);
+        assert_eq!(i16s.modified().len(), 4);
+        assert_eq!(i16s.inserted_or_modified().len(), 4);
 
         let mut iter = (&mut i16s).modified().iter();
         assert_eq!(iter.next().unwrap(), &10);
@@ -82,6 +110,13 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), (&4, &14));
         assert!(iter.next().is_none());
 
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 0);
+        assert_eq!(u32s.inserted_or_modified().len(), 0);
+        assert_eq!(i16s.inserted().len(), 0);
+        assert_eq!(i16s.modified().len(), 0);
+        assert_eq!(i16s.inserted_or_modified().len(), 0);
+
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
@@ -91,6 +126,13 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
         assert_eq!(iter.next().unwrap(), (&mut 4, &mut 14));
         assert!(iter.next().is_none());
+
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 3);
+        assert_eq!(u32s.inserted_or_modified().len(), 3);
+        assert_eq!(i16s.inserted().len(), 0);
+        assert_eq!(i16s.modified().len(), 3);
+        assert_eq!(i16s.inserted_or_modified().len(), 3);
 
         let mut iter = (&mut u32s).modified().iter();
         assert_eq!(iter.next().unwrap(), &0);
@@ -114,6 +156,13 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), (&14, &4));
         assert!(iter.next().is_none());
 
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 0);
+        assert_eq!(u32s.inserted_or_modified().len(), 0);
+        assert_eq!(i16s.inserted().len(), 0);
+        assert_eq!(i16s.modified().len(), 0);
+        assert_eq!(i16s.inserted_or_modified().len(), 0);
+
         assert!(i16s.modified().iter().next().is_none());
         assert!(u32s.modified().iter().next().is_none());
     });
@@ -123,6 +172,13 @@ fn basic() {
         assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
         assert_eq!(iter.next().unwrap(), (&mut 14, &mut 4));
         assert!(iter.next().is_none());
+
+        assert_eq!(u32s.inserted().len(), 0);
+        assert_eq!(u32s.modified().len(), 3);
+        assert_eq!(u32s.inserted_or_modified().len(), 3);
+        assert_eq!(i16s.inserted().len(), 0);
+        assert_eq!(i16s.modified().len(), 3);
+        assert_eq!(i16s.inserted_or_modified().len(), 3);
 
         let mut iter = (&mut i16s).modified().iter();
         assert_eq!(iter.next().unwrap(), &10);

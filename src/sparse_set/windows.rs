@@ -51,7 +51,6 @@ impl<T> Window<'_, T> {
             None
         }
     }
-
     pub fn try_inserted(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             Ok(Window {
