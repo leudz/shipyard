@@ -126,7 +126,9 @@ macro_rules! window_mut {
                 }
                 unsafe fn flag_all(&mut self) {
                     if let Pack::Update(update) = &mut (*self.pack_info).pack {
-                        update.modified = self.dense_len;
+                        if self.dense_len > update.inserted + update.modified {
+                            update.modified = self.dense_len - update.inserted;
+                        }
                     }
                 }
                 unsafe fn flag(&mut self, entity: EntityId) {
