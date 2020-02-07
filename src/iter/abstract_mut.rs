@@ -26,7 +26,7 @@ pub trait AbstractMut {
     fn index_of(&self, entity: EntityId) -> Option<usize>;
     unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize;
     unsafe fn flag_all(&mut self);
-    unsafe fn flag_last(&mut self);
+    unsafe fn flag(&mut self, entity: EntityId);
 }
 
 macro_rules! window {
@@ -64,7 +64,7 @@ macro_rules! window {
                     *self.sparse.get_unchecked(entity.index())
                 }
                 unsafe fn flag_all(&mut self) {}
-                unsafe fn flag_last(&mut self) {}
+                unsafe fn flag(&mut self, _: EntityId) {}
             }
         )+
     }
@@ -129,9 +129,11 @@ macro_rules! window_mut {
                         update.modified = self.dense_len;
                     }
                 }
-                unsafe fn flag_last(&mut self) {
+                unsafe fn flag(&mut self, entity: EntityId) {
                     if let Pack::Update(update) = &mut (*self.pack_info).pack {
-                        update.modified += 1;
+                        if ptr::read(self.sparse.add(entity.index())) >= update.inserted + update.modified {
+                            update.modified += 1;
+                        }
                     }
                 }
             }
@@ -175,7 +177,7 @@ macro_rules! not_window {
                     core::usize::MAX
                 }
                 unsafe fn flag_all(&mut self) {}
-                unsafe fn flag_last(&mut self) {}
+                unsafe fn flag(&mut self, _: EntityId) {}
             }
         )+
     }
@@ -217,7 +219,7 @@ macro_rules! not_window_mut {
                     core::usize::MAX
                 }
                 unsafe fn flag_all(&mut self) {}
-                unsafe fn flag_last(&mut self) {}
+                unsafe fn flag(&mut self, _: EntityId) {}
             }
         )+
     }

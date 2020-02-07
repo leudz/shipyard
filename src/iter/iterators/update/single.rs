@@ -35,7 +35,7 @@ impl<T: IntoAbstract> Shiperator for Update1<T> {
         }
     }
     fn post_process(&mut self) {
-        unsafe { self.data.flag_last() }
+        unsafe { self.data.flag(self.current_id) }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         let len = self.end - self.current;

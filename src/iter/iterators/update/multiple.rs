@@ -46,7 +46,7 @@ macro_rules! impl_iterators {
             fn post_process(&mut self) {
                 unsafe {
                     $(
-                        self.data.$index.flag_last();
+                        self.data.$index.flag(self.current_id);
                     )+
                 }
             }
