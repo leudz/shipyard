@@ -152,8 +152,8 @@ impl Entities {
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///
-    ///     assert_eq!(usizes.get(entity), Some(&0));
-    ///     assert_eq!(u32s.get(entity), Some(&1));
+    ///     assert_eq!(usizes.get(entity), Ok(&0));
+    ///     assert_eq!(u32s.get(entity), Ok(&1));
     /// });
     /// ```
     pub fn add_entity<T: ViewAddEntity>(

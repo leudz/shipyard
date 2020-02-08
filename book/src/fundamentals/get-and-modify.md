@@ -33,7 +33,7 @@ We can also mix and match shared and unique:
 ```rust, noplaypen
 let (mut positions, velocities) = world.borrow::<(&mut Position, &Velocity)>();
 
-if let Some((pos, vel)) = (&mut positions, &velocities).get(entity_id) {
+if let Ok((pos, vel)) = (&mut positions, &velocities).get(entity_id) {
     pos.x += vel.x;
     pos.y += vel.y;
 }

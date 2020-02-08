@@ -1,3 +1,5 @@
+use core::any::type_name;
+use shipyard::error;
 use shipyard::prelude::*;
 
 #[test]
@@ -16,10 +18,22 @@ fn no_pack() {
     drop(all_storages);
 
     let (usizes, u32s) = world.borrow::<(&usize, &u32)>();
-    assert_eq!((&usizes).get(entity1), None);
-    assert_eq!((&u32s).get(entity1), None);
-    assert_eq!(usizes.get(entity2), Some(&2));
-    assert_eq!(u32s.get(entity2), Some(&3));
+    assert_eq!(
+        (&usizes).get(entity1),
+        Err(error::MissingComponent {
+            id: entity1,
+            name: type_name::<usize>(),
+        })
+    );
+    assert_eq!(
+        (&u32s).get(entity1),
+        Err(error::MissingComponent {
+            id: entity1,
+            name: type_name::<u32>(),
+        })
+    );
+    assert_eq!(usizes.get(entity2), Ok(&2));
+    assert_eq!(u32s.get(entity2), Ok(&3));
 }
 
 #[test]
@@ -40,10 +54,22 @@ fn tight() {
 
     let (usizes, u32s) = world.borrow::<(&usize, &u32)>();
 
-    assert_eq!((&usizes).get(entity1), None);
-    assert_eq!((&u32s).get(entity1), None);
-    assert_eq!(usizes.get(entity2), Some(&2));
-    assert_eq!(u32s.get(entity2), Some(&3));
+    assert_eq!(
+        (&usizes).get(entity1),
+        Err(error::MissingComponent {
+            id: entity1,
+            name: type_name::<usize>(),
+        })
+    );
+    assert_eq!(
+        (&u32s).get(entity1),
+        Err(error::MissingComponent {
+            id: entity1,
+            name: type_name::<u32>(),
+        })
+    );
+    assert_eq!(usizes.get(entity2), Ok(&2));
+    assert_eq!(u32s.get(entity2), Ok(&3));
     let mut iter = (&usizes, &u32s).iter();
     assert_eq!(iter.next(), Some((&2, &3)));
     assert_eq!(iter.next(), None);
@@ -66,10 +92,22 @@ fn delete_loose() {
     });
 
     world.run::<(&usize, &u32), _, _>(|(usizes, u32s)| {
-        assert_eq!((&usizes).get(entity1), None);
-        assert_eq!((&u32s).get(entity1), None);
-        assert_eq!(usizes.get(entity2), Some(&2));
-        assert_eq!(u32s.get(entity2), Some(&3));
+        assert_eq!(
+            (&usizes).get(entity1),
+            Err(error::MissingComponent {
+                id: entity1,
+                name: type_name::<usize>(),
+            })
+        );
+        assert_eq!(
+            (&u32s).get(entity1),
+            Err(error::MissingComponent {
+                id: entity1,
+                name: type_name::<u32>(),
+            })
+        );
+        assert_eq!(usizes.get(entity2), Ok(&2));
+        assert_eq!(u32s.get(entity2), Ok(&3));
         let mut iter = (&usizes, &u32s).iter();
         assert_eq!(iter.next(), Some((&2, &3)));
         assert_eq!(iter.next(), None);
@@ -94,12 +132,30 @@ fn delete_tight_loose() {
     });
 
     world.run::<(&usize, &u64, &u32), _, _>(|(usizes, u64s, u32s)| {
-        assert_eq!((&usizes).get(entity1), None);
-        assert_eq!((&u64s).get(entity1), None);
-        assert_eq!((&u32s).get(entity1), None);
-        assert_eq!(usizes.get(entity2), Some(&3));
-        assert_eq!(u64s.get(entity2), Some(&4));
-        assert_eq!(u32s.get(entity2), Some(&5));
+        assert_eq!(
+            (&usizes).get(entity1),
+            Err(error::MissingComponent {
+                id: entity1,
+                name: type_name::<usize>(),
+            })
+        );
+        assert_eq!(
+            (&u64s).get(entity1),
+            Err(error::MissingComponent {
+                id: entity1,
+                name: type_name::<u64>(),
+            })
+        );
+        assert_eq!(
+            (&u32s).get(entity1),
+            Err(error::MissingComponent {
+                id: entity1,
+                name: type_name::<u32>(),
+            })
+        );
+        assert_eq!(usizes.get(entity2), Ok(&3));
+        assert_eq!(u64s.get(entity2), Ok(&4));
+        assert_eq!(u32s.get(entity2), Ok(&5));
         let mut tight_iter = (&usizes, &u64s).iter();
         assert_eq!(tight_iter.next(), Some((&3, &4)));
         assert_eq!(tight_iter.next(), None);
@@ -125,8 +181,14 @@ fn update() {
     drop(all_storages);
 
     let mut usizes = world.borrow::<&mut usize>();
-    assert_eq!((&usizes).get(entity1), None);
-    assert_eq!(usizes.get(entity2), Some(&2));
+    assert_eq!(
+        (&usizes).get(entity1),
+        Err(error::MissingComponent {
+            id: entity1,
+            name: type_name::<usize>(),
+        })
+    );
+    assert_eq!(usizes.get(entity2), Ok(&2));
     assert_eq!(usizes.deleted().len(), 1);
     assert_eq!(usizes.take_deleted(), vec![(entity1, 0)]);
 }

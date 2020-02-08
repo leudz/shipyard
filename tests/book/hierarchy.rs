@@ -53,7 +53,7 @@ impl Hierarchy for (EntitiesViewMut<'_>, ViewMut<'_, Parent>, ViewMut<'_, Child>
         self.detach(id);
 
         // either the designated parent already has a Parent component – and thus one or more children
-        if let Some(p) = (&mut self.1).get(parent) {
+        if let Ok(p) = (&mut self.1).get(parent) {
             // increase the parent's children counter
             p.num_children += 1;
 
@@ -164,7 +164,7 @@ where
     type Item = EntityId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.get_child.get(self.cursor).map(|child| {
+        self.get_child.get(self.cursor).ok().map(|child| {
             self.cursor = child.parent;
             child.parent
         })
@@ -190,7 +190,7 @@ where
                 cursor.1 -= 1;
                 let ret = cursor.0;
                 cursor.0 = self.get_child.get(cursor.0).unwrap().next;
-                if let Some(parent) = self.get_parent.get(ret) {
+                if let Ok(parent) = self.get_parent.get(ret) {
                     self.cursors.push((parent.first_child, parent.num_children));
                 }
                 Some(ret)
@@ -235,9 +235,10 @@ where
         DescendantsIter {
             get_parent: self.0,
             get_child: self.1,
-            cursors: self.0.get(id).map_or_else(Vec::new, |parent| {
-                vec![(parent.first_child, parent.num_children)]
-            }),
+            cursors: self.0.get(id).map_or_else(
+                |_| Vec::new(),
+                |parent| vec![(parent.first_child, parent.num_children)],
+            ),
         }
     }
 }

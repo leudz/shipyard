@@ -1,6 +1,8 @@
+use crate::error;
 use crate::sparse_set::{Window, WindowMut};
 use crate::storage::EntityId;
 use crate::views::{View, ViewMut};
+use core::any::type_name;
 
 /// Retrives components based on their type and entity id.
 pub trait GetComponent {
@@ -15,51 +17,69 @@ pub trait GetComponent {
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
     ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///     assert_eq!((&usizes, &u32s).get(entity), Some((&0, &1)));
+    ///     assert_eq!((&usizes, &u32s).get(entity), Ok((&0, &1)));
     /// });
     /// ```
-    fn get(self, entity: EntityId) -> Option<Self::Out>;
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
 }
 
 impl<'a: 'b, 'b, T: 'static> GetComponent for &'b Window<'a, T> {
     type Out = &'b T;
-    fn get(self, entity: EntityId) -> Option<Self::Out> {
-        self.get(entity)
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        self.get(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
     }
 }
 
 impl<'a: 'b, 'b, T: 'static> GetComponent for &'b WindowMut<'a, T> {
     type Out = &'b T;
-    fn get(self, entity: EntityId) -> Option<Self::Out> {
-        self.get(entity)
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        self.get(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
     }
 }
 
 impl<'a: 'b, 'b, T: 'static> GetComponent for &'b mut WindowMut<'a, T> {
     type Out = &'b mut T;
-    fn get(self, entity: EntityId) -> Option<Self::Out> {
-        self.get_mut(entity)
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        self.get_mut(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
     }
 }
 
 impl<'a: 'b, 'b, T: 'static> GetComponent for &'b View<'a, T> {
     type Out = &'b T;
-    fn get(self, entity: EntityId) -> Option<Self::Out> {
-        (**self).get(entity)
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        (**self).get(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
     }
 }
 
 impl<'a: 'b, 'b, T: 'static> GetComponent for &'b ViewMut<'a, T> {
     type Out = &'b T;
-    fn get(self, entity: EntityId) -> Option<Self::Out> {
-        (**self).get(entity)
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        (**self).get(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
     }
 }
 
 impl<'a: 'b, 'b, T: 'static> GetComponent for &'b mut ViewMut<'a, T> {
     type Out = &'b mut T;
-    fn get(self, entity: EntityId) -> Option<Self::Out> {
-        self.get_mut(entity)
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        self.get_mut(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
     }
 }
 
@@ -67,8 +87,8 @@ macro_rules! impl_get_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: GetComponent),+> GetComponent for ($($type,)+) {
             type Out = ($($type::Out,)+);
-            fn get(self, entity: EntityId) -> Option<Self::Out> {
-                Some(($(self.$index.get(entity)?,)+))
+            fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+                Ok(($(self.$index.get(entity)?,)+))
             }
         }
     }

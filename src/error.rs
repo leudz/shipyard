@@ -1,3 +1,4 @@
+use crate::EntityId;
 use core::any::TypeId;
 use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
@@ -455,6 +456,30 @@ impl Debug for InsertedOrModified {
 }
 
 impl Display for InsertedOrModified {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct MissingComponent {
+    pub id: EntityId,
+    pub name: &'static str,
+}
+
+#[cfg(feature = "std")]
+impl Error for MissingComponent {}
+
+impl Debug for MissingComponent {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        fmt.write_fmt(format_args!(
+            "{:?} doesn't have a {} component.",
+            self.id, self.name
+        ))
+    }
+}
+
+impl Display for MissingComponent {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, fmt)
     }

@@ -353,10 +353,10 @@ impl AllStorages {
     /// });
     ///
     /// world.run::<(&usize, &u32), _, _>(|(usizes, u32s)| {
-    ///     assert_eq!((&usizes).get(entity1), None);
-    ///     assert_eq!((&u32s).get(entity1), None);
-    ///     assert_eq!(usizes.get(entity2), Some(&2));
-    ///     assert_eq!(u32s.get(entity2), Some(&3));
+    ///     assert!((&usizes).get(entity1).is_err());
+    ///     assert!((&u32s).get(entity1).is_err());
+    ///     assert_eq!(usizes.get(entity2), Ok(&2));
+    ///     assert_eq!(u32s.get(entity2), Ok(&3));
     /// });
     /// ```
     pub fn delete(&mut self, entity: EntityId) -> bool {
