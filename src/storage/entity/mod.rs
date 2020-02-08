@@ -49,7 +49,7 @@ impl Entities {
         self.delete_unchecked(entity)
     }
     /// Returns true if the EntityId matches a living entity.
-    pub(crate) fn is_alive(&self, entity_id: EntityId) -> bool {
+    pub fn is_alive(&self, entity_id: EntityId) -> bool {
         entity_id.index() < self.data.len()
             && entity_id == unsafe { *self.data.get_unchecked(entity_id.index()) }
     }
