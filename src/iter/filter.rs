@@ -1,5 +1,6 @@
 use super::{CurrentId, Shiperator};
 
+/// Shiperator filtering all components with `pred`.
 pub struct Filter<I, P> {
     iter: I,
     pred: P,

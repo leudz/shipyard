@@ -6,16 +6,18 @@ use alloc::vec::Vec;
 use core::any::TypeId;
 use core::cmp::Ordering;
 
-pub struct UnstableSort1<'tmp, T>(&'tmp mut SparseSet<T>);
+/// Struct used to sort a single storage.
+pub struct Sort1<'tmp, T>(&'tmp mut SparseSet<T>);
 
 impl<'tmp, T> IntoSortable for &'tmp mut SparseSet<T> {
-    type IntoSortable = UnstableSort1<'tmp, T>;
+    type IntoSortable = Sort1<'tmp, T>;
     fn sort(self) -> Self::IntoSortable {
-        UnstableSort1(self)
+        Sort1(self)
     }
 }
 
-impl<'tmp, T> UnstableSort1<'tmp, T> {
+impl<'tmp, T> Sort1<'tmp, T> {
+    /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
     pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
         if core::mem::discriminant(&self.0.pack_info.pack) == core::mem::discriminant(&Pack::NoPack)
         {
@@ -49,6 +51,8 @@ impl<'tmp, T> UnstableSort1<'tmp, T> {
             Err(error::Sort::MissingPackStorage)
         }
     }
+    /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.  
+    /// Unwraps errors.
     pub fn unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
         self.try_unstable(cmp).unwrap()
     }
@@ -56,6 +60,7 @@ impl<'tmp, T> UnstableSort1<'tmp, T> {
 
 macro_rules! impl_unstable_sort {
     ($sort: ident; $(($type: ident, $index: tt))+) => {
+        /// Struct used to sort multiple storages.
         pub struct $sort<'tmp, $($type),+>($(&'tmp mut SparseSet<$type>,)+);
 
         impl<'tmp, $($type),+> IntoSortable for ($(&'tmp mut ViewMut<'_, $type>,)+) {
@@ -67,6 +72,7 @@ macro_rules! impl_unstable_sort {
         }
 
         impl<'tmp, 'view, $($type: 'static),+> $sort<'tmp, $($type),+> {
+            /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
             pub fn try_unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, mut cmp: Cmp) -> Result<(), error::Sort> {
                 enum PackSort {
                     Tight(usize),
@@ -198,6 +204,8 @@ macro_rules! impl_unstable_sort {
                     PackSort::None => unreachable!(),
                 }
             }
+            /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
+            /// Unwraps errors.
             pub fn unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, cmp: Cmp) {
                 self.try_unstable(cmp).unwrap()
             }
@@ -215,7 +223,7 @@ macro_rules! unstable_sort {
     }
 }
 
-unstable_sort![;UnstableSort2 UnstableSort3 UnstableSort4 UnstableSort5 UnstableSort6 UnstableSort7 UnstableSort8 UnstableSort9 UnstableSort10;(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+unstable_sort![;Sort2 Sort3 Sort4 Sort5 Sort6 Sort7 Sort8 Sort9 Sort10;(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
 
 #[test]
 fn unstable_sort() {

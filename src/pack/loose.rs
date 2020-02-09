@@ -9,12 +9,35 @@ use core::any::TypeId;
 
 /// Trait used to loose pack storage(s).
 pub trait LoosePack<T> {
+    /// Loose packs storages.  
+    /// A loose pack takes at least a non packed storage and an additional storage in any state.  
+    /// A tuple is always needed even when packing a single storage.
+    ///
+    /// ### Example:
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
+    /// usizes.update_pack();
+    /// LoosePack::<(u32,)>::try_loose_pack((&mut u32s, &mut usizes)).unwrap();
+    /// ```
     fn try_loose_pack(self) -> Result<(), error::Pack>;
+    /// Loose packs storages.  
+    /// A loose pack takes at least a non packed storage and an additional storage in any state.  
+    /// A tuple is always needed even when packing a single storage.
+    ///
+    /// ### Example:
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
+    /// usizes.update_pack();
+    /// LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes));
+    /// ```
     fn loose_pack(self);
 }
 
 macro_rules! impl_loose_pack {
-    // add is short for additional
     ($(($tight: ident, $tight_index: tt))+; $(($loose: ident, $loose_index: tt))+) => {
         impl<$($tight: 'static,)+ $($loose: 'static),+> LoosePack<($($tight,)+)> for ($(&mut ViewMut<'_, $tight>,)+ $(&mut ViewMut<'_, $loose>,)+) {
             fn try_loose_pack(self) -> Result<(), error::Pack> {

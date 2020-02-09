@@ -1,5 +1,6 @@
 use super::{CurrentId, Shiperator};
 
+/// Shiperator yielding `EntityId` as well.
 pub struct WithId<I> {
     iter: I,
 }

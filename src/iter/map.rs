@@ -1,5 +1,6 @@
 use super::{CurrentId, Shiperator};
 
+/// Shiperator mapping all components with `f`.
 pub struct Map<I, F> {
     iter: I,
     f: F,

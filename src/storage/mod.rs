@@ -12,6 +12,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
+/// Currently unused it'll replace `TypeId` in `AllStorages` in a future version.
 pub enum StorageId {
     TypeId(TypeId),
     Custom(u64),

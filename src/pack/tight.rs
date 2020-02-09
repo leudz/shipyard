@@ -8,7 +8,28 @@ use core::any::TypeId;
 
 /// Trait used to tight pack storage(s).
 pub trait TightPack {
+    /// Tight packs storages.  
+    /// Only non packed storages can be tight packed at the moment.
+    ///
+    /// ### Example:
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
+    /// (&mut usizes, &mut u32s).try_tight_pack().unwrap();
+    /// ```
     fn try_tight_pack(self) -> Result<(), error::Pack>;
+    /// Tight packs storages.  
+    /// Only non packed storages can be tight packed at the moment.  
+    /// Unwraps errors.
+    ///
+    /// ### Example:
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
+    /// (&mut usizes, &mut u32s).tight_pack();
+    /// ```
     fn tight_pack(self);
 }
 
