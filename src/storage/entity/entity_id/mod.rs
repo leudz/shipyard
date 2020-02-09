@@ -77,6 +77,7 @@ impl EntityId {
     pub(crate) fn zero() -> Self {
         EntityId(NonZeroU64::new(1).unwrap())
     }
+    /// Returns a dead EntityId, it can be used as a null entity.
     pub fn dead() -> Self {
         EntityId(unsafe { NonZeroU64::new_unchecked(core::u64::MAX) })
     }

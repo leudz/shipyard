@@ -6,6 +6,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
+/// Trait used to tight pack storage(s).
 pub trait TightPack {
     fn try_tight_pack(self) -> Result<(), error::Pack>;
     fn tight_pack(self);

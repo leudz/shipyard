@@ -4,6 +4,7 @@ use super::map::Map;
 use super::with_id::WithId;
 use core::iter::FromIterator;
 
+/// Iterator-like trait able to flag only yielded components and not visited ones.
 pub trait Shiperator {
     type Item;
 
@@ -157,6 +158,7 @@ pub trait CurrentId: Shiperator {
     unsafe fn current_id(&self) -> Self::Id;
 }
 
+/// A Shiperator with a known fixed length.
 #[allow(clippy::len_without_is_empty)]
 pub trait ExactSizeShiperator: Shiperator {
     fn len(&self) -> usize {
@@ -168,6 +170,7 @@ pub trait ExactSizeShiperator: Shiperator {
 
 impl<S: ExactSizeShiperator> ExactSizeShiperator for &mut S {}
 
+/// A Shiperator also able to yield item from its tail.
 pub trait DoubleEndedShiperator: Shiperator {
     fn first_pass_back(&mut self) -> Option<Self::Item>;
     fn next_back(&mut self) -> Option<Self::Item> {

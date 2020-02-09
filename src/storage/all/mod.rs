@@ -337,7 +337,7 @@ impl AllStorages {
     }
     /// Delete an entity and all its components.
     /// Returns `true` if `entity` was alive.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -411,16 +411,16 @@ impl AllStorages {
     /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
     /// * [Unique]<&T> for a shared access to a `T` unique storage
     /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -433,9 +433,6 @@ impl AllStorages {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Unique]: struct.Unique.html
-    /// [NonSend]: struct.NonSend.html
-    /// [NonSync]: struct.NonSync.html
-    /// [NonSendSync]: struct.NonSendSync.html
     pub fn try_borrow<'a, C: StorageBorrow<'a>>(
         &'a self,
     ) -> Result<<C as StorageBorrow<'a>>::View, error::GetStorage> {
@@ -454,16 +451,16 @@ impl AllStorages {
     /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
     /// * [Unique]<&T> for a shared access to a `T` unique storage
     /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -476,9 +473,6 @@ impl AllStorages {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Unique]: struct.Unique.html
-    /// [NonSend]: struct.NonSend.html
-    /// [NonSync]: struct.NonSync.html
-    /// [NonSendSync]: struct.NonSendSync.html
     pub fn borrow<'a, C: StorageBorrow<'a>>(&'a self) -> <C as StorageBorrow<'a>>::View {
         self.try_borrow::<C>().unwrap()
     }

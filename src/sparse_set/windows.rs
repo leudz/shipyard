@@ -6,6 +6,7 @@ use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::ptr;
 
+/// Shared slice of a storage.
 pub struct Window<'a, T> {
     pub(crate) sparse: &'a [usize],
     pub(crate) dense: &'a [EntityId],
@@ -27,6 +28,7 @@ impl<T> Clone for Window<'_, T> {
 }
 
 impl<T> Window<'_, T> {
+    /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
         entity.index() < self.sparse.len()
             && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
@@ -37,9 +39,11 @@ impl<T> Window<'_, T> {
                     == entity
             }
     }
+    /// Returns the length of the window.
     pub fn len(&self) -> usize {
         self.data.len()
     }
+    /// Returns true if the window's length is 0.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
@@ -53,6 +57,7 @@ impl<T> Window<'_, T> {
             None
         }
     }
+    /// Returns the *inserted* section of an update packed window.
     pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset == 0 && self.len() >= pack.inserted {
@@ -70,9 +75,12 @@ impl<T> Window<'_, T> {
             Err(error::Inserted::NotUpdatePacked)
         }
     }
+    /// Returns the *inserted* section of an update packed window.  
+    /// Unwraps errors.
     pub fn inserted(&self) -> Window<'_, T> {
         self.try_inserted().unwrap()
     }
+    /// Returns the *modified* section of an update packed window.
     pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset <= pack.inserted && self.len() >= pack.modified {
@@ -92,9 +100,12 @@ impl<T> Window<'_, T> {
             Err(error::Modified::NotUpdatePacked)
         }
     }
+    /// Returns the *modified* section of an update packed window.  
+    /// Unwraps errors.
     pub fn modified(&self) -> Window<'_, T> {
         self.try_modified().unwrap()
     }
+    /// Returns the *inserted* and *modified* section of an update packed window.
     pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
@@ -112,9 +123,12 @@ impl<T> Window<'_, T> {
             Err(error::InsertedOrModified::NotUpdatePacked)
         }
     }
+    /// Returns the *modified* section of an update packed window.  
+    /// Unwraps errors.
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
         self.try_inserted_or_modified().unwrap()
     }
+    /// Returns the *deleted* components of an update packed window.
     pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             Ok(&pack.deleted)
@@ -122,6 +136,8 @@ impl<T> Window<'_, T> {
             Err(error::NotUpdatePack)
         }
     }
+    /// Returns the *deleted* components of an update packed window.  
+    /// Unwraps errors.
     pub fn deleted(&self) -> &[(EntityId, T)] {
         self.try_deleted().unwrap()
     }
@@ -137,6 +153,7 @@ impl<T> Index<EntityId> for Window<'_, T> {
     }
 }
 
+/// Exclusive slice of a storage.
 pub struct WindowMut<'w, T> {
     pub(crate) sparse: &'w mut [usize],
     pub(crate) dense: &'w mut [EntityId],
@@ -177,6 +194,7 @@ impl<'w, T> WindowMut<'w, T> {
             _phantom: PhantomData,
         }
     }
+    /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
         self.as_non_mut().contains(entity)
     }
@@ -228,13 +246,16 @@ impl<'w, T> WindowMut<'w, T> {
             None
         }
     }
+    /// Returns the length of the window.
     pub fn len(&self) -> usize {
         self.as_non_mut().len()
     }
+    /// Returns true if the window's length is 0.
     pub fn is_empty(&self) -> bool {
         self.as_non_mut().is_empty()
     }
 
+    /// Returns the *inserted* section of an update packed window.
     pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset == 0 && self.len() >= pack.inserted {
@@ -252,9 +273,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::Inserted::NotUpdatePacked)
         }
     }
+    /// Returns the *inserted* section of an update packed window.  
+    /// Unwraps errors.
     pub fn inserted(&self) -> Window<'_, T> {
         self.try_inserted().unwrap()
     }
+    /// Returns the *inserted* section of an update packed window mutably.
     pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset == 0 && self.len() >= pack.inserted {
@@ -272,9 +296,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::Inserted::NotUpdatePacked)
         }
     }
+    /// Returns the *inserted* section of an update packed window mutably.  
+    /// Unwraps errors.
     pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_mut().unwrap()
     }
+    /// Returns the *modified* section of an update packed window.
     pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset <= pack.inserted && self.len() >= pack.modified {
@@ -294,9 +321,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::Modified::NotUpdatePacked)
         }
     }
+    /// Returns the *modified* section of an update packed window.  
+    /// Unwraps errors.
     pub fn modified(&self) -> Window<'_, T> {
         self.try_modified().unwrap()
     }
+    /// Returns the *modified* section of an update packed window mutably.
     pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset <= pack.inserted && self.len() >= pack.modified {
@@ -316,9 +346,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::Modified::NotUpdatePacked)
         }
     }
+    /// Returns the *modified* section of an update packed window mutably.  
+    /// Unwraps errors.
     pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_modified_mut().unwrap()
     }
+    /// Returns the *inserted* and *modified* section of an update packed window.
     pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
@@ -336,9 +369,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::InsertedOrModified::NotUpdatePacked)
         }
     }
+    /// Returns the *inserted* and *modified* section of an update packed window.  
+    /// Unwraps errors.
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
         self.try_inserted_or_modified().unwrap()
     }
+    /// Returns the *inserted* and *modified* section of an update packed window mutably.
     pub fn try_inserted_or_modified_mut(
         &mut self,
     ) -> Result<WindowMut<'_, T>, error::InsertedOrModified> {
@@ -358,9 +394,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::InsertedOrModified::NotUpdatePacked)
         }
     }
+    /// Returns the *inserted* and *modified* section of an update packed window mutably.  
+    /// Unwraps errors.
     pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_or_modified_mut().unwrap()
     }
+    /// Returns the *deleted* components of an update packed window.
     pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.pack_info.pack {
             Ok(&pack.deleted)
@@ -368,9 +407,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::NotUpdatePack)
         }
     }
+    /// Returns the *deleted* components of an update packed window.  
+    /// Unwraps errors.
     pub fn deleted(&self) -> &[(EntityId, T)] {
         self.try_deleted().unwrap()
     }
+    /// Takes ownership of the *deleted* components of an update packed window.
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             let mut vec = Vec::with_capacity(pack.deleted.capacity());
@@ -380,9 +422,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::NotUpdatePack)
         }
     }
+    /// Takes ownership of the *deleted* components of an update packed window.  
+    /// Unwraps errors.
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
         self.try_take_deleted().unwrap()
     }
+    /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             if pack.modified == 0 {
@@ -409,9 +454,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::NotUpdatePack)
         }
     }
+    /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.  
+    /// Unwraps errors.
     pub fn clear_inserted(&mut self) {
         self.try_clear_inserted().unwrap()
     }
+    /// Moves all component in the *modified* section of an update packed window to the *neutral* section.
     pub fn try_clear_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             pack.modified = 0;
@@ -420,9 +468,12 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::NotUpdatePack)
         }
     }
+    /// Moves all component in the *modified* section of an update packed window to the *neutral* section.  
+    /// Unwraps errors.
     pub fn clear_modified(&mut self) {
         self.try_clear_modified().unwrap()
     }
+    /// Moves all component in the *inserted* and *modified* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted_and_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             pack.inserted = 0;
@@ -432,6 +483,8 @@ impl<'w, T> WindowMut<'w, T> {
             Err(error::NotUpdatePack)
         }
     }
+    /// Moves all component in the *inserted* and *modified* section of an update packed window to the *neutral* section.  
+    /// Unwraps errors.
     pub fn clear_inserted_and_modified(&mut self) {
         self.try_clear_inserted_and_modified().unwrap()
     }

@@ -7,7 +7,7 @@ use core::any::type_name;
 use core::convert::TryFrom;
 use core::ops::{Deref, DerefMut};
 
-pub struct AllStoragesView<'a>(Ref<'a, AllStorages>);
+struct AllStoragesView<'a>(Ref<'a, AllStorages>);
 
 impl<'a> TryFrom<&'a AtomicRefCell<AllStorages>> for AllStoragesView<'a> {
     type Error = error::GetStorage;
@@ -27,6 +27,7 @@ impl Deref for AllStoragesView<'_> {
     }
 }
 
+/// Exclusive `AllStorages` view.
 pub struct AllStoragesViewMut<'a>(RefMut<'a, AllStorages>);
 
 impl<'a> TryFrom<&'a AtomicRefCell<AllStorages>> for AllStoragesViewMut<'a> {
@@ -53,6 +54,7 @@ impl DerefMut for AllStoragesViewMut<'_> {
     }
 }
 
+/// Shared `Entities` view.
 pub struct EntitiesView<'a> {
     entities: Ref<'a, Entities>,
     _all_borrow: Borrow<'a>,
@@ -91,6 +93,7 @@ impl Deref for EntitiesView<'_> {
     }
 }
 
+/// Exclusive `Entities` view.
 pub struct EntitiesViewMut<'a> {
     entities: RefMut<'a, Entities>,
     _all_borrow: Borrow<'a>,
@@ -135,6 +138,7 @@ impl DerefMut for EntitiesViewMut<'_> {
     }
 }
 
+/// Shared component view.
 pub struct View<'a, T> {
     window: Window<'a, T>,
     _borrow: Borrow<'a>,
@@ -314,6 +318,7 @@ impl<'a, T> AsRef<Window<'a, T>> for View<'a, T> {
     }
 }
 
+/// Exclusive component view.
 pub struct ViewMut<'a, T> {
     sparse_set: RefMut<'a, SparseSet<T>>,
     _all_borrow: Borrow<'a>,
@@ -448,6 +453,7 @@ impl<'a, T> AsMut<SparseSet<T>> for ViewMut<'a, T> {
     }
 }
 
+/// Shared unique component view.
 pub struct UniqueView<'a, T> {
     unique: Ref<'a, T>,
     _all_borrow: Borrow<'a>,
@@ -676,6 +682,7 @@ impl<T> Deref for UniqueView<'_, T> {
     }
 }
 
+/// Exclusive unique component view.
 pub struct UniqueViewMut<'a, T> {
     unique: RefMut<'a, T>,
     _all_borrow: Borrow<'a>,

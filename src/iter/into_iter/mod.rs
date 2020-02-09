@@ -18,7 +18,7 @@ pub trait IntoIter {
     /// Returns an iterator over storages yielding only components meeting the requirements.
     ///
     /// Iterators can only be made inside [run] closure and systems.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -36,7 +36,7 @@ pub trait IntoIter {
     /// Returns a parallel iterator over storages yielding only components meeting the requirements.
     ///
     /// Iterators can only be made inside [run] closure and systems.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// use rayon::prelude::ParallelIterator;
@@ -58,6 +58,7 @@ pub trait IntoIter {
     fn par_iter(self) -> Self::IntoParIter;
 }
 
+/// Shorthand for a Shiperator only yielding ids.
 pub trait IntoIterIds {
     type IntoIterIds;
     fn iter_ids(self) -> Self::IntoIterIds;

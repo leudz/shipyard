@@ -5,8 +5,40 @@ use crate::views::ViewMut;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
+/// Trait used to delete component(s).
 pub trait Delete<T> {
+    /// Deletes the component(s) of an entity, they won't be returned.  
+    /// A tuple is always needed, even for a single view.
+    ///
+    /// ### Example:
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    ///
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+    /// let entity = entities.add_entity(
+    ///     (&mut usizes, &mut u32s),
+    ///     (0, 1)
+    /// );
+    /// Delete::<(usize, u32)>::try_delete((&mut usizes, &mut u32s), entity).unwrap();
+    /// ```
     fn try_delete(self, entity: EntityId) -> Result<(), error::Remove>;
+    /// Deletes the component(s) of an entity, they won't be returned.  
+    /// A tuple is always needed, even for a single view.  
+    /// Unwraps error.
+    ///
+    /// ### Example:
+    /// ```
+    /// # use shipyard::prelude::*;
+    /// let world = World::new();
+    ///
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+    /// let entity = entities.add_entity(
+    ///     (&mut usizes, &mut u32s),
+    ///     (0, 1)
+    /// );
+    /// Delete::<(usize, u32)>::delete((&mut usizes, &mut u32s), entity);
+    /// ```
     fn delete(self, entity: EntityId);
 }
 

@@ -7,6 +7,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
+/// Trait used to loose pack storage(s).
 pub trait LoosePack<T> {
     fn try_loose_pack(self) -> Result<(), error::Pack>;
     fn loose_pack(self);

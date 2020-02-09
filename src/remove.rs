@@ -20,7 +20,7 @@ pub trait Remove<T: Removable> {
     ///
     /// The compiler has trouble inferring the return types.
     /// You'll often have to use the full path `Remove::<type>::try_remove`.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -33,7 +33,7 @@ pub trait Remove<T: Removable> {
     /// ```
     /// When using packed storages you have to pass all storages packed with it,
     /// even if you don't remove any component from it.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -57,7 +57,7 @@ pub trait Remove<T: Removable> {
     /// You'll often have to use the full path `Remove::<type>::remove`.
     ///
     /// Unwraps errors.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -70,7 +70,7 @@ pub trait Remove<T: Removable> {
     /// ```
     /// When using packed storages you have to pass all storages packed with it,
     /// even if you don't remove any component from it.
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();

@@ -134,7 +134,7 @@ pub use world::World;
 pub struct ThreadPool;
 
 /// Type used to access the value of a unique storage.
-/// # Example:
+/// ### Example:
 /// ```
 /// # use shipyard::prelude::*;
 /// let world = World::default();

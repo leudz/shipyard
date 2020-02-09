@@ -196,16 +196,16 @@ impl World {
     /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
     /// * [Unique]<&T> for a shared access to a `T` unique storage
     /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -219,9 +219,6 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Unique]: struct.Unique.html
-    /// [NonSend]: struct.NonSend.html
-    /// [NonSync]: struct.NonSync.html
-    /// [NonSendSync]: struct.NonSendSync.html
     pub fn try_borrow<'s, C: SystemData<'s>>(
         &'s self,
     ) -> Result<<C as SystemData<'s>>::View, error::GetStorage> {
@@ -247,16 +244,16 @@ impl World {
     /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
     /// * [Unique]<&T> for a shared access to a `T` unique storage
     /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -270,9 +267,6 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Unique]: struct.Unique.html
-    /// [NonSend]: struct.NonSend.html
-    /// [NonSync]: struct.NonSync.html
-    /// [NonSendSync]: struct.NonSendSync.html
     pub fn borrow<'s, C: SystemData<'s>>(&'s self) -> <C as SystemData<'s>>::View {
         self.try_borrow::<C>().unwrap()
     }
@@ -289,16 +283,16 @@ impl World {
     /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
     /// * [Unique]<&T> for a shared access to a `T` unique storage
     /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -312,9 +306,6 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Unique]: struct.Unique.html
-    /// [NonSend]: struct.NonSend.html
-    /// [NonSync]: struct.NonSync.html
-    /// [NonSendSync]: struct.NonSendSync.html
     pub fn run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(&'a self, f: F) -> R {
         self.try_run::<T, _, _>(f).unwrap()
     }
@@ -330,16 +321,16 @@ impl World {
     /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
     /// * [Unique]<&T> for a shared access to a `T` unique storage
     /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    /// * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
     ///
-    /// [Unique] and [NonSend]/[NonSync]/[NonSendSync] can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
+    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -353,9 +344,6 @@ impl World {
     /// [ThreadPool]: struct.ThreadPool.html
     /// [World]: struct.World.html
     /// [Unique]: struct.Unique.html
-    /// [NonSend]: struct.NonSend.html
-    /// [NonSync]: struct.NonSync.html
-    /// [NonSendSync]: struct.NonSendSync.html
     pub fn try_run<'a, T: Run<'a>, R, F: FnOnce(T::Storage) -> R>(
         &'a self,
         f: F,
@@ -371,7 +359,7 @@ impl World {
     }
     /// Runs the `S` system immediately, borrowing the storages necessary to do so.
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// struct Clock(u32);
@@ -392,7 +380,7 @@ impl World {
     /// Runs the `S` system immediately, borrowing the storages necessary to do so.  
     /// Unwraps errors.
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// struct Clock(u32);
@@ -433,7 +421,7 @@ impl World {
     /// They are evaluated left to right when they can't be parallelized.  
     /// The default workload will automatically be set to the first workload added.
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// struct Adder;
@@ -481,7 +469,7 @@ impl World {
     /// The default workload will automatically be set to the first workload added.  
     /// Unwraps errors.
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// struct Adder;

@@ -5,16 +5,25 @@ use crate::world::World;
 /// Trait to define systems.
 ///
 /// `System::Data` can be:
-/// * `&T` for an immutable reference to `T` storage
-/// * `&mut T` for a mutable reference to `T` storage
-/// * [Entities] for an immmutable reference to the entity storage
-/// * [EntitiesMut] for a mutable reference to the entity storage
-/// * [AllStorages] for a mutable reference to the storage of all components
-/// * [ThreadPool] for an immutable reference to the `rayon::ThreadPool` used by the [World]
-/// * [Not] can be used to filter out a component type
+/// * `&T` for a shared access to `T` storage
+/// * `&mut T` for an exclusive access to `T` storage
+/// * [Entities] for a shared access to the entity storage
+/// * [EntitiesMut] for an exclusive reference to the entity storage
+/// * [AllStorages] for an exclusive access to the storage of all components
+/// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
+/// * [Unique]<&T> for a shared access to a `T` unique storage
+/// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
+/// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
+/// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
+/// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
+/// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
+/// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+/// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
+///
+/// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
 ///
 /// A tuple will allow multiple references.
-/// # Example
+/// ### Example
 /// ```
 /// # use shipyard::prelude::*;
 /// struct Single;
@@ -34,10 +43,11 @@ use crate::world::World;
 /// }
 /// ```
 /// [Entities]: struct.Entities.html
+/// [EntitiesMut]: struct.EntitiesMut.html
 /// [AllStorages]: struct.AllStorages.html
 /// [ThreadPool]: struct.ThreadPool.html
 /// [World]: struct.World.html
-/// [Not]: struct.Not.html
+/// [Unique]: struct.Unique.html
 pub trait System<'a> {
     type Data: SystemData<'a>;
     fn run(storage: <Self::Data as SystemData<'a>>::View);

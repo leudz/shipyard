@@ -3,7 +3,7 @@ use core::ops::Not as NotOps;
 
 /// Used to filter out components.
 /// Get and iterators will skip entities that have this component.
-/// # Example
+/// ### Example
 /// ```
 /// # use shipyard::prelude::*;
 /// let world = World::new();

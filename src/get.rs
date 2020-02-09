@@ -10,7 +10,8 @@ pub trait GetComponent {
     /// Retrieve components of `entity`.
     ///
     /// Multiple components can be queried at the same time using a tuple.
-    /// #Example
+    ///
+    /// ### Example:
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();

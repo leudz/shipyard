@@ -48,15 +48,15 @@ impl Entities {
     pub(super) fn delete(&mut self, entity: EntityId) -> bool {
         self.delete_unchecked(entity)
     }
-    /// Returns true if the EntityId matches a living entity.
-    pub fn is_alive(&self, entity_id: EntityId) -> bool {
-        entity_id.index() < self.data.len()
-            && entity_id == unsafe { *self.data.get_unchecked(entity_id.index()) }
+    /// Returns true if `entity` matches a living entity.
+    pub fn is_alive(&self, entity: EntityId) -> bool {
+        entity.index() < self.data.len()
+            && entity == unsafe { *self.data.get_unchecked(entity.index()) }
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -78,7 +78,7 @@ impl Entities {
     /// `Entities` is only borrowed immutably.  
     /// Unwraps errors.
     ///
-    /// # Example
+    /// ### Example
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
@@ -144,7 +144,7 @@ impl Entities {
     }
     /// Stores `component` in a new entity, the `EntityId` to this entity is returned.  
     /// Multiple components can be added at the same time using a tuple.
-    /// # Example:
+    /// ### Example:
     /// ```
     /// # use shipyard::prelude::*;
     /// let world = World::new();
