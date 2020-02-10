@@ -399,80 +399,146 @@ impl AllStorages {
             storage.clear().unwrap()
         }
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.  
-    /// You can use a tuple to get multiple storages at once.
-    ///
-    /// You can use:
-    /// * `&T` for a shared access to `T` storage
-    /// * `&mut T` for an exclusive access to `T` storage
-    /// * [Entities] for a shared access to the entity storage
-    /// * [EntitiesMut] for an exclusive reference to the entity storage
-    /// * [AllStorages] for an exclusive access to the storage of all components
-    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
-    /// * [Unique]<&T> for a shared access to a `T` unique storage
-    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
-    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
-    ///
-    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
-    ///
-    /// ### Example
-    /// ```
-    /// # use shipyard::prelude::*;
-    /// let world = World::new();
-    /// let all_storages = world.borrow::<AllStorages>();
-    /// let u32s = all_storages.try_borrow::<&u32>().unwrap();
-    /// ```
-    /// [Entities]: struct.Entities.html
-    /// [EntitiesMut]: struct.Entities.html
-    /// [AllStorages]: struct.AllStorages.html
-    /// [ThreadPool]: struct.ThreadPool.html
-    /// [World]: struct.World.html
-    /// [Unique]: struct.Unique.html
+    #[doc = "Borrows the requested storage, if it doesn't exist it'll get created.
+
+You can use:
+* `&T` for a shared access to `T` storage
+* `&mut T` for an exclusive access to `T` storage
+* [Entities] for a shared access to the entity storage
+* [EntitiesMut] for an exclusive reference to the entity storage
+* [AllStorages] for an exclusive access to the storage of all components
+* [Unique]<&T> for a shared access to a `T` unique storage
+* [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
+    #[cfg_attr(
+        feature = "parallel",
+        doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
+    )]
+    #[cfg_attr(
+        not(feature = "parallel"),
+        doc = "* ThreadPool: must activate the *parallel* feature"
+    )]
+    #[cfg_attr(
+        feature = "non_send",
+        doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_send"),
+        doc = "* NonSend: must activate the *non_send* feature"
+    )]
+    #[cfg_attr(
+        feature = "non_sync",
+        doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_sync"),
+        doc = "* NonSync: must activate the *non_sync* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(all(feature = "non_send", feature = "non_sync")),
+        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
+    )]
+    #[doc = "### Example
+```
+# use shipyard::prelude::*;
+let world = World::new();
+let all_storages = world.borrow::<AllStorages>();
+let u32s = all_storages.try_borrow::<&u32>().unwrap();
+```
+[Entities]: struct.Entities.html
+[EntitiesMut]: struct.Entities.html
+[AllStorages]: struct.AllStorages.html
+[World]: struct.World.html
+[Unique]: struct.Unique.html"]
+    #[cfg_attr(feature = "parallel", doc = "[ThreadPool]: struct.ThreadPool.html")]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "[NonSendSync]: struct.NonSendSync.html"
+    )]
     pub fn try_borrow<'a, C: StorageBorrow<'a>>(
         &'a self,
     ) -> Result<<C as StorageBorrow<'a>>::View, error::GetStorage> {
         <C as StorageBorrow<'a>>::try_borrow(self)
     }
-    /// Borrows the requested storages and runs `f`, this is an unnamed system.  
-    /// You can use a tuple to get multiple storages at once.  
-    /// Unwraps errors.
-    ///
-    /// You can use:
-    /// * `&T` for a shared access to `T` storage
-    /// * `&mut T` for an exclusive access to `T` storage
-    /// * [Entities] for a shared access to the entity storage
-    /// * [EntitiesMut] for an exclusive reference to the entity storage
-    /// * [AllStorages] for an exclusive access to the storage of all components
-    /// * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]
-    /// * [Unique]<&T> for a shared access to a `T` unique storage
-    /// * [Unique]<&mut T> for an exclusive access to a `T` unique storage
-    /// * `NonSend<&T>` for a shared access to a `T` storage where `T` isn't `Send`
-    /// * `NonSend<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send`
-    /// * `NonSync<&T>` for a shared access to a `T` storage where `T` isn't `Sync`
-    /// * `NonSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Sync`
-    /// * `NonSendSync<&T>` for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    /// * `NonSendSync<&mut T>` for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
-    ///
-    /// [Unique] and `NonSend`/`NonSync`/`NonSendSync` can be used together to access a unique storage missing `Send` and/or `Sync` bound(s).
-    ///
-    /// ### Example
-    /// ```
-    /// # use shipyard::prelude::*;
-    /// let world = World::new();
-    /// let all_storages = world.borrow::<AllStorages>();
-    /// let u32s = all_storages.borrow::<&u32>();
-    /// ```
-    /// [Entities]: struct.Entities.html
-    /// [EntitiesMut]: struct.Entities.html
-    /// [AllStorages]: struct.AllStorages.html
-    /// [ThreadPool]: struct.ThreadPool.html
-    /// [World]: struct.World.html
-    /// [Unique]: struct.Unique.html
+    #[doc = "Borrows the requested storage, if it doesn't exist it'll get created.  
+Unwraps errors.
+
+You can use:
+* `&T` for a shared access to `T` storage
+* `&mut T` for an exclusive access to `T` storage
+* [Entities] for a shared access to the entity storage
+* [EntitiesMut] for an exclusive reference to the entity storage
+* [AllStorages] for an exclusive access to the storage of all components
+* [Unique]<&T> for a shared access to a `T` unique storage
+* [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
+    #[cfg_attr(
+        feature = "parallel",
+        doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
+    )]
+    #[cfg_attr(
+        not(feature = "parallel"),
+        doc = "* ThreadPool: must activate the *parallel* feature"
+    )]
+    #[cfg_attr(
+        feature = "non_send",
+        doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_send"),
+        doc = "* NonSend: must activate the *non_send* feature"
+    )]
+    #[cfg_attr(
+        feature = "non_sync",
+        doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_sync"),
+        doc = "* NonSync: must activate the *non_sync* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(all(feature = "non_send", feature = "non_sync")),
+        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
+    )]
+    #[doc = "### Example
+```
+# use shipyard::prelude::*;
+let world = World::new();
+let all_storages = world.borrow::<AllStorages>();
+let u32s = all_storages.borrow::<&u32>();
+```
+[Entities]: struct.Entities.html
+[EntitiesMut]: struct.Entities.html
+[AllStorages]: struct.AllStorages.html
+[World]: struct.World.html
+[Unique]: struct.Unique.html"]
+    #[cfg_attr(feature = "parallel", doc = "[ThreadPool]: struct.ThreadPool.html")]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "[NonSendSync]: struct.NonSendSync.html"
+    )]
     pub fn borrow<'a, C: StorageBorrow<'a>>(&'a self) -> <C as StorageBorrow<'a>>::View {
         self.try_borrow::<C>().unwrap()
     }

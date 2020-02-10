@@ -146,11 +146,14 @@ pub struct ThreadPool;
 /// ```
 pub struct Unique<T: ?Sized>(T);
 
+/// Type used to access `!Send` storages.
 #[cfg(feature = "non_send")]
 pub struct NonSend<T: ?Sized>(T);
 
+/// Type used to access `!Sync` storages.
 #[cfg(feature = "non_sync")]
 pub struct NonSync<T: ?Sized>(T);
 
+/// Type used to access `!Send + !Sync` storages.
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 pub struct NonSendSync<T: ?Sized>(T);
