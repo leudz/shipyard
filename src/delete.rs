@@ -3,7 +3,7 @@ use crate::sparse_set::Pack;
 use crate::storage::EntityId;
 use crate::views::ViewMut;
 use alloc::vec::Vec;
-use core::any::TypeId;
+use core::any::{type_name, TypeId};
 
 /// Trait used to delete component(s).
 pub trait Delete<T> {
@@ -69,7 +69,7 @@ macro_rules! impl_delete {
                                 Pack::Update(_) => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                                 Pack::NoPack => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                             }
-                            Err(_) => return Err(error::Remove::MissingPackStorage(TypeId::of::<$type>()))
+                            Err(_) => return Err(error::Remove::MissingPackStorage(type_name::<$type>()))
                         }
                     )+
 

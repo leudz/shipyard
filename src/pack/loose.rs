@@ -5,7 +5,7 @@ use crate::views::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::any::TypeId;
+use core::any::{type_name, TypeId};
 
 /// Trait used to loose pack storage(s).
 pub trait LoosePack<T> {
@@ -45,13 +45,13 @@ macro_rules! impl_loose_pack {
                 $(
                     match self.$tight_index.pack_info.pack {
                         Pack::Tight(_) => {
-                            return Err(error::Pack::AlreadyTightPack(TypeId::of::<$tight>()));
+                            return Err(error::Pack::AlreadyTightPack(type_name::<$tight>()));
                         },
                         Pack::Loose(_) => {
-                            return Err(error::Pack::AlreadyLoosePack(TypeId::of::<$tight>()));
+                            return Err(error::Pack::AlreadyLoosePack(type_name::<$tight>()));
                         },
                         Pack::Update(_) => {
-                            return Err(error::Pack::AlreadyUpdatePack(TypeId::of::<$tight>()))
+                            return Err(error::Pack::AlreadyUpdatePack(type_name::<$tight>()))
                         },
                         Pack::NoPack => {}
                     }

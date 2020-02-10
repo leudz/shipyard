@@ -4,7 +4,7 @@ use crate::views::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::any::TypeId;
+use core::any::{type_name, TypeId};
 
 /// Trait used to tight pack storage(s).
 pub trait TightPack {
@@ -46,13 +46,13 @@ macro_rules! impl_tight_pack {
                 $(
                     match self.$index.pack_info.pack {
                         Pack::Tight(_) => {
-                            return Err(error::Pack::AlreadyTightPack(TypeId::of::<$type>()));
+                            return Err(error::Pack::AlreadyTightPack(type_name::<$type>()));
                         },
                         Pack::Loose(_) => {
-                            return Err(error::Pack::AlreadyLoosePack(TypeId::of::<$type>()));
+                            return Err(error::Pack::AlreadyLoosePack(type_name::<$type>()));
                         },
                         Pack::Update(_) => {
-                            return Err(error::Pack::AlreadyUpdatePack(TypeId::of::<$type>()))
+                            return Err(error::Pack::AlreadyUpdatePack(type_name::<$type>()))
                         },
                         Pack::NoPack => {
                             self.$index.pack_info.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));

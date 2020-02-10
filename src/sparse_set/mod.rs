@@ -7,7 +7,7 @@ use crate::error;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
-use core::any::{Any, TypeId};
+use core::any::{type_name, Any, TypeId};
 use core::marker::PhantomData;
 use core::ptr;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
@@ -117,12 +117,12 @@ impl<T> SparseSet<T> {
     {
         if self.pack_info.observer_types.is_empty() {
             match self.pack_info.pack {
-                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
+                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
                 _ => Ok(self.actual_remove(entity)),
             }
         } else {
-            Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+            Err(error::Remove::MissingPackStorage(type_name::<T>()))
         }
     }
     /// Removes `entity`'s component from this storage.  
@@ -228,15 +228,15 @@ impl<T> SparseSet<T> {
     {
         if self.pack_info.observer_types.is_empty() {
             match self.pack_info.pack {
-                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
-                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
+                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
                 _ => {
                     self.actual_delete(entity);
                     Ok(())
                 }
             }
         } else {
-            Err(error::Remove::MissingPackStorage(TypeId::of::<T>()))
+            Err(error::Remove::MissingPackStorage(type_name::<T>()))
         }
     }
     /// Deletes `entity`'s component from this storage.  
@@ -558,9 +558,9 @@ impl<T> SparseSet<T> {
                 });
                 Ok(())
             }
-            Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(TypeId::of::<T>())),
-            Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(TypeId::of::<T>())),
-            Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(TypeId::of::<T>())),
+            Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(type_name::<T>())),
+            Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(type_name::<T>())),
+            Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(type_name::<T>())),
         }
     }
     /// Update packs this storage making it track *inserted*, *modified* and *deleted* components.  

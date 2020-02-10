@@ -2,7 +2,7 @@ use shipyard::prelude::*;
 
 #[test]
 fn pack() {
-    use std::any::TypeId;
+    use std::any::type_name;
 
     let world = World::new();
     let (mut usizes, mut u64s, mut u32s, mut u16s) =
@@ -13,8 +13,8 @@ fn pack() {
     match (&mut usizes, &mut u64s).try_tight_pack() {
         Ok(_) => panic!(),
         Err(err) => assert!(
-            err == shipyard::error::Pack::AlreadyTightPack(TypeId::of::<usize>())
-                || err == shipyard::error::Pack::AlreadyTightPack(TypeId::of::<u64>())
+            err == shipyard::error::Pack::AlreadyTightPack(type_name::<usize>())
+                || err == shipyard::error::Pack::AlreadyTightPack(type_name::<u64>())
         ),
     }
 
@@ -22,7 +22,7 @@ fn pack() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             err,
-            shipyard::error::Pack::AlreadyTightPack(TypeId::of::<usize>())
+            shipyard::error::Pack::AlreadyTightPack(type_name::<usize>())
         ),
     }
 
@@ -30,15 +30,15 @@ fn pack() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             err,
-            shipyard::error::Pack::AlreadyTightPack(TypeId::of::<u64>())
+            shipyard::error::Pack::AlreadyTightPack(type_name::<u64>())
         ),
     }
 
     match LoosePack::<(usize, u64)>::try_loose_pack((&mut usizes, &mut u64s, &mut u32s)) {
         Ok(_) => panic!(),
         Err(err) => assert!(
-            err == shipyard::error::Pack::AlreadyTightPack(TypeId::of::<usize>())
-                || err == shipyard::error::Pack::AlreadyTightPack(TypeId::of::<u64>())
+            err == shipyard::error::Pack::AlreadyTightPack(type_name::<usize>())
+                || err == shipyard::error::Pack::AlreadyTightPack(type_name::<u64>())
         ),
     }
 
@@ -46,7 +46,7 @@ fn pack() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             err,
-            shipyard::error::Pack::AlreadyTightPack(TypeId::of::<usize>())
+            shipyard::error::Pack::AlreadyTightPack(type_name::<usize>())
         ),
     }
 
@@ -54,7 +54,7 @@ fn pack() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             err,
-            shipyard::error::Pack::AlreadyTightPack(TypeId::of::<u64>())
+            shipyard::error::Pack::AlreadyTightPack(type_name::<u64>())
         ),
     }
 
@@ -62,14 +62,14 @@ fn pack() {
 
     match (&mut u32s, &mut u16s).try_tight_pack() {
         Ok(_) => panic!(),
-        Err(err) => assert!(err == shipyard::error::Pack::AlreadyLoosePack(TypeId::of::<u32>())),
+        Err(err) => assert!(err == shipyard::error::Pack::AlreadyLoosePack(type_name::<u32>())),
     }
 
     match (&mut u32s, &mut u16s).try_loose_pack() {
         Ok(_) => panic!(),
         Err(err) => assert_eq!(
             err,
-            shipyard::error::Pack::AlreadyLoosePack(TypeId::of::<u32>())
+            shipyard::error::Pack::AlreadyLoosePack(type_name::<u32>())
         ),
     }
 }

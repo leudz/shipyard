@@ -3,7 +3,7 @@ use crate::error;
 use crate::sparse_set::Pack;
 use crate::views::ViewMut;
 use alloc::vec::Vec;
-use core::any::TypeId;
+use core::any::{type_name, TypeId};
 
 // No new storage will be created
 /// Adds components to an existing entity without creating new storage.
@@ -26,14 +26,14 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
     ) -> Result<(), error::AddComponent> {
         if entities.is_alive(entity) {
             match self.pack_info.pack {
-                Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
-                Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>())),
+                Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
+                Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
                 Pack::Update(_) => {
                     if self.pack_info.observer_types.is_empty() {
                         self.insert(component, entity);
                         Ok(())
                     } else {
-                        Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
+                        Err(error::AddComponent::MissingPackStorage(type_name::<T>()))
                     }
                 }
                 Pack::NoPack => {
@@ -41,7 +41,7 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
                         self.insert(component, entity);
                         Ok(())
                     } else {
-                        Err(error::AddComponent::MissingPackStorage(TypeId::of::<T>()))
+                        Err(error::AddComponent::MissingPackStorage(type_name::<T>()))
                     }
                 }
             }
@@ -82,7 +82,7 @@ macro_rules! impl_add_component {
                         should_pack.reserve(real_types.len());
                         $(
                             if self.$index.pack_info.check_types(&type_ids, &add_types).is_err() {
-                                return Err(error::AddComponent::MissingPackStorage(TypeId::of::<$type>()));
+                                return Err(error::AddComponent::MissingPackStorage(type_name::<$type>()));
                             } else {
                                 if !should_pack.contains(&TypeId::of::<$type>()) {
                                     match &self.$index.pack_info.pack {

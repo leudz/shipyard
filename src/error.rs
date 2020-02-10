@@ -1,5 +1,4 @@
 use crate::EntityId;
-use core::any::TypeId;
 use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
 use std::error::Error;
@@ -140,7 +139,7 @@ impl Display for NewEntity {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
     // `TypeId` of the storage requirering more storages
-    MissingPackStorage(TypeId),
+    MissingPackStorage(&'static str),
     EntityIsNotAlive,
 }
 
@@ -150,7 +149,7 @@ impl Error for AddComponent {}
 impl Debug for AddComponent {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
-            Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage for type ({:?}). To add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
+            Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing {} storage, to add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
             Self::EntityIsNotAlive => fmt.write_str("Entity has to be alive to add component to it."),
         }
     }
@@ -168,9 +167,9 @@ impl Display for AddComponent {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Pack {
     GetStorage(GetStorage),
-    AlreadyTightPack(TypeId),
-    AlreadyLoosePack(TypeId),
-    AlreadyUpdatePack(TypeId),
+    AlreadyTightPack(&'static str),
+    AlreadyLoosePack(&'static str),
+    AlreadyUpdatePack(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -186,17 +185,17 @@ impl Debug for Pack {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
             Self::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
-            Self::AlreadyTightPack(type_id) => fmt.write_fmt(format_args!(
-                "The storage of type ({:?}) is already tightly packed.",
-                type_id
+            Self::AlreadyTightPack(type_name) => fmt.write_fmt(format_args!(
+                "{} storage is already tightly packed.",
+                type_name
             )),
-            Self::AlreadyLoosePack(type_id) => fmt.write_fmt(format_args!(
-                "The storage of type ({:?}) is already loosely packed.",
-                type_id
+            Self::AlreadyLoosePack(type_name) => fmt.write_fmt(format_args!(
+                "{} storage is already loosely packed.",
+                type_name
             )),
-            Self::AlreadyUpdatePack(type_id) => fmt.write_fmt(format_args!(
-                "The storage of type ({:?}) is already has an update pack.",
-                type_id
+            Self::AlreadyUpdatePack(type_name) => fmt.write_fmt(format_args!(
+                "{} storage is already has an update pack.",
+                type_name
             )),
         }
     }
@@ -214,7 +213,7 @@ impl Display for Pack {
 /// This error occurs when there is a missing storage, `TypeId` will indicate which storage.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Remove {
-    MissingPackStorage(TypeId),
+    MissingPackStorage(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -223,7 +222,7 @@ impl Error for Remove {}
 impl Debug for Remove {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
-            Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing storage for type ({:?}). To remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
+            Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing {} storage, to remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
         }
     }
 }
