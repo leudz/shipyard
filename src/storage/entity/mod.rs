@@ -50,8 +50,8 @@ impl Entities {
     }
     /// Returns true if `entity` matches a living entity.
     pub fn is_alive(&self, entity: EntityId) -> bool {
-        entity.index() < self.data.len()
-            && entity == unsafe { *self.data.get_unchecked(entity.index()) }
+        entity.uindex() < self.data.len()
+            && entity == unsafe { *self.data.get_unchecked(entity.uindex()) }
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.
@@ -104,7 +104,7 @@ impl Entities {
             if new == *old {
                 self.list = None;
             } else {
-                *old = unsafe { self.data.get_unchecked(*old).index() };
+                *old = unsafe { self.data.get_unchecked(*old).uindex() };
             }
         }
         if let Some(index) = index {
@@ -122,7 +122,7 @@ impl Entities {
         if self.is_alive(entity_id) {
             if unsafe {
                 self.data
-                    .get_unchecked_mut(entity_id.index())
+                    .get_unchecked_mut(entity_id.uindex())
                     .bump_version()
                     .is_ok()
             } {
@@ -130,11 +130,11 @@ impl Entities {
                     unsafe {
                         self.data
                             .get_unchecked_mut(*new)
-                            .set_index(entity_id.index() as u64)
+                            .set_index(entity_id.index())
                     };
-                    *new = entity_id.index();
+                    *new = entity_id.uindex();
                 } else {
-                    self.list = Some((entity_id.index(), entity_id.index()));
+                    self.list = Some((entity_id.uindex(), entity_id.uindex()));
                 }
             }
             true
@@ -187,13 +187,13 @@ impl UnknownStorage for Entities {
         let begin = self
             .data
             .iter()
-            .position(|id| (id.version() as u64) < ((1u64 << (EntityId::VERSION_LEN + 1)) - 1))
+            .position(|id| id.version() < ((1u64 << (EntityId::VERSION_LEN + 1)) - 1))
             .unwrap();
         let end = self
             .data
             .iter()
             .rev()
-            .position(|id| (id.version() as u64) < ((1u64 << (EntityId::VERSION_LEN + 1)) - 1))
+            .position(|id| id.version() < ((1u64 << (EntityId::VERSION_LEN + 1)) - 1))
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
     }

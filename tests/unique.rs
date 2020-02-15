@@ -1,3 +1,5 @@
+use core::any::type_name;
+use shipyard::error;
 use shipyard::prelude::*;
 
 #[test]
@@ -15,37 +17,22 @@ fn unique_storage() {
 
 #[test]
 fn not_unique_storage() {
-    match std::panic::catch_unwind(|| {
-        let world = World::new();
+    let world = World::new();
 
-        world.run::<Unique<&usize>, _, _>(|x| {
-            assert_eq!(*x, 1);
-        });
-    }) {
-        Ok(_) => panic!(),
-        Err(err) => assert_eq!(
-            format!("{}", err.downcast::<String>().unwrap()),
-            "called `Result::unwrap()` on an `Err` value: usize's storage isn't unique.\n\
-            You might have forgotten to declare it, replace world.register::<usize>() by world.register_unique(/* your_storage */).\n\
-            If it isn't supposed to be a unique storage, replace Unique<&usize> by &usize."
-        ),
-    }
-
-    match std::panic::catch_unwind(|| {
-        let world = World::new();
-
-        world.run::<Unique<&mut usize>, _, _>(|x| {
-            assert_eq!(*x, 1);
-        });
-    }) {
-        Ok(_) => panic!(),
-        Err(err) => assert_eq!(
-            format!("{}", err.downcast::<String>().unwrap()),
-            "called `Result::unwrap()` on an `Err` value: usize's storage isn't unique.\n\
-            You might have forgotten to declare it, replace world.register::<usize>() by world.register_unique(/* your_storage */).\n\
-            If it isn't supposed to be a unique storage, replace Unique<&mut usize> by &mut usize."
-        ),
-    }
+    assert_eq!(
+        world.try_run::<Unique<&usize>, _, _>(|_| {}).err(),
+        Some(error::GetStorage::NonUnique((
+            type_name::<usize>(),
+            error::Borrow::Shared
+        )))
+    );
+    assert_eq!(
+        world.try_run::<Unique<&mut usize>, _, _>(|_| {}).err(),
+        Some(error::GetStorage::NonUnique((
+            type_name::<usize>(),
+            error::Borrow::Unique
+        )))
+    );
 }
 
 #[cfg(feature = "non_send")]

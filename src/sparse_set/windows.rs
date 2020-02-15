@@ -30,12 +30,12 @@ impl<T> Clone for Window<'_, T> {
 impl<T> Window<'_, T> {
     /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
-        entity.index() < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(entity.index()) } < self.dense.len()
+        entity.uindex() < self.sparse.len()
+            && unsafe { *self.sparse.get_unchecked(entity.uindex()) } < self.dense.len()
             && unsafe {
                 *self
                     .dense
-                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
                     == entity
             }
     }
@@ -51,7 +51,7 @@ impl<T> Window<'_, T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
-                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
             })
         } else {
             None
@@ -144,6 +144,55 @@ impl<T> Window<'_, T> {
     pub(crate) fn is_unique(&self) -> bool {
         self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
     }
+    /// Returns the `EntityId` at a given `index`.
+    pub fn try_id_at(&self, index: usize) -> Option<EntityId> {
+        self.dense.get(index).copied()
+    }
+    /// Returns the `EntityId` at a given `index`.  
+    /// Unwraps errors.
+    pub fn id_at(&self, index: usize) -> EntityId {
+        self.try_id_at(index).unwrap()
+    }
+    /// Returns a slice of all the components in this window.
+    pub fn as_slice(&self) -> &[T] {
+        &self.data
+    }
+    /// Returns a window over `range`.
+    pub fn try_as_window<R: core::ops::RangeBounds<usize>>(
+        &self,
+        range: R,
+    ) -> Result<Window<'_, T>, error::NotInbound> {
+        use core::ops::Bound;
+
+        let start = match range.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end,
+            Bound::Excluded(end) => end.checked_sub(1).unwrap_or(0),
+            Bound::Unbounded => self.len(),
+        };
+        let range = start..end;
+
+        if range.end <= self.len() {
+            Ok(Window {
+                offset: range.start + self.offset,
+                sparse: &self.sparse,
+                dense: &self.dense[range.clone()],
+                data: &self.data[range],
+                pack_info: &self.pack_info,
+            })
+        } else {
+            Err(error::NotInbound::Window)
+        }
+    }
+    /// Returns a window over `range`.  
+    /// Unwraps errors.
+    pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
+        self.try_as_window(range).unwrap()
+    }
 }
 
 impl<T> Index<EntityId> for Window<'_, T> {
@@ -202,7 +251,7 @@ impl<'w, T> WindowMut<'w, T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
-                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
             })
         } else {
             None
@@ -211,7 +260,7 @@ impl<'w, T> WindowMut<'w, T> {
     pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         if self.contains(entity) {
             // SAFE we checked the window countains the entity
-            let mut index = unsafe { *self.sparse.get_unchecked(entity.index()) };
+            let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 if index >= pack.modified {
                     // index of the first element non modified
@@ -229,11 +278,11 @@ impl<'w, T> WindowMut<'w, T> {
                             );
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(non_mod)).index()) =
+                                .get_unchecked_mut((*self.dense.get_unchecked(non_mod)).uindex()) =
                                 non_mod;
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(index)).index()) =
+                                .get_unchecked_mut((*self.dense.get_unchecked(index)).uindex()) =
                                 index;
                         }
                         pack.modified += 1;
@@ -445,7 +494,7 @@ impl<'w, T> WindowMut<'w, T> {
                     unsafe {
                         *self
                             .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(i).index()) = i;
+                            .get_unchecked_mut(self.dense.get_unchecked(i).uindex()) = i;
                     }
                 }
             }
@@ -490,12 +539,12 @@ impl<'w, T> WindowMut<'w, T> {
     }
     pub(crate) fn pack(&mut self, entity: EntityId) {
         if self.contains(entity) {
-            let dense_index = self.sparse[entity.index()];
+            let dense_index = self.sparse[entity.uindex()];
             match &mut self.pack_info.pack {
                 Pack::Tight(pack) => {
                     if dense_index >= pack.len {
                         self.sparse
-                            .swap(self.dense[pack.len].index(), entity.index());
+                            .swap(self.dense[pack.len].uindex(), entity.uindex());
                         self.dense.swap(pack.len, dense_index);
                         self.data.swap(pack.len, dense_index);
                         pack.len += 1;
@@ -504,7 +553,7 @@ impl<'w, T> WindowMut<'w, T> {
                 Pack::Loose(pack) => {
                     if dense_index >= pack.len {
                         self.sparse
-                            .swap(self.dense[pack.len].index(), entity.index());
+                            .swap(self.dense[pack.len].uindex(), entity.uindex());
                         self.dense.swap(pack.len, dense_index);
                         self.data.swap(pack.len, dense_index);
                         pack.len += 1;
@@ -516,7 +565,7 @@ impl<'w, T> WindowMut<'w, T> {
         }
     }
     pub(crate) fn unpack(&mut self, entity: EntityId) {
-        let dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
+        let dense_index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
         match &mut self.pack_info.pack {
             Pack::Tight(pack) => {
                 if dense_index < pack.len {
@@ -524,8 +573,8 @@ impl<'w, T> WindowMut<'w, T> {
                     // swap index and last packed element (can be the same)
                     unsafe {
                         self.sparse.swap(
-                            self.dense.get_unchecked(pack.len).index(),
-                            self.dense.get_unchecked(dense_index).index(),
+                            self.dense.get_unchecked(pack.len).uindex(),
+                            self.dense.get_unchecked(dense_index).uindex(),
                         )
                     };
                     self.dense.swap(dense_index, pack.len);
@@ -538,8 +587,8 @@ impl<'w, T> WindowMut<'w, T> {
                     // swap index and last packed element (can be the same)
                     unsafe {
                         self.sparse.swap(
-                            self.dense.get_unchecked(pack.len).index(),
-                            self.dense.get_unchecked(dense_index).index(),
+                            self.dense.get_unchecked(pack.len).uindex(),
+                            self.dense.get_unchecked(dense_index).uindex(),
                         )
                     };
                     self.dense.swap(dense_index, pack.len);
@@ -549,6 +598,101 @@ impl<'w, T> WindowMut<'w, T> {
             Pack::Update(_) => {}
             Pack::NoPack => {}
         }
+    }
+    /// Returns the `EntityId` at a given `index`.
+    pub fn try_id_at(&self, index: usize) -> Option<EntityId> {
+        self.dense.get(index).copied()
+    }
+    /// Returns the `EntityId` at a given `index`.  
+    /// Unwraps errors.
+    pub fn id_at(&self, index: usize) -> EntityId {
+        self.try_id_at(index).unwrap()
+    }
+    /// Returns a slice of all the components in this window.
+    pub fn as_slice(&self) -> &[T] {
+        &self.data
+    }
+    /// Returns a window over `range`.
+    pub fn try_as_window<R: core::ops::RangeBounds<usize>>(
+        &self,
+        range: R,
+    ) -> Result<Window<'_, T>, error::NotInbound> {
+        use core::ops::Bound;
+
+        let start = match range.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end + 1,
+            Bound::Excluded(end) => *end,
+            Bound::Unbounded => self.len(),
+        };
+        let range = start..end;
+
+        if range.end <= self.len() {
+            Ok(Window {
+                offset: range.start + self.offset,
+                sparse: &self.sparse,
+                dense: &self.dense[range.clone()],
+                data: &self.data[range],
+                pack_info: &self.pack_info,
+            })
+        } else {
+            Err(error::NotInbound::Window)
+        }
+    }
+    /// Returns a window over `range`.  
+    /// Unwraps errors.
+    pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
+        self.try_as_window(range).unwrap()
+    }
+    /// Returns a mutable window over `range`.
+    pub fn try_as_window_mut<R: core::ops::RangeBounds<usize>>(
+        &mut self,
+        range: R,
+    ) -> Result<WindowMut<'_, T>, error::NotInbound> {
+        use core::ops::Bound;
+
+        let start = match range.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end + 1,
+            Bound::Excluded(end) => *end,
+            Bound::Unbounded => self.len(),
+        };
+        let range = start..end;
+
+        if range.end <= self.len() {
+            if let Pack::Update(update) = &self.pack_info.pack {
+                if !(range.start + self.offset..range.end + self.offset)
+                    .contains(&(update.inserted + update.modified))
+                {
+                    return Err(error::NotInbound::UpdatePack);
+                }
+            }
+            Ok(WindowMut {
+                offset: range.start + self.offset,
+                sparse: &mut self.sparse,
+                dense: &mut self.dense[range.clone()],
+                data: &mut self.data[range],
+                pack_info: &mut self.pack_info,
+            })
+        } else {
+            Err(error::NotInbound::Window)
+        }
+    }
+    /// Returns a mutable window over `range`.  
+    /// Unwraps errors.
+    pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
+        &mut self,
+        range: R,
+    ) -> WindowMut<'_, T> {
+        self.try_as_window_mut(range).unwrap()
     }
 }
 
@@ -581,9 +725,9 @@ impl<T> RawWindowMut<'_, T> {
     pub(crate) fn contains(&self, entity: EntityId) -> bool {
         use core::ptr::read;
 
-        entity.index() < self.sparse_len
-            && unsafe { read(self.sparse.add(entity.index())) } < self.dense_len
-            && unsafe { read(self.dense.add(read(self.sparse.add(entity.index())))) == entity }
+        entity.uindex() < self.sparse_len
+            && unsafe { read(self.sparse.add(entity.uindex())) } < self.dense_len
+            && unsafe { read(self.dense.add(read(self.sparse.add(entity.uindex())))) == entity }
     }
 }
 

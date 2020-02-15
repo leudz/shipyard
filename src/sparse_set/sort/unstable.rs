@@ -1,4 +1,4 @@
-use super::{IntoSortable, SparseSet};
+use super::{IntoSortable, SparseSet, WindowMut};
 use crate::error;
 use crate::sparse_set::{EntityId, Pack};
 use crate::views::ViewMut;
@@ -41,8 +41,59 @@ impl<'tmp, T> Sort1<'tmp, T> {
 
             for i in 0..self.0.dense.len() {
                 unsafe {
-                    let dense_index = self.0.dense.get_unchecked(i).index();
+                    let dense_index = self.0.dense.get_unchecked(i).uindex();
                     *self.0.sparse.get_unchecked_mut(dense_index) = i;
+                }
+            }
+
+            Ok(())
+        } else {
+            Err(error::Sort::MissingPackStorage)
+        }
+    }
+    /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.  
+    /// Unwraps errors.
+    pub fn unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
+        self.try_unstable(cmp).unwrap()
+    }
+}
+
+pub struct WindowSort1<'tmp, 'w, T>(&'tmp mut WindowMut<'w, T>);
+
+impl<'tmp, 'w, T> IntoSortable for &'tmp mut WindowMut<'w, T> {
+    type IntoSortable = WindowSort1<'tmp, 'w, T>;
+    fn sort(self) -> Self::IntoSortable {
+        WindowSort1(self)
+    }
+}
+
+impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
+    /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
+    pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
+        if core::mem::discriminant(&self.0.pack_info.pack) == core::mem::discriminant(&Pack::NoPack)
+        {
+            let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
+
+            transform.sort_unstable_by(|&i, &j| {
+                cmp(unsafe { self.0.data.get_unchecked(i) }, unsafe {
+                    self.0.data.get_unchecked(j)
+                })
+            });
+
+            let mut pos;
+            for i in 0..transform.len() {
+                pos = unsafe { *transform.get_unchecked(i) };
+                while pos < i {
+                    pos = unsafe { *transform.get_unchecked(pos) };
+                }
+                self.0.dense.swap(i, pos);
+                self.0.data.swap(i, pos);
+            }
+
+            for i in 0..self.0.dense.len() {
+                unsafe {
+                    let dense_index = self.0.dense.get_unchecked(i).uindex();
+                    *self.0.sparse.get_unchecked_mut(dense_index) = i + self.0.offset;
                 }
             }
 
@@ -141,7 +192,7 @@ macro_rules! impl_unstable_sort {
 
                             for i in 0..self.$index.dense.len() {
                                 unsafe {
-                                    *self.$index.sparse.get_unchecked_mut(self.0.dense.get_unchecked(i).index()) = i;
+                                    *self.$index.sparse.get_unchecked_mut(self.0.dense.get_unchecked(i).uindex()) = i;
                                 }
                             }
                         )*
@@ -166,7 +217,7 @@ macro_rules! impl_unstable_sort {
                                     if packed & 1 << $index != 0 {
                                         self.$index.data.get_unchecked(i)
                                     } else {
-                                        self.$index.data.get_unchecked(*self.$index.sparse.get_unchecked(dense.get_unchecked(i).index()))
+                                        self.$index.data.get_unchecked(*self.$index.sparse.get_unchecked(dense.get_unchecked(i).uindex()))
                                     }
                                 }
                             ,)+),
@@ -175,7 +226,7 @@ macro_rules! impl_unstable_sort {
                                     if packed & 1 << $index != 0 {
                                         self.$index.data.get_unchecked(j)
                                     } else {
-                                        self.$index.data.get_unchecked(*self.$index.sparse.get_unchecked(dense.get_unchecked(j).index()))
+                                        self.$index.data.get_unchecked(*self.$index.sparse.get_unchecked(dense.get_unchecked(j).uindex()))
                                     }
                                 }
                             ,)+)
@@ -194,7 +245,7 @@ macro_rules! impl_unstable_sort {
 
                             for i in 0..self.$index.dense.len() {
                                 unsafe {
-                                    *self.$index.sparse.get_unchecked_mut(self.0.dense.get_unchecked(i).index()) = i;
+                                    *self.$index.sparse.get_unchecked_mut(self.0.dense.get_unchecked(i).uindex()) = i;
                                 }
                             }
                         )*

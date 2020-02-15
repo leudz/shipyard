@@ -1,3 +1,4 @@
+use shipyard::error;
 use shipyard::internal::iterators;
 use shipyard::prelude::*;
 
@@ -114,53 +115,54 @@ fn tight_loose_sort() {
 }
 
 #[test]
-#[should_panic(
-    expected = "The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."
-)]
 fn tight_sort_missing_storage() {
     let world = World::new();
     let (mut usizes, mut u64s) = world.borrow::<(&mut usize, &mut u64)>();
 
     (&mut usizes, &mut u64s).tight_pack();
-    usizes.sort().unstable(Ord::cmp);
+    assert_eq!(
+        usizes.sort().try_unstable(Ord::cmp).err(),
+        Some(error::Sort::MissingPackStorage)
+    );
 }
 
 #[test]
-#[should_panic(
-    expected = "The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."
-)]
 fn loose_sort_missing_storage() {
     let world = World::new();
     let (mut usizes, mut u64s) = world.borrow::<(&mut usize, &mut u64)>();
 
     (&mut usizes, &mut u64s).loose_pack();
-    usizes.sort().unstable(Ord::cmp);
+    assert_eq!(
+        usizes.sort().try_unstable(Ord::cmp).err(),
+        Some(error::Sort::MissingPackStorage)
+    );
 }
 
 #[test]
-#[should_panic(
-    expected = "You provided too many storages non packed together. Only single storage and storages packed together can be sorted."
-)]
 fn tight_sort_too_many_storages() {
     let world = World::new();
     let (mut usizes, mut u64s, mut u32s) = world.borrow::<(&mut usize, &mut u64, &mut u32)>();
 
     (&mut usizes, &mut u64s).tight_pack();
-    (&mut usizes, &mut u64s, &mut u32s)
-        .sort()
-        .unstable(|(&x1, &y1, &z1), (&x2, &y2, &z2)| {
-            (x1 + y1 as usize + z1 as usize).cmp(&(x2 + y2 as usize + z2 as usize))
-        });
+    assert_eq!(
+        (&mut usizes, &mut u64s, &mut u32s)
+            .sort()
+            .try_unstable(|(&x1, &y1, &z1), (&x2, &y2, &z2)| {
+                (x1 + y1 as usize + z1 as usize).cmp(&(x2 + y2 as usize + z2 as usize))
+            })
+            .err(),
+        Some(error::Sort::TooManyStorages)
+    );
 }
 
 #[test]
-#[should_panic(
-    expected = "Result::unwrap()` on an `Err` value: The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."
-)]
 fn update_sort() {
     let world = World::new();
     let mut usizes = world.borrow::<&mut usize>();
 
     usizes.update_pack();
-    usizes.sort().unstable(Ord::cmp);
+    assert_eq!(
+        usizes.sort().try_unstable(Ord::cmp).err(),
+        Some(error::Sort::MissingPackStorage)
+    );
 }

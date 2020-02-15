@@ -72,15 +72,15 @@ impl<T> SparseSet<T> {
         }
     }
     pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
-        if entity.index() >= self.sparse.len() {
-            self.sparse.resize(entity.index() + 1, 0);
+        if entity.uindex() >= self.sparse.len() {
+            self.sparse.resize(entity.uindex() + 1, 0);
         }
 
         let result = if let Some(data) = self.get_mut(entity) {
             core::mem::swap(data, &mut value);
             Some(value)
         } else {
-            unsafe { *self.sparse.get_unchecked_mut(entity.index()) = self.dense.len() };
+            unsafe { *self.sparse.get_unchecked_mut(entity.uindex()) = self.dense.len() };
             self.dense.push(entity);
             self.data.push(value);
             None
@@ -89,15 +89,15 @@ impl<T> SparseSet<T> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             let len = self.data.len() - 1;
             unsafe {
-                *self.sparse.get_unchecked_mut(entity.index()) = pack.inserted;
+                *self.sparse.get_unchecked_mut(entity.uindex()) = pack.inserted;
                 *self.sparse.get_unchecked_mut(
                     self.dense
                         .get_unchecked(pack.inserted + pack.modified)
-                        .index(),
+                        .uindex(),
                 ) = len;
                 *self
                     .sparse
-                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).index()) =
+                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).uindex()) =
                     pack.inserted + pack.modified;
             }
             self.dense.swap(pack.inserted + pack.modified, len);
@@ -134,9 +134,9 @@ impl<T> SparseSet<T> {
         self.try_remove(entity).unwrap()
     }
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
-        if entity.index() < self.sparse.len() {
+        if entity.uindex() < self.sparse.len() {
             // SAFE we're inbound
-            let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.index()) };
+            let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if dense_index < self.dense.len() {
                 // SAFE we're inbound
                 let dense_id = unsafe { *self.dense.get_unchecked(dense_index) };
@@ -149,7 +149,7 @@ impl<T> SparseSet<T> {
                                 // swap index and last packed element (can be the same)
                                 unsafe {
                                     *self.sparse.get_unchecked_mut(
-                                        self.dense.get_unchecked(pack_len - 1).index(),
+                                        self.dense.get_unchecked(pack_len - 1).uindex(),
                                     ) = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack_len - 1);
@@ -164,7 +164,7 @@ impl<T> SparseSet<T> {
                                 // swap index and last packed element (can be the same)
                                 unsafe {
                                     *self.sparse.get_unchecked_mut(
-                                        self.dense.get_unchecked(pack_len - 1).index(),
+                                        self.dense.get_unchecked(pack_len - 1).uindex(),
                                     ) = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack_len - 1);
@@ -177,7 +177,7 @@ impl<T> SparseSet<T> {
                                 pack.inserted -= 1;
                                 unsafe {
                                     *self.sparse.get_unchecked_mut(
-                                        self.dense.get_unchecked(pack.inserted).index(),
+                                        self.dense.get_unchecked(pack.inserted).uindex(),
                                     ) = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack.inserted);
@@ -190,7 +190,7 @@ impl<T> SparseSet<T> {
                                     *self.sparse.get_unchecked_mut(
                                         self.dense
                                             .get_unchecked(pack.inserted + pack.modified)
-                                            .index(),
+                                            .uindex(),
                                     ) = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack.inserted + pack.modified);
@@ -202,7 +202,7 @@ impl<T> SparseSet<T> {
                     }
                     unsafe {
                         *self.sparse.get_unchecked_mut(
-                            self.dense.get_unchecked(self.dense.len() - 1).index(),
+                            self.dense.get_unchecked(self.dense.len() - 1).uindex(),
                         ) = dense_index;
                     }
                     self.dense.swap_remove(dense_index);
@@ -262,7 +262,7 @@ impl<T> SparseSet<T> {
         if self.contains(entity) {
             Some(unsafe {
                 self.data
-                    .get_unchecked(*self.sparse.get_unchecked(entity.index()))
+                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
             })
         } else {
             None
@@ -271,7 +271,7 @@ impl<T> SparseSet<T> {
     pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         if self.contains(entity) {
             // SAFE we checked the window countains the entity
-            let mut index = unsafe { *self.sparse.get_unchecked(entity.index()) };
+            let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 if index >= pack.modified {
                     // index of the first element non modified
@@ -289,11 +289,11 @@ impl<T> SparseSet<T> {
                             );
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(non_mod)).index()) =
+                                .get_unchecked_mut((*self.dense.get_unchecked(non_mod)).uindex()) =
                                 non_mod;
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(index)).index()) =
+                                .get_unchecked_mut((*self.dense.get_unchecked(index)).uindex()) =
                                 index;
                         }
                         pack.modified += 1;
@@ -476,7 +476,7 @@ impl<T> SparseSet<T> {
                     unsafe {
                         *self
                             .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(i).index()) = i;
+                            .get_unchecked_mut(self.dense.get_unchecked(i).uindex()) = i;
                     }
                 }
             }
@@ -590,6 +590,99 @@ impl<T> SparseSet<T> {
             self.dense.clear();
             self.data.clear();
         }
+    }
+    /// Returns the `EntityId` at a given `index`.
+    pub fn try_id_at(&self, index: usize) -> Option<EntityId> {
+        self.dense.get(index).copied()
+    }
+    /// Returns the `EntityId` at a given `index`.  
+    /// Unwraps errors.
+    pub fn id_at(&self, index: usize) -> EntityId {
+        self.try_id_at(index).unwrap()
+    }
+    /// Returns a slice of all the components in this storage.
+    pub fn as_slice(&self) -> &[T] {
+        &self.data
+    }
+    /// Returns a window over `range`.
+    pub fn try_as_window<R: core::ops::RangeBounds<usize>>(
+        &self,
+        range: R,
+    ) -> Result<Window<'_, T>, error::NotInbound> {
+        use core::ops::Bound;
+
+        let start = match range.end_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end,
+            Bound::Excluded(end) => end.checked_sub(1).unwrap_or(0),
+            Bound::Unbounded => self.len(),
+        };
+        let range = start..end;
+
+        if range.end <= self.len() {
+            Ok(Window {
+                offset: range.start,
+                sparse: &self.sparse,
+                dense: &self.dense[range.clone()],
+                data: &self.data[range],
+                pack_info: &self.pack_info,
+            })
+        } else {
+            Err(error::NotInbound::View(type_name::<T>()))
+        }
+    }
+    /// Returns a window over `range`.  
+    /// Unwraps errors.
+    pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
+        self.try_as_window(range).unwrap()
+    }
+    /// Returns a mutable window over `range`.
+    pub fn try_as_window_mut<R: core::ops::RangeBounds<usize>>(
+        &mut self,
+        range: R,
+    ) -> Result<WindowMut<'_, T>, error::NotInbound> {
+        use core::ops::Bound;
+
+        let start = match range.start_bound() {
+            Bound::Included(start) => *start,
+            Bound::Excluded(start) => *start + 1,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(end) => *end + 1,
+            Bound::Excluded(end) => *end,
+            Bound::Unbounded => self.len(),
+        };
+        let range = start..end;
+
+        if range.end <= self.len() {
+            if let Pack::Update(update) = &self.pack_info.pack {
+                if !range.contains(&(update.inserted + update.modified)) {
+                    return Err(error::NotInbound::UpdatePack);
+                }
+            }
+            Ok(WindowMut {
+                offset: range.start,
+                sparse: &mut self.sparse,
+                dense: &mut self.dense[range.clone()],
+                data: &mut self.data[range],
+                pack_info: &mut self.pack_info,
+            })
+        } else {
+            Err(error::NotInbound::View(type_name::<T>()))
+        }
+    }
+    /// Returns a mutable window over `range`.  
+    /// Unwraps errors.
+    pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
+        &mut self,
+        range: R,
+    ) -> WindowMut<'_, T> {
+        self.try_as_window_mut(range).unwrap()
     }
 }
 

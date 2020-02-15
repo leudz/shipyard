@@ -6,6 +6,8 @@ mod serialization;
 mod window;
 mod workload;
 
+use shipyard::error;
+#[cfg(feature = "parallel")]
 use shipyard::internal::iterators;
 use shipyard::prelude::*;
 
@@ -49,6 +51,7 @@ fn run() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn thread_pool() {
     let world = World::new();
@@ -134,6 +137,7 @@ fn systems() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn simple_parallel_sum() {
     use rayon::prelude::*;
@@ -156,6 +160,7 @@ fn simple_parallel_sum() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn tight_parallel_iterator() {
     use iterators::ParIter2;
@@ -192,6 +197,7 @@ fn tight_parallel_iterator() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn parallel_iterator() {
     use rayon::prelude::*;
@@ -222,6 +228,7 @@ fn parallel_iterator() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn loose_parallel_iterator() {
     use iterators::ParIter2;
@@ -258,6 +265,7 @@ fn loose_parallel_iterator() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn two_workloads() {
     struct System1;
@@ -278,6 +286,7 @@ fn two_workloads() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
     expected = "Result::unwrap()` on an `Err` value: Cannot mutably borrow usize storage while it's already borrowed."
@@ -301,25 +310,29 @@ fn two_bad_workloads() {
 }
 
 #[test]
-#[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn add_component_with_old_key() {
     let world = World::new();
 
-    let entity = world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
-        |(mut entities, mut usizes, mut u32s)| {
-            entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32))
-        },
-    );
+    let entity = {
+        let (mut entities, mut usizes, mut u32s) =
+            world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32))
+    };
 
     world.run::<AllStorages, _, _>(|mut all_storages| {
         all_storages.delete(entity);
     });
 
-    world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(entities, mut usizes, mut u32s)| {
-        entities.add_component((&mut usizes, &mut u32s), (1, 2), entity);
-    });
+    {
+        let (entities, mut usizes, mut u32s) = world.borrow::<(Entities, &mut usize, &mut u32)>();
+        assert_eq!(
+            entities.try_add_component((&mut usizes, &mut u32s), (1, 2), entity),
+            Err(error::AddComponent::EntityIsNotAlive)
+        );
+    }
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn derive() {
     let t = trybuild::TestCases::new();
@@ -355,6 +368,7 @@ fn derive() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn par_update_pack() {
     use rayon::prelude::*;
@@ -391,6 +405,7 @@ fn par_update_pack() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn par_multiple_update_pack() {
     use iterators::ParIter2;
@@ -446,6 +461,7 @@ fn par_multiple_update_pack() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn par_update_filter() {
     use rayon::prelude::*;

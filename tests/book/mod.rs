@@ -7,6 +7,7 @@ mod get;
 mod hierarchy;
 mod iterators;
 mod remove_components;
+#[cfg(feature = "proc")]
 mod systems;
 mod world;
 

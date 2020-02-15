@@ -449,6 +449,7 @@ fn unique_reborrow() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn non_send_sync() {
     struct Test(*const ());
@@ -470,6 +471,7 @@ fn non_send_sync() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn non_sync_send() {
     struct Test(*const ());
@@ -495,6 +497,7 @@ fn non_sync_send() {
 }
 
 #[cfg(feature = "parallel")]
+#[cfg_attr(miri, ignore)]
 #[test]
 fn non_send_non_sync() {
     struct Test(*const ());

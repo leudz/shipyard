@@ -55,13 +55,13 @@ macro_rules! window {
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.contains(entity) {
-                        Some(unsafe { *self.sparse.get_unchecked(entity.index()) })
+                        Some(unsafe { *self.sparse.get_unchecked(entity.uindex()) })
                     } else {
                         None
                     }
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *self.sparse.get_unchecked(entity.index())
+                    *self.sparse.get_unchecked(entity.uindex())
                 }
                 unsafe fn flag_all(&mut self) {}
                 unsafe fn flag(&mut self, _: EntityId) {}
@@ -89,10 +89,10 @@ macro_rules! window_mut {
                             ptr::swap(self.dense.add(non_mod), self.dense.add(index));
                             ptr::swap(self.data.add(non_mod), self.data.add(index));
 
-                            let non_mod_index = ptr::read(self.dense.add(non_mod)).index();
+                            let non_mod_index = ptr::read(self.dense.add(non_mod)).uindex();
                             *self.sparse.add(non_mod_index) = non_mod;
 
-                            let index_index = ptr::read(self.dense.add(index)).index();
+                            let index_index = ptr::read(self.dense.add(index)).uindex();
                             *self.sparse.add(index_index) = index;
 
                             index = non_mod;
@@ -115,14 +115,14 @@ macro_rules! window_mut {
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     unsafe {
                         if self.contains(entity) {
-                            Some(*self.sparse.add(entity.index()))
+                            Some(*self.sparse.add(entity.uindex()))
                         } else {
                             None
                         }
                     }
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *self.sparse.add(entity.index())
+                    *self.sparse.add(entity.uindex())
                 }
                 unsafe fn flag_all(&mut self) {
                     if let Pack::Update(update) = &mut (*self.pack_info).pack {
@@ -133,7 +133,7 @@ macro_rules! window_mut {
                 }
                 unsafe fn flag(&mut self, entity: EntityId) {
                     if let Pack::Update(update) = &mut (*self.pack_info).pack {
-                        if ptr::read(self.sparse.add(entity.index())) >= update.inserted + update.modified {
+                        if ptr::read(self.sparse.add(entity.uindex())) >= update.inserted + update.modified {
                             update.modified += 1;
                         }
                     }

@@ -18,13 +18,17 @@ impl EntityId {
 
     /// Returns the index part of the EntityId.
     #[inline]
-    pub(crate) fn index(self) -> usize {
-        ((self.0.get() & Self::INDEX_MASK) - 1) as usize
+    pub(crate) fn index(self) -> u64 {
+        (self.0.get() & Self::INDEX_MASK) - 1
+    }
+    #[inline]
+    pub(crate) fn uindex(self) -> usize {
+        self.index() as usize
     }
     /// Returns the version part of the EntityId.
     #[inline]
-    pub(crate) fn version(self) -> usize {
-        ((self.0.get() & Self::VERSION_MASK) >> (64 - Self::VERSION_LEN)) as usize
+    pub(crate) fn version(self) -> u64 {
+        (self.0.get() & Self::VERSION_MASK) >> (64 - Self::VERSION_LEN)
     }
     /// Make a new EntityId with the given index.
     #[inline]
@@ -64,8 +68,7 @@ impl EntityId {
         if self.0.get() < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = unsafe {
                 NonZeroU64::new_unchecked(
-                    (self.index() + 1) as u64
-                        | (((self.version() + 1) as u64) << (64 - Self::VERSION_LEN)),
+                    self.index() + 1 | ((self.version() + 1) << (64 - Self::VERSION_LEN)),
                 )
             };
             Ok(())

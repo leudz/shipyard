@@ -81,7 +81,7 @@ pub trait Shiperator {
     /// Returns `EntityId` as well as component(s).
     fn with_id(self) -> WithId<Self>
     where
-        Self: Sized,
+        Self: Sized + CurrentId,
     {
         WithId::new(self)
     }

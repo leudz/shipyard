@@ -483,3 +483,32 @@ impl Display for MissingComponent {
         Debug::fmt(self, fmt)
     }
 }
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NotInbound {
+    View(&'static str),
+    Window,
+    UpdatePack,
+}
+
+#[cfg(feature = "std")]
+impl Error for NotInbound {}
+
+impl Debug for NotInbound {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::View(name) => fmt.write_fmt(format_args!(
+                "There isn't enough {} components to fill this range.",
+                name,
+            )),
+            Self::Window => fmt.write_str("This window is too small to fill this range."),
+            Self::UpdatePack => fmt.write_str("With update packed storages windows including *regular* components have to include the first non modified component.")
+        }
+    }
+}
+
+impl Display for NotInbound {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
