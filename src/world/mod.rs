@@ -71,6 +71,7 @@ impl World {
     ) -> Self {
         World {
             all_storages: AtomicRefCell::new(Default::default(), None, true),
+            #[cfg(feature = "parallel")]
             thread_pool: ThreadPoolBuilder::new()
                 .num_threads(num_cpus::get_physical())
                 .spawn_handler(f)
@@ -495,6 +496,8 @@ world.try_run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///
     /// ### Example
     /// ```
+    /// # #[cfg(feature = "proc")]
+    /// # {
     /// # use shipyard::prelude::*;
     /// struct Clock(u32);
     ///
@@ -507,6 +510,7 @@ world.try_run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///
     /// let world = World::default();
     /// world.try_run_system::<Tick>().unwrap();
+    /// # }
     /// ```
     pub fn try_run_system<S: for<'a> System<'a> + 'static>(&self) -> Result<(), error::GetStorage> {
         S::try_dispatch(self)
@@ -516,6 +520,8 @@ world.try_run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///
     /// ### Example
     /// ```
+    /// # #[cfg(feature = "proc")]
+    /// # {
     /// # use shipyard::prelude::*;
     /// struct Clock(u32);
     ///
@@ -528,6 +534,7 @@ world.try_run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
     ///
     /// let world = World::default();
     /// world.run_system::<Tick>();
+    /// # }
     /// ```
     pub fn run_system<S: for<'a> System<'a> + 'static>(&self) {
         self.try_run_system::<S>().unwrap()

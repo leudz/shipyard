@@ -1,5 +1,7 @@
 //! # Getting started
 //! ```
+//! # #[cfg(feature = "proc")]
+//! # {
 //! use shipyard::prelude::*;
 //!
 //! struct Health(f32);
@@ -33,10 +35,11 @@
 //! }
 //!
 //! world.run_system::<InAcid>();
+//! # }
 //! ```
 //! # Let's make some pigs!
 //! ```
-//! # #[cfg(feature = "parallel")]
+//! # #[cfg(all(feature = "parallel", feature = "proc"))]
 //! # {
 //! use shipyard::prelude::*;
 //!

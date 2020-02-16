@@ -333,6 +333,7 @@ fn add_component_with_old_key() {
 }
 
 #[cfg_attr(miri, ignore)]
+#[cfg(feature = "proc")]
 #[test]
 fn derive() {
     let t = trybuild::TestCases::new();

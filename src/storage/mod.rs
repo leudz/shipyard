@@ -54,11 +54,11 @@ impl Storage {
         }
     }
     #[cfg(feature = "non_send")]
-    pub(crate) fn new_non_send<T: 'static + Sync>() -> Self {
+    pub(crate) fn new_non_send<T: 'static + Sync>(world_thread_id: std::thread::ThreadId) -> Self {
         let sparse_set = SparseSet::<T>::default();
         Storage(Box::new(AtomicRefCell::new(
             sparse_set,
-            Some(std::thread::current().id()),
+            Some(world_thread_id),
             true,
         )))
     }
@@ -68,11 +68,11 @@ impl Storage {
         Storage(Box::new(AtomicRefCell::new(sparse_set, None, false)))
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
-    pub(crate) fn new_non_send_sync<T: 'static>() -> Self {
+    pub(crate) fn new_non_send_sync<T: 'static>(world_thread_id: std::thread::ThreadId) -> Self {
         let sparse_set = SparseSet::<T>::default();
         Storage(Box::new(AtomicRefCell::new(
             sparse_set,
-            Some(std::thread::current().id()),
+            Some(world_thread_id),
             false,
         )))
     }

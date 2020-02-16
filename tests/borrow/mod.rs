@@ -1,3 +1,5 @@
+#[cfg(feature = "non_send")]
+use core::any::type_name;
 use shipyard::error;
 use shipyard::prelude::*;
 
@@ -64,4 +66,49 @@ fn all_storages_double_borrow() {
     let u32s = all_storages.borrow::<&mut u32>();
     drop(u32s);
     all_storages.borrow::<&mut u32>();
+}
+
+#[test]
+#[cfg(feature = "non_send")]
+fn non_send_storage_in_other_thread() {
+    struct NonSendStruct(*const ());
+
+    unsafe impl Sync for NonSendStruct {}
+
+    dbg!(std::thread::current().id());
+    let world = World::new();
+    rayon::join(
+        || {
+            dbg!(std::thread::current().id());
+            assert_eq!(
+                world.try_borrow::<NonSend<&mut NonSendStruct>>().err(),
+                Some(error::GetStorage::StorageBorrow((
+                    type_name::<NonSendStruct>(),
+                    error::Borrow::WrongThread
+                )))
+            )
+        },
+        || {},
+    );
+}
+
+#[test]
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+fn non_send_sync_storage_in_other_thread() {
+    struct NonSendSyncStruct(*const ());
+
+    let world = World::new();
+    rayon::join(
+        || {
+            dbg!(std::thread::current().id());
+            assert_eq!(
+                world.try_borrow::<NonSendSync<&NonSendSyncStruct>>().err(),
+                Some(error::GetStorage::StorageBorrow((
+                    type_name::<NonSendSyncStruct>(),
+                    error::Borrow::WrongThread
+                )))
+            )
+        },
+        || {},
+    );
 }

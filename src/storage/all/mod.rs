@@ -25,6 +25,8 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 pub struct AllStorages {
     lock: RawRwLock,
     storages: UnsafeCell<HashMap<TypeId, Storage, BuildHasherDefault<TypeIdHasher>>>,
+    #[cfg(feature = "non_send")]
+    thread_id: std::thread::ThreadId,
 }
 
 impl Default for AllStorages {
@@ -48,9 +50,20 @@ impl Default for AllStorages {
             );
         }
 
-        AllStorages {
-            storages: UnsafeCell::new(storages),
-            lock: RawRwLock::INIT,
+        #[cfg(not(feature = "non_send"))]
+        {
+            AllStorages {
+                storages: UnsafeCell::new(storages),
+                lock: RawRwLock::INIT,
+            }
+        }
+        #[cfg(feature = "non_send")]
+        {
+            AllStorages {
+                storages: UnsafeCell::new(storages),
+                lock: RawRwLock::INIT,
+                thread_id: std::thread::current().id(),
+            }
         }
     }
 }
@@ -167,7 +180,7 @@ impl AllStorages {
         // another thread might have initialized the storage before this thread so we use entry
         let sparse_set = storages
             .entry(type_id)
-            .or_insert_with(Storage::new_non_send::<T>)
+            .or_insert_with(|| Storage::new_non_send::<T>(self.thread_id))
             .sparse_set::<T>();
         self.lock.unlock_exclusive();
         sparse_set
@@ -195,7 +208,7 @@ impl AllStorages {
         // another thread might have initialized the storage before this thread so we use entry
         let sparse_set = storages
             .entry(type_id)
-            .or_insert_with(Storage::new_non_send::<T>)
+            .or_insert_with(|| Storage::new_non_send::<T>(self.thread_id))
             .sparse_set_mut::<T>();
         self.lock.unlock_exclusive();
         sparse_set
@@ -279,7 +292,7 @@ impl AllStorages {
         // another thread might have initialized the storage before this thread so we use entry
         let sparse_set = storages
             .entry(type_id)
-            .or_insert_with(Storage::new_non_send_sync::<T>)
+            .or_insert_with(|| Storage::new_non_send_sync::<T>(self.thread_id))
             .sparse_set::<T>();
         self.lock.unlock_exclusive();
         sparse_set
@@ -307,7 +320,7 @@ impl AllStorages {
         // another thread might have initialized the storage before this thread so we use entry
         let sparse_set = storages
             .entry(type_id)
-            .or_insert_with(Storage::new_non_send_sync::<T>)
+            .or_insert_with(|| Storage::new_non_send_sync::<T>(self.thread_id))
             .sparse_set_mut::<T>();
         self.lock.unlock_exclusive();
         sparse_set
