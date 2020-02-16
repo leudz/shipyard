@@ -369,13 +369,6 @@ impl<'a, T: 'a + ?Sized> RefMut<'a, T> {
             borrow: origin.borrow,
         })
     }
-    /*
-    /// Get the inner parts of the `RefMut`.
-    /// # Safety
-    /// The reference has to be dropped before `Borrow`
-    pub(crate) unsafe fn destructure(RefMut { inner, borrow }: Self) -> (&'a mut T, Borrow<'a>) {
-        (inner, borrow)
-    }*/
 }
 
 impl<T: ?Sized> core::ops::Deref for RefMut<'_, T> {
