@@ -5,27 +5,35 @@ use core::ptr;
 
 // Abstracts different types of view to iterate over
 // mutable and immutable views with the same iterator
-#[doc(hidden)]
 pub trait AbstractMut {
     type Out;
     type Slice;
     /// # Safety
     ///
-    /// `index` has to be inbound and `Out` need a correct lifetime.
+    /// `index` has to be inbound and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
     unsafe fn get_data(&mut self, index: usize) -> Self::Out;
     /// # Safety
     ///
-    /// `index` has to be inbound and `Out` need a correct lifetime.
+    /// `index` has to be inbound and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
     unsafe fn get_update_data(&mut self, index: usize) -> Self::Out;
     /// # Safety
     ///
-    /// `index` has to be inbound and `Slice` need a correct lifetime.
+    /// `index` has to be inbound and `Slice` needs a correct lifetime when used on `Window` or `RawWindowMut`.
     unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice;
     fn dense(&self) -> *const EntityId;
+    /// # Safety
+    ///
+    /// `index` has to be in bound.
     unsafe fn id_at(&self, index: usize) -> EntityId;
     fn index_of(&self, entity: EntityId) -> Option<usize>;
+    /// # Safety
+    ///
+    /// `entity` has to own a component in `self` when used on `Window` or `RawWindowMut`.
     unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize;
-    unsafe fn flag_all(&mut self);
+    fn flag_all(&mut self);
+    /// # Safety
+    ///
+    /// `entity` has to own a component in `self` when used on `RawWindowMut`.
     unsafe fn flag(&mut self, entity: EntityId);
 }
 
@@ -63,7 +71,7 @@ macro_rules! window {
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
                     *self.sparse.get_unchecked(entity.uindex())
                 }
-                unsafe fn flag_all(&mut self) {}
+                fn flag_all(&mut self) {}
                 unsafe fn flag(&mut self, _: EntityId) {}
             }
         )+
@@ -124,8 +132,9 @@ macro_rules! window_mut {
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
                     *self.sparse.add(entity.uindex())
                 }
-                unsafe fn flag_all(&mut self) {
-                    if let Pack::Update(update) = &mut (*self.pack_info).pack {
+                fn flag_all(&mut self) {
+                    // SAFE we have a mutable reference
+                    if let Pack::Update(update) = unsafe { &mut (*self.pack_info).pack } {
                         if self.dense_len > update.inserted + update.modified {
                             update.modified = self.dense_len - update.inserted;
                         }
@@ -178,7 +187,7 @@ macro_rules! not_window {
                 unsafe fn index_of_unchecked(&self, _: EntityId) -> usize {
                     core::usize::MAX
                 }
-                unsafe fn flag_all(&mut self) {}
+                fn flag_all(&mut self) {}
                 unsafe fn flag(&mut self, _: EntityId) {}
             }
         )+
@@ -220,7 +229,7 @@ macro_rules! not_window_mut {
                 unsafe fn index_of_unchecked(&self, _: EntityId) -> usize {
                     core::usize::MAX
                 }
-                unsafe fn flag_all(&mut self) {}
+                fn flag_all(&mut self) {}
                 unsafe fn flag(&mut self, _: EntityId) {}
             }
         )+

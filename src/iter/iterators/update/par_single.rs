@@ -108,7 +108,7 @@ where
     where
         CB: ProducerCallback<Self::Item>,
     {
-        unsafe { self.data.flag_all() };
+        self.data.flag_all();
         callback.callback(self)
     }
 }

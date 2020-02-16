@@ -32,7 +32,7 @@ macro_rules! impl_iterators {
             fn drive_unindexed<Con>(mut self, consumer: Con) -> Con::Result
             where Con: UnindexedConsumer<Self::Item> {
                 $(
-                    unsafe {self.0.data.$index.flag_all()};
+                    self.0.data.$index.flag_all();
                 )+
                 bridge_unindexed(self.0, consumer)
             }
