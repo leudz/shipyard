@@ -10,6 +10,7 @@ mod remove_components;
 #[cfg(feature = "proc")]
 mod systems;
 mod world;
+mod world_insides;
 
 use shipyard::prelude::*;
 
