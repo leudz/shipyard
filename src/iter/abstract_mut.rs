@@ -63,13 +63,15 @@ macro_rules! window {
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.contains(entity) {
-                        Some(unsafe { *self.sparse.get_unchecked(entity.uindex()) })
+                        unsafe {
+                            Some(*self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index()))
+                        }
                     } else {
                         None
                     }
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *self.sparse.get_unchecked(entity.uindex())
+                    *self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index())
                 }
                 fn flag_all(&mut self) {}
                 unsafe fn flag(&mut self, _: EntityId) {}
@@ -97,11 +99,11 @@ macro_rules! window_mut {
                             ptr::swap(self.dense.add(non_mod), self.dense.add(index));
                             ptr::swap(self.data.add(non_mod), self.data.add(index));
 
-                            let non_mod_index = ptr::read(self.dense.add(non_mod)).uindex();
-                            *self.sparse.add(non_mod_index) = non_mod;
+                            let non_mod_id = ptr::read(self.dense.add(non_mod));
+                            *(&mut *self.sparse.add(non_mod_id.bucket())).as_mut().unwrap().get_unchecked_mut(non_mod_id.bucket_index()) = non_mod;
 
-                            let index_index = ptr::read(self.dense.add(index)).uindex();
-                            *self.sparse.add(index_index) = index;
+                            let index_id = ptr::read(self.dense.add(index));
+                            *(&mut *self.sparse.add(index_id.bucket())).as_mut().unwrap().get_unchecked_mut(index_id.bucket_index()) = index;
 
                             index = non_mod;
                         }
@@ -121,16 +123,16 @@ macro_rules! window_mut {
                     *self.dense.add(index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
-                    unsafe {
-                        if self.contains(entity) {
-                            Some(*self.sparse.add(entity.uindex()))
-                        } else {
-                            None
+                    if self.contains(entity) {
+                        unsafe {
+                            Some(*(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()))
                         }
+                    } else {
+                        None
                     }
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *self.sparse.add(entity.uindex())
+                    *(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index())
                 }
                 fn flag_all(&mut self) {
                     // SAFE we have a mutable reference
@@ -142,7 +144,7 @@ macro_rules! window_mut {
                 }
                 unsafe fn flag(&mut self, entity: EntityId) {
                     if let Pack::Update(update) = &mut (*self.pack_info).pack {
-                        if ptr::read(self.sparse.add(entity.uindex())) >= update.inserted + update.modified {
+                        if *(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()) >= update.inserted + update.modified {
                             update.modified += 1;
                         }
                     }

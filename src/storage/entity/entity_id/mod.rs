@@ -68,7 +68,7 @@ impl EntityId {
         if self.0.get() < !(!0 >> (Self::VERSION_LEN - 1)) {
             self.0 = unsafe {
                 NonZeroU64::new_unchecked(
-                    self.index() + 1 | ((self.version() + 1) << (64 - Self::VERSION_LEN)),
+                    (self.index() + 1) | ((self.version() + 1) << (64 - Self::VERSION_LEN)),
                 )
             };
             Ok(())
@@ -83,6 +83,12 @@ impl EntityId {
     /// Returns a dead EntityId, it can be used as a null entity.
     pub fn dead() -> Self {
         EntityId(unsafe { NonZeroU64::new_unchecked(core::u64::MAX) })
+    }
+    pub(crate) fn bucket(self) -> usize {
+        self.uindex() / crate::sparse_set::BUCKET_SIZE
+    }
+    pub(crate) fn bucket_index(self) -> usize {
+        self.uindex() % crate::sparse_set::BUCKET_SIZE
     }
 }
 

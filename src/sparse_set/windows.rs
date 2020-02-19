@@ -1,6 +1,7 @@
 use super::{Pack, PackInfo};
 use crate::error;
 use crate::EntityId;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
@@ -8,7 +9,7 @@ use core::ptr;
 
 /// Shared slice of a storage.
 pub struct Window<'a, T> {
-    pub(crate) sparse: &'a [usize],
+    pub(crate) sparse: &'a [Option<Box<[usize; super::BUCKET_SIZE]>>],
     pub(crate) dense: &'a [EntityId],
     pub(crate) data: &'a [T],
     pub(crate) pack_info: &'a PackInfo<T>,
@@ -30,14 +31,17 @@ impl<T> Clone for Window<'_, T> {
 impl<T> Window<'_, T> {
     /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
-        entity.uindex() < self.sparse.len()
-            && unsafe { *self.sparse.get_unchecked(entity.uindex()) } < self.dense.len()
-            && unsafe {
-                *self
-                    .dense
-                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
-                    == entity
+        if entity.bucket() < self.sparse.len() {
+            unsafe {
+                if let Some(bucket) = self.sparse.get_unchecked(entity.bucket()) {
+                    *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX
+                } else {
+                    false
+                }
             }
+        } else {
+            false
+        }
     }
     /// Returns the length of the window.
     pub fn len(&self) -> usize {
@@ -49,10 +53,18 @@ impl<T> Window<'_, T> {
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
-            Some(unsafe {
-                self.data
-                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
-            })
+            unsafe {
+                Some(
+                    self.data.get_unchecked(
+                        *self
+                            .sparse
+                            .get_unchecked(entity.bucket())
+                            .as_ref()
+                            .unwrap()
+                            .get_unchecked(entity.bucket_index()),
+                    ),
+                )
+            }
         } else {
             None
         }
@@ -204,7 +216,7 @@ impl<T> Index<EntityId> for Window<'_, T> {
 
 /// Exclusive slice of a storage.
 pub struct WindowMut<'w, T> {
-    pub(crate) sparse: &'w mut [usize],
+    pub(crate) sparse: &'w mut [Option<Box<[usize; super::BUCKET_SIZE]>>],
     pub(crate) dense: &'w mut [EntityId],
     pub(crate) data: &'w mut [T],
     pub(crate) pack_info: &'w mut PackInfo<T>,
@@ -249,10 +261,18 @@ impl<'w, T> WindowMut<'w, T> {
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
-            Some(unsafe {
-                self.data
-                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
-            })
+            unsafe {
+                Some(
+                    self.data.get_unchecked(
+                        *self
+                            .sparse
+                            .get_unchecked(entity.bucket())
+                            .as_ref()
+                            .unwrap()
+                            .get_unchecked(entity.bucket_index()),
+                    ),
+                )
+            }
         } else {
             None
         }
@@ -260,7 +280,15 @@ impl<'w, T> WindowMut<'w, T> {
     pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         if self.contains(entity) {
             // SAFE we checked the window countains the entity
-            let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
+            let mut index = unsafe {
+                *self
+                    .sparse
+                    .get_unchecked(entity.bucket())
+                    .as_ref()
+                    .unwrap()
+                    .get_unchecked(entity.bucket_index())
+            };
+            //let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 if index >= pack.modified {
                     // index of the first element non modified
@@ -276,14 +304,20 @@ impl<'w, T> WindowMut<'w, T> {
                                 self.data.get_unchecked_mut(non_mod),
                                 self.data.get_unchecked_mut(index),
                             );
+                            let dense = self.dense.get_unchecked(non_mod);
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(non_mod)).uindex()) =
-                                non_mod;
+                                .get_unchecked_mut(dense.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(dense.bucket_index()) = non_mod;
+                            let dense = *self.dense.get_unchecked(index);
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(index)).uindex()) =
-                                index;
+                                .get_unchecked_mut(dense.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(dense.bucket_index()) = index;
                         }
                         pack.modified += 1;
                         index = non_mod;
@@ -303,7 +337,6 @@ impl<'w, T> WindowMut<'w, T> {
     pub fn is_empty(&self) -> bool {
         self.as_non_mut().is_empty()
     }
-
     /// Returns the *inserted* section of an update packed window.
     pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
@@ -492,9 +525,13 @@ impl<'w, T> WindowMut<'w, T> {
                 }
                 for i in pack.modified.saturating_sub(new_len)..pack.modified + new_len {
                     unsafe {
+                        let dense = *self.dense.get_unchecked(i);
                         *self
                             .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(i).uindex()) = i;
+                            .get_unchecked_mut(dense.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(dense.bucket_index()) = i;
                     }
                 }
             }
@@ -539,12 +576,40 @@ impl<'w, T> WindowMut<'w, T> {
     }
     pub(crate) fn pack(&mut self, entity: EntityId) {
         if self.contains(entity) {
-            let dense_index = self.sparse[entity.uindex()];
+            let dense_index = unsafe {
+                *self
+                    .sparse
+                    .get_unchecked(entity.bucket())
+                    .as_ref()
+                    .unwrap()
+                    .get_unchecked(entity.bucket_index())
+            };
             match &mut self.pack_info.pack {
                 Pack::Tight(pack) => {
                     if dense_index >= pack.len {
-                        self.sparse
-                            .swap(self.dense[pack.len].uindex(), entity.uindex());
+                        unsafe {
+                            let last_pack = *self.dense.get_unchecked(pack.len);
+                            let mut last_pack_index = *self
+                                .sparse
+                                .get_unchecked(last_pack.bucket())
+                                .as_ref()
+                                .unwrap()
+                                .get_unchecked(last_pack.bucket_index());
+                            core::mem::swap(
+                                &mut last_pack_index,
+                                self.sparse
+                                    .get_unchecked_mut(entity.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(entity.bucket_index()),
+                            );
+                            *self
+                                .sparse
+                                .get_unchecked_mut(last_pack.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                        }
                         self.dense.swap(pack.len, dense_index);
                         self.data.swap(pack.len, dense_index);
                         pack.len += 1;
@@ -552,8 +617,23 @@ impl<'w, T> WindowMut<'w, T> {
                 }
                 Pack::Loose(pack) => {
                     if dense_index >= pack.len {
-                        self.sparse
-                            .swap(self.dense[pack.len].uindex(), entity.uindex());
+                        unsafe {
+                            let last_pack = *self.dense.get_unchecked(pack.len);
+                            let mut last_pack_index = *self
+                                .sparse
+                                .get_unchecked(last_pack.bucket())
+                                .as_ref()
+                                .unwrap()
+                                .get_unchecked(last_pack.bucket_index());
+                            core::mem::swap(
+                                &mut last_pack_index,
+                                self.sparse
+                                    .get_unchecked_mut(entity.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(entity.bucket_index()),
+                            );
+                        }
                         self.dense.swap(pack.len, dense_index);
                         self.data.swap(pack.len, dense_index);
                         pack.len += 1;
@@ -565,18 +645,42 @@ impl<'w, T> WindowMut<'w, T> {
         }
     }
     pub(crate) fn unpack(&mut self, entity: EntityId) {
-        let dense_index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
+        let dense_index = unsafe {
+            *self
+                .sparse
+                .get_unchecked(entity.bucket())
+                .as_ref()
+                .unwrap()
+                .get_unchecked(entity.bucket_index())
+        };
         match &mut self.pack_info.pack {
             Pack::Tight(pack) => {
                 if dense_index < pack.len {
                     pack.len -= 1;
-                    // swap index and last packed element (can be the same)
                     unsafe {
-                        self.sparse.swap(
-                            self.dense.get_unchecked(pack.len).uindex(),
-                            self.dense.get_unchecked(dense_index).uindex(),
-                        )
-                    };
+                        // swap index and last packed element (can be the same)
+                        let last_pack = *self.dense.get_unchecked(pack.len);
+                        let mut last_pack_index = *self
+                            .sparse
+                            .get_unchecked(last_pack.bucket())
+                            .as_ref()
+                            .unwrap()
+                            .get_unchecked(last_pack.bucket_index());
+                        core::mem::swap(
+                            &mut last_pack_index,
+                            self.sparse
+                                .get_unchecked_mut(entity.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(entity.bucket_index()),
+                        );
+                        *self
+                            .sparse
+                            .get_unchecked_mut(last_pack.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                    }
                     self.dense.swap(dense_index, pack.len);
                     self.data.swap(dense_index, pack.len);
                 }
@@ -584,13 +688,30 @@ impl<'w, T> WindowMut<'w, T> {
             Pack::Loose(pack) => {
                 if dense_index < pack.len {
                     pack.len -= 1;
-                    // swap index and last packed element (can be the same)
                     unsafe {
-                        self.sparse.swap(
-                            self.dense.get_unchecked(pack.len).uindex(),
-                            self.dense.get_unchecked(dense_index).uindex(),
-                        )
-                    };
+                        // swap index and last packed element (can be the same)
+                        let last_pack = *self.dense.get_unchecked(pack.len);
+                        let mut last_pack_index = *self
+                            .sparse
+                            .get_unchecked(last_pack.bucket())
+                            .as_ref()
+                            .unwrap()
+                            .get_unchecked(last_pack.bucket_index());
+                        core::mem::swap(
+                            &mut last_pack_index,
+                            self.sparse
+                                .get_unchecked_mut(entity.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(entity.bucket_index()),
+                        );
+                        *self
+                            .sparse
+                            .get_unchecked_mut(last_pack.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                    }
                     self.dense.swap(dense_index, pack.len);
                     self.data.swap(dense_index, pack.len);
                 }
@@ -710,7 +831,7 @@ impl<T> IndexMut<EntityId> for WindowMut<'_, T> {
 }
 
 pub struct RawWindowMut<'a, T> {
-    pub(crate) sparse: *mut usize,
+    pub(crate) sparse: *mut Option<Box<[usize; super::BUCKET_SIZE]>>,
     pub(crate) sparse_len: usize,
     pub(crate) dense: *mut EntityId,
     pub(crate) dense_len: usize,
@@ -723,11 +844,15 @@ unsafe impl<T: Send> Send for RawWindowMut<'_, T> {}
 
 impl<T> RawWindowMut<'_, T> {
     pub(crate) fn contains(&self, entity: EntityId) -> bool {
-        use core::ptr::read;
-
-        entity.uindex() < self.sparse_len
-            && unsafe { read(self.sparse.add(entity.uindex())) } < self.dense_len
-            && unsafe { read(self.dense.add(read(self.sparse.add(entity.uindex())))) == entity }
+        if entity.bucket() < self.sparse_len {
+            if let Some(bucket) = unsafe { &*self.sparse.add(entity.bucket()) } {
+                unsafe { *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 }
 

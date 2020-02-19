@@ -6,6 +6,7 @@ mod windows;
 use crate::error;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::{type_name, Any, TypeId};
 use core::marker::PhantomData;
@@ -14,6 +15,8 @@ pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
 pub use windows::{Window, WindowMut};
+
+pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
 // Only usize can be added. On insertion, the number is pushed into the dense vector
@@ -24,7 +27,7 @@ pub use windows::{Window, WindowMut};
 // We can't be limited to store solely integers, this is why there is a third vector.
 // It mimics the dense vector in regard to insertion/deletion.
 pub struct SparseSet<T> {
-    pub(crate) sparse: Vec<usize>,
+    pub(crate) sparse: Vec<Option<Box<[usize; BUCKET_SIZE]>>>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
     pub(crate) pack_info: PackInfo<T>,
@@ -71,34 +74,64 @@ impl<T> SparseSet<T> {
             _phantom: PhantomData,
         }
     }
-    pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
-        if entity.uindex() >= self.sparse.len() {
-            self.sparse.resize(entity.uindex() + 1, 0);
+    pub(crate) fn allocate_at(&mut self, entity: EntityId) {
+        if entity.bucket() >= self.sparse.len() {
+            self.sparse.resize(entity.bucket() + 1, None);
         }
+        unsafe {
+            if self.sparse.get_unchecked(entity.bucket()).is_none() {
+                *self.sparse.get_unchecked_mut(entity.bucket()) =
+                    Some(Box::new([core::usize::MAX; BUCKET_SIZE]));
+            }
+        }
+    }
+    pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
+        self.allocate_at(entity);
 
-        let result = if let Some(data) = self.get_mut(entity) {
-            core::mem::swap(data, &mut value);
-            Some(value)
-        } else {
-            unsafe { *self.sparse.get_unchecked_mut(entity.uindex()) = self.dense.len() };
-            self.dense.push(entity);
-            self.data.push(value);
-            None
+        let result = match unsafe {
+            self.sparse
+                .get_unchecked_mut(entity.bucket())
+                .as_mut()
+                .unwrap()
+                .get_unchecked_mut(entity.bucket_index())
+        } {
+            i if *i == core::usize::MAX => {
+                *i = self.dense.len();
+                self.dense.push(entity);
+                self.data.push(value);
+                None
+            }
+            &mut i => {
+                unsafe {
+                    core::mem::swap(self.data.get_unchecked_mut(i), &mut value);
+                }
+                Some(value)
+            }
         };
 
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             let len = self.data.len() - 1;
             unsafe {
-                *self.sparse.get_unchecked_mut(entity.uindex()) = pack.inserted;
-                *self.sparse.get_unchecked_mut(
-                    self.dense
-                        .get_unchecked(pack.inserted + pack.modified)
-                        .uindex(),
-                ) = len;
                 *self
                     .sparse
-                    .get_unchecked_mut(self.dense.get_unchecked(pack.inserted).uindex()) =
-                    pack.inserted + pack.modified;
+                    .get_unchecked_mut(entity.bucket())
+                    .as_mut()
+                    .unwrap()
+                    .get_unchecked_mut(entity.bucket_index()) = pack.inserted;
+                let dense = self.dense.get_unchecked(pack.inserted + pack.modified);
+                *self
+                    .sparse
+                    .get_unchecked_mut(dense.bucket())
+                    .as_mut()
+                    .unwrap()
+                    .get_unchecked_mut(dense.bucket_index()) = len;
+                let dense = self.dense[pack.inserted];
+                *self
+                    .sparse
+                    .get_unchecked_mut(dense.bucket())
+                    .as_mut()
+                    .unwrap()
+                    .get_unchecked_mut(dense.bucket_index()) = pack.inserted + pack.modified;
             }
             self.dense.swap(pack.inserted + pack.modified, len);
             self.dense
@@ -134,51 +167,69 @@ impl<T> SparseSet<T> {
         self.try_remove(entity).unwrap()
     }
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
-        if entity.uindex() < self.sparse.len() {
+        if self.contains(entity) {
             // SAFE we're inbound
-            let mut dense_index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
+            let mut dense_index = unsafe {
+                *self
+                    .sparse
+                    .get_unchecked(entity.bucket())
+                    .as_ref()
+                    .unwrap()
+                    .get_unchecked(entity.bucket_index())
+            };
             if dense_index < self.dense.len() {
                 // SAFE we're inbound
                 let dense_id = unsafe { *self.dense.get_unchecked(dense_index) };
                 if dense_id.index() == entity.index() && dense_id.version() <= entity.version() {
                     match &mut self.pack_info.pack {
                         Pack::Tight(pack_info) => {
-                            let pack_len = pack_info.len;
-                            if dense_index < pack_len {
+                            if dense_index < pack_info.len {
                                 pack_info.len -= 1;
-                                // swap index and last packed element (can be the same)
                                 unsafe {
-                                    *self.sparse.get_unchecked_mut(
-                                        self.dense.get_unchecked(pack_len - 1).uindex(),
-                                    ) = dense_index;
+                                    // swap index and last packed element (can be the same)
+                                    let last_packed = *self.dense.get_unchecked(pack_info.len);
+                                    *self
+                                        .sparse
+                                        .get_unchecked_mut(last_packed.bucket())
+                                        .as_mut()
+                                        .unwrap()
+                                        .get_unchecked_mut(last_packed.bucket_index()) =
+                                        dense_index;
                                 }
-                                self.dense.swap(dense_index, pack_len - 1);
-                                self.data.swap(dense_index, pack_len - 1);
-                                dense_index = pack_len - 1;
+                                self.dense.swap(dense_index, pack_info.len);
+                                self.data.swap(dense_index, pack_info.len);
+                                dense_index = pack_info.len;
                             }
                         }
                         Pack::Loose(pack_info) => {
-                            let pack_len = pack_info.len;
-                            if dense_index < pack_len {
+                            if dense_index < pack_info.len - 1 {
                                 pack_info.len -= 1;
-                                // swap index and last packed element (can be the same)
                                 unsafe {
-                                    *self.sparse.get_unchecked_mut(
-                                        self.dense.get_unchecked(pack_len - 1).uindex(),
-                                    ) = dense_index;
+                                    // swap index and last packed element (can be the same)
+                                    let dense = self.dense.get_unchecked(pack_info.len);
+                                    *self
+                                        .sparse
+                                        .get_unchecked_mut(dense.bucket())
+                                        .as_mut()
+                                        .unwrap()
+                                        .get_unchecked_mut(dense.bucket_index()) = dense_index;
                                 }
-                                self.dense.swap(dense_index, pack_len - 1);
-                                self.data.swap(dense_index, pack_len - 1);
-                                dense_index = pack_len - 1;
+                                self.dense.swap(dense_index, pack_info.len);
+                                self.data.swap(dense_index, pack_info.len);
+                                dense_index = pack_info.len;
                             }
                         }
                         Pack::Update(pack) => {
                             if dense_index < pack.inserted {
                                 pack.inserted -= 1;
                                 unsafe {
-                                    *self.sparse.get_unchecked_mut(
-                                        self.dense.get_unchecked(pack.inserted).uindex(),
-                                    ) = dense_index;
+                                    let dense = *self.dense.get_unchecked(pack.inserted);
+                                    *self
+                                        .sparse
+                                        .get_unchecked_mut(dense.bucket())
+                                        .as_mut()
+                                        .unwrap()
+                                        .get_unchecked_mut(dense.bucket_index()) = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack.inserted);
                                 self.data.swap(dense_index, pack.inserted);
@@ -187,11 +238,14 @@ impl<T> SparseSet<T> {
                             if dense_index < pack.inserted + pack.modified {
                                 pack.modified -= 1;
                                 unsafe {
-                                    *self.sparse.get_unchecked_mut(
-                                        self.dense
-                                            .get_unchecked(pack.inserted + pack.modified)
-                                            .uindex(),
-                                    ) = dense_index;
+                                    let dense =
+                                        *self.dense.get_unchecked(pack.inserted + pack.modified);
+                                    *self
+                                        .sparse
+                                        .get_unchecked_mut(dense.bucket())
+                                        .as_mut()
+                                        .unwrap()
+                                        .get_unchecked_mut(dense.bucket_index()) = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack.inserted + pack.modified);
                                 self.data.swap(dense_index, pack.inserted + pack.modified);
@@ -201,14 +255,25 @@ impl<T> SparseSet<T> {
                         Pack::NoPack => {}
                     }
                     unsafe {
-                        *self.sparse.get_unchecked_mut(
-                            self.dense.get_unchecked(self.dense.len() - 1).uindex(),
-                        ) = dense_index;
+                        let last = *self.dense.get_unchecked(self.dense.len() - 1);
+                        *self
+                            .sparse
+                            .get_unchecked_mut(last.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(last.bucket_index()) = dense_index;
+                        *self
+                            .sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index()) = core::usize::MAX;
                     }
                     self.dense.swap_remove(dense_index);
                     if dense_id.version() == entity.version() {
                         Some(self.data.swap_remove(dense_index))
                     } else {
+                        self.data.swap_remove(dense_index);
                         None
                     }
                 } else {
@@ -260,10 +325,18 @@ impl<T> SparseSet<T> {
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
-            Some(unsafe {
-                self.data
-                    .get_unchecked(*self.sparse.get_unchecked(entity.uindex()))
-            })
+            unsafe {
+                Some(
+                    self.data.get_unchecked(
+                        *self
+                            .sparse
+                            .get_unchecked(entity.bucket())
+                            .as_ref()
+                            .unwrap()
+                            .get_unchecked(entity.bucket_index()),
+                    ),
+                )
+            }
         } else {
             None
         }
@@ -271,7 +344,15 @@ impl<T> SparseSet<T> {
     pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         if self.contains(entity) {
             // SAFE we checked the window countains the entity
-            let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
+            let mut index = unsafe {
+                *self
+                    .sparse
+                    .get_unchecked(entity.bucket())
+                    .as_ref()
+                    .unwrap()
+                    .get_unchecked(entity.bucket_index())
+            };
+            //let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 if index >= pack.modified {
                     // index of the first element non modified
@@ -287,14 +368,20 @@ impl<T> SparseSet<T> {
                                 self.data.get_unchecked_mut(non_mod),
                                 self.data.get_unchecked_mut(index),
                             );
+                            let dense = self.dense.get_unchecked(non_mod);
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(non_mod)).uindex()) =
-                                non_mod;
+                                .get_unchecked_mut(dense.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(dense.bucket_index()) = non_mod;
+                            let dense = *self.dense.get_unchecked(index);
                             *self
                                 .sparse
-                                .get_unchecked_mut((*self.dense.get_unchecked(index)).uindex()) =
-                                index;
+                                .get_unchecked_mut(dense.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(dense.bucket_index()) = index;
                         }
                         pack.modified += 1;
                         index = non_mod;
@@ -445,13 +532,7 @@ impl<T> SparseSet<T> {
     }
     /// Takes ownership of the *deleted* components of an update packed window.
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
-        if let Pack::Update(pack) = &mut self.pack_info.pack {
-            let mut vec = Vec::with_capacity(pack.deleted.capacity());
-            core::mem::swap(&mut vec, &mut pack.deleted);
-            Ok(vec)
-        } else {
-            Err(error::NotUpdatePack)
-        }
+        self.window_mut().try_take_deleted()
     }
     /// Takes ownership of the *deleted* components of an update packed window.  
     /// Unwraps errors.
@@ -460,30 +541,7 @@ impl<T> SparseSet<T> {
     }
     /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
-        if let Pack::Update(pack) = &mut self.pack_info.pack {
-            if pack.modified == 0 {
-                pack.inserted = 0;
-            } else {
-                let new_len = pack.inserted;
-                while pack.inserted > 0 {
-                    let new_end =
-                        core::cmp::min(pack.inserted + pack.modified - 1, self.dense.len());
-                    self.dense.swap(new_end, pack.inserted - 1);
-                    self.data.swap(new_end, pack.inserted - 1);
-                    pack.inserted -= 1;
-                }
-                for i in pack.modified.saturating_sub(new_len)..pack.modified + new_len {
-                    unsafe {
-                        *self
-                            .sparse
-                            .get_unchecked_mut(self.dense.get_unchecked(i).uindex()) = i;
-                    }
-                }
-            }
-            Ok(())
-        } else {
-            Err(error::NotUpdatePack)
-        }
+        self.window_mut().try_clear_inserted()
     }
     /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.  
     /// Unwraps errors.
@@ -492,12 +550,7 @@ impl<T> SparseSet<T> {
     }
     /// Moves all component in the *modified* section of an update packed window to the *neutral* section.
     pub fn try_clear_modified(&mut self) -> Result<(), error::NotUpdatePack> {
-        if let Pack::Update(pack) = &mut self.pack_info.pack {
-            pack.modified = 0;
-            Ok(())
-        } else {
-            Err(error::NotUpdatePack)
-        }
+        self.window_mut().try_clear_modified()
     }
     /// Moves all component in the *modified* section of an update packed window to the *neutral* section.  
     /// Unwraps errors.
@@ -506,13 +559,7 @@ impl<T> SparseSet<T> {
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted_and_modified(&mut self) -> Result<(), error::NotUpdatePack> {
-        if let Pack::Update(pack) = &mut self.pack_info.pack {
-            pack.inserted = 0;
-            pack.modified = 0;
-            Ok(())
-        } else {
-            Err(error::NotUpdatePack)
-        }
+        self.window_mut().try_clear_inserted_and_modified()
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed window to the *neutral* section.  
     /// Unwraps errors.
@@ -579,6 +626,9 @@ impl<T> SparseSet<T> {
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
         if !self.is_unique() {
+            for id in &self.dense {
+                self.sparse[id.bucket()].as_mut().unwrap()[id.bucket_index()] = core::usize::MAX;
+            }
             match &mut self.pack_info.pack {
                 Pack::Tight(tight) => tight.len = 0,
                 Pack::Loose(loose) => loose.len = 0,

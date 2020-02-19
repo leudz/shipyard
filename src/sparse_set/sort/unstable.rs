@@ -40,10 +40,8 @@ impl<'tmp, T> Sort1<'tmp, T> {
             }
 
             for i in 0..self.0.dense.len() {
-                unsafe {
-                    let dense_index = self.0.dense.get_unchecked(i).uindex();
-                    *self.0.sparse.get_unchecked_mut(dense_index) = i;
-                }
+                let dense = self.0.dense[i];
+                self.0.sparse[dense.bucket()].as_mut().unwrap()[dense.bucket_index()] = i;
             }
 
             Ok(())
@@ -92,8 +90,14 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
 
             for i in 0..self.0.dense.len() {
                 unsafe {
-                    let dense_index = self.0.dense.get_unchecked(i).uindex();
-                    *self.0.sparse.get_unchecked_mut(dense_index) = i + self.0.offset;
+                    let dense = *self.0.dense.get_unchecked(i);
+                    *self
+                        .0
+                        .sparse
+                        .get_unchecked_mut(dense.bucket())
+                        .as_mut()
+                        .unwrap()
+                        .get_unchecked_mut(dense.bucket_index()) = i + self.0.offset;
                 }
             }
 
@@ -191,8 +195,9 @@ macro_rules! impl_unstable_sort {
                             }
 
                             for i in 0..self.$index.dense.len() {
-                                unsafe {
-                                    *self.$index.sparse.get_unchecked_mut(self.0.dense.get_unchecked(i).uindex()) = i;
+                                unsafe{
+                                    let dense = self.0.dense.get_unchecked(i);
+                                    *self.$index.sparse.get_unchecked_mut(dense.bucket()).as_mut().unwrap().get_unchecked_mut(dense.bucket_index()) = i;
                                 }
                             }
                         )*
@@ -214,19 +219,23 @@ macro_rules! impl_unstable_sort {
                         transform.sort_unstable_by(|&i, &j| cmp(
                             ($(
                                 unsafe {
-                                    if packed & 1 << $index != 0 {
+                                    if packed & (1 << $index) != 0 {
                                         self.$index.data.get_unchecked(i)
                                     } else {
-                                        self.$index.data.get_unchecked(*self.$index.sparse.get_unchecked(dense.get_unchecked(i).uindex()))
+                                        let id = dense.get_unchecked(i);
+                                        let index = *self.$index.sparse.get_unchecked(id.bucket()).as_ref().unwrap().get_unchecked(id.bucket_index());
+                                        &self.$index.data.get_unchecked(index)
                                     }
                                 }
                             ,)+),
                             ($(
                                 unsafe {
-                                    if packed & 1 << $index != 0 {
+                                    if packed & (1 << $index) != 0 {
                                         self.$index.data.get_unchecked(j)
                                     } else {
-                                        self.$index.data.get_unchecked(*self.$index.sparse.get_unchecked(dense.get_unchecked(j).uindex()))
+                                        let id = dense.get_unchecked(j);
+                                        let index = *self.$index.sparse.get_unchecked(id.bucket()).as_ref().unwrap().get_unchecked(id.bucket_index());
+                                        &self.$index.data.get_unchecked(index)
                                     }
                                 }
                             ,)+)
@@ -245,7 +254,8 @@ macro_rules! impl_unstable_sort {
 
                             for i in 0..self.$index.dense.len() {
                                 unsafe {
-                                    *self.$index.sparse.get_unchecked_mut(self.0.dense.get_unchecked(i).uindex()) = i;
+                                    let dense = self.0.dense.get_unchecked(i);
+                                    *self.$index.sparse.get_unchecked_mut(dense.bucket()).as_mut().unwrap().get_unchecked_mut(dense.bucket_index()) = i;
                                 }
                             }
                         )*
