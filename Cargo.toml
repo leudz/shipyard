@@ -32,4 +32,4 @@ std = []
 
 [dev-dependencies]
 trybuild = "1.0.21"
-serde_json = "1.0.46"
+serde_json = "1.0.48"
