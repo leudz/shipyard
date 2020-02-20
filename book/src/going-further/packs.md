@@ -2,6 +2,14 @@
 
 `SparseSet`s are very flexible, so much so that we can use their internal layout to encode additional information.
 
+Quick overview compared to non packed storage:
+||Tight|Loose|Free|Update
+:---:|:---:|:---:|:---:|:---:
+Iteration speed|++|+|+|-
+Add/Remove speed|-|-|-|-
+Memory|same|same|+|same
+Special||||tracks insertion / modification / deletion
+
 ### Tight
 
 Let's start with the one offering the most performance, so good your CPU will stop taking so many vacations.  
@@ -42,11 +50,13 @@ The big downside is we have to access and pass all packed storages when doing an
 Packs comes with one more limitation: we can't pack multiple times the same storage ([for now](https://github.com/leudz/shipyard/issues/47)).  
 Loose pack let us pack again a tightly packed storage or just pack two storages without shuffling one of them.  
 This time we'll need the storages we want to pack, the other storages and call `loose_pack`.  
+`loose_pack` needs all storages present in the pack (like `tight_pack`) but also that we specify which storages are going to be modified and which ones won't.  
 Example:
 ```rust, noplaypen
 let world = World::new();
 
 let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+// usize's storage will be modified
 LoosePack::<(usize,)>::loose_pack((&mut usizes, &mut u32s));
 
 let entity0 = entities.add_entity(&mut usizes, 0);

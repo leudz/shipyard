@@ -11,7 +11,7 @@ use core::any::{type_name, TypeId};
 pub trait LoosePack<T> {
     /// Loose packs storages.  
     /// A loose pack takes at least a non packed storage and an additional storage in any state.  
-    /// A tuple is always needed even when packing a single storage.
+    /// A tuple is needed to specify which storages are going to be modified. It always have to be a tuple, even when there's just a single storage.
     ///
     /// ### Example:
     /// ```
@@ -24,7 +24,7 @@ pub trait LoosePack<T> {
     fn try_loose_pack(self) -> Result<(), error::Pack>;
     /// Loose packs storages.  
     /// A loose pack takes at least a non packed storage and an additional storage in any state.  
-    /// A tuple is always needed even when packing a single storage.
+    /// A tuple is needed to specify which storages are going to be modified. It always have to be a tuple, even when there's just a single storage.
     ///
     /// ### Example:
     /// ```
