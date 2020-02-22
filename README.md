@@ -76,6 +76,15 @@ Today I wouldn't say Shipyard is better or worse than Specs, it's just different
 - [Shared components](https://github.com/leudz/shipyard/issues/38)
 - [Iterator blueprint](https://github.com/leudz/shipyard/issues/41)
 
+## Features
+
+- **parallel** *(default)* &mdash; adds parallel iterators and dispatch
+- **proc** *(default)* &mdash; adds `system` proc macro
+- **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
+- **non_send** &mdash; add methods and types required to work with `!Send` components
+- **non_sync** &mdash; add methods and types required to work with `!Sync` components
+- **std** *(default)* &mdash; let shipyard use the standard library
+
 ## Unsafe
 
 This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.  

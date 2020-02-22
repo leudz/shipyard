@@ -1,5 +1,5 @@
-#[cfg(feature = "serialization")]
-mod serialization;
+#[cfg(feature = "serde")]
+mod serde;
 
 use core::num::NonZeroU64;
 
@@ -38,7 +38,7 @@ impl EntityId {
     }
 
     /// Make a new EntityId with the given version and index.
-    #[cfg(feature = "serialization")]
+    #[cfg(feature = "serde")]
     #[inline]
     pub(crate) fn new_from_pair(index: u64, version: u16) -> Self {
         assert!(index < Self::INDEX_MASK);

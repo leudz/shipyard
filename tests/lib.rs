@@ -1,8 +1,8 @@
 mod book;
 mod borrow;
 mod iteration;
-#[cfg(feature = "serialization")]
-mod serialization;
+#[cfg(feature = "serde")]
+mod serde;
 mod window;
 mod workload;
 

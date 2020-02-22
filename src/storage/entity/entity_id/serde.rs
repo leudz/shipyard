@@ -8,7 +8,7 @@ impl Serialize for EntityId {
     {
         if serializer.is_human_readable() {
             let mut tup = serializer.serialize_tuple_struct("EntityId", 2)?;
-            tup.serialize_field(&(self.index() as u64))?;
+            tup.serialize_field(&self.index())?;
             tup.serialize_field(&(self.version() as u16))?;
             tup.end()
         } else {

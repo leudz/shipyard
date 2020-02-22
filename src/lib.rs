@@ -101,6 +101,15 @@
 //! });
 //! # }
 //! ```
+//!
+//! ## Features
+//!
+//! - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
+//! - **proc** *(default)* &mdash; adds `system` proc macro
+//! - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
+//! - **non_send** &mdash; add methods and types required to work with `!Send` components
+//! - **non_sync** &mdash; add methods and types required to work with `!Sync` components
+//! - **std** *(default)* &mdash; let shipyard use the standard library
 
 #![deny(bare_trait_objects)]
 #![deny(elided_lifetimes_in_paths)]
