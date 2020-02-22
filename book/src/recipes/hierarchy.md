@@ -70,15 +70,16 @@ Since we need access to `EntitiesViewMut` as well as our hierarchy component sto
 
 ```rust, noplaypen
 fn detach(&mut self, id: EntityId) {
+    let (_, parents, children) = self;
     // remove the Child component - if nonexistent, do nothing
-    if let Some(child) = self.2.remove(id) {
+    if let Some(child) = children.remove(id) {
         // retrieve and update Parent component from ancestor
-        let parent = &mut self.1[child.parent];
+        let parent = &mut parents[child.parent];
         parent.num_children -= 1;
 
         if parent.num_children == 0 {
             // if the number of children is zero, the Parent component must be removed
-            self.1.remove(child.parent);
+            parents.remove(child.parent);
         } else {
             // the ancestor still has children, and we have to change some linking
             // check if we have to change first_child
@@ -86,8 +87,8 @@ fn detach(&mut self, id: EntityId) {
                 parent.first_child = child.next;
             }
             // remove the detached child from the sibling chain
-            self.2[child.prev].next = child.next;
-            self.2[child.next].prev = child.prev;
+            children[child.prev].next = child.next;
+            children[child.next].prev = child.prev;
         }
     }
 }
@@ -95,13 +96,10 @@ fn detach(&mut self, id: EntityId) {
 
 Before we move on to `attach`, let's make some observations.
 
-Remember that `self.1` is of type `ViewMut<Parent>`, a mutable View into the `Parent` component storage; `self.2` is a `ViewMut<Child>`. Calling `get` on these with a given `EntityId` returns an `Option<&Parent>` or `Option<&Child>` - the entity may have that component or not.
-
-As the calls to `unwrap` indicate, something might go wrong here.
-
+We use indexing on `parents` and `children` but if the entity doesn't have the component it'll `unwrap`.  
 We don't have to worry as long as we only use the methods in our `Hierarchy` trait.
 
-If you accidentally delete hierarchy components in other places without changing the linking, things will go fatally wrong. This should be seen as a bug and thus panicking with `unwrap` or, even better, `except` is fine.
+If you accidentally delete hierarchy components in other places without changing the linking, things will go fatally wrong. If you want to catch these errors you might want to use `get` and handle the error (for example with `expect`).
 
 `attach` looks like this:
 
@@ -110,27 +108,28 @@ fn attach(&mut self, id: EntityId, parent: EntityId) {
     // the entity we want to attach might already be attached to another parent
     self.detach(id);
 
+    let (entities, parents, children) = self;
+
     // either the designated parent already has a Parent component – and thus one or more children
-    if let Ok(p) = (&mut self.1).get(parent) {
+    if let Ok(p) = parents.get(parent) {
         // increase the parent's children counter
         p.num_children += 1;
 
         // get the ids of the new previous and next siblings of our new child
-        let prev = self.2[p.first_child].prev;
+        let prev = children[p.first_child].prev;
         let next = p.first_child;
 
         // change the linking
-        self.2[prev].next = id;
-        self.2[next].prev = id;
+        children[prev].next = id;
+        children[next].prev = id;
 
         // add the Child component to the new entity
-        self.0
-            .add_component(&mut self.2, Child { parent, prev, next }, id);
+        entities.add_component(children, Child { parent, prev, next }, id);
     } else {
         // in this case our designated parent is missing a Parent component
         // we don't need to change any links, just insert both components
-        self.0.add_component(
-            &mut self.2,
+        entities.add_component(
+            children,
             Child {
                 parent,
                 prev: id,
@@ -138,8 +137,8 @@ fn attach(&mut self, id: EntityId, parent: EntityId) {
             },
             id,
         );
-        self.0.add_component(
-            &mut self.1,
+        entities.add_component(
+            parents,
             Parent {
                 num_children: 1,
                 first_child: id,
@@ -307,29 +306,35 @@ where
     C: GetComponent<Out = &'a Child> + Copy,
 {
     fn ancestors(&self, id: EntityId) -> AncestorIter<C> {
+        let (_, children) = self;
+
         AncestorIter {
-            get_child: self.1,
+            get_child: *children,
             cursor: id,
         }
     }
 
     fn children(&self, id: EntityId) -> ChildrenIter<C> {
+        let (parents, children) = self;
+
         ChildrenIter {
-            get_child: self.1,
-            cursor: self
-                .0
+            get_child: *children,
+            cursor: parents
                 .get(id)
                 .map_or((id, 0), |parent| (parent.first_child, parent.num_children)),
         }
     }
 
     fn descendants(&self, id: EntityId) -> DescendantsIter<P, C> {
+        let (parents, children) = self;
+
         DescendantsIter {
-            get_parent: self.0,
-            get_child: self.1,
-            cursors: self.0.get(id).map_or_else(|_| Vec::new(), |parent| {
-                vec![(parent.first_child, parent.num_children)]
-            }),
+            get_parent: *parents,
+            get_child: *children,
+            cursors: parents.get(id).map_or_else(
+                |_| Vec::new(),
+                |parent| vec![(parent.first_child, parent.num_children)],
+            ),
         }
     }
 }
@@ -385,6 +390,7 @@ Both methods can be added to our `Hierarchy` trait:
 ```rust, noplaypen
 fn remove(&mut self, id: EntityId) {
     self.detach(id);
+
     let children = (&self.1, &self.2).children(id).collect::<Vec<_>>();
     for child_id in children {
         self.detach(child_id);
@@ -397,7 +403,9 @@ A method that removes a whole subtree is easy to write by making use of recursio
 
 ```rust, noplaypen
 fn remove_all(&mut self, id: EntityId) {
-    for child_id in (&self.1, &self.2).children(id).collect::<Vec<_>>() {
+    let (_, parents, children) = self;
+
+    for child_id in (&*parents, &*children).children(id).collect::<Vec<_>>() {
         self.remove_all(child_id);
     }
     self.remove(id);
@@ -436,22 +444,26 @@ However, a simple sorting for children can be done in two steps:
 We can add this method to the `Hierarchy` trait:
 
 ```rust, noplaypen
-fn sort_children_by<F>(&mut self, id: EntityId, mut compare: F)
+fn sort_children_by<F>(&mut self, id: EntityId, compare: F)
 where
     F: FnMut(&EntityId, &EntityId) -> std::cmp::Ordering,
 {
-    let mut children = (&self.1, &self.2).children(id).collect::<Vec<EntityId>>();
+    let (_, parents, children_storage) = self;
+
+    let mut children = (&*parents, &*children_storage)
+        .children(id)
+        .collect::<Vec<EntityId>>();
     if children.len() > 1 {
-        children.sort_by(|a, b| compare(a, b));
+        children.sort_by(compare);
         // set first_child in Parent component
-        self.1[id].first_child = children[0];
+        parents[id].first_child = children[0];
         // loop through children and relink them
         for i in 0..children.len() - 1 {
-            self.2[children[i]].next = children[i + 1];
-            self.2[children[i + 1]].prev = children[i];
+            children_storage[children[i]].next = children[i + 1];
+            children_storage[children[i + 1]].prev = children[i];
         }
-        self.2[children[0]].prev = *children.last().unwrap();
-        self.2[*children.last().unwrap()].next = children[0];
+        children_storage[children[0]].prev = *children.last().unwrap();
+        children_storage[*children.last().unwrap()].next = children[0];
     }
 }
 ```

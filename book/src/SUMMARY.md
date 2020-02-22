@@ -19,7 +19,7 @@
     - [Parallelism](./going-further/parallelism.md)
     - [Packs](./going-further/packs.md)
     - [Other Components and Storages](./going-further/other-component-storage.md)
-    - [Going Unchecked](./going-further/unchecked.md)
+    - [Might want to try_ or go _unchecked](./going-further/try-unchecked.md)
     - [Syntactic Peculiarities](./going-further/syntactic-peculiarities.md)
 - [Recipes](./recipes.md)
     - [Hierarchy](./recipes/hierarchy.md)
