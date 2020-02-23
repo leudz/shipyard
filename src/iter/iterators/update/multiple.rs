@@ -46,6 +46,7 @@ macro_rules! impl_iterators {
             fn post_process(&mut self) {
                 unsafe {
                     $(
+                        // SAFE current_id has the components
                         self.data.$index.flag(self.current_id);
                     )+
                 }

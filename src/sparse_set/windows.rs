@@ -32,8 +32,10 @@ impl<T> Window<'_, T> {
     /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
         if entity.bucket() < self.sparse.len() {
+            // SAFE we checked for OOB
             unsafe {
                 if let Some(bucket) = self.sparse.get_unchecked(entity.bucket()) {
+                    // SAFE bucket_index is always a valid bucket index
                     *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX
                 } else {
                     false
@@ -53,6 +55,7 @@ impl<T> Window<'_, T> {
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
+            // SAFE we checked for OOB
             unsafe {
                 Some(
                     self.data.get_unchecked(
@@ -261,6 +264,7 @@ impl<'w, T> WindowMut<'w, T> {
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
+            // SAFE we checked for OOB
             unsafe {
                 Some(
                     self.data.get_unchecked(
@@ -288,7 +292,6 @@ impl<'w, T> WindowMut<'w, T> {
                     .unwrap()
                     .get_unchecked(entity.bucket_index())
             };
-            //let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 if index >= pack.modified {
                     // index of the first element non modified
@@ -524,8 +527,10 @@ impl<'w, T> WindowMut<'w, T> {
                     pack.inserted -= 1;
                 }
                 for i in pack.modified.saturating_sub(new_len)..pack.modified + new_len {
+                    // SAFE i is in bound
                     unsafe {
                         let dense = *self.dense.get_unchecked(i);
+                        // SAFE dense can always index into sparse
                         *self
                             .sparse
                             .get_unchecked_mut(dense.bucket())
@@ -576,6 +581,7 @@ impl<'w, T> WindowMut<'w, T> {
     }
     pub(crate) fn pack(&mut self, entity: EntityId) {
         if self.contains(entity) {
+            // SAFE we checked for OOB
             let dense_index = unsafe {
                 *self
                     .sparse
@@ -587,14 +593,17 @@ impl<'w, T> WindowMut<'w, T> {
             match &mut self.pack_info.pack {
                 Pack::Tight(pack) => {
                     if dense_index >= pack.len {
+                        // SAFE pack.len is valid
                         unsafe {
                             let last_pack = *self.dense.get_unchecked(pack.len);
+                            // SAFE dense can always index into sparse
                             let mut last_pack_index = *self
                                 .sparse
                                 .get_unchecked(last_pack.bucket())
                                 .as_ref()
                                 .unwrap()
                                 .get_unchecked(last_pack.bucket_index());
+                            // SAFE we checked for OOB
                             core::mem::swap(
                                 &mut last_pack_index,
                                 self.sparse
@@ -618,7 +627,9 @@ impl<'w, T> WindowMut<'w, T> {
                 Pack::Loose(pack) => {
                     if dense_index >= pack.len {
                         unsafe {
+                            // SAFE pack.len is valid
                             let last_pack = *self.dense.get_unchecked(pack.len);
+                            // SAFE dense can always index into sparse
                             let mut last_pack_index = *self
                                 .sparse
                                 .get_unchecked(last_pack.bucket())
@@ -627,6 +638,7 @@ impl<'w, T> WindowMut<'w, T> {
                                 .get_unchecked(last_pack.bucket_index());
                             core::mem::swap(
                                 &mut last_pack_index,
+                                // SAFE we checked for OOB
                                 self.sparse
                                     .get_unchecked_mut(entity.bucket())
                                     .as_mut()
@@ -645,79 +657,90 @@ impl<'w, T> WindowMut<'w, T> {
         }
     }
     pub(crate) fn unpack(&mut self, entity: EntityId) {
-        let dense_index = unsafe {
-            *self
-                .sparse
-                .get_unchecked(entity.bucket())
-                .as_ref()
-                .unwrap()
-                .get_unchecked(entity.bucket_index())
-        };
-        match &mut self.pack_info.pack {
-            Pack::Tight(pack) => {
-                if dense_index < pack.len {
-                    pack.len -= 1;
-                    unsafe {
+        if self.contains(entity) {
+            // SAFE we checked for OOB
+            let dense_index = unsafe {
+                *self
+                    .sparse
+                    .get_unchecked(entity.bucket())
+                    .as_ref()
+                    .unwrap()
+                    .get_unchecked(entity.bucket_index())
+            };
+            match &mut self.pack_info.pack {
+                Pack::Tight(pack) => {
+                    if dense_index < pack.len {
+                        pack.len -= 1;
                         // swap index and last packed element (can be the same)
-                        let last_pack = *self.dense.get_unchecked(pack.len);
-                        let mut last_pack_index = *self
-                            .sparse
-                            .get_unchecked(last_pack.bucket())
-                            .as_ref()
-                            .unwrap()
-                            .get_unchecked(last_pack.bucket_index());
-                        core::mem::swap(
-                            &mut last_pack_index,
-                            self.sparse
-                                .get_unchecked_mut(entity.bucket())
+                        unsafe {
+                            // SAFE PACK;LEN IS VALID
+                            let last_pack = *self.dense.get_unchecked(pack.len);
+                            // SAFE dense can always index into sparse
+                            let mut last_pack_index = *self
+                                .sparse
+                                .get_unchecked(last_pack.bucket())
+                                .as_ref()
+                                .unwrap()
+                                .get_unchecked(last_pack.bucket_index());
+                            core::mem::swap(
+                                &mut last_pack_index,
+                                // SAFE we checked for OOB
+                                self.sparse
+                                    .get_unchecked_mut(entity.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(entity.bucket_index()),
+                            );
+                            // SAFE dense can always index into sparse
+                            *self
+                                .sparse
+                                .get_unchecked_mut(last_pack.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(entity.bucket_index()),
-                        );
-                        *self
-                            .sparse
-                            .get_unchecked_mut(last_pack.bucket())
-                            .as_mut()
-                            .unwrap()
-                            .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                                .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                        }
                     }
                     self.dense.swap(dense_index, pack.len);
                     self.data.swap(dense_index, pack.len);
                 }
-            }
-            Pack::Loose(pack) => {
-                if dense_index < pack.len {
-                    pack.len -= 1;
-                    unsafe {
+                Pack::Loose(pack) => {
+                    if dense_index < pack.len {
+                        pack.len -= 1;
                         // swap index and last packed element (can be the same)
-                        let last_pack = *self.dense.get_unchecked(pack.len);
-                        let mut last_pack_index = *self
-                            .sparse
-                            .get_unchecked(last_pack.bucket())
-                            .as_ref()
-                            .unwrap()
-                            .get_unchecked(last_pack.bucket_index());
-                        core::mem::swap(
-                            &mut last_pack_index,
-                            self.sparse
-                                .get_unchecked_mut(entity.bucket())
+                        unsafe {
+                            // SAFE pack.len is valid
+                            let last_pack = *self.dense.get_unchecked(pack.len);
+                            // SAFE dense can always index into sparse
+                            let mut last_pack_index = *self
+                                .sparse
+                                .get_unchecked(last_pack.bucket())
+                                .as_ref()
+                                .unwrap()
+                                .get_unchecked(last_pack.bucket_index());
+                            core::mem::swap(
+                                &mut last_pack_index,
+                                // SAFE we checked for OOB
+                                self.sparse
+                                    .get_unchecked_mut(entity.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(entity.bucket_index()),
+                            );
+                            // SAFE dense can always index into sparse
+                            *self
+                                .sparse
+                                .get_unchecked_mut(last_pack.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(entity.bucket_index()),
-                        );
-                        *self
-                            .sparse
-                            .get_unchecked_mut(last_pack.bucket())
-                            .as_mut()
-                            .unwrap()
-                            .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                                .get_unchecked_mut(last_pack.bucket_index()) = last_pack_index;
+                        }
+                        self.dense.swap(dense_index, pack.len);
+                        self.data.swap(dense_index, pack.len);
                     }
-                    self.dense.swap(dense_index, pack.len);
-                    self.data.swap(dense_index, pack.len);
                 }
+                Pack::Update(_) => {}
+                Pack::NoPack => {}
             }
-            Pack::Update(_) => {}
-            Pack::NoPack => {}
         }
     }
     /// Returns the `EntityId` at a given `index`.
@@ -845,7 +868,9 @@ unsafe impl<T: Send> Send for RawWindowMut<'_, T> {}
 impl<T> RawWindowMut<'_, T> {
     pub(crate) fn contains(&self, entity: EntityId) -> bool {
         if entity.bucket() < self.sparse_len {
+            // SAFE we checked for OOB
             if let Some(bucket) = unsafe { &*self.sparse.add(entity.bucket()) } {
+                // SAFE bucket_index is always valid
                 unsafe { *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX }
             } else {
                 false

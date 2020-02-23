@@ -63,6 +63,7 @@ macro_rules! window {
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.contains(entity) {
+                        // SAFE we checked entity has this component
                         unsafe {
                             Some(*self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index()))
                         }
@@ -124,6 +125,7 @@ macro_rules! window_mut {
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.contains(entity) {
+                        // SAFE we checked entity has this component
                         unsafe {
                             Some(*(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()))
                         }

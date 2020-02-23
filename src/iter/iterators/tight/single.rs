@@ -47,6 +47,7 @@ impl<T: IntoAbstract> Shiperator for Tight1<T> {
         let current = self.current;
         if current < self.end {
             self.current += 1;
+            // SAFE we checked for OOB and the lifetime is ok
             let data = unsafe { self.data.get_data(current) };
             Some(data)
         } else {
@@ -74,6 +75,7 @@ impl<T: IntoAbstract> DoubleEndedShiperator for Tight1<T> {
     fn first_pass_back(&mut self) -> Option<Self::Item> {
         if self.current < self.end {
             self.end -= 1;
+            // SAFE we checked for OOB and the lifetime is ok
             let data = unsafe { self.data.get_data(self.end) };
             Some(data)
         } else {

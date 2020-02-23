@@ -73,6 +73,7 @@ macro_rules! impl_iterators {
             fn first_pass_back(&mut self) -> Option<Self::Item> {
                 if self.current < self.end {
                     self.end -= 1;
+                    // SAFE we checked for OOB
                     let index = unsafe {ptr::read(self.indices.add(self.current))};
                     let indices = ($(
                         if (self.array >> $index) & 1 != 0 {

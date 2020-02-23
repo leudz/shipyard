@@ -52,6 +52,7 @@ macro_rules! impl_iterators {
                 let current = self.current;
                 if current < self.end {
                     self.current += 1;
+                    // SAFE we checked for OOB and the lifetime is ok
                     Some(unsafe {($(self.data.$index.get_data(current),)+)})
                 } else {
                     None
@@ -78,6 +79,7 @@ macro_rules! impl_iterators {
             fn first_pass_back(&mut self) -> Option<Self::Item> {
                 if self.current < self.end {
                     self.end -= 1;
+                    // SAFE we checked for OOB and the lifetime is ok
                     Some(unsafe { ($(self.data.$index.get_data(self.end),)+) })
                 } else {
                     None

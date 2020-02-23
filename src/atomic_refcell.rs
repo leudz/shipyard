@@ -14,8 +14,13 @@ pub struct AtomicRefCell<T: ?Sized> {
     send: Option<ThreadId>,
     #[cfg(feature = "std")]
     is_sync: bool,
+    _non_send: core::marker::PhantomData<*const ()>,
     inner: UnsafeCell<T>,
 }
+
+// AtomicRefCell can't be Send if it contains !Send components
+#[cfg(not(feature = "non_send"))]
+unsafe impl<T: ?Sized> Send for AtomicRefCell<T> {}
 
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
 
@@ -36,6 +41,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
                 borrow_state: Default::default(),
                 is_sync,
                 send,
+                _non_send: core::marker::PhantomData,
             }
         }
         #[cfg(not(feature = "std"))]
@@ -43,6 +49,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
             AtomicRefCell {
                 inner: UnsafeCell::new(value),
                 borrow_state: Default::default(),
+                _non_send: core::marker::PhantomData,
             }
         }
     }
@@ -56,6 +63,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             Ok(Ref {
                 borrow: self.borrow_state.try_borrow(self.send, self.is_sync)?,
+                // SAFE we have the lock
                 inner: unsafe { &*self.inner.get() },
             })
         }
@@ -63,6 +71,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             Ok(Ref {
                 borrow: self.borrow_state.try_borrow()?,
+                // SAFE we have the lock
                 inner: unsafe { &*self.inner.get() },
             })
         }
@@ -76,6 +85,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             Ok(RefMut {
                 borrow: self.borrow_state.try_borrow_mut(self.send, self.is_sync)?,
+                // SAFE we have the lock
                 inner: unsafe { &mut *self.inner.get() },
             })
         }
@@ -83,6 +93,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             Ok(RefMut {
                 borrow: self.borrow_state.try_borrow_mut()?,
+                // SAFE we have the lock
                 inner: unsafe { &mut *self.inner.get() },
             })
         }

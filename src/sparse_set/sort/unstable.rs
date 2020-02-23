@@ -24,6 +24,7 @@ impl<'tmp, T> Sort1<'tmp, T> {
             let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
 
             transform.sort_unstable_by(|&i, &j| {
+                // SAFE dense and data have the same length
                 cmp(unsafe { self.0.data.get_unchecked(i) }, unsafe {
                     self.0.data.get_unchecked(j)
                 })
@@ -31,8 +32,10 @@ impl<'tmp, T> Sort1<'tmp, T> {
 
             let mut pos;
             for i in 0..transform.len() {
+                // SAFE we're in bound
                 pos = unsafe { *transform.get_unchecked(i) };
                 while pos < i {
+                    // SAFE we're in bound
                     pos = unsafe { *transform.get_unchecked(pos) };
                 }
                 self.0.dense.swap(i, pos);
@@ -73,6 +76,7 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
             let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
 
             transform.sort_unstable_by(|&i, &j| {
+                // SAFE dense and data have the same length
                 cmp(unsafe { self.0.data.get_unchecked(i) }, unsafe {
                     self.0.data.get_unchecked(j)
                 })
@@ -80,8 +84,10 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
 
             let mut pos;
             for i in 0..transform.len() {
+                // SAFE we're in bound
                 pos = unsafe { *transform.get_unchecked(i) };
                 while pos < i {
+                    // SAFE we're in bound
                     pos = unsafe { *transform.get_unchecked(pos) };
                 }
                 self.0.dense.swap(i, pos);
@@ -89,6 +95,7 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
             }
 
             for i in 0..self.0.dense.len() {
+                // SAFE dense can always index into sparse
                 unsafe {
                     let dense = *self.0.dense.get_unchecked(i);
                     *self
@@ -178,6 +185,7 @@ macro_rules! impl_unstable_sort {
                     PackSort::Tight(len) => {
                         let mut transform: Vec<usize> = (0..len).collect();
 
+                        // SAFE dense and data have the same length
                         transform.sort_unstable_by(|&i, &j| cmp(
                             ($(unsafe {self.$index.data.get_unchecked(i)},)+),
                             ($(unsafe {self.$index.data.get_unchecked(j)},)+),
@@ -186,8 +194,10 @@ macro_rules! impl_unstable_sort {
                         let mut pos;
                         $(
                             for i in 0..transform.len() {
+                                // SAFE we're in bound
                                 pos = unsafe {*transform.get_unchecked(i)};
                                 while pos < i {
+                                    // SAFE we're in bound
                                     pos = unsafe { *transform.get_unchecked(pos) };
                                 }
                                 self.$index.dense.swap(i, pos);
@@ -195,8 +205,10 @@ macro_rules! impl_unstable_sort {
                             }
 
                             for i in 0..self.$index.dense.len() {
-                                unsafe{
+                                unsafe {
+                                    // SAFE i is in bound
                                     let dense = self.0.dense.get_unchecked(i);
+                                    // SAFE dense can always index into sparse
                                     *self.$index.sparse.get_unchecked_mut(dense.bucket()).as_mut().unwrap().get_unchecked_mut(dense.bucket_index()) = i;
                                 }
                             }
@@ -220,10 +232,14 @@ macro_rules! impl_unstable_sort {
                             ($(
                                 unsafe {
                                     if packed & (1 << $index) != 0 {
+                                        // SAFE i is in bound
                                         self.$index.data.get_unchecked(i)
                                     } else {
+                                        // SAFE i is in bound
                                         let id = dense.get_unchecked(i);
+                                        // SAFE dense can always index into sparse
                                         let index = *self.$index.sparse.get_unchecked(id.bucket()).as_ref().unwrap().get_unchecked(id.bucket_index());
+                                        // SAFE sparse can always index into data
                                         &self.$index.data.get_unchecked(index)
                                     }
                                 }
@@ -231,10 +247,14 @@ macro_rules! impl_unstable_sort {
                             ($(
                                 unsafe {
                                     if packed & (1 << $index) != 0 {
+                                        // SAFE j is in bound
                                         self.$index.data.get_unchecked(j)
                                     } else {
+                                        // SAFE j is in bound
                                         let id = dense.get_unchecked(j);
+                                        // SAFE dense can always index into sparse
                                         let index = *self.$index.sparse.get_unchecked(id.bucket()).as_ref().unwrap().get_unchecked(id.bucket_index());
+                                        // SAFE sparse can always index into data
                                         &self.$index.data.get_unchecked(index)
                                     }
                                 }
@@ -244,8 +264,10 @@ macro_rules! impl_unstable_sort {
                         let mut pos;
                         $(
                             for i in 0..transform.len() {
+                                // SAFE i is in bound
                                 pos = unsafe {*transform.get_unchecked(i)};
                                 while pos < i {
+                                    // SAFE pos is in bound
                                     pos = unsafe { *transform.get_unchecked(pos) };
                                 }
                                 self.$index.dense.swap(i, pos);
@@ -254,7 +276,9 @@ macro_rules! impl_unstable_sort {
 
                             for i in 0..self.$index.dense.len() {
                                 unsafe {
+                                    // SAFE i is in bound
                                     let dense = self.0.dense.get_unchecked(i);
+                                    // SAFE dense can always index into sparse
                                     *self.$index.sparse.get_unchecked_mut(dense.bucket()).as_mut().unwrap().get_unchecked_mut(dense.bucket_index()) = i;
                                 }
                             }

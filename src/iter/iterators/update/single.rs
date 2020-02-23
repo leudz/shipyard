@@ -28,13 +28,16 @@ impl<T: IntoAbstract> Shiperator for Update1<T> {
         let current = self.current;
         if current < self.end {
             self.current += 1;
+            // SAFE we checked for OOB
             self.current_id = unsafe { self.data.id_at(current) };
+            // SAFE we checked for OOB and the lifetime is ok
             Some(unsafe { self.data.get_update_data(current) })
         } else {
             None
         }
     }
     fn post_process(&mut self) {
+        // SAFE current_id has the component
         unsafe { self.data.flag(self.current_id) }
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -57,7 +60,9 @@ impl<T: IntoAbstract> DoubleEndedShiperator for Update1<T> {
     fn first_pass_back(&mut self) -> Option<Self::Item> {
         if self.current < self.end {
             self.end -= 1;
+            // SAFE we checked for OOB
             self.current_id = unsafe { self.data.id_at(self.end) };
+            // SAFE we checked for OOB and the lifetime is ok
             Some(unsafe { self.data.get_update_data(self.end) })
         } else {
             None

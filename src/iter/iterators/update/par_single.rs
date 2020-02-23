@@ -25,6 +25,7 @@ impl<T: IntoAbstract> Iterator for IntoIterator<ParUpdate1<T>> {
         let current = self.0.current;
         if current < self.0.end {
             self.0.current += 1;
+            // SAFE we checked for OOB and the lifetime is ok
             Some(unsafe { self.0.data.get_data(current) })
         } else {
             None
@@ -45,6 +46,7 @@ impl<T: IntoAbstract> DoubleEndedIterator for IntoIterator<ParUpdate1<T>> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.0.current < self.0.end {
             self.0.end -= 1;
+            // SAFE we checked for OOB and the lifetime is ok
             Some(unsafe { self.0.data.get_data(self.0.end) })
         } else {
             None

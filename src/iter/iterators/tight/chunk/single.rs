@@ -14,9 +14,11 @@ impl<T: IntoAbstract> Shiperator for Chunk1<T> {
         let current = self.current;
         if current + self.step < self.end {
             self.current += self.step;
+            // SAFE we checked for OOB and the lifetime is ok
             Some(unsafe { self.data.get_data_slice(current..(current + self.step)) })
         } else if current < self.end {
             self.current = self.end;
+            // SAFE we checked for OOB and the lifetime is ok
             Some(unsafe { self.data.get_data_slice(current..self.end) })
         } else {
             None

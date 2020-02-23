@@ -7,7 +7,7 @@ use core::any::{Any, TypeId};
 pub(super) trait UnknownStorage {
     fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>);
     fn clear(&mut self);
-    fn unpack(&mut self, entitiy: EntityId);
+    fn unpack(&mut self, entity: EntityId);
     fn any(&self) -> &dyn Any;
     fn any_mut(&mut self) -> &mut dyn Any;
 }

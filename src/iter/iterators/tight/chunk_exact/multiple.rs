@@ -22,6 +22,7 @@ macro_rules! impl_iterators {
                 let current = self.current;
                 if current + self.step <= self.end {
                     self.current += self.step;
+                    // SAFE we checked for OOB and the lifetime is ok
                     Some(unsafe {($(self.data.$index.get_data_slice(current..(current + self.step)),)+)})
                 } else {
                     None
@@ -42,6 +43,7 @@ macro_rules! impl_iterators {
                 let remainder = core::cmp::min(self.end - self.current, self.end % self.step);
                 self.end -= remainder;
                 ($(
+                    // SAFE we checked for OOB and the lifetime is ok
                     unsafe { self.data.$index.get_data_slice(self.end..end) },
                 )+)
             }

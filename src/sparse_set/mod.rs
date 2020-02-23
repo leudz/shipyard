@@ -79,6 +79,7 @@ impl<T> SparseSet<T> {
             self.sparse.resize(entity.bucket() + 1, None);
         }
         unsafe {
+            // SAFE we just allocated at least entity.bucket()
             if self.sparse.get_unchecked(entity.bucket()).is_none() {
                 *self.sparse.get_unchecked_mut(entity.bucket()) =
                     Some(Box::new([core::usize::MAX; BUCKET_SIZE]));
@@ -88,6 +89,7 @@ impl<T> SparseSet<T> {
     pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
         self.allocate_at(entity);
 
+        // SAFE entity.bucket() exists and contains at least bucket_index elements
         let result = match unsafe {
             self.sparse
                 .get_unchecked_mut(entity.bucket())
@@ -102,6 +104,7 @@ impl<T> SparseSet<T> {
                 None
             }
             &mut i => {
+                // SAFE sparse index are always valid
                 unsafe {
                     core::mem::swap(self.data.get_unchecked_mut(i), &mut value);
                 }
@@ -111,6 +114,7 @@ impl<T> SparseSet<T> {
 
         if let Pack::Update(pack) = &mut self.pack_info.pack {
             let len = self.data.len() - 1;
+            // SAFE entity.bucket() exists and contains at least bucket_index elements
             unsafe {
                 *self
                     .sparse
@@ -223,7 +227,9 @@ impl<T> SparseSet<T> {
                             if dense_index < pack.inserted {
                                 pack.inserted -= 1;
                                 unsafe {
+                                    // SAFE pack.inserted is a valid index
                                     let dense = *self.dense.get_unchecked(pack.inserted);
+                                    // SAFE dense can always index into sparse
                                     *self
                                         .sparse
                                         .get_unchecked_mut(dense.bucket())
@@ -238,8 +244,10 @@ impl<T> SparseSet<T> {
                             if dense_index < pack.inserted + pack.modified {
                                 pack.modified -= 1;
                                 unsafe {
+                                    // SAFE pack.inserted + pack.modified is a valid index
                                     let dense =
                                         *self.dense.get_unchecked(pack.inserted + pack.modified);
+                                    // SAFE dense can always index into sparse
                                     *self
                                         .sparse
                                         .get_unchecked_mut(dense.bucket())
@@ -255,13 +263,16 @@ impl<T> SparseSet<T> {
                         Pack::NoPack => {}
                     }
                     unsafe {
+                        // SAFE we're in bound
                         let last = *self.dense.get_unchecked(self.dense.len() - 1);
+                        // SAFE dense can always index into sparse
                         *self
                             .sparse
                             .get_unchecked_mut(last.bucket())
                             .as_mut()
                             .unwrap()
                             .get_unchecked_mut(last.bucket_index()) = dense_index;
+                        // SAFE we checked for OOB
                         *self
                             .sparse
                             .get_unchecked_mut(entity.bucket())
@@ -325,6 +336,7 @@ impl<T> SparseSet<T> {
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
+            // SAFE we checked for OOB
             unsafe {
                 Some(
                     self.data.get_unchecked(

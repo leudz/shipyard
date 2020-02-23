@@ -34,6 +34,7 @@ impl EntityId {
     #[inline]
     pub(crate) fn new(index: u64) -> Self {
         assert!(index < Self::INDEX_MASK);
+        // SAFE never zero
         EntityId(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
 
@@ -42,6 +43,7 @@ impl EntityId {
     #[inline]
     pub(crate) fn new_from_pair(index: u64, version: u16) -> Self {
         assert!(index < Self::INDEX_MASK);
+        // SAFE never zero
         EntityId(unsafe {
             NonZeroU64::new_unchecked((index + 1) | ((version as u64) << (64 - Self::VERSION_LEN)))
         })
@@ -52,6 +54,7 @@ impl EntityId {
     #[inline]
     pub(super) fn set_index(&mut self, index: u64) {
         assert!(index < Self::INDEX_MASK);
+        // SAFE never zero
         self.0 =
             unsafe { NonZeroU64::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1)) }
     }
@@ -59,6 +62,7 @@ impl EntityId {
     #[cfg(test)]
     pub(crate) fn set_index(&mut self, index: u64) {
         assert!(index + 1 <= Self::INDEX_MASK);
+        // SAFE never zero
         self.0 =
             unsafe { NonZeroU64::new_unchecked((self.0.get() & Self::VERSION_MASK) | (index + 1)) }
     }
@@ -66,6 +70,7 @@ impl EntityId {
     #[inline]
     pub(super) fn bump_version(&mut self) -> Result<(), ()> {
         if self.0.get() < !(!0 >> (Self::VERSION_LEN - 1)) {
+            // SAFE never zero
             self.0 = unsafe {
                 NonZeroU64::new_unchecked(
                     (self.index() + 1) | ((self.version() + 1) << (64 - Self::VERSION_LEN)),
@@ -82,6 +87,7 @@ impl EntityId {
     }
     /// Returns a dead EntityId, it can be used as a null entity.
     pub fn dead() -> Self {
+        // SAFE not zero
         EntityId(unsafe { NonZeroU64::new_unchecked(core::u64::MAX) })
     }
     pub(crate) fn bucket(self) -> usize {

@@ -50,6 +50,7 @@ impl Entities {
     }
     /// Returns true if `entity` matches a living entity.
     pub fn is_alive(&self, entity: EntityId) -> bool {
+        // SAFE we're in bound
         entity.uindex() < self.data.len()
             && entity == unsafe { *self.data.get_unchecked(entity.uindex()) }
     }
@@ -104,10 +105,12 @@ impl Entities {
             if new == *old {
                 self.list = None;
             } else {
+                // SAFE old is always valid
                 *old = unsafe { self.data.get_unchecked(*old).uindex() };
             }
         }
         if let Some(index) = index {
+            // SAFE index is always in bound
             unsafe { self.data.get_unchecked_mut(index).set_index(index as u64) };
             unsafe { *self.data.get_unchecked(index) }
         } else {
@@ -120,6 +123,7 @@ impl Entities {
     /// If the entity has components, they will not be deleted and still be accessible using this id.
     pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
         if self.is_alive(entity_id) {
+            // SAFE we checked for OOB
             if unsafe {
                 self.data
                     .get_unchecked_mut(entity_id.uindex())
@@ -127,6 +131,7 @@ impl Entities {
                     .is_ok()
             } {
                 if let Some((ref mut new, _)) = self.list {
+                    // SAFE new is always in bound
                     unsafe {
                         self.data
                             .get_unchecked_mut(*new)

@@ -5,7 +5,6 @@ use crate::error;
 use crate::run::{Dispatch, Run, System, SystemData};
 use crate::storage::AllStorages;
 use alloc::borrow::Cow;
-use core::marker::PhantomData;
 use core::ops::Range;
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -17,14 +16,7 @@ pub struct World {
     #[cfg(feature = "parallel")]
     pub(crate) thread_pool: ThreadPool,
     scheduler: AtomicRefCell<Scheduler>,
-    _not_send: PhantomData<*const ()>,
 }
-
-// World can't be Send if it contains !Send components
-#[cfg(not(feature = "non_send"))]
-unsafe impl Send for World {}
-
-unsafe impl Sync for World {}
 
 impl Default for World {
     /// Create an empty `World`.
@@ -39,7 +31,6 @@ impl Default for World {
                     .build()
                     .unwrap(),
                 scheduler: AtomicRefCell::new(Default::default(), None, true),
-                _not_send: PhantomData,
             }
         }
         #[cfg(not(feature = "std"))]
@@ -52,7 +43,6 @@ impl Default for World {
                     .build()
                     .unwrap(),
                 scheduler: AtomicRefCell::new(Default::default()),
-                _not_send: PhantomData,
             }
         }
     }
@@ -78,7 +68,6 @@ impl World {
                 .build()
                 .unwrap(),
             scheduler: AtomicRefCell::new(Default::default(), None, true),
-            _not_send: PhantomData,
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
