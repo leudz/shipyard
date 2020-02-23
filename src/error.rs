@@ -8,6 +8,10 @@ use std::error::Error;
 /// Unique means the BorrowState was mutably borrowed when an illegal borrow occured.
 ///
 /// Shared means the BorrowState was immutably borrowed when an illegal borrow occured.
+///
+/// WrongThread is linked to !Send, when trying to access them from an other thread.
+///
+/// MultipleThreads is when !Send types are accessed from multiple threads.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Borrow {
     Unique,
@@ -138,7 +142,6 @@ impl Display for NewEntity {
 /// passed in the add_component call even if no components are added.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
-    // `TypeId` of the storage requirering more storages
     MissingPackStorage(&'static str),
     EntityIsNotAlive,
 }
@@ -161,7 +164,7 @@ impl Display for AddComponent {
     }
 }
 
-/// Error occuring when a pack can't be made.
+/// Error occuring when a pack can't be made.  
 /// It could be a borrow issue or one of the storage could already have
 /// an incompatible pack or the storage could be unique.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -269,7 +272,8 @@ impl Display for SetDefaultWorkload {
     }
 }
 
-/// Try to run a non existant workload.
+/// Error related to `run_default` and `run_workload`.  
+/// The error can be a storage error, problem with the scheduler's borrowing or a non existant workload.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RunWorkload {
     Scheduler,
@@ -304,7 +308,7 @@ impl Display for RunWorkload {
     }
 }
 
-/// Error occuring when trying to sort a single packed storage.
+/// Error occuring when trying to sort a packed storage but providing too few or too many storages.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Sort {
     MissingPackStorage,
@@ -329,6 +333,7 @@ impl Display for Sort {
     }
 }
 
+/*
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Register {
     Borrow(Borrow),
@@ -359,8 +364,9 @@ impl From<Borrow> for Register {
     fn from(borrow: Borrow) -> Self {
         Self::Borrow(borrow)
     }
-}
+}*/
 
+/// Error when trying to use update pack related function on non update packed storage.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NotUpdatePack;
 
@@ -379,6 +385,7 @@ impl Display for NotUpdatePack {
     }
 }
 
+/// Error when trying to access the *inserted* section of an update packed storage but the storage isn't update packed or the section isn't present in the window.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Inserted {
     NotUpdatePacked,
@@ -406,6 +413,7 @@ impl Display for Inserted {
     }
 }
 
+/// Error when trying to access the *modified* section of an update packed storage but the storage isn't update packed or the section isn't present in the window.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Modified {
     NotUpdatePacked,
@@ -433,6 +441,7 @@ impl Display for Modified {
     }
 }
 
+/// Error when trying to access the *inserted* and *modified* sections of an update packed storage but the storage isn't update packed or the sections aren't present in the window.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InsertedOrModified {
     NotUpdatePacked,
@@ -460,6 +469,7 @@ impl Display for InsertedOrModified {
     }
 }
 
+/// Error when using `get` with an entity that doesn't have any component in the requested storage(s).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MissingComponent {
     pub id: EntityId,
@@ -484,6 +494,7 @@ impl Display for MissingComponent {
     }
 }
 
+/// Error related to window slicing, the range could be too big or trying to access an invalid range of an update packed window.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NotInbound {
     View(&'static str),
