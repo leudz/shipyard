@@ -13,7 +13,7 @@ pub struct Window<'a, T> {
     pub(crate) dense: &'a [EntityId],
     pub(crate) data: &'a [T],
     pub(crate) pack_info: &'a PackInfo<T>,
-    pub(super) offset: usize,
+    pub(crate) offset: usize,
 }
 
 impl<T> Clone for Window<'_, T> {
@@ -31,15 +31,12 @@ impl<T> Clone for Window<'_, T> {
 impl<T> Window<'_, T> {
     /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
-        if entity.bucket() < self.sparse.len() {
-            // SAFE we checked for OOB
+        if let Some(bucket) = self.sparse.get(entity.bucket()).and_then(Option::as_ref) {
             unsafe {
-                if let Some(bucket) = self.sparse.get_unchecked(entity.bucket()) {
-                    // SAFE bucket_index is always a valid bucket index
-                    *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX
-                } else {
-                    false
-                }
+                // SAFE bucket_index is always a valid bucket index
+                let index = *bucket.get_unchecked(entity.bucket_index());
+                index != core::usize::MAX
+                    && (self.offset..self.offset + self.len()).contains(&index)
             }
         } else {
             false
@@ -64,7 +61,7 @@ impl<T> Window<'_, T> {
                             .get_unchecked(entity.bucket())
                             .as_ref()
                             .unwrap()
-                            .get_unchecked(entity.bucket_index()),
+                            .get_unchecked(entity.bucket_index() - self.offset),
                     ),
                 )
             }
@@ -173,7 +170,11 @@ impl<T> Window<'_, T> {
         &self.data
     }
     /// Returns a window over `range`.
-    pub fn try_as_window<R: core::ops::RangeBounds<usize>>(
+    /// # Safety
+    ///
+    /// This function isn't well tested and might trigger UB down the line.  
+    /// Sorting and component access are good.
+    pub unsafe fn try_as_window<R: core::ops::RangeBounds<usize>>(
         &self,
         range: R,
     ) -> Result<Window<'_, T>, error::NotInbound> {
@@ -205,7 +206,11 @@ impl<T> Window<'_, T> {
     }
     /// Returns a window over `range`.  
     /// Unwraps errors.
-    pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
+    /// # Safety
+    ///
+    /// This function isn't well tested and might trigger UB down the line.  
+    /// Sorting and component access are good.
+    pub unsafe fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
         self.try_as_window(range).unwrap()
     }
 }
@@ -223,7 +228,7 @@ pub struct WindowMut<'w, T> {
     pub(crate) dense: &'w mut [EntityId],
     pub(crate) data: &'w mut [T],
     pub(crate) pack_info: &'w mut PackInfo<T>,
-    pub(super) offset: usize,
+    pub(crate) offset: usize,
 }
 
 impl<'w, T> WindowMut<'w, T> {
@@ -244,6 +249,7 @@ impl<'w, T> WindowMut<'w, T> {
             dense_len: self.dense.len(),
             data: self.data.as_mut_ptr(),
             pack_info: self.pack_info,
+            offset: self.offset,
             _phantom: PhantomData,
         }
     }
@@ -255,6 +261,7 @@ impl<'w, T> WindowMut<'w, T> {
             dense_len: self.dense.len(),
             data: self.data.as_mut_ptr(),
             pack_info: self.pack_info,
+            offset: self.offset,
             _phantom: PhantomData,
         }
     }
@@ -273,7 +280,7 @@ impl<'w, T> WindowMut<'w, T> {
                             .get_unchecked(entity.bucket())
                             .as_ref()
                             .unwrap()
-                            .get_unchecked(entity.bucket_index()),
+                            .get_unchecked(entity.bucket_index() - self.offset),
                     ),
                 )
             }
@@ -290,12 +297,12 @@ impl<'w, T> WindowMut<'w, T> {
                     .get_unchecked(entity.bucket())
                     .as_ref()
                     .unwrap()
-                    .get_unchecked(entity.bucket_index())
+                    .get_unchecked(entity.bucket_index() - self.offset)
             };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
-                if index >= pack.modified {
+                if index >= pack.modified - self.offset {
                     // index of the first element non modified
-                    let non_mod = pack.inserted + pack.modified;
+                    let non_mod = pack.inserted + pack.modified - self.offset;
                     if index >= non_mod {
                         // SAFE we checked the window contains the entity
                         unsafe {
@@ -307,23 +314,23 @@ impl<'w, T> WindowMut<'w, T> {
                                 self.data.get_unchecked_mut(non_mod),
                                 self.data.get_unchecked_mut(index),
                             );
-                            let dense = self.dense.get_unchecked(non_mod);
+                            let id = self.dense.get_unchecked(non_mod);
                             *self
                                 .sparse
-                                .get_unchecked_mut(dense.bucket())
+                                .get_unchecked_mut(id.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(dense.bucket_index()) = non_mod;
-                            let dense = *self.dense.get_unchecked(index);
+                                .get_unchecked_mut(id.bucket_index()) = non_mod + self.offset;
+                            let id = *self.dense.get_unchecked(index);
                             *self
                                 .sparse
-                                .get_unchecked_mut(dense.bucket())
+                                .get_unchecked_mut(id.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(dense.bucket_index()) = index;
+                                .get_unchecked_mut(id.bucket_index()) = index + self.offset;
                         }
                         pack.modified += 1;
-                        index = non_mod;
+                        index = non_mod + self.offset;
                     }
                 }
             }
@@ -757,7 +764,11 @@ impl<'w, T> WindowMut<'w, T> {
         &self.data
     }
     /// Returns a window over `range`.
-    pub fn try_as_window<R: core::ops::RangeBounds<usize>>(
+    /// # Safety
+    ///
+    /// This function isn't well tested and might trigger UB down the line.  
+    /// Sorting and component access are good.
+    pub unsafe fn try_as_window<R: core::ops::RangeBounds<usize>>(
         &self,
         range: R,
     ) -> Result<Window<'_, T>, error::NotInbound> {
@@ -789,11 +800,19 @@ impl<'w, T> WindowMut<'w, T> {
     }
     /// Returns a window over `range`.  
     /// Unwraps errors.
-    pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
+    /// # Safety
+    ///
+    /// This function isn't well tested and might trigger UB down the line.  
+    /// Sorting and component access are good.
+    pub unsafe fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
         self.try_as_window(range).unwrap()
     }
     /// Returns a mutable window over `range`.
-    pub fn try_as_window_mut<R: core::ops::RangeBounds<usize>>(
+    /// # Safety
+    ///
+    /// This function isn't well tested and might trigger UB down the line.  
+    /// Sorting and component access are good.
+    pub unsafe fn try_as_window_mut<R: core::ops::RangeBounds<usize>>(
         &mut self,
         range: R,
     ) -> Result<WindowMut<'_, T>, error::NotInbound> {
@@ -832,7 +851,11 @@ impl<'w, T> WindowMut<'w, T> {
     }
     /// Returns a mutable window over `range`.  
     /// Unwraps errors.
-    pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
+    /// # Safety
+    ///
+    /// This function isn't well tested and might trigger UB down the line.  
+    /// Sorting and component access are good.
+    pub unsafe fn as_window_mut<R: core::ops::RangeBounds<usize>>(
         &mut self,
         range: R,
     ) -> WindowMut<'_, T> {
@@ -860,6 +883,7 @@ pub struct RawWindowMut<'a, T> {
     pub(crate) dense_len: usize,
     pub(crate) data: *mut T,
     pub(crate) pack_info: *mut PackInfo<T>,
+    pub(crate) offset: usize,
     pub(super) _phantom: PhantomData<&'a mut T>,
 }
 
@@ -890,6 +914,7 @@ impl<T> Clone for RawWindowMut<'_, T> {
             dense_len: self.dense_len,
             data: self.data,
             pack_info: self.pack_info,
+            offset: self.offset,
             _phantom: PhantomData,
         }
     }

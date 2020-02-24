@@ -9,7 +9,6 @@ use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::{type_name, Any, TypeId};
-use core::marker::PhantomData;
 use core::ptr;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view_add_entity::ViewAddEntity;
@@ -64,15 +63,7 @@ impl<T> SparseSet<T> {
         }
     }
     pub(crate) fn raw_window_mut(&mut self) -> RawWindowMut<'_, T> {
-        RawWindowMut {
-            sparse: self.sparse.as_mut_ptr(),
-            sparse_len: self.sparse.len(),
-            dense: self.dense.as_mut_ptr(),
-            dense_len: self.dense.len(),
-            data: self.data.as_mut_ptr(),
-            pack_info: &mut self.pack_info,
-            _phantom: PhantomData,
-        }
+        self.window_mut().into_raw()
     }
     pub(crate) fn allocate_at(&mut self, entity: EntityId) {
         if entity.bucket() >= self.sparse.len() {
@@ -332,7 +323,15 @@ impl<T> SparseSet<T> {
     }
     /// Returns true if the window contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
-        self.window().contains(entity)
+        // we're not delegating to window since we know the index is in range
+        if let Some(bucket) = self.sparse.get(entity.bucket()).and_then(Option::as_ref) {
+            unsafe {
+                // SAFE bucket_index is always a valid bucket index
+                *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX
+            }
+        } else {
+            false
+        }
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         if self.contains(entity) {
@@ -673,7 +672,7 @@ impl<T> SparseSet<T> {
     ) -> Result<Window<'_, T>, error::NotInbound> {
         use core::ops::Bound;
 
-        let start = match range.end_bound() {
+        let start = match range.start_bound() {
             Bound::Included(start) => *start,
             Bound::Excluded(start) => *start + 1,
             Bound::Unbounded => 0,

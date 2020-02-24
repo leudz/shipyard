@@ -10,20 +10,20 @@ pub trait AbstractMut {
     type Slice;
     /// # Safety
     ///
-    /// `index` has to be inbound and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
+    /// `index` has to be between 0 and window.len() and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
     unsafe fn get_data(&mut self, index: usize) -> Self::Out;
     /// # Safety
     ///
-    /// `index` has to be inbound and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
+    /// `index` has to be between 0 and window.len() and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
     unsafe fn get_update_data(&mut self, index: usize) -> Self::Out;
     /// # Safety
     ///
-    /// `index` has to be inbound and `Slice` needs a correct lifetime when used on `Window` or `RawWindowMut`.
+    /// `indices` has to be between 0 and window.len() and `Slice` needs a correct lifetime when used on `Window` or `RawWindowMut`.
     unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice;
     fn dense(&self) -> *const EntityId;
     /// # Safety
     ///
-    /// `index` has to be in bound.
+    /// `index` has to be between 0 and window.len().
     unsafe fn id_at(&self, index: usize) -> EntityId;
     fn index_of(&self, entity: EntityId) -> Option<usize>;
     /// # Safety
@@ -65,7 +65,7 @@ macro_rules! window {
                     if self.contains(entity) {
                         // SAFE we checked entity has this component
                         unsafe {
-                            Some(*self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index()))
+                            Some(*self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index()) - self.offset)
                         }
                     } else {
                         None
@@ -127,7 +127,7 @@ macro_rules! window_mut {
                     if self.contains(entity) {
                         // SAFE we checked entity has this component
                         unsafe {
-                            Some(*(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()))
+                            Some(*(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()) - self.offset)
                         }
                     } else {
                         None

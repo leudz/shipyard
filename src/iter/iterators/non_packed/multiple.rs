@@ -45,13 +45,13 @@ macro_rules! impl_iterators {
                 while self.current < self.end {
                     // SAFE at this point there are no mutable reference to sparse or dense
                     // and self.indices can't access out of bounds
-                    let index = unsafe {ptr::read(self.indices.add(self.current))};
+                    let id = unsafe { ptr::read(self.indices.add(self.current)) };
                     self.current += 1;
                     let data_indices = ($(
                         if $index == self.array {
                             self.current - 1
                         } else {
-                            if let Some(index) = self.data.$index.index_of(index) {
+                            if let Some(index) = self.data.$index.index_of(id) {
                                 index
                             } else {
                                 continue
