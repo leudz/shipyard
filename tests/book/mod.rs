@@ -8,6 +8,7 @@ mod hierarchy;
 mod iterators;
 mod packs;
 mod remove_components;
+mod syntactic_peculiarities;
 #[cfg(feature = "proc")]
 mod systems;
 mod world;
