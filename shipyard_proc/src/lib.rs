@@ -165,6 +165,11 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                                                     unreachable!()
                                                 }
                                             }
+                                        } else {
+                                            return Err(Error::new_spanned(
+                                                inner_type,
+                                                "Unique will only work with component storages referred by &T or &mut T",
+                                            ));
                                         }
                                     },
                                     _ => {
@@ -273,7 +278,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
         #vis struct #name;
         impl<'sys> ::shipyard::prelude::System<'sys> for #name {
             type Data = (#(#data,)*);
-            fn run((#(#binding,)*): <Self::Data as ::shipyard::prelude::SystemData<'sys>>::View) #body
+            fn run((#(#binding,)*): (#(<#data as SystemData<'sys>>::View,)*)) #body
         }
     })
 }
