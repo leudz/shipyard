@@ -167,6 +167,7 @@ impl<S: Shiperator + ?Sized> Shiperator for &mut S {
     }
 }
 
+/// Trait extending `Shiperator` to be able to iterate ids alongside components.
 pub trait CurrentId: Shiperator {
     type Id;
 
