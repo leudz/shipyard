@@ -75,11 +75,9 @@ fn non_send_storage_in_other_thread() {
 
     unsafe impl Sync for NonSendStruct {}
 
-    dbg!(std::thread::current().id());
     let world = World::new();
     rayon::join(
         || {
-            dbg!(std::thread::current().id());
             assert_eq!(
                 world.try_borrow::<NonSend<&mut NonSendStruct>>().err(),
                 Some(error::GetStorage::StorageBorrow((
@@ -100,7 +98,6 @@ fn non_send_sync_storage_in_other_thread() {
     let world = World::new();
     rayon::join(
         || {
-            dbg!(std::thread::current().id());
             assert_eq!(
                 world.try_borrow::<NonSendSync<&NonSendSyncStruct>>().err(),
                 Some(error::GetStorage::StorageBorrow((

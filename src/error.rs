@@ -333,39 +333,6 @@ impl Display for Sort {
     }
 }
 
-/*
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Register {
-    Borrow(Borrow),
-    WrongThread,
-}
-
-#[cfg(feature = "std")]
-impl Error for Register {}
-
-impl Debug for Register {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match self {
-            Self::Borrow(borrow) => Debug::fmt(borrow, fmt),
-            Self::WrongThread => fmt.write_str(
-                "Impossible to add !Send storages on other thread than World's (for now).",
-            ),
-        }
-    }
-}
-
-impl Display for Register {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
-impl From<Borrow> for Register {
-    fn from(borrow: Borrow) -> Self {
-        Self::Borrow(borrow)
-    }
-}*/
-
 /// Error when trying to use update pack related function on non update packed storage.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NotUpdatePack;
