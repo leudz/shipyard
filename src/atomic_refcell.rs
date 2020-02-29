@@ -334,7 +334,7 @@ impl<'a, T: 'a + ?Sized> Ref<'a, T> {
     /// # Safety
     ///
     /// The reference has to be dropped before `Borrow`.
-    pub(crate) unsafe fn destructure(Ref { inner, borrow, .. }: Self) -> (&'a T, Borrow<'a>) {
+    pub(crate) unsafe fn destructure_0(Ref { inner, borrow, .. }: Self) -> (&'a T, Borrow<'a>) {
         (inner, borrow)
     }
 }

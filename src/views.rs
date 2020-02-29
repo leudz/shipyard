@@ -64,7 +64,7 @@ impl<'a> TryFrom<Ref<'a, AllStorages>> for EntitiesView<'a> {
     type Error = error::GetStorage;
     fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
         // SAFE all_storages and entities are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         Ok(EntitiesView {
             entities: all_storages
                 .entities()
@@ -103,7 +103,7 @@ impl<'a> TryFrom<Ref<'a, AllStorages>> for EntitiesViewMut<'a> {
     type Error = error::GetStorage;
     fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
         // SAFE all_storages and entities are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         Ok(EntitiesViewMut {
             entities: all_storages
                 .entities_mut()
@@ -149,10 +149,10 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for View<'a, T>
     type Error = error::GetStorage;
     fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
         // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -171,7 +171,7 @@ impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for View<'a, T> {
     fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -191,10 +191,10 @@ impl<'a, T: 'static + Sync> View<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get_non_send::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -211,7 +211,7 @@ impl<'a, T: 'static + Sync> View<'a, T> {
     ) -> Result<Self, error::GetStorage> {
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get_non_send::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -231,10 +231,10 @@ impl<'a, T: 'static + Send> View<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get_non_sync::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -251,7 +251,7 @@ impl<'a, T: 'static + Send> View<'a, T> {
     ) -> Result<Self, error::GetStorage> {
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get_non_sync::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -271,10 +271,10 @@ impl<'a, T: 'static> View<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get_non_send_sync::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -291,7 +291,7 @@ impl<'a, T: 'static> View<'a, T> {
     ) -> Result<Self, error::GetStorage> {
         // SAFE window is dropped before borrow
         let (sparse_set, borrow) = unsafe {
-            Ref::destructure(
+            Ref::destructure_0(
                 all_storages
                     .get_non_send_sync::<T>()
                     .map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))?,
@@ -328,7 +328,7 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for ViewMut<'a,
     type Error = error::GetStorage;
     fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
         // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         Ok(ViewMut {
             sparse_set: all_storages
                 .get_mut::<T>()
@@ -356,7 +356,7 @@ impl<'a, T: 'static + Sync> ViewMut<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         Ok(ViewMut {
             sparse_set: all_storages
                 .get_non_send_mut::<T>()
@@ -382,7 +382,7 @@ impl<'a, T: 'static + Send> ViewMut<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         Ok(ViewMut {
             sparse_set: all_storages
                 .get_non_sync_mut::<T>()
@@ -408,7 +408,7 @@ impl<'a, T: 'static> ViewMut<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         Ok(ViewMut {
             sparse_set: all_storages
                 .get_non_send_sync_mut::<T>()
@@ -463,7 +463,7 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for UniqueView<
     type Error = error::GetStorage;
     fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = Ref::try_map(
             all_storages
                 .get::<T>()
@@ -519,7 +519,7 @@ impl<'a, T: 'static + Sync> UniqueView<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = Ref::try_map(
             all_storages
                 .get_non_send::<T>()
@@ -573,7 +573,7 @@ impl<'a, T: 'static + Send> UniqueView<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = Ref::try_map(
             all_storages
                 .get_non_sync::<T>()
@@ -627,7 +627,7 @@ impl<'a, T: 'static> UniqueView<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = Ref::try_map(
             all_storages
                 .get_non_send_sync::<T>()
@@ -692,7 +692,7 @@ impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for UniqueViewM
     type Error = error::GetStorage;
     fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = RefMut::try_map(
             all_storages
                 .get_mut::<T>()
@@ -748,7 +748,7 @@ impl<'a, T: 'static + Sync> UniqueViewMut<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = RefMut::try_map(
             all_storages
                 .get_non_send_mut::<T>()
@@ -802,7 +802,7 @@ impl<'a, T: 'static + Send> UniqueViewMut<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = RefMut::try_map(
             all_storages
                 .get_non_sync_mut::<T>()
@@ -856,7 +856,7 @@ impl<'a, T: 'static> UniqueViewMut<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { Ref::destructure_0(all_storages) };
         let unique = RefMut::try_map(
             all_storages
                 .get_non_send_sync_mut::<T>()
