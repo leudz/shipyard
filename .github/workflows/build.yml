@@ -76,10 +76,10 @@ jobs:
     - name: install cargo make 
       run: cargo install cargo-make 
 
-    - name: build for release 
+    - name: build bunny demo for release 
       run: cd demo && cargo make build --profile production 
 
-    - name: copy demo to dist
+    - name: copy bunny demo to dist
       run: cp -R ./demo/_static ./dist/demo
 
     - name: install mdbook 
