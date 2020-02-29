@@ -18,6 +18,7 @@ pub fn system(
         .into()
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> {
     if run.sig.ident != "run" {
         return Err(Error::new(
