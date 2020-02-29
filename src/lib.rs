@@ -10,7 +10,7 @@
 //! use shipyard::prelude::*;
 //!
 //! struct Health(f32);
-//! struct Position { x: f32, y: f32 };
+//! struct Position { x: f32, y: f32 }
 //!
 //! #[system(InAcid)]
 //! fn run(pos: &Position, mut health: &mut Health) {
