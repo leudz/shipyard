@@ -79,8 +79,8 @@ impl Debug for GetStorage {
             },
             Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {name}.\nConsider adding this line after the creation of World: world.register_unique::<{name}>(/* your_storage */);", name = name)),
             Self::NonUnique((name, mutation)) => match mutation {
-                Borrow::Shared => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, replace world.register::<{name}>() by world.register_unique(/* your_storage */).\nIf it isn't supposed to be a unique storage, replace Unique<&{name}> by &{name}.", name = name)),
-                Borrow::Unique => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, replace world.register::<{name}>() by world.register_unique(/* your_storage */).\nIf it isn't supposed to be a unique storage, replace Unique<&mut {name}> by &mut {name}.", name = name)),
+                Borrow::Shared => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, add world.add_unique(/* your_storage */) somewhere before accessing it.\nIf it isn't supposed to be a unique storage, replace Unique<&{name}> by &{name}.", name = name)),
+                Borrow::Unique => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, add world.add_unique(/* your_storage */) somewhere before accessing it.\nIf it isn't supposed to be a unique storage, replace Unique<&mut {name}> by &mut {name}.", name = name)),
                 _ => unreachable!(),
             },
             Self::Entities(borrow) => match borrow {
