@@ -6,9 +6,12 @@ macro_rules! impl_iterators {
         $chunk_exact: ident
         $(($type: ident, $index: tt))+
     ) => {
-        #[doc = "Chunk exact iterator over"]
+        #[doc = "Chunk iterator over"]
         #[doc = $number]
-        #[doc = "components.\n Returns a tuple of `size` long slices and not single elements.\n ChunkExact will always return a slice with the same length.\n To get the remaining items (if any) use the `remainder` method."]
+        #[doc = "components.  
+Returns a tuple of `size` long slices and not single elements.  
+ChunkExact will always return a slice with the same length.  
+To get the remaining items (if any) use the `remainder` method."]
         pub struct $chunk_exact<$($type: IntoAbstract),+> {
             pub(crate) data: ($($type::AbsView,)+),
             pub(crate) current: usize,

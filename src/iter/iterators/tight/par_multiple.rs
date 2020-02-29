@@ -9,6 +9,10 @@ macro_rules! impl_iterators {
         $seq: ident
         $(($type: ident, $index: tt))+
     ) => {
+        #[doc = "Tight parallel iterator over"]
+        #[doc = $number]
+        #[doc = "components.  
+Tight iterators are fast but are limited to components tightly packed together."]
         pub struct $tight<$($type: IntoAbstract),+>($seq<$($type),+>);
 
         impl<$($type: IntoAbstract),+> From<$seq<$($type),+>> for $tight<$($type),+> {

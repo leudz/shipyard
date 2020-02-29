@@ -9,6 +9,9 @@ macro_rules! impl_iterators {
         $seq: ident
         $(($type: ident, $index: tt))+
     ) => {
+        #[doc = "Loose parallel iterator over"]
+        #[doc = $number]
+        #[doc = "components."]
         pub struct $loose<$($type: IntoAbstract),+>($seq<$($type),+>);
 
         impl<$($type: IntoAbstract),+> From<$seq<$($type),+>> for $loose<$($type),+> {

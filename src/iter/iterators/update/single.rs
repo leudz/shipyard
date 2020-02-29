@@ -3,6 +3,7 @@ use super::{
 };
 use crate::EntityId;
 
+/// Update iterator over a single component.
 pub struct Update1<T: IntoAbstract> {
     pub(super) data: T::AbsView,
     pub(super) current: usize,

@@ -8,6 +8,9 @@ macro_rules! impl_iterators {
         $update: ident
         $(($type: ident, $index: tt))+
     ) => {
+        #[doc = "Update iterator over"]
+        #[doc = $number]
+        #[doc = "components."]
         pub struct $update<$($type: IntoAbstract),+> {
             pub(crate) data: ($($type::AbsView,)+),
             pub(crate) indices: *const EntityId,

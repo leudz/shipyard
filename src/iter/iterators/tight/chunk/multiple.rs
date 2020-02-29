@@ -8,7 +8,9 @@ macro_rules! impl_iterators {
     ) => {
         #[doc = "Chunk iterator over"]
         #[doc = $number]
-        #[doc = "components.\n Returns a tuple of `size` long slices and not single elements.\n The last chunk's length will be smaller than `size` if `size` does not divide the iterator's length perfectly."]
+        #[doc = "components.  
+Returns a tuple of `size` long slices and not single elements.  
+The last chunk's length will be smaller than `size` if `size` does not divide the iterator's length perfectly."]
         pub struct $chunk<$($type: IntoAbstract),+> {
             pub(crate) data: ($($type::AbsView,)+),
             pub(crate) current: usize,

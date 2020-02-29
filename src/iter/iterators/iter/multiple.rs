@@ -15,8 +15,8 @@ macro_rules! impl_iterators {
     ) => {
         #[doc = "Iterator over"]
         #[doc = $number]
-        #[doc = "components.\n This enum allows to abstract away what kind of iterator you really get. That doesn't mean the performance will suffer, the compiler will (almost)
-        always optimize it away."]
+        #[doc = "components.  
+This enum allows to abstract away what kind of iterator you really get. That doesn't mean the performance will suffer, the compiler will (almost) always optimize it away."]
         pub enum $iter<$($type: IntoAbstract),+> {
             Tight($tight<$($type),+>),
             Loose($loose<$($type),+>),

@@ -2,6 +2,7 @@ use super::{AbstractMut, IntoAbstract, IntoIterator, Update1};
 use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+/// Update parallel iterator over a single component.
 pub struct ParUpdate1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,

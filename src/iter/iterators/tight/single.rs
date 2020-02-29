@@ -8,6 +8,7 @@ use crate::EntityId;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 
+/// Tight iterator over a single component.
 pub struct Tight1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,
@@ -22,6 +23,8 @@ impl<T: IntoAbstract> Tight1<T> {
             data: data.into_abstract(),
         }
     }
+    /// Return a chunk iterator over `step` component at a time.  
+    /// If `step` doesn't divide the length perfectly, the last chunk will be smaller.
     pub fn into_chunk(self, step: usize) -> Chunk1<T> {
         Chunk1 {
             data: self.data,
@@ -30,6 +33,8 @@ impl<T: IntoAbstract> Tight1<T> {
             step,
         }
     }
+    /// Return a chunk iterator over `step` component at a time.  
+    /// If `step` doesn't divide the length perfectly, the remaining elements can be fetched with `remainder`.
     pub fn into_chunk_exact(self, step: usize) -> ChunkExact1<T> {
         ChunkExact1 {
             data: self.data,

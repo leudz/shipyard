@@ -2,6 +2,7 @@ use super::{AbstractMut, IntoAbstract, ParTight1, ParUpdate1};
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+/// Parallel iterator over a single component.
 pub enum ParIter1<T: IntoAbstract> {
     Tight(ParTight1<T>),
     Update(ParUpdate1<T>),

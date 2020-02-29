@@ -11,6 +11,10 @@ macro_rules! impl_iterators {
         $non_packed: ident
         $(($type: ident, $index: tt))+
     ) => {
+        #[doc = "Parallel iterator over"]
+        #[doc = $number]
+        #[doc = "components.  
+This enum allows to abstract away what kind of iterator you really get. That doesn't mean the performance will suffer, the compiler will (almost) always optimize it away."]
         pub enum $iter<$($type: IntoAbstract),+> {
             Tight($tight<$($type),+>),
             Loose($loose<$($type),+>),

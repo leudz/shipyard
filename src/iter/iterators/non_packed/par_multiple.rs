@@ -11,6 +11,9 @@ macro_rules! impl_iterators {
         $update: ident
         $(($type: ident, $index: tt))+
     ) => {
+        #[doc = "Non packed parallel iterator over"]
+        #[doc = $number]
+        #[doc = "components."]
         pub struct $non_packed<$($type: IntoAbstract),+>($seq<$($type),+>);
 
         impl<$($type: IntoAbstract),+> From<$seq<$($type),+>> for $non_packed<$($type),+> {

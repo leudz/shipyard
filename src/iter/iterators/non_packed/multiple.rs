@@ -14,7 +14,7 @@ macro_rules! impl_iterators {
     ) => {
         #[doc = "Non packed iterator over"]
         #[doc = $number]
-        #[doc = "components.\n"]
+        #[doc = "components."]
         pub struct $non_packed<$($type: IntoAbstract),+> {
             pub(crate) data: ($($type::AbsView,)+),
             pub(crate) indices: *const EntityId,

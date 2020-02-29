@@ -1,5 +1,7 @@
 use super::{AbstractMut, IntoAbstract, Shiperator};
 
+/// Chunk iterator over a single component.  
+/// Returns slices `size` long, to get the remaining items (if any) use the `remainder` method.
 pub struct ChunkExact1<T: IntoAbstract> {
     pub(crate) data: T::AbsView,
     pub(crate) current: usize,

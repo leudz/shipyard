@@ -19,7 +19,8 @@ macro_rules! impl_iterators {
     ) => {
         #[doc = "Tight iterator over"]
         #[doc = $number]
-        #[doc = "components.\n Tight iterators are fast but are limited to components tightly packed together."]
+        #[doc = "components.  
+Tight iterators are fast but are limited to components tightly packed together."]
         pub struct $tight<$($type: IntoAbstract),+> {
             pub(crate) data: ($($type::AbsView,)+),
             pub(crate) current: usize,
@@ -27,6 +28,8 @@ macro_rules! impl_iterators {
         }
 
         impl<$($type: IntoAbstract),+> $tight<$($type),+> {
+            /// Return a chunk iterator over `step` component at a time.
+            /// If `step` doesn't divide the length perfectly, the last chunk will be smaller.
             pub fn into_chunk(self, step: usize) -> $chunk<$($type),+> {
                 $chunk {
                     data: self.data,
@@ -35,6 +38,8 @@ macro_rules! impl_iterators {
                     step,
                 }
             }
+            /// Return a chunk iterator over `step` component at a time.
+            /// If `step` doesn't divide the length perfectly, the remaining elements can be fetched with `remainder`.
             pub fn into_chunk_exact(self, step: usize) -> $chunk_exact<$($type),+> {
                 $chunk_exact {
                     data: self.data,

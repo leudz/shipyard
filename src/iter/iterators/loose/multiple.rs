@@ -14,9 +14,9 @@ macro_rules! impl_iterators {
         $loose: ident
         $(($type: ident, $index: tt))+
     ) => {
-        #[doc = "Loose packed iterator over"]
+        #[doc = "Loose iterator over"]
         #[doc = $number]
-        #[doc = "components.\n"]
+        #[doc = "components."]
         pub struct $loose<$($type: IntoAbstract),+> {
             pub(crate) data: ($($type::AbsView,)+),
             pub(crate) indices: *const EntityId,

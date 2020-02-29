@@ -3,18 +3,25 @@ use super::{
 };
 use crate::EntityId;
 
+/// Iterator over a single component.
 pub enum Iter1<T: IntoAbstract> {
     Tight(Tight1<T>),
     Update(Update1<T>),
 }
 
 impl<T: IntoAbstract> Iter1<T> {
+    /// Tries to return a chunk iterator over `step` component at a time.  
+    /// If `step` doesn't divide the length perfectly, the last chunk will be smaller.  
+    /// In case this iterator can't be turned into a chunk iterator it will be returned.
     pub fn into_chunk(self, step: usize) -> Result<Chunk1<T>, Self> {
         match self {
             Self::Tight(tight) => Ok(tight.into_chunk(step)),
             _ => Err(self),
         }
     }
+    /// Tries to return a chunk iterator over `step` component at a time.  
+    /// If `step` doesn't divide the length perfectly, the remaining elements can be fetched with `remainder`.
+    /// In case this iterator can't be turned into a chunk iterator it will be returned.
     pub fn into_chunk_exact(self, step: usize) -> Result<ChunkExact1<T>, Self> {
         match self {
             Self::Tight(tight) => Ok(tight.into_chunk_exact(step)),

@@ -2,6 +2,7 @@ use super::{AbstractMut, ExactSizeShiperator, IntoAbstract, Tight1};
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+/// Tight parallel iterator over a single component.
 pub struct ParTight1<T: IntoAbstract>(Tight1<T>);
 
 impl<T: IntoAbstract> From<Tight1<T>> for ParTight1<T> {

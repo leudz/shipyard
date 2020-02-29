@@ -1,4 +1,9 @@
+//! Shipyard is an Entity Component System focused on usability and speed.
+//!
 //! # Getting started
+//!
+//! The [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!  
+//! Here's two examples to get an idea of what it provides:
 //! ```
 //! # #[cfg(feature = "proc")]
 //! # {
@@ -110,6 +115,12 @@
 //! - **non_send** &mdash; add methods and types required to work with `!Send` components
 //! - **non_sync** &mdash; add methods and types required to work with `!Sync` components
 //! - **std** *(default)* &mdash; let shipyard use the standard library
+//!
+//! ## Unsafe
+//!
+//! This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.  
+//! Releases should have all invocation of `unsafe` explained.  
+//! If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) feel free to open an issue or a PR.
 
 #![deny(bare_trait_objects)]
 #![deny(elided_lifetimes_in_paths)]
@@ -123,8 +134,10 @@ extern crate alloc;
 
 mod atomic_refcell;
 mod delete;
+/// Contains all error types.
 pub mod error;
 mod get;
+/// Re-export types that aren't needed in most use cases.
 pub mod internal;
 mod iter;
 mod not;
