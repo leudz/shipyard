@@ -36,12 +36,13 @@ macro_rules! impl_iterators {
                 if current < self.end {
                     self.current += 1;
                     // SAFE at this point there are no mutable reference to sparse or dense
-                    // and self.indices can't access out of bounds
+                    // and current is in bound
                     let index = unsafe {ptr::read(self.indices.add(current))};
                     let indices = ($(
                         if (self.array >> $index) & 1 != 0 {
                             current
                         } else {
+                            // SAFE the entity has a component in this storage
                             unsafe {self.data.$index.index_of_unchecked(index)}
                         },
                     )+);
@@ -79,6 +80,7 @@ macro_rules! impl_iterators {
                         if (self.array >> $index) & 1 != 0 {
                             self.end
                         } else {
+                            // SAFE the entity has a component in this storage
                             unsafe {self.data.$index.index_of_unchecked(index)}
                         },
                     )+);

@@ -160,3 +160,24 @@ fn enumerate_filter_map_with_id() {
 
     assert_eq!(vec, vec![(0, key0, 10), (6, key2, 12)]);
 }
+
+#[test]
+fn off_by_one() {
+    let world = World::new();
+
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+
+    entities.add_entity(&mut u32s, 0);
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity(&mut u32s, 2);
+
+    let window = u32s.as_window(1..);
+    let iter = (&window).iter();
+    assert_eq!(iter.size_hint(), (2, Some(2)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![&1, &2]);
+
+    let window = window.as_window(1..);
+    let iter = window.iter();
+    assert_eq!(iter.size_hint(), (1, Some(1)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![&2]);
+}

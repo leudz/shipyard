@@ -1,7 +1,6 @@
 use crate::not::Not;
-use crate::sparse_set::{Pack, RawWindowMut, Window};
+use crate::sparse_set::{RawWindowMut, Window};
 use crate::storage::EntityId;
-use core::ptr;
 
 // Abstracts different types of view to iterate over
 // mutable and immutable views with the same iterator
@@ -10,16 +9,19 @@ pub trait AbstractMut {
     type Slice;
     /// # Safety
     ///
-    /// `index` has to be between 0 and window.len() and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
-    unsafe fn get_data(&mut self, index: usize) -> Self::Out;
+    /// `index` has to be between 0 and self.len() and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
+    unsafe fn get_data(&self, index: usize) -> Self::Out;
     /// # Safety
     ///
-    /// `index` has to be between 0 and window.len() and `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
-    unsafe fn get_update_data(&mut self, index: usize) -> Self::Out;
+    /// `index` has to be between 0 and self.len().  
+    /// No other borrow should be in progress on `index` on `RawWindowMut`.  
+    /// Only one call to this function can happen at a time on `RawWindowMut`.  
+    /// `Out` needs a correct lifetime when used on `Window` or `RawWindowMut`.
+    unsafe fn get_update_data(&self, index: usize) -> Self::Out;
     /// # Safety
     ///
-    /// `indices` has to be between 0 and window.len() and `Slice` needs a correct lifetime when used on `Window` or `RawWindowMut`.
-    unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice;
+    /// `indices` has to be between 0 and self.len() and `Slice` needs a correct lifetime when used on `Window` or `RawWindowMut`.
+    unsafe fn get_data_slice(&self, indices: core::ops::Range<usize>) -> Self::Slice;
     fn dense(&self) -> *const EntityId;
     /// # Safety
     ///
@@ -33,153 +35,111 @@ pub trait AbstractMut {
     fn flag_all(&mut self);
     /// # Safety
     ///
-    /// `entity` has to own a component in `self` when used on `RawWindowMut`.
-    unsafe fn flag(&mut self, entity: EntityId);
+    /// When used on `RawWindowMut`:\
+    /// `entity` has to own a component in `self`.\
+    /// This method can only be called once at a time.\
+    /// No borrow must be in progress on `entity` nor `first_non_mod`.
+    unsafe fn flag(&self, entity: EntityId);
 }
 
 macro_rules! window {
     ($($window: ty);+) => {
         $(
-            impl<'a, T> AbstractMut for $window {
-                type Out = &'a T;
-                type Slice = &'a [T];
-                unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    self.data.get_unchecked(index)
+            impl<'w, T> AbstractMut for $window {
+                type Out = &'w T;
+                type Slice = &'w [T];
+                unsafe fn get_data(&self, index: usize) -> Self::Out {
+                    self.get_at_unbounded_0(index)
                 }
-                unsafe fn get_update_data(&mut self, index: usize) -> Self::Out {
+                unsafe fn get_update_data(&self, index: usize) -> Self::Out {
                     self.get_data(index)
                 }
-                unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice {
-                    core::slice::from_raw_parts(
-                        self.data.get_unchecked(indices.start),
-                        indices.end - indices.start,
-                    )
+                unsafe fn get_data_slice(&self, indices: core::ops::Range<usize>) -> Self::Slice {
+                    self.get_at_unbounded_slice_0(indices)
                 }
                 fn dense(&self) -> *const EntityId {
-                    self.dense.as_ptr()
+                    self.dense_ptr()
                 }
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    *self.dense.get_unchecked(index)
+                    <Window<'_, T>>::id_at(self, index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
-                    if self.contains(entity) {
-                        // SAFE we checked entity has this component
-                        unsafe {
-                            Some(*self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index()) - self.offset)
-                        }
-                    } else {
-                        None
-                    }
+                    (*self).index_of(entity)
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *self.sparse.get_unchecked(entity.bucket()).as_ref().unwrap().get_unchecked(entity.bucket_index())
+                    (*self).index_of_unchecked(entity)
                 }
                 fn flag_all(&mut self) {}
-                unsafe fn flag(&mut self, _: EntityId) {}
+                unsafe fn flag(&self, _: EntityId) {}
             }
         )+
     }
 }
 
-window![Window<'a, T>; &Window<'a, T>];
+window![Window<'w, T>; &Window<'w, T>];
 
 macro_rules! window_mut {
     ($($window_mut: ty);+) => {
         $(
-            impl<'a, T> AbstractMut for $window_mut {
-                type Out = &'a mut T;
-                type Slice = &'a mut [T];
-                unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    &mut *self.data.add(index)
+            impl<'w, T> AbstractMut for $window_mut {
+                type Out = &'w mut T;
+                type Slice = &'w mut [T];
+                unsafe fn get_data(&self, index: usize) -> Self::Out {
+                    self.get_at_unbounded(index)
                 }
-                unsafe fn get_update_data(&mut self, mut index: usize) -> Self::Out {
-                    if let Pack::Update(pack) = &(*self.pack_info).pack {
-                        // index of the first element non modified
-                        let non_mod = pack.inserted + pack.modified;
-                        if index >= non_mod {
-                            ptr::swap(self.dense.add(non_mod), self.dense.add(index));
-                            ptr::swap(self.data.add(non_mod), self.data.add(index));
-
-                            let non_mod_id = ptr::read(self.dense.add(non_mod));
-                            *(&mut *self.sparse.add(non_mod_id.bucket())).as_mut().unwrap().get_unchecked_mut(non_mod_id.bucket_index()) = non_mod;
-
-                            let index_id = ptr::read(self.dense.add(index));
-                            *(&mut *self.sparse.add(index_id.bucket())).as_mut().unwrap().get_unchecked_mut(index_id.bucket_index()) = index;
-
-                            index = non_mod;
-                        }
-                    }
-                    &mut *self.data.add(index)
+                unsafe fn get_update_data(&self, index: usize) -> Self::Out {
+                    self.swap_with_last_non_modified(index)
                 }
-                unsafe fn get_data_slice(&mut self, indices: core::ops::Range<usize>) -> Self::Slice {
-                    core::slice::from_raw_parts_mut(
-                        self.data.add(indices.start),
-                        indices.end - indices.start,
-                    )
+                unsafe fn get_data_slice(&self, indices: core::ops::Range<usize>) -> Self::Slice {
+                    self.get_at_unbounded_slice(indices)
                 }
                 fn dense(&self) -> *const EntityId {
-                    self.dense
+                    <RawWindowMut<'_, T>>::dense(self)
                 }
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    *self.dense.add(index)
+                    <RawWindowMut<'_, T>>::id_at(self, index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
-                    if self.contains(entity) {
-                        // SAFE we checked entity has this component
-                        unsafe {
-                            Some(*(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()) - self.offset)
-                        }
-                    } else {
-                        None
-                    }
+                    <RawWindowMut<'_, T>>::index_of(self, entity)
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    *(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index())
+                    <RawWindowMut<'_, T>>::index_of_unchecked_0(self, entity)
                 }
                 fn flag_all(&mut self) {
-                    // SAFE we have a mutable reference
-                    if let Pack::Update(update) = unsafe { &mut (*self.pack_info).pack } {
-                        if self.dense_len > update.inserted + update.modified {
-                            update.modified = self.dense_len - update.inserted;
-                        }
-                    }
+                    <RawWindowMut<'_, T>>::flag_all(self)
                 }
-                unsafe fn flag(&mut self, entity: EntityId) {
-                    if let Pack::Update(update) = &mut (*self.pack_info).pack {
-                        if *(&*self.sparse.add(entity.bucket())).as_ref().unwrap().get_unchecked(entity.bucket_index()) >= update.inserted + update.modified {
-                            update.modified += 1;
-                        }
-                    }
+                unsafe fn flag(&self, entity: EntityId) {
+                    <RawWindowMut<'_, T>>::flag(self, entity)
                 }
             }
         )+
     }
 }
 
-window_mut![RawWindowMut<'a, T>; &mut RawWindowMut<'a, T>];
+window_mut![RawWindowMut<'w, T>; &mut RawWindowMut<'w, T>];
 
 macro_rules! not_window {
     ($($not_window: ty);+) => {
         $(
-            impl<'a, T> AbstractMut for $not_window {
+            impl<'w, T> AbstractMut for $not_window {
                 type Out = ();
                 type Slice = ();
-                unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    if index != core::usize::MAX {
+                unsafe fn get_data(&self, index: usize) -> Self::Out {
+                    if self.0.contains_index(index) {
                         unreachable!()
                     }
                 }
-                unsafe fn get_update_data(&mut self, index: usize) -> Self::Out {
+                unsafe fn get_update_data(&self, index: usize) -> Self::Out {
                     self.get_data(index)
                 }
-                unsafe fn get_data_slice(&mut self, _: core::ops::Range<usize>) -> Self::Slice {
+                unsafe fn get_data_slice(&self, _: core::ops::Range<usize>) -> Self::Slice {
                     unreachable!()
                 }
                 fn dense(&self) -> *const EntityId {
                     unreachable!()
                 }
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    *self.0.dense.get_unchecked(index)
+                    <Window<'_, T>>::id_at(&self.0, index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.0.contains(entity) {
@@ -192,36 +152,36 @@ macro_rules! not_window {
                     core::usize::MAX
                 }
                 fn flag_all(&mut self) {}
-                unsafe fn flag(&mut self, _: EntityId) {}
+                unsafe fn flag(&self, _: EntityId) {}
             }
         )+
     }
 }
 
-not_window![Not<Window<'a, T>>; Not<&Window<'a, T>>];
+not_window![Not<Window<'w, T>>; Not<&Window<'w, T>>];
 
 macro_rules! not_window_mut {
     ($($not_window_mut: ty);+) => {
         $(
-            impl<'a, T> AbstractMut for $not_window_mut {
+            impl<'w, T> AbstractMut for $not_window_mut {
                 type Out = ();
                 type Slice = ();
-                unsafe fn get_data(&mut self, index: usize) -> Self::Out {
-                    if index != core::usize::MAX {
+                unsafe fn get_data(&self, index: usize) -> Self::Out {
+                    if self.0.contains_index(index) {
                         unreachable!()
                     }
                 }
-                unsafe fn get_update_data(&mut self, index: usize) -> Self::Out {
+                unsafe fn get_update_data(&self, index: usize) -> Self::Out {
                     self.get_data(index)
                 }
-                unsafe fn get_data_slice(&mut self, _: core::ops::Range<usize>) -> Self::Slice {
+                unsafe fn get_data_slice(&self, _: core::ops::Range<usize>) -> Self::Slice {
                     unreachable!()
                 }
                 fn dense(&self) -> *const EntityId {
                     unreachable!()
                 }
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    *self.0.dense.add(index)
+                    <RawWindowMut<'_, T>>::id_at(&self.0, index)
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     if self.0.contains(entity) {
@@ -234,10 +194,10 @@ macro_rules! not_window_mut {
                     core::usize::MAX
                 }
                 fn flag_all(&mut self) {}
-                unsafe fn flag(&mut self, _: EntityId) {}
+                unsafe fn flag(&self, _: EntityId) {}
             }
         )+
     }
 }
 
-not_window_mut![Not<RawWindowMut<'a, T>>; Not<&mut RawWindowMut<'a, T>>];
+not_window_mut![Not<RawWindowMut<'w, T>>; Not<&mut RawWindowMut<'w, T>>];

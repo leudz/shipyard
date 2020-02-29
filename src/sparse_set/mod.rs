@@ -13,7 +13,7 @@ use core::ptr;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
-pub use windows::{Window, WindowMut};
+pub use windows::{Window, WindowMut, WindowSort1};
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 
@@ -45,22 +45,10 @@ impl<T> Default for SparseSet<T> {
 
 impl<T> SparseSet<T> {
     pub(crate) fn window(&self) -> Window<'_, T> {
-        Window {
-            sparse: &self.sparse,
-            dense: &self.dense,
-            data: &self.data,
-            pack_info: &self.pack_info,
-            offset: 0,
-        }
+        Window::new(self, 0..self.len())
     }
     pub(crate) fn window_mut(&mut self) -> WindowMut<'_, T> {
-        WindowMut {
-            sparse: &mut self.sparse,
-            dense: &mut self.dense,
-            data: &mut self.data,
-            pack_info: &mut self.pack_info,
-            offset: 0,
-        }
+        WindowMut::new(self, 0..self.len())
     }
     pub(crate) fn raw_window_mut(&mut self) -> RawWindowMut<'_, T> {
         self.window_mut().into_raw()
@@ -363,7 +351,6 @@ impl<T> SparseSet<T> {
                     .unwrap()
                     .get_unchecked(entity.bucket_index())
             };
-            //let mut index = unsafe { *self.sparse.get_unchecked(entity.uindex()) };
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 if index >= pack.modified {
                     // index of the first element non modified
@@ -406,7 +393,7 @@ impl<T> SparseSet<T> {
     }
     /// Returns the length of the window.
     pub fn len(&self) -> usize {
-        self.window().len()
+        self.dense.len()
     }
     /// Returns true if the window's length is 0.
     pub fn is_empty(&self) -> bool {
@@ -415,13 +402,7 @@ impl<T> SparseSet<T> {
     /// Returns the *inserted* section of an update packed window.
     pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[0..pack.inserted],
-                data: &self.data[0..pack.inserted],
-                pack_info: &self.pack_info,
-                offset: 0,
-            })
+            Ok(Window::new(self, 0..pack.inserted))
         } else {
             Err(error::Inserted::NotUpdatePacked)
         }
@@ -434,13 +415,8 @@ impl<T> SparseSet<T> {
     /// Returns the *inserted* section of an update packed window mutably.
     pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::Inserted> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(WindowMut {
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[0..pack.inserted],
-                data: &mut self.data[0..pack.inserted],
-                pack_info: &mut self.pack_info,
-                offset: 0,
-            })
+            let range = 0..pack.inserted;
+            Ok(WindowMut::new(self, range))
         } else {
             Err(error::Inserted::NotUpdatePacked)
         }
@@ -453,13 +429,10 @@ impl<T> SparseSet<T> {
     /// Returns the *modified* section of an update packed window.
     pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[pack.inserted..pack.inserted + pack.modified],
-                data: &self.data[pack.inserted..pack.inserted + pack.modified],
-                offset: pack.inserted,
-                pack_info: &self.pack_info,
-            })
+            Ok(Window::new(
+                self,
+                pack.inserted..pack.inserted + pack.modified,
+            ))
         } else {
             Err(error::Modified::NotUpdatePacked)
         }
@@ -472,13 +445,8 @@ impl<T> SparseSet<T> {
     /// Returns the *modified* section of an update packed window mutably.
     pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::Modified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(WindowMut {
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[pack.inserted..pack.inserted + pack.modified],
-                data: &mut self.data[pack.inserted..pack.inserted + pack.modified],
-                offset: pack.inserted,
-                pack_info: &mut self.pack_info,
-            })
+            let range = pack.inserted..pack.inserted + pack.modified;
+            Ok(WindowMut::new(self, range))
         } else {
             Err(error::Modified::NotUpdatePacked)
         }
@@ -491,13 +459,7 @@ impl<T> SparseSet<T> {
     /// Returns the *inserted* and *modified* section of an update packed window.
     pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(Window {
-                sparse: &self.sparse,
-                dense: &self.dense[0..pack.inserted + pack.modified],
-                data: &self.data[0..pack.inserted + pack.modified],
-                pack_info: &self.pack_info,
-                offset: 0,
-            })
+            Ok(Window::new(self, 0..pack.inserted + pack.modified))
         } else {
             Err(error::InsertedOrModified::NotUpdatePacked)
         }
@@ -512,13 +474,8 @@ impl<T> SparseSet<T> {
         &mut self,
     ) -> Result<WindowMut<'_, T>, error::InsertedOrModified> {
         if let Pack::Update(pack) = &self.pack_info.pack {
-            Ok(WindowMut {
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[0..pack.inserted + pack.modified],
-                data: &mut self.data[0..pack.inserted + pack.modified],
-                pack_info: &mut self.pack_info,
-                offset: 0,
-            })
+            let range = 0..pack.inserted + pack.modified;
+            Ok(WindowMut::new(self, range))
         } else {
             Err(error::InsertedOrModified::NotUpdatePacked)
         }
@@ -578,7 +535,7 @@ impl<T> SparseSet<T> {
         self.try_clear_inserted_and_modified().unwrap()
     }
     pub(crate) fn is_unique(&self) -> bool {
-        self.window().is_unique()
+        self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
     }
     //          ▼ old end of pack
     //              ▼ new end of pack
@@ -587,7 +544,60 @@ impl<T> SparseSet<T> {
     //            ---------
     //              pack
     pub(crate) fn pack(&mut self, entity: EntityId) {
-        self.window_mut().pack(entity)
+        if let Some(dense_index) = self.index_of(entity) {
+            match &mut self.pack_info.pack {
+                Pack::Tight(pack) => {
+                    if dense_index >= pack.len {
+                        unsafe {
+                            // SAFE pack.len is in bound
+                            let first_non_packed = *self.dense.get_unchecked(pack.len);
+                            // SAFE we checked the entity has a component and bucket_index is alwyas in bound
+                            *self
+                                .sparse
+                                .get_unchecked_mut(entity.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(entity.bucket_index()) = pack.len;
+                            *self
+                                .sparse
+                                .get_unchecked_mut(first_non_packed.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(first_non_packed.bucket_index()) = dense_index;
+                        }
+                        self.dense.swap(pack.len, dense_index);
+                        self.data.swap(pack.len, dense_index);
+                        pack.len += 1;
+                    }
+                }
+                Pack::Loose(pack) => {
+                    if dense_index >= pack.len {
+                        unsafe {
+                            // SAFE pack.len is in bound
+                            let first_non_packed = *self.dense.get_unchecked(pack.len);
+                            // SAFE we checked the entity has a component and bucket_index is alwyas in bound
+                            *self
+                                .sparse
+                                .get_unchecked_mut(entity.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(entity.bucket_index()) = pack.len;
+                            *self
+                                .sparse
+                                .get_unchecked_mut(first_non_packed.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(first_non_packed.bucket_index()) = dense_index;
+                        }
+                        self.dense.swap(pack.len, dense_index);
+                        self.data.swap(pack.len, dense_index);
+                        pack.len += 1;
+                    }
+                }
+                Pack::Update(_) => {}
+                Pack::NoPack => {}
+            }
+        }
     }
     pub(crate) fn unpack(&mut self, entity: EntityId) {
         self.window_mut().unpack(entity)
@@ -661,6 +671,33 @@ impl<T> SparseSet<T> {
     pub fn id_at(&self, index: usize) -> EntityId {
         self.try_id_at(index).unwrap()
     }
+    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
+    /// This index is only valid for this storage and until a modification happens.
+    pub fn index_of(&self, entity: EntityId) -> Option<usize> {
+        if let Some(bucket) = self.sparse.get(entity.bucket()).and_then(Option::as_ref) {
+            let index = unsafe { *bucket.get_unchecked(entity.bucket_index()) };
+            if index != core::usize::MAX {
+                Some(index)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
+    /// This index is only valid for this storage and until a modification happens.
+    /// # Safety
+    ///
+    /// `entity` has to own a component in this storage.  
+    /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
+    pub unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
+        if let Some(bucket) = self.sparse.get_unchecked(entity.bucket()) {
+            *bucket.get_unchecked(entity.bucket_index())
+        } else {
+            core::hint::unreachable_unchecked()
+        }
+    }
     /// Returns a slice of all the components in this storage.
     pub fn as_slice(&self) -> &[T] {
         &self.data
@@ -685,13 +722,7 @@ impl<T> SparseSet<T> {
         let range = start..end;
 
         if range.end <= self.len() {
-            Ok(Window {
-                offset: range.start,
-                sparse: &self.sparse,
-                dense: &self.dense[range.clone()],
-                data: &self.data[range],
-                pack_info: &self.pack_info,
-            })
+            Ok(Window::new(self, range))
         } else {
             Err(error::NotInbound::View(type_name::<T>()))
         }
@@ -726,13 +757,7 @@ impl<T> SparseSet<T> {
                     return Err(error::NotInbound::UpdatePack);
                 }
             }
-            Ok(WindowMut {
-                offset: range.start,
-                sparse: &mut self.sparse,
-                dense: &mut self.dense[range.clone()],
-                data: &mut self.data[range],
-                pack_info: &mut self.pack_info,
-            })
+            Ok(WindowMut::new(self, range))
         } else {
             Err(error::NotInbound::View(type_name::<T>()))
         }

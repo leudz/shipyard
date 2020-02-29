@@ -122,22 +122,19 @@ fn filter() {
     entities.add_entity(&mut u32s, 2);
     u32s.clear_inserted();
 
-    drop(u32s);
-    let mut vec = Vec::new();
-    world.run::<&u32, _, _>(|u32s| {
-        let iter = u32s.iter();
-        assert_eq!(iter.size_hint(), (3, Some(3)));
-        iter.filter(|&&x| x % 2 == 0).for_each(|&x| vec.push(x));
-    });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    assert_eq!((&u32s).iter().size_hint(), (3, Some(3)));
+    assert_eq!(
+        (&u32s).iter().filter(|&&x| x % 2 == 0).collect::<Vec<_>>(),
+        vec![&0, &2]
+    );
+    assert_eq!(
         (&mut u32s)
             .iter()
             .filter(|&&mut x| x % 2 != 0)
-            .for_each(|&mut x| vec.push(x));
-        u32s.modified().iter().for_each(|&x| vec.push(x));
-    });
-
-    assert_eq!(vec, vec![0, 2, 1, 1]);
+            .collect::<Vec<_>>(),
+        vec![&mut 1]
+    );
+    assert_eq!(u32s.modified().iter().collect::<Vec<_>>(), vec![&1]);
 }
 
 #[test]

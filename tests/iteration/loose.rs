@@ -383,3 +383,36 @@ fn enumerate_filter_map_with_id() {
     assert_eq!(iter.next().unwrap(), (key2, (3, (&mut 12, &mut 2))));
     assert!(iter.next().is_none());
 }
+
+#[test]
+fn off_by_one() {
+    let world = World::new();
+    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+
+    (&mut u32s, &mut i16s).loose_pack();
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+    entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+
+    let u32_window = u32s.as_window(1..);
+    let iter = (&u32_window, &i16s).iter();
+    assert_eq!(iter.size_hint(), (0, Some(3)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![(&2, &12), (&4, &14)]);
+
+    let u32_window = u32_window.as_window(1..);
+    let iter = (&u32_window, &i16s).iter();
+    assert_eq!(iter.size_hint(), (0, Some(2)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![(&4, &14)]);
+
+    let i16_window = i16s.as_window(1..);
+    let iter = (&u32s, &i16_window).iter();
+    assert_eq!(iter.size_hint(), (0, Some(3)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![(&2, &12), (&4, &14)]);
+
+    let i16_window = i16_window.as_window(1..);
+    let iter = (&u32s, &i16_window).iter();
+    assert_eq!(iter.size_hint(), (0, Some(2)));
+    assert_eq!(iter.collect::<Vec<_>>(), vec![(&4, &14)]);
+}

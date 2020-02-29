@@ -1,6 +1,6 @@
 mod unstable;
 
-use super::{SparseSet, WindowMut};
+use super::SparseSet;
 pub use unstable::*;
 
 /// Trait used to sort storage(s).

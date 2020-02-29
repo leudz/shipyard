@@ -32,11 +32,12 @@ macro_rules! impl_iterators {
                 let mut smallest = core::usize::MAX;
                 let mut i = 0;
                 let mut pack_iter = PackIter::None;
+                let is_offseted = $(self.$index.offset() != 0)||+;
 
                 $({
                     if pack_iter == PackIter::None || pack_iter == PackIter::Update {
-                        match &self.$index.pack_info().pack {
-                            Pack::Tight(pack) => {
+                        match (&self.$index.pack_info().pack, is_offseted) {
+                            (Pack::Tight(pack), false) => {
                                 if let Ok(types) = pack.check_types(&type_ids) {
                                     if types.len() == type_ids.len() {
                                         pack_iter = PackIter::Tight;
@@ -52,7 +53,7 @@ macro_rules! impl_iterators {
                                     }
                                 }
                             }
-                            Pack::Loose(pack) => {
+                            (Pack::Loose(pack), false) => {
                                 if pack.check_all_types(&type_ids).is_ok() {
                                     if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
                                         pack_iter = PackIter::Loose;
@@ -69,7 +70,7 @@ macro_rules! impl_iterators {
                                     }
                                 }
                             }
-                            Pack::Update(_) => {
+                            (Pack::Update(_), _) => {
                                 pack_iter = PackIter::Update;
                                 if let Some(len) = self.$index.len() {
                                     if len < smallest {
@@ -78,7 +79,7 @@ macro_rules! impl_iterators {
                                     }
                                 }
                             }
-                            Pack::NoPack => if let Some(len) = self.$index.len() {
+                            _ => if let Some(len) = self.$index.len() {
                                 if len < smallest {
                                     smallest = len;
                                     smallest_index = i;
@@ -94,6 +95,9 @@ macro_rules! impl_iterators {
 
                 match pack_iter {
                     PackIter::Tight => {
+                        $(
+                            let smallest = self.$index.len().unwrap_or(0).min(smallest);
+                        )+
                         $iter::Tight($tight {
                             data: ($(self.$index.into_abstract(),)+),
                             current: 0,
@@ -101,6 +105,9 @@ macro_rules! impl_iterators {
                         })
                     }
                     PackIter::Loose => {
+                        $(
+                            let smallest = self.$index.len().unwrap_or(0).min(smallest);
+                        )+
                         let mut indices = None;
                         let mut array = 0;
                         $(
@@ -146,7 +153,7 @@ macro_rules! impl_iterators {
                         })
                     }
                     PackIter::None => {
-                        let mut indices = None;
+                        let mut indices = ptr::null();
                         let data = ($(self.$index.into_abstract(),)+);
                         // if the user is trying to iterate over Not containers only
                         if smallest == core::usize::MAX {
@@ -154,14 +161,14 @@ macro_rules! impl_iterators {
                         } else {
                             $(
                                 if $index == smallest_index {
-                                    indices = Some(data.$index.dense());
+                                    indices = data.$index.dense();
                                 }
                             )+
                         }
 
                         $iter::NonPacked($non_packed {
                             data,
-                            indices: indices.unwrap_or(ptr::null()),
+                            indices,
                             current: 0,
                             end: smallest,
                             array: smallest_index,
