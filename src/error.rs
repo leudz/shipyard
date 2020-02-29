@@ -77,7 +77,7 @@ impl Debug for GetStorage {
                 Borrow::MultipleThreads => fmt.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
                 Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
             },
-            Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {name}.\nConsider adding this line after the creation of World: world.register_unique::<{name}>(/* your_storage */);", name = name)),
+            Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {name}.\nConsider adding this line after the creation of World: world.add_unique::<{name}>(/* your_storage */);", name = name)),
             Self::NonUnique((name, mutation)) => match mutation {
                 Borrow::Shared => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, add world.add_unique(/* your_storage */) somewhere before accessing it.\nIf it isn't supposed to be a unique storage, replace Unique<&{name}> by &{name}.", name = name)),
                 Borrow::Unique => fmt.write_fmt(format_args!("{name}'s storage isn't unique.\nYou might have forgotten to declare it, add world.add_unique(/* your_storage */) somewhere before accessing it.\nIf it isn't supposed to be a unique storage, replace Unique<&mut {name}> by &mut {name}.", name = name)),
