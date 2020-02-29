@@ -50,7 +50,7 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
             &canvas,
             Some(&WebGlContextOptions {
                 alpha: false,
-                ..WebGlContextOptions::default()
+                ..Default::default()
             }),
         )?;
 
@@ -103,7 +103,7 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
 
         input::start(world, &canvas);
 
-        std::mem::forget(Box::new(tick));
+        Box::leak(Box::new(tick));
         Ok(JsValue::null())
     };
 

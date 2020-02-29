@@ -1,5 +1,4 @@
-use wasm_bindgen::prelude::JsValue;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{Document, HtmlElement};
 
 pub struct Hud {
