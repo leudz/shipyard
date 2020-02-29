@@ -99,6 +99,14 @@ macro_rules! impl_tight_pack {
                 self.try_tight_pack().unwrap()
             }
         }
+        impl<$($type: 'static),+> TightPack for ($(ViewMut<'_, $type>,)+) {
+            fn try_tight_pack(mut self) -> Result<(), error::Pack> {
+                ($(&mut self.$index,)+).try_tight_pack()
+            }
+            fn tight_pack(self) {
+                self.try_tight_pack().unwrap()
+            }
+        }
     }
 }
 
