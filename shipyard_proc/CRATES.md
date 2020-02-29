@@ -2,7 +2,7 @@ Crate providing attribute macro to [Shipyard](https://crates.io/crates/shipyard)
 
 [![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE-MIT)
 [![LICENSE](https://img.shields.io/badge/license-apache-blue.svg)](../LICENSE-APACHE)
-[![Gitter](https://badges.gitter.im/leudz-shipyard/community.svg)](https://gitter.im/leudz-shipyard/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+[![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
 
 ## License
 
