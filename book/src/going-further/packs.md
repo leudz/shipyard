@@ -3,12 +3,13 @@
 `SparseSet`s are very flexible, so much so that we can use their internal layout to encode additional information.
 
 Quick overview compared to non packed storage:
-||Tight|Loose|Free|Update
-:---:|:---:|:---:|:---:|:---:
-Iteration speed|++|+|+|-
-Add/Remove speed|-|-|-|-
-Memory|same|same|+|same
-Special||||tracks insertion / modification / deletion
+
+|                |Tight|Loose|Free |Update|
+|:---:           |:---:|:---:|:---:|:---:|
+|Iteration speed |++   |+    |+    |-|
+|Add/Remove speed|-    |-    |-    |-|
+|Memory          |same |same |+    |same|
+|Special         |     |     |     |tracks insertion / modification / deletion|
 
 ### Tight
 
