@@ -1,6 +1,6 @@
 # Remove Components
 
-We use the word "remove" and not "delete", not because it would be repetitive but because these two operations have different meaning. A delete won't return anything while a remove will return the component(s).
+For components, "remove" and "delete" have different meanings. A remove returns the component(s) being removed.  A delete doesn't return anything.
 
 ### Remove a single component
 
@@ -10,7 +10,7 @@ let mut counts = world.borrow::<&mut Count>();
 let count = counts.remove(entity_id);
 ```
 
-No need for `Entities` here, you can call the method directly on the view and give the id of the entity.
+There is no need for `Entities` here. You can call the `remove` method directly on your component storage view, passing it the id of the entity to remove it from.
 
 ### Remove a bunch of components
 

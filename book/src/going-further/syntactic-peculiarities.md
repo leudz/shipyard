@@ -1,6 +1,6 @@
 # Syntactic Peculiarities
 
-Some parts of Rust are less used than others, let's look into some of them.
+Some parts of Rust are less-used than others, let's look into some of them.
 
 ### Tuples
 

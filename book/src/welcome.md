@@ -16,10 +16,10 @@ However, programming with an ECS requires thinking about data and logic in a dif
 
 # How does it work?
 
-`EntityId` is just a newtype wrapping `u64`, it's just an index.
+`EntityId` is just a newtype wrapping a `u64`, which is interpreted as a 48-bit index plus a 16-bit version.
 
 Components hold data. Only data. No logic. They _can_ of course contain methods but the ECS only sees the hard data.
 
 Systems do the heavy lifting: updating components, running side-effects, and integrating with other parts of the code.
 
-To know Shipyard differs from other ECS implementations, see [Different Types of ECS](./pilgrimage/different-types-of-ecs.md).
+To see how Shipyard differs from other ECS implementations, see [Different Types of ECS](./pilgrimage/different-types-of-ecs.md).

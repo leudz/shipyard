@@ -1,8 +1,8 @@
 # Add Components 
 
-An entity can only contain a single instance of a particular component type.
+An entity can only have a single instance of a particular component type.
 
-However there's no need to check for this - adding a component to an entity will simply replace the component if it already exists.
+Adding a second component of the same type to an entity will simply replace the existing component.
 
 ### Add a single component to an entity
 
@@ -16,13 +16,13 @@ entities.add_component(
 );
 ```
 
-You'll notice that we use `Entities` and not `EntitiesMut` it's because we just have to make sure the id is alive and not deleted. We could use `EntitiesMut` of course but it's not needed.
+You'll notice that we use `Entities` and not `EntitiesMut`, because the entities storage is only used to look and see if the entity id is alive (not deleted). We could use `EntitiesMut` of course, but unique access is not necessary.
 
-Then it's exactly like `add_entity`, we pass the storage and the component. We also need an id this time since we're not creating it.
+Just like with `add_entity`, we pass the storage and the component value. We also need an entity id this time to specify an existing entity.
 
-### Add a bunch of components to an entity
+### Add multiple components to an entity
 
-For multiple components we use a tuple just like `add_entity`.
+For multiple components we use tuples just like we did with `add_entity`.
 
 ```rust, noplaypen
 let (entities, mut positions, mut fruits) = world.borrow::<(Entities, &mut Position, &mut Fruit)>();
