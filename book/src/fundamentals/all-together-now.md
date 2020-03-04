@@ -1,3 +1,3 @@
 # All Together Now 
 
-This chapter will be available soon =)
+This chapter will be available soon 😄

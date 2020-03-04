@@ -96,7 +96,8 @@ fn detach(&mut self, id: EntityId) {
 
 Before we move on to `attach`, let's make some observations.
 
-We use indexing on `parents` and `children` but if the entity doesn't have the component it'll `unwrap`.  
+We use indexing on `parents` and `children` but if the entity doesn't have the component it'll `unwrap`.
+
 We don't have to worry as long as we only use the methods in our `Hierarchy` trait.
 
 If you accidentally delete hierarchy components in other places without changing the linking, things will go fatally wrong. If you want to catch these errors you might want to use `get` and handle the error (for example with `expect`).
