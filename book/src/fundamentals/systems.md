@@ -17,7 +17,7 @@ We then implement `System`, using its `Data` associated type to specify which st
 Lastly, `run` will let us act on these storages. It has a single parameter: a tuple of the views of the storages we requested. You can specify the parameter's type or use `<Self::Data as SystemData>::View` as it'll always work.
 Note that there is no `self` of any kind, so even if `CreateEmpty` wasn't empty, we couldn't access any of its fields.
 
-This syntaxisn't pretty, however. Now that we've seen what they look like under the hood, we can use the macro:
+This syntax isn't pretty, however. Now that we've seen what they look like under the hood, we can use the macro:
 
 ```rust, noplaypen
 #[system(CreateEmpty)]
