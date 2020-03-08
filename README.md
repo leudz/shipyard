@@ -12,7 +12,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 
 While usable it is far from finished, there's a lot of planned features, nearly all being backward compatible additions.
 
-Most discussions about current and future features happen on zulip, feel free to join to follow the development or ask any question.
+Most discussions about current and future features happen on zulip, feel free to join in to follow the development, ask any question or just say hi.
 
 If you are new here, the [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!
 
@@ -55,9 +55,9 @@ world.run_system::<InAcid>();
 
 ## Past, Present and Future
 
-I initially started to make an ECS to learn how it works. After a failed attempt and learning a lot from it and other ECS out there I started to work on Shipyard.
+I initially started to make an ECS to learn how it works. After a failed attempt and learning a lot from it and other ECS out there, I started to work on Shipyard.
 
-[Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: sparse sets.
+[Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: `SparseSet`.
 
 It turned out to be extremely flexible and is still the core of Shipyard. You can pay for what you want: iteration speed, memory, ease of use,...
 
@@ -75,6 +75,18 @@ Today I wouldn't say Shipyard is better or worse than Specs, it's just different
 - [Nested packs](https://github.com/leudz/shipyard/issues/47)
 - [Shared components](https://github.com/leudz/shipyard/issues/38)
 - [Iterator blueprint](https://github.com/leudz/shipyard/issues/41)
+
+## Similar Projects
+
+- [EnTT](https://github.com/skypjack/entt) - C++ library built on `SparseSet` and providing grouping functionality, a lot of its designs are explained in [a blog](https://skypjack.github.io/). This is where Shipyard's `SparseSet` and most packs come from
+- [Specs](https://github.com/amethyst/specs) - Rust library relying on `BitSet` and allowing to use multiple storage types
+- [Legion](https://github.com/TomGillen/legion) - Rust library based on archetypes
+- [Hecs](https://github.com/Ralith/hecs) - Rust library also based on archetypes but keeping a minimalistic approach
+
+## Performance
+
+If you're wondering how fast Shipyard is you can look at a few graphs in [this issue](https://github.com/leudz/shipyard/issues/61).  
+There is still a lot of room for optimization, the current focus is more on adding functionalities.
 
 ## Features
 
