@@ -103,6 +103,14 @@ This crate uses `unsafe` both because sometimes there's no way around it, and fo
 Releases should have all invocation of `unsafe` explained.  
 If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) feel free to open an issue or a PR.
 
+## Origin of the Name
+
+Assembly lines take input, process it at each step, and output a result.  You can have multiple lines working in parallel as long as they don't bother each other.
+
+Shipyards such as the [Venetian Arsenal](https://en.wikipedia.org/wiki/Venetian_Arsenal) are some of the oldest examples of successful, large-scale, industrial assembly lines.  So successful that it could output a fully-finished ship _every day_.
+
+*Shipyard* is a project you can use to build your own highly-parallel software processes.
+
 ## License
 
 Licensed under either of
@@ -119,11 +127,3 @@ at your option.
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
-
-## Origin of the name
-
-Assembly lines take input, process it at each step, and output a result.  You can have multiple lines working in parallel as long as they don't bother each other.
-
-Shipyards such as the [Venetian Arsenal](https://en.wikipedia.org/wiki/Venetian_Arsenal) are some of the oldest examples of successful, large-scale, industrial assembly lines.  So successful that it could output a fully-finished ship _every day_.
-
-*Shipyard* is a project you can use to build your own highly-parallel software processes.
