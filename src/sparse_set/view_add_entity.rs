@@ -30,7 +30,7 @@ impl<T: 'static> ViewAddEntity for (&mut ViewMut<'_, T>,) {
 
 macro_rules! impl_view_add_entity {
     ($(($type: ident, $index: tt))+) => {
-        impl<'a, $($type: 'static + Send + Sync),+> ViewAddEntity for ($(&mut ViewMut<'_, $type>,)+) {
+        impl<'a, $($type: 'static),+> ViewAddEntity for ($(&mut ViewMut<'_, $type>,)+) {
             type Component = ($($type,)+);
             fn add_entity(self, component: Self::Component, entity: EntityId) {
                 let sparse_sets = ($(&mut **self.$index,)+);
