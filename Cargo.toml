@@ -30,5 +30,5 @@ non_sync = ["std"]
 std = []
 
 [dev-dependencies]
-trybuild = "1.0.23"
+trybuild = "1.0.24"
 serde_json = "1.0.48"

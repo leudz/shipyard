@@ -3,3 +3,5 @@ error: Systems have only one method: run
   |
 3 | #[system(Test)]
   | ^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)

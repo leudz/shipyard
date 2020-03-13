@@ -144,6 +144,7 @@ fn check_types(
     additional: &[TypeId],
 ) -> (bool, bool) {
     if components.len() + additional.len() < self_types.len() {
+        // if the number of component is less than the number of packed types, they can't be packed
         return (false, false);
     }
 
@@ -196,7 +197,7 @@ fn check_types(
     }
 
     if packed == self_types.len() {
-        (true, packed == comp)
+        (true, add == 0)
     } else {
         (false, false)
     }
