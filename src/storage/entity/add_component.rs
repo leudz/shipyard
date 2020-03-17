@@ -81,21 +81,21 @@ macro_rules! impl_add_component {
 
                         should_pack.reserve(real_types.len());
                         $(
-                            if self.$index.pack_info.check_types(&type_ids, &add_types).is_err() {
-                                return Err(error::AddComponent::MissingPackStorage(type_name::<$type>()));
-                            } else {
+                            if self.$index.pack_info.has_all_storages(&type_ids, &add_types) {
                                 if !should_pack.contains(&TypeId::of::<$type>()) {
                                     match &self.$index.pack_info.pack {
-                                        Pack::Tight(pack) => if let Ok(types) = pack.check_types(&real_types) {
+                                        Pack::Tight(pack) => if let Ok(types) = pack.is_packable(&real_types) {
                                             should_pack.extend_from_slice(types);
                                         }
-                                        Pack::Loose(pack) => if let Ok(types) = pack.check_all_types(&real_types) {
+                                        Pack::Loose(pack) => if let Ok(types) = pack.is_packable(&real_types) {
                                             should_pack.extend_from_slice(types);
                                         }
                                         Pack::Update(_) => {}
                                         Pack::NoPack => {}
                                     }
                                 }
+                            } else {
+                                return Err(error::AddComponent::MissingPackStorage(type_name::<$type>()));
                             }
                         )+
 

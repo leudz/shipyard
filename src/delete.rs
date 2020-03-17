@@ -56,8 +56,8 @@ macro_rules! impl_delete {
 
                     let mut should_unpack = Vec::with_capacity(types.len() + add_types.len());
                     $(
-                        match self.$index.pack_info.check_types(&types, &add_types) {
-                            Ok(_) => match &self.$index.pack_info.pack {
+                        if self.$index.pack_info.has_all_storages(&types, &add_types) {
+                            match &self.$index.pack_info.pack {
                                 Pack::Tight(pack) => {
                                     should_unpack.extend_from_slice(&pack.types);
                                     should_unpack.extend_from_slice(&self.$index.pack_info.observer_types);
@@ -69,7 +69,8 @@ macro_rules! impl_delete {
                                 Pack::Update(_) => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                                 Pack::NoPack => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
                             }
-                            Err(_) => return Err(error::Remove::MissingPackStorage(type_name::<$type>()))
+                        } else {
+                            return Err(error::Remove::MissingPackStorage(type_name::<$type>()));
                         }
                     )+
 

@@ -89,7 +89,7 @@ macro_rules! impl_unstable_sort {
                     if let PackSort::None = pack_sort {
                         match &self.$index.pack_info.pack {
                             Pack::Tight(pack) => {
-                                if let Ok(types) = pack.check_types(&type_ids) {
+                                if let Ok(types) = pack.is_packable(&type_ids) {
                                     if types.len() == type_ids.len() {
                                         pack_sort = PackSort::Tight(pack.len);
                                     } else if types.len() < type_ids.len() {
@@ -102,7 +102,7 @@ macro_rules! impl_unstable_sort {
                                 }
                             }
                             Pack::Loose(pack) => {
-                                if pack.check_all_types(&type_ids).is_ok() {
+                                if pack.is_packable(&type_ids).is_ok() {
                                     if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
                                         pack_sort = PackSort::Loose(pack.len);
                                     } else if pack.tight_types.len() + pack.loose_types.len() < type_ids.len() {

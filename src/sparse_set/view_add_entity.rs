@@ -39,26 +39,27 @@ macro_rules! impl_view_add_entity {
                     sparse_sets.$index.insert(component.$index, entity);
                 )+
 
-                let mut type_ids = [$(TypeId::of::<$type>()),+];
-                type_ids.sort_unstable();
+                let type_ids = [$(TypeId::of::<$type>()),+];
+                let mut sorted_type_ids = type_ids.clone();
+                sorted_type_ids.sort_unstable();
 
                 let mut should_pack = Vec::with_capacity(type_ids.len());
                 $(
-                    let type_id = TypeId::of::<$type>();
+                    let type_id = type_ids[$index];
 
                     if should_pack.contains(&type_id) {
                         sparse_sets.$index.pack(entity);
                     } else {
                         match &mut sparse_sets.$index.pack_info.pack {
-                            Pack::Tight(pack) => if let Ok(types) = pack.check_types(&type_ids) {
-                                should_pack.extend_from_slice(&pack.types);
+                            Pack::Tight(pack) => if let Ok(types) = pack.is_packable(&sorted_type_ids) {
                                 if !types.is_empty() {
+                                    should_pack.extend_from_slice(&types);
                                     sparse_sets.$index.pack(entity);
                                 }
                             }
-                            Pack::Loose(pack) => if let Ok(types) = pack.check_all_types(&type_ids) {
-                                should_pack.extend_from_slice(&pack.tight_types);
+                            Pack::Loose(pack) => if let Ok(types) = pack.is_packable(&sorted_type_ids) {
                                 if !types.is_empty() {
+                                    should_pack.extend_from_slice(&types);
                                     sparse_sets.$index.pack(entity);
                                 }
                             }

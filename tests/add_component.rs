@@ -86,3 +86,41 @@ fn update() {
 
     assert_eq!(usizes.inserted().len(), 3);
 }
+
+#[test]
+fn not_enough_to_tightly_pack() {
+    let world = World::new();
+    let (mut entities, mut usizes, mut u32s, mut f32s) =
+        world.borrow::<(EntitiesMut, &mut usize, &mut u32, &mut f32)>();
+
+    (&mut usizes, &mut u32s).tight_pack();
+    entities.add_entity(&mut u32s, 0);
+    let entity = entities.add_entity((), ());
+    entities.add_component((&mut f32s, &mut u32s, &mut usizes), (1., 1), entity);
+
+    let mut iter = (&u32s).iter();
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), None);
+
+    assert_eq!((&u32s, &f32s).get(entity), Ok((&1, &1.)));
+}
+
+#[test]
+fn not_enough_to_loosely_pack() {
+    let world = World::new();
+    let (mut entities, mut usizes, mut u32s, mut f32s) =
+        world.borrow::<(EntitiesMut, &mut usize, &mut u32, &mut f32)>();
+
+    (&mut usizes, &mut u32s).loose_pack();
+    entities.add_entity(&mut u32s, 0);
+    let entity = entities.add_entity((), ());
+    entities.add_component((&mut f32s, &mut u32s, &mut usizes), (1., 1), entity);
+
+    let mut iter = (&u32s).iter();
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), None);
+
+    assert_eq!((&u32s, &f32s).get(entity), Ok((&1, &1.)));
+}

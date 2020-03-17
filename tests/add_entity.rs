@@ -61,13 +61,29 @@ fn update() {
 #[test]
 fn not_all_tight() {
     let world = World::new();
-    
+
     let (mut entities, mut u32s, mut u16s, mut f32s) =
         world.borrow::<(EntitiesMut, &mut u32, &mut u16, &mut f32)>();
 
     (&mut u32s, &mut u16s).tight_pack();
 
-    entities.add_entity((&mut u32s, &mut u16s, &mut f32s), (0, 0, 0.0));
+    entities.add_entity((&mut u32s, &mut u16s, &mut f32s), (0, 0, 0.));
+    entities.add_entity((&mut f32s, &mut u16s, &mut u32s), (0., 0, 0));
+
+    assert!((&mut u32s, &mut u16s).iter().count() > 0);
+}
+
+#[test]
+fn not_all_loose() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut u16s, mut f32s) =
+        world.borrow::<(EntitiesMut, &mut u32, &mut u16, &mut f32)>();
+
+    (&mut u32s, &mut u16s).loose_pack();
+
+    entities.add_entity((&mut u32s, &mut u16s, &mut f32s), (0, 0, 0.));
+    entities.add_entity((&mut f32s, &mut u16s, &mut u32s), (0., 0, 0));
 
     assert!((&mut u32s, &mut u16s).iter().count() > 0);
 }

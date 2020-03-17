@@ -38,7 +38,7 @@ macro_rules! impl_iterators {
                     if pack_iter == PackIter::None || pack_iter == PackIter::Update {
                         match (&self.$index.pack_info().pack, is_offseted) {
                             (Pack::Tight(pack), false) => {
-                                if let Ok(types) = pack.check_types(&type_ids) {
+                                if let Ok(types) = pack.is_packable(&type_ids) {
                                     if types.len() == type_ids.len() {
                                         pack_iter = PackIter::Tight;
                                         smallest = pack.len;
@@ -54,7 +54,7 @@ macro_rules! impl_iterators {
                                 }
                             }
                             (Pack::Loose(pack), false) => {
-                                if pack.check_all_types(&type_ids).is_ok() {
+                                if pack.is_packable(&type_ids).is_ok() {
                                     if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
                                         pack_iter = PackIter::Loose;
                                         smallest = pack.len;

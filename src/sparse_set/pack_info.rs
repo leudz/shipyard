@@ -2,7 +2,6 @@ use crate::storage::EntityId;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::any::TypeId;
-use core::cmp::Ordering;
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum Pack<T> {
@@ -36,45 +35,51 @@ impl<T> Default for PackInfo<T> {
 }
 
 impl<T> PackInfo<T> {
-    /// `components` is a sorted slice of all types this entity has.
-    /// `additional` is a sorted slice of types this entity might have.
-    pub(crate) fn check_types(
-        &self,
-        components: &[TypeId],
-        additional: &[TypeId],
-    ) -> Result<&[TypeId], ()> {
-        let mut self_types: Vec<_> = match &self.pack {
-            Pack::Tight(pack) => pack
-                .types
-                .iter()
-                .copied()
-                .chain(self.observer_types.iter().copied())
-                .collect(),
-            Pack::Loose(pack) => pack
-                .tight_types
-                .iter()
-                .copied()
-                .chain(pack.loose_types.iter().copied())
-                .chain(self.observer_types.iter().copied())
-                .collect(),
-            Pack::Update(_) => self.observer_types.iter().copied().collect(),
-            Pack::NoPack => self.observer_types.iter().copied().collect(),
-        };
+    /// Returns `true` if enough storages were passed in
+    pub(crate) fn has_all_storages(&self, components: &[TypeId], additionals: &[TypeId]) -> bool {
+        match &self.pack {
+            Pack::Tight(tight) => {
+                tight.has_all_storages(components, additionals, &self.observer_types)
+            }
+            Pack::Loose(loose) => {
+                loose.has_all_storages(components, additionals, &self.observer_types)
+            }
+            Pack::Update(_) | Pack::NoPack => {
+                if components.len() + additionals.len() < self.observer_types.len() {
+                    return false;
+                }
 
-        self_types.sort_unstable();
+                // current component index
+                let mut comp = 0;
+                // current additional index
+                let mut add = 0;
 
-        let (all_types, should_pack) = check_types(&self_types, components, additional);
-        if all_types && should_pack {
-            Ok(match &self.pack {
-                Pack::Tight(pack) => &pack.types,
-                Pack::Loose(pack) => &pack.tight_types,
-                Pack::Update(_) => &[],
-                Pack::NoPack => &[],
-            })
-        } else if all_types {
-            Ok(&[])
-        } else {
-            Err(())
+                // we know observer types are at most as many as components + additionals so we'll use them to drive the iteration
+                for &observer_type in &self.observer_types {
+                    // we skip components with a lower TypeId
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < observer_type)
+                        .count();
+
+                    // we also skip additional types with a lower TypeId
+                    add += additionals[add..]
+                        .iter()
+                        .take_while(|&&additional| additional < observer_type)
+                        .count();
+
+                    // one of them has to be equal to observer_type else not enough storages where passed in
+                    match (components.get(comp), additionals.get(add)) {
+                        (Some(&component), Some(&additional))
+                            if component == observer_type || additional == observer_type => {}
+                        (Some(&component), None) if component == observer_type => {}
+                        (None, Some(&additional)) if additional == observer_type => {}
+                        _ => return false,
+                    }
+                }
+
+                true
+            }
         }
     }
 }
@@ -88,12 +93,117 @@ impl TightPack {
     pub(crate) fn new(types: Arc<[TypeId]>) -> Self {
         TightPack { types, len: 0 }
     }
-    pub(crate) fn check_types(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
-        if check_types(&self.types, &components, &[]) == (true, true) {
-            Ok(&self.types)
-        } else {
-            Err(())
+    /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
+    pub(crate) fn is_packable(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+        // the entity doesn't have enough components to be packed
+        if components.len() < self.types.len() {
+            return Err(());
         }
+
+        // current component index
+        let mut comp = 0;
+
+        // we know packed types are at most as many as components so we'll use them to drive the iteration
+        for &packed_type in &*self.types {
+            // we skip components with a lower TypeId
+            comp += components[comp..]
+                .iter()
+                .take_while(|&&component| component < packed_type)
+                .count();
+
+            // since both slices are sorted, if the types aren't equal it means components is missing a packed type
+            if components
+                .get(comp)
+                .filter(|&&component| component == packed_type)
+                .is_none()
+            {
+                return Err(());
+            }
+        }
+        Ok(&self.types)
+    }
+    /// Returns `true` if enough storages were passed in
+    fn has_all_storages(
+        &self,
+        components: &[TypeId],
+        additionals: &[TypeId],
+        observer_types: &[TypeId],
+    ) -> bool {
+        // both pairs can't have duplicates
+        if components.len() + additionals.len() < self.types.len() + observer_types.len() {
+            return false;
+        }
+
+        // current tight type
+        let mut tight = 0;
+        // current observer type
+        let mut observer = 0;
+        // current component
+        let mut comp = 0;
+        // current additional
+        let mut add = 0;
+
+        // we use the tight and observer types to drive the iteration since there are at most the same count as components + additionals
+        loop {
+            // since both arrays are sorted and a value can't be in both we can iterate just once
+            // but we have to make sure to not stop the iteration too early when tight or loose ends
+            match (self.types.get(tight), observer_types.get(observer)) {
+                (Some(&tight_type), observer_type)
+                    if observer_type.is_none() || tight_type < *observer_type.unwrap() =>
+                {
+                    // we skip components with a lower TypeId
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < tight_type)
+                        .count();
+
+                    // we also skip additional types with a lower TypeId
+                    add += additionals[add..]
+                        .iter()
+                        .take_while(|&&additional| additional < tight_type)
+                        .count();
+
+                    // one of them has to be equal to tight_type else not enough storages where passed in
+                    // we also have to update the number of components found in the tight_types
+                    match (components.get(comp), additionals.get(add)) {
+                        (Some(&component), Some(&additional))
+                            if component == tight_type || additional == tight_type =>
+                        {
+                            tight += 1
+                        }
+                        (Some(&component), None) if component == tight_type => tight += 1,
+                        (None, Some(&additional)) if additional == tight_type => tight += 1,
+                        _ => return false,
+                    }
+                }
+                (Some(_), None) => unreachable!(), // the compiler isn't smart enough to see this
+                (_, Some(&observer_type)) => {
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < observer_type)
+                        .count();
+                    add += additionals[add..]
+                        .iter()
+                        .take_while(|&&additional| additional < observer_type)
+                        .count();
+
+                    match (components.get(comp), additionals.get(add)) {
+                        (Some(&component), Some(&additional))
+                            if component == observer_type || additional == observer_type =>
+                        {
+                            observer += 1
+                        }
+                        (Some(&component), None) if component == observer_type => observer += 1,
+                        (None, Some(&additional)) if additional == observer_type => observer += 1,
+                        _ => return false,
+                    }
+                }
+                (None, None) => break,
+            }
+        }
+
+        // we check all types were passed in
+        tight == self.types.len() && observer == observer_types.len()
     }
 }
 
@@ -111,19 +221,377 @@ impl LoosePack {
             len: 0,
         }
     }
-    pub(crate) fn check_all_types(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
-        let mut all_types: Vec<_> = self
-            .tight_types
-            .iter()
-            .copied()
-            .chain(self.loose_types.iter().copied())
-            .collect();
-        all_types.sort_unstable();
-        if check_types(&all_types, &components, &[]) == (true, true) {
+    /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
+    pub(crate) fn is_packable(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+        if components.len() < self.tight_types.len() + self.loose_types.len() {
+            // the entity doesn't have enough components to be packed
+            return Err(());
+        }
+
+        // current tight type
+        let mut tight = 0;
+        // current loose type
+        let mut loose = 0;
+        // current component
+        let mut comp = 0;
+
+        // we use the packed types to drive the iteration since there are at most the same count as components
+        loop {
+            // since both arrays are sorted and a value can't be in both we can iterate just once
+            // but we have to make sure to not stop the iteration too early when tight or loose ends
+            match (self.tight_types.get(tight), self.loose_types.get(loose)) {
+                (Some(&tight_type), loose_type)
+                    if loose_type.is_none() || tight_type < *loose_type.unwrap() =>
+                {
+                    // we skip components with a lower TypeId
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < tight_type)
+                        .count();
+
+                    if components
+                        .get(comp)
+                        .filter(|&&component| component == tight_type)
+                        .is_some()
+                    {
+                        tight += 1;
+                    } else {
+                        return Err(());
+                    }
+                }
+                (Some(_), None) => unreachable!(),
+                (_, Some(&loose_type)) => {
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < loose_type)
+                        .count();
+
+                    if components
+                        .get(comp)
+                        .filter(|&&component| component == loose_type)
+                        .is_some()
+                    {
+                        loose += 1;
+                    } else {
+                        return Err(());
+                    }
+                }
+                (None, None) => break,
+            }
+        }
+
+        if tight == self.tight_types.len() && loose == self.loose_types.len() {
             Ok(&self.tight_types)
         } else {
             Err(())
         }
+    }
+    /// Returns `true` if enough storages were passed in
+    fn has_all_storages(
+        &self,
+        components: &[TypeId],
+        additionals: &[TypeId],
+        observer_types: &[TypeId],
+    ) -> bool {
+        if components.len() + additionals.len()
+            < self.tight_types.len() + self.loose_types.len() + observer_types.len()
+        {
+            return false;
+        }
+
+        // current tight type
+        let mut tight = 0;
+        // current loose type
+        let mut loose = 0;
+        // current observer type
+        let mut observer = 0;
+        // current component
+        let mut comp = 0;
+        // current additional
+        let mut add = 0;
+
+        // we use the packed types to drive the iteration since there are at most the same count as components
+        loop {
+            // since both arrays are sorted and a value can't be in both we can iterate just once
+            // but we have to make sure to not stop the iteration too early when tight or loose ends
+            match (
+                self.tight_types.get(tight),
+                self.loose_types.get(loose),
+                observer_types.get(observer),
+            ) {
+                (Some(&tight_type), Some(&loose_type), Some(&observer_type)) => {
+                    if tight_type < loose_type && tight_type < observer_type {
+                        // we skip components with a lower TypeId
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < tight_type)
+                            .count();
+
+                        // we also skip additional types with a lower TypeId
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < tight_type)
+                            .count();
+
+                        // one of them has to be equal to tight_type else not enough storages where passed in
+                        // we also have to update the number of components found in the tight_types
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == tight_type || additional == tight_type =>
+                            {
+                                tight += 1
+                            }
+                            (Some(&component), None) if component == tight_type => tight += 1,
+                            (None, Some(&additional)) if additional == tight_type => tight += 1,
+                            _ => return false,
+                        }
+                    } else if loose_type < observer_type {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < loose_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < loose_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == loose_type || additional == loose_type =>
+                            {
+                                loose += 1
+                            }
+                            (Some(&component), None) if component == loose_type => loose += 1,
+                            (None, Some(&additional)) if additional == loose_type => loose += 1,
+                            _ => return false,
+                        }
+                    } else {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < observer_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < observer_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == observer_type || additional == observer_type =>
+                            {
+                                observer += 1
+                            }
+                            (Some(&component), None) if component == observer_type => observer += 1,
+                            (None, Some(&additional)) if additional == observer_type => {
+                                observer += 1
+                            }
+                            _ => return false,
+                        }
+                    }
+                }
+                (Some(&tight_type), Some(&loose_type), None) => {
+                    if tight_type < loose_type {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < tight_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < tight_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == tight_type || additional == tight_type =>
+                            {
+                                tight += 1
+                            }
+                            (Some(&component), None) if component == tight_type => tight += 1,
+                            (None, Some(&additional)) if additional == tight_type => tight += 1,
+                            _ => return false,
+                        }
+                    } else {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < loose_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < loose_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == loose_type || additional == loose_type =>
+                            {
+                                loose += 1
+                            }
+                            (Some(&component), None) if component == loose_type => loose += 1,
+                            (None, Some(&additional)) if additional == loose_type => loose += 1,
+                            _ => return false,
+                        }
+                    }
+                }
+                (Some(&tight_type), None, Some(&observer_type)) => {
+                    if tight_type < observer_type {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < tight_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < tight_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == tight_type || additional == tight_type =>
+                            {
+                                tight += 1
+                            }
+                            (Some(&component), None) if component == tight_type => tight += 1,
+                            (None, Some(&additional)) if additional == tight_type => tight += 1,
+                            _ => return false,
+                        }
+                    } else {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < observer_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < observer_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == observer_type || additional == observer_type =>
+                            {
+                                observer += 1
+                            }
+                            (Some(&component), None) if component == observer_type => observer += 1,
+                            (None, Some(&additional)) if additional == observer_type => {
+                                observer += 1
+                            }
+                            _ => return false,
+                        }
+                    }
+                }
+                (None, Some(&loose_type), Some(&observer_type)) => {
+                    if loose_type < observer_type {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < loose_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < loose_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == loose_type || additional == loose_type =>
+                            {
+                                loose += 1
+                            }
+                            (Some(&component), None) if component == loose_type => loose += 1,
+                            (None, Some(&additional)) if additional == loose_type => loose += 1,
+                            _ => return false,
+                        }
+                    } else {
+                        comp += components[comp..]
+                            .iter()
+                            .take_while(|&&component| component < observer_type)
+                            .count();
+                        add += additionals[add..]
+                            .iter()
+                            .take_while(|&&additional| additional < observer_type)
+                            .count();
+
+                        match (components.get(comp), additionals.get(add)) {
+                            (Some(&component), Some(&additional))
+                                if component == observer_type || additional == observer_type =>
+                            {
+                                observer += 1
+                            }
+                            (Some(&component), None) if component == observer_type => observer += 1,
+                            (None, Some(&additional)) if additional == observer_type => {
+                                observer += 1
+                            }
+                            _ => return false,
+                        }
+                    }
+                }
+                (Some(&tight_type), None, None) => {
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < tight_type)
+                        .count();
+                    add += additionals[add..]
+                        .iter()
+                        .take_while(|&&additional| additional < tight_type)
+                        .count();
+
+                    match (components.get(comp), additionals.get(add)) {
+                        (Some(&component), Some(&additional))
+                            if component == tight_type || additional == tight_type =>
+                        {
+                            tight += 1
+                        }
+                        (Some(&component), None) if component == tight_type => tight += 1,
+                        (None, Some(&additional)) if additional == tight_type => tight += 1,
+                        _ => return false,
+                    }
+                }
+                (None, Some(&loose_type), None) => {
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < loose_type)
+                        .count();
+                    add += additionals[add..]
+                        .iter()
+                        .take_while(|&&additional| additional < loose_type)
+                        .count();
+
+                    match (components.get(comp), additionals.get(add)) {
+                        (Some(&component), Some(&additional))
+                            if component == loose_type || additional == loose_type =>
+                        {
+                            loose += 1
+                        }
+                        (Some(&component), None) if component == loose_type => loose += 1,
+                        (None, Some(&additional)) if additional == loose_type => loose += 1,
+                        _ => return false,
+                    }
+                }
+                (None, None, Some(&observer_type)) => {
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < observer_type)
+                        .count();
+                    add += additionals[add..]
+                        .iter()
+                        .take_while(|&&additional| additional < observer_type)
+                        .count();
+
+                    match (components.get(comp), additionals.get(add)) {
+                        (Some(&component), Some(&additional))
+                            if component == observer_type || additional == observer_type =>
+                        {
+                            observer += 1
+                        }
+                        (Some(&component), None) if component == observer_type => observer += 1,
+                        (None, Some(&additional)) if additional == observer_type => observer += 1,
+                        _ => return false,
+                    }
+                }
+                (None, None, None) => break,
+            }
+        }
+
+        tight == self.tight_types.len()
+            && loose == self.loose_types.len()
+            && observer == observer_types.len()
     }
 }
 
@@ -131,136 +599,4 @@ pub(crate) struct UpdatePack<T> {
     pub(crate) inserted: usize,
     pub(crate) modified: usize,
     pub(crate) deleted: Vec<(EntityId, T)>,
-}
-
-/// The first returned `bool` is true if all packed types are present.
-/// in either `components` or `additional`.
-/// The second returned `bool` is true when all pack types are contained in `components`.
-/// `components` is a sorted slice of all types this entity has.
-/// `additional` is a sorted slice of types this entity might have.
-fn check_types(
-    self_types: &[TypeId],
-    components: &[TypeId],
-    additional: &[TypeId],
-) -> (bool, bool) {
-    if components.len() + additional.len() < self_types.len() {
-        // if the number of component is less than the number of packed types, they can't be packed
-        return (false, false);
-    }
-
-    let mut packed = 0;
-    let mut comp = 0;
-    let mut add = 0;
-
-    while packed < self_types.len() {
-        if comp < components.len() && add < additional.len() {
-            if components[comp] < additional[add] {
-                match self_types[packed].cmp(&components[comp]) {
-                    Ordering::Greater => comp += 1,
-                    Ordering::Equal => {
-                        packed += 1;
-                        comp += 1;
-                    }
-                    Ordering::Less => return (false, false),
-                }
-            } else {
-                match self_types[packed].cmp(&additional[add]) {
-                    Ordering::Greater => add += 1,
-                    Ordering::Equal => {
-                        packed += 1;
-                        add += 1;
-                    }
-                    Ordering::Less => return (false, false),
-                }
-            }
-        } else if comp < components.len() {
-            match self_types[packed].cmp(&components[comp]) {
-                Ordering::Greater => comp += 1,
-                Ordering::Equal => {
-                    packed += 1;
-                    comp += 1;
-                }
-                Ordering::Less => return (false, false),
-            }
-        } else if add < additional.len() {
-            match self_types[packed].cmp(&additional[add]) {
-                Ordering::Greater => add += 1,
-                Ordering::Equal => {
-                    packed += 1;
-                    add += 1;
-                }
-                Ordering::Less => return (false, false),
-            }
-        } else {
-            break;
-        }
-    }
-
-    if packed == self_types.len() {
-        (true, add == 0)
-    } else {
-        (false, false)
-    }
-}
-
-#[test]
-fn pack_check() {
-    let pack_types = &mut [
-        TypeId::of::<usize>(),
-        TypeId::of::<u32>(),
-        TypeId::of::<String>(),
-    ];
-    pack_types.sort_unstable();
-
-    let components = &[];
-    let additional = &mut [TypeId::of::<usize>(), TypeId::of::<String>()];
-    additional.sort_unstable();
-    assert_eq!(
-        check_types(pack_types, components, additional),
-        (false, false)
-    );
-
-    let components = &[];
-    let additional = &mut [
-        TypeId::of::<usize>(),
-        TypeId::of::<i8>(),
-        TypeId::of::<String>(),
-    ];
-    additional.sort_unstable();
-    assert_eq!(
-        check_types(pack_types, components, additional),
-        (false, false)
-    );
-
-    let components = &[];
-    let additional = &mut [
-        TypeId::of::<usize>(),
-        TypeId::of::<u32>(),
-        TypeId::of::<String>(),
-    ];
-    additional.sort_unstable();
-    assert_eq!(
-        check_types(pack_types, components, additional),
-        (true, false)
-    );
-
-    let components = &[TypeId::of::<usize>()];
-    let additional = &mut [TypeId::of::<u32>(), TypeId::of::<String>()];
-    additional.sort_unstable();
-    assert_eq!(
-        check_types(pack_types, components, additional),
-        (true, false)
-    );
-
-    let components = &mut [
-        TypeId::of::<usize>(),
-        TypeId::of::<u32>(),
-        TypeId::of::<String>(),
-    ];
-    components.sort_unstable();
-    let additional = &mut [];
-    assert_eq!(
-        check_types(pack_types, components, additional),
-        (true, true)
-    );
 }
