@@ -337,6 +337,8 @@ fn add_component_with_old_key() {
 #[test]
 fn derive() {
     let t = trybuild::TestCases::new();
+    t.pass("tests/derive/all_storages_threadpool.rs");
+    t.compile_fail("tests/derive/all_storages.rs");
     t.pass("tests/derive/good.rs");
     #[cfg(feature = "parallel")]
     {

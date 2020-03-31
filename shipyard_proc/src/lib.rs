@@ -60,9 +60,15 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
     let mut data = Vec::with_capacity(run.sig.inputs.len());
     let mut binding = Vec::with_capacity(run.sig.inputs.len());
 
+    let mut borrows_all_store: Option<Span> = None;
+    let mut borrows_other: Option<Span> = None;
+
     run.sig.inputs.iter_mut().try_for_each(|arg| {
+        use syn::spanned::Spanned;
+        let arg_span = arg.span();
         if let syn::FnArg::Typed(syn::PatType { pat, ty, .. }) = arg {
-            match **ty {
+            let ty = &mut **ty;
+            match ty {
                 syn::Type::Reference(ref mut reference) => {
                     // references are added a 'sys lifetime if they don't have one
                     // if they have another lifetime, make it 'sys
@@ -70,10 +76,11 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                         // transform &Entities into Entites and &mut Entities into EntitiesMut
                         if path.path.segments.last().unwrap().ident == "Entities" {
                             if reference.mutability.is_none() {
-                                **ty = parse_quote!(::shipyard::prelude::Entities);
+                                *ty = parse_quote!(::shipyard::prelude::Entities);
                             } else {
-                                **ty = parse_quote!(::shipyard::prelude::EntitiesMut);
+                                *ty = parse_quote!(::shipyard::prelude::EntitiesMut);
                             }
+                            borrows_other.get_or_insert(arg_span);
                         } else if path.path.segments.last().unwrap().ident == "AllStorages" {
                             if reference.mutability.is_none() {
                                 return Err(Error::new_spanned(
@@ -81,11 +88,12 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                                     "You probably forgot a mut, &AllStorages isn't a valid storage access"
                                 ));
                             } else {
-                                **ty = parse_quote!(::shipyard::prelude::AllStorages);
+                                *ty = parse_quote!(::shipyard::prelude::AllStorages);
+                                borrows_all_store = Some(arg_span);
                             }
                         } else if path.path.segments.last().unwrap().ident == "ThreadPool" {
                             if reference.mutability.is_none() {
-                                **ty = parse_quote!(::shipyard::prelude::ThreadPool);
+                                *ty = parse_quote!(::shipyard::prelude::ThreadPool);
                             } else {
                                 return Err(Error::new_spanned(
                                     path,
@@ -94,9 +102,11 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             }
                         } else {
                             reference.lifetime = parse_quote!('sys);
+                            borrows_other.get_or_insert(arg_span);
                         }
                     } else {
                         reference.lifetime = parse_quote!('sys);
+                        borrows_other.get_or_insert(arg_span);
                     }
                 }
                 syn::Type::Path(ref mut path) => {
@@ -238,7 +248,13 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                                 unreachable!()
                             }
                         }
+                    } else if last.ident == "AllStorages" {
+                        borrows_all_store = Some(arg_span);
+                        return Ok(());
+                    } else if last.ident == "ThreadPool" {
+                        return Ok(());
                     }
+                    borrows_other.get_or_insert(arg_span);
                 }
                 _ => {
                     return Err(Error::new_spanned(
@@ -254,7 +270,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                 }
             }
 
-            data.push((*ty).clone());
+            data.push(ty.clone());
             binding.push((**pat).clone());
             Ok(())
         } else {
@@ -262,11 +278,20 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
         }
     })?;
 
+    if let (Some(all), Some(other)) = (borrows_all_store, borrows_other) {
+        let mut err = Error::new(all, "Cannot borrow AllStorages exclusively as it is being borrowed by a component store already");
+        err.combine(Error::new(
+            other,
+            "Cannot borrow AllStorages due to this component borrow. You should borrow this component manually from the AllStorages borrow instead.",
+        ));
+        return Err(err);
+    }
+
     // make tuples MAX_TYPES len maximum to allow users to pass an infinite number of types
     while data.len() > MAX_TYPES {
         for i in 0..(data.len() / MAX_TYPES) {
             let ten = &data[(i * MAX_TYPES)..((i + 1) * MAX_TYPES)];
-            *data[i] = parse_quote!((#(#ten,)*));
+            data[i] = parse_quote!((#(#ten,)*));
             data.drain((i + 1)..((i + 1) * MAX_TYPES));
 
             let ten = &binding[i..(i + 10)];
