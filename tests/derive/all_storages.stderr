@@ -1,0 +1,61 @@
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+ --> $DIR/all_storages.rs:4:8
+  |
+4 | fn run(_: AllStorages, _: &mut i32) {}
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+ --> $DIR/all_storages.rs:7:8
+  |
+7 | fn run(_: &mut AllStorages, _: &i32) {}
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+  --> $DIR/all_storages.rs:10:9
+   |
+10 | fn run( _: &mut i32, _: AllStorages) {}
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+  --> $DIR/all_storages.rs:13:9
+   |
+13 | fn run( _: &mut i32, _: &mut AllStorages) {}
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+  --> $DIR/all_storages.rs:16:8
+   |
+16 | fn run(_: AllStorages, _: Entities) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+  --> $DIR/all_storages.rs:19:8
+   |
+19 | fn run(_: AllStorages, _: EntitiesMut) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+  --> $DIR/all_storages.rs:22:8
+   |
+22 | fn run(_: AllStorages, _: &Entities) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages and a storage at the same time, this includes entities.
+       You can borrow the storage from AllStorages inside the system instead.
+  --> $DIR/all_storages.rs:25:8
+   |
+25 | fn run(_: AllStorages, _: &mut Entities) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow AllStorages twice.
+  --> $DIR/all_storages.rs:28:8
+   |
+28 | fn run(_: AllStorages, _: AllStorages) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

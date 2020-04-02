@@ -1,0 +1,23 @@
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+ --> $DIR/double_borrow_non_send_sync.rs:6:8
+  |
+6 | fn run(_: NonSendSync<&NonSendSyncStruct>, _: NonSendSync<&mut NonSendSyncStruct>) {}
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+ --> $DIR/double_borrow_non_send_sync.rs:9:8
+  |
+9 | fn run(_: NonSendSync<&NonSendSyncStruct>, _: Unique<NonSendSync<&mut NonSendSyncStruct>>) {}
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+  --> $DIR/double_borrow_non_send_sync.rs:12:8
+   |
+12 | fn run(_: Unique<NonSendSync<&NonSendSyncStruct>>, _: NonSendSync<&mut NonSendSyncStruct>) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+  --> $DIR/double_borrow_non_send_sync.rs:15:8
+   |
+15 | fn run(_: Unique<NonSendSync<&NonSendSyncStruct>>, _: Unique<NonSendSync<&mut NonSendSyncStruct>>) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
