@@ -59,6 +59,33 @@ fn update() {
 }
 
 #[test]
+fn cleared_update() {
+    let world = World::new();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
+    usizes.update_pack();
+    let entity1 = entities.add_entity(&mut usizes, 1);
+    usizes.clear_inserted_and_modified();
+    let entity2 = entities.add_entity(&mut usizes, 2);
+    assert_eq!(usizes.inserted().len(), 1);
+    assert_eq!(*usizes.get(entity1).unwrap(), 1);
+    assert_eq!(*usizes.get(entity2).unwrap(), 2);
+}
+
+#[test]
+fn modified_update() {
+    let world = World::new();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
+    usizes.update_pack();
+    let entity1 = entities.add_entity(&mut usizes, 1);
+    usizes.clear_inserted_and_modified();
+    usizes[entity1] = 3;
+    let entity2 = entities.add_entity(&mut usizes, 2);
+    assert_eq!(usizes.inserted().len(), 1);
+    assert_eq!(*usizes.get(entity1).unwrap(), 3);
+    assert_eq!(*usizes.get(entity2).unwrap(), 2);
+}
+
+#[test]
 fn not_all_tight() {
     let world = World::new();
 

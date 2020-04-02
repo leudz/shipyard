@@ -92,7 +92,35 @@ impl<T> SparseSet<T> {
         };
 
         if let Pack::Update(pack) = &mut self.pack_info.pack {
-            let len = self.data.len() - 1;
+            let last_index = self.data.len() - 1;
+            self.dense.swap(pack.inserted + pack.modified, last_index);
+            self.dense
+                .swap(pack.inserted, pack.inserted + pack.modified);
+            self.data.swap(pack.inserted + pack.modified, last_index);
+            self.data.swap(pack.inserted, pack.inserted + pack.modified);
+
+            let entity = self.dense[self.data.len() - 1];
+            // SAFE entity.bucket() exists and contains at least bucket_index elements
+            unsafe {
+                *self
+                    .sparse
+                    .get_unchecked_mut(entity.bucket())
+                    .as_mut()
+                    .unwrap()
+                    .get_unchecked_mut(entity.bucket_index()) = self.data.len() - 1;
+            }
+            let entity = self.dense[pack.inserted + pack.modified];
+            // SAFE entity.bucket() exists and contains at least bucket_index elements
+            unsafe {
+                *self
+                    .sparse
+                    .get_unchecked_mut(entity.bucket())
+                    .as_mut()
+                    .unwrap()
+                    .get_unchecked_mut(entity.bucket_index()) = pack.inserted + pack.modified;
+            }
+
+            let entity = self.dense[pack.inserted];
             // SAFE entity.bucket() exists and contains at least bucket_index elements
             unsafe {
                 *self
@@ -101,26 +129,8 @@ impl<T> SparseSet<T> {
                     .as_mut()
                     .unwrap()
                     .get_unchecked_mut(entity.bucket_index()) = pack.inserted;
-                let dense = self.dense.get_unchecked(pack.inserted + pack.modified);
-                *self
-                    .sparse
-                    .get_unchecked_mut(dense.bucket())
-                    .as_mut()
-                    .unwrap()
-                    .get_unchecked_mut(dense.bucket_index()) = len;
-                let dense = self.dense[pack.inserted];
-                *self
-                    .sparse
-                    .get_unchecked_mut(dense.bucket())
-                    .as_mut()
-                    .unwrap()
-                    .get_unchecked_mut(dense.bucket_index()) = pack.inserted + pack.modified;
             }
-            self.dense.swap(pack.inserted + pack.modified, len);
-            self.dense
-                .swap(pack.inserted, pack.inserted + pack.modified);
-            self.data.swap(pack.inserted + pack.modified, len);
-            self.data.swap(pack.inserted, pack.inserted + pack.modified);
+
             pack.inserted += 1;
         }
 
