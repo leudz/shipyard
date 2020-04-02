@@ -1,0 +1,23 @@
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+ --> $DIR/double_borrow.rs:4:8
+  |
+4 | fn run(_: &u32, _: &mut u32) {}
+  |        ^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+ --> $DIR/double_borrow.rs:7:8
+  |
+7 | fn run(_: &u32, _: Unique<&mut u32>) {}
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+  --> $DIR/double_borrow.rs:10:8
+   |
+10 | fn run(_: Unique<&u32>, _: &mut u32) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Cannot borrow again a storage already borrowed exclusively, you may want to remove the shared borrow.
+  --> $DIR/double_borrow.rs:13:8
+   |
+13 | fn run(_: Unique<&u32>, _: Unique<&mut u32>) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

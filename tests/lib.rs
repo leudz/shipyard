@@ -339,6 +339,8 @@ fn derive() {
     let t = trybuild::TestCases::new();
     t.pass("tests/derive/all_storages_threadpool.rs");
     t.compile_fail("tests/derive/all_storages.rs");
+    t.compile_fail("tests/derive/double_borrow.rs");
+    t.compile_fail("tests/derive/entities.rs");
     t.pass("tests/derive/good.rs");
     #[cfg(feature = "parallel")]
     {
@@ -359,14 +361,17 @@ fn derive() {
     #[cfg(feature = "non_send")]
     {
         t.pass("tests/derive/good_non_send.rs");
+        t.compile_fail("tests/derive/double_borrow_non_send.rs");
     }
     #[cfg(feature = "non_sync")]
     {
         t.pass("tests/derive/good_non_sync.rs");
+        t.compile_fail("tests/derive/double_borrow_non_sync.rs");
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     {
         t.pass("tests/derive/good_non_send_sync.rs");
+        t.compile_fail("tests/derive/double_borrow_non_send_sync.rs");
     }
 }
 

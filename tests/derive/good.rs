@@ -1,9 +1,15 @@
 use shipyard::prelude::*;
 
-#[system(Test)]
-fn run(_: &usize, _: &mut i32, _: &Entities, _: &mut Entities, _: Unique<&usize>, _: Unique<&mut usize>, _: Entities, _: EntitiesMut) {}
+#[system(Test1)]
+fn run(_: &usize, _: &mut i32, _: &Entities, _: Unique<&u32>, _: Entities) {}
+
+#[system(Test2)]
+fn run(_: EntitiesMut, _: &mut u32) {}
+
+#[system(Test3)]
+fn run(_: &mut Entities, _: &mut u32) {}
 
 #[system(Lifetime)]
-fn run(_: &'test usize, _: &'test mut i32, _: &'test Entities, _: &'test mut Entities, _: Unique<&'test usize>, _: Unique<&'test mut usize>) {}
+fn run(_: &'a usize, _: &'b mut i32, _: &'c Entities, _: Unique<&'d u32>, _: Entities) {}
 
 fn main() {}
