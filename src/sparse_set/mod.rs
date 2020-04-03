@@ -69,7 +69,7 @@ impl<T> SparseSet<T> {
         self.allocate_at(entity);
 
         // SAFE entity.bucket() exists and contains at least bucket_index elements
-        let result = match unsafe {
+        let (result, mut index) = match unsafe {
             self.sparse
                 .get_unchecked_mut(entity.bucket())
                 .as_mut()
@@ -80,58 +80,64 @@ impl<T> SparseSet<T> {
                 *i = self.dense.len();
                 self.dense.push(entity);
                 self.data.push(value);
-                None
+                (None, self.dense.len() - 1)
             }
             &mut i => {
                 // SAFE sparse index are always valid
                 unsafe {
                     core::mem::swap(self.data.get_unchecked_mut(i), &mut value);
                 }
-                Some(value)
+                (Some(value), i)
             }
         };
 
         if let Pack::Update(pack) = &mut self.pack_info.pack {
-            let last_index = self.data.len() - 1;
-            self.dense.swap(pack.inserted + pack.modified, last_index);
-            self.dense
-                .swap(pack.inserted, pack.inserted + pack.modified);
-            self.data.swap(pack.inserted + pack.modified, last_index);
-            self.data.swap(pack.inserted, pack.inserted + pack.modified);
+            if index >= pack.inserted {
+                if index >= pack.inserted + pack.modified {
+                    self.dense.swap(pack.inserted + pack.modified, index);
+                    self.data.swap(pack.inserted + pack.modified, index);
 
-            let entity = self.dense[self.data.len() - 1];
-            // SAFE entity.bucket() exists and contains at least bucket_index elements
-            unsafe {
-                *self
-                    .sparse
-                    .get_unchecked_mut(entity.bucket())
-                    .as_mut()
-                    .unwrap()
-                    .get_unchecked_mut(entity.bucket_index()) = self.data.len() - 1;
-            }
-            let entity = self.dense[pack.inserted + pack.modified];
-            // SAFE entity.bucket() exists and contains at least bucket_index elements
-            unsafe {
-                *self
-                    .sparse
-                    .get_unchecked_mut(entity.bucket())
-                    .as_mut()
-                    .unwrap()
-                    .get_unchecked_mut(entity.bucket_index()) = pack.inserted + pack.modified;
-            }
+                    let entity = self.dense[index];
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    unsafe {
+                        *self
+                            .sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index()) = index;
+                    }
 
-            let entity = self.dense[pack.inserted];
-            // SAFE entity.bucket() exists and contains at least bucket_index elements
-            unsafe {
-                *self
-                    .sparse
-                    .get_unchecked_mut(entity.bucket())
-                    .as_mut()
-                    .unwrap()
-                    .get_unchecked_mut(entity.bucket_index()) = pack.inserted;
-            }
+                    index = pack.inserted + pack.modified;
+                }
 
-            pack.inserted += 1;
+                self.dense.swap(pack.inserted, index);
+                self.data.swap(pack.inserted, index);
+
+                let entity = self.dense[index];
+                // SAFE entity.bucket() exists and contains at least bucket_index elements
+                unsafe {
+                    *self
+                        .sparse
+                        .get_unchecked_mut(entity.bucket())
+                        .as_mut()
+                        .unwrap()
+                        .get_unchecked_mut(entity.bucket_index()) = index;
+                }
+
+                let entity = self.dense[pack.inserted];
+                // SAFE entity.bucket() exists and contains at least bucket_index elements
+                unsafe {
+                    *self
+                        .sparse
+                        .get_unchecked_mut(entity.bucket())
+                        .as_mut()
+                        .unwrap()
+                        .get_unchecked_mut(entity.bucket_index()) = pack.inserted;
+                }
+
+                pack.inserted += 1;
+            }
         }
 
         result

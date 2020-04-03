@@ -75,6 +75,7 @@ fn update() {
     let e2 = entities.add_entity((), ());
 
     entities.add_component(&mut usizes, 1, e0);
+    entities.add_component(&mut usizes, 1, e0);
     entities.add_component(&mut usizes, 2, e1);
     entities.add_component(&mut usizes, 3, e2);
 
