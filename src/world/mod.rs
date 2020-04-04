@@ -58,6 +58,7 @@ impl World {
     /// Returns a new `World` with custom threads.  
     /// Custom threads can be useful when working with wasm for example.
     #[cfg(feature = "parallel")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     pub fn new_with_custom_threads<F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>>(
         f: F,
     ) -> Self {
@@ -102,6 +103,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn try_add_unique_non_send<T: 'static + Sync>(
         &self,
         component: T,
@@ -119,6 +121,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
@@ -129,6 +132,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn try_add_unique_non_sync<T: 'static + Send>(
         &self,
         component: T,
@@ -146,6 +150,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
@@ -156,6 +161,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn try_add_unique_non_send_sync<T: 'static>(
         &self,
         component: T,
@@ -173,6 +179,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
@@ -184,11 +191,19 @@ You can use:
 * `&mut T` for an exclusive access to `T` storage
 * [Entities] for a shared access to the entity storage
 * [EntitiesMut] for an exclusive reference to the entity storage
-* [AllStorages] for an exclusive access to the storage of all components
+* [AllStorages] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [Unique]<&T> for a shared access to a `T` unique storage
 * [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
     #[cfg_attr(
-        feature = "parallel",
+        all(feature = "parallel", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", docsrs),
+        doc = "    * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", not(docsrs)),
         doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
     )]
     #[cfg_attr(
@@ -196,7 +211,17 @@ You can use:
         doc = "* ThreadPool: must activate the *parallel* feature"
     )]
     #[cfg_attr(
-        feature = "non_send",
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
         doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
 * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
 [Unique] and [NonSend] can be used together to access a `!Send` unique storage."
@@ -206,7 +231,17 @@ You can use:
         doc = "* NonSend: must activate the *non_send* feature"
     )]
     #[cfg_attr(
-        feature = "non_sync",
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
         doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
 * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
 [Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
@@ -216,7 +251,17 @@ You can use:
         doc = "* NonSync: must activate the *non_sync* feature"
     )]
     #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
         doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
 * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
 [Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
@@ -265,11 +310,19 @@ You can use:
 * `&mut T` for an exclusive access to `T` storage
 * [Entities] for a shared access to the entity storage
 * [EntitiesMut] for an exclusive reference to the entity storage
-* [AllStorages] for an exclusive access to the storage of all components
+* [AllStorages] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [Unique]<&T> for a shared access to a `T` unique storage
 * [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
     #[cfg_attr(
-        feature = "parallel",
+        all(feature = "parallel", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", docsrs),
+        doc = "    * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", not(docsrs)),
         doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
     )]
     #[cfg_attr(
@@ -277,7 +330,17 @@ You can use:
         doc = "* ThreadPool: must activate the *parallel* feature"
     )]
     #[cfg_attr(
-        feature = "non_send",
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
         doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
 * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
 [Unique] and [NonSend] can be used together to access a `!Send` unique storage."
@@ -287,7 +350,17 @@ You can use:
         doc = "* NonSend: must activate the *non_send* feature"
     )]
     #[cfg_attr(
-        feature = "non_sync",
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
         doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
 * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
 [Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
@@ -297,7 +370,17 @@ You can use:
         doc = "* NonSync: must activate the *non_sync* feature"
     )]
     #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
         doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
 * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
 [Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
@@ -337,11 +420,19 @@ You can use:
 * `&mut T` for an exclusive access to `T` storage
 * [Entities] for a shared access to the entity storage
 * [EntitiesMut] for an exclusive reference to the entity storage
-* [AllStorages] for an exclusive access to the storage of all components
+* [AllStorages] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [Unique]<&T> for a shared access to a `T` unique storage
 * [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
     #[cfg_attr(
-        feature = "parallel",
+        all(feature = "parallel", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", docsrs),
+        doc = "    * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", not(docsrs)),
         doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
     )]
     #[cfg_attr(
@@ -349,7 +440,17 @@ You can use:
         doc = "* ThreadPool: must activate the *parallel* feature"
     )]
     #[cfg_attr(
-        feature = "non_send",
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
         doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
 * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
 [Unique] and [NonSend] can be used together to access a `!Send` unique storage."
@@ -359,7 +460,17 @@ You can use:
         doc = "* NonSend: must activate the *non_send* feature"
     )]
     #[cfg_attr(
-        feature = "non_sync",
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
         doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
 * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
 [Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
@@ -369,7 +480,17 @@ You can use:
         doc = "* NonSync: must activate the *non_sync* feature"
     )]
     #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
         doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
 * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
 [Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
@@ -409,11 +530,19 @@ You can use:
 * `&mut T` for an exclusive access to `T` storage
 * [Entities] for a shared access to the entity storage
 * [EntitiesMut] for an exclusive reference to the entity storage
-* [AllStorages] for an exclusive access to the storage of all components
+* [AllStorages] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [Unique]<&T> for a shared access to a `T` unique storage
 * [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
     #[cfg_attr(
-        feature = "parallel",
+        all(feature = "parallel", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", docsrs),
+        doc = "    * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
+    )]
+    #[cfg_attr(
+        all(feature = "parallel", not(docsrs)),
         doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
     )]
     #[cfg_attr(
@@ -421,7 +550,17 @@ You can use:
         doc = "* ThreadPool: must activate the *parallel* feature"
     )]
     #[cfg_attr(
-        feature = "non_send",
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
         doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
 * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
 [Unique] and [NonSend] can be used together to access a `!Send` unique storage."
@@ -431,7 +570,17 @@ You can use:
         doc = "* NonSend: must activate the *non_send* feature"
     )]
     #[cfg_attr(
-        feature = "non_sync",
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
         doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
 * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
 [Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
@@ -441,7 +590,17 @@ You can use:
         doc = "* NonSync: must activate the *non_sync* feature"
     )]
     #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
         doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
 * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
 [Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
