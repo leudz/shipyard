@@ -47,6 +47,24 @@ impl<'a, T: SystemData<'a>> Run<'a> for T {
     }
 }
 
+/// Mimics a system accessing a storage exclusively without actually doing it.
+/// 
+/// Can be useful to correctly schedule `Sync` types.
+/// # Example:
+/// ```
+/// # #[cfg(feature = "proc")]
+/// # {
+/// # use shipyard::*;
+/// #[system(DisplayFirst)]
+/// fn run(positions: &usize) {}
+///
+/// #[system(DisplaySecond)]
+/// fn run(positions: &usize) {}
+///
+/// let world = World::new();
+/// world.add_workload::<(DisplayFirst, FakeBorrow<usize>, DisplaySecond), _>("Display");
+/// # }
+/// ```
 pub struct FakeBorrow<T: ?Sized>(T);
 
 impl<'a, T: 'static> System<'a> for FakeBorrow<T> {

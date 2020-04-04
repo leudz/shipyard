@@ -4,9 +4,9 @@ pub use crate::iter::{CurrentId, ExactSizeShiperator, IntoIter, IntoIterIds, Shi
 pub use crate::not::Not;
 pub use crate::pack::{LoosePack, TightPack};
 pub use crate::remove::Remove;
+pub use crate::run::{FakeBorrow, System};
 #[doc(hidden)]
-pub use crate::run::{FakeBorrow, SystemData};
-pub use crate::run::{StorageBorrow, System};
+pub use crate::run::{StorageBorrow, SystemData};
 pub use crate::sparse_set::sort::IntoSortable;
 pub use crate::sparse_set::{Window, WindowMut};
 pub use crate::storage::{AllStorages, Entities, EntitiesMut, EntityId};

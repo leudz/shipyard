@@ -1,5 +1,7 @@
 mod scheduler;
 
+pub use scheduler::IntoWorkload;
+
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
 use crate::run::{Dispatch, Run, System, SystemData};
@@ -8,7 +10,7 @@ use alloc::borrow::Cow;
 use core::ops::Range;
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use scheduler::{IntoWorkload, Scheduler};
+use scheduler::Scheduler;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {

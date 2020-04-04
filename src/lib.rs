@@ -151,7 +151,28 @@ mod unknown_storage;
 mod views;
 mod world;
 
+pub use delete::Delete;
+pub use get::GetComponent;
+pub use iter::{
+    iterators, CurrentId, Enumerate, ExactSizeShiperator, Filter, IntoIter, IntoIterIds, Map,
+    Shiperator, WithId,
+};
+pub use not::Not;
+pub use pack::{LoosePack, TightPack};
+pub use remove::Remove;
+pub use run::{FakeBorrow, System};
+#[doc(hidden)]
+pub use run::{Run, StorageBorrow, SystemData};
+#[doc(hidden)]
+#[cfg(feature = "proc")]
+pub use shipyard_proc::system;
+pub use sparse_set::{sort, sort::IntoSortable, Window, WindowMut};
 pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
+pub use views::{
+    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+};
+#[doc(hidden)]
+pub use world::IntoWorkload;
 pub use world::World;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.

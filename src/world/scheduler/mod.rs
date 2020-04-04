@@ -4,7 +4,7 @@ mod regular;
 
 // WIP
 //pub(super) use function::IntoWorkloadFn;
-pub(super) use regular::IntoWorkload;
+pub use regular::IntoWorkload;
 
 use crate::error;
 use crate::World;

@@ -16,16 +16,16 @@ As long as the "parallel" feature is set (it's enabled by default), workloads wi
 
 When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.
 
-There's just one problem with this approach. What happens when I want to force two non-conflicting systems to run one after the other? The `FakeBorrow` system is here just for that, it'll mimic a system accessing the storage exclusively without actually doing it.  To use it, place it in between your other systems in a workload like this:
+There's just one problem with this approach. What happens when I want to force two non-conflicting systems to run one after the other? The `FakeBorrow` system is here just for that, it'll mimic a system accessing the storage exclusively without actually doing it. To use it, place it in-between your other systems in a workload like this:
 
 ```rust, noplaypen
-#[system(MovePosition)]
-fn run(entities: &mut Entities, positions: &mut Position) { ... }
+#[system(DisplayFirst)]
+fn run(positions: &Position) { ... }
 
-#[system(ClampPosition)]
-fn run(entities: &mut Entities, positions: &mut Position) { ... }
+#[system(DisplaySecond)]
+fn run(positions: &Position) { ... }
 
-world.add_workload<(MovePosition, FakeBorrow<Position>, ClampPosition), _>("Move and stop at bounds");
+world.add_workload::<(DisplayFirst, FakeBorrow<Position>, DisplaySecond), _>("Display");
 ```
 
 ### Inner-parallelism
