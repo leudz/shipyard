@@ -13,6 +13,7 @@ macro_rules! impl_iterators {
         #[doc = $number]
         #[doc = "components.  
 Tight iterators are fast but are limited to components tightly packed together."]
+        #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
         pub struct $tight<$($type: IntoAbstract),+>($seq<$($type),+>);
 
         impl<$($type: IntoAbstract),+> From<$seq<$($type),+>> for $tight<$($type),+> {

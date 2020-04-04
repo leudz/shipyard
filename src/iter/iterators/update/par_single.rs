@@ -3,6 +3,7 @@ use rayon::iter::plumbing::{bridge, Consumer, Producer, ProducerCallback, Uninde
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 /// Update parallel iterator over a single component.
+#[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 pub struct ParUpdate1<T: IntoAbstract> {
     data: T::AbsView,
     current: usize,

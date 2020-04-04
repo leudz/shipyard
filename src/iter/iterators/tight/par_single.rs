@@ -3,6 +3,7 @@ use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsume
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 /// Tight parallel iterator over a single component.
+#[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 pub struct ParTight1<T: IntoAbstract>(Tight1<T>);
 
 impl<T: IntoAbstract> From<Tight1<T>> for ParTight1<T> {
