@@ -12,6 +12,7 @@ macro_rules! impl_iterators {
         #[doc = "Loose parallel iterator over"]
         #[doc = $number]
         #[doc = "components."]
+        #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
         pub struct $loose<$($type: IntoAbstract),+>($seq<$($type),+>);
 
         impl<$($type: IntoAbstract),+> From<$seq<$($type),+>> for $loose<$($type),+> {

@@ -128,6 +128,7 @@
 #![deny(trivial_numeric_casts)]
 #![deny(unused_qualifications)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[macro_use]
 extern crate alloc;
@@ -156,6 +157,7 @@ pub use world::World;
 
 /// Type used to borrow the rayon::ThreadPool inside `World`.
 #[cfg(feature = "parallel")]
+#[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 pub struct ThreadPool;
 
 /// Type used to access the value of a unique storage.
@@ -173,12 +175,15 @@ pub struct Unique<T: ?Sized>(T);
 
 /// Type used to access `!Send` storages.
 #[cfg(feature = "non_send")]
+#[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
 pub struct NonSend<T: ?Sized>(T);
 
 /// Type used to access `!Sync` storages.
 #[cfg(feature = "non_sync")]
+#[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
 pub struct NonSync<T: ?Sized>(T);
 
 /// Type used to access `!Send + !Sync` storages.
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
 pub struct NonSendSync<T: ?Sized>(T);

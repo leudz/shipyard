@@ -14,6 +14,7 @@ macro_rules! impl_iterators {
         #[doc = "Non packed parallel iterator over"]
         #[doc = $number]
         #[doc = "components."]
+        #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
         pub struct $non_packed<$($type: IntoAbstract),+>($seq<$($type),+>);
 
         impl<$($type: IntoAbstract),+> From<$seq<$($type),+>> for $non_packed<$($type),+> {

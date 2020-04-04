@@ -56,6 +56,7 @@ impl World {
     /// Returns a new `World` with custom threads.  
     /// Custom threads can be useful when working with wasm for example.
     #[cfg(feature = "parallel")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     pub fn new_with_custom_threads<F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>>(
         f: F,
     ) -> Self {
@@ -100,6 +101,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn try_add_unique_non_send<T: 'static + Sync>(
         &self,
         component: T,
@@ -117,6 +119,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
     #[cfg(feature = "non_send")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
@@ -127,6 +130,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn try_add_unique_non_sync<T: 'static + Send>(
         &self,
         component: T,
@@ -144,6 +148,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
@@ -154,6 +159,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn try_add_unique_non_send_sync<T: 'static>(
         &self,
         component: T,
@@ -171,6 +177,7 @@ impl World {
     /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
