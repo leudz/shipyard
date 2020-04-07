@@ -15,6 +15,14 @@ pub trait StorageBorrow<'a> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage>;
 }
 
+impl<'a> StorageBorrow<'a> for () {
+    type View = ();
+
+    fn try_borrow(_: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+        Ok(())
+    }
+}
+
 impl<'a> StorageBorrow<'a> for Entities {
     type View = EntitiesView<'a>;
 
