@@ -31,7 +31,7 @@ Example:
 ```rust, noplaypen
 let world = World::new();
 world.add_unique(Camera::new());
-let camera = world.borrow::<Unique<Camera>>();
+let camera = world.borrow::<Unique<&Camera>>();
 ```
 
 Note that `Unique` and `!Send`/`!Sync` components can be used together, in this case `Unique` will envelop `NonSend`/`NonSync` or `NonSendSync`.
