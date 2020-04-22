@@ -23,6 +23,7 @@
     - [Syntactic Peculiarities](./going-further/syntactic-peculiarities.md)
 - [Recipes](./recipes.md)
     - [Hierarchy](./recipes/hierarchy.md)
+    - [0.4 migration](./recipes/0.4-migration.md)
 - [Pilgrimage](./pilgrimage.md)
     - [Different Types of ECS](./pilgrimage/different-types-of-ecs.md)
     - [More Resources](./pilgrimage/more-resources.md)
