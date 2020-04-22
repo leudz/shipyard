@@ -2,7 +2,7 @@ use crate::components::*;
 use crate::config::*;
 use crate::geometry::*;
 use rand::prelude::*;
-use shipyard::prelude::*;
+use shipyard::*;
 
 pub const TICK: &str = "TICK";
 

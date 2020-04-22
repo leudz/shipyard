@@ -1,8 +1,6 @@
-#[cfg(feature = "parallel")]
-use super::IntoIterator;
 use super::{
     AbstractMut, Chunk1, ChunkExact1, CurrentId, DoubleEndedShiperator, ExactSizeShiperator,
-    IntoAbstract, Shiperator,
+    IntoAbstract, IntoIterator, Shiperator,
 };
 use crate::EntityId;
 #[cfg(feature = "parallel")]
@@ -98,7 +96,7 @@ where
     type Item = <T::AbsView as AbstractMut>::Out;
     type IntoIter = IntoIterator<Self>;
     fn into_iter(self) -> Self::IntoIter {
-        <Self as Shiperator>::into_iter(self)
+        core::iter::IntoIterator::into_iter(self)
     }
     fn split_at(mut self, index: usize) -> (Self, Self) {
         let clone = Tight1 {
@@ -108,5 +106,13 @@ where
         };
         self.end = clone.current;
         (self, clone)
+    }
+}
+
+impl<I: IntoAbstract> core::iter::IntoIterator for Tight1<I> {
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

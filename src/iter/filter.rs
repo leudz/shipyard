@@ -1,4 +1,4 @@
-use super::{CurrentId, Shiperator};
+use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator filtering all components with `pred`.
 pub struct Filter<I, P> {
@@ -42,5 +42,16 @@ where
 
     unsafe fn current_id(&self) -> Self::Id {
         self.iter.current_id()
+    }
+}
+
+impl<I: Shiperator, P> core::iter::IntoIterator for Filter<I, P>
+where
+    P: FnMut(&I::Item) -> bool,
+{
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

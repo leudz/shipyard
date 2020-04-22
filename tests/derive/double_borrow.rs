@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[system(Double)]
 fn run(_: &u32, _: &mut u32) {}

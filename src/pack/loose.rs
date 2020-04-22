@@ -1,7 +1,7 @@
 use crate::error;
 use crate::iter::{IntoIterIds, Shiperator};
 use crate::sparse_set::{LoosePack as LoosePackInfo, Pack};
-use crate::views::ViewMut;
+use crate::view::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -15,7 +15,7 @@ pub trait LoosePack<T> {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
     /// usizes.update_pack();
@@ -28,7 +28,7 @@ pub trait LoosePack<T> {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
     /// usizes.update_pack();

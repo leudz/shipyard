@@ -1,4 +1,5 @@
 use crate::EntityId;
+use alloc::boxed::Box;
 use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
 use std::error::Error;
@@ -274,35 +275,65 @@ impl Display for SetDefaultWorkload {
 
 /// Error related to `run_default` and `run_workload`.  
 /// The error can be a storage error, problem with the scheduler's borrowing or a non existant workload.
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum RunWorkload {
     Scheduler,
-    GetStorage(GetStorage),
+    Run((&'static str, Run)),
     MissingWorkload,
 }
 
 #[cfg(feature = "std")]
 impl Error for RunWorkload {}
 
-impl From<GetStorage> for RunWorkload {
-    fn from(get_storage: GetStorage) -> Self {
-        RunWorkload::GetStorage(get_storage)
-    }
-}
-
 impl Debug for RunWorkload {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
             Self::Scheduler => {
-                fmt.write_str("Cannot borrow scheduler while it's already mutably borrowed.")
+                fmt.write_str("Cannot borrow the scheduler while it's already mutably borrowed.")
             }
             Self::MissingWorkload => fmt.write_str("No workload with this name exists."),
-            Self::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
+            Self::Run((system_name, run)) => {
+                fmt.write_fmt(format_args!("System {} failed: {:?}", system_name, run))
+            }
         }
     }
 }
 
 impl Display for RunWorkload {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
+pub enum Run {
+    GetStorage(GetStorage),
+    Custom(Box<dyn core::any::Any + Send>),
+}
+
+impl From<GetStorage> for Run {
+    fn from(get_storage: GetStorage) -> Self {
+        Run::GetStorage(get_storage)
+    }
+}
+
+impl Run {
+    pub fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
+        Run::Custom(Box::new(error))
+    }
+}
+
+#[cfg(feature = "std")]
+impl Error for Run {}
+
+impl Debug for Run {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::GetStorage(get_storage) => Debug::fmt(&get_storage, fmt),
+            Self::Custom(_) => fmt.write_fmt(format_args!("run failed with a custom error.")),
+        }
+    }
+}
+
+impl Display for Run {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, fmt)
     }

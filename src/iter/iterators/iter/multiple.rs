@@ -79,6 +79,14 @@ This enum allows to abstract away what kind of iterator you really get. That doe
                 }
             }
         }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $iter<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
+            }
+        }
     }
 }
 

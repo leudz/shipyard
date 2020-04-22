@@ -59,7 +59,7 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     /// let entity = world.run::<EntitiesMut, _, _>(|mut entities| {
     ///     entities.add_entity((), ())
@@ -81,7 +81,7 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     /// let entity = world.run::<EntitiesMut, _, _>(|mut entities| {
     ///     entities.add_entity((), ())
@@ -151,7 +151,7 @@ impl Entities {
     /// Multiple components can be added at the same time using a tuple.
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {

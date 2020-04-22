@@ -1,11 +1,11 @@
-use crate::views::{View, ViewMut};
+use crate::view::{View, ViewMut};
 use core::ops::Not as NotOps;
 
 /// Used to filter out components.
 /// Get and iterators will skip entities that have this component.
 /// ### Example
 /// ```
-/// # use shipyard::prelude::*;
+/// # use shipyard::*;
 /// let world = World::new();
 ///
 /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {

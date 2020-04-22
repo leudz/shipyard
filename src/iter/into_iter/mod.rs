@@ -20,7 +20,7 @@ pub trait IntoIter {
     /// Iterators can only be made inside [run] closure and systems.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
@@ -38,7 +38,7 @@ pub trait IntoIter {
     /// Iterators can only be made inside [run] closure and systems.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// use rayon::prelude::ParallelIterator;
     ///
     /// let world = World::new();

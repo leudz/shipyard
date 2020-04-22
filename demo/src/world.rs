@@ -2,7 +2,7 @@ use crate::components::*;
 use crate::geometry::*;
 use crate::hud::Hud;
 use crate::renderer::SceneRenderer;
-use shipyard::prelude::*;
+use shipyard::*;
 
 pub fn init_world(img_area: Area, stage_area: Area, hud: Hud, renderer: SceneRenderer) -> World {
     let world = World::default();

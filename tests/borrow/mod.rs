@@ -1,13 +1,13 @@
 #[cfg(feature = "non_send")]
 use core::any::type_name;
 use shipyard::error;
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn simple_borrow() {
     let world = World::new();
 
-    let u32s = world.borrow::<&u32>();
+    let u32s = world.borrow::<View<u32>>();
     assert_eq!(u32s.len(), 0);
 }
 
@@ -15,8 +15,8 @@ fn simple_borrow() {
 fn all_storages_simple_borrow() {
     let world = World::new();
 
-    let all_storages = world.borrow::<AllStorages>();
-    let u32s = all_storages.borrow::<&u32>();
+    let all_storages = world.borrow::<AllStoragesViewMut>();
+    let u32s = all_storages.borrow::<View<u32>>();
     assert_eq!(u32s.len(), 0);
 }
 
@@ -24,9 +24,9 @@ fn all_storages_simple_borrow() {
 fn invalid_borrow() {
     let world = World::new();
 
-    let _u32s = world.borrow::<&mut u32>();
+    let _u32s = world.borrow::<ViewMut<u32>>();
     assert_eq!(
-        world.try_borrow::<&mut u32>().err(),
+        world.try_borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
             core::any::type_name::<u32>(),
             error::Borrow::Unique
@@ -38,10 +38,10 @@ fn invalid_borrow() {
 fn all_storages_invalid_borrow() {
     let world = World::new();
 
-    let all_storages = world.borrow::<AllStorages>();
-    let _u32s = all_storages.borrow::<&mut u32>();
+    let all_storages = world.borrow::<AllStoragesViewMut>();
+    let _u32s = all_storages.borrow::<ViewMut<u32>>();
     assert_eq!(
-        all_storages.try_borrow::<&mut u32>().err(),
+        all_storages.try_borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
             core::any::type_name::<u32>(),
             error::Borrow::Unique
@@ -53,19 +53,19 @@ fn all_storages_invalid_borrow() {
 fn double_borrow() {
     let world = World::new();
 
-    let u32s = world.borrow::<&mut u32>();
+    let u32s = world.borrow::<ViewMut<u32>>();
     drop(u32s);
-    world.borrow::<&mut u32>();
+    world.borrow::<ViewMut<u32>>();
 }
 
 #[test]
 fn all_storages_double_borrow() {
     let world = World::new();
 
-    let all_storages = world.borrow::<AllStorages>();
-    let u32s = all_storages.borrow::<&mut u32>();
+    let all_storages = world.borrow::<AllStoragesViewMut>();
+    let u32s = all_storages.borrow::<ViewMut<u32>>();
     drop(u32s);
-    all_storages.borrow::<&mut u32>();
+    all_storages.borrow::<ViewMut<u32>>();
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn non_send_storage_in_other_thread() {
     rayon::join(
         || {
             assert_eq!(
-                world.try_borrow::<NonSend<&mut NonSendStruct>>().err(),
+                world.try_borrow::<NonSend<ViewMut<NonSendStruct>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
                     type_name::<NonSendStruct>(),
                     error::Borrow::WrongThread
@@ -99,7 +99,9 @@ fn non_send_sync_storage_in_other_thread() {
     rayon::join(
         || {
             assert_eq!(
-                world.try_borrow::<NonSendSync<&NonSendSyncStruct>>().err(),
+                world
+                    .try_borrow::<NonSendSync<View<NonSendSyncStruct>>>()
+                    .err(),
                 Some(error::GetStorage::StorageBorrow((
                     type_name::<NonSendSyncStruct>(),
                     error::Borrow::WrongThread

@@ -11,7 +11,7 @@ pub trait IntoSortable {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     /// let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
     /// entities.add_entity(&mut usizes, 1);

@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn pack() {
@@ -6,7 +6,7 @@ fn pack() {
 
     let world = World::new();
     let (mut usizes, mut u64s, mut u32s, mut u16s) =
-        world.borrow::<(&mut usize, &mut u64, &mut u32, &mut u16)>();
+        world.borrow::<(ViewMut<usize>, ViewMut<u64>, ViewMut<u32>, ViewMut<u16>)>();
 
     (&mut usizes, &mut u64s).tight_pack();
 

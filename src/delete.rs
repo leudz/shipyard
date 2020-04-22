@@ -1,7 +1,7 @@
 use crate::error;
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
-use crate::views::ViewMut;
+use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::{type_name, TypeId};
 
@@ -12,7 +12,7 @@ pub trait Delete<T> {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
@@ -29,7 +29,7 @@ pub trait Delete<T> {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();

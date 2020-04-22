@@ -1,10 +1,10 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn no_pack() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     let entity1 = entities.add_entity((), ());
     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
@@ -16,7 +16,7 @@ fn no_pack() {
 fn tight() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u32s).tight_pack();
     let entity1 = entities.add_entity((), ());
@@ -32,7 +32,7 @@ fn tight() {
 fn loose_add_component() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u32s).loose_pack();
     let entity1 = entities.add_entity((), ());
@@ -48,7 +48,7 @@ fn loose_add_component() {
 fn tight_loose_add_component() {
     let world = World::new();
     let (mut entities, mut usizes, mut u64s, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u64, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u64s).tight_pack();
     LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes, &mut u64s));
@@ -67,7 +67,7 @@ fn tight_loose_add_component() {
 #[test]
 fn update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
 
     usizes.update_pack();
     let e0 = entities.add_entity((), ());
@@ -92,7 +92,7 @@ fn update() {
 fn not_enough_to_tightly_pack() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s, mut f32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32, &mut f32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>, ViewMut<f32>)>();
 
     (&mut usizes, &mut u32s).tight_pack();
     entities.add_entity(&mut u32s, 0);
@@ -111,7 +111,7 @@ fn not_enough_to_tightly_pack() {
 fn not_enough_to_loosely_pack() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s, mut f32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32, &mut f32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>, ViewMut<f32>)>();
 
     (&mut usizes, &mut u32s).loose_pack();
     entities.add_entity(&mut u32s, 0);

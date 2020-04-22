@@ -1,6 +1,6 @@
 use core::any::type_name;
 use shipyard::error;
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn returned() {
@@ -9,16 +9,19 @@ fn returned() {
     unsafe { WORLD = Some(World::new()) };
 
     let _view: ViewMut<'static, usize> =
-        unsafe { WORLD.as_ref().unwrap() }.run::<&mut usize, _, _>(|usizes| usizes);
-    assert_eq!(
-        unsafe { WORLD.as_ref().unwrap() }
-            .try_run::<&mut usize, _, _>(|usizes| usizes)
-            .err(),
-        Some(error::GetStorage::StorageBorrow((
-            type_name::<usize>(),
-            error::Borrow::Unique
-        )))
-    );
+        unsafe { WORLD.as_ref().unwrap() }.run(|usizes: ViewMut<usize>| usizes);
+    match unsafe { WORLD.as_ref().unwrap() }
+        .try_run(|usizes: ViewMut<usize>| usizes)
+        .err()
+    {
+        Some(error::Run::GetStorage(get_storage)) => {
+            assert_eq!(
+                get_storage,
+                error::GetStorage::StorageBorrow((type_name::<usize>(), error::Borrow::Unique))
+            );
+        }
+        _ => panic!(),
+    }
 }
 
 #[test]
@@ -28,15 +31,18 @@ fn taken_from_run() {
     unsafe { WORLD = Some(World::new()) };
 
     let mut view = None;
-    unsafe { WORLD.as_ref().unwrap() }.run::<&mut usize, _, _>(|usizes| view = Some(usizes));
+    unsafe { WORLD.as_ref().unwrap() }.run(|usizes: ViewMut<usize>| view = Some(usizes));
     let mut view = None;
-    assert_eq!(
-        unsafe { WORLD.as_ref().unwrap() }
-            .try_run::<&mut usize, _, _>(|usizes| view = Some(usizes))
-            .err(),
-        Some(error::GetStorage::StorageBorrow((
-            type_name::<usize>(),
-            error::Borrow::Unique
-        )))
-    );
+    match unsafe { WORLD.as_ref().unwrap() }
+        .try_run(|usizes: ViewMut<usize>| view = Some(usizes))
+        .err()
+    {
+        Some(error::Run::GetStorage(get_storage)) => {
+            assert_eq!(
+                get_storage,
+                error::GetStorage::StorageBorrow((type_name::<usize>(), error::Borrow::Unique))
+            );
+        }
+        _ => panic!(),
+    }
 }

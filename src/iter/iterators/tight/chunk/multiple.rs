@@ -1,4 +1,4 @@
-use super::{AbstractMut, IntoAbstract, Shiperator};
+use super::{AbstractMut, IntoAbstract, IntoIterator, Shiperator};
 
 macro_rules! impl_iterators {
     (
@@ -41,6 +41,14 @@ The last chunk's length will be smaller than `size` if `size` does not divide th
             fn size_hint(&self) -> (usize, Option<usize>) {
                 let len = (self.end - self.current + self.step - 1) / self.step;
                 (len, Some(len))
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $chunk<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
             }
         }
     }

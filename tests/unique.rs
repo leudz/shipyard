@@ -1,16 +1,16 @@
 use core::any::type_name;
 use shipyard::error;
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn unique_storage() {
     let world = World::default();
     world.add_unique(0usize);
 
-    world.run::<Unique<&mut usize>, _, _>(|mut x| {
+    world.run(|mut x: UniqueViewMut<usize>| {
         *x += 1;
     });
-    world.run::<Unique<&usize>, _, _>(|x| {
+    world.run(|x: UniqueView<usize>| {
         assert_eq!(*x, 1);
     });
 }
@@ -19,20 +19,21 @@ fn unique_storage() {
 fn not_unique_storage() {
     let world = World::new();
 
-    assert_eq!(
-        world.try_run::<Unique<&usize>, _, _>(|_| {}).err(),
-        Some(error::GetStorage::NonUnique((
-            type_name::<usize>(),
-            error::Borrow::Shared
-        )))
-    );
-    assert_eq!(
-        world.try_run::<Unique<&mut usize>, _, _>(|_| {}).err(),
-        Some(error::GetStorage::NonUnique((
-            type_name::<usize>(),
-            error::Borrow::Unique
-        )))
-    );
+    match world.try_run(|_: UniqueView<usize>| {}).err() {
+        Some(error::Run::GetStorage(get_storage)) => assert_eq!(
+            get_storage,
+            error::GetStorage::NonUnique((type_name::<usize>(), error::Borrow::Shared))
+        ),
+        _ => panic!(),
+    }
+
+    match world.try_run(|_: UniqueViewMut<usize>| {}).err() {
+        Some(error::Run::GetStorage(get_storage)) => assert_eq!(
+            get_storage,
+            error::GetStorage::NonUnique((type_name::<usize>(), error::Borrow::Unique))
+        ),
+        _ => panic!(),
+    }
 }
 
 #[cfg(feature = "non_send")]
@@ -50,10 +51,10 @@ fn non_send() {
         _phantom: core::marker::PhantomData,
     });
 
-    world.run::<Unique<NonSend<&mut NonSendStruct>>, _, _>(|mut x| {
+    world.run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
         x.value += 1;
     });
-    world.run::<Unique<NonSend<&NonSendStruct>>, _, _>(|x| {
+    world.run(|x: NonSend<UniqueView<NonSendStruct>>| {
         assert_eq!(x.value, 1);
     });
 }
@@ -73,10 +74,10 @@ fn non_sync() {
         _phantom: core::marker::PhantomData,
     });
 
-    world.run::<Unique<NonSync<&mut NonSyncStruct>>, _, _>(|mut x| {
+    world.run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
         x.value += 1;
     });
-    world.run::<Unique<NonSync<&NonSyncStruct>>, _, _>(|x| {
+    world.run(|x: NonSync<UniqueView<NonSyncStruct>>| {
         assert_eq!(x.value, 1);
     });
 }
@@ -95,10 +96,10 @@ fn non_send_sync() {
         _phantom: core::marker::PhantomData,
     });
 
-    world.run::<Unique<NonSendSync<&mut NonSendSyncStruct>>, _, _>(|mut x| {
+    world.run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
         x.value += 1;
     });
-    world.run::<Unique<NonSendSync<&NonSendSyncStruct>>, _, _>(|x| {
+    world.run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
         assert_eq!(x.value, 1);
     });
 }

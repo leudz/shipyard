@@ -22,7 +22,7 @@ parking_lot = { version = "^0.10" }
 hashbrown = "^0.7"
 
 [features]
-default = ["parallel", "proc"]
+default = ["parallel"]
 parallel = ["rayon", "num_cpus", "std"]
 proc = ["shipyard_proc"]
 non_send = ["std"]

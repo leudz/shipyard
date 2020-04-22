@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[system(RefMut)]
 fn run(ref mut usizes: &mut usize) {

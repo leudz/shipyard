@@ -1,6 +1,6 @@
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
-use crate::views::ViewMut;
+use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::TypeId;
 

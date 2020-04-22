@@ -34,23 +34,14 @@ impl<T: ?Sized> AtomicRefCell<T> {
     where
         T: Sized,
     {
-        #[cfg(feature = "std")]
-        {
-            AtomicRefCell {
-                inner: UnsafeCell::new(value),
-                borrow_state: Default::default(),
-                is_sync,
-                send,
-                _non_send: core::marker::PhantomData,
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            AtomicRefCell {
-                inner: UnsafeCell::new(value),
-                borrow_state: Default::default(),
-                _non_send: core::marker::PhantomData,
-            }
+        AtomicRefCell {
+            borrow_state: Default::default(),
+            #[cfg(feature = "std")]
+            send,
+            #[cfg(feature = "std")]
+            is_sync,
+            _non_send: core::marker::PhantomData,
+            inner: UnsafeCell::new(value),
         }
     }
     /// Immutably borrows the wrapped value, returning an error if the value is currently mutably

@@ -1,33 +1,35 @@
 use shipyard::error;
-use shipyard::internal::iterators;
-use shipyard::prelude::*;
+use shipyard::iterators;
+use shipyard::*;
 
 #[test]
 fn simple_sort() {
     let world = World::new();
 
-    world.run::<(EntitiesMut, &mut usize), _, _>(|(mut entities, mut usizes)| {
-        entities.add_entity(&mut usizes, 5);
-        entities.add_entity(&mut usizes, 2);
-        entities.add_entity(&mut usizes, 4);
-        entities.add_entity(&mut usizes, 3);
-        entities.add_entity(&mut usizes, 1);
+    world.run(
+        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
+            entities.add_entity(&mut usizes, 5);
+            entities.add_entity(&mut usizes, 2);
+            entities.add_entity(&mut usizes, 4);
+            entities.add_entity(&mut usizes, 3);
+            entities.add_entity(&mut usizes, 1);
 
-        usizes.sort().unstable(Ord::cmp);
+            usizes.sort().unstable(Ord::cmp);
 
-        let mut prev = 0;
-        (&mut usizes).iter().for_each(|&mut x| {
-            assert!(prev <= x);
-            prev = x;
-        });
-    });
+            let mut prev = 0;
+            (&mut usizes).iter().for_each(|&mut x| {
+                assert!(prev <= x);
+                prev = x;
+            });
+        },
+    );
 }
 
 #[test]
 fn tight_sort() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u32s).tight_pack();
     entities.add_entity((&mut usizes, &mut u32s), (10usize, 3u32));
@@ -52,7 +54,7 @@ fn tight_sort() {
 fn loose_sort() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u32s).loose_pack();
 
@@ -78,7 +80,7 @@ fn loose_sort() {
 fn tight_loose_sort() {
     let world = World::new();
     let (mut entities, mut usizes, mut u64s, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u64, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u64s).tight_pack();
     LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes, &mut u64s));
@@ -117,7 +119,7 @@ fn tight_loose_sort() {
 #[test]
 fn tight_sort_missing_storage() {
     let world = World::new();
-    let (mut usizes, mut u64s) = world.borrow::<(&mut usize, &mut u64)>();
+    let (mut usizes, mut u64s) = world.borrow::<(ViewMut<usize>, ViewMut<u64>)>();
 
     (&mut usizes, &mut u64s).tight_pack();
     assert_eq!(
@@ -129,7 +131,7 @@ fn tight_sort_missing_storage() {
 #[test]
 fn loose_sort_missing_storage() {
     let world = World::new();
-    let (mut usizes, mut u64s) = world.borrow::<(&mut usize, &mut u64)>();
+    let (mut usizes, mut u64s) = world.borrow::<(ViewMut<usize>, ViewMut<u64>)>();
 
     (&mut usizes, &mut u64s).loose_pack();
     assert_eq!(
@@ -141,7 +143,8 @@ fn loose_sort_missing_storage() {
 #[test]
 fn tight_sort_too_many_storages() {
     let world = World::new();
-    let (mut usizes, mut u64s, mut u32s) = world.borrow::<(&mut usize, &mut u64, &mut u32)>();
+    let (mut usizes, mut u64s, mut u32s) =
+        world.borrow::<(ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u64s).tight_pack();
     assert_eq!(
@@ -158,7 +161,7 @@ fn tight_sort_too_many_storages() {
 #[test]
 fn update_sort() {
     let world = World::new();
-    let mut usizes = world.borrow::<&mut usize>();
+    let mut usizes = world.borrow::<ViewMut<usize>>();
 
     usizes.update_pack();
     assert_eq!(

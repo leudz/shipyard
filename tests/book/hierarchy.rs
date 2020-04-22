@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 struct Parent {
     num_children: usize,

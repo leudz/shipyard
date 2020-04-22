@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 struct NonSyncStruct(core::marker::PhantomData<*const ()>);
 

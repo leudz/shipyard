@@ -1,4 +1,4 @@
-use super::{CurrentId, Shiperator};
+use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator mapping all components with `f`.
 pub struct Map<I, F> {
@@ -37,5 +37,16 @@ where
 
     unsafe fn current_id(&self) -> Self::Id {
         self.iter.current_id()
+    }
+}
+
+impl<I: Shiperator, F> core::iter::IntoIterator for Map<I, F>
+where
+    F: FnMut(I::Item) -> I::Item,
+{
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

@@ -7,7 +7,7 @@
 //! ```
 //! # #[cfg(feature = "proc")]
 //! # {
-//! use shipyard::prelude::*;
+//! use shipyard::*;
 //!
 //! struct Health(f32);
 //! struct Position { x: f32, y: f32 }
@@ -46,7 +46,7 @@
 //! ```
 //! # #[cfg(all(feature = "parallel", feature = "proc"))]
 //! # {
-//! use shipyard::prelude::*;
+//! use shipyard::*;
 //!
 //! struct Health(f32);
 //! struct Fat(f32);
@@ -110,7 +110,7 @@
 //! ## Features
 //!
 //! - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
-//! - **proc** *(default)* &mdash; adds `system` proc macro
+//! - **proc** &mdash; adds `system` proc macro
 //! - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 //! - **non_send** &mdash; add methods and types required to work with `!Send` components
 //! - **non_sync** &mdash; add methods and types required to work with `!Sync` components
@@ -130,28 +130,35 @@
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-#[macro_use]
 extern crate alloc;
 
 mod atomic_refcell;
+mod borrow;
 mod delete;
 /// Contains all error types.
 pub mod error;
 mod get;
-/// Re-export types that aren't needed in most use cases.
-pub mod internal;
 mod iter;
 mod not;
 mod pack;
-pub mod prelude;
 mod remove;
-mod run;
 mod sparse_set;
 mod storage;
+mod system_macro;
 mod unknown_storage;
-mod views;
+mod view;
 mod world;
 
+#[cfg(feature = "non_send")]
+pub use crate::borrow::NonSend;
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+pub use crate::borrow::NonSendSync;
+#[cfg(feature = "non_sync")]
+#[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
+pub use crate::borrow::NonSync;
+#[doc(hidden)]
+pub use crate::borrow::{AllStoragesBorrow, Borrow};
+pub use borrow::FakeBorrow;
 pub use delete::Delete;
 pub use get::GetComponent;
 pub use iter::{
@@ -161,52 +168,17 @@ pub use iter::{
 pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
-pub use run::{FakeBorrow, System};
-#[doc(hidden)]
-pub use run::{Run, StorageBorrow, SystemData};
 #[doc(hidden)]
 #[cfg(feature = "proc")]
-pub use shipyard_proc::system;
+pub use shipyard_proc::system as system_fn;
+pub use sparse_set::SparseSet;
 pub use sparse_set::{sort, sort::IntoSortable, Window, WindowMut};
 pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
-pub use views::{
+#[cfg(feature = "parallel")]
+pub use view::ThreadPoolView;
+pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 #[doc(hidden)]
-pub use world::IntoWorkload;
+pub use world::WorkloadBuilder;
 pub use world::World;
-
-/// Type used to borrow the rayon::ThreadPool inside `World`.
-#[cfg(feature = "parallel")]
-#[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
-pub struct ThreadPool;
-
-/// Type used to access the value of a unique storage.
-/// 
-/// You may know it as "Resource".
-/// ### Example:
-/// ```
-/// # use shipyard::prelude::*;
-/// let world = World::default();
-/// world.add_unique(0usize);
-///
-/// world.run::<Unique<&mut usize>, _, _>(|mut x| {
-///     *x += 1;
-/// });
-/// ```
-pub struct Unique<T: ?Sized>(T);
-
-/// Type used to access `!Send` storages.
-#[cfg(feature = "non_send")]
-#[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
-pub struct NonSend<T: ?Sized>(T);
-
-/// Type used to access `!Sync` storages.
-#[cfg(feature = "non_sync")]
-#[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
-pub struct NonSync<T: ?Sized>(T);
-
-/// Type used to access `!Send + !Sync` storages.
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
-pub struct NonSendSync<T: ?Sized>(T);

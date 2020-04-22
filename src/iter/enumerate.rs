@@ -1,4 +1,4 @@
-use super::{CurrentId, Shiperator};
+use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator yielding iteration count as well.
 pub struct Enumerate<I> {
@@ -34,5 +34,13 @@ impl<I: CurrentId> CurrentId for Enumerate<I> {
 
     unsafe fn current_id(&self) -> Self::Id {
         self.iter.current_id()
+    }
+}
+
+impl<I: Shiperator> core::iter::IntoIterator for Enumerate<I> {
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

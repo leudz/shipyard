@@ -13,7 +13,7 @@ use awsm_web::webgl::{
 };
 use awsm_web::window::get_window_size;
 use gloo_events::EventListener;
-use shipyard::prelude::*;
+use shipyard::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;

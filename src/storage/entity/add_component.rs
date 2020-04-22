@@ -1,7 +1,7 @@
 use super::{Entities, EntityId};
 use crate::error;
 use crate::sparse_set::Pack;
-use crate::views::ViewMut;
+use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::{type_name, TypeId};
 

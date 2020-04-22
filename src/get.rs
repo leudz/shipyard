@@ -1,7 +1,7 @@
 use crate::error;
 use crate::sparse_set::{Window, WindowMut};
 use crate::storage::EntityId;
-use crate::views::{View, ViewMut};
+use crate::view::{View, ViewMut};
 use core::any::type_name;
 
 /// Retrives components based on their type and entity id.
@@ -13,7 +13,7 @@ pub trait GetComponent {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {

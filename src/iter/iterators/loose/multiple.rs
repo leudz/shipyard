@@ -1,7 +1,6 @@
-#[cfg(feature = "parallel")]
-use super::IntoIterator;
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
 };
 use crate::EntityId;
 use core::ptr;
@@ -99,7 +98,7 @@ macro_rules! impl_iterators {
             type Item = ($(<$type::AbsView as AbstractMut>::Out),+);
             type IntoIter = IntoIterator<Self>;
             fn into_iter(self) -> Self::IntoIter {
-                <Self as Shiperator>::into_iter(self)
+                core::iter::IntoIterator::into_iter(self)
             }
             fn split_at(mut self, index: usize) -> (Self, Self) {
                 let clone = $loose {
@@ -111,6 +110,14 @@ macro_rules! impl_iterators {
                 };
                 self.end = clone.current;
                 (self, clone)
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $loose<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
             }
         }
     }

@@ -76,10 +76,10 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                         // transform &Entities into Entites and &mut Entities into EntitiesMut
                         if path.path.segments.last().unwrap().ident == "Entities" {
                             if reference.mutability.is_some() {
-                                **ty = parse_quote!(::shipyard::prelude::EntitiesMut);
+                                **ty = parse_quote!(::shipyard::EntitiesMut);
                                 exclusive_borrows.push((i, parse_quote!(Entities)));
                             } else {
-                                **ty = parse_quote!(::shipyard::prelude::Entities);
+                                **ty = parse_quote!(::shipyard::Entities);
                                 shared_borrows.push((i, parse_quote!(Entities)));
                             }
 
@@ -101,7 +101,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                                     "You probably forgot a mut, &AllStorages isn't a valid storage access"
                                 ));
                             } else {
-                                **ty = parse_quote!(::shipyard::prelude::AllStorages);
+                                **ty = parse_quote!(::shipyard::AllStorages);
 
                                 match &mut conflict {
                                     Conflict::AllStorages(all_storages) => {
@@ -118,7 +118,7 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
                             }
                         } else if path.path.segments.last().unwrap().ident == "ThreadPool" {
                             if reference.mutability.is_none() {
-                                **ty = parse_quote!(::shipyard::prelude::ThreadPool);
+                                **ty = parse_quote!(::shipyard::ThreadPool);
                             } else {
                                 return Err(Error::new_spanned(
                                     path,
@@ -557,9 +557,9 @@ fn expand_system(name: syn::Ident, mut run: syn::ItemFn) -> Result<TokenStream> 
 
     Ok(quote! {
         #vis struct #name;
-        impl<'sys> ::shipyard::prelude::System<'sys> for #name {
+        impl<'sys> ::shipyard::System<'sys> for #name {
             type Data = (#(#data,)*);
-            fn run((#(#binding,)*): (#(<#data as ::shipyard::prelude::SystemData<'sys>>::View,)*)) #body
+            fn run((#(#binding,)*): (#(<#data as ::shipyard::SystemData<'sys>>::View,)*)) #body
         }
     })
 }

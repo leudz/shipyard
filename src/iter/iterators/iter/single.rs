@@ -1,5 +1,6 @@
 use super::{
-    AbstractMut, Chunk1, ChunkExact1, CurrentId, IntoAbstract, Shiperator, Tight1, Update1,
+    AbstractMut, Chunk1, ChunkExact1, CurrentId, IntoAbstract, IntoIterator, Shiperator, Tight1,
+    Update1,
 };
 use crate::EntityId;
 
@@ -61,5 +62,13 @@ impl<T: IntoAbstract> CurrentId for Iter1<T> {
             Self::Tight(tight) => tight.current_id(),
             Self::Update(update) => update.current_id(),
         }
+    }
+}
+
+impl<I: IntoAbstract> core::iter::IntoIterator for Iter1<I> {
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

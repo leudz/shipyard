@@ -2,8 +2,8 @@ mod hasher;
 
 use super::{Entities, EntityId, Storage};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
+use crate::borrow::AllStoragesBorrow;
 use crate::error;
-use crate::run::StorageBorrow;
 use crate::sparse_set::SparseSet;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -50,20 +50,11 @@ impl Default for AllStorages {
             );
         }
 
-        #[cfg(not(feature = "non_send"))]
-        {
-            AllStorages {
-                storages: UnsafeCell::new(storages),
-                lock: RawRwLock::INIT,
-            }
-        }
-        #[cfg(feature = "non_send")]
-        {
-            AllStorages {
-                storages: UnsafeCell::new(storages),
-                lock: RawRwLock::INIT,
-                thread_id: std::thread::current().id(),
-            }
+        AllStorages {
+            storages: UnsafeCell::new(storages),
+            lock: RawRwLock::INIT,
+            #[cfg(feature = "non_send")]
+            thread_id: std::thread::current().id(),
         }
     }
 }
@@ -352,7 +343,7 @@ impl AllStorages {
     /// Returns `true` if `entity` was alive.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
@@ -500,7 +491,7 @@ You can use:
     )]
     #[doc = "### Example
 ```
-# use shipyard::prelude::*;
+# use shipyard::*;
 let world = World::new();
 let all_storages = world.borrow::<AllStorages>();
 let u32s = all_storages.try_borrow::<&u32>().unwrap();
@@ -517,10 +508,8 @@ let u32s = all_storages.try_borrow::<&u32>().unwrap();
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn try_borrow<'a, C: StorageBorrow<'a>>(
-        &'a self,
-    ) -> Result<<C as StorageBorrow<'a>>::View, error::GetStorage> {
-        <C as StorageBorrow<'a>>::try_borrow(self)
+    pub fn try_borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
+        V::try_borrow(self)
     }
     #[doc = "Borrows the requested storage, if it doesn't exist it'll get created.  
 Unwraps errors.
@@ -611,7 +600,7 @@ You can use:
     )]
     #[doc = "### Example
 ```
-# use shipyard::prelude::*;
+# use shipyard::*;
 let world = World::new();
 let all_storages = world.borrow::<AllStorages>();
 let u32s = all_storages.borrow::<&u32>();
@@ -628,7 +617,7 @@ let u32s = all_storages.borrow::<&u32>();
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn borrow<'a, C: StorageBorrow<'a>>(&'a self) -> <C as StorageBorrow<'a>>::View {
-        self.try_borrow::<C>().unwrap()
+    pub fn borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> V {
+        self.try_borrow::<V>().unwrap()
     }
 }

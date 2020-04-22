@@ -17,6 +17,7 @@ pub use windows::{Window, WindowMut, WindowSort1};
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 
+/// Component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
 // Only usize can be added. On insertion, the number is pushed into the dense vector
 // and sparse[number] is set to dense.len() - 1.

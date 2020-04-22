@@ -1,4 +1,4 @@
-use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
+use super::{AbstractMut, CurrentId, IntoAbstract, IntoIterator, Shiperator};
 use crate::EntityId;
 use core::ptr;
 
@@ -64,6 +64,14 @@ macro_rules! impl_iterators {
 
             unsafe fn current_id(&self) -> Self::Id {
                 self.current_id
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $update<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
             }
         }
     }

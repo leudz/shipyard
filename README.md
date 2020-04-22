@@ -18,7 +18,7 @@ If you are new here, the [user guide](https://leudz.github.io/shipyard/book) is 
 
 ## Simple Example
 ```rust
-use shipyard::prelude::*;
+use shipyard::*;
 
 struct Health(f32);
 struct Position { x: f32, y: f32 }
@@ -91,7 +91,7 @@ There is still a lot of room for optimization, the current focus is more on addi
 ## Features
 
 - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
-- **proc** *(default)* &mdash; adds `system` proc macro
+- **proc** &mdash; adds `system` proc macro
 - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 - **non_send** &mdash; add methods and types required to work with `!Send` components
 - **non_sync** &mdash; add methods and types required to work with `!Sync` components

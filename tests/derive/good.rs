@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[system(Test1)]
 fn run(_: &usize, _: &mut i32, _: &Entities, _: Unique<&u32>, _: Entities) {}

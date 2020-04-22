@@ -2,10 +2,9 @@ mod multiple;
 #[cfg(feature = "parallel")]
 mod par_multiple;
 
-#[cfg(feature = "parallel")]
-use super::IntoIterator;
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
 };
 
 pub use multiple::*;

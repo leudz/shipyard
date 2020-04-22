@@ -1,7 +1,7 @@
 use crate::components::*;
 
 use gloo_events::EventListener;
-use shipyard::prelude::*;
+use shipyard::*;
 use std::rc::Rc;
 use web_sys::HtmlCanvasElement;
 

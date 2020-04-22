@@ -1,10 +1,6 @@
-// WIP
-//mod function;
-mod regular;
+mod builder;
 
-// WIP
-//pub(super) use function::IntoWorkloadFn;
-pub use regular::IntoWorkload;
+pub use builder::WorkloadBuilder;
 
 use crate::error;
 use crate::World;
@@ -15,15 +11,12 @@ use core::any::TypeId;
 use core::ops::Range;
 use hashbrown::HashMap;
 
-#[allow(clippy::type_complexity)]
 pub struct Scheduler {
-    pub(super) systems:
-        Vec<Box<dyn for<'a> Fn(&'a World) -> Result<(), error::GetStorage> + Send + Sync>>,
+    pub(super) systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
+    pub(super) system_names: Vec<&'static str>,
     pub(super) lookup_table: HashMap<TypeId, usize>,
-    // a batch list systems running in parallel
+    // a batch lists systems that can run in parallel
     pub(super) batch: Vec<Box<[usize]>>,
-    // first usize is the index where the workload begins
-    // the second is the number of batch in it
     pub(super) workloads: HashMap<Cow<'static, str>, Range<usize>>,
     pub(super) default: Range<usize>,
 }
@@ -32,6 +25,7 @@ impl Default for Scheduler {
     fn default() -> Self {
         Scheduler {
             systems: Vec::new(),
+            system_names: Vec::new(),
             lookup_table: HashMap::new(),
             batch: Vec::new(),
             workloads: HashMap::new(),

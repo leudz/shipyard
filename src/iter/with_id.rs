@@ -1,4 +1,4 @@
-use super::{CurrentId, Shiperator};
+use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator yielding `EntityId` as well.
 pub struct WithId<I> {
@@ -32,5 +32,13 @@ impl<I: CurrentId> CurrentId for WithId<I> {
 
     unsafe fn current_id(&self) -> Self::Id {
         self.iter.current_id()
+    }
+}
+
+impl<I: CurrentId> core::iter::IntoIterator for WithId<I> {
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

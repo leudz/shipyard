@@ -1,13 +1,13 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn no_pack() {
     let world = World::default();
-    world.run::<EntitiesMut, _, _>(|mut entities| {
+    world.run(|mut entities: EntitiesViewMut| {
         entities.add_entity((), ());
     });
-    world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(
-        |(mut entities, mut usizes, mut u32s)| {
+    world.run(
+        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)| {
             let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
             assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
         },
@@ -18,7 +18,7 @@ fn no_pack() {
 fn tight() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u32s).tight_pack();
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
@@ -29,7 +29,7 @@ fn tight() {
 fn loose() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u32s).loose_pack();
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
@@ -40,7 +40,7 @@ fn loose() {
 fn tight_loose() {
     let world = World::new();
     let (mut entities, mut usizes, mut u64s, mut u32s) =
-        world.borrow::<(EntitiesMut, &mut usize, &mut u64, &mut u32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>();
 
     (&mut usizes, &mut u64s).tight_pack();
     LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes, &mut u64s));
@@ -51,7 +51,7 @@ fn tight_loose() {
 #[test]
 fn update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
     usizes.update_pack();
     let entity = entities.add_entity(&mut usizes, 0);
     assert_eq!(usizes.inserted().len(), 1);
@@ -61,7 +61,7 @@ fn update() {
 #[test]
 fn cleared_update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
     usizes.clear_inserted_and_modified();
@@ -74,7 +74,7 @@ fn cleared_update() {
 #[test]
 fn modified_update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
     usizes.clear_inserted_and_modified();
@@ -90,7 +90,7 @@ fn not_all_tight() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut u16s, mut f32s) =
-        world.borrow::<(EntitiesMut, &mut u32, &mut u16, &mut f32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<u16>, ViewMut<f32>)>();
 
     (&mut u32s, &mut u16s).tight_pack();
 
@@ -105,7 +105,7 @@ fn not_all_loose() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut u16s, mut f32s) =
-        world.borrow::<(EntitiesMut, &mut u32, &mut u16, &mut f32)>();
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<u16>, ViewMut<f32>)>();
 
     (&mut u32s, &mut u16s).loose_pack();
 

@@ -1,4 +1,4 @@
-use super::{AbstractMut, IntoAbstract, Shiperator};
+use super::{AbstractMut, IntoAbstract, IntoIterator, Shiperator};
 
 /// Chunk iterator over a single component.  
 /// Returns slices `size` long except for the last one that might be smaller.
@@ -30,5 +30,13 @@ impl<T: IntoAbstract> Shiperator for Chunk1<T> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let len = (self.end - self.current + self.step - 1) / self.step;
         (len, Some(len))
+    }
+}
+
+impl<I: IntoAbstract> core::iter::IntoIterator for Chunk1<I> {
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

@@ -1,5 +1,6 @@
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
 };
 use crate::EntityId;
 
@@ -68,5 +69,13 @@ impl<T: IntoAbstract> DoubleEndedShiperator for Update1<T> {
         } else {
             None
         }
+    }
+}
+
+impl<I: IntoAbstract> core::iter::IntoIterator for Update1<I> {
+    type IntoIter = IntoIterator<Self>;
+    type Item = <Self as Shiperator>::Item;
+    fn into_iter(self) -> Self::IntoIter {
+        IntoIterator(self)
     }
 }

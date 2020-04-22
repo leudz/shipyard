@@ -1,9 +1,10 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn basic() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     u32s.update_pack();
     i16s.update_pack();
@@ -31,7 +32,7 @@ fn basic() {
     assert_eq!(i16s.inserted_or_modified().len(), 0);
 
     drop((u32s, i16s));
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let mut iter = (&u32s).iter();
         assert_eq!(iter.size_hint(), (4, Some(4)));
         assert_eq!(iter.next().unwrap(), &0);
@@ -44,7 +45,7 @@ fn basic() {
         assert_eq!(u32s.modified().len(), 0);
         assert_eq!(u32s.inserted_or_modified().len(), 0);
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         let mut iter = (&mut u32s).iter();
         assert_eq!(iter.next().unwrap(), &mut 0);
         assert_eq!(iter.next().unwrap(), &mut 1);
@@ -66,7 +67,7 @@ fn basic() {
         u32s.clear_modified();
     });
 
-    world.run::<&i16, _, _>(|i16s| {
+    world.run(|i16s: View<i16>| {
         let mut iter = (&i16s).iter();
         assert_eq!(iter.next().unwrap(), &10);
         assert_eq!(iter.next().unwrap(), &12);
@@ -80,7 +81,7 @@ fn basic() {
 
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<&mut i16, _, _>(|mut i16s| {
+    world.run(|mut i16s: ViewMut<i16>| {
         let mut iter = (&mut i16s).iter();
         assert_eq!(iter.next().unwrap(), &mut 10);
         assert_eq!(iter.next().unwrap(), &mut 12);
@@ -102,7 +103,7 @@ fn basic() {
         i16s.clear_modified();
     });
 
-    world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
+    world.run(|(u32s, i16s): (View<u32>, View<i16>)| {
         let mut iter = (&u32s, &i16s).iter();
         assert_eq!(iter.size_hint(), (0, Some(4)));
         assert_eq!(iter.next().unwrap(), (&0, &10));
@@ -120,7 +121,7 @@ fn basic() {
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+    world.run(|(mut u32s, mut i16s): (ViewMut<u32>, ViewMut<i16>)| {
         let mut iter = (&mut u32s, &mut i16s).iter();
         assert_eq!(iter.next().unwrap(), (&mut 0, &mut 10));
         assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
@@ -149,7 +150,7 @@ fn basic() {
         i16s.clear_modified();
     });
 
-    world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
+    world.run(|(i16s, u32s): (View<i16>, View<u32>)| {
         let mut iter = (&i16s, &u32s).iter();
         assert_eq!(iter.next().unwrap(), (&10, &0));
         assert_eq!(iter.next().unwrap(), (&12, &2));
@@ -166,7 +167,7 @@ fn basic() {
         assert!(i16s.modified().iter().next().is_none());
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+    world.run(|(mut i16s, mut u32s): (ViewMut<i16>, ViewMut<u32>)| {
         let mut iter = (&mut i16s, &mut u32s).iter();
         assert_eq!(iter.next().unwrap(), (&mut 10, &mut 0));
         assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
@@ -196,7 +197,8 @@ fn basic() {
 #[test]
 fn with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     u32s.update_pack();
     i16s.update_pack();
@@ -209,7 +211,7 @@ fn with_id() {
     i16s.clear_inserted();
 
     drop((u32s, i16s));
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let mut iter = (&u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &0));
         assert_eq!(iter.next().unwrap(), (key1, &1));
@@ -219,7 +221,7 @@ fn with_id() {
 
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         let mut iter = (&mut u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &mut 0));
         assert_eq!(iter.next().unwrap(), (key1, &mut 1));
@@ -237,7 +239,7 @@ fn with_id() {
         u32s.clear_modified();
     });
 
-    world.run::<&i16, _, _>(|i16s| {
+    world.run(|i16s: View<i16>| {
         let mut iter = (&i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &10));
         assert_eq!(iter.next().unwrap(), (key2, &12));
@@ -247,7 +249,7 @@ fn with_id() {
 
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<&mut i16, _, _>(|mut i16s| {
+    world.run(|mut i16s: ViewMut<i16>| {
         let mut iter = (&mut i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, &mut 10));
         assert_eq!(iter.next().unwrap(), (key2, &mut 12));
@@ -265,7 +267,7 @@ fn with_id() {
         i16s.clear_modified();
     });
 
-    world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
+    world.run(|(u32s, i16s): (View<u32>, View<i16>)| {
         let mut iter = (&u32s, &i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&0, &10)));
         assert_eq!(iter.next().unwrap(), (key2, (&2, &12)));
@@ -275,7 +277,7 @@ fn with_id() {
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+    world.run(|(mut u32s, mut i16s): (ViewMut<u32>, ViewMut<i16>)| {
         let mut iter = (&mut u32s, &mut i16s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&mut 0, &mut 10)));
         assert_eq!(iter.next().unwrap(), (key2, (&mut 2, &mut 12)));
@@ -297,7 +299,7 @@ fn with_id() {
         i16s.clear_modified();
     });
 
-    world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
+    world.run(|(i16s, u32s): (View<i16>, View<u32>)| {
         let mut iter = (&i16s, &u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&10, &0)));
         assert_eq!(iter.next().unwrap(), (key2, (&12, &2)));
@@ -307,7 +309,7 @@ fn with_id() {
         assert!(i16s.modified().iter().next().is_none());
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+    world.run(|(mut i16s, mut u32s): (ViewMut<i16>, ViewMut<u32>)| {
         let mut iter = (&mut i16s, &mut u32s).iter().with_id();
         assert_eq!(iter.next().unwrap(), (key0, (&mut 10, &mut 0)));
         assert_eq!(iter.next().unwrap(), (key2, (&mut 12, &mut 2)));
@@ -330,7 +332,8 @@ fn with_id() {
 #[test]
 fn map() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     u32s.update_pack();
     i16s.update_pack();
@@ -344,7 +347,7 @@ fn map() {
     i16s.clear_inserted();
 
     drop((u32s, i16s));
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let mut iter = (&u32s).iter().map(Clone::clone);
         assert_eq!(iter.next().unwrap(), 0);
         assert_eq!(iter.next().unwrap(), 1);
@@ -354,7 +357,7 @@ fn map() {
 
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         let mut iter = (&mut u32s).iter().map(|x| *x);
         assert_eq!(iter.next().unwrap(), 0);
         assert_eq!(iter.next().unwrap(), 1);
@@ -372,7 +375,7 @@ fn map() {
         u32s.clear_modified();
     });
 
-    world.run::<&i16, _, _>(|i16s| {
+    world.run(|i16s: View<i16>| {
         let mut iter = (&i16s).iter().map(Clone::clone);
         assert_eq!(iter.next().unwrap(), 10);
         assert_eq!(iter.next().unwrap(), 12);
@@ -382,7 +385,7 @@ fn map() {
 
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<&mut i16, _, _>(|mut i16s| {
+    world.run(|mut i16s: ViewMut<i16>| {
         let mut iter = (&mut i16s).iter().map(|x| *x);
         assert_eq!(iter.next().unwrap(), 10);
         assert_eq!(iter.next().unwrap(), 12);
@@ -400,7 +403,7 @@ fn map() {
         i16s.clear_modified();
     });
 
-    world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
+    world.run(|(u32s, i16s): (View<u32>, View<i16>)| {
         let mut iter = (&u32s, &i16s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (0, 10));
         assert_eq!(iter.next().unwrap(), (2, 12));
@@ -410,7 +413,7 @@ fn map() {
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+    world.run(|(mut u32s, mut i16s): (ViewMut<u32>, ViewMut<i16>)| {
         let mut iter = (&mut u32s, &mut i16s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (0, 10));
         assert_eq!(iter.next().unwrap(), (2, 12));
@@ -432,7 +435,7 @@ fn map() {
         i16s.clear_modified();
     });
 
-    world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
+    world.run(|(i16s, u32s): (View<i16>, View<u32>)| {
         let mut iter = (&i16s, &u32s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (10, 0));
         assert_eq!(iter.next().unwrap(), (12, 2));
@@ -442,7 +445,7 @@ fn map() {
         assert!(i16s.modified().iter().next().is_none());
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+    world.run(|(mut i16s, mut u32s): (ViewMut<i16>, ViewMut<u32>)| {
         let mut iter = (&mut i16s, &mut u32s).iter().map(|(x, y)| (*x, *y));
         assert_eq!(iter.next().unwrap(), (10, 0));
         assert_eq!(iter.next().unwrap(), (12, 2));
@@ -465,7 +468,8 @@ fn map() {
 #[test]
 fn filter() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     u32s.update_pack();
     i16s.update_pack();
@@ -479,7 +483,7 @@ fn filter() {
     i16s.clear_inserted();
 
     drop((u32s, i16s));
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let mut iter = (&u32s).iter().filter(|x| **x % 2 == 0);
         assert_eq!(iter.size_hint(), (0, Some(4)));
         assert_eq!(iter.next().unwrap(), &0);
@@ -489,7 +493,7 @@ fn filter() {
 
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         let mut iter = (&mut u32s).iter().filter(|x| **x % 2 != 0);
         assert_eq!(iter.next().unwrap(), &mut 1);
         assert!(iter.next().is_none());
@@ -501,7 +505,7 @@ fn filter() {
         u32s.clear_modified();
     });
 
-    world.run::<&i16, _, _>(|i16s| {
+    world.run(|i16s: View<i16>| {
         let mut iter = (&i16s).iter().filter(|x| **x % 2 == 0);
         assert_eq!(iter.next().unwrap(), &10);
         assert_eq!(iter.next().unwrap(), &12);
@@ -510,7 +514,7 @@ fn filter() {
 
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<&mut i16, _, _>(|mut i16s| {
+    world.run(|mut i16s: ViewMut<i16>| {
         let mut iter = (&mut i16s).iter().filter(|x| **x % 2 != 0);
         assert_eq!(iter.next().unwrap(), &mut 13);
         assert!(iter.next().is_none());
@@ -522,7 +526,7 @@ fn filter() {
         i16s.clear_modified();
     });
 
-    world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
+    world.run(|(u32s, i16s): (View<u32>, View<i16>)| {
         let mut iter = (&u32s, &i16s).iter().filter(|(_, y)| **y % 5 == 0);
         assert_eq!(iter.next().unwrap(), (&0, &10));
         assert!(iter.next().is_none());
@@ -530,7 +534,7 @@ fn filter() {
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<(&mut u32, &mut i16), _, _>(|(mut u32s, mut i16s)| {
+    world.run(|(mut u32s, mut i16s): (ViewMut<u32>, ViewMut<i16>)| {
         let mut iter = (&mut u32s, &mut i16s).iter().filter(|(_, y)| **y % 5 != 0);
         assert_eq!(iter.next().unwrap(), (&mut 4, &mut 14));
         assert_eq!(iter.next().unwrap(), (&mut 2, &mut 12));
@@ -549,7 +553,7 @@ fn filter() {
         i16s.clear_modified();
     });
 
-    world.run::<(&i16, &u32), _, _>(|(i16s, u32s)| {
+    world.run(|(i16s, u32s): (View<i16>, View<u32>)| {
         let mut iter = (&i16s, &u32s).iter().filter(|(x, _)| **x % 5 == 0);
         assert_eq!(iter.next().unwrap(), (&10, &0));
         assert!(iter.next().is_none());
@@ -557,7 +561,7 @@ fn filter() {
         assert!(i16s.modified().iter().next().is_none());
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+    world.run(|(mut i16s, mut u32s): (ViewMut<i16>, ViewMut<u32>)| {
         let mut iter = (&mut i16s, &mut u32s).iter().filter(|(x, _)| **x % 5 != 0);
         assert_eq!(iter.next().unwrap(), (&mut 14, &mut 4));
         assert_eq!(iter.next().unwrap(), (&mut 12, &mut 2));
@@ -577,7 +581,8 @@ fn filter() {
 #[test]
 fn enumerate_map_filter_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     u32s.update_pack();
     i16s.update_pack();
@@ -590,7 +595,7 @@ fn enumerate_map_filter_with_id() {
     i16s.clear_inserted();
 
     drop((u32s, i16s));
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let mut iter = (&u32s)
             .iter()
             .enumerate()
@@ -605,7 +610,7 @@ fn enumerate_map_filter_with_id() {
 
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         let mut iter = (&mut u32s)
             .iter()
             .enumerate()
@@ -626,7 +631,7 @@ fn enumerate_map_filter_with_id() {
         u32s.clear_modified();
     });
 
-    world.run::<&i16, _, _>(|i16s| {
+    world.run(|i16s: View<i16>| {
         let mut iter = (&i16s)
             .iter()
             .enumerate()
@@ -641,7 +646,7 @@ fn enumerate_map_filter_with_id() {
 
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<&mut i16, _, _>(|mut i16s| {
+    world.run(|mut i16s: ViewMut<i16>| {
         let mut iter = (&mut i16s)
             .iter()
             .enumerate()
@@ -662,7 +667,7 @@ fn enumerate_map_filter_with_id() {
         i16s.clear_modified();
     });
 
-    world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
+    world.run(|(u32s, i16s): (View<u32>, View<i16>)| {
         let mut iter = (&u32s, &i16s)
             .iter()
             .enumerate()
@@ -677,7 +682,7 @@ fn enumerate_map_filter_with_id() {
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+    world.run(|(mut u32s, mut i16s): (ViewMut<u32>, ViewMut<i16>)| {
         let mut iter = (&mut i16s, &mut u32s)
             .iter()
             .enumerate()
@@ -707,7 +712,8 @@ fn enumerate_map_filter_with_id() {
 #[test]
 fn enumerate_filter_map_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     u32s.update_pack();
     i16s.update_pack();
@@ -720,7 +726,7 @@ fn enumerate_filter_map_with_id() {
     i16s.clear_inserted();
 
     drop((u32s, i16s));
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let mut iter = (&u32s)
             .iter()
             .enumerate()
@@ -735,7 +741,7 @@ fn enumerate_filter_map_with_id() {
 
         assert!(u32s.modified().iter().next().is_none());
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         let mut iter = (&mut u32s)
             .iter()
             .enumerate()
@@ -753,7 +759,7 @@ fn enumerate_filter_map_with_id() {
         u32s.clear_modified();
     });
 
-    world.run::<&i16, _, _>(|i16s| {
+    world.run(|i16s: View<i16>| {
         let mut iter = (&i16s)
             .iter()
             .enumerate()
@@ -768,7 +774,7 @@ fn enumerate_filter_map_with_id() {
 
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<&mut i16, _, _>(|mut i16s| {
+    world.run(|mut i16s: ViewMut<i16>| {
         let mut iter = (&mut i16s)
             .iter()
             .enumerate()
@@ -786,7 +792,7 @@ fn enumerate_filter_map_with_id() {
         i16s.clear_modified();
     });
 
-    world.run::<(&u32, &i16), _, _>(|(u32s, i16s)| {
+    world.run(|(u32s, i16s): (View<u32>, View<i16>)| {
         let mut iter = (&u32s, &i16s)
             .iter()
             .enumerate()
@@ -801,7 +807,7 @@ fn enumerate_filter_map_with_id() {
         assert!(u32s.modified().iter().next().is_none());
         assert!(i16s.modified().iter().next().is_none());
     });
-    world.run::<(&mut i16, &mut u32), _, _>(|(mut i16s, mut u32s)| {
+    world.run(|(mut i16s, mut u32s): (ViewMut<i16>, ViewMut<u32>)| {
         let mut iter = (&mut i16s, &mut u32s)
             .iter()
             .enumerate()

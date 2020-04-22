@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn test1() {

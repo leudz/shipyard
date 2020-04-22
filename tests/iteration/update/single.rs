@@ -1,9 +1,9 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn basic() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     entities.add_entity(&mut u32s, 0);
@@ -22,7 +22,7 @@ fn basic() {
 
     drop(u32s);
     let mut vec = Vec::new();
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         let iter = u32s.iter();
         assert_eq!(iter.size_hint(), (3, Some(3)));
         iter.for_each(|&x| vec.push(x));
@@ -31,7 +31,7 @@ fn basic() {
         assert_eq!(u32s.modified().len(), 0);
         assert_eq!(u32s.inserted_or_modified().len(), 0);
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         (&mut u32s).iter().for_each(|&mut x| vec.push(x));
         u32s.modified().iter().for_each(|&x| vec.push(x));
         (&mut u32s).iter().for_each(|_| {});
@@ -47,7 +47,7 @@ fn basic() {
 #[test]
 fn with_id() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     let key0 = entities.add_entity(&mut u32s, 0);
@@ -57,10 +57,10 @@ fn with_id() {
 
     drop(u32s);
     let mut vec = Vec::new();
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         u32s.iter().with_id().for_each(|(id, &x)| vec.push((id, x)));
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         (&mut u32s)
             .iter()
             .with_id()
@@ -90,7 +90,7 @@ fn with_id() {
 #[test]
 fn map() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     entities.add_entity(&mut u32s, 0);
@@ -100,10 +100,10 @@ fn map() {
 
     drop(u32s);
     let mut vec = Vec::new();
-    world.run::<&u32, _, _>(|u32s| {
+    world.run(|u32s: View<u32>| {
         u32s.iter().map(|x| *x + 10).for_each(|x| vec.push(x));
     });
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         (&mut u32s).iter().map(|x| *x + 1).for_each(|x| vec.push(x));
         u32s.modified().iter().for_each(|&x| vec.push(x));
     });
@@ -114,7 +114,7 @@ fn map() {
 #[test]
 fn filter() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     entities.add_entity(&mut u32s, 0);
@@ -140,7 +140,7 @@ fn filter() {
 #[test]
 fn enumerate_map_filter_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     let key0 = entities.add_entity(&mut u32s, 10);
@@ -151,7 +151,7 @@ fn enumerate_map_filter_with_id() {
     drop(u32s);
     let mut vec = Vec::new();
     let mut modified = Vec::new();
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         (&mut u32s)
             .iter()
             .enumerate()
@@ -169,7 +169,7 @@ fn enumerate_map_filter_with_id() {
 #[test]
 fn enumerate_filter_map_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     let key0 = entities.add_entity(&mut u32s, 10);
@@ -180,7 +180,7 @@ fn enumerate_filter_map_with_id() {
     drop(u32s);
     let mut vec = Vec::new();
     let mut modified = Vec::new();
-    world.run::<&mut u32, _, _>(|mut u32s| {
+    world.run(|mut u32s: ViewMut<u32>| {
         (&mut u32s)
             .iter()
             .enumerate()

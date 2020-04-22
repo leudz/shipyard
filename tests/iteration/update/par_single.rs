@@ -1,10 +1,10 @@
 use rayon::prelude::*;
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn filter() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut u32)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
 
     u32s.update_pack();
     entities.add_entity(&mut u32s, 0);

@@ -1,9 +1,8 @@
 use super::chunk::multiple::*;
 use super::chunk_exact::multiple::*;
-#[cfg(feature = "parallel")]
-use super::IntoIterator;
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
 };
 use crate::EntityId;
 #[cfg(feature = "parallel")]
@@ -98,7 +97,7 @@ Tight iterators are fast but are limited to components tightly packed together."
             type Item = ($(<$type::AbsView as AbstractMut>::Out),+);
             type IntoIter = IntoIterator<Self>;
             fn into_iter(self) -> Self::IntoIter {
-                <Self as Shiperator>::into_iter(self)
+                core::iter::IntoIterator::into_iter(self)
             }
             fn split_at(mut self, index: usize) -> (Self, Self) {
                 let clone = $tight {
@@ -108,6 +107,14 @@ Tight iterators are fast but are limited to components tightly packed together."
                 };
                 self.end = clone.current;
                 (self, clone)
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $tight<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
             }
         }
     }

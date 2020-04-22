@@ -4,11 +4,9 @@ mod par_single;
 mod single;
 
 use super::{
-    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, Shiperator,
+    AbstractMut, CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoAbstract, IntoIterator,
+    Shiperator,
 };
-
-#[cfg(feature = "parallel")]
-use super::IntoIterator;
 
 pub use multiple::*;
 #[cfg(feature = "parallel")]

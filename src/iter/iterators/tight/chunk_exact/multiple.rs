@@ -1,4 +1,4 @@
-use super::{AbstractMut, IntoAbstract, Shiperator};
+use super::{AbstractMut, IntoAbstract, IntoIterator, Shiperator};
 
 macro_rules! impl_iterators {
     (
@@ -49,6 +49,14 @@ To get the remaining items (if any) use the `remainder` method."]
                     // SAFE we checked for OOB and the lifetime is ok
                     unsafe { self.data.$index.get_data_slice(self.end..end) },
                 )+)
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $chunk_exact<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
             }
         }
     }

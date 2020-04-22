@@ -1,7 +1,7 @@
 use crate::error;
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
-use crate::views::ViewMut;
+use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::{type_name, TypeId};
 
@@ -22,7 +22,7 @@ pub trait Remove<T: Removable> {
     /// You'll often have to use the full path `Remove::<type>::try_remove`.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
@@ -35,7 +35,7 @@ pub trait Remove<T: Removable> {
     /// even if you don't remove any component from it.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
@@ -59,7 +59,7 @@ pub trait Remove<T: Removable> {
     /// Unwraps errors.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
@@ -72,7 +72,7 @@ pub trait Remove<T: Removable> {
     /// even if you don't remove any component from it.
     /// ### Example
     /// ```
-    /// # use shipyard::prelude::*;
+    /// # use shipyard::*;
     /// let world = World::new();
     ///
     /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {

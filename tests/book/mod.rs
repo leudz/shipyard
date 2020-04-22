@@ -15,7 +15,7 @@ mod systems;
 mod world;
 mod world_insides;
 
-use shipyard::prelude::*;
+use shipyard::*;
 
 struct Empty;
 

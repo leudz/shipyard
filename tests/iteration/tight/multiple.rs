@@ -1,9 +1,10 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn basic() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     (&mut u32s, &mut i16s).tight_pack();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -66,7 +67,8 @@ fn basic() {
 #[test]
 fn with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     (&mut u32s, &mut i16s).tight_pack();
     let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -127,7 +129,8 @@ fn with_id() {
 #[test]
 fn map() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     (&mut u32s, &mut i16s).tight_pack();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -188,7 +191,8 @@ fn map() {
 #[test]
 fn filter() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     (&mut u32s, &mut i16s).tight_pack();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -236,7 +240,8 @@ fn filter() {
 #[test]
 fn enumerate_map_filter_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     (&mut u32s, &mut i16s).tight_pack();
     let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -311,7 +316,8 @@ fn enumerate_map_filter_with_id() {
 #[test]
 fn enumerate_filter_map_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
 
     (&mut u32s, &mut i16s).tight_pack();
     let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -387,7 +393,8 @@ fn enumerate_filter_map_with_id() {
 fn off_by_one() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
     (&mut u32s, &mut i16s).tight_pack();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));

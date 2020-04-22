@@ -1,5 +1,5 @@
 use super::super::update::*;
-use super::{AbstractMut, CurrentId, IntoAbstract, Shiperator};
+use super::{AbstractMut, CurrentId, IntoAbstract, IntoIterator, Shiperator};
 use crate::EntityId;
 use core::ptr;
 #[cfg(feature = "parallel")]
@@ -97,7 +97,15 @@ macro_rules! impl_iterators {
                 }
             }
             fn fold_with<Fold>(self, folder: Fold) -> Fold where Fold: Folder<Self::Item> {
-                folder.consume_iter(<Self as Shiperator>::into_iter(self))
+                folder.consume_iter(core::iter::IntoIterator::into_iter(self))
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> core::iter::IntoIterator for $non_packed<$($type),+> {
+            type IntoIter = IntoIterator<Self>;
+            type Item = <Self as Shiperator>::Item;
+            fn into_iter(self) -> Self::IntoIter {
+                IntoIterator(self)
             }
         }
     }

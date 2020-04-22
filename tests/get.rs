@@ -1,10 +1,11 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[test]
 fn non_packed() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -34,7 +35,8 @@ fn non_packed() {
 fn tight() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
     (&mut u32s, &mut i16s).tight_pack();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
@@ -65,7 +67,8 @@ fn tight() {
 fn loose() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
     (&mut u32s, &mut i16s).loose_pack();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
@@ -96,7 +99,8 @@ fn loose() {
 fn update() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) = world.borrow::<(EntitiesMut, &mut u32, &mut i16)>();
+    let (mut entities, mut u32s, mut i16s) =
+        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
     u32s.update_pack();
     i16s.update_pack();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -127,7 +131,7 @@ fn update() {
 #[test]
 fn off_by_one() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesMut, &mut usize)>();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
     let entity0 = entities.add_entity(&mut u32s, 0);
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity(&mut u32s, 2);

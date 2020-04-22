@@ -1,4 +1,4 @@
-use shipyard::prelude::*;
+use shipyard::*;
 
 #[system(Test1)]
 fn run(_: Entities, _: EntitiesMut) {}
