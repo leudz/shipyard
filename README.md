@@ -2,9 +2,8 @@
 
 Shipyard is an Entity Component System focused on usability and speed.
 
-[![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
-[![LICENSE](https://img.shields.io/badge/license-apache-blue.svg)](LICENSE-APACHE)
-[![Crates.io](https://img.shields.io/crates/v/shipyard.svg)](https://crates.io/crates/shipyard)
+[![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
+[![Crates.io](https://img.shields.io/crates/v/shipyard)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/book)
 [![Demo](https://img.shields.io/badge/demo-launch-yellow)](https://leudz.github.io/shipyard/demo)
@@ -12,7 +11,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 
 While usable it is far from finished, there's a lot of planned features, nearly all being backward compatible additions.
 
-Most discussions about current and future features happen on zulip, feel free to join in to follow the development, ask any question or just say hi.
+Most discussions about current and future features happen on zulip.
 
 If you are new here, the [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!
 
