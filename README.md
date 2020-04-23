@@ -21,36 +21,41 @@ If you are new here, the [user guide](https://leudz.github.io/shipyard/book) is 
 use shipyard::*;
 
 struct Health(f32);
-struct Position { x: f32, y: f32 }
-
-#[system(InAcid)]
-fn run(pos: &Position, mut health: &mut Health) {
-    (&pos, &mut health).iter()
-        .filter(|(pos, _)| is_in_acid(pos))
-        .for_each(|(pos, mut health)| {
-            health.0 -= 1.0;
-        });
+struct Position {
+    _x: f32,
+    _y: f32,
 }
 
-fn is_in_acid(pos: &Position) -> bool {
+fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
+    for (_, mut health) in (&positions, &mut healths)
+        .iter()
+        .filter(|(pos, _)| is_in_acid(pos))
+    {
+        health.0 -= 1.0;
+    }
+}
+
+fn is_in_acid(_: &Position) -> bool {
     // it's wet season
     true
 }
 
-let world = World::new();
+fn main() {
+    let world = World::new();
 
-{
-    let (mut entities, mut positions, mut healths) =
-        world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
-   
-    entities.add_entity(
-        (&mut positions, &mut healths),
-        (Position { x: 0.0, y: 0.0 },
-        Health(1000.0))
+    world.run(
+        |mut entities: EntitiesViewMut,
+         mut positions: ViewMut<Position>,
+         mut healths: ViewMut<Health>| {
+            entities.add_entity(
+                (&mut positions, &mut healths),
+                (Position { _x: 0.0, _y: 0.0 }, Health(1000.0)),
+            );
+        },
     );
-}
 
-world.run_system::<InAcid>();
+    world.run(in_acid);
+}
 ```
 
 ## Past, Present and Future

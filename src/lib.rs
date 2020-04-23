@@ -8,36 +8,41 @@
 //! use shipyard::*;
 //!
 //! struct Health(f32);
-//! struct Position { x: f32, y: f32 }
-//!
-//! #[system(InAcid)]
-//! fn run(pos: &Position, mut health: &mut Health) {
-//!     (&pos, &mut health).iter()
-//!         .filter(|(pos, _)| is_in_acid(pos))
-//!         .for_each(|(pos, mut health)| {
-//!             health.0 -= 1.0;
-//!         });
+//! struct Position {
+//!     _x: f32,
+//!     _y: f32,
 //! }
 //!
-//! fn is_in_acid(pos: &Position) -> bool {
+//! fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
+//!     for (_, mut health) in (&positions, &mut healths)
+//!         .iter()
+//!         .filter(|(pos, _)| is_in_acid(pos))
+//!     {
+//!         health.0 -= 1.0;
+//!     }
+//! }
+//!
+//! fn is_in_acid(_: &Position) -> bool {
 //!     // it's wet season
 //!     true
 //! }
 //!
-//! let world = World::new();
+//! fn main() {
+//!     let world = World::new();
 //!
-//! {
-//!     let (mut entities, mut positions, mut healths) =
-//!         world.borrow::<(EntitiesMut, &mut Position, &mut Health)>();
-//!    
-//!     entities.add_entity(
-//!         (&mut positions, &mut healths),
-//!         (Position { x: 0.0, y: 0.0 },
-//!         Health(1000.0))
+//!     world.run(
+//!         |mut entities: EntitiesViewMut,
+//!          mut positions: ViewMut<Position>,
+//!          mut healths: ViewMut<Health>| {
+//!             entities.add_entity(
+//!                 (&mut positions, &mut healths),
+//!                 (Position { _x: 0.0, _y: 0.0 }, Health(1000.0)),
+//!             );
+//!         },
 //!     );
-//! }
 //!
-//! world.run_system::<InAcid>();
+//!     world.run(in_acid);
+//! }
 //! ```
 //! # Let's make some pigs!
 //! ```
@@ -48,59 +53,72 @@
 //! struct Health(f32);
 //! struct Fat(f32);
 //!
-//! #[system(Reproduction)]
-//! fn run(mut fat: &mut Fat, mut health: &mut Health, mut entities: &mut Entities) {
-//!     let count = (&health, &fat).iter().filter(|(health, fat)| health.0 > 40.0 && fat.0 > 20.0).count();
-//!     (0..count).for_each(|_| {
-//!         entities.add_entity((&mut health, &mut fat), (Health(100.0), Fat(0.0)));
-//!     });
+//! fn reproduction(
+//!     mut fats: ViewMut<Fat>,
+//!     mut healths: ViewMut<Health>,
+//!     mut entities: EntitiesViewMut,
+//! ) {
+//!     let count = (&healths, &fats)
+//!         .iter()
+//!         .filter(|(health, fat)| health.0 > 40.0 && fat.0 > 20.0)
+//!         .count();
+//!
+//!     for _ in 0..count {
+//!         entities.add_entity((&mut healths, &mut fats), (Health(100.0), Fat(0.0)));
+//!     }
 //! }
 //!
-//! #[system(Meal)]
-//! fn run(mut fat: &mut Fat) {
-//!     (&mut fat).iter().into_chunk(8).ok().unwrap().for_each(|slice| {
+//! fn meal(mut fats: ViewMut<Fat>) {
+//!     for slice in (&mut fats).iter().into_chunk(8).ok().unwrap() {
 //!         for fat in slice {
 //!             fat.0 += 3.0;
 //!         }
-//!     });
+//!     }
 //! }
 //!
-//! #[system(Age)]
-//! fn run(mut health: &mut Health, thread_pool: ThreadPool) {
+//! fn age(mut healths: ViewMut<Health>, thread_pool: ThreadPoolView) {
 //!     use rayon::prelude::ParallelIterator;
 //!
 //!     thread_pool.install(|| {
-//!         (&mut health).par_iter().for_each(|health| {
+//!         (&mut healths).par_iter().for_each(|health| {
 //!             health.0 -= 4.0;
 //!         });
 //!     });
 //! }
 //!
-//! let world = World::new();
+//! fn main() {
+//!     let world = World::new();
 //!
-//! world.run::<(EntitiesMut, &mut Health, &mut Fat), _, _>(|(mut entities, mut health, mut fat)| {
-//!     (0..100).for_each(|_| {
-//!         entities.add_entity(
-//!             (&mut health, &mut fat),
-//!             (Health(100.0), Fat(0.0))
-//!         );
-//!     })
-//! });
+//!     world.run(
+//!         |mut entities: EntitiesViewMut, mut healths: ViewMut<Health>, mut fats: ViewMut<Fat>| {
+//!             for _ in 0..100 {
+//!                 entities.add_entity((&mut healths, &mut fats), (Health(100.0), Fat(0.0)));
+//!             }
+//!         },
+//!     );
 //!
-//! world.add_workload::<(Meal, Age), _>("Life");
-//! world.add_workload::<Reproduction, _>("Reproduction");
+//!     world
+//!         .add_workload("Life")
+//!         .with_system(system!(meal))
+//!         .with_system(system!(age))
+//!         .build();
+//!     world
+//!         .add_workload("Reproduction")
+//!         .with_system(system!(reproduction))
+//!         .build();
 //!
-//! for day in 0..100 {
-//!     if day % 6 == 0 {
-//!         world.run_workload("Reproduction");
+//!     for day in 0..100 {
+//!         if day % 6 == 0 {
+//!             world.run_workload("Reproduction");
+//!         }
+//!         world.run_default();
 //!     }
-//!     world.run_default();
-//! }
 //!
-//! world.run::<&Health, _, _>(|health| {
-//!     // we've got some new pigs
-//!     assert_eq!(health.len(), 900);
-//! });
+//!     world.run(|healths: View<Health>| {
+//!         // we've got some new pigs
+//!         assert_eq!(healths.len(), 900);
+//!     });
+//! }
 //! # }
 //! ```
 //!
