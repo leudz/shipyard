@@ -138,7 +138,7 @@ pub trait Shiperator {
     }
     /// Transforms a shiperator into an iterator, allowing the use of for loop and crates such as itertools.  
     /// Iterator doesn't know about update pack so it'll flag everything it visits.
-    fn into_iter(self) -> IntoIterator<Self>
+    fn into_iterator(self) -> IntoIterator<Self>
     where
         Self: Sized,
     {
@@ -149,7 +149,7 @@ pub trait Shiperator {
     where
         Self: Sized,
     {
-        self.into_iter().collect()
+        self.into_iterator().collect()
     }
 }
 
