@@ -7,24 +7,30 @@ use shipyard::*;
 pub const TICK: &str = "TICK";
 
 pub fn register_workloads(world: &World) {
-    world.add_workload::<(Start, HandleController, Update, Commit, Render, End), _>(TICK);
+    world
+        .add_workload(TICK)
+        .with_system(system!(start))
+        .with_system(system!(handle_controller))
+        .with_system(system!(update))
+        .with_system(system!(commit))
+        .with_system(system!(render))
+        .with_system(system!(end))
+        .build();
 }
 
-#[system(Start)]
-pub fn run(mut fps_counter: Unique<&mut FpsCounter>) {
+pub fn start(mut fps_counter: UniqueViewMut<FpsCounter>) {
     fps_counter.begin();
 }
 
-#[system(HandleController)]
-pub fn run(
-    mut entities: &mut Entities,
-    controller: Unique<&Controller>,
-    mut positions: &mut Position,
-    mut speeds: &mut Speed,
-    mut gravities: &mut Gravity,
-    stage_area: Unique<&StageArea>,
-    img_area: Unique<&ImageArea>,
-    mut instance_positions: Unique<&mut InstancePositions>,
+pub fn handle_controller(
+    mut entities: EntitiesViewMut,
+    controller: UniqueView<Controller>,
+    mut positions: ViewMut<Position>,
+    mut speeds: ViewMut<Speed>,
+    mut gravities: ViewMut<Gravity>,
+    stage_area: UniqueView<StageArea>,
+    img_area: UniqueView<ImageArea>,
+    mut instance_positions: UniqueViewMut<InstancePositions>,
 ) {
     if *controller == Controller::Adding {
         let count = positions.len();
@@ -61,13 +67,12 @@ pub fn run(
     }
 }
 
-#[system(Update)]
-pub fn run(
-    mut positions: &mut Position,
-    mut speeds: &mut Speed,
-    mut gravities: &mut Gravity,
-    stage_area: Unique<&StageArea>,
-    img_area: Unique<&ImageArea>,
+pub fn update(
+    mut positions: ViewMut<Position>,
+    mut speeds: ViewMut<Speed>,
+    mut gravities: ViewMut<Gravity>,
+    stage_area: UniqueView<StageArea>,
+    img_area: UniqueView<ImageArea>,
 ) {
     let stage_size = &stage_area.0;
     let img_size = &img_area.0;
@@ -111,8 +116,7 @@ pub fn run(
         });
 }
 
-#[system(Commit)]
-pub fn run(positions: &Position, mut instance_positions: Unique<&mut InstancePositions>) {
+pub fn commit(positions: View<Position>, mut instance_positions: UniqueViewMut<InstancePositions>) {
     let instance_positions = &mut instance_positions.0[..];
 
     (&positions).iter().enumerate().for_each(|(index, pos)| {
@@ -123,13 +127,12 @@ pub fn run(positions: &Position, mut instance_positions: Unique<&mut InstancePos
     });
 }
 
-#[system(Render)]
-pub fn run(
-    mut renderer: Unique<NonSendSync<&mut SceneRenderer>>,
-    positions: &Position,
-    stage_area: Unique<&StageArea>,
-    img_area: Unique<&ImageArea>,
-    instance_positions: Unique<&InstancePositions>,
+pub fn render(
+    mut renderer: NonSendSync<UniqueViewMut<SceneRenderer>>,
+    positions: View<Position>,
+    stage_area: UniqueView<StageArea>,
+    img_area: UniqueView<ImageArea>,
+    instance_positions: UniqueView<InstancePositions>,
 ) {
     renderer
         .render(
@@ -141,11 +144,10 @@ pub fn run(
         .unwrap();
 }
 
-#[system(End)]
-pub fn run(
-    mut fps_counter: Unique<&mut FpsCounter>,
-    hud: Unique<NonSendSync<&mut Hud>>,
-    positions: &Position,
+pub fn end(
+    mut fps_counter: UniqueViewMut<FpsCounter>,
+    hud: NonSendSync<UniqueViewMut<Hud>>,
+    positions: View<Position>,
 ) {
     fps_counter.end();
     let fps = fps_counter.current.ceil() as u32;

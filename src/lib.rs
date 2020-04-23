@@ -27,22 +27,20 @@
 //!     true
 //! }
 //!
-//! fn main() {
-//!     let world = World::new();
+//! let world = World::new();
 //!
-//!     world.run(
-//!         |mut entities: EntitiesViewMut,
-//!          mut positions: ViewMut<Position>,
-//!          mut healths: ViewMut<Health>| {
-//!             entities.add_entity(
-//!                 (&mut positions, &mut healths),
-//!                 (Position { _x: 0.0, _y: 0.0 }, Health(1000.0)),
-//!             );
-//!         },
-//!     );
+//! world.run(
+//!     |mut entities: EntitiesViewMut,
+//!      mut positions: ViewMut<Position>,
+//!      mut healths: ViewMut<Health>| {
+//!         entities.add_entity(
+//!             (&mut positions, &mut healths),
+//!             (Position { _x: 0.0, _y: 0.0 }, Health(1000.0)),
+//!         );
+//!     },
+//! );
 //!
-//!     world.run(in_acid);
-//! }
+//! world.run(in_acid);
 //! ```
 //! # Let's make some pigs!
 //! ```
@@ -86,39 +84,37 @@
 //!     });
 //! }
 //!
-//! fn main() {
-//!     let world = World::new();
+//! let world = World::new();
 //!
-//!     world.run(
-//!         |mut entities: EntitiesViewMut, mut healths: ViewMut<Health>, mut fats: ViewMut<Fat>| {
-//!             for _ in 0..100 {
-//!                 entities.add_entity((&mut healths, &mut fats), (Health(100.0), Fat(0.0)));
-//!             }
-//!         },
-//!     );
-//!
-//!     world
-//!         .add_workload("Life")
-//!         .with_system(system!(meal))
-//!         .with_system(system!(age))
-//!         .build();
-//!     world
-//!         .add_workload("Reproduction")
-//!         .with_system(system!(reproduction))
-//!         .build();
-//!
-//!     for day in 0..100 {
-//!         if day % 6 == 0 {
-//!             world.run_workload("Reproduction");
+//! world.run(
+//!     |mut entities: EntitiesViewMut, mut healths: ViewMut<Health>, mut fats: ViewMut<Fat>| {
+//!         for _ in 0..100 {
+//!             entities.add_entity((&mut healths, &mut fats), (Health(100.0), Fat(0.0)));
 //!         }
-//!         world.run_default();
-//!     }
+//!     },
+//! );
 //!
-//!     world.run(|healths: View<Health>| {
-//!         // we've got some new pigs
-//!         assert_eq!(healths.len(), 900);
-//!     });
+//! world
+//!     .add_workload("Life")
+//!     .with_system(system!(meal))
+//!     .with_system(system!(age))
+//!     .build();
+//! world
+//!     .add_workload("Reproduction")
+//!     .with_system(system!(reproduction))
+//!     .build();
+//!
+//! for day in 0..100 {
+//!     if day % 6 == 0 {
+//!         world.run_workload("Reproduction");
+//!     }
+//!     world.run_default();
 //! }
+//!
+//! world.run(|healths: View<Health>| {
+//!     // we've got some new pigs
+//!     assert_eq!(healths.len(), 900);
+//! });
 //! # }
 //! ```
 //!

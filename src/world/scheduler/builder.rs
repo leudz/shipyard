@@ -14,6 +14,7 @@ use core::any::TypeId;
 use core::ops::Range;
 use hashbrown::hash_map::Entry;
 
+#[allow(clippy::type_complexity)]
 pub struct WorkloadBuilder<'a> {
     scheduler: RefMut<'a, Scheduler>,
     systems: Vec<(
@@ -33,7 +34,7 @@ impl<'a> WorkloadBuilder<'a> {
             scheduler,
             systems: Vec::new(),
             borrow_info: Vec::new(),
-            name: name.into(),
+            name,
         }
     }
 }

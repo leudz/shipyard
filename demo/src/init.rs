@@ -9,7 +9,8 @@ use crate::world::init_world;
 
 use awsm_web::loaders::fetch;
 use awsm_web::webgl::{
-    get_texture_size, get_webgl_context_1, WebGl1Renderer, WebGlContextOptions, WebGlTextureSource,
+    get_texture_size, get_webgl_context_1, ResizeStrategy, WebGl1Renderer, WebGlContextOptions,
+    WebGlTextureSource,
 };
 use awsm_web::window::get_window_size;
 use gloo_events::EventListener;
@@ -78,10 +79,10 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
             move |_: &web_sys::Event| {
                 let (width, height) = get_window_size(&window).unwrap();
                 world
-                    .borrow::<Unique<NonSendSync<&mut SceneRenderer>>>()
+                    .borrow::<NonSendSync<UniqueViewMut<SceneRenderer>>>()
                     .renderer
-                    .resize(width, height);
-                let mut stage_area = world.borrow::<Unique<&mut StageArea>>();
+                    .resize(ResizeStrategy::All(width, height));
+                let mut stage_area = world.borrow::<UniqueViewMut<StageArea>>();
                 stage_area.0.width = width;
                 stage_area.0.height = height;
             }
@@ -96,7 +97,7 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
             let world = Rc::clone(&world);
 
             move |timestamp| {
-                world.borrow::<Unique<&mut Timestamp>>().0 = timestamp;
+                world.borrow::<UniqueViewMut<Timestamp>>().0 = timestamp;
                 world.run_workload(TICK);
             }
         });

@@ -3,9 +3,9 @@ use nalgebra::{Matrix4, Vector3};
 use web_sys::HtmlImageElement;
 
 use awsm_web::webgl::{
-    AttributeOptions, BeginMode, BlendFactor, BufferData, BufferTarget, BufferUsage,
-    ClearBufferMask, DataType, GlToggle, Id, PixelFormat, SimpleTextureOptions, TextureTarget,
-    WebGl1Renderer, WebGlTextureSource,
+    AttributeOptions, BeginMode, BlendFactor, BufferData, BufferMask, BufferTarget, BufferUsage,
+    DataType, GlToggle, Id, PixelFormat, SimpleTextureOptions, TextureTarget, WebGl1Renderer,
+    WebGlTextureSource,
 };
 
 pub struct SceneRenderer {
@@ -75,10 +75,8 @@ impl SceneRenderer {
     }
 
     pub fn clear(&mut self) {
-        self.renderer.clear(&[
-            ClearBufferMask::ColorBufferBit,
-            ClearBufferMask::DepthBufferBit,
-        ]);
+        self.renderer
+            .clear(&[BufferMask::ColorBufferBit, BufferMask::DepthBufferBit]);
     }
     pub fn render(
         &mut self,

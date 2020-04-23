@@ -286,6 +286,7 @@ impl LoosePack {
             Err(())
         }
     }
+    #[allow(clippy::cognitive_complexity)]
     /// Returns `true` if enough storages were passed in
     fn has_all_storages(
         &self,
