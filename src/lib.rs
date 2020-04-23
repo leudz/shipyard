@@ -5,8 +5,6 @@
 //! The [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!  
 //! Here's two examples to get an idea of what it provides:
 //! ```
-//! # #[cfg(feature = "proc")]
-//! # {
 //! use shipyard::*;
 //!
 //! struct Health(f32);
@@ -40,11 +38,10 @@
 //! }
 //!
 //! world.run_system::<InAcid>();
-//! # }
 //! ```
 //! # Let's make some pigs!
 //! ```
-//! # #[cfg(all(feature = "parallel", feature = "proc"))]
+//! # #[cfg(feature = "parallel")]
 //! # {
 //! use shipyard::*;
 //!
@@ -110,7 +107,6 @@
 //! ## Features
 //!
 //! - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
-//! - **proc** &mdash; adds `system` proc macro
 //! - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 //! - **non_send** &mdash; add methods and types required to work with `!Send` components
 //! - **non_sync** &mdash; add methods and types required to work with `!Sync` components
@@ -144,6 +140,7 @@ mod pack;
 mod remove;
 mod sparse_set;
 mod storage;
+mod system;
 mod system_macro;
 mod unknown_storage;
 mod view;
@@ -169,11 +166,11 @@ pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
 #[doc(hidden)]
-#[cfg(feature = "proc")]
-pub use shipyard_proc::system as system_fn;
 pub use sparse_set::SparseSet;
 pub use sparse_set::{sort, sort::IntoSortable, Window, WindowMut};
 pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
+#[doc(hidden)]
+pub use system::{Nothing, System};
 #[cfg(feature = "parallel")]
 pub use view::ThreadPoolView;
 pub use view::{

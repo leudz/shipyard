@@ -1,8 +1,9 @@
 use super::Scheduler;
 use crate::atomic_refcell::RefMut;
-use crate::borrow::{Borrow, Mutation};
+use crate::borrow::Mutation;
 use crate::error;
 use crate::storage::AllStorages;
+use crate::system::System;
 use crate::world::World;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
@@ -39,17 +40,17 @@ impl<'a> WorkloadBuilder<'a> {
 
 impl<'a> WorkloadBuilder<'a> {
     pub fn with_system<
-        V: Borrow<'a>,
+        B,
         R,
-        F: Fn(V) -> R,
+        F: System<'a, B, R>,
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
         &mut self,
         (system, _): (S, F),
     ) -> &mut WorkloadBuilder<'a> {
         let old_len = self.borrow_info.len();
-        V::borrow_infos(&mut self.borrow_info);
-        let is_send_sync = V::is_send_sync();
+        F::borrow_infos(&mut self.borrow_info);
+        let is_send_sync = F::is_send_sync();
         self.systems.push((
             core::any::TypeId::of::<S>(),
             type_name::<F>(),

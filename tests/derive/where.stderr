@@ -1,5 +1,0 @@
-error: run should not take a where clause
- --> $DIR/where.rs:4:19
-  |
-4 | fn run(_: &usize) where usize: Debug {}
-  |                   ^^^^^^^^^^^^^^^^^^

@@ -1,5 +1,0 @@
-error: run should not take generic arguments
- --> $DIR/generic_lifetime.rs:4:7
-  |
-4 | fn run<'a>() {}
-  |       ^^^^

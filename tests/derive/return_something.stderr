@@ -1,5 +1,0 @@
-error: run should not return anything
- --> $DIR/return_something.rs:4:10
-  |
-4 | fn run() -> usize { 0 }
-  |          ^^^^^^^^

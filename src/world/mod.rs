@@ -517,18 +517,18 @@ world.try_run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn try_run<'s, V: Borrow<'s>, R, F: FnOnce(V) -> R>(
+    pub fn try_run<'s, B, R, S: crate::system::System<'s, B, R>>(
         &'s self,
-        f: F,
+        s: S,
     ) -> Result<R, error::Run> {
-        Ok((f)({
+        Ok(s.run({
             #[cfg(feature = "parallel")]
             {
-                V::try_borrow(&self.all_storages, &self.thread_pool)?
+                S::try_borrow(&self.all_storages, &self.thread_pool)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                V::try_borrow(&self.all_storages)?
+                S::try_borrow(&self.all_storages)?
             }
         }))
     }
@@ -640,8 +640,9 @@ world.run::<(&usize, &mut u32), _, _>(|(usizes, u32s)| {
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn run<'s, V: Borrow<'s>, R, F: FnOnce(V) -> R>(&'s self, f: F) -> R {
-        self.try_run(f).unwrap()
+    pub fn run<'s, B, R, S: crate::system::System<'s, B, R>>(&'s self, s: S) -> R {
+        //pub fn run<'s, V: Borrow<'s>, R, F: FnOnce(V) -> R>(&'s self, f: F) -> R {
+        self.try_run(s).unwrap()
     }
     /// Modifies the current default workload to `name`.
     pub fn try_set_default_workload(

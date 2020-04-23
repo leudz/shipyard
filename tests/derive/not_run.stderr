@@ -1,7 +1,0 @@
-error: Systems have only one method: run
- --> $DIR/not_run.rs:3:1
-  |
-3 | #[system(Test)]
-  | ^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in an attribute macro (in Nightly builds, run with -Z macro-backtrace for more info)
