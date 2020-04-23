@@ -11,12 +11,15 @@ pub trait IntoSortable {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, IntoSortable, ViewMut, World};
+    ///
     /// let world = World::new();
-    /// let (mut entities, mut usizes) = world.borrow::<(EntitiesMut, &mut usize)>();
-    /// entities.add_entity(&mut usizes, 1);
-    /// entities.add_entity(&mut usizes, 0);
-    /// usizes.sort().unstable(Ord::cmp);
+    ///
+    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>| {
+    ///     entities.add_entity(&mut usizes, 1);
+    ///     entities.add_entity(&mut usizes, 0);
+    ///     usizes.sort().unstable(Ord::cmp);
+    /// });
     /// ```
     fn sort(self) -> Self::IntoSortable;
 }

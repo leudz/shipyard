@@ -15,11 +15,14 @@ pub trait LoosePack<T> {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{LoosePack, ViewMut, World};
+    ///
     /// let world = World::new();
-    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
-    /// usizes.update_pack();
-    /// LoosePack::<(u32,)>::try_loose_pack((&mut u32s, &mut usizes)).unwrap();
+    ///
+    /// world.run(|mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///     usizes.update_pack();
+    ///     LoosePack::<(u32,)>::try_loose_pack((&mut u32s, &mut usizes)).unwrap();
+    /// });
     /// ```
     fn try_loose_pack(self) -> Result<(), error::Pack>;
     /// Loose packs storages.  
@@ -28,11 +31,14 @@ pub trait LoosePack<T> {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{LoosePack, ViewMut, World};
+    ///
     /// let world = World::new();
-    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
-    /// usizes.update_pack();
-    /// LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes));
+    ///
+    /// world.run(|mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///     usizes.update_pack();
+    ///     LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes));
+    /// });
     /// ```
     fn loose_pack(self);
 }

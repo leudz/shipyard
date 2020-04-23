@@ -251,7 +251,7 @@ unstable_sort![;Sort2 Sort3 Sort4 Sort5 Sort6 Sort7 Sort8 Sort9 Sort10;(A, 0) (B
 
 #[test]
 fn unstable_sort() {
-    let mut array = crate::sparse_set::SparseSet::default();
+    let mut array = crate::sparse_set::SparseSet::new();
 
     for i in (0..100).rev() {
         let mut entity_id = crate::storage::EntityId::zero();
@@ -273,7 +273,7 @@ fn unstable_sort() {
 
 #[test]
 fn partially_sorted_unstable_sort() {
-    let mut array = crate::sparse_set::SparseSet::default();
+    let mut array = crate::sparse_set::SparseSet::new();
 
     for i in 0..20 {
         let mut entity_id = crate::storage::EntityId::zero();

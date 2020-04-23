@@ -13,10 +13,14 @@ pub trait TightPack {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{TightPack, ViewMut, World};
+    ///
     /// let world = World::new();
-    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
-    /// (&mut usizes, &mut u32s).try_tight_pack().unwrap();
+    ///
+    /// world
+    ///     .borrow::<(ViewMut<usize>, ViewMut<u32>)>()
+    ///     .try_tight_pack()
+    ///     .unwrap();
     /// ```
     fn try_tight_pack(self) -> Result<(), error::Pack>;
     /// Tight packs storages.  
@@ -25,10 +29,13 @@ pub trait TightPack {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{TightPack, ViewMut, World};
+    ///
     /// let world = World::new();
-    /// let (mut usizes, mut u32s) = world.borrow::<(&mut usize, &mut u32)>();
-    /// (&mut usizes, &mut u32s).tight_pack();
+    ///
+    /// world
+    ///     .borrow::<(ViewMut<usize>, ViewMut<u32>)>()
+    ///     .tight_pack();
     /// ```
     fn tight_pack(self);
 }

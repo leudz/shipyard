@@ -33,8 +33,8 @@ pub struct SparseSet<T> {
     pub(crate) pack_info: PackInfo<T>,
 }
 
-impl<T> Default for SparseSet<T> {
-    fn default() -> Self {
+impl<T> SparseSet<T> {
+    pub(crate) fn new() -> Self {
         SparseSet {
             sparse: Vec::new(),
             dense: Vec::new(),
@@ -42,9 +42,6 @@ impl<T> Default for SparseSet<T> {
             pack_info: Default::default(),
         }
     }
-}
-
-impl<T> SparseSet<T> {
     pub(crate) fn window(&self) -> Window<'_, T> {
         Window::new(self, 0..self.len())
     }
@@ -834,7 +831,7 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
 
 #[test]
 fn insert() {
-    let mut array = SparseSet::default();
+    let mut array = SparseSet::new();
     let mut entity_id = EntityId::zero();
     entity_id.set_index(0);
     assert!(array.insert("0", entity_id).is_none());
@@ -862,7 +859,7 @@ fn insert() {
 }
 #[test]
 fn remove() {
-    let mut array = SparseSet::default();
+    let mut array = SparseSet::new();
     let mut entity_id = EntityId::zero();
     entity_id.set_index(0);
     array.insert("0", entity_id);

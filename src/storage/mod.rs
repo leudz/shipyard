@@ -43,7 +43,7 @@ unsafe impl Sync for Storage {}
 impl Storage {
     /// Creates a new `Storage` storing elements of type T.
     pub(crate) fn new<T: 'static + Send + Sync>() -> Self {
-        let sparse_set = SparseSet::<T>::default();
+        let sparse_set = SparseSet::<T>::new();
         #[cfg(feature = "std")]
         {
             Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
@@ -55,7 +55,7 @@ impl Storage {
     }
     #[cfg(feature = "non_send")]
     pub(crate) fn new_non_send<T: 'static + Sync>(world_thread_id: std::thread::ThreadId) -> Self {
-        let sparse_set = SparseSet::<T>::default();
+        let sparse_set = SparseSet::<T>::new();
         Storage(Box::new(AtomicRefCell::new(
             sparse_set,
             Some(world_thread_id),
@@ -64,12 +64,12 @@ impl Storage {
     }
     #[cfg(feature = "non_sync")]
     pub(crate) fn new_non_sync<T: 'static + Send>() -> Self {
-        let sparse_set = SparseSet::<T>::default();
+        let sparse_set = SparseSet::<T>::new();
         Storage(Box::new(AtomicRefCell::new(sparse_set, None, false)))
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     pub(crate) fn new_non_send_sync<T: 'static>(world_thread_id: std::thread::ThreadId) -> Self {
-        let sparse_set = SparseSet::<T>::default();
+        let sparse_set = SparseSet::<T>::new();
         Storage(Box::new(AtomicRefCell::new(
             sparse_set,
             Some(world_thread_id),

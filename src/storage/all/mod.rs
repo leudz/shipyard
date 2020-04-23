@@ -29,8 +29,8 @@ pub struct AllStorages {
     thread_id: std::thread::ThreadId,
 }
 
-impl Default for AllStorages {
-    fn default() -> Self {
+impl AllStorages {
+    pub(crate) fn new() -> Self {
         let mut storages = HashMap::default();
 
         let entities = Entities::default();
@@ -57,9 +57,6 @@ impl Default for AllStorages {
             thread_id: std::thread::current().id(),
         }
     }
-}
-
-impl AllStorages {
     pub(crate) fn entities(&self) -> Result<Ref<'_, Entities>, error::Borrow> {
         let type_id = TypeId::of::<Entities>();
         self.lock.lock_shared();
@@ -343,20 +340,24 @@ impl AllStorages {
     /// Returns `true` if `entity` was alive.
     /// ### Example
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{AllStoragesViewMut, EntitiesViewMut, GetComponent, View, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesMut, &mut usize, &mut u32)>();
+    /// let [entity1, entity2] = world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         [
+    ///             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)),
+    ///             entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)),
+    ///         ]
+    ///     },
+    /// );
     ///
-    /// let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    /// let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-    ///
-    /// drop((entities, usizes, u32s));
-    /// world.run::<AllStorages, _, _>(|mut all_storages| {
+    /// world.run(|mut all_storages: AllStoragesViewMut| {
     ///     all_storages.delete(entity1);
     /// });
     ///
-    /// world.run::<(&usize, &u32), _, _>(|(usizes, u32s)| {
+    /// world.run(|usizes: View<usize>, u32s: View<u32>| {
     ///     assert!((&usizes).get(entity1).is_err());
     ///     assert!((&u32s).get(entity1).is_err());
     ///     assert_eq!(usizes.get(entity2), Ok(&2));
@@ -403,47 +404,31 @@ impl AllStorages {
             storage.clear().unwrap()
         }
     }
-    #[doc = "Borrows the requested storage, if it doesn't exist it'll get created.
+    #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
+You can use a tuple to get multiple storages at once.
 
 You can use:
-* `&T` for a shared access to `T` storage
-* `&mut T` for an exclusive access to `T` storage
-* [Entities] for a shared access to the entity storage
-* [EntitiesMut] for an exclusive reference to the entity storage
-* [AllStorages] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
-* [Unique]<&T> for a shared access to a `T` unique storage
-* [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
+* [View]\\<T\\> for a shared access to `T` storage
+* [ViewMut]\\<T\\> for an exclusive access to `T` storage
+* [EntitiesView] for a shared access to the entity storage
+* [EntitiesViewMut] for an exclusive reference to the entity storage
+* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
     )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
-        doc = "    * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         all(feature = "non_send", not(docsrs)),
-        doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         not(feature = "non_send"),
@@ -455,15 +440,15 @@ You can use:
     )]
     #[cfg_attr(
         all(feature = "non_sync", docsrs),
-        doc = "    * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "non_sync", not(docsrs)),
-        doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         not(feature = "non_sync"),
@@ -475,15 +460,15 @@ You can use:
     )]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync", docsrs),
-        doc = "    * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync", not(docsrs)),
-        doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         not(all(feature = "non_send", feature = "non_sync")),
@@ -491,17 +476,23 @@ You can use:
     )]
     #[doc = "### Example
 ```
-# use shipyard::*;
+use shipyard::{AllStoragesViewMut, EntitiesView, View, ViewMut, World};
+
 let world = World::new();
-let all_storages = world.borrow::<AllStorages>();
-let u32s = all_storages.try_borrow::<&u32>().unwrap();
+
+world.run(|all_storages: AllStoragesViewMut| {
+    let u32s = all_storages.try_borrow::<View<u32>>().unwrap();
+    let (entities, mut usizes) = all_storages
+        .try_borrow::<(EntitiesView, ViewMut<usize>)>()
+        .unwrap();
+});
 ```
-[Entities]: struct.Entities.html
-[EntitiesMut]: struct.Entities.html
-[AllStorages]: struct.AllStorages.html
-[World]: struct.World.html
-[Unique]: struct.Unique.html"]
-    #[cfg_attr(feature = "parallel", doc = "[ThreadPool]: struct.ThreadPool.html")]
+[EntitiesView]: struct.Entities.html
+[EntitiesViewMut]: struct.Entities.html
+[View]: struct.View.html
+[ViewMut]: struct.ViewMut.html
+[UniqueView]: struct.UniqueView.html
+[UniqueViewMut]: struct.UniqueViewMut.html"]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -511,48 +502,32 @@ let u32s = all_storages.try_borrow::<&u32>().unwrap();
     pub fn try_borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
         V::try_borrow(self)
     }
-    #[doc = "Borrows the requested storage, if it doesn't exist it'll get created.  
+    #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
+You can use a tuple to get multiple storages at once.  
 Unwraps errors.
 
 You can use:
-* `&T` for a shared access to `T` storage
-* `&mut T` for an exclusive access to `T` storage
-* [Entities] for a shared access to the entity storage
-* [EntitiesMut] for an exclusive reference to the entity storage
-* [AllStorages] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
-* [Unique]<&T> for a shared access to a `T` unique storage
-* [Unique]<&mut T> for an exclusive access to a `T` unique storage"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPool] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
+* [View]\\<T\\> for a shared access to `T` storage
+* [ViewMut]\\<T\\> for an exclusive access to `T` storage
+* [EntitiesView] for a shared access to the entity storage
+* [EntitiesViewMut] for an exclusive reference to the entity storage
+* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
     )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
-        doc = "    * [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         all(feature = "non_send", not(docsrs)),
-        doc = "* [NonSend]<&T> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[Unique] and [NonSend] can be used together to access a `!Send` unique storage."
+        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         not(feature = "non_send"),
@@ -564,15 +539,15 @@ You can use:
     )]
     #[cfg_attr(
         all(feature = "non_sync", docsrs),
-        doc = "    * [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "non_sync", not(docsrs)),
-        doc = "* [NonSync]<&T> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[Unique] and [NonSync] can be used together to access a `!Sync` unique storage."
+        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         not(feature = "non_sync"),
@@ -584,15 +559,15 @@ You can use:
     )]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync", docsrs),
-        doc = "    * [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync", not(docsrs)),
-        doc = "* [NonSendSync]<&T> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<&mut T> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[Unique] and [NonSendSync] can be used together to access a `!Send + !Sync` unique storage."
+        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         not(all(feature = "non_send", feature = "non_sync")),
@@ -600,17 +575,21 @@ You can use:
     )]
     #[doc = "### Example
 ```
-# use shipyard::*;
+use shipyard::{AllStoragesViewMut, EntitiesView, View, ViewMut, World};
+
 let world = World::new();
-let all_storages = world.borrow::<AllStorages>();
-let u32s = all_storages.borrow::<&u32>();
+
+world.run(|all_storages: AllStoragesViewMut| {
+    let u32s = all_storages.try_borrow::<View<u32>>().unwrap();
+    let (entities, mut usizes) = all_storages.borrow::<(EntitiesView, ViewMut<usize>)>();
+});
 ```
-[Entities]: struct.Entities.html
-[EntitiesMut]: struct.Entities.html
-[AllStorages]: struct.AllStorages.html
-[World]: struct.World.html
-[Unique]: struct.Unique.html"]
-    #[cfg_attr(feature = "parallel", doc = "[ThreadPool]: struct.ThreadPool.html")]
+[EntitiesView]: struct.Entities.html
+[EntitiesViewMut]: struct.Entities.html
+[View]: struct.View.html
+[ViewMut]: struct.ViewMut.html
+[UniqueView]: struct.UniqueView.html
+[UniqueViewMut]: struct.UniqueViewMut.html"]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -619,5 +598,214 @@ let u32s = all_storages.borrow::<&u32>();
     )]
     pub fn borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> V {
         self.try_borrow::<V>().unwrap()
+    }
+    #[doc = "Borrows the requested storages and runs the function.
+
+You can use:
+* [View]\\<T\\> for a shared access to `T` storage
+* [ViewMut]\\<T\\> for an exclusive access to `T` storage
+* [EntitiesView] for a shared access to the entity storage
+* [EntitiesViewMut] for an exclusive reference to the entity storage
+* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
+        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_send"),
+        doc = "* NonSend: must activate the *non_send* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
+        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_sync"),
+        doc = "* NonSync: must activate the *non_sync* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
+        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(all(feature = "non_send", feature = "non_sync")),
+        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
+    )]
+    #[doc = "### Example
+```
+use shipyard::{AllStoragesViewMut, View, ViewMut, World};
+
+fn sys1(i32s: View<i32>) -> i32 {
+    0
+}
+
+let world = World::new();
+
+let all_storages = world.borrow::<AllStoragesViewMut>();
+
+all_storages
+    .try_run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
+        // -- snip --
+    })
+    .unwrap();
+
+let i = all_storages.try_run(sys1).unwrap();
+```
+[EntitiesView]: struct.Entities.html
+[EntitiesViewMut]: struct.Entities.html
+[View]: struct.View.html
+[ViewMut]: struct.ViewMut.html
+[UniqueView]: struct.UniqueView.html
+[UniqueViewMut]: struct.UniqueViewMut.html"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "[NonSendSync]: struct.NonSendSync.html"
+    )]
+    pub fn try_run<'s, B, R, S: crate::system::AllSystem<'s, B, R>>(
+        &'s self,
+        s: S,
+    ) -> Result<R, error::Run> {
+        Ok(s.run({ S::try_borrow(self)? }))
+    }
+    #[doc = "Borrows the requested storages and runs the function.
+
+You can use:
+* [View]\\<T\\> for a shared access to `T` storage
+* [ViewMut]\\<T\\> for an exclusive access to `T` storage
+* [EntitiesView] for a shared access to the entity storage
+* [EntitiesViewMut] for an exclusive reference to the entity storage
+* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
+        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_send"),
+        doc = "* NonSend: must activate the *non_send* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
+        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_sync"),
+        doc = "* NonSync: must activate the *non_sync* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
+        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(all(feature = "non_send", feature = "non_sync")),
+        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
+    )]
+    #[doc = "### Example
+```
+use shipyard::{AllStoragesViewMut, View, ViewMut, World};
+
+fn sys1(i32s: View<i32>) -> i32 {
+    0
+}
+
+let world = World::new();
+
+let all_storages = world.borrow::<AllStoragesViewMut>();
+
+all_storages.run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
+    // -- snip --
+});
+
+let i = all_storages.run(sys1);
+```
+[EntitiesView]: struct.Entities.html
+[EntitiesViewMut]: struct.Entities.html
+[View]: struct.View.html
+[ViewMut]: struct.ViewMut.html
+[UniqueView]: struct.UniqueView.html
+[UniqueViewMut]: struct.UniqueViewMut.html"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "[NonSendSync]: struct.NonSendSync.html"
+    )]
+    pub fn run<'s, B, R, S: crate::system::AllSystem<'s, B, R>>(&'s self, s: S) -> R {
+        self.try_run(s).unwrap()
     }
 }

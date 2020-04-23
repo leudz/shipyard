@@ -27,7 +27,7 @@ impl Deref for AllStoragesView<'_> {
     }
 }
 
-/// Exclusive `AllStorages` view.
+/// Exclusive view over `AllStorages`.
 pub struct AllStoragesViewMut<'a>(RefMut<'a, AllStorages>);
 
 impl<'a> TryFrom<&'a AtomicRefCell<AllStorages>> for AllStoragesViewMut<'a> {
@@ -54,7 +54,7 @@ impl DerefMut for AllStoragesViewMut<'_> {
     }
 }
 
-/// Shared `Entities` view.
+/// Shared view over `Entities` storage.
 pub struct EntitiesView<'a> {
     entities: Ref<'a, Entities>,
     _all_borrow: Borrow<'a>,
@@ -93,7 +93,7 @@ impl Deref for EntitiesView<'_> {
     }
 }
 
-/// Exclusive `Entities` view.
+/// Exclusive view over `Entities` storage.
 pub struct EntitiesViewMut<'a> {
     entities: RefMut<'a, Entities>,
     _all_borrow: Borrow<'a>,
@@ -138,7 +138,7 @@ impl DerefMut for EntitiesViewMut<'_> {
     }
 }
 
-/// Shared component view.
+/// Shared view over a component storage.
 pub struct View<'a, T> {
     window: Window<'a, T>,
     _borrow: Borrow<'a>,
@@ -318,7 +318,7 @@ impl<'a, T> AsRef<Window<'a, T>> for View<'a, T> {
     }
 }
 
-/// Exclusive component view.
+/// Exclusive view over a component storage.
 pub struct ViewMut<'a, T> {
     sparse_set: RefMut<'a, SparseSet<T>>,
     _all_borrow: Borrow<'a>,
@@ -453,7 +453,7 @@ impl<'a, T> AsMut<SparseSet<T>> for ViewMut<'a, T> {
     }
 }
 
-/// Shared unique component view.
+/// Shared view over a unique component storage.
 pub struct UniqueView<'a, T> {
     unique: Ref<'a, T>,
     _all_borrow: Borrow<'a>,
@@ -682,7 +682,7 @@ impl<T> Deref for UniqueView<'_, T> {
     }
 }
 
-/// Exclusive unique component view.
+/// Exclusive view over a unique component storage.
 pub struct UniqueViewMut<'a, T> {
     unique: RefMut<'a, T>,
     _all_borrow: Borrow<'a>,
@@ -919,6 +919,7 @@ impl<T> DerefMut for UniqueViewMut<'_, T> {
 
 #[cfg(feature = "parallel")]
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
+/// Shared view over the thread_pool.
 pub struct ThreadPoolView<'a>(pub(crate) &'a rayon::ThreadPool);
 
 #[cfg(feature = "parallel")]

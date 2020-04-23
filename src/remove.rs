@@ -22,10 +22,11 @@ pub trait Remove<T: Removable> {
     /// You'll often have to use the full path `Remove::<type>::try_remove`.
     /// ### Example
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, Remove, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     ///     assert_eq!(old, (Some(0), Some(1)));
@@ -35,10 +36,11 @@ pub trait Remove<T: Removable> {
     /// even if you don't remove any component from it.
     /// ### Example
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, Remove, TightPack, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     (&mut usizes, &mut u32s).tight_pack();
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
@@ -59,10 +61,11 @@ pub trait Remove<T: Removable> {
     /// Unwraps errors.
     /// ### Example
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, Remove, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity1);
     ///     assert_eq!(old, (Some(0), Some(1)));
@@ -72,10 +75,11 @@ pub trait Remove<T: Removable> {
     /// even if you don't remove any component from it.
     /// ### Example
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, Remove, TightPack, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
+    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     (&mut usizes, &mut u32s).tight_pack();
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);

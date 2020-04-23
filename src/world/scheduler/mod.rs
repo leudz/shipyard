@@ -12,7 +12,7 @@ use core::ops::Range;
 use hashbrown::HashMap;
 
 #[allow(clippy::type_complexity)]
-pub struct Scheduler {
+pub(crate) struct Scheduler {
     pub(super) systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
     pub(super) system_names: Vec<&'static str>,
     pub(super) lookup_table: HashMap<TypeId, usize>,

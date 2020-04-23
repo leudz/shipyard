@@ -274,11 +274,20 @@ impl Display for SetDefaultWorkload {
 }
 
 /// Error related to `run_default` and `run_workload`.  
-/// The error can be a storage error, problem with the scheduler's borrowing or a non existant workload.
+/// The error can be a storage error, problem with the scheduler's borrowing, a non existant workload or a custom error.
 pub enum RunWorkload {
     Scheduler,
     Run((&'static str, Run)),
     MissingWorkload,
+}
+
+impl RunWorkload {
+    pub fn custom_error(self) -> Option<Box<dyn core::any::Any + Send>> {
+        match self {
+            Self::Run((_, Run::Custom(error))) => Some(error),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -304,6 +313,8 @@ impl Display for RunWorkload {
     }
 }
 
+/// Error returned by `World::try_run` and `AllStorages::try_run`.  
+/// Can refer to an invalid storage borrow or a custom error.
 pub enum Run {
     GetStorage(GetStorage),
     Custom(Box<dyn core::any::Any + Send>),

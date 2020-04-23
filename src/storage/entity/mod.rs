@@ -60,12 +60,15 @@ impl Entities {
     /// ### Example
     /// ```
     /// # use shipyard::*;
+    /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
+    ///
     /// let world = World::new();
-    /// let entity = world.run::<EntitiesMut, _, _>(|mut entities| {
-    ///     entities.add_entity((), ())
+    ///
+    /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
+    ///
+    /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
+    ///     entities.try_add_component(&mut u32s, 0, entity).unwrap();
     /// });
-    /// let (entities, mut u32s) = world.borrow::<(Entities, &mut u32)>();
-    /// entities.try_add_component(&mut u32s, 0, entity).unwrap();
     /// ```
     pub fn try_add_component<C, S: AddComponent<C>>(
         &self,
@@ -82,12 +85,15 @@ impl Entities {
     /// ### Example
     /// ```
     /// # use shipyard::*;
+    /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
+    ///
     /// let world = World::new();
-    /// let entity = world.run::<EntitiesMut, _, _>(|mut entities| {
-    ///     entities.add_entity((), ())
+    ///
+    /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
+    ///
+    /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
+    ///     entities.add_component(&mut u32s, 0, entity);
     /// });
-    /// let (entities, mut u32s) = world.borrow::<(Entities, &mut u32)>();
-    /// entities.add_component(&mut u32s, 0, entity);
     /// ```
     pub fn add_component<C, S: AddComponent<C>>(
         &self,
@@ -151,15 +157,17 @@ impl Entities {
     /// Multiple components can be added at the same time using a tuple.
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, GetComponent, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
-    ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///
-    ///     assert_eq!(usizes.get(entity), Ok(&0));
-    ///     assert_eq!(u32s.get(entity), Ok(&1));
-    /// });
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    ///         assert_eq!(usizes.get(entity), Ok(&0));
+    ///         assert_eq!(u32s.get(entity), Ok(&1));
+    ///     },
+    /// );
     /// ```
     pub fn add_entity<T: ViewAddEntity>(
         &mut self,

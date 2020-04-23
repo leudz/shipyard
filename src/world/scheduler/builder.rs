@@ -14,6 +14,7 @@ use core::any::TypeId;
 use core::ops::Range;
 use hashbrown::hash_map::Entry;
 
+/// Keeps information to create a workload.
 #[allow(clippy::type_complexity)]
 pub struct WorkloadBuilder<'a> {
     scheduler: RefMut<'a, Scheduler>,
@@ -40,6 +41,48 @@ impl<'a> WorkloadBuilder<'a> {
 }
 
 impl<'a> WorkloadBuilder<'a> {
+    /// Adds a system to the workload been created.  
+    /// It is strongly recommanded to use the [system] and [try_system] macros.  
+    /// If the two functions in the tuple don't match, the workload could fail to run every time.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
+    ///
+    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
+    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
+    ///         *x += y as usize;
+    ///     }
+    /// }
+    ///
+    /// fn check(usizes: View<usize>) {
+    ///     let mut iter = usizes.iter();
+    ///     assert_eq!(iter.next(), Some(&1));
+    ///     assert_eq!(iter.next(), Some(&5));
+    ///     assert_eq!(iter.next(), Some(&9));
+    /// }
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
+    ///     },
+    /// );
+    ///
+    /// world
+    ///     .add_workload("Add & Check")
+    ///     .with_system((|world: &World| world.try_run(add), add))
+    ///     .with_system(system!(check))
+    ///     .build();
+    ///
+    /// world.run_default();
+    /// ```
+    ///
+    /// [system]: macro.system.html
+    /// [try_system]: macro.try_system.html
     pub fn with_system<
         B,
         R,
@@ -61,6 +104,7 @@ impl<'a> WorkloadBuilder<'a> {
         ));
         self
     }
+    /// Finishes the workload creation and store it in the `World`.
     pub fn build(&mut self) {
         if self.systems.len() == 1 {
             let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();

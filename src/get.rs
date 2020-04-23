@@ -13,13 +13,16 @@ pub trait GetComponent {
     ///
     /// ### Example:
     /// ```
-    /// # use shipyard::*;
+    /// use shipyard::{EntitiesViewMut, GetComponent, ViewMut, World};
+    ///
     /// let world = World::new();
     ///
-    /// world.run::<(EntitiesMut, &mut usize, &mut u32), _, _>(|(mut entities, mut usizes, mut u32s)| {
-    ///     let entity = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///     assert_eq!((&usizes, &u32s).get(entity), Ok((&0, &1)));
-    /// });
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         assert_eq!((&usizes, &u32s).get(entity), Ok((&0, &1)));
+    ///     },
+    /// );
     /// ```
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
 }

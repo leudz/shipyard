@@ -179,17 +179,13 @@ pub use iter::{
 pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
-#[doc(hidden)]
-pub use sparse_set::SparseSet;
-pub use sparse_set::{sort, sort::IntoSortable, Window, WindowMut};
+pub use sparse_set::{sort, sort::IntoSortable, SparseSet, Window, WindowMut};
 pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
 #[doc(hidden)]
-pub use system::{Nothing, System};
+pub use system::{AllSystem, Nothing, System};
 #[cfg(feature = "parallel")]
 pub use view::ThreadPoolView;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
-#[doc(hidden)]
-pub use world::WorkloadBuilder;
-pub use world::World;
+pub use world::{WorkloadBuilder, World};

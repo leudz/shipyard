@@ -1,3 +1,7 @@
+mod all_storages;
+
+pub use all_storages::AllSystem;
+
 use crate::atomic_refcell::AtomicRefCell;
 use crate::borrow::Borrow;
 use crate::borrow::Mutation;
