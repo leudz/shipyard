@@ -6,7 +6,7 @@ use core::num::NonZeroU64;
 /// A Key is a handle to an entity and has two parts, the index and the version.
 /// The index is 48 bits long and the version 16.
 #[doc(hidden)]
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct EntityId(pub(super) NonZeroU64);
 
