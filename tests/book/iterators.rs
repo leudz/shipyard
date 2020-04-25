@@ -1,13 +1,13 @@
-use super::*;
+use shipyard::*;
 
 #[test]
 fn single() {
     let world = World::new();
 
-    let positions = world.borrow::<&Position>();
-
-    (&positions).iter().for_each(|pos| {
-        dbg!(pos);
+    world.run(|u32s: View<u32>| {
+        for i in u32s.iter() {
+            dbg!(i);
+        }
     });
 }
 
@@ -15,10 +15,10 @@ fn single() {
 fn with_id() {
     let world = World::new();
 
-    let positions = world.borrow::<&Position>();
-
-    (&positions).iter().with_id().for_each(|(id, pos)| {
-        println!("Entity {:?} is at {:?}", id, pos);
+    world.run(|u32s: View<u32>| {
+        for (id, i) in u32s.iter().with_id() {
+            println!("{} belongs to entity {:?}", i, id);
+        }
     });
 }
 
@@ -26,9 +26,9 @@ fn with_id() {
 fn multiple() {
     let world = World::new();
 
-    let (positions, fruits) = world.borrow::<(&Position, &Fruit)>();
-
-    (&positions, &fruits).iter().for_each(|(pos, fruit)| {
-        println!("There is a {:?} at {:?}", pos, fruit);
+    world.run(|u32s: View<u32>, usizes: View<usize>| {
+        for (_i, _j) in (&u32s, &usizes).iter() {
+            // -- snip --
+        }
     });
 }

@@ -4,37 +4,35 @@ So far we've only seen how to interact with `Send + Sync` components using the d
 
 ### `!Send` and `!Sync` Components
 
-`World` can store `!Send` and/or `!Sync` components once the corresponding feature is set but they come with limitations:
+[`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) can store `!Send` and/or `!Sync` components once the corresponding feature is set but they come with limitations:
 
-- `!Send` storages can only be added in `World`'s thread.
+- `!Send` storages can only be added in [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html)'s thread.
 - `Send + !Sync` components can only be accessed from one thread at a time.
 - `!Send + Sync` components can only be accessed immutably from other threads.
 - `!Send + !Sync` components can only be accessed in the thread they were added in.
 
-With these constrains you can run into issues like unrunnable systems or undeletable entities, be careful.
-As a rule of thumb, try to call `World::run_default` and `run_workload` from `World`'s thread.
-
-To help with `!Send` storages, all systems borrowing `AllStorages` will run in the thread `World::run_default` or `run_workload` is called in.
-
-These storages are accessed with `NonSend`, `NonSync` and `NonSendSync`, for example:
+These storages are accessed with [`NonSend`](https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html), [`NonSync`](https://docs.rs/shipyard/latest/shipyard/struct.NonSync.html) and [`NonSendSync`](https://docs.rs/shipyard/latest/shipyard/struct.NonSendSync.html), for example:
 ```rust, noplaypen
-#[system(Counted)]
-fn run(rcs: NonSendSync<&Rc<usize>>) {}
+fn run(rcs: NonSendSync<View<Rc<usize>>>) {}
 ```
 
 ### Unique Storages
 
-When we known there'll only ever be exactly one instance of some component, it doesn't need to be attached to an entity. It also works well as global data while still being sound.
+When we known there'll only ever be exactly one instance of some component, it doesn't need to be attached to an entity. It also works well as global data while still being safe.
 
-As opposed to other storages, unique storages have to be initialized with `add_unique`. This will both create the storage and initialize its only component. We can then access this component with `Unique`.  
-Example:
+As opposed to other storages, unique storages have to be initialized with `add_unique`. This will both create the storage and initialize its only component. We can then access this component with [`UniqueView`](https://docs.rs/shipyard/latest/shipyard/struct.UniqueView.html) and [`UniqueViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.UniqueViewMut.html).
+
 ```rust, noplaypen
 let world = World::new();
+
 world.add_unique(Camera::new());
-let camera = world.borrow::<Unique<&Camera>>();
+
+world.run(|camera: UniqueView<Camera>| {
+    // -- snip --
+})
 ```
 
-Note that `Unique` and `!Send`/`!Sync` components can be used together, in this case `Unique` will envelop `NonSend`/`NonSync` or `NonSendSync`.
+Note that `!Send`/`!Sync` components can be stored in unique storages.
 
 ### Tag Components
 
@@ -42,6 +40,8 @@ Components don't always need data, they're sometimes just there to flag entities
 Example:
 ```rust, noplaypen
 struct Dirty;
-#[system(FlagDirty)]
-fn run(dirties: &mut Dirty) { ... }
+
+fn flag_dirty(mut dirties: ViewMut<Dirty>) {
+    // -- snip --
+}
 ```

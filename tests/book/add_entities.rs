@@ -1,27 +1,30 @@
-use super::*;
+use shipyard::*;
 
 #[test]
 fn single() {
     let world = World::new();
 
-    let (mut entities, mut empties) = world.borrow::<(EntitiesMut, &mut Empty)>();
-
-    let _entity = entities.add_entity(&mut empties, Empty);
+    world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
+        let _entity = entities.add_entity(&mut u32s, 0);
+    });
 }
 
 #[test]
 fn multiple() {
     let world = World::new();
 
-    let (mut entities, mut empties, mut counts) =
-        world.borrow::<(EntitiesMut, &mut Empty, &mut Count)>();
-
-    let _entity = entities.add_entity((&mut empties, &mut counts), (Empty, Count(0)));
+    world.run(
+        |mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>, mut usize: ViewMut<usize>| {
+            let _entity = entities.add_entity((&mut u32s, &mut usize), (0, 10));
+        },
+    );
 }
 
 #[test]
 fn none() {
     let world = World::new();
 
-    let _entity = world.borrow::<EntitiesMut>().add_entity((), ());
+    world.run(|mut entities: EntitiesViewMut| {
+        let _entity = entities.add_entity((), ());
+    });
 }

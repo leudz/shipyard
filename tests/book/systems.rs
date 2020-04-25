@@ -1,21 +1,24 @@
-use super::*;
+use shipyard::*;
 
-struct CreateEmpty;
-impl<'a> System<'a> for CreateEmpty {
-    type Data = (EntitiesMut, &'a mut Empty);
-
-    fn run(_: <Self::Data as SystemData>::View) {}
+fn create_ints(mut _entities: EntitiesViewMut, mut _u32s: ViewMut<u32>) {
+    // -- snip --
 }
 
-#[system(DestroyEmpty)]
-fn run(_: &mut Entities, _: &mut Empty) {}
+fn delete_ints(mut _u32s: ViewMut<u32>) {
+    // -- snip --
+}
 
 #[test]
 fn test() {
     let world = World::new();
-    world.run_system::<CreateEmpty>();
-    world.add_workload::<(CreateEmpty, DestroyEmpty), _>("Empty Cycle");
-    world.run_workload("Empty Cycle");
+
+    world.run(create_ints);
+
+    world
+        .add_workload("Int cycle")
+        .with_system((|world: &World| world.try_run(create_ints), create_ints))
+        .with_system(system!(delete_ints))
+        .build();
+    world.run_workload("Int cycle");
     world.run_default();
-    world.run::<(EntitiesMut, &mut Empty), _, _>(|_| {});
 }

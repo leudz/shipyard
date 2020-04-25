@@ -1,13 +1,14 @@
 mod add_component;
 mod entity_id;
 
+pub use entity_id::EntityId;
+
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
 use crate::unknown_storage::UnknownStorage;
 use add_component::AddComponent;
 use alloc::vec::Vec;
 use core::any::{Any, TypeId};
-pub use entity_id::EntityId;
 
 /// Type used to borrow `Entities` mutably.
 pub struct EntitiesMut;

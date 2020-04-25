@@ -4,7 +4,7 @@
 - [Getting Started](./getting-started.md)
 - [Fundamentals](./fundamentals.md)
     - [Create a World](./fundamentals/world.md)
-    - [Borrow the World](./fundamentals/borrow.md)
+    - [Run the World](./fundamentals/run.md)
     - [Add Entities](./fundamentals/add-entities.md)
     - [Delete Entities](./fundamentals/delete-entities.md)
     - [Add Components](./fundamentals/add-components.md)

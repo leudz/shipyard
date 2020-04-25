@@ -1,4 +1,4 @@
-use super::*;
+use shipyard::*;
 
 #[test]
 fn test() {

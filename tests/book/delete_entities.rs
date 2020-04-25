@@ -1,9 +1,11 @@
-use super::*;
+use shipyard::*;
 
 #[test]
 fn test() {
     let entity_id = EntityId::dead();
     let world = World::new();
 
-    world.borrow::<AllStorages>().delete(entity_id);
+    world.run(|mut all_storages: AllStoragesViewMut| {
+        all_storages.delete(entity_id);
+    });
 }

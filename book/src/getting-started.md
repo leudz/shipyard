@@ -1,9 +1,5 @@
 # Getting Started
 
-Just add it to Cargo.toml 😄
+For most target architecture you can just add it to Cargo.toml.
 
-For WASM or single-threaded environments you'll need to turn off default features and remember to add other features back in, like this:
-
-```toml
-shipyard = { version = "0.3.2", features = ["serde"], default-features = false }
-```
+For single-threaded environments (like WASM) or embedded you'll need to turn off default features and add features back in when needed.

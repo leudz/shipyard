@@ -1,40 +1,33 @@
 # Get and Modify Components
 
-To access or update component(s) of a single entity you can use `get`. It'll work with both shared and unique views.
+To access or update component(s) of a single entity you can use [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get). It'll work with both shared and unique views.
 
-### Update a component of a single entity
+### Update a single component
 
 ```rust, noplaypen
-let mut positions = world.borrow::<&mut Position>();
-
-*(&mut positions).get(entity_id).unwrap() = Position {
-    x: 5.0,
-    y: 6.0,
-};
+world.run(|mut u32s: ViewMut<u32>| {
+    *(&mut u32s).get(entity_id) = 1;
+});
 ```
 
-`get` will return an `Option<&T>` when used with a `View<T>` and an `Option<&mut T>` with a `ViewMut<T>`. You can also get an `Option<&T>` from a `ViewMut<T>`, which is why we have to explicitly mutably borrow `positions`.
+[`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get) will return an `&T` when used with a [`&View<T>`](https://docs.rs/shipyard/latest/shipyard/struct.View.html) and an `&mut T` with a [`&mut ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html). You can also get an `&T` from a [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html), which is why we have to explicitly mutably borrow `u32s`.
 
 For single views if you're sure the entity has the component you want, you can index into it:
 
 ```rust, noplaypen
-let mut positions = world.borrow::<&mut Position>();
-
-positions[entity_id] = Position {
-    x: 5.0,
-    y: 6.0,
-};
+world.run(|mut u32s: ViewMut<u32>| {
+    u32s[entity_id] = 1;
+});
 ```
 
-### Update multiple components of a single entity
+### Update multiple components
 
-We can also mix and match shared and unique component access with `get`:
+We can mix and match shared and unique component access with [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get):
 
 ```rust, noplaypen
-let (mut positions, velocities) = world.borrow::<(&mut Position, &Velocity)>();
-
-if let Ok((pos, vel)) = (&mut positions, &velocities).get(entity_id) {
-    pos.x += vel.x;
-    pos.y += vel.y;
-}
+world.run(|mut u32s: ViewMut<u32>, usizes: View<usize>| {
+        let (i, &j) = (&mut u32s, &usizes).get(entity_id);
+        *i += j as u32;
+        *i += j as u32;
+    });
 ```

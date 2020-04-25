@@ -1,4 +1,4 @@
-//mod book;
+mod book;
 mod borrow;
 mod iteration;
 #[cfg(feature = "serde")]

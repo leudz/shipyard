@@ -12,13 +12,11 @@ There are two main benefits to using an ECS:
     - Spatial locality
     - Less pointer chasing
 
-However, programming with an ECS requires thinking about data and logic in a different way than you might be used to. Also, the optimization techniques need explicit choice and tuning to get the greatest benefit (see [Packs](./going-further/packs.md))
+However, programming with an ECS requires thinking about data and logic in a different way than you might be used to.
 
 # How does it work?
 
-`EntityId` is just a newtype wrapping a `u64`, which is interpreted as a 48-bit index plus a 16-bit version.
-
-Components hold data. Only data. No logic. They _can_ of course contain methods but the ECS only sees the hard data.
+Components hold data. Entities are simply ids used to refer to a group of components.
 
 Systems do the heavy lifting: updating components, running side-effects, and integrating with other parts of the code.
 

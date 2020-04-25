@@ -112,7 +112,7 @@ fn attach(&mut self, id: EntityId, parent: EntityId) {
     let (entities, parents, children) = self;
 
     // either the designated parent already has a Parent component – and thus one or more children
-    if let Ok(p) = parents.get(parent) {
+    if let Ok(p) = parents.try_get(parent) {
         // increase the parent's children counter
         p.num_children += 1;
 
@@ -170,15 +170,15 @@ And lastly a simple usage example:
 ```rust, noplaypen
 let world = World::new();
 
-let mut hierarchy = world.borrow::<(EntitiesMut, &mut Parent, &mut Child)>();
+let mut hierarchy = world.borrow::<(EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>)>();
 
 let root1 = hierarchy.0.add_entity((), ());
 let root2 = hierarchy.0.add_entity((), ());
 
 let e1 = hierarchy.attach_new(root1);
-let e2 = hierarchy.attach_new(e1);
+let _e2 = hierarchy.attach_new(e1);
 let e3 = hierarchy.attach_new(e1);
-let e4 = hierarchy.attach_new(e3);
+let _e4 = hierarchy.attach_new(e3);
 
 hierarchy.attach(e3, root2);
 ```
@@ -207,7 +207,7 @@ struct ChildrenIter<C> {
 
 impl<'a, C> Iterator for ChildrenIter<C>
 where
-    C: GetComponent<Out = &'a Child> + Copy,
+    C: Get<Out = &'a Child> + Copy,
 {
     type Item = EntityId;
 
@@ -215,7 +215,7 @@ where
         if self.cursor.1 > 0 {
             self.cursor.1 -= 1;
             let ret = self.cursor.0;
-            self.cursor.0 = self.get_child.get(self.cursor.0).unwrap().next;
+            self.cursor.0 = self.get_child.get(self.cursor.0).next;
             Some(ret)
         } else {
             None
@@ -236,12 +236,12 @@ struct AncestorIter<C> {
 
 impl<'a, C> Iterator for AncestorIter<C>
 where
-    C: GetComponent<Out = &'a Child> + Copy,
+    C: Get<Out = &'a Child> + Copy,
 {
     type Item = EntityId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.get_child.get(self.cursor).ok().map(|child| {
+        self.get_child.try_get(self.cursor).ok().map(|child| {
             self.cursor = child.parent;
             child.parent
         })
@@ -266,8 +266,8 @@ struct DescendantsIter<P, C> {
 
 impl<'a, P, C> Iterator for DescendantsIter<P, C>
 where
-    P: GetComponent<Out = &'a Parent> + Copy,
-    C: GetComponent<Out = &'a Child> + Copy,
+    P: Get<Out = &'a Parent> + Copy,
+    C: Get<Out = &'a Child> + Copy,
 {
     type Item = EntityId;
 
@@ -276,8 +276,8 @@ where
             if cursor.1 > 0 {
                 cursor.1 -= 1;
                 let ret = cursor.0;
-                cursor.0 = self.get_child.get(cursor.0).unwrap().next;
-                if let Ok(parent) = self.get_parent.get(ret) {
+                cursor.0 = self.get_child.get(cursor.0).next;
+                if let Ok(parent) = self.get_parent.try_get(ret) {
                     self.cursors.push((parent.first_child, parent.num_children));
                 }
                 Some(ret)
@@ -303,8 +303,8 @@ trait HierarchyIter<'a, P, C> {
 
 impl<'a, P, C> HierarchyIter<'a, P, C> for (P, C)
 where
-    P: GetComponent<Out = &'a Parent> + Copy,
-    C: GetComponent<Out = &'a Child> + Copy,
+    P: Get<Out = &'a Parent> + Copy,
+    C: Get<Out = &'a Child> + Copy,
 {
     fn ancestors(&self, id: EntityId) -> AncestorIter<C> {
         let (_, children) = self;
@@ -321,7 +321,7 @@ where
         ChildrenIter {
             get_child: *children,
             cursor: parents
-                .get(id)
+                .try_get(id)
                 .map_or((id, 0), |parent| (parent.first_child, parent.num_children)),
         }
     }
@@ -332,7 +332,7 @@ where
         DescendantsIter {
             get_parent: *parents,
             get_child: *children,
-            cursors: parents.get(id).map_or_else(
+            cursors: parents.try_get(id).map_or_else(
                 |_| Vec::new(),
                 |parent| vec![(parent.first_child, parent.num_children)],
             ),
@@ -348,7 +348,7 @@ Cool. Let's extend the former usage example into a little test.
 fn test_hierarchy() {
     let world = World::new();
 
-    let mut hierarchy = world.borrow::<(EntitiesMut, &mut Parent, &mut Child)>();
+    let mut hierarchy = world.borrow::<(EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>)>();
 
     let root1 = hierarchy.0.add_entity((), ());
     let root2 = hierarchy.0.add_entity((), ());
@@ -476,8 +476,11 @@ Again a small test demonstrates the usage:
 fn test_sorting() {
     let world = World::new();
 
-    let (mut hierarchy, mut usizes) = world.borrow::<((EntitiesMut, &mut Parent, &mut Child), &mut usize)>();
-
+    let (mut hierarchy, mut usizes) = world.borrow::<(
+        (EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>),
+        ViewMut<usize>,
+    )>();
+    
     let root = hierarchy.0.add_entity((), ());
 
     let e0 = hierarchy.attach_new(root);
