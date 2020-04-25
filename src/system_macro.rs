@@ -56,21 +56,21 @@ macro_rules! system {
 /// use shipyard::{error::RunWorkload, try_system, EntitiesViewMut, World};
 /// use std::error::Error;
 /// use std::fmt::{Debug, Display, Formatter};
-/// 
+///
 /// #[derive(Debug)]
 /// struct TerribleError;
-/// 
+///
 /// impl Display for TerribleError {
 ///     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
 ///         Debug::fmt(self, fmt)
 ///     }
 /// }
 /// impl Error for TerribleError {}
-/// 
+///
 /// fn my_sys(mut entities: EntitiesViewMut) -> Result<(), TerribleError> {
 ///     Err(TerribleError)
 /// }
-/// 
+///
 /// fn main() {
 ///     let world = World::new();
 ///     world
