@@ -59,28 +59,28 @@ fn tight() {
     let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>();
 
     assert_eq!(
-        (&usizes).get(entity1),
+        (&usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
     assert_eq!(
-        (&u32s).get(entity1),
+        (&u32s).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<u32>(),
         })
     );
     assert_eq!(
-        usizes.get(entity2),
+        usizes.try_get(entity2),
         Err(error::MissingComponent {
             id: entity2,
             name: type_name::<usize>(),
         })
     );
     assert_eq!(
-        u32s.get(entity2),
+        u32s.try_get(entity2),
         Err(error::MissingComponent {
             id: entity2,
             name: type_name::<u32>(),
@@ -109,28 +109,28 @@ fn delete_loose() {
 
     world.run(|(usizes, u32s): (View<usize>, View<u32>)| {
         assert_eq!(
-            (&usizes).get(entity1),
+            (&usizes).try_get(entity1),
             Err(error::MissingComponent {
                 id: entity1,
                 name: type_name::<usize>(),
             })
         );
         assert_eq!(
-            (&u32s).get(entity1),
+            (&u32s).try_get(entity1),
             Err(error::MissingComponent {
                 id: entity1,
                 name: type_name::<u32>(),
             })
         );
         assert_eq!(
-            usizes.get(entity2),
+            usizes.try_get(entity2),
             Err(error::MissingComponent {
                 id: entity2,
                 name: type_name::<usize>(),
             })
         );
         assert_eq!(
-            u32s.get(entity2),
+            u32s.try_get(entity2),
             Err(error::MissingComponent {
                 id: entity2,
                 name: type_name::<u32>(),
@@ -161,42 +161,42 @@ fn delete_tight_loose() {
     world.run(
         |(usizes, u64s, u32s): (View<usize>, View<u64>, View<u32>)| {
             assert_eq!(
-                (&usizes).get(entity1),
+                (&usizes).try_get(entity1),
                 Err(error::MissingComponent {
                     id: entity1,
                     name: type_name::<usize>(),
                 })
             );
             assert_eq!(
-                (&u64s).get(entity1),
+                (&u64s).try_get(entity1),
                 Err(error::MissingComponent {
                     id: entity1,
                     name: type_name::<u64>(),
                 })
             );
             assert_eq!(
-                (&u32s).get(entity1),
+                (&u32s).try_get(entity1),
                 Err(error::MissingComponent {
                     id: entity1,
                     name: type_name::<u32>(),
                 })
             );
             assert_eq!(
-                usizes.get(entity2),
+                usizes.try_get(entity2),
                 Err(error::MissingComponent {
                     id: entity2,
                     name: type_name::<usize>(),
                 })
             );
             assert_eq!(
-                u64s.get(entity2),
+                u64s.try_get(entity2),
                 Err(error::MissingComponent {
                     id: entity2,
                     name: type_name::<u64>(),
                 })
             );
             assert_eq!(
-                u32s.get(entity2),
+                u32s.try_get(entity2),
                 Err(error::MissingComponent {
                     id: entity2,
                     name: type_name::<u32>(),
@@ -229,14 +229,14 @@ fn update() {
 
     let mut usizes = world.borrow::<ViewMut<usize>>();
     assert_eq!(
-        (&usizes).get(entity1),
+        (&usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
     assert_eq!(
-        usizes.get(entity2),
+        usizes.try_get(entity2),
         Err(error::MissingComponent {
             id: entity2,
             name: type_name::<usize>(),

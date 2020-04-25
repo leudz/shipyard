@@ -19,21 +19,21 @@ fn no_pack() {
 
     let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>();
     assert_eq!(
-        (&usizes).get(entity1),
+        (&usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
     assert_eq!(
-        (&u32s).get(entity1),
+        (&u32s).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<u32>(),
         })
     );
-    assert_eq!(usizes.get(entity2), Ok(&2));
-    assert_eq!(u32s.get(entity2), Ok(&3));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
+    assert_eq!(u32s.try_get(entity2), Ok(&3));
 }
 
 #[test]
@@ -55,21 +55,21 @@ fn tight() {
     let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>();
 
     assert_eq!(
-        (&usizes).get(entity1),
+        (&usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
     assert_eq!(
-        (&u32s).get(entity1),
+        (&u32s).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<u32>(),
         })
     );
-    assert_eq!(usizes.get(entity2), Ok(&2));
-    assert_eq!(u32s.get(entity2), Ok(&3));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
+    assert_eq!(u32s.try_get(entity2), Ok(&3));
     let mut iter = (&usizes, &u32s).iter();
     assert_eq!(iter.next(), Some((&2, &3)));
     assert_eq!(iter.next(), None);
@@ -93,21 +93,21 @@ fn delete_loose() {
 
     world.run(|(usizes, u32s): (View<usize>, View<u32>)| {
         assert_eq!(
-            (&usizes).get(entity1),
+            (&usizes).try_get(entity1),
             Err(error::MissingComponent {
                 id: entity1,
                 name: type_name::<usize>(),
             })
         );
         assert_eq!(
-            (&u32s).get(entity1),
+            (&u32s).try_get(entity1),
             Err(error::MissingComponent {
                 id: entity1,
                 name: type_name::<u32>(),
             })
         );
-        assert_eq!(usizes.get(entity2), Ok(&2));
-        assert_eq!(u32s.get(entity2), Ok(&3));
+        assert_eq!(usizes.try_get(entity2), Ok(&2));
+        assert_eq!(u32s.try_get(entity2), Ok(&3));
         let mut iter = (&usizes, &u32s).iter();
         assert_eq!(iter.next(), Some((&2, &3)));
         assert_eq!(iter.next(), None);
@@ -134,29 +134,29 @@ fn delete_tight_loose() {
     world.run(
         |(usizes, u64s, u32s): (View<usize>, View<u64>, View<u32>)| {
             assert_eq!(
-                (&usizes).get(entity1),
+                (&usizes).try_get(entity1),
                 Err(error::MissingComponent {
                     id: entity1,
                     name: type_name::<usize>(),
                 })
             );
             assert_eq!(
-                (&u64s).get(entity1),
+                (&u64s).try_get(entity1),
                 Err(error::MissingComponent {
                     id: entity1,
                     name: type_name::<u64>(),
                 })
             );
             assert_eq!(
-                (&u32s).get(entity1),
+                (&u32s).try_get(entity1),
                 Err(error::MissingComponent {
                     id: entity1,
                     name: type_name::<u32>(),
                 })
             );
-            assert_eq!(usizes.get(entity2), Ok(&3));
-            assert_eq!(u64s.get(entity2), Ok(&4));
-            assert_eq!(u32s.get(entity2), Ok(&5));
+            assert_eq!(usizes.try_get(entity2), Ok(&3));
+            assert_eq!(u64s.try_get(entity2), Ok(&4));
+            assert_eq!(u32s.try_get(entity2), Ok(&5));
             let mut tight_iter = (&usizes, &u64s).iter();
             assert_eq!(tight_iter.next(), Some((&3, &4)));
             assert_eq!(tight_iter.next(), None);
@@ -184,13 +184,13 @@ fn update() {
 
     let mut usizes = world.borrow::<ViewMut<usize>>();
     assert_eq!(
-        (&usizes).get(entity1),
+        (&usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!(usizes.get(entity2), Ok(&2));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
     assert_eq!(usizes.deleted().len(), 1);
     assert_eq!(usizes.take_deleted(), vec![(entity1, 0)]);
 }

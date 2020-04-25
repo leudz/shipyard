@@ -157,15 +157,15 @@ impl Entities {
     /// Multiple components can be added at the same time using a tuple.
     /// ### Example:
     /// ```
-    /// use shipyard::{EntitiesViewMut, GetComponent, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, Get, ViewMut, World};
     ///
     /// let world = World::new();
     ///
     /// world.run(
     ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         assert_eq!(usizes.get(entity), Ok(&0));
-    ///         assert_eq!(u32s.get(entity), Ok(&1));
+    ///         assert_eq!(usizes.try_get(entity), Ok(&0));
+    ///         assert_eq!(u32s.try_get(entity), Ok(&1));
     ///     },
     /// );
     /// ```

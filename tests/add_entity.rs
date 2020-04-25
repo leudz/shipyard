@@ -9,7 +9,7 @@ fn no_pack() {
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)| {
             let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-            assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
+            assert_eq!((&usizes, &u32s).get(entity1), (&0, &1));
         },
     );
 }
@@ -22,7 +22,7 @@ fn tight() {
 
     (&mut usizes, &mut u32s).tight_pack();
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
+    assert_eq!((&usizes, &u32s).get(entity1), (&0, &1));
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn loose() {
 
     (&mut usizes, &mut u32s).loose_pack();
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
+    assert_eq!((&usizes, &u32s).get(entity1), (&0, &1));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn tight_loose() {
     (&mut usizes, &mut u64s).tight_pack();
     LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes, &mut u64s));
     let entity1 = entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2));
-    assert_eq!((&usizes, &u64s, &u32s).get(entity1).unwrap(), (&0, &1, &2));
+    assert_eq!((&usizes, &u64s, &u32s).get(entity1), (&0, &1, &2));
 }
 
 #[test]
@@ -67,8 +67,8 @@ fn cleared_update() {
     usizes.clear_inserted_and_modified();
     let entity2 = entities.add_entity(&mut usizes, 2);
     assert_eq!(usizes.inserted().len(), 1);
-    assert_eq!(*usizes.get(entity1).unwrap(), 1);
-    assert_eq!(*usizes.get(entity2).unwrap(), 2);
+    assert_eq!(*usizes.get(entity1), 1);
+    assert_eq!(*usizes.get(entity2), 2);
 }
 
 #[test]
@@ -81,8 +81,8 @@ fn modified_update() {
     usizes[entity1] = 3;
     let entity2 = entities.add_entity(&mut usizes, 2);
     assert_eq!(usizes.inserted().len(), 1);
-    assert_eq!(*usizes.get(entity1).unwrap(), 3);
-    assert_eq!(*usizes.get(entity2).unwrap(), 2);
+    assert_eq!(*usizes.get(entity1), 3);
+    assert_eq!(*usizes.get(entity2), 2);
 }
 
 #[test]

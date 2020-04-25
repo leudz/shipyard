@@ -171,7 +171,7 @@ pub use crate::borrow::NonSync;
 pub use crate::borrow::{AllStoragesBorrow, Borrow};
 pub use borrow::FakeBorrow;
 pub use delete::Delete;
-pub use get::GetComponent;
+pub use get::Get;
 pub use iter::{
     iterators, CurrentId, Enumerate, ExactSizeShiperator, Filter, IntoIter, IntoIterIds, Map,
     Shiperator, WithId,

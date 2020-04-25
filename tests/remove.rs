@@ -14,15 +14,15 @@ fn no_pack() {
     let component = usizes.remove(entity1);
     assert_eq!(component, Some(0usize));
     assert_eq!(
-        (&mut usizes).get(entity1),
+        (&mut usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!((&mut u32s).get(entity1), Ok(&mut 1));
-    assert_eq!(usizes.get(entity2), Ok(&2));
-    assert_eq!(u32s.get(entity2), Ok(&3));
+    assert_eq!((&mut u32s).try_get(entity1), Ok(&mut 1));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
+    assert_eq!(u32s.try_get(entity2), Ok(&3));
 }
 
 #[test]
@@ -37,15 +37,15 @@ fn tight() {
     let component = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
     assert_eq!(component, (Some(0usize),));
     assert_eq!(
-        (&mut usizes).get(entity1),
+        (&mut usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!((&mut u32s).get(entity1), Ok(&mut 1));
-    assert_eq!(usizes.get(entity2), Ok(&2));
-    assert_eq!(u32s.get(entity2), Ok(&3));
+    assert_eq!((&mut u32s).try_get(entity1), Ok(&mut 1));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
+    assert_eq!(u32s.try_get(entity2), Ok(&3));
     let iter = (&usizes, &u32s).iter();
     if let iterators::Iter2::Tight(mut iter) = iter {
         assert_eq!(iter.next(), Some((&2, &3)));
@@ -67,15 +67,15 @@ fn loose() {
     let component = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
     assert_eq!(component, (Some(0usize),));
     assert_eq!(
-        (&mut usizes).get(entity1),
+        (&mut usizes).try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!((&mut u32s).get(entity1), Ok(&mut 1));
-    assert_eq!(usizes.get(entity2), Ok(&2));
-    assert_eq!(u32s.get(entity2), Ok(&3));
+    assert_eq!((&mut u32s).try_get(entity1), Ok(&mut 1));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
+    assert_eq!(u32s.try_get(entity2), Ok(&3));
     let mut iter = (&usizes, &u32s).iter();
     assert_eq!(iter.next(), Some((&2, &3)));
     assert_eq!(iter.next(), None);
@@ -128,13 +128,13 @@ fn update() {
     let component = usizes.remove(entity1);
     assert_eq!(component, Some(0));
     assert_eq!(
-        usizes.get(entity1),
+        usizes.try_get(entity1),
         Err(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!(usizes.get(entity2), Ok(&2));
+    assert_eq!(usizes.try_get(entity2), Ok(&2));
     assert_eq!(usizes.len(), 1);
     assert_eq!(usizes.inserted().len(), 1);
     assert_eq!(usizes.modified().len(), 0);

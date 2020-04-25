@@ -12,23 +12,23 @@ fn non_packed() {
     let entity3 = entities.add_entity(&mut i16s, 13);
     let entity4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    assert_eq!(u32s.get(entity0), Ok(&0));
-    assert_eq!(u32s.get(entity1), Ok(&1));
-    assert_eq!(u32s.get(entity2), Ok(&2));
-    assert!(u32s.get(entity3).is_err());
-    assert_eq!(u32s.get(entity4), Ok(&4));
+    assert_eq!(u32s.try_get(entity0), Ok(&0));
+    assert_eq!(u32s.try_get(entity1), Ok(&1));
+    assert_eq!(u32s.try_get(entity2), Ok(&2));
+    assert!(u32s.try_get(entity3).is_err());
+    assert_eq!(u32s.try_get(entity4), Ok(&4));
 
-    assert_eq!(i16s.get(entity0), Ok(&10));
-    assert!(i16s.get(entity1).is_err());
-    assert_eq!(i16s.get(entity2), Ok(&12));
-    assert_eq!(i16s.get(entity3), Ok(&13));
-    assert_eq!(i16s.get(entity4), Ok(&14));
+    assert_eq!(i16s.try_get(entity0), Ok(&10));
+    assert!(i16s.try_get(entity1).is_err());
+    assert_eq!(i16s.try_get(entity2), Ok(&12));
+    assert_eq!(i16s.try_get(entity3), Ok(&13));
+    assert_eq!(i16s.try_get(entity4), Ok(&14));
 
-    assert_eq!((&u32s, &i16s).get(entity0), Ok((&0, &10)));
-    assert!((&u32s, &i16s).get(entity1).is_err());
-    assert_eq!((&u32s, &i16s).get(entity2), Ok((&2, &12)));
-    assert!((&u32s, &i16s).get(entity3).is_err());
-    assert_eq!((&u32s, &i16s).get(entity4), Ok((&4, &14)));
+    assert_eq!((&u32s, &i16s).try_get(entity0), Ok((&0, &10)));
+    assert!((&u32s, &i16s).try_get(entity1).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity2), Ok((&2, &12)));
+    assert!((&u32s, &i16s).try_get(entity3).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity4), Ok((&4, &14)));
 }
 
 #[test]
@@ -44,23 +44,23 @@ fn tight() {
     let entity3 = entities.add_entity(&mut i16s, 13);
     let entity4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    assert_eq!(u32s.get(entity0), Ok(&0));
-    assert_eq!(u32s.get(entity1), Ok(&1));
-    assert_eq!(u32s.get(entity2), Ok(&2));
-    assert!(u32s.get(entity3).is_err());
-    assert_eq!(u32s.get(entity4), Ok(&4));
+    assert_eq!(u32s.try_get(entity0), Ok(&0));
+    assert_eq!(u32s.try_get(entity1), Ok(&1));
+    assert_eq!(u32s.try_get(entity2), Ok(&2));
+    assert!(u32s.try_get(entity3).is_err());
+    assert_eq!(u32s.try_get(entity4), Ok(&4));
 
-    assert_eq!(i16s.get(entity0), Ok(&10));
-    assert!(i16s.get(entity1).is_err());
-    assert_eq!(i16s.get(entity2), Ok(&12));
-    assert_eq!(i16s.get(entity3), Ok(&13));
-    assert_eq!(i16s.get(entity4), Ok(&14));
+    assert_eq!(i16s.try_get(entity0), Ok(&10));
+    assert!(i16s.try_get(entity1).is_err());
+    assert_eq!(i16s.try_get(entity2), Ok(&12));
+    assert_eq!(i16s.try_get(entity3), Ok(&13));
+    assert_eq!(i16s.try_get(entity4), Ok(&14));
 
-    assert_eq!((&u32s, &i16s).get(entity0), Ok((&0, &10)));
-    assert!((&u32s, &i16s).get(entity1).is_err());
-    assert_eq!((&u32s, &i16s).get(entity2), Ok((&2, &12)));
-    assert!((&u32s, &i16s).get(entity3).is_err());
-    assert_eq!((&u32s, &i16s).get(entity4), Ok((&4, &14)));
+    assert_eq!((&u32s, &i16s).try_get(entity0), Ok((&0, &10)));
+    assert!((&u32s, &i16s).try_get(entity1).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity2), Ok((&2, &12)));
+    assert!((&u32s, &i16s).try_get(entity3).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity4), Ok((&4, &14)));
 }
 
 #[test]
@@ -76,23 +76,23 @@ fn loose() {
     let entity3 = entities.add_entity(&mut i16s, 13);
     let entity4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    assert_eq!(u32s.get(entity0), Ok(&0));
-    assert_eq!(u32s.get(entity1), Ok(&1));
-    assert_eq!(u32s.get(entity2), Ok(&2));
-    assert!(u32s.get(entity3).is_err());
-    assert_eq!(u32s.get(entity4), Ok(&4));
+    assert_eq!(u32s.try_get(entity0), Ok(&0));
+    assert_eq!(u32s.try_get(entity1), Ok(&1));
+    assert_eq!(u32s.try_get(entity2), Ok(&2));
+    assert!(u32s.try_get(entity3).is_err());
+    assert_eq!(u32s.try_get(entity4), Ok(&4));
 
-    assert_eq!(i16s.get(entity0), Ok(&10));
-    assert!(i16s.get(entity1).is_err());
-    assert_eq!(i16s.get(entity2), Ok(&12));
-    assert_eq!(i16s.get(entity3), Ok(&13));
-    assert_eq!(i16s.get(entity4), Ok(&14));
+    assert_eq!(i16s.try_get(entity0), Ok(&10));
+    assert!(i16s.try_get(entity1).is_err());
+    assert_eq!(i16s.try_get(entity2), Ok(&12));
+    assert_eq!(i16s.try_get(entity3), Ok(&13));
+    assert_eq!(i16s.try_get(entity4), Ok(&14));
 
-    assert_eq!((&u32s, &i16s).get(entity0), Ok((&0, &10)));
-    assert!((&u32s, &i16s).get(entity1).is_err());
-    assert_eq!((&u32s, &i16s).get(entity2), Ok((&2, &12)));
-    assert!((&u32s, &i16s).get(entity3).is_err());
-    assert_eq!((&u32s, &i16s).get(entity4), Ok((&4, &14)));
+    assert_eq!((&u32s, &i16s).try_get(entity0), Ok((&0, &10)));
+    assert!((&u32s, &i16s).try_get(entity1).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity2), Ok((&2, &12)));
+    assert!((&u32s, &i16s).try_get(entity3).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity4), Ok((&4, &14)));
 }
 
 #[test]
@@ -109,23 +109,23 @@ fn update() {
     let entity3 = entities.add_entity(&mut i16s, 13);
     let entity4 = entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    assert_eq!(u32s.get(entity0), Ok(&0));
-    assert_eq!(u32s.get(entity1), Ok(&1));
-    assert_eq!(u32s.get(entity2), Ok(&2));
-    assert!(u32s.get(entity3).is_err());
-    assert_eq!(u32s.get(entity4), Ok(&4));
+    assert_eq!(u32s.try_get(entity0), Ok(&0));
+    assert_eq!(u32s.try_get(entity1), Ok(&1));
+    assert_eq!(u32s.try_get(entity2), Ok(&2));
+    assert!(u32s.try_get(entity3).is_err());
+    assert_eq!(u32s.try_get(entity4), Ok(&4));
 
-    assert_eq!(i16s.get(entity0), Ok(&10));
-    assert!(i16s.get(entity1).is_err());
-    assert_eq!(i16s.get(entity2), Ok(&12));
-    assert_eq!(i16s.get(entity3), Ok(&13));
-    assert_eq!(i16s.get(entity4), Ok(&14));
+    assert_eq!(i16s.try_get(entity0), Ok(&10));
+    assert!(i16s.try_get(entity1).is_err());
+    assert_eq!(i16s.try_get(entity2), Ok(&12));
+    assert_eq!(i16s.try_get(entity3), Ok(&13));
+    assert_eq!(i16s.try_get(entity4), Ok(&14));
 
-    assert_eq!((&u32s, &i16s).get(entity0), Ok((&0, &10)));
-    assert!((&u32s, &i16s).get(entity1).is_err());
-    assert_eq!((&u32s, &i16s).get(entity2), Ok((&2, &12)));
-    assert!((&u32s, &i16s).get(entity3).is_err());
-    assert_eq!((&u32s, &i16s).get(entity4), Ok((&4, &14)));
+    assert_eq!((&u32s, &i16s).try_get(entity0), Ok((&0, &10)));
+    assert!((&u32s, &i16s).try_get(entity1).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity2), Ok((&2, &12)));
+    assert!((&u32s, &i16s).try_get(entity3).is_err());
+    assert_eq!((&u32s, &i16s).try_get(entity4), Ok((&4, &14)));
 }
 
 #[test]
@@ -138,23 +138,23 @@ fn off_by_one() {
 
     let window = u32s.as_window(1..);
     assert_eq!(window.len(), 2);
-    assert!(window.get(entity0).is_err());
-    assert_eq!(window.get(entity1).ok(), Some(&1));
-    assert_eq!(window.get(entity2).ok(), Some(&2));
+    assert!(window.try_get(entity0).is_err());
+    assert_eq!(window.try_get(entity1).ok(), Some(&1));
+    assert_eq!(window.try_get(entity2).ok(), Some(&2));
     let window = window.as_window(1..);
     assert_eq!(window.len(), 1);
-    assert!(window.get(entity0).is_err());
-    assert!(window.get(entity1).is_err());
-    assert_eq!(window.get(entity2).ok(), Some(&2));
+    assert!(window.try_get(entity0).is_err());
+    assert!(window.try_get(entity1).is_err());
+    assert_eq!(window.try_get(entity2).ok(), Some(&2));
 
     let mut window = u32s.as_window_mut(1..);
     assert_eq!(window.len(), 2);
-    assert!(window.get(entity0).is_err());
-    assert_eq!((&mut window).get(entity1).ok(), Some(&mut 1));
-    assert_eq!((&mut window).get(entity2).ok(), Some(&mut 2));
+    assert!(window.try_get(entity0).is_err());
+    assert_eq!((&mut window).try_get(entity1).ok(), Some(&mut 1));
+    assert_eq!((&mut window).try_get(entity2).ok(), Some(&mut 2));
     let mut window = window.as_window_mut(1..);
     assert_eq!(window.len(), 1);
-    assert!(window.get(entity0).is_err());
-    assert!(window.get(entity1).is_err());
-    assert_eq!((&mut window).get(entity2).ok(), Some(&mut 2));
+    assert!(window.try_get(entity0).is_err());
+    assert!(window.try_get(entity1).is_err());
+    assert_eq!((&mut window).try_get(entity2).ok(), Some(&mut 2));
 }
