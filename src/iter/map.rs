@@ -40,9 +40,9 @@ where
     }
 }
 
-impl<I: Shiperator, F> core::iter::IntoIterator for Map<I, F>
+impl<I: Shiperator, R, F> core::iter::IntoIterator for Map<I, F>
 where
-    F: FnMut(I::Item) -> I::Item,
+    F: FnMut(I::Item) -> R,
 {
     type IntoIter = IntoIterator<Self>;
     type Item = <Self as Shiperator>::Item;
