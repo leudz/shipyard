@@ -282,6 +282,14 @@ pub enum RunWorkload {
 }
 
 impl RunWorkload {
+    #[cfg(feature = "std")]
+    pub fn custom_error(self) -> Option<Box<dyn Error + Send>> {
+        match self {
+            Self::Run((_, Run::Custom(error))) => Some(error),
+            _ => None,
+        }
+    }
+    #[cfg(not(feature = "std"))]
     pub fn custom_error(self) -> Option<Box<dyn core::any::Any + Send>> {
         match self {
             Self::Run((_, Run::Custom(error))) => Some(error),
@@ -317,6 +325,9 @@ impl Display for RunWorkload {
 /// Can refer to an invalid storage borrow or a custom error.
 pub enum Run {
     GetStorage(GetStorage),
+    #[cfg(feature = "std")]
+    Custom(Box<dyn Error + Send>),
+    #[cfg(not(feature = "std"))]
     Custom(Box<dyn core::any::Any + Send>),
 }
 
@@ -327,6 +338,11 @@ impl From<GetStorage> for Run {
 }
 
 impl Run {
+    #[cfg(feature = "std")]
+    pub fn from_custom<E: Error + Send + 'static>(error: E) -> Self {
+        Run::Custom(Box::new(error))
+    }
+    #[cfg(not(feature = "std"))]
     pub fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
         Run::Custom(Box::new(error))
     }

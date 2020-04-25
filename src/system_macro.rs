@@ -51,23 +51,39 @@ macro_rules! system {
 ///
 /// ### Example
 /// ```
-/// use shipyard::{try_system, EntitiesViewMut, World};
-///
+/// #[cfg(feature = "std")]
+/// {
+/// use shipyard::{error::RunWorkload, try_system, EntitiesViewMut, World};
+/// use std::error::Error;
+/// use std::fmt::{Debug, Display, Formatter};
+/// 
+/// #[derive(Debug)]
 /// struct TerribleError;
-///
+/// 
+/// impl Display for TerribleError {
+///     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+///         Debug::fmt(self, fmt)
+///     }
+/// }
+/// impl Error for TerribleError {}
+/// 
 /// fn my_sys(mut entities: EntitiesViewMut) -> Result<(), TerribleError> {
 ///     Err(TerribleError)
 /// }
-///
-/// let world = World::new();
-///
-/// world
-///     .add_workload("May fail")
-///     .with_system(try_system!(my_sys))
-///     .build();
-///
-/// if let Some(error) = world.try_run_default().err().unwrap().custom_error() {
-///     let terrible_error = error.downcast::<TerribleError>();
+/// 
+/// fn main() {
+///     let world = World::new();
+///     world
+///         .add_workload("May fail")
+///         .with_system(try_system!(my_sys))
+///         .build();
+///     match world.try_run_default().map_err(RunWorkload::custom_error) {
+///         Err(Some(error)) => {
+///             assert!(error.is::<TerribleError>());
+///         }
+///         _ => {}
+///     }
+/// }
 /// }
 /// ```
 #[macro_export]
