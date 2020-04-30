@@ -9,7 +9,7 @@ fn no_pack() {
     let entity1 = entities.add_entity((), ());
     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
     entities.add_component((&mut u32s, &mut usizes), (3, 2), entity1);
-    assert_eq!((&usizes, &u32s).get(entity1), (&2, &3));
+    assert_eq!((&usizes, &u32s).try_get(entity1).unwrap(), (&2, &3));
 }
 
 #[test]

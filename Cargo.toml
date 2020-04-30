@@ -21,7 +21,8 @@ parking_lot = { version = "^0.10" }
 hashbrown = "^0.7"
 
 [features]
-default = ["parallel"]
+default = ["parallel", "unwrap_get"]
+unwrap_get = []
 parallel = ["rayon", "num_cpus", "std"]
 non_send = ["std"]
 non_sync = ["std"]

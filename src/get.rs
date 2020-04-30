@@ -7,6 +7,7 @@ use core::any::type_name;
 /// Retrives components based on their type and entity id.
 pub trait Get {
     type Out;
+
     /// Retrieve components of `entity`.
     ///
     /// Multiple components can be queried at the same time using a tuple.
@@ -25,6 +26,8 @@ pub trait Get {
     /// );
     /// ```
     fn try_get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
+
+    #[cfg(feature = "unwrap_get")]
     /// Retrieve components of `entity`.  
     /// Unwraps errors.
     ///
@@ -54,6 +57,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b Window<'a, T> {
             name: type_name::<T>(),
         })
     }
+    #[cfg(feature = "unwrap_get")]
     fn get(self, entity: EntityId) -> Self::Out {
         self.try_get(entity).unwrap()
     }
@@ -67,6 +71,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b WindowMut<'a, T> {
             name: type_name::<T>(),
         })
     }
+    #[cfg(feature = "unwrap_get")]
     fn get(self, entity: EntityId) -> Self::Out {
         self.try_get(entity).unwrap()
     }
@@ -80,6 +85,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b mut WindowMut<'a, T> {
             name: type_name::<T>(),
         })
     }
+    #[cfg(feature = "unwrap_get")]
     fn get(self, entity: EntityId) -> Self::Out {
         self.try_get(entity).unwrap()
     }
@@ -93,6 +99,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b View<'a, T> {
             name: type_name::<T>(),
         })
     }
+    #[cfg(feature = "unwrap_get")]
     fn get(self, entity: EntityId) -> Self::Out {
         self.try_get(entity).unwrap()
     }
@@ -106,6 +113,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b ViewMut<'a, T> {
             name: type_name::<T>(),
         })
     }
+    #[cfg(feature = "unwrap_get")]
     fn get(self, entity: EntityId) -> Self::Out {
         self.try_get(entity).unwrap()
     }
@@ -119,6 +127,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b mut ViewMut<'a, T> {
             name: type_name::<T>(),
         })
     }
+    #[cfg(feature = "unwrap_get")]
     fn get(self, entity: EntityId) -> Self::Out {
         self.try_get(entity).unwrap()
     }
@@ -131,6 +140,7 @@ macro_rules! impl_get_component {
             fn try_get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
                 Ok(($(self.$index.try_get(entity)?,)+))
             }
+            #[cfg(feature = "unwrap_get")]
             fn get(self, entity: EntityId) -> Self::Out {
                 self.try_get(entity).unwrap()
             }
