@@ -229,7 +229,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSend(view))
+        .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -252,7 +252,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSend(view))
+        .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -275,7 +275,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSend(view))
+        .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -298,7 +298,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSend(view))
+        .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -321,7 +321,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSync(view))
+        .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -344,7 +344,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSync(view))
+        .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -367,7 +367,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSync(view))
+        .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -390,7 +390,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSync(view))
+        .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -413,7 +413,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSendSync(view))
+        .map(NonSendSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -436,7 +436,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSendSync(view))
+        .map(NonSendSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -459,7 +459,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSendSync(view))
+        .map(NonSendSync)
     }
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         <NonSendSync<View<'a, T>> as Borrow>::borrow_infos(infos)
@@ -481,7 +481,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
-        .map(|view| NonSendSync(view))
+        .map(NonSendSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {

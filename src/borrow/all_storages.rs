@@ -64,84 +64,84 @@ impl<'a, T: 'static + Send + Sync> AllStoragesBorrow<'a> for UniqueViewMut<'a, T
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<View<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        View::try_storage_from_non_send(all_storages).map(|view| NonSend(view))
+        View::try_storage_from_non_send(all_storages).map(NonSend)
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<ViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        ViewMut::try_storage_from_non_send(all_storages).map(|view| NonSend(view))
+        ViewMut::try_storage_from_non_send(all_storages).map(NonSend)
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<View<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        View::try_storage_from_non_sync(all_storages).map(|view| NonSync(view))
+        View::try_storage_from_non_sync(all_storages).map(NonSync)
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<ViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        ViewMut::try_storage_from_non_sync(all_storages).map(|view| NonSync(view))
+        ViewMut::try_storage_from_non_sync(all_storages).map(NonSync)
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<View<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        View::try_storage_from_non_send_sync(all_storages).map(|view| NonSendSync(view))
+        View::try_storage_from_non_send_sync(all_storages).map(NonSendSync)
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<ViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        ViewMut::try_storage_from_non_send_sync(all_storages).map(|view| NonSendSync(view))
+        ViewMut::try_storage_from_non_send_sync(all_storages).map(NonSendSync)
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueView<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueView::try_storage_from_non_send(all_storages).map(|view| NonSend(view))
+        UniqueView::try_storage_from_non_send(all_storages).map(NonSend)
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_storage_from_non_send(all_storages).map(|view| NonSend(view))
+        UniqueViewMut::try_storage_from_non_send(all_storages).map(NonSend)
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueView<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueView::try_storage_from_non_sync(all_storages).map(|view| NonSync(view))
+        UniqueView::try_storage_from_non_sync(all_storages).map(NonSync)
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_storage_from_non_sync(all_storages).map(|view| NonSync(view))
+        UniqueViewMut::try_storage_from_non_sync(all_storages).map(NonSync)
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<UniqueView<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueView::try_storage_from_non_send_sync(all_storages).map(|view| NonSendSync(view))
+        UniqueView::try_storage_from_non_send_sync(all_storages).map(NonSendSync)
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_storage_from_non_send_sync(all_storages).map(|view| NonSendSync(view))
+        UniqueViewMut::try_storage_from_non_send_sync(all_storages).map(NonSendSync)
     }
 }
 

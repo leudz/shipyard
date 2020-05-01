@@ -22,6 +22,7 @@ pub fn start(mut fps_counter: UniqueViewMut<FpsCounter>) {
     fps_counter.begin();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn handle_controller(
     mut entities: EntitiesViewMut,
     controller: UniqueView<Controller>,
