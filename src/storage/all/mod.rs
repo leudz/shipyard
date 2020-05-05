@@ -33,7 +33,7 @@ impl AllStorages {
     pub(crate) fn new() -> Self {
         let mut storages = HashMap::default();
 
-        let entities = Entities::default();
+        let entities = Entities::new();
 
         #[cfg(feature = "std")]
         {

@@ -33,16 +33,13 @@ pub struct Entities {
     list: Option<(usize, usize)>,
 }
 
-impl Default for Entities {
-    fn default() -> Self {
+impl Entities {
+    pub(crate) fn new() -> Self {
         Entities {
             data: Vec::new(),
             list: None,
         }
     }
-}
-
-impl Entities {
     pub(super) fn delete(&mut self, entity: EntityId) -> bool {
         self.delete_unchecked(entity)
     }
@@ -221,7 +218,7 @@ impl UnknownStorage for Entities {
 fn entities() {
     use core::num::NonZeroU64;
 
-    let mut entities = Entities::default();
+    let mut entities = Entities::new();
 
     let key00 = entities.generate();
     let key10 = entities.generate();
