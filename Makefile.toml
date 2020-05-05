@@ -1,0 +1,24 @@
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+
+[tasks.test-all]
+command = "cargo"
+args = ["test", "--all-features"]
+
+[tasks.test-no-default]
+command = "cargo"
+args = ["test", "--no-default-features"]
+
+[tasks.miri]
+install_crate = "miri"
+command = "cargo"
+args = ["miri", "test", "--no-default-features"]
+dependencies = ["clean"]
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
+
+[tasks.test]
+run_task = { name = ["miri", "test-all", "clean"] }
