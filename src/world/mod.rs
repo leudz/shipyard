@@ -74,19 +74,21 @@ impl World {
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique].  
+    /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
-    /// [Unique]: struct.Unique.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.try_add_unique(component).unwrap();
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique].  
+    /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
-    /// [Unique]: struct.Unique.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     pub fn try_add_unique<T: 'static + Send + Sync>(
         &self,
         component: T,
@@ -97,11 +99,12 @@ impl World {
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique] and [NonSend].  
+    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
-    /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_send")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn try_add_unique_non_send<T: 'static + Sync>(
@@ -114,23 +117,25 @@ impl World {
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique] and [NonSend].  
+    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
-    /// [Unique]: struct.Unique.html
     /// [NonSend]: struct.NonSend.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_send")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique] and [NonSync].  
+    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
-    /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_sync")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn try_add_unique_non_sync<T: 'static + Send>(
@@ -143,23 +148,25 @@ impl World {
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique] and [NonSync].  
+    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
-    /// [Unique]: struct.Unique.html
     /// [NonSync]: struct.NonSync.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_sync")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique] and [NonSendSync].  
+    /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
-    /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn try_add_unique_non_send_sync<T: 'static>(
@@ -172,12 +179,13 @@ impl World {
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [Unique] and [NonSendSync].  
+    /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
-    /// [Unique]: struct.Unique.html
     /// [NonSendSync]: struct.NonSendSync.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
