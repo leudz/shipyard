@@ -1,5 +1,6 @@
 mod all;
 mod entity;
+mod unique;
 
 pub use all::AllStorages;
 pub use entity::{Entities, EntitiesMut, EntityId};
@@ -11,6 +12,7 @@ use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;
+use unique::Unique;
 
 /// Currently unused it'll replace `TypeId` in `AllStorages` in a future version.
 pub enum StorageId {
@@ -76,19 +78,81 @@ impl Storage {
             false,
         )))
     }
+    pub(crate) fn new_unique<T: 'static + Send + Sync>(component: T) -> Self {
+        #[cfg(feature = "std")]
+        {
+            Storage(Box::new(AtomicRefCell::new(Unique(component), None, true)))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            Storage(Box::new(AtomicRefCell::new(Unique(component))))
+        }
+    }
+    #[cfg(feature = "non_send")]
+    pub(crate) fn new_unique_non_send<T: 'static + Sync>(
+        component: T,
+        world_thread_id: std::thread::ThreadId,
+    ) -> Self {
+        Storage(Box::new(AtomicRefCell::new(
+            Unique(component),
+            Some(world_thread_id),
+            true,
+        )))
+    }
+    #[cfg(feature = "non_sync")]
+    pub(crate) fn new_unique_non_sync<T: 'static + Send>(component: T) -> Self {
+        Storage(Box::new(AtomicRefCell::new(Unique(component), None, false)))
+    }
+    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    pub(crate) fn new_unique_non_send_sync<T: 'static>(
+        component: T,
+        world_thread_id: std::thread::ThreadId,
+    ) -> Self {
+        Storage(Box::new(AtomicRefCell::new(
+            Unique(component),
+            Some(world_thread_id),
+            false,
+        )))
+    }
     /// Immutably borrows the component container.
-    pub(crate) fn sparse_set<T: 'static>(&self) -> Result<Ref<'_, SparseSet<T>>, error::Borrow> {
-        Ok(Ref::map(self.0.try_borrow()?, |unknown| {
-            unknown.sparse_set::<T>().unwrap()
-        }))
+    pub(crate) fn sparse_set<T: 'static>(
+        &self,
+    ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
+        Ref::try_map(
+            self.0.try_borrow().map_err(|borrow| {
+                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
+            })?,
+            |unknown| {
+                if let Some(storage) = unknown.sparse_set::<T>() {
+                    Ok(storage)
+                } else {
+                    Err(error::GetStorage::Unique {
+                        name: core::any::type_name::<T>(),
+                        borrow: error::Borrow::Shared,
+                    })
+                }
+            },
+        )
     }
     /// Mutably borrows the component container.
     pub(crate) fn sparse_set_mut<T: 'static>(
         &self,
-    ) -> Result<RefMut<'_, SparseSet<T>>, error::Borrow> {
-        Ok(RefMut::map(self.0.try_borrow_mut()?, |unknown| {
-            unknown.sparse_set_mut::<T>().unwrap()
-        }))
+    ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
+        RefMut::try_map(
+            self.0.try_borrow_mut().map_err(|borrow| {
+                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
+            })?,
+            |unknown| {
+                if let Some(storage) = unknown.sparse_set_mut::<T>() {
+                    Ok(storage)
+                } else {
+                    Err(error::GetStorage::Unique {
+                        name: core::any::type_name::<T>(),
+                        borrow: error::Borrow::Unique,
+                    })
+                }
+            },
+        )
     }
     /// Immutably borrows entities' storage.
     pub(crate) fn entities(&self) -> Result<Ref<'_, Entities>, error::Borrow> {
@@ -101,6 +165,40 @@ impl Storage {
         Ok(RefMut::map(self.0.try_borrow_mut()?, |unknown| {
             unknown.entities_mut().unwrap()
         }))
+    }
+    pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
+        Ref::try_map(
+            self.0.try_borrow().map_err(|borrow| {
+                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
+            })?,
+            |unknown| {
+                if let Some(storage) = unknown.unique::<T>() {
+                    Ok(storage)
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        core::any::type_name::<T>(),
+                        error::Borrow::Shared,
+                    )))
+                }
+            },
+        )
+    }
+    pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
+        RefMut::try_map(
+            self.0.try_borrow_mut().map_err(|borrow| {
+                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
+            })?,
+            |unknown| {
+                if let Some(storage) = unknown.unique_mut::<T>() {
+                    Ok(storage)
+                } else {
+                    Err(error::GetStorage::NonUnique((
+                        core::any::type_name::<T>(),
+                        error::Borrow::Unique,
+                    )))
+                }
+            },
+        )
     }
     /// Mutably borrows the container and delete `index`.
     pub(crate) fn delete(

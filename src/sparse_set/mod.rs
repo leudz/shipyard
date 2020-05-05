@@ -548,9 +548,6 @@ impl<T> SparseSet<T> {
     pub fn clear_inserted_and_modified(&mut self) {
         self.try_clear_inserted_and_modified().unwrap()
     }
-    pub(crate) fn is_unique(&self) -> bool {
-        self.sparse.is_empty() && self.dense.is_empty() && self.data.len() == 1
-    }
     //          ▼ old end of pack
     //              ▼ new end of pack
     // [_ _ _ _ | _ | _ _ _ _ _]
@@ -616,13 +613,6 @@ impl<T> SparseSet<T> {
     pub(crate) fn unpack(&mut self, entity: EntityId) {
         self.window_mut().unpack(entity)
     }
-    /// Place the unique component in the storage.
-    /// The storage has to be completely empty.
-    pub(crate) fn insert_unique(&mut self, component: T) {
-        if self.sparse.is_empty() && self.dense.is_empty() && self.data.is_empty() {
-            self.data.push(component)
-        }
-    }
     pub(crate) fn clone_indices(&self) -> Vec<EntityId> {
         self.dense.clone()
     }
@@ -660,21 +650,19 @@ impl<T> SparseSet<T> {
     }
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
-        if !self.is_unique() {
-            for id in &self.dense {
-                self.sparse[id.bucket()].as_mut().unwrap()[id.bucket_index()] = core::usize::MAX;
-            }
-            match &mut self.pack_info.pack {
-                Pack::Tight(tight) => tight.len = 0,
-                Pack::Loose(loose) => loose.len = 0,
-                Pack::Update(update) => update
-                    .deleted
-                    .extend(self.dense.drain(..).zip(self.data.drain(..))),
-                Pack::NoPack => {}
-            }
-            self.dense.clear();
-            self.data.clear();
+        for id in &self.dense {
+            self.sparse[id.bucket()].as_mut().unwrap()[id.bucket_index()] = core::usize::MAX;
         }
+        match &mut self.pack_info.pack {
+            Pack::Tight(tight) => tight.len = 0,
+            Pack::Loose(loose) => loose.len = 0,
+            Pack::Update(update) => update
+                .deleted
+                .extend(self.dense.drain(..).zip(self.data.drain(..))),
+            Pack::NoPack => {}
+        }
+        self.dense.clear();
+        self.data.clear();
     }
     /// Returns the `EntityId` at a given `index`.
     pub fn try_id_at(&self, index: usize) -> Option<EntityId> {

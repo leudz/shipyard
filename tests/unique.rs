@@ -22,7 +22,7 @@ fn not_unique_storage() {
     match world.try_run(|_: UniqueView<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
-            error::GetStorage::NonUnique((type_name::<usize>(), error::Borrow::Shared))
+            error::GetStorage::MissingUnique(type_name::<usize>())
         ),
         _ => panic!(),
     }
@@ -30,7 +30,7 @@ fn not_unique_storage() {
     match world.try_run(|_: UniqueViewMut<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
-            error::GetStorage::NonUnique((type_name::<usize>(), error::Borrow::Unique))
+            error::GetStorage::MissingUnique(type_name::<usize>())
         ),
         _ => panic!(),
     }

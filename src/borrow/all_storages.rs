@@ -106,42 +106,42 @@ impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<ViewMut<'a, T>
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueView<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueView::try_storage_from_non_send(all_storages).map(NonSend)
+        all_storages.try_into().map(NonSend)
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_storage_from_non_send(all_storages).map(NonSend)
+        all_storages.try_into().map(NonSend)
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueView<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueView::try_storage_from_non_sync(all_storages).map(NonSync)
+        all_storages.try_into().map(NonSync)
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_storage_from_non_sync(all_storages).map(NonSync)
+        all_storages.try_into().map(NonSync)
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<UniqueView<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueView::try_storage_from_non_send_sync(all_storages).map(NonSendSync)
+        all_storages.try_into().map(NonSendSync)
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_storage_from_non_send_sync(all_storages).map(NonSendSync)
+        all_storages.try_into().map(NonSendSync)
     }
 }
 

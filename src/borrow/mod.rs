@@ -270,12 +270,11 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
     ) -> Result<Self, error::GetStorage> {
-        UniqueView::try_from_non_send(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        )
-        .map(NonSend)
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
+            .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -293,12 +292,11 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
     ) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_from_non_send(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        )
-        .map(NonSend)
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
+            .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -362,12 +360,11 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
     ) -> Result<Self, error::GetStorage> {
-        UniqueView::try_from_non_sync(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        )
-        .map(NonSync)
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
+            .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -385,12 +382,11 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
     ) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_from_non_sync(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        )
-        .map(NonSync)
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
+            .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
@@ -454,12 +450,11 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
     ) -> Result<Self, error::GetStorage> {
-        UniqueView::try_from_non_send_sync(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        )
-        .map(NonSendSync)
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
+            .map(NonSendSync)
     }
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
         <NonSendSync<View<'a, T>> as Borrow>::borrow_infos(infos)
@@ -476,12 +471,11 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
         all_storages: &'a AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
     ) -> Result<Self, error::GetStorage> {
-        UniqueViewMut::try_from_non_send_sync(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        )
-        .map(NonSendSync)
+        all_storages
+            .try_borrow()
+            .map_err(error::GetStorage::AllStoragesBorrow)?
+            .try_into()
+            .map(NonSendSync)
     }
 
     fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {

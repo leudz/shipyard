@@ -25,4 +25,10 @@ impl dyn UnknownStorage {
     pub(crate) fn entities_mut(&mut self) -> Option<&mut Entities> {
         self.any_mut().downcast_mut()
     }
+    pub(crate) fn unique<T: 'static>(&self) -> Option<&T> {
+        self.any().downcast_ref()
+    }
+    pub(crate) fn unique_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.any_mut().downcast_mut()
+    }
 }
