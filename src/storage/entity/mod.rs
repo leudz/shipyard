@@ -90,6 +90,8 @@ impl Entities {
     ///     entities.add_component(&mut u32s, 0, entity);
     /// });
     /// ```
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,

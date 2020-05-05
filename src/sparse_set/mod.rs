@@ -157,6 +157,8 @@ impl<T> SparseSet<T> {
     }
     /// Removes `entity`'s component from this storage.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn remove(&mut self, entity: EntityId) -> Option<T>
     where
         T: 'static,
@@ -310,6 +312,8 @@ impl<T> SparseSet<T> {
     }
     /// Deletes `entity`'s component from this storage.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn delete(&mut self, entity: EntityId)
     where
         T: 'static,
@@ -423,6 +427,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *inserted* section of an update packed window.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted(&self) -> Window<'_, T> {
         self.try_inserted().unwrap()
     }
@@ -437,6 +443,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *inserted* section of an update packed window mutably.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_mut().unwrap()
     }
@@ -453,6 +461,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *modified* section of an update packed window.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn modified(&self) -> Window<'_, T> {
         self.try_modified().unwrap()
     }
@@ -467,6 +477,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *modified* section of an update packed window mutably.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_modified_mut().unwrap()
     }
@@ -480,6 +492,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *inserted* and *modified* section of an update packed window.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
         self.try_inserted_or_modified().unwrap()
     }
@@ -496,6 +510,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *inserted* and *modified* section of an update packed window mutably.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_or_modified_mut().unwrap()
     }
@@ -509,6 +525,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *deleted* components of an update packed window.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn deleted(&self) -> &[(EntityId, T)] {
         self.try_deleted().unwrap()
     }
@@ -518,6 +536,8 @@ impl<T> SparseSet<T> {
     }
     /// Takes ownership of the *deleted* components of an update packed window.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
         self.try_take_deleted().unwrap()
     }
@@ -527,6 +547,8 @@ impl<T> SparseSet<T> {
     }
     /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn clear_inserted(&mut self) {
         self.try_clear_inserted().unwrap()
     }
@@ -536,6 +558,8 @@ impl<T> SparseSet<T> {
     }
     /// Moves all component in the *modified* section of an update packed window to the *neutral* section.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn clear_modified(&mut self) {
         self.try_clear_modified().unwrap()
     }
@@ -545,6 +569,8 @@ impl<T> SparseSet<T> {
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed window to the *neutral* section.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn clear_inserted_and_modified(&mut self) {
         self.try_clear_inserted_and_modified().unwrap()
     }
@@ -637,6 +663,8 @@ impl<T> SparseSet<T> {
     }
     /// Update packs this storage making it track *inserted*, *modified* and *deleted* components.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn update_pack(&mut self)
     where
         T: 'static,
@@ -670,6 +698,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns the `EntityId` at a given `index`.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn id_at(&self, index: usize) -> EntityId {
         self.try_id_at(index).unwrap()
     }
@@ -731,6 +761,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns a window over `range`.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
         self.try_as_window(range).unwrap()
     }
@@ -766,6 +798,8 @@ impl<T> SparseSet<T> {
     }
     /// Returns a mutable window over `range`.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
         &mut self,
         range: R,

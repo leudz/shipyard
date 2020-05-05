@@ -7,7 +7,7 @@ use shipyard::*;
 fn simple_borrow() {
     let world = World::new();
 
-    let u32s = world.borrow::<View<u32>>();
+    let u32s = world.try_borrow::<View<u32>>().unwrap();
     assert_eq!(u32s.len(), 0);
 }
 
@@ -15,8 +15,8 @@ fn simple_borrow() {
 fn all_storages_simple_borrow() {
     let world = World::new();
 
-    let all_storages = world.borrow::<AllStoragesViewMut>();
-    let u32s = all_storages.borrow::<View<u32>>();
+    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    let u32s = all_storages.try_borrow::<View<u32>>().unwrap();
     assert_eq!(u32s.len(), 0);
 }
 
@@ -24,7 +24,7 @@ fn all_storages_simple_borrow() {
 fn invalid_borrow() {
     let world = World::new();
 
-    let _u32s = world.borrow::<ViewMut<u32>>();
+    let _u32s = world.try_borrow::<ViewMut<u32>>().unwrap();
     assert_eq!(
         world.try_borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
@@ -38,8 +38,8 @@ fn invalid_borrow() {
 fn all_storages_invalid_borrow() {
     let world = World::new();
 
-    let all_storages = world.borrow::<AllStoragesViewMut>();
-    let _u32s = all_storages.borrow::<ViewMut<u32>>();
+    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    let _u32s = all_storages.try_borrow::<ViewMut<u32>>().unwrap();
     assert_eq!(
         all_storages.try_borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
@@ -53,19 +53,19 @@ fn all_storages_invalid_borrow() {
 fn double_borrow() {
     let world = World::new();
 
-    let u32s = world.borrow::<ViewMut<u32>>();
+    let u32s = world.try_borrow::<ViewMut<u32>>().unwrap();
     drop(u32s);
-    world.borrow::<ViewMut<u32>>();
+    world.try_borrow::<ViewMut<u32>>().unwrap();
 }
 
 #[test]
 fn all_storages_double_borrow() {
     let world = World::new();
 
-    let all_storages = world.borrow::<AllStoragesViewMut>();
-    let u32s = all_storages.borrow::<ViewMut<u32>>();
+    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    let u32s = all_storages.try_borrow::<ViewMut<u32>>().unwrap();
     drop(u32s);
-    all_storages.borrow::<ViewMut<u32>>();
+    all_storages.try_borrow::<ViewMut<u32>>().unwrap();
 }
 
 #[test]

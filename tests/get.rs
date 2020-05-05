@@ -4,8 +4,9 @@ use shipyard::*;
 fn non_packed() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -35,9 +36,10 @@ fn non_packed() {
 fn tight() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
-    (&mut u32s, &mut i16s).tight_pack();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+    (&mut u32s, &mut i16s).try_tight_pack().unwrap();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -67,9 +69,10 @@ fn tight() {
 fn loose() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
-    (&mut u32s, &mut i16s).loose_pack();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -99,10 +102,11 @@ fn loose() {
 fn update() {
     let world = World::new();
 
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
-    u32s.update_pack();
-    i16s.update_pack();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+    u32s.try_update_pack().unwrap();
+    i16s.try_update_pack().unwrap();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -131,28 +135,30 @@ fn update() {
 #[test]
 fn off_by_one() {
     let world = World::new();
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
+    let (mut entities, mut u32s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
     let entity0 = entities.add_entity(&mut u32s, 0);
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity(&mut u32s, 2);
 
-    let window = u32s.as_window(1..);
+    let window = u32s.try_as_window(1..).unwrap();
     assert_eq!(window.len(), 2);
     assert!(window.get(entity0).is_err());
     assert_eq!(window.get(entity1).ok(), Some(&1));
     assert_eq!(window.get(entity2).ok(), Some(&2));
-    let window = window.as_window(1..);
+    let window = window.try_as_window(1..).unwrap();
     assert_eq!(window.len(), 1);
     assert!(window.get(entity0).is_err());
     assert!(window.get(entity1).is_err());
     assert_eq!(window.get(entity2).ok(), Some(&2));
 
-    let mut window = u32s.as_window_mut(1..);
+    let mut window = u32s.try_as_window_mut(1..).unwrap();
     assert_eq!(window.len(), 2);
     assert!(window.get(entity0).is_err());
     assert_eq!((&mut window).get(entity1).ok(), Some(&mut 1));
     assert_eq!((&mut window).get(entity2).ok(), Some(&mut 2));
-    let mut window = window.as_window_mut(1..);
+    let mut window = window.try_as_window_mut(1..).unwrap();
     assert_eq!(window.len(), 1);
     assert!(window.get(entity0).is_err());
     assert!(window.get(entity1).is_err());

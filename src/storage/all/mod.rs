@@ -650,6 +650,8 @@ world.run(|all_storages: AllStoragesViewMut| {
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> V {
         self.try_borrow::<V>().unwrap()
     }
@@ -859,6 +861,8 @@ let i = all_storages.run(sys1);
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, B, R>>(&'s self, s: S) -> R {
         self.try_run(s).unwrap()
     }

@@ -3,10 +3,11 @@ use shipyard::*;
 #[test]
 fn basic() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -67,10 +68,11 @@ fn basic() {
 #[test]
 fn with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
     let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let key1 = entities.add_entity(&mut u32s, 1);
     let key2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -129,10 +131,11 @@ fn with_id() {
 #[test]
 fn map() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -191,10 +194,11 @@ fn map() {
 #[test]
 fn filter() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
@@ -239,10 +243,11 @@ fn filter() {
 #[test]
 fn enumerate_map_filter_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
 
     let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let key1 = entities.add_entity(&mut u32s, 1);
@@ -316,10 +321,11 @@ fn enumerate_map_filter_with_id() {
 #[test]
 fn enumerate_filter_map_with_id() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
 
     let key0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let key1 = entities.add_entity(&mut u32s, 1);
@@ -393,32 +399,33 @@ fn enumerate_filter_map_with_id() {
 #[test]
 fn off_by_one() {
     let world = World::new();
-    let (mut entities, mut u32s, mut i16s) =
-        world.borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>();
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
 
-    (&mut u32s, &mut i16s).loose_pack();
+    (&mut u32s, &mut i16s).try_loose_pack().unwrap();
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
     entities.add_entity(&mut i16s, 13);
     entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    let u32_window = u32s.as_window(1..);
+    let u32_window = u32s.try_as_window(1..).unwrap();
     let iter = (&u32_window, &i16s).iter();
     assert_eq!(iter.size_hint(), (0, Some(3)));
     assert_eq!(iter.collect::<Vec<_>>(), vec![(&2, &12), (&4, &14)]);
 
-    let u32_window = u32_window.as_window(1..);
+    let u32_window = u32_window.try_as_window(1..).unwrap();
     let iter = (&u32_window, &i16s).iter();
     assert_eq!(iter.size_hint(), (0, Some(2)));
     assert_eq!(iter.collect::<Vec<_>>(), vec![(&4, &14)]);
 
-    let i16_window = i16s.as_window(1..);
+    let i16_window = i16s.try_as_window(1..).unwrap();
     let iter = (&u32s, &i16_window).iter();
     assert_eq!(iter.size_hint(), (0, Some(3)));
     assert_eq!(iter.collect::<Vec<_>>(), vec![(&2, &12), (&4, &14)]);
 
-    let i16_window = i16_window.as_window(1..);
+    let i16_window = i16_window.try_as_window(1..).unwrap();
     let iter = (&u32s, &i16_window).iter();
     assert_eq!(iter.size_hint(), (0, Some(2)));
     assert_eq!(iter.collect::<Vec<_>>(), vec![(&4, &14)]);

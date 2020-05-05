@@ -40,6 +40,8 @@ pub trait LoosePack<T> {
     ///     LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes));
     /// });
     /// ```
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn loose_pack(self);
 }
 
@@ -109,6 +111,7 @@ macro_rules! impl_loose_pack {
 
                 Ok(())
             }
+            #[cfg(feature = "panic")]
             fn loose_pack(self) {
                 LoosePack::<($($tight,)+)>::try_loose_pack(self).unwrap()
             }

@@ -5,14 +5,18 @@ use shipyard::*;
 #[test]
 fn unique_storage() {
     let world = World::default();
-    world.add_unique(0usize);
+    world.try_add_unique(0usize).unwrap();
 
-    world.run(|mut x: UniqueViewMut<usize>| {
-        *x += 1;
-    });
-    world.run(|x: UniqueView<usize>| {
-        assert_eq!(*x, 1);
-    });
+    world
+        .try_run(|mut x: UniqueViewMut<usize>| {
+            *x += 1;
+        })
+        .unwrap();
+    world
+        .try_run(|x: UniqueView<usize>| {
+            assert_eq!(*x, 1);
+        })
+        .unwrap();
 }
 
 #[test]
@@ -46,17 +50,23 @@ fn non_send() {
     unsafe impl Sync for NonSendStruct {}
 
     let world = World::default();
-    world.add_unique_non_send(NonSendStruct {
-        value: 0,
-        _phantom: core::marker::PhantomData,
-    });
+    world
+        .try_add_unique_non_send(NonSendStruct {
+            value: 0,
+            _phantom: core::marker::PhantomData,
+        })
+        .unwrap();
 
-    world.run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
-        x.value += 1;
-    });
-    world.run(|x: NonSend<UniqueView<NonSendStruct>>| {
-        assert_eq!(x.value, 1);
-    });
+    world
+        .try_run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
+            x.value += 1;
+        })
+        .unwrap();
+    world
+        .try_run(|x: NonSend<UniqueView<NonSendStruct>>| {
+            assert_eq!(x.value, 1);
+        })
+        .unwrap();
 }
 
 #[cfg(feature = "non_sync")]
@@ -69,17 +79,23 @@ fn non_sync() {
     unsafe impl Send for NonSyncStruct {}
 
     let world = World::default();
-    world.add_unique_non_sync(NonSyncStruct {
-        value: 0,
-        _phantom: core::marker::PhantomData,
-    });
+    world
+        .try_add_unique_non_sync(NonSyncStruct {
+            value: 0,
+            _phantom: core::marker::PhantomData,
+        })
+        .unwrap();
 
-    world.run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
-        x.value += 1;
-    });
-    world.run(|x: NonSync<UniqueView<NonSyncStruct>>| {
-        assert_eq!(x.value, 1);
-    });
+    world
+        .try_run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
+            x.value += 1;
+        })
+        .unwrap();
+    world
+        .try_run(|x: NonSync<UniqueView<NonSyncStruct>>| {
+            assert_eq!(x.value, 1);
+        })
+        .unwrap();
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -91,15 +107,21 @@ fn non_send_sync() {
     }
 
     let world = World::default();
-    world.add_unique_non_send_sync(NonSendSyncStruct {
-        value: 0,
-        _phantom: core::marker::PhantomData,
-    });
+    world
+        .try_add_unique_non_send_sync(NonSendSyncStruct {
+            value: 0,
+            _phantom: core::marker::PhantomData,
+        })
+        .unwrap();
 
-    world.run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
-        x.value += 1;
-    });
-    world.run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
-        assert_eq!(x.value, 1);
-    });
+    world
+        .try_run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
+            x.value += 1;
+        })
+        .unwrap();
+    world
+        .try_run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
+            assert_eq!(x.value, 1);
+        })
+        .unwrap();
 }

@@ -14,6 +14,8 @@ pub trait AddComponent<T> {
         entity: EntityId,
         entities: &Entities,
     ) -> Result<(), error::AddComponent>;
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn add_component(self, component: T, entity: EntityId, entities: &Entities);
 }
 
@@ -49,6 +51,7 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
             Err(error::AddComponent::EntityIsNotAlive)
         }
     }
+    #[cfg(feature = "panic")]
     fn add_component(self, component: T, entity: EntityId, entities: &Entities) {
         self.try_add_component(component, entity, entities).unwrap()
     }
@@ -118,6 +121,7 @@ macro_rules! impl_add_component {
                     Err(error::AddComponent::EntityIsNotAlive)
                 }
             }
+            #[cfg(feature = "panic")]
             fn add_component(self, component: ($($type,)+), entity: EntityId, entities: &Entities) {
                 self.try_add_component(component, entity, entities).unwrap()
             }

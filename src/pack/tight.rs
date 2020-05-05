@@ -37,6 +37,8 @@ pub trait TightPack {
     ///     .borrow::<(ViewMut<usize>, ViewMut<u32>)>()
     ///     .tight_pack();
     /// ```
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn tight_pack(self);
 }
 
@@ -102,7 +104,8 @@ macro_rules! impl_tight_pack {
 
                 Ok(())
             }
-            fn tight_pack(self) {
+                #[cfg(feature = "panic")]
+                fn tight_pack(self) {
                 self.try_tight_pack().unwrap()
             }
         }
@@ -110,7 +113,8 @@ macro_rules! impl_tight_pack {
             fn try_tight_pack(mut self) -> Result<(), error::Pack> {
                 ($(&mut self.$index,)+).try_tight_pack()
             }
-            fn tight_pack(self) {
+                #[cfg(feature = "panic")]
+                fn tight_pack(self) {
                 self.try_tight_pack().unwrap()
             }
         }

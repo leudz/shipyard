@@ -5,31 +5,35 @@ use shipyard::*;
 fn empty_inserted_in_modified() {
     let world = World::new();
 
-    let mut usizes = world.borrow::<ViewMut<usize>>();
-    usizes.update_pack();
-    let modified = usizes.modified();
-    modified.inserted();
+    let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();
+    usizes.try_update_pack().unwrap();
+    let modified = usizes.try_modified().unwrap();
+    modified.try_inserted().unwrap();
 }
 
 #[test]
 fn inserted_in_inserted() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    let inserted = usizes.inserted();
-    inserted.inserted();
+    let inserted = usizes.try_inserted().unwrap();
+    inserted.try_inserted().unwrap();
 }
 
 #[test]
 fn inserted_in_modified() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    let modified = usizes.modified();
+    let modified = usizes.try_modified().unwrap();
     assert_eq!(
         modified.try_inserted().err(),
         Some(error::Inserted::NotInbound)
@@ -40,46 +44,52 @@ fn inserted_in_modified() {
 fn inserted_in_inserted_or_modified() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    let inserted_or_modified = usizes.inserted_or_modified();
-    inserted_or_modified.inserted();
+    let inserted_or_modified = usizes.try_inserted_or_modified().unwrap();
+    inserted_or_modified.try_inserted().unwrap();
 }
 
 #[test]
 fn empty_modified_in_inserted() {
     let world = World::new();
 
-    let mut usizes = world.borrow::<ViewMut<usize>>();
-    usizes.update_pack();
-    let inserted = usizes.inserted();
-    inserted.modified();
+    let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();
+    usizes.try_update_pack().unwrap();
+    let inserted = usizes.try_inserted().unwrap();
+    inserted.try_modified().unwrap();
 }
 
 #[test]
 fn modified_in_modified() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    usizes.clear_inserted();
+    usizes.try_clear_inserted().unwrap();
     (&mut usizes).iter().for_each(|_| {});
-    let modified = usizes.modified();
-    modified.modified();
+    let modified = usizes.try_modified().unwrap();
+    modified.try_modified().unwrap();
 }
 
 #[test]
 fn modified_in_inserted() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    usizes.clear_inserted();
+    usizes.try_clear_inserted().unwrap();
     (&mut usizes).iter().for_each(|_| {});
-    let inserted = usizes.inserted();
+    let inserted = usizes.try_inserted().unwrap();
     assert_eq!(
         inserted.try_modified().err(),
         Some(error::Modified::NotInbound)
@@ -90,61 +100,67 @@ fn modified_in_inserted() {
 fn modified_in_inserted_or_modified() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    usizes.clear_inserted();
+    usizes.try_clear_inserted().unwrap();
     (&mut usizes).iter().for_each(|_| {});
-    let inserted_or_modified = usizes.inserted_or_modified();
-    inserted_or_modified.modified();
+    let inserted_or_modified = usizes.try_inserted_or_modified().unwrap();
+    inserted_or_modified.try_modified().unwrap();
 }
 
 #[test]
 fn empty_inserted_or_modified_in_inserted() {
     let world = World::new();
 
-    let mut usizes = world.borrow::<ViewMut<usize>>();
-    usizes.update_pack();
-    let inserted = usizes.inserted();
-    inserted.inserted_or_modified();
+    let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();
+    usizes.try_update_pack().unwrap();
+    let inserted = usizes.try_inserted().unwrap();
+    inserted.try_inserted_or_modified().unwrap();
 }
 
 #[test]
 fn empty_inserted_or_modified_in_modified() {
     let world = World::new();
 
-    let mut usizes = world.borrow::<ViewMut<usize>>();
-    usizes.update_pack();
-    let modified = usizes.modified();
-    modified.inserted_or_modified();
+    let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();
+    usizes.try_update_pack().unwrap();
+    let modified = usizes.try_modified().unwrap();
+    modified.try_inserted_or_modified().unwrap();
 }
 
 #[test]
 fn inserted_or_modified_in_inserted_or_modified() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    let inserted_or_modified = usizes.inserted_or_modified();
-    inserted_or_modified.inserted_or_modified();
+    let inserted_or_modified = usizes.try_inserted_or_modified().unwrap();
+    inserted_or_modified.try_inserted_or_modified().unwrap();
 
-    usizes.clear_inserted();
+    usizes.try_clear_inserted().unwrap();
     (&mut usizes).iter().for_each(|_| {});
-    let inserted_or_modified = usizes.inserted_or_modified();
-    inserted_or_modified.inserted_or_modified();
+    let inserted_or_modified = usizes.try_inserted_or_modified().unwrap();
+    inserted_or_modified.try_inserted_or_modified().unwrap();
 }
 
 #[test]
 fn inserted_or_modified_in_inserted() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    usizes.clear_inserted();
+    usizes.try_clear_inserted().unwrap();
     (&mut usizes).iter().for_each(|_| {});
-    let inserted = usizes.inserted();
+    let inserted = usizes.try_inserted().unwrap();
     assert_eq!(
         inserted.try_inserted_or_modified().err(),
         Some(error::InsertedOrModified::NotInbound)
@@ -155,10 +171,12 @@ fn inserted_or_modified_in_inserted() {
 fn inserted_or_modified_in_modified() {
     let world = World::new();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>();
-    usizes.update_pack();
+    let (mut entities, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
+        .unwrap();
+    usizes.try_update_pack().unwrap();
     entities.add_entity(&mut usizes, 0);
-    let modified = usizes.modified();
+    let modified = usizes.try_modified().unwrap();
     assert_eq!(
         modified.try_inserted_or_modified().err(),
         Some(error::InsertedOrModified::NotInbound)

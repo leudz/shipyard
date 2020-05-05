@@ -80,6 +80,8 @@ impl World {
     ///
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.try_add_unique(component).unwrap();
     }
@@ -124,8 +126,8 @@ impl World {
     /// [NonSend]: struct.NonSend.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
-    #[cfg(feature = "non_send")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
+    #[cfg(all(feature = "non_send", feature = "panic"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "panic"))))]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
@@ -155,8 +157,8 @@ impl World {
     /// [NonSync]: struct.NonSync.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
-    #[cfg(feature = "non_sync")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
+    #[cfg(all(feature = "non_sync", feature = "panic"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_sync", feature = "panic"))))]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
@@ -186,8 +188,11 @@ impl World {
     /// [NonSendSync]: struct.NonSendSync.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
-    #[cfg(all(feature = "non_send", feature = "non_sync"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
+    #[cfg(all(feature = "non_send", feature = "non_sync", feature = "panic"))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "non_send", feature = "non_sync", feature = "panic")))
+    )]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
@@ -432,6 +437,8 @@ let (entities, mut usizes) = world.borrow::<(EntitiesView, ViewMut<usize>)>();
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> V {
         self.try_borrow::<V>().unwrap()
     }
@@ -693,6 +700,8 @@ let i = world.run(sys1);
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run<'s, B, R, S: crate::system::System<'s, B, R>>(&'s self, s: S) -> R {
         self.try_run(s).unwrap()
     }
@@ -711,6 +720,8 @@ let i = world.run(sys1);
     }
     /// Modifies the current default workload to `name`.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
         self.try_set_default_workload(name).unwrap();
     }
@@ -803,6 +814,8 @@ let i = world.run(sys1);
     ///
     /// world.run_default();
     /// ```
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn add_workload(&self, name: impl Into<Cow<'static, str>>) -> WorkloadBuilder<'_> {
         self.try_add_workload(name).unwrap()
     }
@@ -820,6 +833,8 @@ let i = world.run(sys1);
     }
     /// Runs the `name` workload.  
     /// Unwraps error.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run_workload(&self, name: impl AsRef<str> + Sync) {
         self.try_run_workload(name).unwrap();
     }
@@ -871,6 +886,8 @@ let i = world.run(sys1);
     }
     /// Run the default workload.  
     /// Unwraps error.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run_default(&self) {
         self.try_run_default().unwrap();
     }

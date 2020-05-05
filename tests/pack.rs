@@ -5,10 +5,11 @@ fn pack() {
     use std::any::type_name;
 
     let world = World::new();
-    let (mut usizes, mut u64s, mut u32s, mut u16s) =
-        world.borrow::<(ViewMut<usize>, ViewMut<u64>, ViewMut<u32>, ViewMut<u16>)>();
+    let (mut usizes, mut u64s, mut u32s, mut u16s) = world
+        .try_borrow::<(ViewMut<usize>, ViewMut<u64>, ViewMut<u32>, ViewMut<u16>)>()
+        .unwrap();
 
-    (&mut usizes, &mut u64s).tight_pack();
+    (&mut usizes, &mut u64s).try_tight_pack().unwrap();
 
     match (&mut usizes, &mut u64s).try_tight_pack() {
         Ok(_) => panic!(),
@@ -58,7 +59,7 @@ fn pack() {
         ),
     }
 
-    LoosePack::<(u32,)>::loose_pack((&mut u32s, &mut usizes, &mut u64s));
+    LoosePack::<(u32,)>::try_loose_pack((&mut u32s, &mut usizes, &mut u64s)).unwrap();
 
     match (&mut u32s, &mut u16s).try_tight_pack() {
         Ok(_) => panic!(),

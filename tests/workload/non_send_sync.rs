@@ -10,19 +10,25 @@ fn basic() {
 
     let world = World::default();
 
-    world.run(
-        |mut entities: EntitiesViewMut, mut vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
-            entities.add_entity(&mut *vecs, Rc::new(RefCell::new(Vec::new())));
-        },
-    );
+    world
+        .try_run(
+            |mut entities: EntitiesViewMut,
+             mut vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
+                entities.add_entity(&mut *vecs, Rc::new(RefCell::new(Vec::new())));
+            },
+        )
+        .unwrap();
 
     world
-        .add_workload("Push")
+        .try_add_workload("Push")
+        .unwrap()
         .with_system(system!(push))
         .build();
-    world.run_default();
+    world.try_run_default().unwrap();
 
-    world.run(|vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
-        assert_eq!(&**vecs.iter().next().unwrap().borrow(), &[0][..]);
-    });
+    world
+        .try_run(|vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
+            assert_eq!(&**vecs.iter().next().unwrap().borrow(), &[0][..]);
+        })
+        .unwrap();
 }

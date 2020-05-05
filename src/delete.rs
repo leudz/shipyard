@@ -43,6 +43,8 @@ pub trait Delete<T> {
     ///    },
     /// );
     /// ```
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn delete(self, entity: EntityId);
 }
 
@@ -91,6 +93,7 @@ macro_rules! impl_delete {
 
                 Ok(())
             }
+            #[cfg(feature = "panic")]
             fn delete(self, entity: EntityId) {
                 Delete::<($($type,)+)>::try_delete(self, entity).unwrap()
             }

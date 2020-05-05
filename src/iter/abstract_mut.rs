@@ -61,7 +61,7 @@ macro_rules! window {
                     self.dense_ptr()
                 }
                 unsafe fn id_at(&self, index: usize) -> EntityId {
-                    <Window<'_, T>>::id_at(self, index)
+                    <Window<'_, T>>::try_id_at(self, index).unwrap()
                 }
                 fn index_of(&self, entity: EntityId) -> Option<usize> {
                     (*self).index_of(entity)

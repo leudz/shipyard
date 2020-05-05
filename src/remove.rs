@@ -86,6 +86,8 @@ pub trait Remove<T: Removable> {
     ///     assert_eq!(old, (Some(0),));
     /// });
     /// ```
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn remove(self, entity: EntityId) -> T::Out;
 }
 
@@ -140,6 +142,7 @@ macro_rules! impl_remove {
                     self.$index.actual_remove(entity),
                 )+))
             }
+            #[cfg(feature = "panic")]
             fn remove(self, entity: EntityId) -> <($($type,)+) as Removable>::Out {
                 Remove::<($($type,)+)>::try_remove(self, entity).unwrap()
             }
