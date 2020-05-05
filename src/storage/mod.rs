@@ -3,7 +3,7 @@ mod entity;
 mod unique;
 
 pub use all::AllStorages;
-pub use entity::{Entities, EntitiesMut, EntityId};
+pub use entity::{Entities, EntityId};
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;

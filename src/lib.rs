@@ -180,7 +180,7 @@ pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
 pub use sparse_set::{sort, sort::IntoSortable, SparseSet, Window, WindowMut};
-pub use storage::{AllStorages, Entities, EntitiesMut, EntityId};
+pub use storage::{AllStorages, Entities, EntityId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 #[cfg(feature = "parallel")]

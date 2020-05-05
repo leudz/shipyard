@@ -10,9 +10,6 @@ use add_component::AddComponent;
 use alloc::vec::Vec;
 use core::any::{Any, TypeId};
 
-/// Type used to borrow `Entities` mutably.
-pub struct EntitiesMut;
-
 /// Entities holds the EntityIds to all entities: living, removed and dead.
 ///
 /// A living entity is an entity currently present, with or without component.
