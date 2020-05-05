@@ -412,10 +412,10 @@ impl AllStorages {
     /// });
     ///
     /// world.run(|usizes: View<usize>, u32s: View<u32>| {
-    ///     assert!((&usizes).try_get(entity1).is_err());
-    ///     assert!((&u32s).try_get(entity1).is_err());
-    ///     assert_eq!(usizes.try_get(entity2), Ok(&2));
-    ///     assert_eq!(u32s.try_get(entity2), Ok(&3));
+    ///     assert!((&usizes).get(entity1).is_err());
+    ///     assert!((&u32s).get(entity1).is_err());
+    ///     assert_eq!(usizes.get(entity2), Ok(&2));
+    ///     assert_eq!(u32s.get(entity2), Ok(&3));
     /// });
     /// ```
     pub fn delete(&mut self, entity: EntityId) -> bool {

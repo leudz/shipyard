@@ -9,7 +9,7 @@ fn single() {
     });
 
     world.run(|mut u32s: ViewMut<u32>| {
-        *(&mut u32s).get(entity_id) = 1;
+        *(&mut u32s).get(entity_id).unwrap() = 1;
     });
 }
 
@@ -37,7 +37,7 @@ fn multiple() {
     );
 
     world.run(|mut u32s: ViewMut<u32>, usizes: View<usize>| {
-        let (i, &j) = (&mut u32s, &usizes).get(entity_id);
+        let (i, &j) = (&mut u32s, &usizes).get(entity_id).unwrap();
         *i += j as u32;
         *i += j as u32;
     });

@@ -112,7 +112,7 @@ fn attach(&mut self, id: EntityId, parent: EntityId) {
     let (entities, parents, children) = self;
 
     // either the designated parent already has a Parent component – and thus one or more children
-    if let Ok(p) = parents.try_get(parent) {
+    if let Ok(p) = parents.get(parent) {
         // increase the parent's children counter
         p.num_children += 1;
 
@@ -215,7 +215,7 @@ where
         if self.cursor.1 > 0 {
             self.cursor.1 -= 1;
             let ret = self.cursor.0;
-            self.cursor.0 = self.get_child.get(self.cursor.0).next;
+            self.cursor.0 = self.get_child.get(self.cursor.0).unwrap().next;
             Some(ret)
         } else {
             None
@@ -241,7 +241,7 @@ where
     type Item = EntityId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.get_child.try_get(self.cursor).ok().map(|child| {
+        self.get_child.get(self.cursor).ok().map(|child| {
             self.cursor = child.parent;
             child.parent
         })
@@ -276,8 +276,8 @@ where
             if cursor.1 > 0 {
                 cursor.1 -= 1;
                 let ret = cursor.0;
-                cursor.0 = self.get_child.get(cursor.0).next;
-                if let Ok(parent) = self.get_parent.try_get(ret) {
+                cursor.0 = self.get_child.get(cursor.0).unwrap().next;
+                if let Ok(parent) = self.get_parent.get(ret) {
                     self.cursors.push((parent.first_child, parent.num_children));
                 }
                 Some(ret)
@@ -321,7 +321,7 @@ where
         ChildrenIter {
             get_child: *children,
             cursor: parents
-                .try_get(id)
+                .get(id)
                 .map_or((id, 0), |parent| (parent.first_child, parent.num_children)),
         }
     }
@@ -332,7 +332,7 @@ where
         DescendantsIter {
             get_parent: *parents,
             get_child: *children,
-            cursors: parents.try_get(id).map_or_else(
+            cursors: parents.get(id).map_or_else(
                 |_| Vec::new(),
                 |parent| vec![(parent.first_child, parent.num_children)],
             ),

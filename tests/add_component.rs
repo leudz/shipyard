@@ -9,7 +9,7 @@ fn no_pack() {
     let entity1 = entities.add_entity((), ());
     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
     entities.add_component((&mut u32s, &mut usizes), (3, 2), entity1);
-    assert_eq!((&usizes, &u32s).get(entity1), (&2, &3));
+    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&2, &3));
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn tight() {
     let entity1 = entities.add_entity((), ());
     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
     entities.add_component((&mut usizes, &mut u32s), (3usize,), entity1);
-    assert_eq!((&usizes, &u32s).get(entity1), (&3, &1));
+    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&3, &1));
     let mut iter = (&usizes, &u32s).iter();
     assert_eq!(iter.next(), Some((&3, &1)));
     assert_eq!(iter.next(), None);
@@ -38,7 +38,7 @@ fn loose_add_component() {
     let entity1 = entities.add_entity((), ());
     entities.add_component((&mut usizes, &mut u32s), (0, 1), entity1);
     entities.add_component((&mut u32s, &mut usizes), (3, 2), entity1);
-    assert_eq!((&usizes, &u32s).get(entity1), (&2, &3));
+    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&2, &3));
     let mut iter = (&usizes, &u32s).iter();
     assert_eq!(iter.next(), Some((&2, &3)));
     assert_eq!(iter.next(), None);
@@ -55,7 +55,7 @@ fn tight_loose_add_component() {
     let entity1 = entities.add_entity((), ());
     entities.add_component((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2), entity1);
     entities.add_component((&mut u32s, &mut u64s, &mut usizes), (5, 4, 3), entity1);
-    assert_eq!((&usizes, &u64s, &u32s).get(entity1), (&3, &4, &5));
+    assert_eq!((&usizes, &u64s, &u32s).get(entity1).unwrap(), (&3, &4, &5));
     let mut iter = (&usizes, &u32s, &u64s).iter();
     assert_eq!(iter.next(), Some((&3, &5, &4)));
     assert_eq!(iter.next(), None);
@@ -104,7 +104,7 @@ fn not_enough_to_tightly_pack() {
     assert_eq!(iter.next(), Some(&1));
     assert_eq!(iter.next(), None);
 
-    assert_eq!((&u32s, &f32s).try_get(entity), Ok((&1, &1.)));
+    assert_eq!((&u32s, &f32s).get(entity), Ok((&1, &1.)));
 }
 
 #[test]
@@ -123,5 +123,5 @@ fn not_enough_to_loosely_pack() {
     assert_eq!(iter.next(), Some(&1));
     assert_eq!(iter.next(), None);
 
-    assert_eq!((&u32s, &f32s).try_get(entity), Ok((&1, &1.)));
+    assert_eq!((&u32s, &f32s).get(entity), Ok((&1, &1.)));
 }

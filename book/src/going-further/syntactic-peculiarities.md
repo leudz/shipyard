@@ -14,13 +14,13 @@ Some functions, like [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.
 Let's look at an example:
 ```rust, noplaypen
 fn ref_mut(mut u32s: ViewMut<u32>) {
-    let i: &u32 = u32s.get(id);
+    let i: &u32 = u32s.get(id).unwrap();
 }
 ```
 We can force the compiler to give us a `&mut u32` with a few methods, one of them is to use `ref mut`:
 ```rust, noplaypen
 fn ref_mut(ref mut u32s: ViewMut<u32>) {
-    let i: &mut u32 = u32s.get(id);
+    let i: &mut u32 = u32s.get(id).unwrap();
 }
 ```
 
@@ -29,24 +29,24 @@ fn ref_mut(ref mut u32s: ViewMut<u32>) {
 Since Rust will default to immutable return by default, we don't have to use `ref` for the same reason as `ref mut` but we can use it for something else:
 ```rust, noplaypen
 fn ref_sys(u32s: View<u32>, usizes: View<usize>) {
-    (usizes, u32s).get(id);
+    (usizes, u32s).get(id).unwrap();
 }
 ```
 This example doesn't compile since `get` has to use references. We could take the views by reference at each call of course but when we'd have a bunch of them:
 ```rust, noplaypen
 fn ref_sys(u32s: View<u32>, usizes: View<usize>) {
-    (&usizes, &u32s).get(id);
-    (&usizes, &u32s).get(id);
-    (&usizes, &u32s).get(id);
-    (&usizes, &u32s).get(id);
+    (&usizes, &u32s).get(id).unwrap();
+    (&usizes, &u32s).get(id).unwrap();
+    (&usizes, &u32s).get(id).unwrap();
+    (&usizes, &u32s).get(id).unwrap();
 }
 ```
 It can be easier to just use `ref`:
 ```rust, noplaypen
 fn ref_sys(ref u32s: View<u32>, ref usizes: View<usize>) {
-    (usizes, u32s).get(id);
-    (usizes, u32s).get(id);
-    (usizes, u32s).get(id);
-    (usizes, u32s).get(id);
+    (usizes, u32s).get(id).unwrap();
+    (usizes, u32s).get(id).unwrap();
+    (usizes, u32s).get(id).unwrap();
+    (usizes, u32s).get(id).unwrap();
 }
 ```
