@@ -120,6 +120,7 @@
 //!
 //! ## Features
 //!
+//! - **panic** *(default)* adds panicking functions
 //! - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
 //! - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 //! - **non_send** &mdash; add methods and types required to work with `!Send` components
