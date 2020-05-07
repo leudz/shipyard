@@ -43,6 +43,21 @@ impl<T: IntoAbstract> Tight1<T> {
     }
 }
 
+impl<T: IntoAbstract> Clone for Tight1<T>
+where
+    T::AbsView: Clone + Copy,
+{
+    fn clone(&self) -> Self {
+        Tight1 {
+            data: self.data,
+            current: self.current,
+            end: self.end,
+        }
+    }
+}
+
+impl<T: IntoAbstract> Copy for Tight1<T> where T::AbsView: Clone + Copy {}
+
 impl<T: IntoAbstract> Shiperator for Tight1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
 

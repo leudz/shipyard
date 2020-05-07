@@ -72,3 +72,23 @@ impl<I: IntoAbstract> core::iter::IntoIterator for Iter1<I> {
         IntoIterator(self)
     }
 }
+
+impl<T: IntoAbstract> Clone for Iter1<T>
+where
+    Tight1<T>: Clone,
+    Update1<T>: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Iter1::Tight(tight) => Iter1::Tight(tight.clone()),
+            Iter1::Update(update) => Iter1::Update(update.clone()),
+        }
+    }
+}
+
+impl<T: IntoAbstract> Copy for Iter1<T>
+where
+    Tight1<T>: Copy,
+    Update1<T>: Copy,
+{
+}

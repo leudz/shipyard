@@ -1,6 +1,7 @@
 use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator yielding `EntityId` as well.
+#[derive(Clone, Copy)]
 pub struct WithId<I> {
     iter: I,
 }

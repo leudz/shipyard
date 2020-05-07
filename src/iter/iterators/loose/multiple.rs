@@ -27,6 +27,20 @@ macro_rules! impl_iterators {
         unsafe impl<$($type: IntoAbstract),+> Send for $loose<$($type),+>
         where $($type::AbsView: Clone + Send,)+ $(<$type::AbsView as AbstractMut>::Out: Send),+ {}
 
+        impl<$($type: IntoAbstract),+> Clone for $loose<$($type),+> where $($type::AbsView: Clone + Copy),+ {
+            fn clone(&self) -> Self {
+                $loose {
+                    data: self.data,
+                    indices: self.indices,
+                    current: self.current,
+                    end: self.end,
+                    array: self.array,
+                }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> Copy for $loose<$($type),+> where $($type::AbsView: Clone + Copy),+ {}
+
         impl<$($type: IntoAbstract),+> Shiperator for $loose<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 

@@ -49,6 +49,21 @@ Tight iterators are fast but are limited to components tightly packed together."
             }
         }
 
+        impl<$($type: IntoAbstract),+> Clone for $tight<$($type),+>
+        where
+            $($type::AbsView: Clone + Copy),+
+        {
+            fn clone(&self) -> Self {
+                $tight {
+                    data: self.data,
+                    current: self.current,
+                    end: self.end,
+                }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> Copy for $tight<$($type),+> where $($type::AbsView: Clone + Copy),+ {}
+
         impl<$($type: IntoAbstract),+> Shiperator for $tight<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 

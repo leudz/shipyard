@@ -39,6 +39,32 @@ This enum allows to abstract away what kind of iterator you really get. That doe
             }
         }
 
+        impl<$($type: IntoAbstract),+> Clone for $iter<$($type),+>
+        where
+            $tight<$($type),+>: Clone,
+            $loose<$($type),+>: Clone,
+            $update<$($type),+>: Clone,
+            $non_packed<$($type),+>: Clone,
+        {
+            fn clone(&self) -> Self {
+                match self {
+                    Self::Tight(tight) => Self::Tight(tight.clone()),
+                    Self::Loose(loose) => Self::Loose(loose.clone()),
+                    Self::Update(update) => Self::Update(update.clone()),
+                    Self::NonPacked(non_packed) => Self::NonPacked(non_packed.clone()),
+                }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> Copy for $iter<$($type),+>
+        where
+            $tight<$($type),+>: Copy,
+            $loose<$($type),+>: Copy,
+            $update<$($type),+>: Copy,
+            $non_packed<$($type),+>: Copy,
+        {
+        }
+
         impl<$($type: IntoAbstract),+> Shiperator for $iter<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 

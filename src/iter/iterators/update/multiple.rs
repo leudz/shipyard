@@ -20,6 +20,24 @@ macro_rules! impl_iterators {
             pub(crate) current_id: EntityId,
         }
 
+        impl<$($type: IntoAbstract),+> Clone for $update<$($type),+>
+        where
+            $($type::AbsView: Clone + Copy),+
+        {
+            fn clone(&self) -> Self {
+                $update {
+                    data: self.data,
+                    indices: self.indices,
+                    current: self.current,
+                    end: self.end,
+                    array: self.array,
+                    current_id: self.current_id,
+                }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> Copy for $update<$($type),+> where $($type::AbsView: Clone + Copy),+ {}
+
         impl<$($type: IntoAbstract),+> Shiperator for $update<$($type),+> {
             type Item = ($(<$type::AbsView as AbstractMut>::Out,)+);
 

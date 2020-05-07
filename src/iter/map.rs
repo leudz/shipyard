@@ -1,6 +1,7 @@
 use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator mapping all components with `f`.
+#[derive(Clone, Copy)]
 pub struct Map<I, F> {
     iter: I,
     f: F,

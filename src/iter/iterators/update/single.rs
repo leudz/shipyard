@@ -23,6 +23,22 @@ impl<T: IntoAbstract> Update1<T> {
     }
 }
 
+impl<T: IntoAbstract> Clone for Update1<T>
+where
+    T::AbsView: Clone + Copy,
+{
+    fn clone(&self) -> Self {
+        Update1 {
+            data: self.data,
+            current: self.current,
+            end: self.end,
+            current_id: self.current_id,
+        }
+    }
+}
+
+impl<T: IntoAbstract> Copy for Update1<T> where T::AbsView: Clone + Copy {}
+
 impl<T: IntoAbstract> Shiperator for Update1<T> {
     type Item = <T::AbsView as AbstractMut>::Out;
 

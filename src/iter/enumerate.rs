@@ -1,6 +1,7 @@
 use super::{CurrentId, IntoIterator, Shiperator};
 
 /// Shiperator yielding iteration count as well.
+#[derive(Clone, Copy)]
 pub struct Enumerate<I> {
     iter: I,
     count: usize,

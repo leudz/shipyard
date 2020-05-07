@@ -26,6 +26,20 @@ macro_rules! impl_iterators {
         unsafe impl<$($type: IntoAbstract),+> Send for $non_packed<$($type),+>
         where $($type::AbsView: Clone + Send,)+ $(<$type::AbsView as AbstractMut>::Out: Send),+ {}
 
+        impl<$($type: IntoAbstract),+> Clone for $non_packed<$($type),+> where $($type::AbsView: Clone + Copy),+ {
+            fn clone(&self) -> Self {
+                $non_packed {
+                    data: self.data,
+                    indices: self.indices,
+                    current: self.current,
+                    end: self.end,
+                    array: self.array,
+                }
+            }
+        }
+
+        impl<$($type: IntoAbstract),+> Copy for $non_packed<$($type),+> where $($type::AbsView: Clone + Copy),+ {}
+
         impl<$($type: IntoAbstract),+> From<$update<$($type),+>> for $non_packed<$($type),+> {
             fn from(update: $update<$($type),+>) -> Self {
                 $non_packed {

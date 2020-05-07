@@ -33,6 +33,8 @@ impl<T> Clone for Window<'_, T> {
     }
 }
 
+impl<T> Copy for Window<'_, T> {}
+
 impl<'w, T> Window<'w, T> {
     pub(crate) fn new(sparse_set: &'w SparseSet<T>, range: core::ops::Range<usize>) -> Self {
         Window {
