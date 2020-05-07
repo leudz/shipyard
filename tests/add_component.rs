@@ -92,22 +92,37 @@ fn update() {
         .unwrap();
 
     usizes.try_update_pack().unwrap();
-    let e0 = entities.add_entity((), ());
-    let e1 = entities.add_entity((), ());
-    let e2 = entities.add_entity((), ());
+    let entity = entities.add_entity((), ());
 
-    entities.try_add_component(&mut usizes, 1, e0).unwrap();
-    entities.try_add_component(&mut usizes, 1, e0).unwrap();
-    entities.try_add_component(&mut usizes, 2, e1).unwrap();
-    entities.try_add_component(&mut usizes, 3, e2).unwrap();
+    entities.try_add_component(&mut usizes, 1, entity).unwrap();
 
     let mut iter = usizes.try_inserted().unwrap().iter();
     assert_eq!(iter.next(), Some(&1));
-    assert_eq!(iter.next(), Some(&2));
-    assert_eq!(iter.next(), Some(&3));
     assert_eq!(iter.next(), None);
 
-    assert_eq!(usizes.try_inserted().unwrap().len(), 3);
+    entities.try_add_component(&mut usizes, 2, entity).unwrap();
+
+    let mut iter = usizes.try_inserted().unwrap().iter();
+    assert_eq!(iter.next(), Some(&2));
+    assert_eq!(iter.next(), None);
+
+    usizes.try_clear_inserted().unwrap();
+
+    usizes[entity] = 3;
+
+    entities.try_add_component(&mut usizes, 4, entity).unwrap();
+
+    let mut iter = usizes.try_modified().unwrap().iter();
+    assert_eq!(iter.next(), Some(&4));
+    assert_eq!(iter.next(), None);
+
+    usizes.try_clear_modified().unwrap();
+
+    entities.try_add_component(&mut usizes, 5, entity).unwrap();
+
+    let mut iter = usizes.try_modified().unwrap().iter();
+    assert_eq!(iter.next(), Some(&5));
+    assert_eq!(iter.next(), None);
 }
 
 #[test]
