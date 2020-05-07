@@ -1,10 +1,12 @@
 mod add_component;
+mod contains;
 mod pack_info;
 pub mod sort;
 mod view_add_entity;
 mod windows;
 
 pub use add_component::AddComponentUnchecked;
+pub use contains::Contains;
 pub use windows::{Window, WindowMut, WindowSort1};
 
 use crate::error;
@@ -344,7 +346,7 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Returns true if the window contains `entity`.
+    /// Returns true if the storage contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
         // we're not delegating to window since we know the index is in range
         if let Some(bucket) = self.sparse.get(entity.bucket()).and_then(Option::as_ref) {

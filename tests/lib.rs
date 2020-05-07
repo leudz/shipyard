@@ -541,3 +541,25 @@ fn par_update_filter() {
         )
         .unwrap();
 }
+
+#[test]
+fn contains() {
+    let world = World::new();
+
+    world
+        .try_run(
+            |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+                let entity = entities.add_entity((), ());
+
+                entities.try_add_component(&mut usizes, 0, entity).unwrap();
+
+                assert!(usizes.contains(entity));
+                assert!(!(&usizes, &u32s).contains(entity));
+
+                entities.try_add_component(&mut u32s, 1, entity).unwrap();
+
+                assert!((&usizes, &u32s).contains(entity));
+            },
+        )
+        .unwrap();
+}
