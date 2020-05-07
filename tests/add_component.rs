@@ -168,3 +168,20 @@ fn not_enough_to_loosely_pack() {
 
     assert_eq!((&u32s, &f32s).get(entity), Ok((&1, &1.)));
 }
+
+#[test]
+fn no_pack_unchecked() {
+    let world = World::new();
+    let (mut entities, mut usizes, mut u32s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .unwrap();
+
+    let entity1 = entities.add_entity((), ());
+    (&mut usizes, &mut u32s)
+        .try_add_component_unchecked((0, 1), entity1)
+        .unwrap();
+    (&mut u32s, &mut usizes)
+        .try_add_component_unchecked((3, 2), entity1)
+        .unwrap();
+    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&2, &3));
+}

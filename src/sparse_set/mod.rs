@@ -1,7 +1,11 @@
+mod add_component;
 mod pack_info;
 pub mod sort;
 mod view_add_entity;
 mod windows;
+
+pub use add_component::AddComponentUnchecked;
+pub use windows::{Window, WindowMut, WindowSort1};
 
 use crate::error;
 use crate::storage::EntityId;
@@ -13,7 +17,6 @@ use core::ptr;
 pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
 pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
-pub use windows::{Window, WindowMut, WindowSort1};
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 

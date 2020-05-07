@@ -54,7 +54,6 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// # use shipyard::*;
     /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
     ///
     /// let world = World::new();
@@ -79,7 +78,6 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// # use shipyard::*;
     /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
     ///
     /// let world = World::new();
