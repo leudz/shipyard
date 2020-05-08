@@ -82,16 +82,13 @@ impl<'w, T> Window<'w, T> {
     /// # Safety
     ///
     /// `index` has to be between 0 and self.len()
-    pub(crate) unsafe fn get_at_unbounded_0(&self, index: usize) -> &'w T {
+    pub(crate) unsafe fn get_at_unbounded(&self, index: usize) -> &'w T {
         self.data.get_unchecked(index)
     }
     /// # Safety
     ///
     /// `range` has to be between 0 and self.len()
-    pub(crate) unsafe fn get_at_unbounded_slice_0(
-        &self,
-        range: core::ops::Range<usize>,
-    ) -> &'w [T] {
+    pub(crate) unsafe fn get_at_unbounded_slice(&self, range: core::ops::Range<usize>) -> &'w [T] {
         core::slice::from_raw_parts(
             self.data.get_unchecked(range.start),
             range.end - range.start,
@@ -959,7 +956,7 @@ impl<'w, T> RawWindowMut<'w, T> {
     ///
     /// `entity` has to own a component in this storage.  
     /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
-    pub(crate) unsafe fn index_of_unchecked_0(&self, entity: EntityId) -> usize {
+    pub(crate) unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
         let bucket = ptr::read(self.sparse.add(entity.bucket()));
         ptr::read(bucket.add(entity.bucket_index()))
     }
@@ -996,7 +993,7 @@ impl<'w, T> RawWindowMut<'w, T> {
     pub(crate) unsafe fn flag(&self, entity: EntityId) {
         if let Pack::Update(pack) = &mut (*self.pack_info).pack {
             let first_non_mod = pack.inserted + pack.modified;
-            if self.index_of_unchecked_0(entity) >= first_non_mod {
+            if self.index_of_unchecked(entity) >= first_non_mod {
                 pack.modified += 1;
             }
         }

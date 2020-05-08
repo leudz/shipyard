@@ -49,13 +49,13 @@ macro_rules! window {
                 type Out = &'w T;
                 type Slice = &'w [T];
                 unsafe fn get_data(&self, index: usize) -> Self::Out {
-                    self.get_at_unbounded_0(index)
+                    self.get_at_unbounded(index)
                 }
                 unsafe fn get_update_data(&self, index: usize) -> Self::Out {
                     self.get_data(index)
                 }
                 unsafe fn get_data_slice(&self, indices: core::ops::Range<usize>) -> Self::Slice {
-                    self.get_at_unbounded_slice_0(indices)
+                    self.get_at_unbounded_slice(indices)
                 }
                 fn dense(&self) -> *const EntityId {
                     self.dense_ptr()
@@ -103,7 +103,7 @@ macro_rules! window_mut {
                     <RawWindowMut<'_, T>>::index_of(self, entity)
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    <RawWindowMut<'_, T>>::index_of_unchecked_0(self, entity)
+                    <RawWindowMut<'_, T>>::index_of_unchecked(self, entity)
                 }
                 fn flag_all(&mut self) {
                     <RawWindowMut<'_, T>>::flag_all(self)
