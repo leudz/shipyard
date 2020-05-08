@@ -83,7 +83,7 @@ impl<'a> WorkloadBuilder<'a> {
     ///
     /// [system]: macro.system.html
     /// [try_system]: macro.try_system.html
-    pub fn with_system<
+    pub fn try_with_system<
         B,
         R,
         F: System<'a, B, R>,
@@ -91,9 +91,35 @@ impl<'a> WorkloadBuilder<'a> {
     >(
         &mut self,
         (system, _): (S, F),
-    ) -> &mut WorkloadBuilder<'a> {
+    ) -> Result<&mut WorkloadBuilder<'a>, error::InvalidSystem> {
         let old_len = self.borrow_info.len();
         F::borrow_infos(&mut self.borrow_info);
+
+        let borrows = &self.borrow_info[old_len..];
+
+        if borrows.contains(&(TypeId::of::<AllStorages>(), Mutation::Unique)) && borrows.len() > 1 {
+            return Err(error::InvalidSystem::AllStorages);
+        }
+
+        let mid = borrows.len() / 2 + (borrows.len() % 2 != 0) as usize;
+
+        for (a_type_id, a_borrow) in &borrows[..mid] {
+            for (b_type_id, b_borrow) in &borrows[mid..] {
+                if a_type_id == b_type_id {
+                    match (a_borrow, b_borrow) {
+                        (Mutation::Unique, Mutation::Unique) => {
+                            return Err(error::InvalidSystem::MultipleViewsMut)
+                        }
+                        (Mutation::Unique, Mutation::Shared)
+                        | (Mutation::Shared, Mutation::Unique) => {
+                            return Err(error::InvalidSystem::MultipleViews)
+                        }
+                        (Mutation::Shared, Mutation::Shared) => {}
+                    }
+                }
+            }
+        }
+
         let is_send_sync = F::is_send_sync();
         self.systems.push((
             core::any::TypeId::of::<S>(),
@@ -102,7 +128,19 @@ impl<'a> WorkloadBuilder<'a> {
             is_send_sync,
             Box::new(system),
         ));
-        self
+        Ok(self)
+    }
+    #[cfg(feature = "panic")]
+    pub fn with_system<
+        B,
+        R,
+        F: System<'a, B, R>,
+        S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
+    >(
+        &mut self,
+        system: (S, F),
+    ) -> &mut WorkloadBuilder<'a> {
+        self.try_with_system(system).unwrap()
     }
     /// Finishes the workload creation and store it in the `World`.
     pub fn build(&mut self) {
@@ -270,7 +308,8 @@ fn single_immutable() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "System1".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -299,7 +338,8 @@ fn single_mutable() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "System1".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -329,8 +369,10 @@ fn multiple_immutable() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
-        .with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -360,8 +402,10 @@ fn multiple_mutable() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
-        .with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -392,8 +436,10 @@ fn multiple_mixed() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
-        .with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -416,8 +462,10 @@ fn multiple_mixed() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system2), system2))
-        .with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -448,7 +496,8 @@ fn all_storages() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -470,8 +519,10 @@ fn all_storages() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system2), system2))
-        .with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -494,8 +545,10 @@ fn all_storages() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
-        .with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -518,8 +571,10 @@ fn all_storages() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system2), system2))
-        .with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -557,8 +612,10 @@ fn non_send() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Test".into())
-        .with_system((|world: &World| world.try_run(sys1), sys1))
-        .with_system((|world: &World| world.try_run(sys1), sys1))
+        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -581,8 +638,10 @@ fn non_send() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Test".into())
-        .with_system((|world: &World| world.try_run(sys1), sys1))
-        .with_system((|world: &World| world.try_run(sys2), sys2))
+        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(sys2), sys2))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -605,8 +664,10 @@ fn non_send() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Test".into())
-        .with_system((|world: &World| world.try_run(sys2), sys2))
-        .with_system((|world: &World| world.try_run(sys1), sys1))
+        .try_with_system((|world: &World| world.try_run(sys2), sys2))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -629,8 +690,10 @@ fn non_send() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Test".into())
-        .with_system((|world: &World| world.try_run(sys1), sys1))
-        .with_system((|world: &World| world.try_run(sys3), sys3))
+        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(sys3), sys3))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -653,8 +716,10 @@ fn non_send() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Test".into())
-        .with_system((|world: &World| world.try_run(sys1), sys1))
-        .with_system((|world: &World| world.try_run(sys4), sys4))
+        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(sys4), sys4))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();
@@ -685,12 +750,15 @@ fn fake_borrow() {
         }
     };
     WorkloadBuilder::new(scheduler.try_borrow_mut().unwrap(), "Systems".into())
-        .with_system((|world: &World| world.try_run(system1), system1))
-        .with_system((
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((
             |world: &World| world.try_run(|_: FakeBorrow<usize>| {}),
             |_: FakeBorrow<usize>| {},
         ))
-        .with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
         .build();
 
     let scheduler = scheduler.try_borrow_mut().unwrap();

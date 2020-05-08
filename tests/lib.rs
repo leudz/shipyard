@@ -100,7 +100,8 @@ fn system() {
     world
         .try_add_workload("")
         .unwrap()
-        .with_system(system!(system1))
+        .try_with_system(system!(system1))
+        .unwrap()
         .build();
     world.try_run_default().unwrap();
     world
@@ -145,8 +146,10 @@ fn systems() {
     world
         .try_add_workload("")
         .unwrap()
-        .with_system(system!(system1))
-        .with_system(system!(system2))
+        .try_with_system(system!(system1))
+        .unwrap()
+        .try_with_system(system!(system2))
+        .unwrap()
         .build();
     world.try_run_default().unwrap();
     world

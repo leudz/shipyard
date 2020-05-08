@@ -554,3 +554,30 @@ impl Display for NotInbound {
         Debug::fmt(self, fmt)
     }
 }
+
+/// Trying to add an invalid system to a workload will return this error.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum InvalidSystem {
+    AllStorages,
+    MultipleViews,
+    MultipleViewsMut,
+}
+
+#[cfg(feature = "std")]
+impl Error for InvalidSystem {}
+
+impl Debug for InvalidSystem {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::AllStorages => fmt.write_str("A system borrowing both AllStorages and a storage can't run. You can borrow the storage inside the system with AllStorages::borrow or AllStorages::run instead."),
+            Self::MultipleViews => fmt.write_str("Multiple views of the same storage including an exclusive borrow, consider removing the shared borrow."),
+            Self::MultipleViewsMut => fmt.write_str("Multiple exclusive views of the same storage, consider removing one."),
+        }
+    }
+}
+
+impl Display for InvalidSystem {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
