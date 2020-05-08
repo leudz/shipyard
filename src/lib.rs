@@ -183,7 +183,7 @@ pub use remove::Remove;
 pub use sparse_set::{
     sort, sort::IntoSortable, AddComponentUnchecked, Contains, SparseSet, Window, WindowMut,
 };
-pub use storage::{AllStorages, Entities, EntityId};
+pub use storage::{AllStorages, DeleteAny, Entities, EntityId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 #[cfg(feature = "parallel")]

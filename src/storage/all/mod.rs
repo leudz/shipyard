@@ -1,4 +1,9 @@
+mod delete_any;
 mod hasher;
+
+pub use delete_any::DeleteAny;
+
+pub(crate) use hasher::TypeIdHasher;
 
 use super::{Entities, EntityId, Storage};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
@@ -11,7 +16,6 @@ use core::any::TypeId;
 use core::cell::UnsafeCell;
 use core::hash::BuildHasherDefault;
 use hashbrown::HashMap;
-pub(crate) use hasher::TypeIdHasher;
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
 /// Contains all components present in the World.
@@ -865,5 +869,12 @@ let i = all_storages.run(sys1);
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, B, R>>(&'s self, s: S) -> R {
         self.try_run(s).unwrap()
+    }
+    /// Deletes any entity with at least one of the given type(s).
+    ///
+    /// `T` has to be a tuple even for a single type.  
+    /// In this case use (T,).
+    pub fn delete_any<T: DeleteAny>(&mut self) {
+        T::delete_any(self)
     }
 }

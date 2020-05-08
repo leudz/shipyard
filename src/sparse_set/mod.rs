@@ -9,6 +9,10 @@ pub use add_component::AddComponentUnchecked;
 pub use contains::Contains;
 pub use windows::{Window, WindowMut, WindowSort1};
 
+pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
+pub(crate) use view_add_entity::ViewAddEntity;
+pub(crate) use windows::RawWindowMut;
+
 use crate::error;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
@@ -16,9 +20,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::{type_name, Any, TypeId};
 use core::ptr;
-pub(crate) use pack_info::{LoosePack, Pack, PackInfo, TightPack, UpdatePack};
-pub(crate) use view_add_entity::ViewAddEntity;
-pub(crate) use windows::RawWindowMut;
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 

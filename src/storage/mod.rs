@@ -2,8 +2,10 @@ mod all;
 mod entity;
 mod unique;
 
-pub use all::AllStorages;
+pub use all::{AllStorages, DeleteAny};
 pub use entity::{Entities, EntityId};
+
+pub(crate) use all::TypeIdHasher;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
