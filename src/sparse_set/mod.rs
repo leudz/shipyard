@@ -825,6 +825,72 @@ impl<T> SparseSet<T> {
     ) -> WindowMut<'_, T> {
         self.try_as_window_mut(range).unwrap()
     }
+    /// Swaps `a` and `b`'s components.
+    pub fn swap(&mut self, a: EntityId, b: EntityId) {
+        if let Some(a_index) = self.index_of(a) {
+            if let Some(b_index) = self.index_of(b) {
+                self.data.swap(a_index, b_index);
+
+                if let Pack::Update(pack) = &mut self.pack_info.pack {
+                    let mut non_mut = pack.inserted + pack.modified;
+                    if a_index >= non_mut {
+                        self.dense.swap(a_index, non_mut);
+                        self.data.swap(a_index, non_mut);
+
+                        // SAFE non_mut exists
+                        // a.bucket() exists and contains at least bucket_index elements
+                        unsafe {
+                            let non_mut_id = *self.dense.get_unchecked(non_mut);
+
+                            *self
+                                .sparse
+                                .get_unchecked_mut(a.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(a.bucket_index()) = non_mut;
+
+                            *self
+                                .sparse
+                                .get_unchecked_mut(non_mut_id.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(non_mut_id.bucket_index()) = a_index;
+
+                            pack.modified += 1;
+                            non_mut += 1;
+                        }
+                    }
+
+                    if b_index >= non_mut {
+                        self.dense.swap(b_index, non_mut);
+                        self.data.swap(b_index, non_mut);
+
+                        // SAFE non_mut exists
+                        // a.bucket() exists and contains at least bucket_index elements
+                        unsafe {
+                            let non_mut_id = *self.dense.get_unchecked(non_mut);
+
+                            *self
+                                .sparse
+                                .get_unchecked_mut(b.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(b.bucket_index()) = non_mut;
+
+                            *self
+                                .sparse
+                                .get_unchecked_mut(non_mut_id.bucket())
+                                .as_mut()
+                                .unwrap()
+                                .get_unchecked_mut(non_mut_id.bucket_index()) = b_index;
+
+                            pack.modified += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
