@@ -11,5 +11,3 @@ Currently the only function of this kind is [`Entities::delete_unchecked`](https
 ### Try
 
 All functions provided by shipyard should either not fail in any circumstances or have a `try_` alternative. If it isn't the case, please open an issue or PR.
-
-Fun fact: most functions are implemented as `try_function().unwrap()`.
