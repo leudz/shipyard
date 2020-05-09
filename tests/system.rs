@@ -10,21 +10,24 @@ fn bad_systems() {
 
     assert_eq!(
         world
-            .add_workload("")
+            .try_add_workload("")
+            .unwrap()
             .try_with_system(system!(two_views))
             .err(),
         Some(error::InvalidSystem::MultipleViews)
     );
     assert_eq!(
         world
-            .add_workload("")
+            .try_add_workload("")
+            .unwrap()
             .try_with_system(system!(two_views_mut))
             .err(),
         Some(error::InvalidSystem::MultipleViewsMut)
     );
     assert_eq!(
         world
-            .add_workload("")
+            .try_add_workload("")
+            .unwrap()
             .try_with_system(system!(all_storages))
             .err(),
         Some(error::InvalidSystem::AllStorages)

@@ -45,13 +45,13 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
                 // SAFE dense can always index into sparse
                 unsafe {
                     let dense = *self.0.dense.get_unchecked(i);
-                    *self
-                        .0
+                    self.0
                         .sparse
                         .get_unchecked_mut(dense.bucket())
                         .as_mut()
                         .unwrap()
-                        .get_unchecked_mut(dense.bucket_index()) = i + self.0.offset;
+                        .get_unchecked_mut(dense.bucket_index())
+                        .owned = i + self.0.offset;
                 }
             }
 

@@ -23,6 +23,12 @@ use core::ptr;
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 
+#[derive(Copy, Clone)]
+pub(crate) union SparseIndex {
+    owned: usize,
+    shared: EntityId,
+}
+
 /// Component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
 // Only usize can be added. On insertion, the number is pushed into the dense vector
@@ -32,11 +38,15 @@ pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
 // and if set dense[sparse[number]] != number.
 // We can't be limited to store solely integers, this is why there is a third vector.
 // It mimics the dense vector in regard to insertion/deletion.
+//
+// An entity is shared is self.shared > 0, the sparse index isn't usize::MAX and dense doesn't point back
+// Shared components don't qualify for packs
 pub struct SparseSet<T> {
-    pub(crate) sparse: Vec<Option<Box<[usize; BUCKET_SIZE]>>>,
+    pub(crate) sparse: Vec<Option<Box<[SparseIndex; BUCKET_SIZE]>>>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
     pub(crate) pack_info: PackInfo<T>,
+    shared: usize,
 }
 
 impl<T> SparseSet<T> {
@@ -46,6 +56,7 @@ impl<T> SparseSet<T> {
             dense: Vec::new(),
             data: Vec::new(),
             pack_info: Default::default(),
+            shared: 0,
         }
     }
     pub(crate) fn window(&self) -> Window<'_, T> {
@@ -64,21 +75,40 @@ impl<T> SparseSet<T> {
         unsafe {
             // SAFE we just allocated at least entity.bucket()
             if self.sparse.get_unchecked(entity.bucket()).is_none() {
-                *self.sparse.get_unchecked_mut(entity.bucket()) =
-                    Some(Box::new([core::usize::MAX; BUCKET_SIZE]));
+                *self.sparse.get_unchecked_mut(entity.bucket()) = Some(Box::new(
+                    [SparseIndex {
+                        owned: core::usize::MAX,
+                    }; BUCKET_SIZE],
+                ));
             }
         }
     }
     pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
+        // early return in case entity is shared
+        if self.shared > 0 {
+            if let Some(index) = self.sparse_index(entity) {
+                unsafe {
+                    match index {
+                        SparseIndex { owned }
+                            if owned == core::usize::MAX
+                                || self.dense.get_unchecked(owned).uindex() == owned => {}
+                        SparseIndex { shared: _ } => return None,
+                    }
+                }
+            }
+        }
+
         self.allocate_at(entity);
 
         // SAFE entity.bucket() exists and contains at least bucket_index elements
         let (result, mut index) = match unsafe {
-            self.sparse
+            &mut self
+                .sparse
                 .get_unchecked_mut(entity.bucket())
                 .as_mut()
                 .unwrap()
                 .get_unchecked_mut(entity.bucket_index())
+                .owned
         } {
             i if *i == core::usize::MAX => {
                 *i = self.dense.len();
@@ -103,12 +133,12 @@ impl<T> SparseSet<T> {
                 let entity = self.dense[index];
                 // SAFE entity.bucket() exists and contains at least bucket_index elements
                 unsafe {
-                    *self
-                        .sparse
+                    self.sparse
                         .get_unchecked_mut(entity.bucket())
                         .as_mut()
                         .unwrap()
-                        .get_unchecked_mut(entity.bucket_index()) = index;
+                        .get_unchecked_mut(entity.bucket_index())
+                        .owned = index;
                 }
 
                 index = pack.inserted + pack.modified;
@@ -119,23 +149,23 @@ impl<T> SparseSet<T> {
                 let entity = self.dense[index];
                 // SAFE entity.bucket() exists and contains at least bucket_index elements
                 unsafe {
-                    *self
-                        .sparse
+                    self.sparse
                         .get_unchecked_mut(entity.bucket())
                         .as_mut()
                         .unwrap()
-                        .get_unchecked_mut(entity.bucket_index()) = index;
+                        .get_unchecked_mut(entity.bucket_index())
+                        .owned = index;
                 }
 
                 let entity = self.dense[pack.inserted];
                 // SAFE entity.bucket() exists and contains at least bucket_index elements
                 unsafe {
-                    *self
-                        .sparse
+                    self.sparse
                         .get_unchecked_mut(entity.bucket())
                         .as_mut()
                         .unwrap()
-                        .get_unchecked_mut(entity.bucket_index()) = pack.inserted;
+                        .get_unchecked_mut(entity.bucket_index())
+                        .owned = pack.inserted;
                 }
 
                 pack.inserted += 1;
@@ -146,12 +176,12 @@ impl<T> SparseSet<T> {
                 let entity = self.dense[index];
                 // SAFE entity.bucket() exists and contains at least bucket_index elements
                 unsafe {
-                    *self
-                        .sparse
+                    self.sparse
                         .get_unchecked_mut(entity.bucket())
                         .as_mut()
                         .unwrap()
-                        .get_unchecked_mut(entity.bucket_index()) = index;
+                        .get_unchecked_mut(entity.bucket_index())
+                        .owned = index;
                 }
 
                 pack.modified += 1;
@@ -189,12 +219,12 @@ impl<T> SparseSet<T> {
         if self.contains(entity) {
             // SAFE we're inbound
             let mut dense_index = unsafe {
-                *self
-                    .sparse
+                self.sparse
                     .get_unchecked(entity.bucket())
                     .as_ref()
                     .unwrap()
                     .get_unchecked(entity.bucket_index())
+                    .owned
             };
             if dense_index < self.dense.len() {
                 // SAFE we're inbound
@@ -207,13 +237,12 @@ impl<T> SparseSet<T> {
                                 unsafe {
                                     // swap index and last packed element (can be the same)
                                     let last_packed = *self.dense.get_unchecked(pack_info.len);
-                                    *self
-                                        .sparse
+                                    self.sparse
                                         .get_unchecked_mut(last_packed.bucket())
                                         .as_mut()
                                         .unwrap()
-                                        .get_unchecked_mut(last_packed.bucket_index()) =
-                                        dense_index;
+                                        .get_unchecked_mut(last_packed.bucket_index())
+                                        .owned = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack_info.len);
                                 self.data.swap(dense_index, pack_info.len);
@@ -226,12 +255,12 @@ impl<T> SparseSet<T> {
                                 unsafe {
                                     // swap index and last packed element (can be the same)
                                     let dense = self.dense.get_unchecked(pack_info.len);
-                                    *self
-                                        .sparse
+                                    self.sparse
                                         .get_unchecked_mut(dense.bucket())
                                         .as_mut()
                                         .unwrap()
-                                        .get_unchecked_mut(dense.bucket_index()) = dense_index;
+                                        .get_unchecked_mut(dense.bucket_index())
+                                        .owned = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack_info.len);
                                 self.data.swap(dense_index, pack_info.len);
@@ -245,12 +274,12 @@ impl<T> SparseSet<T> {
                                     // SAFE pack.inserted is a valid index
                                     let dense = *self.dense.get_unchecked(pack.inserted);
                                     // SAFE dense can always index into sparse
-                                    *self
-                                        .sparse
+                                    self.sparse
                                         .get_unchecked_mut(dense.bucket())
                                         .as_mut()
                                         .unwrap()
-                                        .get_unchecked_mut(dense.bucket_index()) = dense_index;
+                                        .get_unchecked_mut(dense.bucket_index())
+                                        .owned = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack.inserted);
                                 self.data.swap(dense_index, pack.inserted);
@@ -263,12 +292,12 @@ impl<T> SparseSet<T> {
                                     let dense =
                                         *self.dense.get_unchecked(pack.inserted + pack.modified);
                                     // SAFE dense can always index into sparse
-                                    *self
-                                        .sparse
+                                    self.sparse
                                         .get_unchecked_mut(dense.bucket())
                                         .as_mut()
                                         .unwrap()
-                                        .get_unchecked_mut(dense.bucket_index()) = dense_index;
+                                        .get_unchecked_mut(dense.bucket_index())
+                                        .owned = dense_index;
                                 }
                                 self.dense.swap(dense_index, pack.inserted + pack.modified);
                                 self.data.swap(dense_index, pack.inserted + pack.modified);
@@ -281,19 +310,19 @@ impl<T> SparseSet<T> {
                         // SAFE we're in bound
                         let last = *self.dense.get_unchecked(self.dense.len() - 1);
                         // SAFE dense can always index into sparse
-                        *self
-                            .sparse
+                        self.sparse
                             .get_unchecked_mut(last.bucket())
                             .as_mut()
                             .unwrap()
-                            .get_unchecked_mut(last.bucket_index()) = dense_index;
+                            .get_unchecked_mut(last.bucket_index())
+                            .owned = dense_index;
                         // SAFE we checked for OOB
-                        *self
-                            .sparse
+                        self.sparse
                             .get_unchecked_mut(entity.bucket())
                             .as_mut()
                             .unwrap()
-                            .get_unchecked_mut(entity.bucket_index()) = core::usize::MAX;
+                            .get_unchecked_mut(entity.bucket_index())
+                            .owned = core::usize::MAX;
                     }
                     self.dense.swap_remove(dense_index);
                     if dense_id.version() == entity.version() {
@@ -349,84 +378,144 @@ impl<T> SparseSet<T> {
     }
     /// Returns true if the storage contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
-        // we're not delegating to window since we know the index is in range
-        if let Some(bucket) = self.sparse.get(entity.bucket()).and_then(Option::as_ref) {
-            unsafe {
-                // SAFE bucket_index is always a valid bucket index
-                *bucket.get_unchecked(entity.bucket_index()) != core::usize::MAX
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                {
+                    owned != core::usize::MAX
+                }
+                Some(SparseIndex { shared }) => self.index_of_unchecked(shared) != core::usize::MAX,
+                None => false,
             }
-        } else {
-            false
+        }
+    }
+    pub fn contains_owned(&self, entity: EntityId) -> bool {
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                {
+                    true
+                }
+                _ => false,
+            }
+        }
+    }
+    pub fn contains_shared(&self, entity: EntityId) -> bool {
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                {
+                    false
+                }
+                Some(_) => true,
+                None => false,
+            }
         }
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
-        if self.contains(entity) {
-            // SAFE we checked for OOB
-            unsafe {
-                Some(
-                    self.data.get_unchecked(
-                        *self
-                            .sparse
-                            .get_unchecked(entity.bucket())
-                            .as_ref()
-                            .unwrap()
-                            .get_unchecked(entity.bucket_index()),
-                    ),
-                )
-            }
-        } else {
-            None
+        unsafe {
+            self.index_of(entity)
+                .map(|index| self.data.get_unchecked(index))
         }
     }
     pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
-        if self.contains(entity) {
-            // SAFE we checked the window countains the entity
-            let mut index = unsafe {
-                *self
-                    .sparse
-                    .get_unchecked(entity.bucket())
-                    .as_ref()
-                    .unwrap()
-                    .get_unchecked(entity.bucket_index())
-            };
-            if let Pack::Update(pack) = &mut self.pack_info.pack {
-                if index >= pack.modified {
-                    // index of the first element non modified
-                    let non_mod = pack.inserted + pack.modified;
-                    if index >= non_mod {
-                        // SAFE we checked the window contains the entity
-                        unsafe {
-                            ptr::swap(
-                                self.dense.get_unchecked_mut(non_mod),
-                                self.dense.get_unchecked_mut(index),
-                            );
-                            ptr::swap(
-                                self.data.get_unchecked_mut(non_mod),
-                                self.data.get_unchecked_mut(index),
-                            );
-                            let dense = self.dense.get_unchecked(non_mod);
-                            *self
-                                .sparse
-                                .get_unchecked_mut(dense.bucket())
-                                .as_mut()
-                                .unwrap()
-                                .get_unchecked_mut(dense.bucket_index()) = non_mod;
-                            let dense = *self.dense.get_unchecked(index);
-                            *self
-                                .sparse
-                                .get_unchecked_mut(dense.bucket())
-                                .as_mut()
-                                .unwrap()
-                                .get_unchecked_mut(dense.bucket_index()) = index;
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned: mut index })
+                    if self.shared == 0
+                        || index == core::usize::MAX
+                        || self.dense.get(index).copied().map(EntityId::uindex) == Some(index) =>
+                {
+                    if index != core::usize::MAX {
+                        if let Pack::Update(pack) = &mut self.pack_info.pack {
+                            // index of the first element non modified
+                            let non_mod = pack.inserted + pack.modified;
+                            if index >= non_mod {
+                                // SAFE we checked the window contains the entity
+                                ptr::swap(
+                                    self.dense.get_unchecked_mut(non_mod),
+                                    self.dense.get_unchecked_mut(index),
+                                );
+                                ptr::swap(
+                                    self.data.get_unchecked_mut(non_mod),
+                                    self.data.get_unchecked_mut(index),
+                                );
+                                let dense = self.dense.get_unchecked(non_mod);
+                                self.sparse
+                                    .get_unchecked_mut(dense.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(dense.bucket_index())
+                                    .owned = non_mod;
+                                let dense = *self.dense.get_unchecked(index);
+                                self.sparse
+                                    .get_unchecked_mut(dense.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(dense.bucket_index())
+                                    .owned = index;
+
+                                pack.modified += 1;
+                                index = non_mod;
+                            }
                         }
-                        pack.modified += 1;
-                        index = non_mod;
+
+                        Some(self.data.get_unchecked_mut(index))
+                    } else {
+                        None
                     }
                 }
+                Some(SparseIndex { shared }) => {
+                    let mut index = self.index_of_unchecked(shared);
+                    if index != core::usize::MAX {
+                        if let Pack::Update(pack) = &mut self.pack_info.pack {
+                            // index of the first element non modified
+                            let non_mod = pack.inserted + pack.modified;
+                            if index >= non_mod {
+                                // SAFE we checked the window contains the entity
+                                ptr::swap(
+                                    self.dense.get_unchecked_mut(non_mod),
+                                    self.dense.get_unchecked_mut(index),
+                                );
+                                ptr::swap(
+                                    self.data.get_unchecked_mut(non_mod),
+                                    self.data.get_unchecked_mut(index),
+                                );
+                                let dense = self.dense.get_unchecked(non_mod);
+                                self.sparse
+                                    .get_unchecked_mut(dense.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(dense.bucket_index())
+                                    .owned = non_mod;
+                                let dense = *self.dense.get_unchecked(index);
+                                self.sparse
+                                    .get_unchecked_mut(dense.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(dense.bucket_index())
+                                    .owned = index;
+
+                                pack.modified += 1;
+                                index = non_mod;
+                            }
+                        }
+
+                        Some(self.data.get_unchecked_mut(index))
+                    } else {
+                        None
+                    }
+                }
+                None => None,
             }
-            Some(unsafe { self.data.get_unchecked_mut(index) })
-        } else {
-            None
         }
     }
     /// Returns the length of the window.
@@ -609,18 +698,18 @@ impl<T> SparseSet<T> {
                             // SAFE pack.len is in bound
                             let first_non_packed = *self.dense.get_unchecked(pack.len);
                             // SAFE we checked the entity has a component and bucket_index is alwyas in bound
-                            *self
-                                .sparse
+                            self.sparse
                                 .get_unchecked_mut(entity.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(entity.bucket_index()) = pack.len;
-                            *self
-                                .sparse
+                                .get_unchecked_mut(entity.bucket_index())
+                                .owned = pack.len;
+                            self.sparse
                                 .get_unchecked_mut(first_non_packed.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(first_non_packed.bucket_index()) = dense_index;
+                                .get_unchecked_mut(first_non_packed.bucket_index())
+                                .owned = dense_index;
                         }
                         self.dense.swap(pack.len, dense_index);
                         self.data.swap(pack.len, dense_index);
@@ -633,18 +722,18 @@ impl<T> SparseSet<T> {
                             // SAFE pack.len is in bound
                             let first_non_packed = *self.dense.get_unchecked(pack.len);
                             // SAFE we checked the entity has a component and bucket_index is alwyas in bound
-                            *self
-                                .sparse
+                            self.sparse
                                 .get_unchecked_mut(entity.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(entity.bucket_index()) = pack.len;
-                            *self
-                                .sparse
+                                .get_unchecked_mut(entity.bucket_index())
+                                .owned = pack.len;
+                            self.sparse
                                 .get_unchecked_mut(first_non_packed.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(first_non_packed.bucket_index()) = dense_index;
+                                .get_unchecked_mut(first_non_packed.bucket_index())
+                                .owned = dense_index;
                         }
                         self.dense.swap(pack.len, dense_index);
                         self.data.swap(pack.len, dense_index);
@@ -699,7 +788,7 @@ impl<T> SparseSet<T> {
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
         for id in &self.dense {
-            self.sparse[id.bucket()].as_mut().unwrap()[id.bucket_index()] = core::usize::MAX;
+            self.sparse[id.bucket()].as_mut().unwrap()[id.bucket_index()].owned = core::usize::MAX;
         }
         match &mut self.pack_info.pack {
             Pack::Tight(tight) => tight.len = 0,
@@ -726,15 +815,29 @@ impl<T> SparseSet<T> {
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this storage and until a modification happens.
     pub fn index_of(&self, entity: EntityId) -> Option<usize> {
-        if let Some(bucket) = self.sparse.get(entity.bucket()).and_then(Option::as_ref) {
-            let index = unsafe { *bucket.get_unchecked(entity.bucket_index()) };
-            if index != core::usize::MAX {
-                Some(index)
-            } else {
-                None
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                {
+                    if owned != core::usize::MAX {
+                        Some(owned)
+                    } else {
+                        None
+                    }
+                }
+                Some(SparseIndex { shared }) => {
+                    let owned = self.index_of_owned_unchecked(shared);
+                    if owned != core::usize::MAX {
+                        Some(owned)
+                    } else {
+                        None
+                    }
+                }
+                None => None,
             }
-        } else {
-            None
         }
     }
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
@@ -744,11 +847,37 @@ impl<T> SparseSet<T> {
     /// `entity` has to own a component in this storage.  
     /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
     pub unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
+        match self.sparse_index(entity) {
+            Some(SparseIndex { owned })
+                if self.shared == 0
+                    || owned == core::usize::MAX
+                    || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+            {
+                owned
+            }
+            Some(SparseIndex { shared }) => self.index_of_owned_unchecked(shared),
+            None => unreachable!(),
+        }
+    }
+    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
+    /// This index is only valid for this storage and until a modification happens.
+    /// # Safety
+    ///
+    /// `entity` has to own a component in this storage.  
+    /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
+    pub unsafe fn index_of_owned_unchecked(&self, entity: EntityId) -> usize {
         if let Some(bucket) = self.sparse.get_unchecked(entity.bucket()) {
-            *bucket.get_unchecked(entity.bucket_index())
+            bucket.get_unchecked(entity.bucket_index()).owned
         } else {
             core::hint::unreachable_unchecked()
         }
+    }
+    fn sparse_index(&self, entity: EntityId) -> Option<SparseIndex> {
+        // SAFE bucket_index always returns a valid bucket index
+        self.sparse
+            .get(entity.bucket())
+            .and_then(Option::as_ref)
+            .map(|bucket| unsafe { *bucket.get_unchecked(entity.bucket_index()) })
     }
     /// Returns a slice of all the components in this storage.
     pub fn as_slice(&self) -> &[T] {
@@ -827,7 +956,31 @@ impl<T> SparseSet<T> {
         self.try_as_window_mut(range).unwrap()
     }
     /// Swaps `a` and `b`'s components.
-    pub fn swap(&mut self, a: EntityId, b: EntityId) {
+    pub fn swap(&mut self, mut a: EntityId, mut b: EntityId) {
+        unsafe {
+            match self.sparse_index(a) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                Some(SparseIndex { shared }) => {
+                    a = shared;
+                }
+                None => {}
+            }
+
+            match self.sparse_index(b) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                Some(SparseIndex { shared }) => {
+                    b = shared;
+                }
+                None => {}
+            }
+        }
+
         if let Some(a_index) = self.index_of(a) {
             if let Some(b_index) = self.index_of(b) {
                 self.data.swap(a_index, b_index);
@@ -843,19 +996,19 @@ impl<T> SparseSet<T> {
                         unsafe {
                             let non_mut_id = *self.dense.get_unchecked(non_mut);
 
-                            *self
-                                .sparse
+                            self.sparse
                                 .get_unchecked_mut(a.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(a.bucket_index()) = non_mut;
+                                .get_unchecked_mut(a.bucket_index())
+                                .owned = non_mut;
 
-                            *self
-                                .sparse
+                            self.sparse
                                 .get_unchecked_mut(non_mut_id.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(non_mut_id.bucket_index()) = a_index;
+                                .get_unchecked_mut(non_mut_id.bucket_index())
+                                .owned = a_index;
 
                             pack.modified += 1;
                             non_mut += 1;
@@ -871,24 +1024,79 @@ impl<T> SparseSet<T> {
                         unsafe {
                             let non_mut_id = *self.dense.get_unchecked(non_mut);
 
-                            *self
-                                .sparse
+                            self.sparse
                                 .get_unchecked_mut(b.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(b.bucket_index()) = non_mut;
+                                .get_unchecked_mut(b.bucket_index())
+                                .owned = non_mut;
 
-                            *self
-                                .sparse
+                            self.sparse
                                 .get_unchecked_mut(non_mut_id.bucket())
                                 .as_mut()
                                 .unwrap()
-                                .get_unchecked_mut(non_mut_id.bucket_index()) = b_index;
+                                .get_unchecked_mut(non_mut_id.bucket_index())
+                                .owned = b_index;
 
                             pack.modified += 1;
                         }
                     }
                 }
+            }
+        }
+    }
+    /// Shares `entity`'s component wuth `with` entity.  
+    /// Deleting `entity`'s component won't stop the sahring.
+    pub fn share(&mut self, mut entity: EntityId, with: EntityId) {
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                Some(SparseIndex { shared }) => entity = shared,
+                None => return,
+            }
+
+            self.allocate_at(with);
+
+            if self.shared > 0 {
+                if let Some(index) = self.index_of(with) {
+                    if self.dense.get(index).copied() == Some(with) {
+                        return;
+                    }
+                }
+            }
+
+            *self
+                .sparse
+                .get_unchecked_mut(with.bucket())
+                .as_mut()
+                .unwrap()
+                .get_unchecked_mut(with.bucket_index()) = SparseIndex { shared: entity };
+
+            self.shared += 1;
+        }
+    }
+    /// Makes `entity` stop observing another entity.
+    pub fn unshare(&mut self, entity: EntityId) {
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                Some(SparseIndex { shared: _ }) => {
+                    *self
+                        .sparse
+                        .get_unchecked_mut(entity.bucket())
+                        .as_mut()
+                        .unwrap()
+                        .get_unchecked_mut(entity.bucket_index()) = SparseIndex {
+                        owned: core::usize::MAX,
+                    }
+                }
+                None => {}
             }
         }
     }
