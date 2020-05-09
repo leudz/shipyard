@@ -3,7 +3,7 @@ mod entity;
 mod unique;
 
 pub use all::{AllStorages, DeleteAny};
-pub use entity::{Entities, EntityId};
+pub use entity::{Entities, EntitiesIter, EntityId};
 
 pub(crate) use all::TypeIdHasher;
 

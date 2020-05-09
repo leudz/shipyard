@@ -1,7 +1,9 @@
 mod add_component;
 mod entity_id;
+mod iterator;
 
 pub use entity_id::EntityId;
+pub use iterator::EntitiesIter;
 
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
@@ -54,6 +56,7 @@ impl Entities {
     ///
     /// ### Example
     /// ```
+    /// # use shipyard::*;
     /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
     ///
     /// let world = World::new();
@@ -78,6 +81,7 @@ impl Entities {
     ///
     /// ### Example
     /// ```
+    /// # use shipyard::*;
     /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
     ///
     /// let world = World::new();
@@ -88,8 +92,6 @@ impl Entities {
     ///     entities.add_component(&mut u32s, 0, entity);
     /// });
     /// ```
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,
@@ -138,8 +140,18 @@ impl Entities {
                             .get_unchecked_mut(*new)
                             .set_index(entity_id.index())
                     };
+                    unsafe {
+                        self.data
+                            .get_unchecked_mut(entity_id.uindex())
+                            .set_index(EntityId::INDEX_MASK - 1)
+                    };
                     *new = entity_id.uindex();
                 } else {
+                    unsafe {
+                        self.data
+                            .get_unchecked_mut(entity_id.uindex())
+                            .set_index(EntityId::INDEX_MASK - 1)
+                    };
                     self.list = Some((entity_id.uindex(), entity_id.uindex()));
                 }
             }
@@ -172,6 +184,9 @@ impl Entities {
         let entity_id = self.generate();
         storages.add_entity(component, entity_id);
         entity_id
+    }
+    pub fn iter(&self) -> EntitiesIter<'_> {
+        self.into_iter()
     }
 }
 
@@ -252,4 +267,45 @@ fn entities() {
     let dead = entities.generate();
     assert_eq!(dead.index(), 2);
     assert_eq!(dead.version(), 0);
+}
+
+#[test]
+fn iterator() {
+    let mut entities = Entities::new();
+
+    entities.add_entity((), ());
+    entities.add_entity((), ());
+    entities.add_entity((), ());
+
+    let mut iter = entities.iter();
+
+    let id0 = iter.next().unwrap();
+    assert_eq!(id0.index(), 0);
+    assert_eq!(id0.version(), 0);
+
+    let id1 = iter.next().unwrap();
+    assert_eq!(id1.index(), 1);
+    assert_eq!(id1.version(), 0);
+
+    let id2 = iter.next().unwrap();
+    assert_eq!(id2.index(), 2);
+    assert_eq!(id2.version(), 0);
+
+    assert!(iter.next().is_none());
+
+    entities.delete(id0);
+    entities.delete(id1);
+    entities.add_entity((), ());
+
+    let mut iter = entities.iter();
+
+    let id = iter.next().unwrap();
+    assert_eq!(id.index(), 0);
+    assert_eq!(id.version(), 1);
+
+    let id = iter.next().unwrap();
+    assert_eq!(id.index(), 2);
+    assert_eq!(id.version(), 0);
+
+    assert!(iter.next().is_none());
 }
