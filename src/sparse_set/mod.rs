@@ -378,26 +378,13 @@ impl<T> SparseSet<T> {
     }
     /// Returns true if the storage contains `entity`.
     pub fn contains(&self, entity: EntityId) -> bool {
-        unsafe {
-            match self.sparse_index(entity) {
-                Some(SparseIndex { owned })
-                    if self.shared == 0
-                        || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
-                {
-                    owned != core::usize::MAX
-                }
-                Some(SparseIndex { shared }) => self.index_of_unchecked(shared) != core::usize::MAX,
-                None => false,
-            }
-        }
+        self.index_of(entity).is_some()
     }
     pub fn contains_owned(&self, entity: EntityId) -> bool {
         unsafe {
             match self.sparse_index(entity) {
                 Some(SparseIndex { owned })
-                    if self.shared == 0
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                    if self.shared == 0 || self.dense.get(owned).copied() == Some(entity) =>
                 {
                     true
                 }
@@ -411,7 +398,7 @@ impl<T> SparseSet<T> {
                 Some(SparseIndex { owned })
                     if self.shared == 0
                         || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                        || self.dense.get(owned).copied() == Some(entity) =>
                 {
                     false
                 }
@@ -473,47 +460,7 @@ impl<T> SparseSet<T> {
                         None
                     }
                 }
-                Some(SparseIndex { shared }) => {
-                    let mut index = self.index_of_unchecked(shared);
-                    if index != core::usize::MAX {
-                        if let Pack::Update(pack) = &mut self.pack_info.pack {
-                            // index of the first element non modified
-                            let non_mod = pack.inserted + pack.modified;
-                            if index >= non_mod {
-                                // SAFE we checked the window contains the entity
-                                ptr::swap(
-                                    self.dense.get_unchecked_mut(non_mod),
-                                    self.dense.get_unchecked_mut(index),
-                                );
-                                ptr::swap(
-                                    self.data.get_unchecked_mut(non_mod),
-                                    self.data.get_unchecked_mut(index),
-                                );
-                                let dense = self.dense.get_unchecked(non_mod);
-                                self.sparse
-                                    .get_unchecked_mut(dense.bucket())
-                                    .as_mut()
-                                    .unwrap()
-                                    .get_unchecked_mut(dense.bucket_index())
-                                    .owned = non_mod;
-                                let dense = *self.dense.get_unchecked(index);
-                                self.sparse
-                                    .get_unchecked_mut(dense.bucket())
-                                    .as_mut()
-                                    .unwrap()
-                                    .get_unchecked_mut(dense.bucket_index())
-                                    .owned = index;
-
-                                pack.modified += 1;
-                                index = non_mod;
-                            }
-                        }
-
-                        Some(self.data.get_unchecked_mut(index))
-                    } else {
-                        None
-                    }
-                }
+                Some(SparseIndex { shared }) => self.get_mut(shared),
                 None => None,
             }
         }
@@ -820,7 +767,7 @@ impl<T> SparseSet<T> {
                 Some(SparseIndex { owned })
                     if self.shared == 0
                         || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                        || self.dense.get(owned).copied() == Some(entity) =>
                 {
                     if owned != core::usize::MAX {
                         Some(owned)
@@ -828,14 +775,7 @@ impl<T> SparseSet<T> {
                         None
                     }
                 }
-                Some(SparseIndex { shared }) => {
-                    let owned = self.index_of_owned_unchecked(shared);
-                    if owned != core::usize::MAX {
-                        Some(owned)
-                    } else {
-                        None
-                    }
-                }
+                Some(SparseIndex { shared }) => self.index_of(shared),
                 None => None,
             }
         }
@@ -851,11 +791,11 @@ impl<T> SparseSet<T> {
             Some(SparseIndex { owned })
                 if self.shared == 0
                     || owned == core::usize::MAX
-                    || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) =>
+                    || self.dense.get(owned).copied() == Some(entity) =>
             {
                 owned
             }
-            Some(SparseIndex { shared }) => self.index_of_owned_unchecked(shared),
+            Some(SparseIndex { shared }) => self.index_of_unchecked(shared),
             None => unreachable!(),
         }
     }
@@ -962,7 +902,7 @@ impl<T> SparseSet<T> {
                 Some(SparseIndex { owned })
                     if self.shared == 0
                         || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                        || self.dense.get(owned).copied() == Some(a) => {}
                 Some(SparseIndex { shared }) => {
                     a = shared;
                 }
@@ -973,7 +913,7 @@ impl<T> SparseSet<T> {
                 Some(SparseIndex { owned })
                     if self.shared == 0
                         || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                        || self.dense.get(owned).copied() == Some(b) => {}
                 Some(SparseIndex { shared }) => {
                     b = shared;
                 }
@@ -1047,36 +987,19 @@ impl<T> SparseSet<T> {
     }
     /// Shares `entity`'s component wuth `with` entity.  
     /// Deleting `entity`'s component won't stop the sahring.
-    pub fn share(&mut self, mut entity: EntityId, with: EntityId) {
+    pub fn share(&mut self, entity: EntityId, with: EntityId) {
+        self.allocate_at(with);
+
         unsafe {
-            match self.sparse_index(entity) {
-                Some(SparseIndex { owned })
-                    if self.shared == 0
-                        || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
-                Some(SparseIndex { shared }) => entity = shared,
-                None => return,
-            }
-
-            self.allocate_at(with);
-
-            if self.shared > 0 {
-                if let Some(index) = self.index_of(with) {
-                    if self.dense.get(index).copied() == Some(with) {
-                        return;
-                    }
-                }
-            }
-
             *self
                 .sparse
                 .get_unchecked_mut(with.bucket())
                 .as_mut()
                 .unwrap()
                 .get_unchecked_mut(with.bucket_index()) = SparseIndex { shared: entity };
-
-            self.shared += 1;
         }
+
+        self.shared += 1;
     }
     /// Makes `entity` stop observing another entity.
     pub fn unshare(&mut self, entity: EntityId) {
@@ -1085,7 +1008,7 @@ impl<T> SparseSet<T> {
                 Some(SparseIndex { owned })
                     if self.shared == 0
                         || owned == core::usize::MAX
-                        || self.dense.get(owned).copied().map(EntityId::uindex) == Some(owned) => {}
+                        || self.dense.get(owned).copied() == Some(entity) => {}
                 Some(SparseIndex { shared: _ }) => {
                     *self
                         .sparse
