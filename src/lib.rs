@@ -181,7 +181,8 @@ pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
 pub use sparse_set::{
-    sort, sort::IntoSortable, AddComponentUnchecked, Contains, SparseSet, Window, WindowMut,
+    sort, sort::IntoSortable, AddComponentUnchecked, Contains, OldComponent, SparseSet, Window,
+    WindowMut,
 };
 pub use storage::{AllStorages, DeleteAny, Entities, EntityId};
 #[doc(hidden)]

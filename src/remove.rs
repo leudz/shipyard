@@ -1,5 +1,5 @@
 use crate::error;
-use crate::sparse_set::Pack;
+use crate::sparse_set::{OldComponent, Pack};
 use crate::storage::EntityId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
@@ -22,21 +22,21 @@ pub trait Remove<T: Removable> {
     /// You'll often have to use the full path `Remove::<type>::try_remove`.
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, Remove, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, OldComponent, Remove, ViewMut, World};
     ///
     /// let world = World::new();
     ///
     /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
-    ///     assert_eq!(old, (Some(0), Some(1)));
+    ///     assert_eq!(old, (Some(OldComponent::Owned(0)), Some(OldComponent::Owned(1))));
     /// });
     /// ```
     /// When using packed storages you have to pass all storages packed with it,
     /// even if you don't remove any component from it.
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, Remove, TightPack, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, OldComponent, Remove, TightPack, ViewMut, World};
     ///
     /// let world = World::new();
     ///
@@ -44,7 +44,7 @@ pub trait Remove<T: Removable> {
     ///     (&mut usizes, &mut u32s).tight_pack();
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
-    ///     assert_eq!(old, (Some(0),));
+    ///     assert_eq!(old, (Some(OldComponent::Owned(0)),));
     /// });
     /// ```
     fn try_remove(self, entity: EntityId) -> Result<T::Out, error::Remove>;
@@ -61,21 +61,21 @@ pub trait Remove<T: Removable> {
     /// Unwraps errors.
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, Remove, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, OldComponent, Remove, ViewMut, World};
     ///
     /// let world = World::new();
     ///
     /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity1);
-    ///     assert_eq!(old, (Some(0), Some(1)));
+    ///     assert_eq!(old, (Some(OldComponent::Owned(0)), Some(OldComponent::Owned(1))));
     /// });
     /// ```
     /// When using packed storages you have to pass all storages packed with it,
     /// even if you don't remove any component from it.
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, Remove, TightPack, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, OldComponent, Remove, TightPack, ViewMut, World};
     ///
     /// let world = World::new();
     ///
@@ -83,7 +83,7 @@ pub trait Remove<T: Removable> {
     ///     (&mut usizes, &mut u32s).tight_pack();
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
-    ///     assert_eq!(old, (Some(0),));
+    ///     assert_eq!(old, (Some(OldComponent::Owned(0)),));
     /// });
     /// ```
     #[cfg(feature = "panic")]
@@ -94,7 +94,7 @@ pub trait Remove<T: Removable> {
 macro_rules! impl_removable {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type),+> Removable for ($($type,)+) {
-            type Out = ($(Option<$type>,)+);
+            type Out = ($(Option<OldComponent<$type>>,)+);
         }
     }
 }

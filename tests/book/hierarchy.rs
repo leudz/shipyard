@@ -28,7 +28,7 @@ impl Hierarchy for (EntitiesViewMut<'_>, ViewMut<'_, Parent>, ViewMut<'_, Child>
     fn detach(&mut self, id: EntityId) {
         let (_, parents, children) = self;
         // remove the Child component - if nonexistent, do nothing
-        if let Some(child) = children.remove(id) {
+        if let Some(OldComponent::Owned(child)) = children.remove(id) {
             // retrieve and update Parent component from ancestor
             let parent = &mut parents[child.parent];
             parent.num_children -= 1;

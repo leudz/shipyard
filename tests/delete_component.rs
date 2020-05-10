@@ -107,7 +107,7 @@ fn tight_loose() {
     }
     let component =
         Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s, &mut u64s), entity2).unwrap();
-    assert_eq!(component, (Some(3),));
+    assert_eq!(component, (Some(OldComponent::Owned(3)),));
     let mut iter = (&usizes, &u64s).iter();
     assert_eq!(iter.next(), Some((&0, &1)));
     assert_eq!(iter.next(), Some((&6, &7)));

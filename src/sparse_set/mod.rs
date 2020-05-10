@@ -83,115 +83,138 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<T> {
-        // early return in case entity is shared
-        if self.shared > 0 {
-            if let Some(index) = self.sparse_index(entity) {
-                unsafe {
-                    match index {
-                        SparseIndex { owned }
-                            if owned == core::usize::MAX
-                                || self.dense.get_unchecked(owned).uindex() == owned => {}
-                        SparseIndex { shared: _ } => return None,
-                    }
-                }
-            }
-        }
-
+    pub(crate) fn insert(&mut self, mut value: T, entity: EntityId) -> Option<OldComponent<T>> {
         self.allocate_at(entity);
 
-        // SAFE entity.bucket() exists and contains at least bucket_index elements
-        let (result, mut index) = match unsafe {
-            &mut self
-                .sparse
-                .get_unchecked_mut(entity.bucket())
-                .as_mut()
-                .unwrap()
-                .get_unchecked_mut(entity.bucket_index())
-                .owned
-        } {
-            i if *i == core::usize::MAX => {
-                *i = self.dense.len();
-                self.dense.push(entity);
-                self.data.push(value);
-                (None, self.dense.len() - 1)
-            }
-            &mut i => {
-                // SAFE sparse index are always valid
-                unsafe {
-                    core::mem::swap(self.data.get_unchecked_mut(i), &mut value);
+        let (old_component, index) = unsafe {
+            match self.sparse_index(entity).unwrap() {
+                SparseIndex { owned }
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || *self.dense.get_unchecked(owned) == entity =>
+                {
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    let (result, index) = match &mut self
+                        .sparse
+                        .get_unchecked_mut(entity.bucket())
+                        .as_mut()
+                        .unwrap()
+                        .get_unchecked_mut(entity.bucket_index())
+                        .owned
+                    {
+                        i if *i == core::usize::MAX => {
+                            *i = self.dense.len();
+                            self.dense.push(entity);
+                            self.data.push(value);
+                            (None, self.dense.len() - 1)
+                        }
+                        &mut i => {
+                            // SAFE sparse index are always valid
+                            core::mem::swap(self.data.get_unchecked_mut(i), &mut value);
+                            (Some(value), i)
+                        }
+                    };
+
+                    (result.map(OldComponent::Owned), index)
                 }
-                (Some(value), i)
+                SparseIndex { shared: _ } => {
+                    *self
+                        .sparse
+                        .get_unchecked_mut(entity.bucket())
+                        .as_mut()
+                        .unwrap()
+                        .get_unchecked_mut(entity.bucket_index()) = SparseIndex {
+                        owned: self.dense.len(),
+                    };
+
+                    self.dense.push(entity);
+                    self.data.push(value);
+
+                    (Some(OldComponent::Shared), self.dense.len() - 1)
+                }
             }
         };
 
         if let Pack::Update(pack) = &mut self.pack_info.pack {
-            if result.is_none() {
-                self.dense.swap(pack.inserted + pack.modified, index);
-                self.data.swap(pack.inserted + pack.modified, index);
+            match old_component {
+                Some(OldComponent::Owned(_)) if index >= pack.inserted + pack.modified => {
+                    self.dense.swap(pack.inserted + pack.modified, index);
+                    self.data.swap(pack.inserted + pack.modified, index);
 
-                let entity = self.dense[index];
-                // SAFE entity.bucket() exists and contains at least bucket_index elements
-                unsafe {
-                    self.sparse
-                        .get_unchecked_mut(entity.bucket())
-                        .as_mut()
-                        .unwrap()
-                        .get_unchecked_mut(entity.bucket_index())
-                        .owned = index;
+                    let entity = self.dense[index];
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    unsafe {
+                        self.sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index())
+                            .owned = index;
+                    }
+
+                    let entity = self.dense[pack.inserted + pack.modified];
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    unsafe {
+                        self.sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index())
+                            .owned = pack.inserted + pack.modified;
+                    }
+
+                    pack.modified += 1;
                 }
+                Some(OldComponent::Shared) | None => {
+                    self.dense.swap(pack.inserted + pack.modified, index);
+                    self.data.swap(pack.inserted + pack.modified, index);
+                    self.dense
+                        .swap(pack.inserted, pack.inserted + pack.modified);
+                    self.data.swap(pack.inserted, pack.inserted + pack.modified);
 
-                index = pack.inserted + pack.modified;
+                    let entity = self.dense[pack.inserted];
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    unsafe {
+                        self.sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index())
+                            .owned = pack.inserted;
+                    }
 
-                self.dense.swap(pack.inserted, index);
-                self.data.swap(pack.inserted, index);
+                    let entity = self.dense[pack.inserted + pack.modified];
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    unsafe {
+                        self.sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index())
+                            .owned = pack.inserted + pack.modified;
+                    }
 
-                let entity = self.dense[index];
-                // SAFE entity.bucket() exists and contains at least bucket_index elements
-                unsafe {
-                    self.sparse
-                        .get_unchecked_mut(entity.bucket())
-                        .as_mut()
-                        .unwrap()
-                        .get_unchecked_mut(entity.bucket_index())
-                        .owned = index;
+                    let entity = self.dense[index];
+                    // SAFE entity.bucket() exists and contains at least bucket_index elements
+                    unsafe {
+                        self.sparse
+                            .get_unchecked_mut(entity.bucket())
+                            .as_mut()
+                            .unwrap()
+                            .get_unchecked_mut(entity.bucket_index())
+                            .owned = index;
+                    }
+
+                    pack.inserted += 1;
                 }
-
-                let entity = self.dense[pack.inserted];
-                // SAFE entity.bucket() exists and contains at least bucket_index elements
-                unsafe {
-                    self.sparse
-                        .get_unchecked_mut(entity.bucket())
-                        .as_mut()
-                        .unwrap()
-                        .get_unchecked_mut(entity.bucket_index())
-                        .owned = pack.inserted;
-                }
-
-                pack.inserted += 1;
-            } else if index >= pack.inserted + pack.modified {
-                self.dense.swap(pack.inserted + pack.modified, index);
-                self.data.swap(pack.inserted + pack.modified, index);
-
-                let entity = self.dense[index];
-                // SAFE entity.bucket() exists and contains at least bucket_index elements
-                unsafe {
-                    self.sparse
-                        .get_unchecked_mut(entity.bucket())
-                        .as_mut()
-                        .unwrap()
-                        .get_unchecked_mut(entity.bucket_index())
-                        .owned = index;
-                }
-
-                pack.modified += 1;
+                _ => {}
             }
         }
 
-        result
+        old_component
     }
     /// Removes `entity`'s component from this storage.
-    pub fn try_remove(&mut self, entity: EntityId) -> Result<Option<T>, error::Remove>
+    pub fn try_remove(&mut self, entity: EntityId) -> Result<Option<OldComponent<T>>, error::Remove>
     where
         T: 'static,
     {
@@ -209,13 +232,13 @@ impl<T> SparseSet<T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    pub fn remove(&mut self, entity: EntityId) -> Option<T>
+    pub fn remove(&mut self, entity: EntityId) -> Option<OldComponent<T>>
     where
         T: 'static,
     {
         self.try_remove(entity).unwrap()
     }
-    pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
+    pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<OldComponent<T>> {
         unsafe {
             match self.sparse_index(entity) {
                 Some(SparseIndex { owned })
@@ -333,7 +356,7 @@ impl<T> SparseSet<T> {
 
                                 self.dense.swap_remove(dense_index);
                                 if dense_id.version() == entity.version() {
-                                    Some(self.data.swap_remove(dense_index))
+                                    Some(OldComponent::Owned(self.data.swap_remove(dense_index)))
                                 } else {
                                     self.data.swap_remove(dense_index);
                                     None
@@ -350,7 +373,7 @@ impl<T> SparseSet<T> {
                 }
                 Some(SparseIndex { shared: _ }) => {
                     self.unshare(entity);
-                    None
+                    Some(OldComponent::Shared)
                 }
                 None => None,
             }
@@ -385,7 +408,7 @@ impl<T> SparseSet<T> {
         self.try_delete(entity).unwrap()
     }
     pub(crate) fn actual_delete(&mut self, entity: EntityId) {
-        if let Some(component) = self.actual_remove(entity) {
+        if let Some(OldComponent::Owned(component)) = self.actual_remove(entity) {
             if let Pack::Update(pack) = &mut self.pack_info.pack {
                 pack.deleted.push((entity, component));
             }
@@ -434,7 +457,7 @@ impl<T> SparseSet<T> {
                 Some(SparseIndex { owned: mut index })
                     if self.shared == 0
                         || index == core::usize::MAX
-                        || self.dense.get(index).copied().map(EntityId::uindex) == Some(index) =>
+                        || self.dense.get(index).copied() == Some(entity) =>
                 {
                     if index != core::usize::MAX {
                         if let Pack::Update(pack) = &mut self.pack_info.pack {
@@ -1083,6 +1106,12 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub enum OldComponent<T> {
+    Owned(T),
+    Shared,
+}
+
 #[test]
 fn insert() {
     let mut array = SparseSet::new();
@@ -1122,13 +1151,19 @@ fn remove() {
     entity_id.set_index(10);
     array.insert("10", entity_id);
     entity_id.set_index(0);
-    assert_eq!(array.actual_remove(entity_id), Some("0"));
+    assert_eq!(
+        array.actual_remove(entity_id),
+        Some(OldComponent::Owned("0"))
+    );
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(5);
     assert_eq!(array.get(entity_id), Some(&"5"));
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), Some(&"10"));
-    assert_eq!(array.actual_remove(entity_id), Some("10"));
+    assert_eq!(
+        array.actual_remove(entity_id),
+        Some(OldComponent::Owned("10"))
+    );
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(5);
@@ -1149,7 +1184,10 @@ fn remove() {
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), Some(&"100"));
     entity_id.set_index(3);
-    assert_eq!(array.actual_remove(entity_id), Some("3"));
+    assert_eq!(
+        array.actual_remove(entity_id),
+        Some(OldComponent::Owned("3"))
+    );
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(3);
@@ -1158,7 +1196,10 @@ fn remove() {
     assert_eq!(array.get(entity_id), Some(&"5"));
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), Some(&"100"));
-    assert_eq!(array.actual_remove(entity_id), Some("100"));
+    assert_eq!(
+        array.actual_remove(entity_id),
+        Some(OldComponent::Owned("100"))
+    );
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(3);
@@ -1168,7 +1209,10 @@ fn remove() {
     entity_id.set_index(10);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(5);
-    assert_eq!(array.actual_remove(entity_id), Some("5"));
+    assert_eq!(
+        array.actual_remove(entity_id),
+        Some(OldComponent::Owned("5"))
+    );
     entity_id.set_index(0);
     assert_eq!(array.get(entity_id), None);
     entity_id.set_index(3);

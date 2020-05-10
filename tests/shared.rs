@@ -14,7 +14,7 @@ fn get() {
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert_eq!(u32s.get(shared), Ok(&0));
 
-                    u32s.delete(shared);
+                    assert_eq!(u32s.try_remove(shared).unwrap(), Some(OldComponent::Shared));
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert!(u32s.get(shared).is_err());
 
@@ -53,7 +53,7 @@ fn get_mut() {
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert_eq!((&mut u32s).get(shared), Ok(&mut 0));
 
-                    u32s.delete(shared);
+                    assert_eq!(u32s.try_remove(shared).unwrap(), Some(OldComponent::Shared));
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert!((&mut u32s).get(shared).is_err());
 

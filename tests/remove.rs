@@ -13,7 +13,7 @@ fn no_pack() {
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     let component = usizes.try_remove(entity1).unwrap();
-    assert_eq!(component, Some(0usize));
+    assert_eq!(component, Some(OldComponent::Owned(0usize)));
     assert_eq!(
         (&mut usizes).get(entity1),
         Err(error::MissingComponent {
@@ -37,7 +37,7 @@ fn tight() {
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     let component = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
-    assert_eq!(component, (Some(0usize),));
+    assert_eq!(component, (Some(OldComponent::Owned(0usize)),));
     assert_eq!(
         (&mut usizes).get(entity1),
         Err(error::MissingComponent {
@@ -68,7 +68,7 @@ fn loose() {
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     let component = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
-    assert_eq!(component, (Some(0usize),));
+    assert_eq!(component, (Some(OldComponent::Owned(0usize)),));
     assert_eq!(
         (&mut usizes).get(entity1),
         Err(error::MissingComponent {
@@ -98,7 +98,7 @@ fn tight_loose() {
     entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (6, 7, 8));
     let component =
         Remove::<(u32,)>::try_remove((&mut u32s, &mut usizes, &mut u64s), entity1).unwrap();
-    assert_eq!(component, (Some(2),));
+    assert_eq!(component, (Some(OldComponent::Owned(2)),));
     let mut iter = (&usizes, &u64s).iter();
     assert_eq!(iter.next(), Some((&0, &1)));
     assert_eq!(iter.next(), Some((&3, &4)));
@@ -112,7 +112,7 @@ fn tight_loose() {
     }
     let component =
         Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s, &mut u64s), entity2).unwrap();
-    assert_eq!(component, (Some(3),));
+    assert_eq!(component, (Some(OldComponent::Owned(3)),));
     let mut iter = (&usizes, &u64s).iter();
     assert_eq!(iter.next(), Some((&0, &1)));
     assert_eq!(iter.next(), Some((&6, &7)));
@@ -134,7 +134,7 @@ fn update() {
     let entity1 = entities.add_entity(&mut usizes, 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
     let component = usizes.try_remove(entity1).unwrap();
-    assert_eq!(component, Some(0));
+    assert_eq!(component, Some(OldComponent::Owned(0)));
     assert_eq!(
         usizes.get(entity1),
         Err(error::MissingComponent {
