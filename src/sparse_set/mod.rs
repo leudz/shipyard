@@ -216,129 +216,144 @@ impl<T> SparseSet<T> {
         self.try_remove(entity).unwrap()
     }
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
-        if self.contains(entity) {
-            // SAFE we're inbound
-            let mut dense_index = unsafe {
-                self.sparse
-                    .get_unchecked(entity.bucket())
-                    .as_ref()
-                    .unwrap()
-                    .get_unchecked(entity.bucket_index())
-                    .owned
-            };
-            if dense_index < self.dense.len() {
-                // SAFE we're inbound
-                let dense_id = unsafe { *self.dense.get_unchecked(dense_index) };
-                if dense_id.index() == entity.index() && dense_id.version() <= entity.version() {
-                    match &mut self.pack_info.pack {
-                        Pack::Tight(pack_info) => {
-                            if dense_index < pack_info.len {
-                                pack_info.len -= 1;
-                                unsafe {
-                                    // swap index and last packed element (can be the same)
-                                    let last_packed = *self.dense.get_unchecked(pack_info.len);
-                                    self.sparse
-                                        .get_unchecked_mut(last_packed.bucket())
-                                        .as_mut()
-                                        .unwrap()
-                                        .get_unchecked_mut(last_packed.bucket_index())
-                                        .owned = dense_index;
-                                }
-                                self.dense.swap(dense_index, pack_info.len);
-                                self.data.swap(dense_index, pack_info.len);
-                                dense_index = pack_info.len;
-                            }
-                        }
-                        Pack::Loose(pack_info) => {
-                            if dense_index < pack_info.len - 1 {
-                                pack_info.len -= 1;
-                                unsafe {
-                                    // swap index and last packed element (can be the same)
-                                    let dense = self.dense.get_unchecked(pack_info.len);
-                                    self.sparse
-                                        .get_unchecked_mut(dense.bucket())
-                                        .as_mut()
-                                        .unwrap()
-                                        .get_unchecked_mut(dense.bucket_index())
-                                        .owned = dense_index;
-                                }
-                                self.dense.swap(dense_index, pack_info.len);
-                                self.data.swap(dense_index, pack_info.len);
-                                dense_index = pack_info.len;
-                            }
-                        }
-                        Pack::Update(pack) => {
-                            if dense_index < pack.inserted {
-                                pack.inserted -= 1;
-                                unsafe {
-                                    // SAFE pack.inserted is a valid index
-                                    let dense = *self.dense.get_unchecked(pack.inserted);
-                                    // SAFE dense can always index into sparse
-                                    self.sparse
-                                        .get_unchecked_mut(dense.bucket())
-                                        .as_mut()
-                                        .unwrap()
-                                        .get_unchecked_mut(dense.bucket_index())
-                                        .owned = dense_index;
-                                }
-                                self.dense.swap(dense_index, pack.inserted);
-                                self.data.swap(dense_index, pack.inserted);
-                                dense_index = pack.inserted;
-                            }
-                            if dense_index < pack.inserted + pack.modified {
-                                pack.modified -= 1;
-                                unsafe {
-                                    // SAFE pack.inserted + pack.modified is a valid index
-                                    let dense =
-                                        *self.dense.get_unchecked(pack.inserted + pack.modified);
-                                    // SAFE dense can always index into sparse
-                                    self.sparse
-                                        .get_unchecked_mut(dense.bucket())
-                                        .as_mut()
-                                        .unwrap()
-                                        .get_unchecked_mut(dense.bucket_index())
-                                        .owned = dense_index;
-                                }
-                                self.dense.swap(dense_index, pack.inserted + pack.modified);
-                                self.data.swap(dense_index, pack.inserted + pack.modified);
-                                dense_index = pack.inserted + pack.modified;
-                            }
-                        }
-                        Pack::NoPack => {}
-                    }
-                    unsafe {
-                        // SAFE we're in bound
-                        let last = *self.dense.get_unchecked(self.dense.len() - 1);
-                        // SAFE dense can always index into sparse
-                        self.sparse
-                            .get_unchecked_mut(last.bucket())
-                            .as_mut()
+        unsafe {
+            match self.sparse_index(entity) {
+                Some(SparseIndex { owned })
+                    if self.shared == 0
+                        || owned == core::usize::MAX
+                        || self.dense.get(owned).copied() == Some(entity) =>
+                {
+                    if owned != core::usize::MAX {
+                        // SAFE we're inbound
+                        let mut dense_index = self
+                            .sparse
+                            .get_unchecked(entity.bucket())
+                            .as_ref()
                             .unwrap()
-                            .get_unchecked_mut(last.bucket_index())
-                            .owned = dense_index;
-                        // SAFE we checked for OOB
-                        self.sparse
-                            .get_unchecked_mut(entity.bucket())
-                            .as_mut()
-                            .unwrap()
-                            .get_unchecked_mut(entity.bucket_index())
-                            .owned = core::usize::MAX;
-                    }
-                    self.dense.swap_remove(dense_index);
-                    if dense_id.version() == entity.version() {
-                        Some(self.data.swap_remove(dense_index))
+                            .get_unchecked(entity.bucket_index())
+                            .owned;
+                        if dense_index < self.dense.len() {
+                            // SAFE we're inbound
+                            let dense_id = *self.dense.get_unchecked(dense_index);
+                            if dense_id.index() == entity.index()
+                                && dense_id.version() <= entity.version()
+                            {
+                                match &mut self.pack_info.pack {
+                                    Pack::Tight(pack_info) => {
+                                        if dense_index < pack_info.len {
+                                            pack_info.len -= 1;
+                                            // swap index and last packed element (can be the same)
+                                            let last_packed =
+                                                *self.dense.get_unchecked(pack_info.len);
+                                            self.sparse
+                                                .get_unchecked_mut(last_packed.bucket())
+                                                .as_mut()
+                                                .unwrap()
+                                                .get_unchecked_mut(last_packed.bucket_index())
+                                                .owned = dense_index;
+
+                                            self.dense.swap(dense_index, pack_info.len);
+                                            self.data.swap(dense_index, pack_info.len);
+                                            dense_index = pack_info.len;
+                                        }
+                                    }
+                                    Pack::Loose(pack_info) => {
+                                        if dense_index < pack_info.len - 1 {
+                                            pack_info.len -= 1;
+                                            // swap index and last packed element (can be the same)
+                                            let dense = self.dense.get_unchecked(pack_info.len);
+                                            self.sparse
+                                                .get_unchecked_mut(dense.bucket())
+                                                .as_mut()
+                                                .unwrap()
+                                                .get_unchecked_mut(dense.bucket_index())
+                                                .owned = dense_index;
+
+                                            self.dense.swap(dense_index, pack_info.len);
+                                            self.data.swap(dense_index, pack_info.len);
+                                            dense_index = pack_info.len;
+                                        }
+                                    }
+                                    Pack::Update(pack) => {
+                                        if dense_index < pack.inserted {
+                                            pack.inserted -= 1;
+                                            // SAFE pack.inserted is a valid index
+                                            let dense = *self.dense.get_unchecked(pack.inserted);
+                                            // SAFE dense can always index into sparse
+                                            self.sparse
+                                                .get_unchecked_mut(dense.bucket())
+                                                .as_mut()
+                                                .unwrap()
+                                                .get_unchecked_mut(dense.bucket_index())
+                                                .owned = dense_index;
+
+                                            self.dense.swap(dense_index, pack.inserted);
+                                            self.data.swap(dense_index, pack.inserted);
+                                            dense_index = pack.inserted;
+                                        }
+                                        if dense_index < pack.inserted + pack.modified {
+                                            pack.modified -= 1;
+                                            // SAFE pack.inserted + pack.modified is a valid index
+                                            let dense = *self
+                                                .dense
+                                                .get_unchecked(pack.inserted + pack.modified);
+                                            // SAFE dense can always index into sparse
+                                            self.sparse
+                                                .get_unchecked_mut(dense.bucket())
+                                                .as_mut()
+                                                .unwrap()
+                                                .get_unchecked_mut(dense.bucket_index())
+                                                .owned = dense_index;
+
+                                            self.dense
+                                                .swap(dense_index, pack.inserted + pack.modified);
+                                            self.data
+                                                .swap(dense_index, pack.inserted + pack.modified);
+                                            dense_index = pack.inserted + pack.modified;
+                                        }
+                                    }
+                                    Pack::NoPack => {}
+                                }
+                                // SAFE we're in bound
+                                let last = *self.dense.get_unchecked(self.dense.len() - 1);
+                                // SAFE dense can always index into sparse
+                                self.sparse
+                                    .get_unchecked_mut(last.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(last.bucket_index())
+                                    .owned = dense_index;
+                                // SAFE we checked for OOB
+                                self.sparse
+                                    .get_unchecked_mut(entity.bucket())
+                                    .as_mut()
+                                    .unwrap()
+                                    .get_unchecked_mut(entity.bucket_index())
+                                    .owned = core::usize::MAX;
+
+                                self.dense.swap_remove(dense_index);
+                                if dense_id.version() == entity.version() {
+                                    Some(self.data.swap_remove(dense_index))
+                                } else {
+                                    self.data.swap_remove(dense_index);
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
                     } else {
-                        self.data.swap_remove(dense_index);
                         None
                     }
-                } else {
+                }
+                Some(SparseIndex { shared: _ }) => {
+                    self.unshare(entity);
                     None
                 }
-            } else {
-                None
+                None => None,
             }
-        } else {
-            None
         }
     }
     /// Deletes `entity`'s component from this storage.

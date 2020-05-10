@@ -14,6 +14,11 @@ fn get() {
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert_eq!(u32s.get(shared), Ok(&0));
 
+                    u32s.delete(shared);
+                    assert_eq!(u32s.get(owned), Ok(&0));
+                    assert!(u32s.get(shared).is_err());
+
+                    u32s.share(owned, shared);
                     u32s.unshare(shared);
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert!(u32s.get(shared).is_err());
@@ -48,9 +53,13 @@ fn get_mut() {
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert_eq!((&mut u32s).get(shared), Ok(&mut 0));
 
+                    u32s.delete(shared);
+                    assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
+                    assert!((&mut u32s).get(shared).is_err());
+
                     u32s.unshare(shared);
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
-                    assert!(u32s.get(shared).is_err());
+                    assert!((&mut u32s).get(shared).is_err());
 
                     u32s.share(owned, shared);
                     (owned, shared)
@@ -60,8 +69,8 @@ fn get_mut() {
             all_storages.delete(owned);
 
             all_storages
-                .try_run(|u32s: View<u32>| {
-                    assert!(u32s.get(shared).is_err());
+                .try_run(|mut u32s: ViewMut<u32>| {
+                    assert!((&mut u32s).get(shared).is_err());
                 })
                 .unwrap();
         })

@@ -764,7 +764,7 @@ let i = all_storages.try_run(sys1).unwrap();
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
-        Ok(s.run({ S::try_borrow(self)? }))
+        Ok(s.run(S::try_borrow(self)?))
     }
     #[doc = "Borrows the requested storages and runs the function.
 
