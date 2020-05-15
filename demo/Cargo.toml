@@ -9,9 +9,9 @@ crate-type = ["cdylib"]
 [dependencies]
 rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 nalgebra = "0.21.0"
-wasm-bindgen = "0.2.60"
-js-sys = "0.3.37"
-wasm-bindgen-futures= "0.4.10"
+wasm-bindgen = "0.2.62"
+js-sys = "0.3.39"
+wasm-bindgen-futures= "0.4.12"
 gloo-events = "0.1.1"
 awsm_web = { version = "0.1.9", features = ["tick", "webgl", "loaders", "audio"], default-features = false }
 wee_alloc = { version = "0.4.5", optional = true }
@@ -21,16 +21,14 @@ cfg-if = "0.1.10"
 log = "0.4.8"
 lazy_static = "1.4.0"
 
-
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.6", optional = true }
 
-
 [dependencies.web-sys]
-version = "0.3.37"
+version = "0.3.39"
 features = [
     "console",
     "MouseEvent",
@@ -46,6 +44,7 @@ features = [
     "Performance",
 
 ]
+
 [features]
 default = ["wee_alloc"]
 dev = ["wee_alloc", "wasm-logger", "console_error_panic_hook"]
