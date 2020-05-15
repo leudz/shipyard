@@ -13,7 +13,7 @@ args = ["test", "--no-default-features"]
 [tasks.miri]
 install_crate = "miri"
 command = "cargo"
-args = ["miri", "test", "--no-default-features"]
+args = ["+nightly", "miri", "test", "--no-default-features"]
 dependencies = ["clean"]
 
 [tasks.clean]
