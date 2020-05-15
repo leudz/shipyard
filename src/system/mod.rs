@@ -12,8 +12,8 @@ use core::any::TypeId;
 
 pub struct Nothing;
 
-pub trait System<'s, B, R> {
-    fn run(self, b: B) -> R;
+pub trait System<'s, Data, B, R> {
+    fn run(self, data: Data, b: B) -> R;
     fn try_borrow(
         all_storages: &'s AtomicRefCell<AllStorages>,
         #[cfg(feature = "parallel")] thread_pool: &'s rayon::ThreadPool,
@@ -25,12 +25,34 @@ pub trait System<'s, B, R> {
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
-impl<'s, R, F> System<'s, Nothing, R> for F
+impl<'s, R, F> System<'s, (), Nothing, R> for F
 where
     F: FnOnce() -> R,
 {
-    fn run(self, _: Nothing) -> R {
+    fn run(self, _: (), _: Nothing) -> R {
         (self)()
+    }
+    fn try_borrow(
+        _: &'s AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] _: &'s rayon::ThreadPool,
+    ) -> Result<Nothing, error::GetStorage> {
+        Ok(Nothing)
+    }
+
+    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+
+    fn is_send_sync() -> bool {
+        true
+    }
+}
+
+// Nothing has to be used and not () to not conflict where A = ()
+impl<'s, Data, R, F> System<'s, (Data,), Nothing, R> for F
+where
+    F: FnOnce(Data) -> R,
+{
+    fn run(self, (data,): (Data,), _: Nothing) -> R {
+        (self)(data)
     }
     fn try_borrow(
         _: &'s AtomicRefCell<AllStorages>,
@@ -48,9 +70,38 @@ where
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: Borrow<'s>,)+ R, Func> System<'s, ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
-            fn run(self, b: ($($type,)+)) -> R {
+        impl<'s, $($type: Borrow<'s>,)+ R, Func> System<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
+            fn run(self, _: (), b: ($($type,)+)) -> R {
                 (self)($(b.$index,)+)
+            }
+            fn try_borrow(
+                all_storages: &'s AtomicRefCell<AllStorages>,
+                #[cfg(feature = "parallel")] thread_pool: &'s rayon::ThreadPool
+            ) -> Result<($($type,)+), error::GetStorage> {
+                #[cfg(feature = "parallel")]
+                {
+                    Ok(($($type::try_borrow(all_storages, thread_pool)?,)+))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    Ok(($($type::try_borrow(all_storages)?,)+))
+                }
+            }
+            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+                $(
+                    $type::borrow_infos(infos);
+                )+
+            }
+            fn is_send_sync() -> bool {
+                $(
+                    $type::is_send_sync()
+                )&&+
+            }
+        }
+
+        impl<'s, Data, $($type: Borrow<'s>,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type,)+) -> R {
+            fn run(self, (data,): (Data,), b: ($($type,)+)) -> R {
+                (self)(data, $(b.$index,)+)
             }
             fn try_borrow(
                 all_storages: &'s AtomicRefCell<AllStorages>,

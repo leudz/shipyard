@@ -86,7 +86,7 @@ impl<'a> WorkloadBuilder<'a> {
     pub fn try_with_system<
         B,
         R,
-        F: System<'a, B, R>,
+        F: System<'a, (), B, R>,
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
         &mut self,
@@ -134,7 +134,7 @@ impl<'a> WorkloadBuilder<'a> {
     pub fn with_system<
         B,
         R,
-        F: System<'a, B, R>,
+        F: System<'a, (), B, R>,
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
         &mut self,
