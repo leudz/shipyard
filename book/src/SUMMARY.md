@@ -13,7 +13,6 @@
     - [Get and Modify Components](./fundamentals/get-and-modify.md)
     - [Iterators](./fundamentals/iterators.md)
     - [Systems](./fundamentals/systems.md)
-    - [All Together Now](./fundamentals/all-together-now.md)
 - [Going Further](./going-further.md)
     - [What's inside a World?](./going-further/world-insides.md)
     - [Parallelism](./going-further/parallelism.md)

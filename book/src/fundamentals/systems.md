@@ -58,4 +58,3 @@ There's a few points to keep in mind about workloads:
 ---
 
 Congratulations, that's it for the fundamentals!  
-In the next chapter we'll use everything we learned so far to make a small game.
