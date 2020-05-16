@@ -1,6 +1,6 @@
 # Add Entities
 
-To add entities we'll use [`EntitiesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html), the exclusive view over the entities storage and [`ViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) an exclusive view over a component storage.
+To add entities we'll use [`EntitiesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html), the exclusive view over the entities storage, and [`ViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html), an exclusive view over a component storage.
 
 ### Add an entity with a single component
 
@@ -14,7 +14,7 @@ world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
 
 ### Add an entity with multiple components
 
-We can make an entity with multiple components, of course. For that we'll just have to use tuples for both arguments:
+Of course, we can also make an entity with multiple components. For that we'll just have to use tuples for both arguments:
 
 ```rust, noplaypen
 world.run(
@@ -26,7 +26,7 @@ world.run(
 
 ### Add an entity with no components
 
-We can use `()` for both argument to create an empty entity and add components to it later.
+We can use `()` for both argument to create an empty entity and add components later.
 
 ```rust, noplaypen
 world.run(|mut entities: EntitiesViewMut| {
