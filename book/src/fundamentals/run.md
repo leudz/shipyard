@@ -9,7 +9,7 @@ world.run(|mut all_storages: AllStoragesViewMut| {
 });
 ```
 
-In this example we ask the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) for an [`AllStoragesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.AllStoragesViewMut.html), which is an exclusive view over [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html) and the storage holding all components and entities.
+In this example we ask the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) for an [`AllStoragesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.AllStoragesViewMut.html), which is an exclusive view over [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html), the storage holding all components and entities.
 
 Storage accesses follow the same rules as Rust's borrowing: You can have as many shared accesses to a storage as you like or a single exclusive access.
 

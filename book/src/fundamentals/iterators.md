@@ -1,6 +1,6 @@
 # Iterators
 
-Fast iteration is one of the most important features of an ECS.
+Iteration is one of the most important features of an ECS.
 
 In Shipyard this is achieved using the [`iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter) method on views.
 
@@ -49,5 +49,5 @@ You shouldn't expect specific ordering from Shipyard's iterators, in general.
 
 ---
 
-Fast iteration speed is only one of the main assets of an ECS.
+Iteration is only one of the main assets of an ECS.
 In the next chapter we'll talk about perhaps the most important feature: Systems.

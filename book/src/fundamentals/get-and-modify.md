@@ -13,7 +13,7 @@ world.run(|mut u32s: ViewMut<u32>| {
 [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get) will return a `&T` when used with a [`&View<T>`](https://docs.rs/shipyard/latest/shipyard/struct.View.html) and a `&mut T` with a [`&mut ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html).
 You can also get a `&T` from a [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html), which is why we have to explicitly get a mutable borrow on `u32s`.
 
-If you're certain that an entity has the desired component, you can access it directly via index when using single views:
+When using a single view, if you're certain that an entity has the desired component, you can access it directly via index:
 
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>| {
