@@ -102,10 +102,10 @@ ids: [
 ]
 deleted: Some((0, 0))
 ```
-Finally, we delete `entity1`.  `ids[newest].index` becomes `1` and we have a linked list where we start at the oldest index `0`.  `0` is not the newest index, so we know its value `1` is the index of the next deleted [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html).  `1` is the newest index, so we know we have reached the end of the linked list of deleted entries.
+Finally, we delete `entity1`.  `ids[newest].index` becomes `1` and we have a linked list where we start at the oldest index `0`.  `0` is not the newest index, so we know value `1` is the index of the next deleted [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html).  `1` is the newest index, so we know we have reached the end of the linked list of deleted entries.
 ```
 ids: [
-    { index: 1, version: 1 },
+    { index: 0, version: 1 },
     { index: 1, version: 1 },
     { index: 2, version: 0 }
 ]
