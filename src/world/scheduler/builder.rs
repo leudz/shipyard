@@ -16,6 +16,7 @@ use hashbrown::hash_map::Entry;
 
 /// Keeps information to create a workload.
 #[allow(clippy::type_complexity)]
+#[must_use]
 pub struct WorkloadBuilder<'a> {
     scheduler: RefMut<'a, Scheduler>,
     systems: Vec<(
@@ -89,9 +90,9 @@ impl<'a> WorkloadBuilder<'a> {
         F: System<'a, (), B, R>,
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
-        &mut self,
+        mut self,
         (system, _): (S, F),
-    ) -> Result<&mut WorkloadBuilder<'a>, error::InvalidSystem> {
+    ) -> Result<WorkloadBuilder<'a>, error::InvalidSystem> {
         let old_len = self.borrow_info.len();
         F::borrow_infos(&mut self.borrow_info);
 
@@ -137,13 +138,13 @@ impl<'a> WorkloadBuilder<'a> {
         F: System<'a, (), B, R>,
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
-        &mut self,
+        self,
         system: (S, F),
-    ) -> &mut WorkloadBuilder<'a> {
+    ) -> WorkloadBuilder<'a> {
         self.try_with_system(system).unwrap()
     }
     /// Finishes the workload creation and store it in the `World`.
-    pub fn build(&mut self) {
+    pub fn build(mut self) {
         if self.systems.len() == 1 {
             let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();
             let mut name = "".into();
