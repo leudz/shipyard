@@ -599,5 +599,6 @@ impl LoosePack {
 pub(crate) struct UpdatePack<T> {
     pub(crate) inserted: usize,
     pub(crate) modified: usize,
+    pub(crate) removed: Vec<EntityId>,
     pub(crate) deleted: Vec<(EntityId, T)>,
 }

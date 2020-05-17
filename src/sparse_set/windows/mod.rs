@@ -182,6 +182,21 @@ impl<'w, T> Window<'w, T> {
     pub fn deleted(&self) -> &[(EntityId, T)] {
         self.try_deleted().unwrap()
     }
+    /// Returns the ids of *removed* components of an update packed window.
+    pub fn try_removed(&self) -> Result<&[EntityId], error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(&pack.removed)
+        } else {
+            Err(error::NotUpdatePack)
+        }
+    }
+    /// Returns the ids of *removed* components of an update packed window.  
+    /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn removed(&self) -> &[EntityId] {
+        self.try_removed().unwrap()
+    }
     /// Returns the `EntityId` at a given `index`.
     pub fn try_id_at(&self, index: usize) -> Option<EntityId> {
         self.dense.get(index).copied()
@@ -615,6 +630,21 @@ impl<'w, T> WindowMut<'w, T> {
     pub fn deleted(&self) -> &[(EntityId, T)] {
         self.try_deleted().unwrap()
     }
+    /// Returns the ids of *removed* components of an update packed window.
+    pub fn try_removed(&self) -> Result<&[EntityId], error::NotUpdatePack> {
+        if let Pack::Update(pack) = &self.pack_info.pack {
+            Ok(&pack.removed)
+        } else {
+            Err(error::NotUpdatePack)
+        }
+    }
+    /// Returns the ids of *removed* components of an update packed window.  
+    /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn removed(&self) -> &[EntityId] {
+        self.try_removed().unwrap()
+    }
     /// Takes ownership of the *deleted* components of an update packed window.
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &mut self.pack_info.pack {
@@ -631,6 +661,23 @@ impl<'w, T> WindowMut<'w, T> {
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
         self.try_take_deleted().unwrap()
+    }
+    /// Takes ownership of the ids of *removed* components of an update packed window.
+    pub fn try_take_removed(&mut self) -> Result<Vec<EntityId>, error::NotUpdatePack> {
+        if let Pack::Update(pack) = &mut self.pack_info.pack {
+            let mut vec = Vec::with_capacity(pack.removed.capacity());
+            core::mem::swap(&mut vec, &mut pack.removed);
+            Ok(vec)
+        } else {
+            Err(error::NotUpdatePack)
+        }
+    }
+    /// Takes ownership of the ids of *removed* components of an update packed window.  
+    /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn take_removed(&mut self) -> Vec<EntityId> {
+        self.try_take_removed().unwrap()
     }
     /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
