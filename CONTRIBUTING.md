@@ -10,13 +10,13 @@ If you feel that good advice is missing from this document, please feel free to 
 
 Many conversations start as raw ideas in [the Shipyard Zulip](https://shipyard.zulipchat.com/), since it's an easy medium for quick feedback.
 
-Otherwise, you may open a new issue with a write-up of what you're trying to accomplish with Shipyard also works.
+Otherwise, you may open a new issue with a write-up of what you're trying to accomplish with Shipyard.
 
-One of the hardest parts about determining which features to build into the core library and which features should be left for supporting libraries to build is challenge of balancing the needs of many different projects. Ensuring that your feature proposal shares context for what you are trying to accomplish will ensure that we can collaborate towards the best approach that can benefit everyone.
+One of the hardest parts about determining which features to build into the core library and which features should be left for supporting libraries to build is a challenge of balancing the needs of many different projects. Sharing context for what you are trying to accomplish will ensure that we can collaborate towards the best approach that can benefit everyone.
 
 ## Testing
 
-Currently, Shipyard uses [`cargo-make`](https://github.com/sagiegurari/cargo-make) alongside our [Makefile.toml](./Makefile.toml) to specify several helpful tasks for testing several different feature combinations.
+Currently, Shipyard uses [`cargo-make`](https://github.com/sagiegurari/cargo-make) alongside our [Makefile.toml](./Makefile.toml) to specify helpful tasks for testing different feature combinations.
 
 ```sh
 # run all tests and static checks (miri may not work for macOS)
