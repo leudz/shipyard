@@ -147,6 +147,7 @@ fn update() {
     assert_eq!(usizes.try_inserted().unwrap().len(), 1);
     assert_eq!(usizes.try_modified().unwrap().len(), 0);
     assert_eq!(usizes.try_deleted().unwrap().len(), 0);
+    assert_eq!(usizes.try_removed().unwrap(), &[entity1]);
 }
 
 #[test]

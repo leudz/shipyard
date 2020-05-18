@@ -207,4 +207,5 @@ fn update() {
     assert_eq!(usizes.get(entity2), Ok(&2));
     assert_eq!(usizes.try_deleted().unwrap().len(), 1);
     assert_eq!(usizes.try_take_deleted().unwrap(), vec![(entity1, 0)]);
+    assert_eq!(usizes.try_removed().unwrap().len(), 0);
 }
