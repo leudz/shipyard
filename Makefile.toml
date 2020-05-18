@@ -20,5 +20,9 @@ dependencies = ["clean"]
 command = "cargo"
 args = ["clean"]
 
+[tasks.clippy]
+command = "cargo"
+args = ["clippy"]
+
 [tasks.test]
-run_task = { name = ["miri", "test-all", "clean"] }
+run_task = { name = ["miri", "clippy", "test-all", "clean"] }
