@@ -11,7 +11,6 @@ mod world;
 
 use cfg_if::cfg_if;
 use wasm_bindgen::prelude::*;
-
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
 #[cfg(feature = "wee_alloc")]
@@ -34,8 +33,8 @@ cfg_if! {
 }
 
 // Called by our JS entry point to run the example.
-#[wasm_bindgen]
-pub fn run() -> Result<js_sys::Promise, JsValue> {
+#[wasm_bindgen(start)]
+pub fn run() {
     setup();
-    init::start()
+    init::start();
 }

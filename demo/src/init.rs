@@ -19,32 +19,31 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::future_to_promise;
+use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlCanvasElement, HtmlElement};
 
-pub fn start() -> Result<js_sys::Promise, JsValue> {
-    let window = web_sys::window().ok_or("should have a Window")?;
-    let document = window.document().ok_or("should have a Document")?;
-    let body = document.body().ok_or("should have a Body")?;
+pub fn start() {
+    spawn_local(async {
+        let window = web_sys::window().expect("should have a Window");
+        let document = window.document().expect("should have a Document");
+        let body = document.body().expect("should have a Body");
 
-    let loading: HtmlElement = document.create_element("div")?.dyn_into()?;
-    loading.set_class_name("loading");
-    loading.set_text_content(Some("Loading..."));
-    body.append_child(&loading)?;
-
-    let future = async move {
-        let img = fetch::image(&get_media_href("bunny.png")).await?;
-        let vertex = fetch::text(&get_media_href("vertex.glsl")).await?;
-        let fragment = fetch::text(&get_media_href("fragment.glsl")).await?;
+        let loading: HtmlElement = document.create_element("div").unwrap_throw().dyn_into().unwrap_throw();
+        loading.set_class_name("loading");
+        loading.set_text_content(Some("Loading..."));
+        body.append_child(&loading).unwrap_throw();
+        let img = fetch::image(&get_media_href("bunny.png")).await.unwrap_throw();
+        let vertex = fetch::text(&get_media_href("vertex.glsl")).await.unwrap_throw();
+        let fragment = fetch::text(&get_media_href("fragment.glsl")).await.unwrap_throw();
 
         let (stage_width, stage_height) = get_window_size(&window).unwrap();
         let (img_width, img_height, _) = get_texture_size(&WebGlTextureSource::ImageElement(&img));
 
-        body.remove_child(&loading)?;
-        let canvas: HtmlCanvasElement = document.create_element("canvas")?.dyn_into()?;
-        body.append_child(&canvas)?;
+        body.remove_child(&loading).unwrap_throw();
+        let canvas: HtmlCanvasElement = document.create_element("canvas").unwrap_throw().dyn_into().unwrap_throw();
+        body.append_child(&canvas).unwrap_throw();
 
-        let hud = Hud::new(&document, &body)?;
+        let hud = Hud::new(&document, &body).unwrap_throw();
 
         //not using any webgl2 features so might as well stick with v1
         let gl = get_webgl_context_1(
@@ -53,11 +52,11 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
                 alpha: false,
                 ..Default::default()
             }),
-        )?;
+        ).unwrap_throw();
 
-        let renderer = WebGl1Renderer::new(gl)?;
+        let renderer = WebGl1Renderer::new(gl).unwrap_throw();
 
-        let scene_renderer = SceneRenderer::new(renderer, &vertex, &fragment, &img)?;
+        let scene_renderer = SceneRenderer::new(renderer, &vertex, &fragment, &img).unwrap_throw();
 
         let world = Rc::new(init_world(
             Area {
@@ -105,10 +104,7 @@ pub fn start() -> Result<js_sys::Promise, JsValue> {
         input::start(world, &canvas);
 
         Box::leak(Box::new(tick));
-        Ok(JsValue::null())
-    };
-
-    Ok(future_to_promise(future))
+    });
 }
 
 /// Until Raf is availble in gloo...
