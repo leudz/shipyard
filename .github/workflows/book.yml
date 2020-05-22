@@ -1,4 +1,4 @@
-name: Book and Demo
+name: Book
 
 on: [push]
 
