@@ -4,7 +4,7 @@ use shipyard::*;
 fn entity_id_serde() {
     let world = World::default();
 
-    //create and check a couple entities
+    // create and check a couple entities
     let (entity_id0, _) = world.run(
         |(mut entities, mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
             let entity_id0 = entities.add_entity(&mut u32s, 0);
@@ -17,16 +17,16 @@ fn entity_id_serde() {
         },
     );
 
-    //delete the first entity
+    // delete the first entity
     world.run(|mut all_storages: AllStoragesViewMut| {
         assert!(all_storages.delete(entity_id0));
     });
 
-    //add 2 more
+    // add 2 more
     world.run(
         |(mut entities, mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
             let entity_id2 = entities.add_entity(&mut u32s, 2);
-            //version was bumped
+            // generation was bumped
             check_roundtrip(entity_id2, "[0,1]");
 
             let entity_id3 = entities.add_entity(&mut u32s, 1);

@@ -26,7 +26,7 @@ use core::any::{Any, TypeId};
 /// &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
 ///       ⬑----------↵
 // An entity starts with a generation at 0, each removal will increase it by 1
-// until version::MAX() where the entity is considered dead.
+// until genration::MAX() where the entity is considered dead.
 // Removed entities form a linked list inside the vector, using their index part to point to the next.
 // Removed entities are added to one end and removed from the other.
 // Dead entities are simply never added to the linked list.
@@ -130,7 +130,7 @@ impl Entities {
             if unsafe {
                 self.data
                     .get_unchecked_mut(entity_id.uindex())
-                    .bump_version()
+                    .bump_gen()
                     .is_ok()
             } {
                 if let Some((ref mut new, _)) = self.list {
@@ -200,7 +200,7 @@ impl UnknownStorage for Entities {
         for (i, id) in self.data.iter_mut().enumerate().rev() {
             let target = last_alive;
 
-            if id.bump_version().is_ok() {
+            if id.bump_gen().is_ok() {
                 last_alive = i as u64;
             }
 
@@ -210,13 +210,13 @@ impl UnknownStorage for Entities {
         let begin = self
             .data
             .iter()
-            .position(|id| id.version() < ((1u64 << (EntityId::VERSION_LEN + 1)) - 1))
+            .position(|id| id.gen() < ((1u64 << (EntityId::GEN_LEN + 1)) - 1))
             .unwrap();
         let end = self
             .data
             .iter()
             .rev()
-            .position(|id| id.version() < ((1u64 << (EntityId::VERSION_LEN + 1)) - 1))
+            .position(|id| id.gen() < ((1u64 << (EntityId::GEN_LEN + 1)) - 1))
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
     }
@@ -239,16 +239,16 @@ fn entities() {
     let key10 = entities.generate();
 
     assert_eq!(key00.index(), 0);
-    assert_eq!(key00.version(), 0);
+    assert_eq!(key00.gen(), 0);
     assert_eq!(key10.index(), 1);
-    assert_eq!(key10.version(), 0);
+    assert_eq!(key10.gen(), 0);
 
     assert!(entities.delete_unchecked(key00));
     assert!(!entities.delete_unchecked(key00));
     let key01 = entities.generate();
 
     assert_eq!(key01.index(), 0);
-    assert_eq!(key01.version(), 1);
+    assert_eq!(key01.gen(), 1);
 
     assert!(entities.delete_unchecked(key10));
     assert!(entities.delete_unchecked(key01));
@@ -256,9 +256,9 @@ fn entities() {
     let key02 = entities.generate();
 
     assert_eq!(key11.index(), 1);
-    assert_eq!(key11.version(), 1);
+    assert_eq!(key11.gen(), 1);
     assert_eq!(key02.index(), 0);
-    assert_eq!(key02.version(), 2);
+    assert_eq!(key02.gen(), 2);
 
     let last_key = EntityId(NonZeroU64::new(!(!0 >> 15) + 1).unwrap());
     entities.data[0] = last_key;
@@ -266,7 +266,7 @@ fn entities() {
     assert_eq!(entities.list, None);
     let dead = entities.generate();
     assert_eq!(dead.index(), 2);
-    assert_eq!(dead.version(), 0);
+    assert_eq!(dead.gen(), 0);
 }
 
 #[test]
@@ -281,15 +281,15 @@ fn iterator() {
 
     let id0 = iter.next().unwrap();
     assert_eq!(id0.index(), 0);
-    assert_eq!(id0.version(), 0);
+    assert_eq!(id0.gen(), 0);
 
     let id1 = iter.next().unwrap();
     assert_eq!(id1.index(), 1);
-    assert_eq!(id1.version(), 0);
+    assert_eq!(id1.gen(), 0);
 
     let id2 = iter.next().unwrap();
     assert_eq!(id2.index(), 2);
-    assert_eq!(id2.version(), 0);
+    assert_eq!(id2.gen(), 0);
 
     assert!(iter.next().is_none());
 
@@ -301,11 +301,11 @@ fn iterator() {
 
     let id = iter.next().unwrap();
     assert_eq!(id.index(), 0);
-    assert_eq!(id.version(), 1);
+    assert_eq!(id.gen(), 1);
 
     let id = iter.next().unwrap();
     assert_eq!(id.index(), 2);
-    assert_eq!(id.version(), 0);
+    assert_eq!(id.gen(), 0);
 
     assert!(iter.next().is_none());
 }

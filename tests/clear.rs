@@ -27,22 +27,10 @@ fn no_pack() {
     let entity2 = entities.add_entity(&mut u32s, 5);
     let entity3 = entities.add_entity(&mut u32s, 5);
 
-    assert_eq!(
-        "EntityId { index: 0, version: 1 }",
-        format!("{:?}", entity0)
-    );
-    assert_eq!(
-        "EntityId { index: 1, version: 1 }",
-        format!("{:?}", entity1)
-    );
-    assert_eq!(
-        "EntityId { index: 2, version: 1 }",
-        format!("{:?}", entity2)
-    );
-    assert_eq!(
-        "EntityId { index: 3, version: 0 }",
-        format!("{:?}", entity3)
-    );
+    assert_eq!("EntityId { index: 0, gen: 1 }", format!("{:?}", entity0));
+    assert_eq!("EntityId { index: 1, gen: 1 }", format!("{:?}", entity1));
+    assert_eq!("EntityId { index: 2, gen: 1 }", format!("{:?}", entity2));
+    assert_eq!("EntityId { index: 3, gen: 0 }", format!("{:?}", entity3));
 }
 
 #[test]

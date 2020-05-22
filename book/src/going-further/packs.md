@@ -33,7 +33,7 @@ world.run(
 );
 ```
 
-After adding `entity0`, `usize`'s storage looks like this (version omitted):
+After adding `entity0`, `usize`'s storage looks like this (generation omitted):
 
 ```
 sparse: [0]

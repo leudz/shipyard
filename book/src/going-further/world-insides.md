@@ -55,9 +55,9 @@ If the tuple is `Some`, we'll use the oldest deleted index for the new entity an
 
 If [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) was interpreted as only an index, then two entities could have the same id. In just few operations, add - remove - add, we're back to the same index for a different entity, which could cause problems.
 
-Which is why [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) is not just an index, it is interpreted as two parts: a 48-bit index and a 16-bit version.
+Which is why [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) is not just an index, it is interpreted as two parts: a 48-bit index and a 16-bit generation.
 
-When we delete an entity its version gets incremented and its index becomes part of the optional tuple.
+When we delete an entity its generation gets incremented and its index becomes part of the optional tuple.
 
 This tuple only contains two elements, however, so we use the indices of deleted [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) entries to to form a linked list of all the deleted entries from most recently deleted to oldest.
 
@@ -86,9 +86,9 @@ world.run(|mut all_storages: AllStoragesViewMut| {
 Let's take a look at what happens to [`Entities`](https://docs.rs/shipyard/latest/shipyard/struct.Entities.html) as we run this code.  After adding all three entries, it looks something like this:
 ```
 ids: [
-    { index: 0, version: 0 },
-    { index: 1, version: 0 },
-    { index: 2, version: 0 }
+    { index: 0, gen: 0 },
+    { index: 1, gen: 0 },
+    { index: 2, gen: 0 }
 ]
 deleted: None
 ```
@@ -96,35 +96,33 @@ Then we delete `entity0`. Since there is just a single deleted entity, it's both
 
 ```
 ids: [
-    { index: 0, version: 1 },
-    { index: 1, version: 0 },
-    { index: 2, version: 0 }
+    { index: 0, gen: 1 },
+    { index: 1, gen: 0 },
+    { index: 2, gen: 0 }
 ]
 deleted: Some((0, 0))
 ```
 Finally, we delete `entity1`.  `ids[newest].index` becomes `1` and we have a linked list where we start at the oldest index `0`.  `0` is not the newest index, so we know value `1` is the index of the next deleted [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html).  `1` is the newest index, so we know we have reached the end of the linked list of deleted entries.
 ```
 ids: [
-    { index: 1, version: 1 },
-    { index: 1, version: 1 },
-    { index: 2, version: 0 }
+    { index: 1, gen: 1 },
+    { index: 1, gen: 1 },
+    { index: 2, gen: 0 }
 ]
 deleted: Some((1, 0))
 ```
 
 ### EntityId
 
-While only 64 bits, [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html)s are very interesting. 48 bits are used for the index, and the remaining 16 for the version.
-
-Almost all ECS have this kind of id, the difference being the length of the id and version.
+While only 64 bits, [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html)s are very interesting. Almost all ECS have this kind of id, the difference being the length of the id and generation.
 
 32 bits felt too small to fit the wildest use cases. A generic approach was discarded due to: first - adding a generic everywhere, and second - making actions between worlds more difficult.
 
-In some ECS implementations versions sometimes take more space, because who needs 48 bits for the index? But at the same time, who needs more than 16 bits for the version?
+In some ECS implementations generations sometimes take more space, because who needs 48 bits for the index? But at the same time, who needs more than 16 bits for the generation?
 
-In the exceptional event that you add and remove entities to and from the same index enough times to reach the version limit, the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) won't stop. This index will be considered dead (simply by not adding it the linked list) and you'll get an entity at another index on your next add.
+In the exceptional event that you add and remove entities to and from the same index enough times to reach the generation limit, the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) won't panic. This index will be considered dead (simply by not adding it the linked list) and you'll get an entity at another index.
 
-Plus, we add and delete from opposite sides of the linked list making the version increase slower in general.
+Plus, we add and delete from opposite sides of the linked list making the generation increase slower in general.
 
 ---
 

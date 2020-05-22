@@ -271,8 +271,7 @@ impl<T> SparseSet<T> {
                         if dense_index < self.dense.len() {
                             // SAFE we're inbound
                             let dense_id = *self.dense.get_unchecked(dense_index);
-                            if dense_id.index() == entity.index()
-                                && dense_id.version() <= entity.version()
+                            if dense_id.index() == entity.index() && dense_id.gen() <= entity.gen()
                             {
                                 match &mut self.pack_info.pack {
                                     Pack::Tight(pack_info) => {
@@ -368,7 +367,7 @@ impl<T> SparseSet<T> {
                                     .owned = core::usize::MAX;
 
                                 self.dense.swap_remove(dense_index);
-                                if dense_id.version() == entity.version() {
+                                if dense_id.gen() == entity.gen() {
                                     Some(OldComponent::Owned(self.data.swap_remove(dense_index)))
                                 } else {
                                     self.data.swap_remove(dense_index);
