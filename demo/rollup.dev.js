@@ -13,7 +13,7 @@ export default {
     },
     plugins: [
         rust({
-            serverPath: "/wasm/",
+            serverPath: "wasm/",
             debug: true,
             watchPatterns: ["src/**"],
             features: ["dev"],

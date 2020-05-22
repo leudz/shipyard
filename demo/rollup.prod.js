@@ -11,7 +11,7 @@ export default {
     },
     plugins: [
         rust({
-            serverPath: "/wasm/",
+            serverPath: "wasm/",
             debug: false,
         }),
     ],
