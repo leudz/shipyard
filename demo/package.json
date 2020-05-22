@@ -4,7 +4,7 @@
     "repository": "https://github.com/leudz/shipyard",
     "license": "(MIT OR Apache-2.0)",
     "scripts": {
-        "build": "npm run clean && npm run _copy-static-prod && rollup --config rollup.prod.js",
+        "build": "npm run clean && rollup --config rollup.prod.js",
         "start": "rollup --config rollup.dev.js --watch",
         "clean": "rimraf ./public/wasm"
     },
