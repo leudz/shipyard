@@ -659,6 +659,191 @@ world.run(|all_storages: AllStoragesViewMut| {
     pub fn borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> V {
         self.try_borrow::<V>().unwrap()
     }
+    #[doc = "Borrows the requested storages and runs the function.  
+Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
+
+You can use:
+* [View]\\<T\\> for a shared access to `T` storage
+* [ViewMut]\\<T\\> for an exclusive access to `T` storage
+* [EntitiesView] for a shared access to the entity storage
+* [EntitiesViewMut] for an exclusive reference to the entity storage
+* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
+        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_send"),
+        doc = "* NonSend: must activate the *non_send* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
+        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_sync"),
+        doc = "* NonSync: must activate the *non_sync* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
+        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(all(feature = "non_send", feature = "non_sync")),
+        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
+    )]
+    #[doc = "
+[EntitiesView]: struct.Entities.html
+[EntitiesViewMut]: struct.Entities.html
+[World]: struct.World.html
+[View]: struct.View.html
+[ViewMut]: struct.ViewMut.html
+[UniqueView]: struct.UniqueView.html
+[UniqueViewMut]: struct.UniqueViewMut.html"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "[NonSendSync]: struct.NonSendSync.html"
+    )]
+    pub fn try_run_with_data<'s, Data, B, R, S: crate::system::AllSystem<'s, (Data,), B, R>>(
+        &'s self,
+        s: S,
+        data: Data,
+    ) -> Result<R, error::Run> {
+        Ok(s.run((data,), { S::try_borrow(self)? }))
+    }
+    #[doc = "Borrows the requested storages and runs the function.  
+Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.  
+Unwraps errors.
+
+You can use:
+* [View]\\<T\\> for a shared access to `T` storage
+* [ViewMut]\\<T\\> for an exclusive access to `T` storage
+* [EntitiesView] for a shared access to the entity storage
+* [EntitiesViewMut] for an exclusive reference to the entity storage
+* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", docsrs),
+        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", not(docsrs)),
+        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_send"),
+        doc = "* NonSend: must activate the *non_send* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", not(docsrs)),
+        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(feature = "non_sync"),
+        doc = "* NonSync: must activate the *non_sync* feature"
+    )]
+    #[cfg_attr(
+        all(feature = "non_sync", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", docsrs),
+        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync", not(docsrs)),
+        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
+    )]
+    #[cfg_attr(
+        not(all(feature = "non_send", feature = "non_sync")),
+        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
+    )]
+    #[doc = "
+[EntitiesView]: struct.Entities.html
+[EntitiesViewMut]: struct.Entities.html
+[World]: struct.World.html
+[View]: struct.View.html
+[ViewMut]: struct.ViewMut.html
+[UniqueView]: struct.UniqueView.html
+[UniqueViewMut]: struct.UniqueViewMut.html"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+    #[cfg_attr(
+        all(feature = "non_send", feature = "non_sync"),
+        doc = "[NonSendSync]: struct.NonSendSync.html"
+    )]
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn run_with_data<'s, Data, B, R, S: crate::system::AllSystem<'s, (Data,), B, R>>(
+        &'s self,
+        s: S,
+        data: Data,
+    ) -> R {
+        self.try_run_with_data(s, data).unwrap()
+    }
     #[doc = "Borrows the requested storages and runs the function.
 
 You can use:
@@ -760,11 +945,11 @@ let i = all_storages.try_run(sys1).unwrap();
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn try_run<'s, B, R, S: crate::system::AllSystem<'s, B, R>>(
+    pub fn try_run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
-        Ok(s.run(S::try_borrow(self)?))
+        Ok(s.run((), S::try_borrow(self)?))
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -867,7 +1052,7 @@ let i = all_storages.run(sys1);
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    pub fn run<'s, B, R, S: crate::system::AllSystem<'s, B, R>>(&'s self, s: S) -> R {
+    pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, s: S) -> R {
         self.try_run(s).unwrap()
     }
     /// Deletes any entity with at least one of the given type(s).

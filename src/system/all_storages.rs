@@ -3,18 +3,31 @@ use crate::borrow::AllStoragesBorrow;
 use crate::error;
 use crate::storage::AllStorages;
 
-pub trait AllSystem<'s, B, R> {
-    fn run(self, b: B) -> R;
+pub trait AllSystem<'s, Data, B, R> {
+    fn run(self, data: Data, b: B) -> R;
     fn try_borrow(all_storages: &'s AllStorages) -> Result<B, error::GetStorage>;
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
-impl<'s, R, F> AllSystem<'s, Nothing, R> for F
+impl<'s, R, F> AllSystem<'s, (), Nothing, R> for F
 where
     F: FnOnce() -> R,
 {
-    fn run(self, _: Nothing) -> R {
+    fn run(self, _: (), _: Nothing) -> R {
         (self)()
+    }
+    fn try_borrow(_: &'s AllStorages) -> Result<Nothing, error::GetStorage> {
+        Ok(Nothing)
+    }
+}
+
+// Nothing has to be used and not () to not conflict where A = ()
+impl<'s, Data, R, F> AllSystem<'s, (Data,), Nothing, R> for F
+where
+    F: FnOnce(Data) -> R,
+{
+    fn run(self, (data,): (Data,), _: Nothing) -> R {
+        (self)(data)
     }
     fn try_borrow(_: &'s AllStorages) -> Result<Nothing, error::GetStorage> {
         Ok(Nothing)
@@ -23,9 +36,20 @@ where
 
 macro_rules! impl_all_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: AllStoragesBorrow<'s>,)+ R, Func> AllSystem<'s, ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
-            fn run(self, b: ($($type,)+)) -> R {
+        impl<'s, $($type: AllStoragesBorrow<'s>,)+ R, Func> AllSystem<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
+            fn run(self, _: (), b: ($($type,)+)) -> R {
                 (self)($(b.$index,)+)
+            }
+            fn try_borrow(
+                all_storages: &'s AllStorages,
+            ) -> Result<($($type,)+), error::GetStorage> {
+                    Ok(($($type::try_borrow(all_storages)?,)+))
+            }
+        }
+
+        impl<'s, Data, $($type: AllStoragesBorrow<'s>,)+ R, Func> AllSystem<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type),+) -> R {
+            fn run(self, (data,): (Data,), b: ($($type,)+)) -> R {
+                (self)(data, $(b.$index,)+)
             }
             fn try_borrow(
                 all_storages: &'s AllStorages,
