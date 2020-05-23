@@ -3,9 +3,9 @@ mod serde;
 
 use core::num::NonZeroU64;
 
-/// A Key is a handle to an entity.  
+/// Handle to an entity.
+///
 /// It has two parts, an index and a generation.  
-/// The index is 48 bits long and the generation 16.
 #[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct EntityId(pub(super) NonZeroU64);
