@@ -63,6 +63,7 @@ fn main() {
   - [All at once](#all-at-once)
 - [Unique Storage (Resource)](#unique-storage-resource)
 - [!Send and !Sync Components](#send-and-sync-components)
+- [Workload](#workload)
 - [Cargo Features](#cargo-features)
 - [Unsafe](#unsafe)
 - [License](#license)
@@ -162,6 +163,41 @@ fn run(rcs: NonSendSync<View<Rc<u32>>>) {
     // -- snip --
 }
 ```
+
+## Workload
+
+Workloads make it easy to run multiple systems again and again. They also automatically schedule systems so you don't have borrow error when trying to use multiple threads.
+
+```rust
+fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
+    // -- snip --
+}
+
+fn tag_dead(entities: EntitiesView, healths: View<Health>, mut deads: ViewMut<Dead>) {
+    for (id, health) in healths.iter().with_id() {
+        if health.0 == 0.0 {
+            entities.add_component(&mut deads, Dead, id);
+        }
+    }
+}
+
+fn remove_dead(mut all_storages: AllStoragesViewMut) {
+    all_storages.remove_any::<(Dead,)>();
+}
+
+world
+    .add_workload("Rain")
+    .with_system(system!(in_acid))
+    .with_system(system!(tag_dead))
+    .with_system(system!(remove_dead))
+    .build();
+
+world.run_workload("Rain");
+world.run_workload("Rain");
+```
+
+The system macro acts as duck tape while waiting for some features in the language, it will disappear as soon as possible.  
+You can make workloads without it but I strongly recommended to use it.
 
 ## Cargo Features
 
