@@ -75,8 +75,10 @@ impl<'a> WorkloadBuilder<'a> {
     ///
     /// world
     ///     .add_workload("Add & Check")
-    ///     .with_system((|world: &World| world.try_run(add), add))
-    ///     .with_system(system!(check))
+    ///     .try_with_system((|world: &World| world.try_run(add), add))
+    ///     .unwrap()
+    ///     .try_with_system(system!(check))
+    ///     .unwrap()
     ///     .build();
     ///
     /// world.run_default();
@@ -131,7 +133,51 @@ impl<'a> WorkloadBuilder<'a> {
         ));
         Ok(self)
     }
+    /// Adds a system to the workload been created.  
+    /// It is strongly recommanded to use the [system] and [try_system] macros.  
+    /// If the two functions in the tuple don't match, the workload could fail to run every time.  
+    /// Unwraps errors.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
+    ///
+    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
+    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
+    ///         *x += y as usize;
+    ///     }
+    /// }
+    ///
+    /// fn check(usizes: View<usize>) {
+    ///     let mut iter = usizes.iter();
+    ///     assert_eq!(iter.next(), Some(&1));
+    ///     assert_eq!(iter.next(), Some(&5));
+    ///     assert_eq!(iter.next(), Some(&9));
+    /// }
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
+    ///     },
+    /// );
+    ///
+    /// world
+    ///     .add_workload("Add & Check")
+    ///     .with_system((|world: &World| world.try_run(add), add))
+    ///     .with_system(system!(check))
+    ///     .build();
+    ///
+    /// world.run_default();
+    /// ```
+    ///
+    /// [system]: macro.system.html
+    /// [try_system]: macro.try_system.html
     #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn with_system<
         B,
         R,
