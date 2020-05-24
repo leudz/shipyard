@@ -18,11 +18,29 @@ jobs:
     - name: install mdbook 
       run: cargo install mdbook 
 
+    - name: install node
+      uses: actions/setup-node@v1
+
+    - name: install npm deps
+      run: npm ci
+      working-directory: ./demo
+
+    - name: add rust wasm target
+      run: rustup target add wasm32-unknown-unknown
+
     - name: build book
-      run: cd book && mdbook build
+      run: mdbook build
+      working-directory: ./book
+
+    - name: build demo 
+      run: npm run build 
+      working-directory: ./demo
 
     - name: copy book to dist
       run: cp -R ./book/output ./dist/book
+
+    - name: copy demo to dist
+      run: cp -R ./demo/public ./dist/demo
 
     - name: deploy to gh_pages
       uses: maxheld83/ghpages@master
