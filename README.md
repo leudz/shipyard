@@ -1,18 +1,16 @@
-# Shipyard
-
 Shipyard is an Entity Component System focused on usability and speed.
 
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 [![Crates.io](https://img.shields.io/crates/v/shipyard)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
-[![User's Guide](https://img.shields.io/badge/user's%20guide-current-blueviolet)](https://leudz.github.io/shipyard/book)
-[![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com/join/zrakw74eyqongdul9bib769w/)
+[![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com)
 
-While usable it is far from finished, there's a lot of planned features, nearly all being backward compatible additions.
+If you have any question or want to follow the development more closely join the [Zulip](https://shipyard.zulipchat.com).
 
-Most discussions about current and future features happen on zulip.
-
-If you are new here, the [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!
+There's two big learning resources:
+- (Soon™) The Tutorial for people new to ECS or preferring to learn by making a project.
+- [The Guide](https://leudz.github.io/shipyard/book) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
+  It also go more in depth and provide useful recipes for common patterns.
 
 ## Simple Example
 ```rust
@@ -56,42 +54,116 @@ fn main() {
 }
 ```
 
-## Past, Present and Future
+## Table of Contents
+- [Let there be SparseSets](#let-there-be-sparsesets)
+- [Systems](#systems)
+  - [Not just storage](#not-just-storage)
+  - [Return](#return)
+  - [Generics](#generics)
+  - [All at once](#all-at-once)
+- [Unique Storage (Resource)](#unique-storage-resource)
+- [!Send and !Sync Components](#send-and-sync-components)
+- [Cargo Features](#cargo-features)
+- [Unsafe](#unsafe)
+- [License](#license)
+- [Contributing](#contributing)
 
-I initially started to make an ECS to learn how it works. After a failed attempt and learning a lot from it and other ECS out there, I started to work on Shipyard.
+## Let there be SparseSets
+
+I initially started to make an ECS to learn how it works. A failed attempt and some research later, I started to work on Shipyard.
 
 [Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: `SparseSet`.
 
-It turned out to be extremely flexible and is still the core of Shipyard. You can pay for what you want: iteration speed, memory, ease of use,...
+It's extremely flexible and is the core data-structure behind Shipyard.  
+Today I wouldn't say Shipyard is better or worse than Specs, it's just different.
 
-And it allowed amazing features:
-- No component boilerplate
-- Very simple systems
-- Powerful inner and outer system parallelism
-- Ability to add/remove components while adding/removing entities
-- Chunk iteration
-- And a lot more!
+## Systems
 
-Today I wouldn't say Shipyard is better or worse than Specs, it's just different. I'm really happy with it and the future looks very promising, especially:
-- [Pipeline](https://github.com/leudz/shipyard/issues/44)
-- [Events](https://github.com/leudz/shipyard/issues/22)
-- [Nested packs](https://github.com/leudz/shipyard/issues/47)
-- [Shared components](https://github.com/leudz/shipyard/issues/38)
-- [Iterator blueprint](https://github.com/leudz/shipyard/issues/41)
+Systems make it very easy to split your logic in manageable chunk. Shipyard takes the concept quite far.
 
-## Similar Projects
+You always start with a function or closure and almost always take a few views (reference to storage) as arguments.  
+The basic example shown above does just that:
+```rust
+fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
+    // -- snip --
+}
+```
+A function with two views as argument.
 
-- [EnTT](https://github.com/skypjack/entt) - C++ library built on `SparseSet` and providing grouping functionality, a lot of its designs are explained in [a blog](https://skypjack.github.io/). This is where Shipyard's `SparseSet` and most packs come from
-- [Specs](https://github.com/amethyst/specs) - Rust library relying on `BitSet` and allowing to use multiple storage types
-- [Legion](https://github.com/TomGillen/legion) - Rust library based on archetypes
-- [Hecs](https://github.com/Ralith/hecs) - Rust library also based on archetypes but keeping a minimalistic approach
+### Not just storage
 
-## Performance
+The first argument doesn't have to be a view, you can pass any data to a system. You don't even have to own it.
 
-If you're wondering how fast Shipyard is you can look at a few graphs in [this issue](https://github.com/leudz/shipyard/issues/61).  
-There is still a lot of room for optimization, the current focus is more on adding functionalities.
+```rust
+fn in_acid(season: &Season, positions: View<Position>, mut healths: ViewMut<Health>) {
+    // -- snip --
+}
 
-## Features
+world.run_with_data(in_acid, &season);
+```
+You have to provide the data when running the system of course.
+
+### Return
+
+Systems can also have a return type, if run directly with `World::run` or `AllStorages::run` you'll get the returned value right away.  
+For workloads you can only get back errors.
+
+```rust
+fn lowest_hp(healths: View<Health>) -> EntityId {
+    // -- snip --
+}
+
+let entity = world.run(lowest_hp);
+```
+
+### Generics
+
+Just like any function you can add some generics. You'll have to specify them when running the system.
+
+```rust
+fn in_acid<F: Float>(positions: View<Position<F>>, mut healths: ViewMut<Health>) {
+    // -- snip --
+}
+
+world.run(in_acid::<f32>);
+```
+
+### All at once
+
+You can of course use all of them at the same time.
+
+```rust
+fn debug<T: Debug + 'static>(fmt: &mut Formatter, view: View<T>) -> Result<(), fmt::Error> {
+    // -- snip --
+}
+
+world.run_with_data(debug::<u32>, fmt)?;
+```
+
+## Unique Storage (Resource)
+
+Unique storages are used to store data you only have once in the `World` and aren't related to any entity.
+
+```rust
+fn render(renderer: UniqueView<Renderer>) {
+    // -- snip --
+}
+
+world.add_unique(Renderer::new());
+```
+
+## !Send and !Sync Components
+
+`!Send` and `!Sync` components can be stored directly in the `World` and accessed almost just like any other component.  
+Make sure to add the cargo feature to have access to this functionality.
+
+```rust
+fn run(rcs: NonSendSync<View<Rc<u32>>>) {
+    // -- snip --
+}
+```
+
+## Cargo Features
 
 - **panic** *(default)* adds panicking functions
 - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
@@ -104,15 +176,7 @@ There is still a lot of room for optimization, the current focus is more on addi
 
 This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.  
 Releases should have all invocation of `unsafe` explained.  
-If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) feel free to open an issue or a PR.
-
-## Origin of the Name
-
-Assembly lines take input, process it at each step, and output a result.  You can have multiple lines working in parallel as long as they don't bother each other.
-
-Shipyards such as the [Venetian Arsenal](https://en.wikipedia.org/wiki/Venetian_Arsenal) are some of the oldest examples of successful, large-scale, industrial assembly lines.  So successful that it could output a fully-finished ship _every day_.
-
-*Shipyard* is a project you can use to build your own highly-parallel software processes.
+If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) please open an issue or a PR.
 
 ## License
 
@@ -125,7 +189,7 @@ Licensed under either of
 
 at your option.
 
-## Contribution
+## Contributing
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be

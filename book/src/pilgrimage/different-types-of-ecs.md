@@ -12,7 +12,7 @@ This implementation groups entities and their components based on which one they
 
 When an entity gains or loses a component it moves from an archetype to another.
 
-[Unity's dots](https://unity.com/dots), [Flecs](https://github.com/SanderMertens/flecs/) and [Legion](https://github.com/TomGillen/legion) are implemented using archetypes.
+[Unity's dots](https://unity.com/dots), [Flecs](https://github.com/SanderMertens/flecs/), [Legion](https://github.com/TomGillen/legion) and [Hecs](https://github.com/Ralith/hecs) are implemented using archetypes.
 
 ### Bitset
 
