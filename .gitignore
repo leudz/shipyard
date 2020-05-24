@@ -3,4 +3,4 @@
 Cargo.lock
 book/output
 node_modules
-demo/_static/wasm/shipyard_demo
+demo/public/wasm
