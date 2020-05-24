@@ -143,33 +143,43 @@ impl<'a> WorkloadBuilder<'a> {
     ) -> WorkloadBuilder<'a> {
         self.try_with_system(system).unwrap()
     }
-    /// Calls the given function on `self` and returns the result.
+    /// Calls the given function on the builder.
     ///
     /// Can be useful to chain calls to functions that modify a `WorkloadBuilder`.
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{system, WorkloadBuilder, World};
+    /// use shipyard::World;
     ///
-    /// fn my_system() {}
+    /// mod mod1 {
+    ///     use shipyard::{system, WorkloadBuilder};
     ///
-    /// fn register_systems<'a>(workload: WorkloadBuilder<'a>) -> WorkloadBuilder<'a> {
-    ///     workload.with_system(system!(my_system))
+    ///     fn private_system() {}
+    ///
+    ///     pub fn register_systems(workload: WorkloadBuilder) -> WorkloadBuilder {
+    ///         workload.with_system(system!(private_system))
+    ///     }
     /// }
     ///
-    /// fn register_more_systems<'a>(workload: WorkloadBuilder<'a>) -> WorkloadBuilder<'a> {
-    ///     workload.with_system(system!(|| {}))
+    /// mod mod2 {
+    ///     use shipyard::{system, WorkloadBuilder};
+    ///
+    ///     fn private_system() {}
+    ///
+    ///     pub fn register_systems(workload: WorkloadBuilder) -> WorkloadBuilder {
+    ///         workload.with_system(system!(private_system))
+    ///     }
     /// }
     ///
     /// World::new()
     ///     .add_workload("My workload")
-    ///     .apply(register_systems)
-    ///     .apply(register_more_systems)
+    ///     .apply(mod1::register_systems)
+    ///     .apply(mod2::register_systems)
     ///     .build();
     /// ```
     pub fn apply<F>(self, f: F) -> Self
     where
-        F: Fn(Self) -> Self,
+        F: FnOnce(Self) -> Self,
     {
         f(self)
     }
