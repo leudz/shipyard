@@ -143,6 +143,36 @@ impl<'a> WorkloadBuilder<'a> {
     ) -> WorkloadBuilder<'a> {
         self.try_with_system(system).unwrap()
     }
+    /// Calls the given function on `self` and returns the result.
+    ///
+    /// Can be useful to chain calls to functions that modify a `WorkloadBuilder`.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{system, WorkloadBuilder, World};
+    ///
+    /// fn my_system() {}
+    ///
+    /// fn register_systems<'a>(workload: WorkloadBuilder<'a>) -> WorkloadBuilder<'a> {
+    ///     workload.with_system(system!(my_system))
+    /// }
+    ///
+    /// fn register_more_systems<'a>(workload: WorkloadBuilder<'a>) -> WorkloadBuilder<'a> {
+    ///     workload.with_system(system!(|| {}))
+    /// }
+    ///
+    /// World::new()
+    ///     .add_workload("My workload")
+    ///     .apply(register_systems)
+    ///     .apply(register_more_systems)
+    ///     .build();
+    /// ```
+    pub fn apply<F>(self, f: F) -> Self
+    where
+        F: Fn(Self) -> Self,
+    {
+        f(self)
+    }
     /// Finishes the workload creation and store it in the `World`.
     pub fn build(mut self) {
         if self.systems.len() == 1 {
