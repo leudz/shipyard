@@ -748,7 +748,7 @@ You can use:
         s: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        Ok(s.run((data,), { S::try_borrow(self)? }))
+        Ok(s.run((data,), S::try_borrow(self)?))
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.  
