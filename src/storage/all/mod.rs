@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use core::any::TypeId;
 use core::cell::UnsafeCell;
 use core::hash::BuildHasherDefault;
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
 /// Contains all components present in the World.
@@ -342,6 +342,21 @@ impl AllStorages {
             unique
         } else {
             self.lock.unlock_shared();
+            Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
+        }
+    }
+    pub(crate) fn take_unique<T: 'static>(&self) -> Result<T, error::GetStorage> {
+        let type_id = TypeId::of::<T>();
+        self.lock.lock_exclusive();
+        // SAFE we locked
+        let storages = unsafe { &mut *self.storages.get() };
+        if let Entry::Occupied(_entry) = storages.entry(type_id) {
+            // Try to mutably lock the storage, and if we get it then `entry.remove()` and take the
+            // inner value.
+            todo!();
+            self.lock.unlock_exclusive();
+        } else {
+            self.lock.unlock_exclusive();
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
         }
     }
