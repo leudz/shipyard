@@ -91,6 +91,15 @@ impl<T: ?Sized> AtomicRefCell<T> {
     }
 }
 
+impl AtomicRefCell<dyn crate::unknown_storage::UnknownStorage> {
+    /// # Safety
+    ///
+    /// `T` has to be a unique storage of the right type.
+    pub unsafe fn into_unique<T: 'static>(mut this: Box<Self>) -> T {
+        todo!()
+    }
+}
+
 /// `BorrowState` keeps track of which borrow is currently active.
 // If `HIGH_BIT` is set, it is a unique borrow, in all other cases it is a shared borrowed
 #[doc(hidden)]

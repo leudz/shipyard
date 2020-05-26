@@ -200,9 +200,7 @@ impl World {
     pub fn try_take_unique<T: 'static>(&self) -> Result<T, error::GetStorage> {
         self.all_storages
             .try_borrow_mut()
-            .map_err(|borrow| {
-                error::GetStorage::AllStoragesBorrow(borrow)
-            })?
+            .map_err(|borrow| error::GetStorage::AllStoragesBorrow(borrow))?
             .take_unique()
     }
     /// Fetches a unique storage, removing it from the world.

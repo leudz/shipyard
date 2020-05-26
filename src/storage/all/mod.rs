@@ -352,9 +352,9 @@ impl AllStorages {
         let storages = unsafe { &mut *self.storages.get() };
         if let Entry::Occupied(entry) = storages.entry(type_id) {
             // `.err()` to avoid borrowing `entry` in the `Ok` case
-            if let Some(err) = entry.get().unique_mut::<T>().err() {
+            if let Some(get_storage) = entry.get().unique_mut::<T>().err() {
                 self.lock.unlock_exclusive();
-                Err(err)
+                Err(get_storage)
             } else {
                 // We were able to lock the storage, we've still got exclusive access even though
                 // we released that lock as we're still holding the `AllStorages` lock.

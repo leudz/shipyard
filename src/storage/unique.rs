@@ -5,6 +5,12 @@ use core::any::{Any, TypeId};
 
 pub(crate) struct Unique<T>(pub(crate) T);
 
+impl<T> Unique<T> {
+    pub(crate) fn into_inner(self) -> T {
+        self.0
+    }
+}
+
 impl<T: 'static> UnknownStorage for Unique<T> {
     fn delete(&mut self, _: EntityId, _: &mut Vec<TypeId>) {}
     fn clear(&mut self) {}

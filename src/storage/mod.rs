@@ -203,7 +203,12 @@ impl Storage {
         )
     }
     pub(crate) fn take_unique<T: 'static>(self) -> Result<T, error::GetStorage> {
-        todo!()
+        // We already have exclusive access, but need to verify that this is actually a
+        // `Unique<T>`.
+        self.unique_mut::<T>()?;
+        // SAFE the cast to `T` succeeded.
+        let storage = unsafe { AtomicRefCell::into_unique::<Unique<T>>(self.0) };
+        Ok(storage.into_inner())
     }
     /// Mutably borrows the container and delete `index`.
     pub(crate) fn delete(
