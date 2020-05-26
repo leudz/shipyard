@@ -202,6 +202,9 @@ impl Storage {
             },
         )
     }
+    pub(crate) fn take_unique<T: 'static>(self) -> Result<T, error::GetStorage> {
+        todo!()
+    }
     /// Mutably borrows the container and delete `index`.
     pub(crate) fn delete(
         &mut self,

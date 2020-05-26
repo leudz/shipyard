@@ -350,11 +350,18 @@ impl AllStorages {
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
-        if let Entry::Occupied(_entry) = storages.entry(type_id) {
-            // Try to mutably lock the storage, and if we get it then `entry.remove()` and take the
-            // inner value.
-            todo!();
-            self.lock.unlock_exclusive();
+        if let Entry::Occupied(entry) = storages.entry(type_id) {
+            // `.err()` to avoid borrowing `entry` in the `Ok` case
+            if let Some(err) = entry.get().unique_mut::<T>().err() {
+                self.lock.unlock_exclusive();
+                Err(err)
+            } else {
+                // We were able to lock the storage, we've still got exclusive access even though
+                // we released that lock as we're still holding the `AllStorages` lock.
+                let storage = entry.remove();
+                self.lock.unlock_exclusive();
+                storage.take_unique::<T>()
+            }
         } else {
             self.lock.unlock_exclusive();
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
