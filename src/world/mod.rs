@@ -196,6 +196,20 @@ impl World {
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
+    /// Removes a unique storage.
+    pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+        self.all_storages
+            .try_borrow()
+            .map_err(|_| error::UniqueRemove::AllStorages)?
+            .remove_unique::<T>()
+    }
+    /// Removes a unique storage.
+    /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn remove_unique<T: 'static>(&self) -> T {
+        self.try_remove_unique().unwrap()
+    }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.
 

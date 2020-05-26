@@ -581,3 +581,35 @@ impl Display for InvalidSystem {
         Debug::fmt(self, fmt)
     }
 }
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum UniqueRemove {
+    AllStorages,
+    MissingUnique(&'static str),
+    StorageBorrow((&'static str, Borrow)),
+    NonUnique(&'static str),
+}
+
+#[cfg(feature = "std")]
+impl Error for UniqueRemove {}
+
+impl Debug for UniqueRemove {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::AllStorages => fmt.write_str("Cannot borrow AllStorages while it's already exclusively borrowed."),
+            Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {}.\n", name)),
+            Self::StorageBorrow((name, borrow)) => match borrow {
+                Borrow::Unique => fmt.write_fmt(format_args!("Cannot mutably borrow {} storage while it's already borrowed.", name)),
+                Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
+                _ => unreachable!()
+            }
+            Self::NonUnique(name) => fmt.write_fmt(format_args!("{}'s storage isn't unique.", name)),
+        }
+    }
+}
+
+impl Display for UniqueRemove {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}

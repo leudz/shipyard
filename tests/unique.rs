@@ -17,6 +17,24 @@ fn unique_storage() {
             assert_eq!(*x, 1);
         })
         .unwrap();
+
+    world.try_remove_unique::<usize>().unwrap();
+
+    if let Some(shipyard::error::Run::GetStorage(get_error)) = world
+        .try_run(|mut x: UniqueViewMut<usize>| {
+            *x += 1;
+        })
+        .err()
+    {
+        assert_eq!(
+            get_error,
+            shipyard::error::GetStorage::MissingUnique(core::any::type_name::<usize>())
+        );
+    } else {
+        panic!()
+    }
+
+    world.try_add_unique(0usize).unwrap();
 }
 
 #[test]
@@ -36,6 +54,11 @@ fn not_unique_storage() {
             get_storage,
             error::GetStorage::MissingUnique(type_name::<usize>())
         ),
+        _ => panic!(),
+    }
+
+    match world.try_remove_unique::<usize>().err() {
+        Some(error::UniqueRemove::MissingUnique(name)) => assert_eq!(name, type_name::<usize>()),
         _ => panic!(),
     }
 }
@@ -124,4 +147,27 @@ fn non_send_sync() {
             assert_eq!(x.value, 1);
         })
         .unwrap();
+}
+
+#[test]
+#[cfg(all(feature = "std", feature = "non_send"))]
+fn non_send_remove() {
+    let world: &'static World = Box::leak(Box::new(World::new()));
+
+    world.add_unique_non_send(0usize);
+
+    std::thread::spawn(move || {
+        if let Some(shipyard::error::UniqueRemove::StorageBorrow(infos)) =
+            world.try_remove_unique::<usize>().err()
+        {
+            assert_eq!(
+                infos,
+                (type_name::<usize>(), shipyard::error::Borrow::WrongThread)
+            );
+        } else {
+            panic!()
+        }
+    })
+    .join()
+    .unwrap();
 }

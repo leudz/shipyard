@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use core::any::TypeId;
 use core::cell::UnsafeCell;
 use core::hash::BuildHasherDefault;
-use hashbrown::HashMap;
+use hashbrown::{hash_map::Entry, HashMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
 /// Contains all components present in the World.
@@ -343,6 +343,39 @@ impl AllStorages {
         } else {
             self.lock.unlock_shared();
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
+        }
+    }
+    pub(crate) fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+        let type_id = TypeId::of::<T>();
+        self.lock.lock_exclusive();
+        // SAFE we locked
+        let storages = unsafe { &mut *self.storages.get() };
+        if let Entry::Occupied(entry) = storages.entry(type_id) {
+            // `.err()` to avoid borrowing `entry` in the `Ok` case
+            if let Some(get_storage) = entry.get().unique_mut::<T>().err() {
+                self.lock.unlock_exclusive();
+                match get_storage {
+                    error::GetStorage::NonUnique((name, _)) => {
+                        Err(error::UniqueRemove::NonUnique(name))
+                    }
+                    error::GetStorage::StorageBorrow(infos) => {
+                        Err(error::UniqueRemove::StorageBorrow(infos))
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
+                // We were able to lock the storage, we've still got exclusive access even though
+                // we released that lock as we're still holding the `AllStorages` lock.
+                let storage = entry.remove();
+                self.lock.unlock_exclusive();
+                // SAFE T is a unique storage
+                unsafe { Ok(AtomicRefCell::into_unique::<T>(storage.0)) }
+            }
+        } else {
+            self.lock.unlock_exclusive();
+            Err(error::UniqueRemove::MissingUnique(
+                core::any::type_name::<T>(),
+            ))
         }
     }
     /// Register a new unique component and create a storage for it.
