@@ -345,7 +345,7 @@ impl AllStorages {
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
         }
     }
-    pub(crate) fn take_unique<T: 'static>(&self) -> Result<T, error::GetStorage> {
+    pub(crate) fn remove_unique<T: 'static>(&self) -> Result<T, error::GetStorage> {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
