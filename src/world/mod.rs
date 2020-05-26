@@ -201,10 +201,12 @@ impl World {
         self.all_storages
             .try_borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
-            .remove_unique()
+            .remove_unique::<T>()
     }
     /// Removes a unique storage.
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn remove_unique<T: 'static>(&self) -> T {
         self.try_remove_unique().unwrap()
     }

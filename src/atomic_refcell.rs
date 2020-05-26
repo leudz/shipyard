@@ -1,5 +1,7 @@
 use crate::error;
+use alloc::boxed::Box;
 use core::cell::UnsafeCell;
+use core::mem::ManuallyDrop;
 use core::sync::atomic::{AtomicUsize, Ordering};
 #[cfg(feature = "std")]
 use std::thread;
@@ -15,7 +17,8 @@ pub struct AtomicRefCell<T: ?Sized> {
     #[cfg(feature = "std")]
     is_sync: bool,
     _non_send: core::marker::PhantomData<*const ()>,
-    inner: UnsafeCell<T>,
+    taken: bool,
+    inner: ManuallyDrop<UnsafeCell<T>>,
 }
 
 // AtomicRefCell can't be Send if it contains !Send components
@@ -23,6 +26,17 @@ pub struct AtomicRefCell<T: ?Sized> {
 unsafe impl<T: ?Sized> Send for AtomicRefCell<T> {}
 
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
+
+impl<T: ?Sized> Drop for AtomicRefCell<T> {
+    fn drop(&mut self) {
+        if !self.taken {
+            // SAFE we're in the Drop impl so it won't be accessed again
+            unsafe {
+                ManuallyDrop::drop(&mut self.inner);
+            }
+        }
+    }
+}
 
 impl<T: ?Sized> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
@@ -41,7 +55,8 @@ impl<T: ?Sized> AtomicRefCell<T> {
             #[cfg(feature = "std")]
             is_sync,
             _non_send: core::marker::PhantomData,
-            inner: UnsafeCell::new(value),
+            taken: false,
+            inner: ManuallyDrop::new(UnsafeCell::new(value)),
         }
     }
     /// Immutably borrows the wrapped value, returning an error if the value is currently mutably
@@ -95,8 +110,19 @@ impl AtomicRefCell<dyn crate::unknown_storage::UnknownStorage> {
     /// # Safety
     ///
     /// `T` has to be a unique storage of the right type.
+    #[allow(clippy::boxed_local)]
     pub unsafe fn into_unique<T: 'static>(mut this: Box<Self>) -> T {
-        todo!()
+        use core::mem::MaybeUninit;
+
+        let mut tmp: MaybeUninit<T> = MaybeUninit::uninit();
+
+        this.taken = true;
+        // SAFE both regions are valids
+        tmp.as_mut_ptr()
+            .copy_from_nonoverlapping((&*this.inner.get()).unique::<T>().unwrap(), 1);
+
+        // SAFE this is initialized
+        tmp.assume_init()
     }
 }
 
