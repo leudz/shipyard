@@ -345,7 +345,7 @@ impl AllStorages {
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
         }
     }
-    pub(crate) fn remove_unique<T: 'static>(&self) -> Result<T, error::GetStorage> {
+    pub(crate) fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
@@ -354,17 +354,28 @@ impl AllStorages {
             // `.err()` to avoid borrowing `entry` in the `Ok` case
             if let Some(get_storage) = entry.get().unique_mut::<T>().err() {
                 self.lock.unlock_exclusive();
-                Err(get_storage)
+                match get_storage {
+                    error::GetStorage::NonUnique((name, _)) => {
+                        Err(error::UniqueRemove::NonUnique(name))
+                    }
+                    error::GetStorage::StorageBorrow(infos) => {
+                        Err(error::UniqueRemove::StorageBorrow(infos))
+                    }
+                    _ => unreachable!(),
+                }
             } else {
                 // We were able to lock the storage, we've still got exclusive access even though
                 // we released that lock as we're still holding the `AllStorages` lock.
                 let storage = entry.remove();
                 self.lock.unlock_exclusive();
-                storage.take_unique::<T>()
+                // SAFE T is a unique storage
+                unsafe { Ok(AtomicRefCell::into_unique::<T>(storage.0)) }
             }
         } else {
             self.lock.unlock_exclusive();
-            Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
+            Err(error::UniqueRemove::MissingUnique(
+                core::any::type_name::<T>(),
+            ))
         }
     }
     /// Register a new unique component and create a storage for it.

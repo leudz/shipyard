@@ -197,10 +197,10 @@ impl World {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
     /// Removes a unique storage.
-    pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::GetStorage> {
+    pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .try_borrow()
-            .map_err(|borrow| error::GetStorage::AllStoragesBorrow(borrow))?
+            .map_err(|_| error::UniqueRemove::AllStorages)?
             .remove_unique()
     }
     /// Removes a unique storage.
