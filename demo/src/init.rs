@@ -28,19 +28,33 @@ pub fn start() {
         let document = window.document().expect("should have a Document");
         let body = document.body().expect("should have a Body");
 
-        let loading: HtmlElement = document.create_element("div").unwrap_throw().dyn_into().unwrap_throw();
+        let loading: HtmlElement = document
+            .create_element("div")
+            .unwrap_throw()
+            .dyn_into()
+            .unwrap_throw();
         loading.set_class_name("loading");
         loading.set_text_content(Some("Loading..."));
         body.append_child(&loading).unwrap_throw();
-        let img = fetch::image(&get_media_href("bunny.png")).await.unwrap_throw();
-        let vertex = fetch::text(&get_media_href("vertex.glsl")).await.unwrap_throw();
-        let fragment = fetch::text(&get_media_href("fragment.glsl")).await.unwrap_throw();
+        let img = fetch::image(&get_media_href("bunny.png"))
+            .await
+            .unwrap_throw();
+        let vertex = fetch::text(&get_media_href("vertex.glsl"))
+            .await
+            .unwrap_throw();
+        let fragment = fetch::text(&get_media_href("fragment.glsl"))
+            .await
+            .unwrap_throw();
 
         let (stage_width, stage_height) = get_window_size(&window).unwrap();
         let (img_width, img_height, _) = get_texture_size(&WebGlTextureSource::ImageElement(&img));
 
         body.remove_child(&loading).unwrap_throw();
-        let canvas: HtmlCanvasElement = document.create_element("canvas").unwrap_throw().dyn_into().unwrap_throw();
+        let canvas: HtmlCanvasElement = document
+            .create_element("canvas")
+            .unwrap_throw()
+            .dyn_into()
+            .unwrap_throw();
         body.append_child(&canvas).unwrap_throw();
 
         let hud = Hud::new(&document, &body).unwrap_throw();
@@ -52,7 +66,8 @@ pub fn start() {
                 alpha: false,
                 ..Default::default()
             }),
-        ).unwrap_throw();
+        )
+        .unwrap_throw();
 
         let renderer = WebGl1Renderer::new(gl).unwrap_throw();
 
