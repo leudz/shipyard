@@ -30,6 +30,7 @@ fn display_next(u32s: View<u32>) {
 world
     .add_workload("Display")
     .with_system(system!(display_first))
+    .with_system(system!(|_: FakeBorrow<usize>| {}))
     .with_system(system!(display_next))
     .build();
 ```
