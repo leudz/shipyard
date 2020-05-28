@@ -21,6 +21,7 @@ command = "cargo"
 args = ["clean"]
 
 [tasks.clippy]
+env = { "RUSTFLAGS" = "-D warnings" }
 command = "cargo"
 args = ["clippy"]
 
