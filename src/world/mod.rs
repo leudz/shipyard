@@ -96,7 +96,7 @@ impl World {
         component: T,
     ) -> Result<(), error::Borrow> {
         self.all_storages
-            .try_borrow_mut()?
+            .try_borrow()?
             .register_unique(component);
         Ok(())
     }
@@ -114,7 +114,7 @@ impl World {
         component: T,
     ) -> Result<(), error::Borrow> {
         self.all_storages
-            .try_borrow_mut()?
+            .try_borrow()?
             .register_unique_non_send(component);
         Ok(())
     }
@@ -145,7 +145,7 @@ impl World {
         component: T,
     ) -> Result<(), error::Borrow> {
         self.all_storages
-            .try_borrow_mut()?
+            .try_borrow()?
             .register_unique_non_sync(component);
         Ok(())
     }
@@ -176,7 +176,7 @@ impl World {
         component: T,
     ) -> Result<(), error::Borrow> {
         self.all_storages
-            .try_borrow_mut()?
+            .try_borrow()?
             .register_unique_non_send_sync(component);
         Ok(())
     }
