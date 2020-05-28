@@ -111,3 +111,11 @@ fn non_send_sync_storage_in_other_thread() {
         || {},
     );
 }
+
+#[test]
+fn add_unique_while_borrowing() {
+    let world = World::new();
+    world.try_add_unique(0u32).unwrap();
+    let _s = world.try_borrow::<UniqueView<'_, u32>>().unwrap();
+    world.try_add_unique(0usize).unwrap();
+}
