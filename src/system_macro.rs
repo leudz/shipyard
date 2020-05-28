@@ -39,7 +39,7 @@
 macro_rules! system {
     ($function: expr) => {{
         (
-            |world: &shipyard::World| world.try_run($function).map(drop),
+            |world: &$crate::World| world.try_run($function).map(drop),
             $function,
         )
     }};
@@ -90,10 +90,10 @@ macro_rules! system {
 macro_rules! try_system {
     ($function: expr) => {{
         (
-            |world: &shipyard::World| {
+            |world: &$crate::World| {
                 world
                     .try_run($function)?
-                    .map_err(shipyard::error::Run::from_custom)
+                    .map_err($crate::error::Run::from_custom)
             },
             $function,
         )
