@@ -3,6 +3,21 @@ use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
+#[cfg(feature = "non_send")]
+struct NotSend(*const ());
+
+#[cfg(feature = "non_send")]
+unsafe impl Sync for NotSend {}
+
+#[cfg(feature = "non_sync")]
+struct NotSync(*const ());
+
+#[cfg(feature = "non_sync")]
+unsafe impl Send for NotSync {}
+
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+struct NotSendSync(*const ());
+
 #[test]
 fn simple_borrow() {
     let world = World::new();
@@ -71,17 +86,13 @@ fn all_storages_double_borrow() {
 #[test]
 #[cfg(feature = "non_send")]
 fn non_send_storage_in_other_thread() {
-    struct NonSendStruct(*const ());
-
-    unsafe impl Sync for NonSendStruct {}
-
     let world = World::new();
     rayon::join(
         || {
             assert_eq!(
-                world.try_borrow::<NonSend<ViewMut<NonSendStruct>>>().err(),
+                world.try_borrow::<NonSend<ViewMut<NotSend>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
-                    type_name::<NonSendStruct>(),
+                    type_name::<NotSend>(),
                     error::Borrow::WrongThread
                 )))
             )
@@ -93,17 +104,13 @@ fn non_send_storage_in_other_thread() {
 #[test]
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 fn non_send_sync_storage_in_other_thread() {
-    struct NonSendSyncStruct(*const ());
-
     let world = World::new();
     rayon::join(
         || {
             assert_eq!(
-                world
-                    .try_borrow::<NonSendSync<View<NonSendSyncStruct>>>()
-                    .err(),
+                world.try_borrow::<NonSendSync<View<NotSendSync>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
-                    type_name::<NonSendSyncStruct>(),
+                    type_name::<NotSendSync>(),
                     error::Borrow::WrongThread
                 )))
             )
@@ -118,4 +125,60 @@ fn add_unique_while_borrowing() {
     world.try_add_unique(0u32).unwrap();
     let _s = world.try_borrow::<UniqueView<'_, u32>>().unwrap();
     world.try_add_unique(0usize).unwrap();
+}
+
+#[test]
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+fn exhaustive_list() {
+    let world = World::new();
+
+    let _ = world.try_borrow::<(
+        NonSend<View<NotSend>>,
+        NonSync<View<NotSync>>,
+        NonSendSync<View<NotSendSync>>,
+        NonSend<ViewMut<NotSend>>,
+        NonSync<ViewMut<NotSync>>,
+        NonSendSync<ViewMut<NotSendSync>>,
+    )>();
+
+    world.run(|all_storages: AllStoragesViewMut| {
+        let _ = all_storages.try_borrow::<(
+            NonSend<View<NotSend>>,
+            NonSync<View<NotSync>>,
+            NonSendSync<View<NotSendSync>>,
+            NonSend<ViewMut<NotSend>>,
+            NonSync<ViewMut<NotSync>>,
+            NonSendSync<ViewMut<NotSendSync>>,
+        )>();
+    });
+}
+
+#[test]
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+fn unique_exhaustive_list() {
+    let world = World::new();
+
+    world.add_unique_non_send(NotSend(&()));
+    world.add_unique_non_sync(NotSync(&()));
+    world.add_unique_non_send_sync(NotSendSync(&()));
+
+    let _ = world.try_borrow::<(
+        NonSend<UniqueView<NotSend>>,
+        NonSync<UniqueView<NotSync>>,
+        NonSendSync<UniqueView<NotSendSync>>,
+        NonSend<UniqueViewMut<NotSend>>,
+        NonSync<UniqueViewMut<NotSync>>,
+        NonSendSync<UniqueViewMut<NotSendSync>>,
+    )>();
+
+    world.run(|all_storages: AllStoragesViewMut| {
+        let _ = all_storages.try_borrow::<(
+            NonSend<UniqueView<NotSend>>,
+            NonSync<UniqueView<NotSync>>,
+            NonSendSync<UniqueView<NotSendSync>>,
+            NonSend<UniqueViewMut<NotSend>>,
+            NonSync<UniqueViewMut<NotSync>>,
+            NonSendSync<UniqueViewMut<NotSendSync>>,
+        )>();
+    });
 }
