@@ -95,9 +95,7 @@ impl World {
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
-        self.all_storages
-            .try_borrow()?
-            .register_unique(component);
+        self.all_storages.try_borrow()?.register_unique(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
