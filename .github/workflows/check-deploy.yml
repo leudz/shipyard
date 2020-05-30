@@ -99,19 +99,17 @@ jobs:
     needs: [guide, bunny_demo]
     if: github.event_name == 'push'
     steps:
-      - run: mkdir dist
-
       - name: load guide
         uses: actions/download-artifact@v2
         with:
           name: guide
-          path: dist
+          path: dist/guide
 
       - name: load bunny_demo
         uses: actions/download-artifact@v2
         with:
           name: bunny_demo
-          path: dist
+          path: dist/bunny_demo
 
       - name: deploy to gh pages
         uses: maxheld83/ghpages@master
