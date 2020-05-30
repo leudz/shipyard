@@ -27,24 +27,24 @@ jobs:
           components: miri
   fmt:
     runs-on: ubuntu-latest
-    needs: install-stable
+    needs: [checkout, install-stable]
     steps:
       - run: cargo +stable fmt -- --check
   miri:
     runs-on: ubuntu-latest
-    needs: install-nightly
+    needs: [checkout, install-nightly]
     steps:
       - run: cargo +nightly miri test --no-default-features
   clippy:
     runs-on: ubuntu-latest
-    needs: install-stable
+    needs: [checkout, install-stable]
     steps:
       - run: cargo +stable clippy
         env:
           RUSTFLAGS: -D warnings
   all-features:
     runs-on: ubuntu-latest
-    needs: install-stable
+    needs: [checkout, install-stable]
     steps:
       - run: cargo +stable test --all-features
   guide:
