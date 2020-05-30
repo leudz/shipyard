@@ -11,7 +11,7 @@ readme = "README.md"
 repository = "https://github.com/leudz/shipyard"
 
 [workspace]
-members = ["demo"]
+members = ["bunny_demo"]
 
 [dependencies]
 num_cpus = { version = "^1", optional = true }

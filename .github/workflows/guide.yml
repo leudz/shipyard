@@ -1,0 +1,30 @@
+name: Guide
+
+on:
+  push:
+    paths:
+      - guide/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: mkdir dist
+
+      - name: install mdbook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: "latest"
+
+      - run: mdbook build
+        working-directory: ./guide
+
+      - run: cp -R ./guide/output ./dist/guide
+
+      - name: deploy to gh pages
+        uses: maxheld83/ghpages@master
+        env:
+          BUILD_DIR: "dist/"
+          GH_PAT: ${{ secrets.GH_PAT }}

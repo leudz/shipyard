@@ -1,0 +1,40 @@
+name: Bunny demo
+
+on:
+  push:
+    paths:
+      - bunny_demo/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - run: mkdir dist
+
+      - name: install rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - run: rustup target add wasm32-unknown-unknown
+
+      - name: install node
+        uses: actions/setup-node@v1
+
+      - name: install npm deps
+        run: npm ci
+        working-directory: ./bunny_demo
+
+      - run: npm run build
+        working-directory: ./bunny_demo
+
+      - run: cp -R ./bunny_demo/public ./dist/bunny_demo
+
+      - name: deploy to gh pages
+        uses: maxheld83/ghpages@master
+        env:
+          BUILD_DIR: "dist/"
+          GH_PAT: ${{ secrets.GH_PAT }}
