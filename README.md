@@ -9,7 +9,7 @@ If you have any question or want to follow the development more closely join the
 
 There's two big learning resources:
 - (Soon™) The Tutorial for people new to ECS or preferring to learn by making a project.
-- [The Guide](https://leudz.github.io/shipyard/book) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
+- [The Guide](https://leudz.github.io/shipyard/guide) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
   It also go more in depth and provide useful recipes for common patterns.
 
 ## Simple Example

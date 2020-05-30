@@ -2,7 +2,7 @@
 //!
 //! # Getting started
 //!
-//! The [user guide](https://leudz.github.io/shipyard/book) is a great place to learn all about Shipyard!  
+//! The [user guide](https://leudz.github.io/shipyard/guide) is a great place to learn all about Shipyard!  
 //! Here's two examples to get an idea of what it provides:
 //! ```
 //! use shipyard::*;

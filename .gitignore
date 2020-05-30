@@ -1,6 +1,6 @@
 /target
 **/*.rs.bk
 Cargo.lock
-book/output
+guide/output
 node_modules
-demo/public/wasm
+bunny_demo/public/wasm
