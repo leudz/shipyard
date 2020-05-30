@@ -1,9 +1,10 @@
-name: Bunny demo
+name: Bunny demo & Guide
 
 on:
   push:
     paths:
       - bunny_demo/**
+      - guide/**
 
 jobs:
   deploy:
@@ -12,6 +13,16 @@ jobs:
       - uses: actions/checkout@v2
 
       - run: mkdir dist
+
+      - name: install mdbook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: "latest"
+
+      - run: mdbook build
+        working-directory: ./guide
+
+      - run: cp -R ./guide/output ./dist/guide
 
       - name: install rust
         uses: actions-rs/toolchain@v1

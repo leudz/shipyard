@@ -28,6 +28,6 @@ jobs:
 
       - run: cargo +stable clippy
         env:
-          RUSTFLAGS: -D Warnings
+          RUSTFLAGS: -D warnings
 
       - run: cargo +stable test --all-features
