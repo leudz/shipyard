@@ -12,15 +12,6 @@ jobs:
           toolchain: stable
           profile: minimal
           components: clippy, rustfmt
-  install-nightly:
-    runs-on: ubuntu-latest
-    steps:
-      - name: install rust nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          components: miri
   fmt:
     runs-on: ubuntu-latest
     needs: install-stable
@@ -30,9 +21,15 @@ jobs:
       - run: cargo +stable fmt -- --check
   miri:
     runs-on: ubuntu-latest
-    needs: install-nightly
     steps:
       - uses: actions/checkout@v2
+
+      - name: install rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: miri
 
       - run: cargo +nightly miri test --no-default-features
   clippy:
