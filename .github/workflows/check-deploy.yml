@@ -34,7 +34,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: check
-    if: github.event_name == "push"
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
 
