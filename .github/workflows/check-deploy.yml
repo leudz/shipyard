@@ -3,44 +3,56 @@ name: Check & Deploy
 on: [push, pull_request]
 
 jobs:
-  check:
+  checkout:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-
+  install-stable:
+    runs-on: ubuntu-latest
+    steps:
       - name: install rust stable
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           components: clippy, rustfmt
-
+  install-nightly:
+    runs-on: ubuntu-latest
+    steps:
       - name: install rust nightly
         uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
           profile: minimal
           components: miri
-
+  fmt:
+    runs-on: ubuntu-latest
+    needs: install-stable
+    steps:
       - run: cargo +stable fmt -- --check
-
+  miri:
+    runs-on: ubuntu-latest
+    needs: install-nightly
+    steps:
       - run: cargo +nightly miri test --no-default-features
-
+  clippy:
+    runs-on: ubuntu-latest
+    needs: install-stable
+    steps:
       - run: cargo +stable clippy
         env:
           RUSTFLAGS: -D warnings
-
-      - run: cargo +stable test --all-features
-  deploy:
+  all-features:
     runs-on: ubuntu-latest
-    needs: check
+    needs: install-stable
+    steps:
+      - run: cargo +stable test --all-features
+  guide:
+    runs-on: ubuntu-latest
+    needs: [fmt, miri, clippy, all-features]
     if: github.event_name == 'push'
     steps:
-      - uses: actions/checkout@v2
-
-      - run: mkdir dist
-
-      - name: install mdbook
+      - name: download mdbook
         uses: peaceiris/actions-mdbook@v1
         with:
           mdbook-version: "latest"
@@ -48,15 +60,15 @@ jobs:
       - run: mdbook build
         working-directory: ./guide
 
+      - run: mkdir dist
+
       - run: cp -R ./guide/output ./dist/guide
-
-      - name: install rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-
-      - run: rustup target add wasm32-unknown-unknown
+  bunny_demo:
+    runs-on: ubuntu-latest
+    needs: [fmt, miri, clippy, all-features]
+    if: github.event_name == 'push'
+    steps:
+      - run: rustup +stable target add wasm32-unknown-unknown
 
       - name: install node
         uses: actions/setup-node@v1
@@ -68,8 +80,14 @@ jobs:
       - run: npm run build
         working-directory: ./bunny_demo
 
-      - run: cp -R ./bunny_demo/public ./dist/bunny_demo
+      - run: mkdir dist
 
+      - run: cp -R ./bunny_demo/public ./dist/bunny_demo
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [guide, bunny_demo]
+    if: github.event_name == 'push'
+    steps:
       - name: deploy to gh pages
         uses: maxheld83/ghpages@master
         env:
