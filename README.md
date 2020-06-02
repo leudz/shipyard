@@ -1,3 +1,5 @@
+# Shipyard <!-- omit in toc -->
+
 Shipyard is an Entity Component System focused on usability and speed.
 
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
@@ -12,7 +14,7 @@ There's two big learning resources:
 - [The Guide](https://leudz.github.io/shipyard/guide) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
   It also go more in depth and provide useful recipes for common patterns.
 
-## Simple Example
+## Simple Example <!-- omit in toc -->
 ```rust
 use shipyard::*;
 
@@ -54,7 +56,7 @@ fn main() {
 }
 ```
 
-## Table of Contents
+## Table of Contents <!-- omit in toc -->
 - [Let there be SparseSets](#let-there-be-sparsesets)
 - [Systems](#systems)
   - [Not just storage](#not-just-storage)
@@ -204,9 +206,9 @@ You can make workloads without it but I strongly recommended to use it.
 - **panic** *(default)* adds panicking functions
 - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
 - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
-- **non_send** &mdash; add methods and types required to work with `!Send` components
-- **non_sync** &mdash; add methods and types required to work with `!Sync` components
-- **std** *(default)* &mdash; let shipyard use the standard library
+- **non_send** &mdash; adds methods and types required to work with `!Send` components
+- **non_sync** &mdash; adds methods and types required to work with `!Sync` components
+- **std** *(default)* &mdash; lets shipyard use the standard library
 
 ## Unsafe
 
