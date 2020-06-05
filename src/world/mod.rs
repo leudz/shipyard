@@ -693,12 +693,15 @@ let i = world.run(sys1);
         &self,
         name: impl Into<Cow<'static, str>>,
     ) -> Result<(), error::SetDefaultWorkload> {
-        let mut scheduler = self.scheduler.try_borrow_mut()?;
-        if let Some(workload) = scheduler.workloads.get(&name.into()) {
-            scheduler.default = workload.clone();
-            Ok(())
+        if let Ok(mut scheduler) = self.scheduler.try_borrow_mut() {
+            if let Some(workload) = scheduler.workloads.get(&name.into()) {
+                scheduler.default = workload.clone();
+                Ok(())
+            } else {
+                Err(error::SetDefaultWorkload::MissingWorkload)
+            }
         } else {
-            Err(error::SetDefaultWorkload::MissingWorkload)
+            Err(error::SetDefaultWorkload::Borrow)
         }
     }
     /// Modifies the current default workload to `name`.  
@@ -749,11 +752,18 @@ let i = world.run(sys1);
     pub fn try_add_workload(
         &self,
         name: impl Into<Cow<'static, str>>,
-    ) -> Result<WorkloadBuilder<'_>, error::Borrow> {
-        Ok(WorkloadBuilder::new(
-            self.scheduler.try_borrow_mut()?,
-            name.into(),
-        ))
+    ) -> Result<WorkloadBuilder<'_>, error::AddWorkload> {
+        if let Ok(scheduler) = self.scheduler.try_borrow_mut() {
+            let name = name.into();
+
+            if scheduler.workloads.contains_key(&name) {
+                Err(error::AddWorkload::AlreadyExists)
+            } else {
+                Ok(WorkloadBuilder::new(scheduler, name))
+            }
+        } else {
+            Err(error::AddWorkload::Borrow)
+        }
     }
     /// A workload is a collection of systems. They will execute as much in parallel as possible.  
     /// They are evaluated first to last when they can't be parallelized.  

@@ -237,31 +237,48 @@ impl Display for Remove {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AddWorkload {
+    AlreadyExists,
+    Borrow,
+}
+
+#[cfg(feature = "std")]
+impl Error for AddWorkload {}
+
+impl Debug for AddWorkload {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::AlreadyExists => fmt.write_str("A workload with this name already exists."),
+            Self::Borrow => {
+                fmt.write_str("Cannot mutably borrow the scheduler while it's already borrowed.")
+            }
+        }
+    }
+}
+
+impl Display for AddWorkload {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, fmt)
+    }
+}
+
 /// Trying to set the default workload to a non existant one will result in this error.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SetDefaultWorkload {
-    Borrow(Borrow),
+    Borrow,
     MissingWorkload,
 }
 
 #[cfg(feature = "std")]
 impl Error for SetDefaultWorkload {}
 
-impl From<Borrow> for SetDefaultWorkload {
-    fn from(borrow: Borrow) -> Self {
-        SetDefaultWorkload::Borrow(borrow)
-    }
-}
-
 impl Debug for SetDefaultWorkload {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
-            Self::Borrow(borrow) => match borrow {
-                Borrow::Unique => {
-                    fmt.write_str("Cannot mutably borrow scheduler while it's already borrowed.")
-                }
-                _ => unreachable!(),
-            },
+            Self::Borrow => {
+                fmt.write_str("Cannot mutably borrow scheduler while it's already borrowed.")
+            }
             Self::MissingWorkload => fmt.write_str("No workload with this name exists."),
         }
     }
