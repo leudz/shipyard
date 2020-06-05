@@ -233,21 +233,28 @@ impl<'a> WorkloadBuilder<'a> {
     pub fn build(mut self) {
         if self.systems.len() == 1 {
             let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();
+
             let mut name = "".into();
             core::mem::swap(&mut name, &mut self.name);
+
             let range = self.scheduler.batch.len()..(self.scheduler.batch.len() + 1);
             if self.scheduler.workloads.is_empty() {
                 self.scheduler.default = range.clone();
             }
             self.scheduler.workloads.insert(name, range);
-            let len = self.scheduler.systems.len();
-            self.scheduler.batch.push(Box::new([len]));
 
-            if let Entry::Vacant(vacant) = self.scheduler.lookup_table.entry(type_id) {
-                vacant.insert(len);
-                self.scheduler.system_names.push(system_name);
-                self.scheduler.systems.push(system);
-            }
+            let len = self.scheduler.systems.len();
+            let system_index = match self.scheduler.lookup_table.entry(type_id) {
+                Entry::Vacant(vacant) => {
+                    vacant.insert(len);
+                    self.scheduler.systems.push(system);
+                    self.scheduler.system_names.push(system_name);
+                    self.scheduler.systems.len() - 1
+                }
+                Entry::Occupied(occupied) => *occupied.get(),
+            };
+
+            self.scheduler.batch.push(Box::new([system_index]));
         } else {
             let batch_start = self.scheduler.batch.len();
             let mut new_batch = vec![Vec::new()];
