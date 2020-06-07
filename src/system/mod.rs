@@ -6,9 +6,8 @@ use crate::atomic_refcell::AtomicRefCell;
 use crate::borrow::Borrow;
 use crate::borrow::Mutation;
 use crate::error;
-use crate::storage::AllStorages;
+use crate::storage::{AllStorages, StorageId};
 use alloc::vec::Vec;
-use core::any::TypeId;
 
 pub struct Nothing;
 
@@ -19,7 +18,7 @@ pub trait System<'s, Data, B, R> {
         #[cfg(feature = "parallel")] thread_pool: &'s rayon::ThreadPool,
     ) -> Result<B, error::GetStorage>;
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>);
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>);
 
     fn is_send_sync() -> bool;
 }
@@ -39,7 +38,7 @@ where
         Ok(Nothing)
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<(StorageId, Mutation)>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -61,7 +60,7 @@ where
         Ok(Nothing)
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<(StorageId, Mutation)>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -87,7 +86,7 @@ macro_rules! impl_system {
                     Ok(($($type::try_borrow(all_storages)?,)+))
                 }
             }
-            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+            fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
                 $(
                     $type::borrow_infos(infos);
                 )+
@@ -116,7 +115,7 @@ macro_rules! impl_system {
                     Ok(($($type::try_borrow(all_storages)?,)+))
                 }
             }
-            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+            fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
                 $(
                     $type::borrow_infos(infos);
                 )+

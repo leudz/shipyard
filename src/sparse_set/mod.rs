@@ -14,11 +14,11 @@ pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
 
 use crate::error;
-use crate::storage::EntityId;
+use crate::storage::{EntityId, StorageId};
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::any::{type_name, Any, TypeId};
+use core::any::{type_name, Any};
 use core::ptr;
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<usize>();
@@ -1116,7 +1116,7 @@ impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
 }
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
-    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
+    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<StorageId>) {
         self.actual_delete(entity);
 
         storage_to_unpack.reserve(self.pack_info.observer_types.len());

@@ -2,7 +2,7 @@ use super::Scheduler;
 use crate::atomic_refcell::RefMut;
 use crate::borrow::Mutation;
 use crate::error;
-use crate::storage::AllStorages;
+use crate::storage::{AllStorages, StorageId};
 use crate::system::System;
 use crate::world::World;
 use alloc::borrow::Cow;
@@ -20,13 +20,13 @@ use hashbrown::hash_map::Entry;
 pub struct WorkloadBuilder<'a> {
     scheduler: RefMut<'a, Scheduler>,
     systems: Vec<(
-        TypeId,
+        StorageId,
         &'static str,
         Range<usize>,
         bool,
         Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
     )>,
-    borrow_info: Vec<(TypeId, Mutation)>,
+    borrow_info: Vec<(StorageId, Mutation)>,
     name: Cow<'static, str>,
 }
 
@@ -100,7 +100,9 @@ impl<'a> WorkloadBuilder<'a> {
 
         let borrows = &self.borrow_info[old_len..];
 
-        if borrows.contains(&(TypeId::of::<AllStorages>(), Mutation::Unique)) && borrows.len() > 1 {
+        if borrows.contains(&(TypeId::of::<AllStorages>().into(), Mutation::Unique))
+            && borrows.len() > 1
+        {
             return Err(error::InvalidSystem::AllStorages);
         }
 
@@ -125,7 +127,7 @@ impl<'a> WorkloadBuilder<'a> {
 
         let is_send_sync = F::is_send_sync();
         self.systems.push((
-            core::any::TypeId::of::<S>(),
+            core::any::TypeId::of::<S>().into(),
             type_name::<F>(),
             old_len..self.borrow_info.len(),
             is_send_sync,
@@ -284,8 +286,9 @@ impl<'a> WorkloadBuilder<'a> {
                                         {
                                             if type_id == batch_type_id
                                                 && mutation == Mutation::Unique
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
+                                                || type_id == TypeId::of::<AllStorages>().into()
+                                                || batch_type_id
+                                                    == TypeId::of::<AllStorages>().into()
                                             {
                                                 conflict = true;
                                                 break;
@@ -295,8 +298,9 @@ impl<'a> WorkloadBuilder<'a> {
                                         {
                                             if type_id == batch_type_id
                                                 && mutation == Mutation::Unique
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
+                                                || type_id == TypeId::of::<AllStorages>().into()
+                                                || batch_type_id
+                                                    == TypeId::of::<AllStorages>().into()
                                             {
                                                 conflict = true;
                                                 break;
@@ -309,8 +313,9 @@ impl<'a> WorkloadBuilder<'a> {
                                         #[cfg(feature = "parallel")]
                                         {
                                             if type_id == batch_type_id
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
+                                                || type_id == TypeId::of::<AllStorages>().into()
+                                                || batch_type_id
+                                                    == TypeId::of::<AllStorages>().into()
                                             {
                                                 conflict = true;
                                                 break;
@@ -319,8 +324,9 @@ impl<'a> WorkloadBuilder<'a> {
                                         #[cfg(not(feature = "parallel"))]
                                         {
                                             if type_id == batch_type_id
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
+                                                || type_id == TypeId::of::<AllStorages>().into()
+                                                || batch_type_id
+                                                    == TypeId::of::<AllStorages>().into()
                                             {
                                                 conflict = true;
                                                 break;
@@ -353,12 +359,13 @@ impl<'a> WorkloadBuilder<'a> {
                         batch_info
                             .last_mut()
                             .unwrap()
-                            .push((TypeId::of::<AllStorages>(), Mutation::Unique));
+                            .push((TypeId::of::<AllStorages>().into(), Mutation::Unique));
                         batch_info.push(Vec::new());
                     } else {
                         new_batch.push(vec![system_index]);
                         new_batch.push(Vec::new());
-                        batch_info.push(vec![(TypeId::of::<AllStorages>(), Mutation::Unique)]);
+                        batch_info
+                            .push(vec![(TypeId::of::<AllStorages>().into(), Mutation::Unique)]);
                         batch_info.push(Vec::new());
                     }
                 }

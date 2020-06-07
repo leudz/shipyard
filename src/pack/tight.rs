@@ -47,7 +47,7 @@ macro_rules! impl_tight_pack {
         #[allow(clippy::useless_let_if_seq)]
         impl<$($type: 'static),+> TightPack for ($(&mut ViewMut<'_, $type>,)+) {
             fn try_tight_pack(self) -> Result<(), error::Pack> {
-                let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<$type>(),)+]);
+                let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<$type>().into(),)+]);
 
                 type_ids.sort_unstable();
                 let type_ids: Arc<[_]> = type_ids.into();

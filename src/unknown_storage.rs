@@ -1,11 +1,10 @@
 use crate::sparse_set::SparseSet;
-use crate::storage::Entities;
-use crate::storage::EntityId;
+use crate::storage::{Entities, EntityId, StorageId};
 use alloc::vec::Vec;
-use core::any::{Any, TypeId};
+use core::any::Any;
 
 pub(super) trait UnknownStorage {
-    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>);
+    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<StorageId>);
     fn clear(&mut self);
     fn unpack(&mut self, entity: EntityId);
     fn any(&self) -> &dyn Any;

@@ -10,11 +10,11 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::storage::StorageId;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;
 use core::cell::UnsafeCell;
-use core::hash::BuildHasherDefault;
 use hashbrown::{hash_map::Entry, HashMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
@@ -28,7 +28,8 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
     lock: RawRwLock,
-    storages: UnsafeCell<HashMap<TypeId, Storage, BuildHasherDefault<TypeIdHasher>>>,
+    // TODO: Re-include the TypeIdHasher as a StorageIdHasher
+    storages: UnsafeCell<HashMap<StorageId, Storage /*, BuildHasherDefault<TypeIdHasher>*/>>,
     #[cfg(feature = "non_send")]
     thread_id: std::thread::ThreadId,
 }
@@ -42,14 +43,14 @@ impl AllStorages {
         #[cfg(feature = "std")]
         {
             storages.insert(
-                TypeId::of::<Entities>(),
+                TypeId::of::<Entities>().into(),
                 Storage(Box::new(AtomicRefCell::new(entities, None, true))),
             );
         }
         #[cfg(not(feature = "std"))]
         {
             storages.insert(
-                TypeId::of::<Entities>(),
+                TypeId::of::<Entities>().into(),
                 Storage(Box::new(AtomicRefCell::new(entities))),
             );
         }
@@ -62,12 +63,12 @@ impl AllStorages {
         }
     }
     pub(crate) fn entities(&self) -> Result<Ref<'_, Entities>, error::Borrow> {
-        let type_id = TypeId::of::<Entities>();
+        let storage_id = TypeId::of::<Entities>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
         // AllStorages is always created with Entities so there's no way to not find it
-        let storage = &storages[&type_id];
+        let storage = &storages[&storage_id];
         match storage.entities() {
             Ok(entities) => {
                 self.lock.unlock_shared();
@@ -80,12 +81,12 @@ impl AllStorages {
         }
     }
     pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, Entities>, error::Borrow> {
-        let type_id = TypeId::of::<Entities>();
+        let storage_id = TypeId::of::<Entities>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
         // AllStorages is always created with Entities so there's no way to not find it
-        let storage = &storages[&type_id];
+        let storage = &storages[&storage_id];
         match storage.entities_mut() {
             Ok(entities) => {
                 self.lock.unlock_shared();
@@ -100,12 +101,12 @@ impl AllStorages {
     pub(crate) fn sparse_set<T: 'static + Send + Sync>(
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
             let storages = unsafe { &*self.storages.get() };
-            if let Some(storage) = storages.get(&type_id) {
+            if let Some(storage) = storages.get(&storage_id) {
                 let sparse_set = storage.sparse_set::<T>();
                 self.lock.unlock_shared();
                 return sparse_set;
@@ -117,7 +118,7 @@ impl AllStorages {
         let storages = unsafe { &mut *self.storages.get() };
         // another thread might have initialized the storage before this thread so we use entry
         let sparse_set = storages
-            .entry(type_id)
+            .entry(storage_id)
             .or_insert_with(Storage::new::<T>)
             .sparse_set::<T>();
         self.lock.unlock_exclusive();
@@ -126,12 +127,12 @@ impl AllStorages {
     pub(crate) fn sparse_set_mut<T: 'static + Send + Sync>(
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
             let storages = unsafe { &*self.storages.get() };
-            if let Some(storage) = storages.get(&type_id) {
+            if let Some(storage) = storages.get(&storage_id) {
                 let sparse_set = storage.sparse_set_mut::<T>();
                 self.lock.unlock_shared();
                 return sparse_set;
@@ -143,7 +144,7 @@ impl AllStorages {
         let storages = unsafe { &mut *self.storages.get() };
         // another thread might have initialized the storage before this thread so we use entry
         let sparse_set = storages
-            .entry(type_id)
+            .entry(storage_id)
             .or_insert_with(Storage::new::<T>)
             .sparse_set_mut::<T>();
         self.lock.unlock_exclusive();
@@ -154,7 +155,7 @@ impl AllStorages {
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
         // Sync components can be accessed by any thread with a shared access
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -182,7 +183,7 @@ impl AllStorages {
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
         // Sync components can only be accessed by the thread they were created in with a unique access
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -210,7 +211,7 @@ impl AllStorages {
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
         // Send components can be accessed by one thread at a time
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -238,7 +239,7 @@ impl AllStorages {
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
         // Send components can be accessed by one thread at a time
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -266,7 +267,7 @@ impl AllStorages {
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
         // !Send + !Sync components can only be accessed by the thread they were created in
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -294,7 +295,7 @@ impl AllStorages {
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
         // !Send + !Sync components can only be accessed by the thread they were created in
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -318,11 +319,11 @@ impl AllStorages {
         sparse_set
     }
     pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
-        if let Some(storage) = storages.get(&type_id) {
+        if let Some(storage) = storages.get(&storage_id) {
             let unique = storage.unique::<T>();
             self.lock.unlock_shared();
             unique
@@ -332,11 +333,11 @@ impl AllStorages {
         }
     }
     pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
-        if let Some(storage) = storages.get(&type_id) {
+        if let Some(storage) = storages.get(&storage_id) {
             let unique = storage.unique_mut::<T>();
             self.lock.unlock_shared();
             unique
@@ -346,11 +347,11 @@ impl AllStorages {
         }
     }
     pub(crate) fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
-        if let Entry::Occupied(entry) = storages.entry(type_id) {
+        if let Entry::Occupied(entry) = storages.entry(storage_id) {
             // `.err()` to avoid borrowing `entry` in the `Ok` case
             if let Some(get_storage) = entry.get().unique_mut::<T>().err() {
                 self.lock.unlock_exclusive();
@@ -381,49 +382,49 @@ impl AllStorages {
     /// Register a new unique component and create a storage for it.
     /// Does nothing if a storage already exists.
     pub(crate) fn register_unique<T: 'static + Send + Sync>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
         // another thread might have initialized the storage before this thread so we use entry
         storages
-            .entry(type_id)
+            .entry(storage_id)
             .or_insert_with(|| Storage::new_unique::<T>(component));
         self.lock.unlock_exclusive();
     }
     #[cfg(feature = "non_send")]
     pub(crate) fn register_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
         // another thread might have initialized the storage before this thread so we use entry
         storages
-            .entry(type_id)
+            .entry(storage_id)
             .or_insert_with(|| Storage::new_unique_non_send::<T>(component, self.thread_id));
         self.lock.unlock_exclusive();
     }
     #[cfg(feature = "non_sync")]
     pub(crate) fn register_unique_non_sync<T: 'static + Send>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
         // another thread might have initialized the storage before this thread so we use entry
         storages
-            .entry(type_id)
+            .entry(storage_id)
             .or_insert_with(|| Storage::new_unique_non_sync::<T>(component));
         self.lock.unlock_exclusive();
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     pub(crate) fn register_unique_non_send_sync<T: 'static>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let storage_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
         // another thread might have initialized the storage before this thread so we use entry
         storages
-            .entry(type_id)
+            .entry(storage_id)
             .or_insert_with(|| Storage::new_unique_non_send_sync::<T>(component, self.thread_id));
         self.lock.unlock_exclusive();
     }

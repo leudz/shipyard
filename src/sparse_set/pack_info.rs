@@ -1,7 +1,6 @@
-use crate::storage::EntityId;
+use crate::storage::{EntityId, StorageId};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::any::TypeId;
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum Pack<T> {
@@ -22,7 +21,7 @@ impl<T> Pack<T> {
 
 pub struct PackInfo<T> {
     pub(crate) pack: Pack<T>,
-    pub(crate) observer_types: Vec<TypeId>,
+    pub(crate) observer_types: Vec<StorageId>,
 }
 
 impl<T> Default for PackInfo<T> {
@@ -36,7 +35,11 @@ impl<T> Default for PackInfo<T> {
 
 impl<T> PackInfo<T> {
     /// Returns `true` if enough storages were passed in
-    pub(crate) fn has_all_storages(&self, components: &[TypeId], additionals: &[TypeId]) -> bool {
+    pub(crate) fn has_all_storages(
+        &self,
+        components: &[StorageId],
+        additionals: &[StorageId],
+    ) -> bool {
         match &self.pack {
             Pack::Tight(tight) => {
                 tight.has_all_storages(components, additionals, &self.observer_types)
@@ -56,13 +59,13 @@ impl<T> PackInfo<T> {
 
                 // we know observer types are at most as many as components + additionals so we'll use them to drive the iteration
                 for &observer_type in &self.observer_types {
-                    // we skip components with a lower TypeId
+                    // we skip components with a lower StorageId
                     comp += components[comp..]
                         .iter()
                         .take_while(|&&component| component < observer_type)
                         .count();
 
-                    // we also skip additional types with a lower TypeId
+                    // we also skip additional types with a lower StorageId
                     add += additionals[add..]
                         .iter()
                         .take_while(|&&additional| additional < observer_type)
@@ -85,16 +88,16 @@ impl<T> PackInfo<T> {
 }
 
 pub(crate) struct TightPack {
-    pub(crate) types: Arc<[TypeId]>,
+    pub(crate) types: Arc<[StorageId]>,
     pub(crate) len: usize,
 }
 
 impl TightPack {
-    pub(crate) fn new(types: Arc<[TypeId]>) -> Self {
+    pub(crate) fn new(types: Arc<[StorageId]>) -> Self {
         TightPack { types, len: 0 }
     }
     /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
-    pub(crate) fn is_packable(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+    pub(crate) fn is_packable(&self, components: &[StorageId]) -> Result<&[StorageId], ()> {
         // the entity doesn't have enough components to be packed
         if components.len() < self.types.len() {
             return Err(());
@@ -105,7 +108,7 @@ impl TightPack {
 
         // we know packed types are at most as many as components so we'll use them to drive the iteration
         for &packed_type in &*self.types {
-            // we skip components with a lower TypeId
+            // we skip components with a lower StorageId
             comp += components[comp..]
                 .iter()
                 .take_while(|&&component| component < packed_type)
@@ -125,9 +128,9 @@ impl TightPack {
     /// Returns `true` if enough storages were passed in
     fn has_all_storages(
         &self,
-        components: &[TypeId],
-        additionals: &[TypeId],
-        observer_types: &[TypeId],
+        components: &[StorageId],
+        additionals: &[StorageId],
+        observer_types: &[StorageId],
     ) -> bool {
         // both pairs can't have duplicates
         if components.len() + additionals.len() < self.types.len() + observer_types.len() {
@@ -151,13 +154,13 @@ impl TightPack {
                 (Some(&tight_type), observer_type)
                     if observer_type.is_none() || tight_type < *observer_type.unwrap() =>
                 {
-                    // we skip components with a lower TypeId
+                    // we skip components with a lower StorageId
                     comp += components[comp..]
                         .iter()
                         .take_while(|&&component| component < tight_type)
                         .count();
 
-                    // we also skip additional types with a lower TypeId
+                    // we also skip additional types with a lower StorageId
                     add += additionals[add..]
                         .iter()
                         .take_while(|&&additional| additional < tight_type)
@@ -208,13 +211,13 @@ impl TightPack {
 }
 
 pub(crate) struct LoosePack {
-    pub(crate) tight_types: Arc<[TypeId]>,
-    pub(crate) loose_types: Arc<[TypeId]>,
+    pub(crate) tight_types: Arc<[StorageId]>,
+    pub(crate) loose_types: Arc<[StorageId]>,
     pub(crate) len: usize,
 }
 
 impl LoosePack {
-    pub(crate) fn new(tight_types: Arc<[TypeId]>, loose_types: Arc<[TypeId]>) -> Self {
+    pub(crate) fn new(tight_types: Arc<[StorageId]>, loose_types: Arc<[StorageId]>) -> Self {
         LoosePack {
             tight_types,
             loose_types,
@@ -222,7 +225,7 @@ impl LoosePack {
         }
     }
     /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
-    pub(crate) fn is_packable(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+    pub(crate) fn is_packable(&self, components: &[StorageId]) -> Result<&[StorageId], ()> {
         if components.len() < self.tight_types.len() + self.loose_types.len() {
             // the entity doesn't have enough components to be packed
             return Err(());
@@ -243,7 +246,7 @@ impl LoosePack {
                 (Some(&tight_type), loose_type)
                     if loose_type.is_none() || tight_type < *loose_type.unwrap() =>
                 {
-                    // we skip components with a lower TypeId
+                    // we skip components with a lower StorageId
                     comp += components[comp..]
                         .iter()
                         .take_while(|&&component| component < tight_type)
@@ -290,9 +293,9 @@ impl LoosePack {
     /// Returns `true` if enough storages were passed in
     fn has_all_storages(
         &self,
-        components: &[TypeId],
-        additionals: &[TypeId],
-        observer_types: &[TypeId],
+        components: &[StorageId],
+        additionals: &[StorageId],
+        observer_types: &[StorageId],
     ) -> bool {
         if components.len() + additionals.len()
             < self.tight_types.len() + self.loose_types.len() + observer_types.len()
@@ -322,13 +325,13 @@ impl LoosePack {
             ) {
                 (Some(&tight_type), Some(&loose_type), Some(&observer_type)) => {
                     if tight_type < loose_type && tight_type < observer_type {
-                        // we skip components with a lower TypeId
+                        // we skip components with a lower StorageId
                         comp += components[comp..]
                             .iter()
                             .take_while(|&&component| component < tight_type)
                             .count();
 
-                        // we also skip additional types with a lower TypeId
+                        // we also skip additional types with a lower StorageId
                         add += additionals[add..]
                             .iter()
                             .take_while(|&&additional| additional < tight_type)
