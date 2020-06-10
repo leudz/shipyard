@@ -22,7 +22,8 @@ use crate::storage::{AllStorages, Entities, StorageId};
 #[cfg(feature = "parallel")]
 use crate::view::ThreadPoolView;
 use crate::view::{
-    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+    AllStoragesViewMut, DynamicView, DynamicViewMut, EntitiesView, EntitiesViewMut, UniqueView,
+    UniqueViewMut, View, ViewMut,
 };
 use alloc::vec::Vec;
 use core::any::TypeId;
@@ -32,6 +33,74 @@ use core::convert::TryInto;
 pub enum Mutation {
     Shared,
     Unique,
+}
+
+/// Like [`Borrow`] but it takes a reference to `self` so that the return values of the functions
+/// can be based on the *instance* of the borrow object instead of the *type*.
+pub trait DynamicBorrow<'a> {
+    fn try_borrow(
+        &self,
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage>
+    where
+        Self: Sized;
+
+    fn borrow_infos(&self, infos: &mut Vec<(StorageId, Mutation)>);
+
+    fn is_send_sync(&self) -> bool;
+}
+
+impl<'a, T: 'static + Send + Sync> DynamicBorrow<'a> for DynamicView<'a, T> {
+    fn try_borrow(
+        &self,
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage>
+    where
+        Self: Sized,
+    {
+        Self::from_storage_atomic_ref(
+            all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+            self.storage_id,
+        )
+    }
+
+    fn borrow_infos(&self, infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((self.storage_id, Mutation::Shared));
+    }
+
+    fn is_send_sync(&self) -> bool {
+        true
+    }
+}
+
+impl<'a, T: 'static + Send + Sync> DynamicBorrow<'a> for DynamicViewMut<'a, T> {
+    fn try_borrow(
+        &self,
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage>
+    where
+        Self: Sized,
+    {
+        Self::from_storage_atomic_ref(
+            all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+            self.storage_id,
+        )
+    }
+
+    fn borrow_infos(&self, infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((self.storage_id, Mutation::Unique));
+    }
+
+    fn is_send_sync(&self) -> bool {
+        true
+    }
 }
 
 pub trait Borrow<'a> {

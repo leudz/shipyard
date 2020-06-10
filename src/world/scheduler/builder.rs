@@ -93,10 +93,10 @@ impl<'a> WorkloadBuilder<'a> {
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
         mut self,
-        (system, _): (S, F),
+        (system, f): (S, F),
     ) -> Result<WorkloadBuilder<'a>, error::InvalidSystem> {
         let old_len = self.borrow_info.len();
-        F::borrow_infos(&mut self.borrow_info);
+        f.borrow_infos(&mut self.borrow_info);
 
         let borrows = &self.borrow_info[old_len..];
 
@@ -125,7 +125,7 @@ impl<'a> WorkloadBuilder<'a> {
             }
         }
 
-        let is_send_sync = F::is_send_sync();
+        let is_send_sync = f.is_send_sync();
         self.systems.push((
             core::any::TypeId::of::<S>().into(),
             type_name::<F>(),

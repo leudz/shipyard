@@ -170,7 +170,7 @@ pub use crate::borrow::NonSendSync;
 pub use crate::borrow::NonSync;
 #[doc(hidden)]
 pub use crate::borrow::{AllStoragesBorrow, Borrow};
-pub use borrow::FakeBorrow;
+pub use borrow::{FakeBorrow, Mutation};
 pub use delete::Delete;
 pub use get::Get;
 pub use iter::{
@@ -186,7 +186,10 @@ pub use sparse_set::{
 };
 pub use storage::{AllStorages, DeleteAny, Entities, EntityId};
 #[doc(hidden)]
-pub use system::{AllSystem, Nothing, System};
+pub use system::{
+    AllSystem, CustomComponent, CustomComponentBorrowIntent, CustomComponentSize,
+    CustomComponentSizeError, DynamicSystem, Nothing, System,
+};
 #[cfg(feature = "parallel")]
 pub use view::ThreadPoolView;
 pub use view::{

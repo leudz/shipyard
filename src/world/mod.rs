@@ -578,16 +578,12 @@ world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
         s: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        Ok(s.run((data,), {
-            #[cfg(feature = "parallel")]
-            {
-                S::try_borrow(&self.all_storages, &self.thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                S::try_borrow(&self.all_storages)?
-            }
-        }))
+        #[cfg(feature = "parallel")]
+        let borrow = s.try_borrow(&self.all_storages, &self.thread_pool)?;
+        #[cfg(not(feature = "parallel"))]
+        let borrow = s.try_borrow(&self.all_storages)?;
+
+        Ok(s.run((data,), borrow))
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.  
@@ -844,16 +840,12 @@ let i = world.try_run(sys1).unwrap();
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
-        Ok(s.run((), {
-            #[cfg(feature = "parallel")]
-            {
-                S::try_borrow(&self.all_storages, &self.thread_pool)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                S::try_borrow(&self.all_storages)?
-            }
-        }))
+        #[cfg(feature = "parallel")]
+        let borrow = s.try_borrow(&self.all_storages, &self.thread_pool)?;
+        #[cfg(not(feature = "parallel"))]
+        let borrow = s.try_borrow(&self.all_storages)?;
+
+        Ok(s.run((), borrow))
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Unwraps errors.

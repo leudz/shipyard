@@ -100,8 +100,8 @@ impl AllStorages {
     }
     pub(crate) fn sparse_set<T: 'static + Send + Sync>(
         &self,
+        storage_id: StorageId,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
-        let storage_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -126,8 +126,8 @@ impl AllStorages {
     }
     pub(crate) fn sparse_set_mut<T: 'static + Send + Sync>(
         &self,
+        storage_id: StorageId,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
-        let storage_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
