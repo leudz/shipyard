@@ -49,8 +49,11 @@ fn main() {
     let pos_vel_sys = DynamicSystem {
         data: (),
         system_fn: |_, borrows| {
-            let velocities = borrows.get(0).unwrap();
-            let positions = borrows.get(0).unwrap();
+            // Need to do something like this, but I cant!
+            let velocities = borrows.get(0).unwrap().downcast::<DynamicView<[u8; 16]>>().unwrap();
+            let positions = borrows.get(1).unwrap().downcast::<DynamicViewMut<[u8; 32]>>().unwrap();
+
+            dbg!(velocities, positions);
         },
         borrow_intents: vec![
             CustomComponentBorrowIntent {
