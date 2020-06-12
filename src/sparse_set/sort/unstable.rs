@@ -81,18 +81,18 @@ macro_rules! impl_unstable_sort {
                     None,
                 }
 
-                let mut type_ids = [$(TypeId::of::<$type>()),+];
-                type_ids.sort_unstable();
+                let mut storage_ids = [$(TypeId::of::<$type>().into()),+];
+                storage_ids.sort_unstable();
                 let mut pack_sort = PackSort::None;
 
                 $({
                     if let PackSort::None = pack_sort {
                         match &self.$index.pack_info.pack {
                             Pack::Tight(pack) => {
-                                if let Ok(types) = pack.is_packable(&type_ids) {
-                                    if types.len() == type_ids.len() {
+                                if let Ok(types) = pack.is_packable(&storage_ids) {
+                                    if types.len() == storage_ids.len() {
                                         pack_sort = PackSort::Tight(pack.len);
-                                    } else if types.len() < type_ids.len() {
+                                    } else if types.len() < storage_ids.len() {
                                         return Err(error::Sort::TooManyStorages);
                                     } else {
                                         return Err(error::Sort::MissingPackStorage);
@@ -102,10 +102,10 @@ macro_rules! impl_unstable_sort {
                                 }
                             }
                             Pack::Loose(pack) => {
-                                if pack.is_packable(&type_ids).is_ok() {
-                                    if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
+                                if pack.is_packable(&storage_ids).is_ok() {
+                                    if pack.tight_types.len() + pack.loose_types.len() == storage_ids.len() {
                                         pack_sort = PackSort::Loose(pack.len);
-                                    } else if pack.tight_types.len() + pack.loose_types.len() < type_ids.len() {
+                                    } else if pack.tight_types.len() + pack.loose_types.len() < storage_ids.len() {
                                         return Err(error::Sort::TooManyStorages);
                                     } else {
                                         return Err(error::Sort::MissingPackStorage);

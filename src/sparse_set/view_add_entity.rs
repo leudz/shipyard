@@ -39,13 +39,13 @@ macro_rules! impl_view_add_entity {
                     sparse_sets.$index.insert(component.$index, entity);
                 )+
 
-                let type_ids = [$(TypeId::of::<$type>()),+];
-                let mut sorted_type_ids = type_ids.clone();
+                let storage_ids = [$(TypeId::of::<$type>().into()),+];
+                let mut sorted_type_ids = storage_ids.clone();
                 sorted_type_ids.sort_unstable();
 
-                let mut should_pack = Vec::with_capacity(type_ids.len());
+                let mut should_pack = Vec::with_capacity(storage_ids.len());
                 $(
-                    let type_id = type_ids[$index];
+                    let type_id = storage_ids[$index];
 
                     if should_pack.contains(&type_id) {
                         sparse_sets.$index.pack(entity);

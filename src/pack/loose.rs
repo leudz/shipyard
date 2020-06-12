@@ -66,11 +66,11 @@ macro_rules! impl_loose_pack {
                 )+
 
                 // we gather and sort all TypeId
-                let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<$tight>()),+]);
+                let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<$tight>().into()),+]);
                 tight_types.sort_unstable();
                 let tight_types: Arc<[_]> = tight_types.into();
 
-                let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<$loose>()),+]);
+                let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<$loose>().into()),+]);
                 loose_types.sort_unstable();
                 let loose_types: Arc<[_]> = loose_types.into();
 

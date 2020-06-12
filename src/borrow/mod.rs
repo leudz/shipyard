@@ -18,11 +18,12 @@ pub use non_sync::NonSync;
 
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
-use crate::storage::{AllStorages, Entities};
+use crate::storage::{AllStorages, Entities, StorageId};
 #[cfg(feature = "parallel")]
 use crate::view::ThreadPoolView;
 use crate::view::{
-    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+    AllStoragesViewMut, DynamicView, DynamicViewMut, EntitiesView, EntitiesViewMut, UniqueView,
+    UniqueViewMut, View, ViewMut,
 };
 use alloc::vec::Vec;
 use core::any::TypeId;
@@ -34,6 +35,74 @@ pub enum Mutation {
     Unique,
 }
 
+/// Like [`Borrow`] but it takes a reference to `self` so that the return values of the functions
+/// can be based on the *instance* of the borrow object instead of the *type*.
+pub trait DynamicBorrow<'a> {
+    fn try_borrow(
+        &self,
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage>
+    where
+        Self: Sized;
+
+    fn borrow_infos(&self, infos: &mut Vec<(StorageId, Mutation)>);
+
+    fn is_send_sync(&self) -> bool;
+}
+
+impl<'a, T: 'static + Send + Sync> DynamicBorrow<'a> for DynamicView<'a, T> {
+    fn try_borrow(
+        &self,
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage>
+    where
+        Self: Sized,
+    {
+        Self::from_storage_atomic_ref(
+            all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+            self.storage_id,
+        )
+    }
+
+    fn borrow_infos(&self, infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((self.storage_id, Mutation::Shared));
+    }
+
+    fn is_send_sync(&self) -> bool {
+        true
+    }
+}
+
+impl<'a, T: 'static + Send + Sync> DynamicBorrow<'a> for DynamicViewMut<'a, T> {
+    fn try_borrow(
+        &self,
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage>
+    where
+        Self: Sized,
+    {
+        Self::from_storage_atomic_ref(
+            all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+            self.storage_id,
+        )
+    }
+
+    fn borrow_infos(&self, infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((self.storage_id, Mutation::Unique));
+    }
+
+    fn is_send_sync(&self) -> bool {
+        true
+    }
+}
+
 pub trait Borrow<'a> {
     fn try_borrow(
         all_storages: &'a AtomicRefCell<AllStorages>,
@@ -42,7 +111,7 @@ pub trait Borrow<'a> {
     where
         Self: Sized;
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>);
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>);
 
     fn is_send_sync() -> bool;
 }
@@ -58,7 +127,7 @@ impl<'a> Borrow<'a> for () {
         Ok(())
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<(StorageId, Mutation)>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -73,8 +142,8 @@ impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
         all_storages.try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<AllStorages>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<AllStorages>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -93,8 +162,8 @@ impl<'a> Borrow<'a> for EntitiesView<'a> {
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<Entities>(), Mutation::Shared));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<Entities>().into(), Mutation::Shared));
     }
 
     fn is_send_sync() -> bool {
@@ -113,8 +182,8 @@ impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<Entities>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<Entities>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -131,7 +200,7 @@ impl<'a> Borrow<'a> for ThreadPoolView<'a> {
         Ok(ThreadPoolView(thread_pool))
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<(StorageId, Mutation)>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -149,8 +218,8 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Shared));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Shared));
     }
 
     fn is_send_sync() -> bool {
@@ -169,8 +238,8 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -189,7 +258,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueView<'a, T> {
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <View<'a, T> as Borrow>::borrow_infos(infos)
     }
 
@@ -209,7 +278,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMut<'a, T> {
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <ViewMut<'a, T> as Borrow>::borrow_infos(infos)
     }
 
@@ -232,8 +301,8 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
         .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -255,8 +324,8 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
         .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -277,7 +346,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
             .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <NonSend<View<'a, T>> as Borrow>::borrow_infos(infos)
     }
 
@@ -299,7 +368,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
             .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <NonSend<ViewMut<'a, T>> as Borrow>::borrow_infos(infos)
     }
 
@@ -322,8 +391,8 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
         .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -345,8 +414,8 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
         .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -367,7 +436,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
             .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <NonSync<View<'a, T>> as Borrow>::borrow_infos(infos)
     }
 
@@ -389,7 +458,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
             .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <NonSync<ViewMut<'a, T>> as Borrow>::borrow_infos(infos)
     }
 
@@ -412,8 +481,8 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
         .map(NonSendSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -435,8 +504,8 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
         .map(NonSendSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique));
     }
 
     fn is_send_sync() -> bool {
@@ -456,7 +525,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
             .try_into()
             .map(NonSendSync)
     }
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <NonSendSync<View<'a, T>> as Borrow>::borrow_infos(infos)
     }
 
@@ -478,7 +547,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
             .map(NonSendSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
         <NonSendSync<ViewMut<'a, T>> as Borrow>::borrow_infos(infos)
     }
 
@@ -495,8 +564,8 @@ impl<'a, T: 'static> Borrow<'a> for FakeBorrow<T> {
         Ok(FakeBorrow::new())
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique))
+    fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
+        infos.push((TypeId::of::<T>().into(), Mutation::Unique))
     }
 
     fn is_send_sync() -> bool {
@@ -525,7 +594,7 @@ macro_rules! impl_borrow {
                 }
             }
 
-            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+            fn borrow_infos(infos: &mut Vec<(StorageId, Mutation)>) {
                 $(
                     $type::borrow_infos(infos);
                 )+

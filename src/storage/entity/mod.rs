@@ -7,10 +7,11 @@ pub use iterator::EntitiesIter;
 
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
+use crate::storage::StorageId;
 use crate::unknown_storage::UnknownStorage;
 use add_component::AddComponent;
 use alloc::vec::Vec;
-use core::any::{Any, TypeId};
+use core::any::Any;
 
 /// Entities holds the EntityIds to all entities: living, removed and dead.
 ///
@@ -191,7 +192,7 @@ impl Entities {
 }
 
 impl UnknownStorage for Entities {
-    fn delete(&mut self, _entity: EntityId, _: &mut Vec<TypeId>) {}
+    fn delete(&mut self, _entity: EntityId, _: &mut Vec<StorageId>) {}
     fn clear(&mut self) {
         if self.data.is_empty() {
             return;

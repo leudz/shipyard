@@ -1,6 +1,6 @@
 use crate::error;
 use crate::sparse_set::Pack;
-use crate::storage::EntityId;
+use crate::storage::{EntityId, StorageId};
 use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::{type_name, TypeId};
@@ -96,24 +96,24 @@ macro_rules! impl_add_component_unchecked {
                     let mut should_pack = Vec::new();
                     // non packed storages should not pay the price of pack
                     if $(core::mem::discriminant(&self.$index.pack_info.pack) != core::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
-                        let mut type_ids = [$(TypeId::of::<$type>()),+];
-                        type_ids.sort_unstable();
-                        let mut add_types = [$(TypeId::of::<$add_type>()),*];
+                        let mut storage_ids = [$(StorageId::TypeId(TypeId::of::<$type>().into())),+];
+                        storage_ids.sort_unstable();
+                        let mut add_types = [$(TypeId::of::<$add_type>().into()),*];
                         add_types.sort_unstable();
-                        let mut real_types = Vec::with_capacity(type_ids.len() + add_types.len());
-                        real_types.extend_from_slice(&type_ids);
+                        let mut real_types = Vec::with_capacity(storage_ids.len() + add_types.len());
+                        real_types.extend_from_slice(&storage_ids);
 
                         $(
                             if self.$add_index.contains(entity) {
-                                real_types.push(TypeId::of::<$add_type>());
+                                real_types.push(TypeId::of::<$add_type>().into());
                             }
                         )*
                         real_types.sort_unstable();
 
                         should_pack.reserve(real_types.len());
                         $(
-                            if self.$index.pack_info.has_all_storages(&type_ids, &add_types) {
-                                if !should_pack.contains(&TypeId::of::<$type>()) {
+                            if self.$index.pack_info.has_all_storages(&storage_ids, &add_types) {
+                                if !should_pack.contains(&TypeId::of::<$type>().into()) {
                                     match &self.$index.pack_info.pack {
                                         Pack::Tight(pack) => if let Ok(types) = pack.is_packable(&real_types) {
                                             should_pack.extend_from_slice(types);
@@ -131,7 +131,7 @@ macro_rules! impl_add_component_unchecked {
                         )+
 
                         $(
-                            if should_pack.contains(&TypeId::of::<$add_type>()) {
+                            if should_pack.contains(&TypeId::of::<$add_type>().into()) {
                                 self.$add_index.pack(entity);
                             }
                         )*
@@ -139,7 +139,7 @@ macro_rules! impl_add_component_unchecked {
 
                     $(
                         self.$index.insert(component.$index, entity);
-                        if should_pack.contains(&TypeId::of::<$type>()) {
+                        if should_pack.contains(&TypeId::of::<$type>().into()) {
                             self.$index.pack(entity);
                         }
                     )+

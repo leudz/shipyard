@@ -14,12 +14,36 @@ use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;
+use core::cmp::Ordering;
 use unique::Unique;
 
 /// Currently unused it'll replace `TypeId` in `AllStorages` in a future version.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum StorageId {
     TypeId(TypeId),
     Custom(u64),
+}
+
+// TODO: Currently custom elements sort as less than TypeId
+impl Ord for StorageId {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self {
+            StorageId::TypeId(id) => match other {
+                StorageId::TypeId(other_id) => id.cmp(other_id),
+                StorageId::Custom(_) => Ordering::Greater,
+            },
+            StorageId::Custom(id) => match other {
+                StorageId::Custom(other_id) => id.cmp(other_id),
+                StorageId::TypeId(_) => Ordering::Less,
+            },
+        }
+    }
+}
+
+impl PartialOrd for StorageId {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl From<TypeId> for StorageId {
@@ -206,7 +230,7 @@ impl Storage {
     pub(crate) fn delete(
         &mut self,
         entity: EntityId,
-        storage_to_unpack: &mut Vec<TypeId>,
+        storage_to_unpack: &mut Vec<StorageId>,
     ) -> Result<(), error::Borrow> {
         self.0.try_borrow_mut()?.delete(entity, storage_to_unpack);
         Ok(())

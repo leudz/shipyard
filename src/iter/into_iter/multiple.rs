@@ -26,8 +26,8 @@ macro_rules! impl_iterators {
                     None,
                 }
 
-                let mut type_ids = [$(self.$index.type_id()),+];
-                type_ids.sort_unstable();
+                let mut storage_ids = [$(self.$index.storage_id().into()),+];
+                storage_ids.sort_unstable();
                 let mut smallest_index = core::usize::MAX;
                 let mut smallest = core::usize::MAX;
                 let mut i = 0;
@@ -38,8 +38,8 @@ macro_rules! impl_iterators {
                     if pack_iter == PackIter::None || pack_iter == PackIter::Update {
                         match (&self.$index.pack_info().pack, is_offseted) {
                             (Pack::Tight(pack), false) => {
-                                if let Ok(types) = pack.is_packable(&type_ids) {
-                                    if types.len() == type_ids.len() {
+                                if let Ok(types) = pack.is_packable(&storage_ids) {
+                                    if types.len() == storage_ids.len() {
                                         pack_iter = PackIter::Tight;
                                         smallest = pack.len;
                                     } else if pack.len < smallest {
@@ -54,8 +54,8 @@ macro_rules! impl_iterators {
                                 }
                             }
                             (Pack::Loose(pack), false) => {
-                                if pack.is_packable(&type_ids).is_ok() {
-                                    if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
+                                if pack.is_packable(&storage_ids).is_ok() {
+                                    if pack.tight_types.len() + pack.loose_types.len() == storage_ids.len() {
                                         pack_iter = PackIter::Loose;
                                         smallest = pack.len;
                                         smallest_index = i;

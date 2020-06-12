@@ -1,6 +1,7 @@
 use super::abstract_mut::AbstractMut;
 use crate::not::Not;
 use crate::sparse_set::{Pack, PackInfo, RawWindowMut, Window, WindowMut};
+use crate::storage::StorageId;
 use crate::view::{View, ViewMut};
 use core::any::TypeId;
 
@@ -14,7 +15,7 @@ pub trait IntoAbstract {
     fn into_abstract(self) -> Self::AbsView;
     fn len(&self) -> Option<usize>;
     fn pack_info(&self) -> &PackInfo<Self::PackType>;
-    fn type_id(&self) -> TypeId;
+    fn storage_id(&self) -> StorageId;
     fn modified(&self) -> usize;
     fn offset(&self) -> usize;
 }
@@ -31,8 +32,8 @@ impl<'a, T: 'static> IntoAbstract for &'a View<'_, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         <Window<'_, T>>::pack_info(self)
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -54,8 +55,8 @@ impl<'a, T: 'static> IntoAbstract for Window<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         self.pack_info()
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -77,8 +78,8 @@ impl<'a, T: 'static> IntoAbstract for &'a Window<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         <Window<'_, T>>::pack_info(self)
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -100,8 +101,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         &self.pack_info
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -123,8 +124,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         &self.pack_info
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         match &self.pack_info.pack {
@@ -149,8 +150,8 @@ impl<'a, T: 'static> IntoAbstract for WindowMut<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         self.pack_info()
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         match &self.pack_info().pack {
@@ -175,8 +176,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b WindowMut<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         <WindowMut<'_, T>>::pack_info(self)
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -198,8 +199,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut WindowMut<'a, T> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         <WindowMut<'_, T>>::pack_info(self)
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         match &self.pack_info().pack {
@@ -224,8 +225,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         self.0.pack_info()
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -247,8 +248,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         &self.0.pack_info
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
@@ -270,8 +271,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
     fn pack_info(&self) -> &PackInfo<Self::PackType> {
         &self.0.pack_info
     }
-    fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+    fn storage_id(&self) -> StorageId {
+        TypeId::of::<T>().into()
     }
     fn modified(&self) -> usize {
         core::usize::MAX
