@@ -1062,8 +1062,8 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Shares `entity`'s component wuth `with` entity.  
-    /// Deleting `entity`'s component won't stop the sahring.
+    /// Shares `entity`'s component with `with` entity.  
+    /// Deleting `entity`'s component won't stop the sharing.
     pub fn share(&mut self, entity: EntityId, with: EntityId) {
         self.allocate_at(with);
 
