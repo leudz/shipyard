@@ -1151,6 +1151,17 @@ pub enum OldComponent<T> {
     Shared,
 }
 
+impl<T> OldComponent<T> {
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn unwrap_owned(self) -> T {
+        match self {
+            Self::Owned(component) => component,
+            Self::Shared => panic!("Called `OldComponent::unwrap_owned` on a `Shared` value"),
+        }
+    }
+}
+
 #[test]
 fn insert() {
     let mut array = SparseSet::new();
