@@ -1062,9 +1062,9 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Shares `entity`'s component with `with` entity.  
-    /// Deleting `entity`'s component won't stop the sharing.
-    pub fn share(&mut self, entity: EntityId, with: EntityId) {
+    /// Shares `owned`'s component with `with` entity.  
+    /// Deleting `owned`'s component won't stop the sharing.
+    pub fn share(&mut self, owned: EntityId, with: EntityId) {
         self.allocate_at(with);
 
         unsafe {
@@ -1073,7 +1073,7 @@ impl<T> SparseSet<T> {
                 .get_unchecked_mut(with.bucket())
                 .as_mut()
                 .unwrap()
-                .get_unchecked_mut(with.bucket_index()) = SparseIndex { shared: entity };
+                .get_unchecked_mut(with.bucket_index()) = SparseIndex { shared: owned };
         }
 
         self.shared += 1;
