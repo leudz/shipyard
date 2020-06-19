@@ -143,6 +143,7 @@
 
 extern crate alloc;
 
+mod add_unique_macro;
 mod atomic_refcell;
 mod borrow;
 mod delete;
@@ -171,6 +172,8 @@ pub use crate::borrow::NonSendSync;
 pub use crate::borrow::NonSync;
 #[doc(hidden)]
 pub use crate::borrow::{AllStoragesBorrow, Borrow};
+#[doc(hidden)]
+pub use add_unique_macro::{AddUnique, Wrap};
 pub use borrow::FakeBorrow;
 pub use delete::Delete;
 pub use entity_builder::EntityBuilder;

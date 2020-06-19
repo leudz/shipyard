@@ -171,3 +171,88 @@ fn non_send_remove() {
     .join()
     .unwrap();
 }
+
+#[test]
+fn macro_test() {
+    let world = World::new();
+
+    try_add_unique!(&world, 0usize).unwrap();
+
+    world.try_borrow::<(UniqueView<usize>,)>().unwrap();
+
+    world.try_remove_unique::<usize>().unwrap();
+
+    add_unique!(world.try_borrow::<AllStoragesViewMut>().unwrap(), 1usize);
+
+    assert_eq!(*world.try_borrow::<UniqueView<usize>>().unwrap(), 1);
+}
+
+#[cfg(all(feature = "non_send", feature = "non_sync", feature = "panic"))]
+#[test]
+fn macro_test_all_features() {
+    struct NotSend(*const ());
+
+    unsafe impl Sync for NotSend {}
+
+    struct NotSync(*const ());
+
+    unsafe impl Send for NotSync {}
+
+    struct NotSendSync(*const ());
+
+    let world = World::new();
+
+    try_add_unique!(&world, NotSend(&())).unwrap();
+    try_add_unique!(&world, NotSync(&())).unwrap();
+    try_add_unique!(&world, NotSendSync(&())).unwrap();
+    try_add_unique!(&world, 0usize).unwrap();
+
+    world
+        .try_borrow::<(
+            UniqueView<usize>,
+            NonSend<UniqueView<NotSend>>,
+            NonSync<UniqueView<NotSync>>,
+            NonSendSync<UniqueView<NotSendSync>>,
+        )>()
+        .unwrap();
+
+    world.try_remove_unique::<usize>().unwrap();
+    world.try_remove_unique::<NotSend>().unwrap();
+    world.try_remove_unique::<NotSync>().unwrap();
+    world.try_remove_unique::<NotSendSync>().unwrap();
+
+    add_unique!(&world, NotSend(&()));
+    add_unique!(&world, NotSync(&()));
+    add_unique!(&world, NotSendSync(&()));
+    add_unique!(&world, 0usize);
+
+    world
+        .try_borrow::<(
+            UniqueView<usize>,
+            NonSend<UniqueView<NotSend>>,
+            NonSync<UniqueView<NotSync>>,
+            NonSendSync<UniqueView<NotSendSync>>,
+        )>()
+        .unwrap();
+
+    world.try_remove_unique::<usize>().unwrap();
+    world.try_remove_unique::<NotSend>().unwrap();
+    world.try_remove_unique::<NotSync>().unwrap();
+    world.try_remove_unique::<NotSendSync>().unwrap();
+
+    world.run(|all_storages: AllStoragesViewMut| {
+        add_unique!(all_storages, NotSend(&()));
+        add_unique!(all_storages, NotSync(&()));
+        add_unique!(all_storages, NotSendSync(&()));
+        add_unique!(all_storages, 0usize);
+
+        all_storages
+            .try_borrow::<(
+                UniqueView<usize>,
+                NonSend<UniqueView<NotSend>>,
+                NonSync<UniqueView<NotSync>>,
+                NonSendSync<UniqueView<NotSendSync>>,
+            )>()
+            .unwrap();
+    });
+}
