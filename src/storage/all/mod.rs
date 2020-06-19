@@ -6,8 +6,9 @@ pub use delete_any::DeleteAny;
 pub(crate) use hasher::TypeIdHasher;
 
 use super::{Entities, EntityId, Storage};
-use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
+use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
+use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::sparse_set::SparseSet;
 use alloc::boxed::Box;
@@ -32,6 +33,11 @@ pub struct AllStorages {
     #[cfg(feature = "non_send")]
     thread_id: std::thread::ThreadId,
 }
+
+#[cfg(not(feature = "non_send"))]
+unsafe impl Send for AllStorages {}
+
+unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     pub(crate) fn new() -> Self {
@@ -345,7 +351,9 @@ impl AllStorages {
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
         }
     }
-    pub(crate) fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+    /// Removes a unique storage.  
+    /// Fails if the storage is borrowed.
+    pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
@@ -378,9 +386,19 @@ impl AllStorages {
             ))
         }
     }
-    /// Register a new unique component and create a storage for it.
-    /// Does nothing if a storage already exists.
-    pub(crate) fn register_unique<T: 'static + Send + Sync>(&self, component: T) {
+    /// Removes a unique storage.  
+    /// Panics if the storage is borrowed.
+    pub fn remove_unique<T: 'static>(&self) -> T {
+        self.try_remove_unique::<T>().unwrap()
+    }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.  
+    /// Unwraps errors.
+    ///
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
@@ -391,8 +409,15 @@ impl AllStorages {
             .or_insert_with(|| Storage::new_unique::<T>(component));
         self.lock.unlock_exclusive();
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.
+    ///
+    /// [NonSend]: struct.NonSend.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_send")]
-    pub(crate) fn register_unique_non_send<T: 'static + Sync>(&self, component: T) {
+    pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
@@ -403,8 +428,15 @@ impl AllStorages {
             .or_insert_with(|| Storage::new_unique_non_send::<T>(component, self.thread_id));
         self.lock.unlock_exclusive();
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.
+    ///
+    /// [NonSync]: struct.NonSync.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_sync")]
-    pub(crate) fn register_unique_non_sync<T: 'static + Send>(&self, component: T) {
+    pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
@@ -415,8 +447,16 @@ impl AllStorages {
             .or_insert_with(|| Storage::new_unique_non_sync::<T>(component));
         self.lock.unlock_exclusive();
     }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.  
+    /// Unwraps errors.
+    ///
+    /// [NonSync]: struct.NonSync.html
+    /// [UniqueView]: struct.UniqueView.html
+    /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
-    pub(crate) fn register_unique_non_send_sync<T: 'static>(&self, component: T) {
+    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
         let type_id = TypeId::of::<T>();
         self.lock.lock_exclusive();
         // SAFE we locked
@@ -1094,5 +1134,18 @@ let i = all_storages.run(sys1);
     /// In this case use (T,).
     pub fn delete_any<T: DeleteAny>(&mut self) {
         T::delete_any(self)
+    }
+    /// Used to create an entity without having to borrow its storage explicitly.  
+    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
+    /// Borrows [AllStorages], panics if already exclusively borrowed.
+    ///
+    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
+    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// [AllStorages]: struct.AllStorages.html
+    pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
+        EntityBuilder::new(Ref {
+            inner: self,
+            borrow: Borrow::None,
+        })
     }
 }

@@ -14,10 +14,24 @@ impl ViewAddEntity for () {
     fn add_entity(self, _: Self::Component, _: EntityId) {}
 }
 
+impl<T: 'static> ViewAddEntity for ViewMut<'_, T> {
+    type Component = T;
+    fn add_entity(mut self, component: Self::Component, entity: EntityId) {
+        self.insert(component, entity);
+    }
+}
+
 impl<T: 'static> ViewAddEntity for &mut ViewMut<'_, T> {
     type Component = T;
     fn add_entity(self, component: Self::Component, entity: EntityId) {
         self.insert(component, entity);
+    }
+}
+
+impl<T: 'static> ViewAddEntity for (ViewMut<'_, T>,) {
+    type Component = (T,);
+    fn add_entity(self, component: Self::Component, entity: EntityId) {
+        self.0.add_entity(component.0, entity);
     }
 }
 
@@ -30,6 +44,13 @@ impl<T: 'static> ViewAddEntity for (&mut ViewMut<'_, T>,) {
 
 macro_rules! impl_view_add_entity {
     ($(($type: ident, $index: tt))+) => {
+        impl<'a, $($type: 'static),+> ViewAddEntity for ($(ViewMut<'_, $type>,)+) {
+            type Component = ($($type,)+);
+            fn add_entity(mut self, component: Self::Component, entity: EntityId) {
+                ($(&mut self.$index),+).add_entity(component, entity)
+            }
+        }
+
         impl<'a, $($type: 'static),+> ViewAddEntity for ($(&mut ViewMut<'_, $type>,)+) {
             type Component = ($($type,)+);
             fn add_entity(self, component: Self::Component, entity: EntityId) {

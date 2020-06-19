@@ -133,3 +133,119 @@ fn not_all_loose() {
 
     assert!((&mut u32s, &mut u16s).iter().count() > 0);
 }
+
+#[test]
+fn builder() {
+    let world = World::new();
+
+    let _entity = world
+        .try_entity_builder()
+        .unwrap()
+        .try_with(0usize)
+        .unwrap()
+        .try_with(0isize)
+        .unwrap()
+        .try_with(0u8)
+        .unwrap()
+        .try_with(0i8)
+        .unwrap()
+        .try_with(0u16)
+        .unwrap()
+        .try_with(0i16)
+        .unwrap()
+        .try_with(0u32)
+        .unwrap()
+        .try_with(0i32)
+        .unwrap()
+        .try_with(0u64)
+        .unwrap()
+        .try_with(0i64)
+        .unwrap()
+        .try_build()
+        .unwrap();
+
+    let _entity2 = world
+        .try_borrow::<AllStoragesViewMut>()
+        .unwrap()
+        .entity_builder()
+        .try_with(0usize)
+        .unwrap()
+        .try_with(0isize)
+        .unwrap()
+        .try_with(0u8)
+        .unwrap()
+        .try_with(0i8)
+        .unwrap()
+        .try_with(0u16)
+        .unwrap()
+        .try_with(0i16)
+        .unwrap()
+        .try_with(0u32)
+        .unwrap()
+        .try_with(0i32)
+        .unwrap()
+        .try_with(0u64)
+        .unwrap()
+        .try_with(0i64)
+        .unwrap()
+        .try_build()
+        .unwrap();
+}
+
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[test]
+fn builder_non_send_sync() {
+    let world = World::new();
+
+    let _entity = world
+        .try_entity_builder()
+        .unwrap()
+        .try_with(0usize)
+        .unwrap()
+        .try_with_non_send(0isize)
+        .unwrap()
+        .try_with_non_sync(0u8)
+        .unwrap()
+        .try_with_non_send_sync(0i8)
+        .unwrap()
+        .try_with(0u16)
+        .unwrap()
+        .try_with(0i16)
+        .unwrap()
+        .try_with(0u32)
+        .unwrap()
+        .try_with(0i32)
+        .unwrap()
+        .try_with(0u64)
+        .unwrap()
+        .try_with(0i64)
+        .unwrap()
+        .try_build()
+        .unwrap();
+
+    let _entity2 = world
+        .borrow::<AllStoragesViewMut>()
+        .entity_builder()
+        .try_with(0usize)
+        .unwrap()
+        .try_with_non_send(0isize)
+        .unwrap()
+        .try_with_non_sync(0u8)
+        .unwrap()
+        .try_with_non_send_sync(0i8)
+        .unwrap()
+        .try_with(0u16)
+        .unwrap()
+        .try_with(0i16)
+        .unwrap()
+        .try_with(0u32)
+        .unwrap()
+        .try_with(0i32)
+        .unwrap()
+        .try_with(0u64)
+        .unwrap()
+        .try_with(0i64)
+        .unwrap()
+        .try_build()
+        .unwrap();
+}

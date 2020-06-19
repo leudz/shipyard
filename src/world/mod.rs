@@ -4,6 +4,7 @@ pub use scheduler::WorkloadBuilder;
 
 use crate::atomic_refcell::AtomicRefCell;
 use crate::borrow::Borrow;
+use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::storage::AllStorages;
 use alloc::borrow::Cow;
@@ -95,7 +96,7 @@ impl World {
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
-        self.all_storages.try_borrow()?.register_unique(component);
+        self.all_storages.try_borrow()?.add_unique(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -113,7 +114,7 @@ impl World {
     ) -> Result<(), error::Borrow> {
         self.all_storages
             .try_borrow()?
-            .register_unique_non_send(component);
+            .add_unique_non_send(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -144,7 +145,7 @@ impl World {
     ) -> Result<(), error::Borrow> {
         self.all_storages
             .try_borrow()?
-            .register_unique_non_sync(component);
+            .add_unique_non_sync(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -175,7 +176,7 @@ impl World {
     ) -> Result<(), error::Borrow> {
         self.all_storages
             .try_borrow()?
-            .register_unique_non_send_sync(component);
+            .add_unique_non_send_sync(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -199,7 +200,7 @@ impl World {
         self.all_storages
             .try_borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
-            .remove_unique::<T>()
+            .try_remove_unique::<T>()
     }
     /// Removes a unique storage.
     /// Unwraps errors.
@@ -1176,5 +1177,27 @@ let i = world.run(sys1);
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run_default(&self) {
         self.try_run_default().unwrap();
+    }
+    /// Used to create an entity without having to borrow its storage explicitly.  
+    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
+    /// Borrows [AllStorages].
+    ///
+    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
+    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// [AllStorages]: struct.AllStorages.html
+    pub fn try_entity_builder(&self) -> Result<EntityBuilder<'_, (), ()>, error::Borrow> {
+        Ok(EntityBuilder::new(self.all_storages.try_borrow()?))
+    }
+    /// Used to create an entity without having to borrow its storage explicitly.  
+    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
+    /// Borrows [AllStorages], panics if already exclusively borrowed.
+    ///
+    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
+    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// [AllStorages]: struct.AllStorages.html
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
+        self.try_entity_builder().unwrap()
     }
 }

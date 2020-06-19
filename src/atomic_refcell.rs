@@ -379,6 +379,15 @@ impl<T: ?Sized> AsRef<T> for Ref<'_, T> {
     }
 }
 
+impl<T: ?Sized> Clone for Ref<'_, T> {
+    fn clone(&self) -> Self {
+        Ref {
+            inner: self.inner,
+            borrow: self.borrow.clone(),
+        }
+    }
+}
+
 /// A wrapper type for a unique borrow from a `AtomicRefCell<T>`.
 pub struct RefMut<'a, T: ?Sized> {
     pub(crate) inner: &'a mut T,

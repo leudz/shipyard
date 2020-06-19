@@ -146,6 +146,7 @@ extern crate alloc;
 mod atomic_refcell;
 mod borrow;
 mod delete;
+mod entity_builder;
 /// Contains all error types.
 pub mod error;
 mod get;
@@ -172,6 +173,7 @@ pub use crate::borrow::NonSync;
 pub use crate::borrow::{AllStoragesBorrow, Borrow};
 pub use borrow::FakeBorrow;
 pub use delete::Delete;
+pub use entity_builder::EntityBuilder;
 pub use get::Get;
 pub use iter::{
     iterators, CurrentId, Enumerate, ExactSizeShiperator, Filter, IntoIter, IntoIterIds, Map,
