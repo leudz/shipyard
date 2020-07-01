@@ -135,9 +135,11 @@ fn update() {
 #[test]
 fn off_by_one() {
     let world = World::new();
+
     let (mut entities, mut u32s) = world
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
+
     let entity0 = entities.add_entity(&mut u32s, 0);
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity(&mut u32s, 2);
@@ -147,6 +149,7 @@ fn off_by_one() {
     assert!(window.get(entity0).is_err());
     assert_eq!(window.get(entity1).ok(), Some(&1));
     assert_eq!(window.get(entity2).ok(), Some(&2));
+
     let window = window.try_as_window(1..).unwrap();
     assert_eq!(window.len(), 1);
     assert!(window.get(entity0).is_err());
@@ -158,9 +161,27 @@ fn off_by_one() {
     assert!(window.get(entity0).is_err());
     assert_eq!((&mut window).get(entity1).ok(), Some(&mut 1));
     assert_eq!((&mut window).get(entity2).ok(), Some(&mut 2));
+
     let mut window = window.try_as_window_mut(1..).unwrap();
     assert_eq!(window.len(), 1);
     assert!(window.get(entity0).is_err());
     assert!(window.get(entity1).is_err());
     assert_eq!((&mut window).get(entity2).ok(), Some(&mut 2));
+}
+
+#[test]
+fn old_id() {
+    let world = World::new();
+
+    world
+        .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
+            let entity = entities.add_entity(&mut u32s, 0);
+
+            entities.delete_unchecked(entity);
+
+            let entity1 = entities.add_entity((), ());
+
+            assert!(u32s.get(entity1).is_err());
+        })
+        .unwrap();
 }

@@ -630,3 +630,66 @@ impl Display for UniqueRemove {
         Debug::fmt(self, fmt)
     }
 }
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Share;
+
+#[cfg(feature = "std")]
+impl Error for Share {}
+
+impl Debug for Share {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.write_str("Cannot share the component of this entity because it already owns one.")
+    }
+}
+
+impl Display for Share {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub struct Unshare;
+
+#[cfg(feature = "std")]
+impl Error for Unshare {}
+
+impl Debug for Unshare {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.write_str("Cannot unshare the component of this entity because it's not shared.")
+    }
+}
+
+impl Display for Unshare {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Apply {
+    IdenticalIds,
+    MissingComponent(EntityId),
+}
+
+#[cfg(feature = "std")]
+impl Error for Apply {}
+
+impl Debug for Apply {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Self::IdenticalIds => f.write_str("Cannot use apply with identical components."),
+            Self::MissingComponent(id) => f.write_fmt(format_args!(
+                "Entity {:?} doesn't have any component in this storage.",
+                id
+            )),
+        }
+    }
+}
+
+impl Display for Apply {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}

@@ -9,7 +9,8 @@ fn no_pack() {
             let entity0 = entities.add_entity(&mut u32s, 0);
             let entity1 = entities.add_entity(&mut u32s, 1);
 
-            u32s.swap(entity0, entity1);
+            u32s.try_apply_mut(entity0, entity1, core::mem::swap)
+                .unwrap();
 
             assert_eq!(u32s[entity0], 1);
             assert_eq!(u32s[entity1], 0);
@@ -31,7 +32,8 @@ fn update() {
 
             let entity1 = entities.add_entity(&mut u32s, 1);
 
-            u32s.swap(entity0, entity1);
+            u32s.try_apply_mut(entity0, entity1, core::mem::swap)
+                .unwrap();
 
             assert_eq!(u32s[entity0], 1);
             assert_eq!(u32s[entity1], 0);

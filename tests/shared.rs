@@ -9,7 +9,7 @@ fn get() {
                 .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
                     let owned = entities.add_entity(&mut u32s, 0);
                     let shared = entities.add_entity((), ());
-                    u32s.share(owned, shared);
+                    u32s.try_share(owned, shared).unwrap();
 
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert_eq!(u32s.get(shared), Ok(&0));
@@ -18,12 +18,12 @@ fn get() {
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert!(u32s.get(shared).is_err());
 
-                    u32s.share(owned, shared);
-                    u32s.unshare(shared);
+                    u32s.try_share(owned, shared).unwrap();
+                    u32s.try_unshare(shared).unwrap();
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert!(u32s.get(shared).is_err());
 
-                    u32s.share(owned, shared);
+                    u32s.try_share(owned, shared).unwrap();
                     (owned, shared)
                 })
                 .unwrap();
@@ -48,7 +48,7 @@ fn get_mut() {
                 .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
                     let owned = entities.add_entity(&mut u32s, 0);
                     let shared = entities.add_entity((), ());
-                    u32s.share(owned, shared);
+                    u32s.try_share(owned, shared).unwrap();
 
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert_eq!((&mut u32s).get(shared), Ok(&mut 0));
@@ -57,11 +57,11 @@ fn get_mut() {
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert!((&mut u32s).get(shared).is_err());
 
-                    u32s.unshare(shared);
+                    assert_eq!(u32s.try_unshare(shared).err(), Some(error::Unshare));
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert!((&mut u32s).get(shared).is_err());
 
-                    u32s.share(owned, shared);
+                    u32s.try_share(owned, shared).unwrap();
                     (owned, shared)
                 })
                 .unwrap();
@@ -84,7 +84,7 @@ fn iter() {
         .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
             let owned = entities.add_entity(&mut u32s, 0);
             let shared = entities.add_entity((), ());
-            u32s.share(owned, shared);
+            u32s.try_share(owned, shared).unwrap();
 
             let mut iter = u32s.iter();
             assert_eq!(iter.next(), Some(&0));
@@ -102,21 +102,21 @@ fn double_shared() {
             let owned2 = entities.add_entity(&mut u32s, 2);
             let shared1 = entities.add_entity((), ());
             let shared2 = entities.add_entity((), ());
-            u32s.share(owned1, shared1);
-            u32s.share(shared1, shared2);
+            u32s.try_share(owned1, shared1).unwrap();
+            u32s.try_share(shared1, shared2).unwrap();
 
             assert_eq!(u32s.get(owned1), Ok(&1));
             assert_eq!(u32s.get(owned2), Ok(&2));
             assert_eq!(u32s.get(shared1), Ok(&1));
             assert_eq!(u32s.get(shared2), Ok(&1));
 
-            u32s.unshare(shared1);
+            u32s.try_unshare(shared1).unwrap();
             assert_eq!(u32s.get(owned1), Ok(&1));
             assert_eq!(u32s.get(owned2), Ok(&2));
             assert!(u32s.get(shared1).is_err());
             assert!(u32s.get(shared2).is_err());
 
-            u32s.share(owned2, shared1);
+            u32s.try_share(owned2, shared1).unwrap();
             assert_eq!(u32s.get(owned1), Ok(&1));
             assert_eq!(u32s.get(owned2), Ok(&2));
             assert_eq!(u32s.get(shared1), Ok(&2));

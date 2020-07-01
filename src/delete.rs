@@ -54,7 +54,7 @@ macro_rules! impl_delete {
         impl<$($type: 'static,)+ $($add_type: 'static),*> Delete<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_delete(self, entity: EntityId) -> Result<(), error::Remove> {
                 // non packed storages should not pay the price of pack
-                if $(core::mem::discriminant(&self.$index.pack_info.pack) != core::mem::discriminant(&Pack::NoPack) || !self.$index.pack_info.observer_types.is_empty())||+ {
+                if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::NoPack) || !self.$index.metadata.observer_types.is_empty())||+ {
                     let mut types = [$(TypeId::of::<$type>()),+];
                     types.sort_unstable();
                     let mut add_types = [$(TypeId::of::<$add_type>()),*];
@@ -62,18 +62,18 @@ macro_rules! impl_delete {
 
                     let mut should_unpack = Vec::with_capacity(types.len() + add_types.len());
                     $(
-                        if self.$index.pack_info.has_all_storages(&types, &add_types) {
-                            match &self.$index.pack_info.pack {
+                        if self.$index.metadata.has_all_storages(&types, &add_types) {
+                            match &self.$index.metadata.pack {
                                 Pack::Tight(pack) => {
                                     should_unpack.extend_from_slice(&pack.types);
-                                    should_unpack.extend_from_slice(&self.$index.pack_info.observer_types);
+                                    should_unpack.extend_from_slice(&self.$index.metadata.observer_types);
                                 }
                                 Pack::Loose(pack) => {
                                     should_unpack.extend_from_slice(&pack.tight_types);
-                                    should_unpack.extend_from_slice(&self.$index.pack_info.observer_types);
+                                    should_unpack.extend_from_slice(&self.$index.metadata.observer_types);
                                 }
-                                Pack::Update(_) => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
-                                Pack::NoPack => should_unpack.extend_from_slice(&self.$index.pack_info.observer_types),
+                                Pack::Update(_) => should_unpack.extend_from_slice(&self.$index.metadata.observer_types),
+                                Pack::NoPack => should_unpack.extend_from_slice(&self.$index.metadata.observer_types),
                             }
                         } else {
                             return Err(error::Remove::MissingPackStorage(type_name::<$type>()));

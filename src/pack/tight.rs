@@ -53,7 +53,7 @@ macro_rules! impl_tight_pack {
                 let type_ids: Arc<[_]> = type_ids.into();
 
                 $(
-                    match self.$index.pack_info.pack {
+                    match self.$index.metadata.pack {
                         Pack::Tight(_) => {
                             return Err(error::Pack::AlreadyTightPack(type_name::<$type>()));
                         },
@@ -64,7 +64,7 @@ macro_rules! impl_tight_pack {
                             return Err(error::Pack::AlreadyUpdatePack(type_name::<$type>()))
                         },
                         Pack::NoPack => {
-                            self.$index.pack_info.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
+                            self.$index.metadata.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
                         }
                     }
                 )+

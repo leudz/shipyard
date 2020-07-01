@@ -206,7 +206,9 @@ fn newer_key() {
                 let (old_usize, old_u32) =
                     Remove::<(usize, u32)>::try_remove((&mut usizes, &mut u32s), new_entity)
                         .unwrap();
-                assert!(old_usize.is_none() && old_u32.is_none());
+
+                assert_eq!(old_usize, Some(OldComponent::OldGenOwned(0)));
+                assert_eq!(old_u32, Some(OldComponent::OldGenOwned(1)));
                 assert_eq!(usizes.len(), 0);
                 assert_eq!(u32s.len(), 0);
             },

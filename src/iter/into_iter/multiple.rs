@@ -36,7 +36,7 @@ macro_rules! impl_iterators {
 
                 $({
                     if pack_iter == PackIter::None || pack_iter == PackIter::Update {
-                        match (&self.$index.pack_info().pack, is_offseted) {
+                        match (&self.$index.metadata().pack, is_offseted) {
                             (Pack::Tight(pack), false) => {
                                 if let Ok(types) = pack.is_packable(&type_ids) {
                                     if types.len() == type_ids.len() {
@@ -111,7 +111,7 @@ macro_rules! impl_iterators {
                         let mut indices = None;
                         let mut array = 0;
                         $(
-                            if let Pack::Loose(_) = self.$index.pack_info().pack {
+                            if let Pack::Loose(_) = self.$index.metadata().pack {
                                 array |= 1 << $index;
                             }
                         )+

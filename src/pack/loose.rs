@@ -51,7 +51,7 @@ macro_rules! impl_loose_pack {
             fn try_loose_pack(self) -> Result<(), error::Pack> {
                 // we check if any of the future tightly packed storages are already packed
                 $(
-                    match self.$tight_index.pack_info.pack {
+                    match self.$tight_index.metadata.pack {
                         Pack::Tight(_) => {
                             return Err(error::Pack::AlreadyTightPack(type_name::<$tight>()));
                         },
@@ -76,7 +76,7 @@ macro_rules! impl_loose_pack {
 
                 // make tightly packed storages loose packed
                 $(
-                    self.$tight_index.pack_info.pack = Pack::Loose(
+                    self.$tight_index.metadata.pack = Pack::Loose(
                         LoosePackInfo::new(Arc::clone(&tight_types), Arc::clone(&loose_types))
                     );
                 )+
@@ -86,13 +86,13 @@ macro_rules! impl_loose_pack {
                     for tight_type in tight_types.iter().copied() {
                         match self
                             .$loose_index
-                            .pack_info
+                            .metadata
                             .observer_types
                             .binary_search(&tight_type) {
                                 Ok(_) => {},
                                 Err(index) => self
                                     .$loose_index
-                                    .pack_info
+                                    .metadata
                                     .observer_types
                                     .insert(index, tight_type),
                         }

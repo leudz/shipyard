@@ -8,7 +8,7 @@ impl<T: IntoAbstract> IntoIter for T {
     #[cfg(feature = "parallel")]
     type IntoParIter = ParIter1<Self>;
     fn iter(self) -> Self::IntoIter {
-        match &self.pack_info().pack {
+        match &self.metadata().pack {
             Pack::Update(_) => Iter1::Update(Update1::new(self)),
             _ => Iter1::Tight(Tight1::new(self)),
         }

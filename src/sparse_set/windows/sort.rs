@@ -17,7 +17,7 @@ impl<'tmp, 'w, T> IntoSortable for &'tmp mut WindowMut<'w, T> {
 impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
     /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
     pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
-        if core::mem::discriminant(&self.0.pack_info().pack)
+        if core::mem::discriminant(&self.0.metadata().pack)
             == core::mem::discriminant(&Pack::NoPack)
         {
             let mut transform: Vec<usize> = (0..self.0.len()).collect();
@@ -45,13 +45,13 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
                 // SAFE dense can always index into sparse
                 unsafe {
                     let dense = *self.0.dense.get_unchecked(i);
-                    self.0
+                    *self
+                        .0
                         .sparse
                         .get_unchecked_mut(dense.bucket())
                         .as_mut()
                         .unwrap()
-                        .get_unchecked_mut(dense.bucket_index())
-                        .owned = i + self.0.offset;
+                        .get_unchecked_mut(dense.bucket_index()) = i + self.0.offset;
                 }
             }
 

@@ -71,7 +71,7 @@ macro_rules! impl_view_add_entity {
                     if should_pack.contains(&type_id) {
                         sparse_sets.$index.pack(entity);
                     } else {
-                        match &mut sparse_sets.$index.pack_info.pack {
+                        match &mut sparse_sets.$index.metadata.pack {
                             Pack::Tight(pack) => if let Ok(types) = pack.is_packable(&sorted_type_ids) {
                                 if !types.is_empty() {
                                     should_pack.extend_from_slice(&types);

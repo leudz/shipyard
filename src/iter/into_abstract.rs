@@ -1,6 +1,6 @@
 use super::abstract_mut::AbstractMut;
 use crate::not::Not;
-use crate::sparse_set::{Pack, PackInfo, RawWindowMut, Window, WindowMut};
+use crate::sparse_set::{Metadata, Pack, RawWindowMut, Window, WindowMut};
 use crate::view::{View, ViewMut};
 use core::any::TypeId;
 
@@ -13,7 +13,7 @@ pub trait IntoAbstract {
     type PackType;
     fn into_abstract(self) -> Self::AbsView;
     fn len(&self) -> Option<usize>;
-    fn pack_info(&self) -> &PackInfo<Self::PackType>;
+    fn metadata(&self) -> &Metadata<Self::PackType>;
     fn type_id(&self) -> TypeId;
     fn modified(&self) -> usize;
     fn offset(&self) -> usize;
@@ -28,8 +28,8 @@ impl<'a, T: 'static> IntoAbstract for &'a View<'_, T> {
     fn len(&self) -> Option<usize> {
         Some((**self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        <Window<'_, T>>::pack_info(self)
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        <Window<'_, T>>::metadata(self)
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -51,8 +51,8 @@ impl<'a, T: 'static> IntoAbstract for Window<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((*self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        self.pack_info()
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        self.metadata()
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -74,8 +74,8 @@ impl<'a, T: 'static> IntoAbstract for &'a Window<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((**self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        <Window<'_, T>>::pack_info(self)
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        <Window<'_, T>>::metadata(self)
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -97,8 +97,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((**self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.pack_info
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        &self.metadata
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -120,14 +120,14 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((**self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.pack_info
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        &self.metadata
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        match &self.pack_info.pack {
+        match &self.metadata.pack {
             Pack::Update(pack) => pack.inserted + pack.modified - 1,
             _ => core::usize::MAX,
         }
@@ -146,14 +146,14 @@ impl<'a, T: 'static> IntoAbstract for WindowMut<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((*self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        self.pack_info()
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        self.metadata()
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        match &self.pack_info().pack {
+        match &self.metadata().pack {
             Pack::Update(pack) => pack.inserted + pack.modified - 1,
             _ => core::usize::MAX,
         }
@@ -172,8 +172,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b WindowMut<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((**self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        <WindowMut<'_, T>>::pack_info(self)
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        <WindowMut<'_, T>>::metadata(self)
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -195,14 +195,14 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut WindowMut<'a, T> {
     fn len(&self) -> Option<usize> {
         Some((**self).len())
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        <WindowMut<'_, T>>::pack_info(self)
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        <WindowMut<'_, T>>::metadata(self)
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
     }
     fn modified(&self) -> usize {
-        match &self.pack_info().pack {
+        match &self.metadata().pack {
             Pack::Update(pack) => pack.inserted + pack.modified - 1,
             _ => core::usize::MAX,
         }
@@ -221,8 +221,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
     fn len(&self) -> Option<usize> {
         None
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        self.0.pack_info()
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        self.0.metadata()
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -244,8 +244,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     fn len(&self) -> Option<usize> {
         None
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.0.pack_info
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
@@ -267,8 +267,8 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
     fn len(&self) -> Option<usize> {
         None
     }
-    fn pack_info(&self) -> &PackInfo<Self::PackType> {
-        &self.0.pack_info
+    fn metadata(&self) -> &Metadata<Self::PackType> {
+        &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<T>()
