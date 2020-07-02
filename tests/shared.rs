@@ -13,8 +13,8 @@ fn get() {
 
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert_eq!(u32s.get(shared), Ok(&0));
-                    assert_eq!(u32s.as_window(..).get(owned), Ok(&0));
-                    assert_eq!(u32s.as_window(..).get(shared), Ok(&0));
+                    assert_eq!(u32s.try_as_window(..).unwrap().get(owned), Ok(&0));
+                    assert_eq!(u32s.try_as_window(..).unwrap().get(shared), Ok(&0));
 
                     assert_eq!(u32s.try_remove(shared).unwrap(), Some(OldComponent::Shared));
                     assert_eq!(u32s.get(owned), Ok(&0));
@@ -54,8 +54,14 @@ fn get_mut() {
 
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
                     assert_eq!((&mut u32s).get(shared), Ok(&mut 0));
-                    assert_eq!((&mut u32s).as_window_mut(..).get(owned), Ok(&0));
-                    assert_eq!((&mut u32s).as_window_mut(..).get(shared), Ok(&0));
+                    assert_eq!(
+                        (&mut u32s).try_as_window_mut(..).unwrap().get(owned),
+                        Ok(&0)
+                    );
+                    assert_eq!(
+                        (&mut u32s).try_as_window_mut(..).unwrap().get(shared),
+                        Ok(&0)
+                    );
 
                     assert_eq!(u32s.try_remove(shared).unwrap(), Some(OldComponent::Shared));
                     assert_eq!((&mut u32s).get(owned), Ok(&mut 0));
