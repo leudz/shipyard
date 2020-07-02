@@ -1,40 +1,10 @@
 use crate::sparse_set::SparseArray;
 use crate::storage::EntityId;
-use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
 pub(super) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<EntityId>();
-
-impl SparseArray<[EntityId; BUCKET_SIZE]> {
-    pub(crate) fn allocate_at(&mut self, entity: EntityId) {
-        if entity.bucket() >= self.0.len() {
-            self.0.resize(entity.bucket() + 1, None);
-        }
-        unsafe {
-            // SAFE we just allocated at least entity.bucket()
-            if self.0.get_unchecked(entity.bucket()).is_none() {
-                *self.0.get_unchecked_mut(entity.bucket()) =
-                    Some(Box::new([EntityId::dead(); BUCKET_SIZE]));
-            }
-        }
-    }
-    pub(super) fn shared_index(&self, entity: EntityId) -> Option<EntityId> {
-        self.0
-            .get(entity.bucket())?
-            .as_ref()
-            .map(|bucket| unsafe { *bucket.get_unchecked(entity.bucket_index()) })
-    }
-    pub(super) unsafe fn set_sparse_index_unchecked(&mut self, shared: EntityId, owned: EntityId) {
-        self.allocate_at(shared);
-
-        match self.0.get_unchecked_mut(shared.bucket()) {
-            Some(bucket) => *bucket.get_unchecked_mut(shared.bucket_index()) = owned,
-            None => core::hint::unreachable_unchecked(),
-        }
-    }
-}
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum Pack<T> {

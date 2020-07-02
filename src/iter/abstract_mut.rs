@@ -67,7 +67,7 @@ macro_rules! window {
                     (*self).index_of(entity)
                 }
                 unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-                    (*self).index_of_unchecked(entity)
+                    (*self).index_of_owned_unchecked(entity)
                 }
                 fn flag_all(&mut self) {}
                 unsafe fn flag(&self, _: EntityId) {}

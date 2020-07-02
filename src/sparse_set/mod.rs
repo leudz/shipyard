@@ -2,6 +2,7 @@ mod add_component;
 mod contains;
 mod metadata;
 pub mod sort;
+mod sparse_array;
 mod view_add_entity;
 mod windows;
 
@@ -20,26 +21,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::{type_name, Any, TypeId};
 use core::ptr;
+use sparse_array::{SparseArray, SparseSlice, SparseSliceMut};
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
-
-pub(crate) struct SparseArray<T>(Vec<Option<Box<T>>>);
-
-impl SparseArray<[usize; BUCKET_SIZE]> {
-    fn sparse_index(&self, entity: EntityId) -> Option<usize> {
-        // SAFE bucket_index always returns a valid bucket index
-        self.0
-            .get(entity.bucket())?
-            .as_ref()
-            .map(|bucket| unsafe { *bucket.get_unchecked(entity.bucket_index()) })
-    }
-    unsafe fn set_sparse_index_unchecked(&mut self, entity: EntityId, index: usize) {
-        match self.0.get_unchecked_mut(entity.bucket()) {
-            Some(bucket) => *bucket.get_unchecked_mut(entity.bucket_index()) = index,
-            None => core::hint::unreachable_unchecked(),
-        }
-    }
-}
 
 /// Component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
@@ -164,12 +148,7 @@ impl<T> SparseSet<T> {
     ///
     /// In case it shares a component, returns `true` even if there is no owned component at the end of the shared chain.
     pub fn contains(&self, entity: EntityId) -> bool {
-        self.contains_owned(entity)
-            || if let Some(gen) = self.sparse.sparse_index(entity) {
-                gen as u64 == entity.gen()
-            } else {
-                false
-            } && self.metadata.shared.shared_index(entity).is_some()
+        self.index_of(entity).is_some()
     }
     /// Returns `true` if `entity` owns a component in this storage.
     pub fn contains_owned(&self, entity: EntityId) -> bool {
@@ -179,13 +158,7 @@ impl<T> SparseSet<T> {
     ///
     /// Returns `true` even if there is no owned component at the end of the shared chain.
     pub fn contains_shared(&self, entity: EntityId) -> bool {
-        !self.contains_owned(entity)
-            && if let Some(gen) = self.sparse.sparse_index(entity) {
-                gen as u64 == entity.gen()
-            } else {
-                false
-            }
-            && self.metadata.shared.shared_index(entity).is_some()
+        self.shared_id(entity).is_some()
     }
     /// Returns the length of the storage.
     pub fn len(&self) -> usize {
