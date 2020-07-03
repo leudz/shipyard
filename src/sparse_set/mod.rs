@@ -916,6 +916,7 @@ impl<T> SparseSet<T> {
                 self.sparse
                     .set_sparse_index_unchecked(shared, shared.gen() as usize);
 
+                self.metadata.shared.allocate_at(shared);
                 self.metadata
                     .shared
                     .set_sparse_index_unchecked(shared, owned);
