@@ -134,3 +134,24 @@ fn double_shared() {
         })
         .unwrap();
 }
+
+#[test]
+fn shared_override() {
+    let world = World::new();
+
+    world
+        .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
+            let owned = entities.add_entity(&mut u32s, 0);
+            let shared = entities.add_entity((), ());
+
+            u32s.try_share(owned, shared).unwrap();
+
+            u32s.try_remove(owned).unwrap();
+            entities.try_add_component(&mut u32s, 1, shared).unwrap();
+
+            u32s.get(shared).unwrap();
+            u32s.try_remove(shared).unwrap();
+            assert!(u32s.get(shared).is_err());
+        })
+        .unwrap();
+}

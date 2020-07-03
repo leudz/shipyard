@@ -297,16 +297,20 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Inserts `value` in the `SparseSet`.  
+    /// Inserts `value` in the `SparseSet`.
+    ///
+    /// If an `entity` with the same index but a greater generation already has a component of this type, does nothing and returns `None`.
     ///
     /// Returns what was present at its place, one of the following:
-    /// - None - no value present, either `entity` never had this component or it was `remove`d/`delete`d
+    /// - None - no value present, either `entity` never had this component or it was removed/deleted
     /// - Some(OldComponent::Owned) - `entity` already had this component, it is no replaced
-    /// - Some(OldComponent::OldGenOwned) - `entity` didn't have the component but an entity with the same index did and it wasn't removed with the entity
+    /// - Some(OldComponent::OldGenOwned) - `entity` didn't have a component but an entity with the same index did and it wasn't removed with the entity
+    /// - Some(OldComponent::Shared) - `entity` shared a component
+    /// - Some(OldComponent::OldShared) - `entity` didn't have a component but an entity with the same index shared one and it wasn't removed with the entity
     ///
     /// # Update pack
     ///
-    /// In case `entity` owned a component of this type, the new component will be considered `modified`.
+    /// In case `entity` had a component of this type, the new component will be considered `modified`.
     /// In all other cases it'll be considered `inserted`.
     pub(crate) fn insert(&mut self, value: T, entity: EntityId) -> Option<OldComponent<T>> {
         self.allocate_at(entity);
@@ -327,20 +331,53 @@ impl<T> SparseSet<T> {
                 (None, self.dense.len() - 1)
             }
             dense_index => {
-                unsafe {
-                    self.sparse.set_sparse_index_unchecked(entity, dense_index);
-                }
+                if let Some(dense_id) = self.dense.get(dense_index).copied() {
+                    if entity.gen() >= dense_id.gen() {
+                        unsafe {
+                            self.sparse.set_sparse_index_unchecked(entity, dense_index);
 
-                unsafe {
-                    *self.dense.get_unchecked_mut(dense_index) = entity;
+                            *self.dense.get_unchecked_mut(dense_index) = entity;
 
-                    (
-                        Some(OldComponent::Owned(core::mem::replace(
-                            self.data.get_unchecked_mut(dense_index),
-                            value,
-                        ))),
-                        dense_index,
-                    )
+                            if entity.gen() == dense_id.gen() {
+                                (
+                                    Some(OldComponent::Owned(core::mem::replace(
+                                        self.data.get_unchecked_mut(dense_index),
+                                        value,
+                                    ))),
+                                    dense_index,
+                                )
+                            } else {
+                                (
+                                    Some(OldComponent::OldGenOwned(core::mem::replace(
+                                        self.data.get_unchecked_mut(dense_index),
+                                        value,
+                                    ))),
+                                    dense_index,
+                                )
+                            }
+                        }
+                    } else {
+                        return None;
+                    }
+                } else if entity.gen() >= dense_index as u64 {
+                    unsafe {
+                        self.metadata
+                            .shared
+                            .set_sparse_index_unchecked(entity, EntityId::dead());
+
+                        self.sparse.set_sparse_index_unchecked(entity, self.len());
+
+                        self.dense.push(entity);
+                        self.data.push(value);
+
+                        if entity.gen() == dense_index as u64 {
+                            (Some(OldComponent::Shared), self.len() - 1)
+                        } else {
+                            (Some(OldComponent::OldGenShared), self.len() - 1)
+                        }
+                    }
+                } else {
+                    return None;
                 }
             }
         };
