@@ -4,7 +4,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
-pub(super) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<EntityId>();
+pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<EntityId>();
 
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum Pack<T> {
@@ -34,7 +34,7 @@ impl<T> Default for Metadata<T> {
         Metadata {
             pack: Pack::NoPack,
             observer_types: Vec::new(),
-            shared: SparseArray(Vec::new()),
+            shared: SparseArray::new(),
         }
     }
 }

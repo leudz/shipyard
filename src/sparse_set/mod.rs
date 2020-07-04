@@ -10,14 +10,15 @@ pub use add_component::AddComponentUnchecked;
 pub use contains::Contains;
 pub use windows::{Window, WindowMut, WindowSort1};
 
-pub(crate) use metadata::{LoosePack, Metadata, Pack, TightPack, UpdatePack};
+pub(crate) use metadata::{
+    LoosePack, Metadata, Pack, TightPack, UpdatePack, BUCKET_SIZE as SHARED_BUCKET_SIZE,
+};
 pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
 
 use crate::error;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
-use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::{type_name, Any, TypeId};
 use core::ptr;
@@ -47,7 +48,7 @@ pub struct SparseSet<T> {
 impl<T> SparseSet<T> {
     pub(crate) fn new() -> Self {
         SparseSet {
-            sparse: SparseArray(Vec::new()),
+            sparse: SparseArray::new(),
             dense: Vec::new(),
             data: Vec::new(),
             metadata: Default::default(),
@@ -285,18 +286,6 @@ impl<T> SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
-    pub(crate) fn allocate_at(&mut self, entity: EntityId) {
-        if entity.bucket() >= self.sparse.0.len() {
-            self.sparse.0.resize(entity.bucket() + 1, None);
-        }
-        unsafe {
-            // SAFE we just allocated at least entity.bucket()
-            if self.sparse.0.get_unchecked(entity.bucket()).is_none() {
-                *self.sparse.0.get_unchecked_mut(entity.bucket()) =
-                    Some(Box::new([core::usize::MAX; BUCKET_SIZE]));
-            }
-        }
-    }
     /// Inserts `value` in the `SparseSet`.
     ///
     /// If an `entity` with the same index but a greater generation already has a component of this type, does nothing and returns `None`.
@@ -313,7 +302,7 @@ impl<T> SparseSet<T> {
     /// In case `entity` had a component of this type, the new component will be considered `modified`.
     /// In all other cases it'll be considered `inserted`.
     pub(crate) fn insert(&mut self, value: T, entity: EntityId) -> Option<OldComponent<T>> {
-        self.allocate_at(entity);
+        self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
         let old_index = self.sparse.sparse_index(entity).unwrap();
@@ -892,8 +881,10 @@ impl<T> SparseSet<T> {
     }
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
-        for id in &self.dense {
-            self.sparse.0[id.bucket()].as_mut().unwrap()[id.bucket_index()] = core::usize::MAX;
+        for &id in &self.dense {
+            unsafe {
+                self.sparse.set_sparse_index_unchecked(id, core::usize::MAX);
+            }
         }
         match &mut self.metadata.pack {
             Pack::Tight(tight) => tight.len = 0,
@@ -909,14 +900,13 @@ impl<T> SparseSet<T> {
     /// Shares `owned`'s component with `shared` entity.
     /// Deleting `owned`'s component won't stop the sharing.
     pub fn try_share(&mut self, owned: EntityId, shared: EntityId) -> Result<(), error::Share> {
-        self.allocate_at(shared);
+        self.sparse.allocate_at(shared);
 
         if !self.contains_owned(shared) {
             unsafe {
                 self.sparse
                     .set_sparse_index_unchecked(shared, shared.gen() as usize);
 
-                self.metadata.shared.allocate_at(shared);
                 self.metadata
                     .shared
                     .set_sparse_index_unchecked(shared, owned);

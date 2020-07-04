@@ -97,6 +97,12 @@ impl EntityId {
     pub(crate) fn bucket_index(self) -> usize {
         self.uindex() % crate::sparse_set::BUCKET_SIZE
     }
+    pub(crate) fn shared_bucket(self) -> usize {
+        self.uindex() / crate::sparse_set::SHARED_BUCKET_SIZE
+    }
+    pub(crate) fn shared_bucket_index(self) -> usize {
+        self.uindex() % crate::sparse_set::SHARED_BUCKET_SIZE
+    }
 }
 
 impl core::fmt::Debug for EntityId {
