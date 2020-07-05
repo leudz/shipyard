@@ -116,6 +116,12 @@ impl core::fmt::Debug for EntityId {
     }
 }
 
+impl From<EntityId> for u64 {
+    fn from(EntityId(id): EntityId) -> Self {
+        id.get()
+    }
+}
+
 #[test]
 fn entity_id() {
     let mut entity_id = EntityId::new(0);
@@ -132,4 +138,5 @@ fn entity_id() {
     entity_id.set_index(554);
     assert_eq!(entity_id.index(), 554);
     assert_eq!(entity_id.gen(), 3);
+    assert_eq!(entity_id.0.get(), entity_id.into());
 }
