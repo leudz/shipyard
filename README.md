@@ -82,7 +82,7 @@ I wouldn't say Shipyard is better or worse than Specs, it's just different.
 
 ## Systems
 
-Systems makes it very easy to split your logic in manageable chunk. Shipyard takes the concept quite far.
+Systems make it very easy to split your logic in manageable chunks. Shipyard takes the concept quite far.
 
 You always start with a function or closure and almost always take a few views (reference to storage) as arguments.  
 The basic example shown above does just that:
