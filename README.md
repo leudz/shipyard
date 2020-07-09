@@ -10,9 +10,9 @@ Shipyard is an Entity Component System focused on usability and speed.
 If you have any question or want to follow the development more closely join the [Zulip](https://shipyard.zulipchat.com).
 
 There's two big learning resources:
-- (Soon™) The Tutorial for people new to ECS or who prefer to learn by making things.
+- (Soon™) The Tutorial for people new to ECS or who prefer to learn by making a project.
 - [The Guide](https://leudz.github.io/shipyard/guide) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
-  It also goes into greater depth and provides useful recipes for common design patterns.
+  It also goes into greater depth and provides useful recipes.
 
 ## Simple Example <!-- omit in toc -->
 ```rust
@@ -73,7 +73,7 @@ fn main() {
 
 ## Let there be SparseSets
 
-I initially started to make an ECS to learn how they work. After a failed attempt and some research, I started to work on Shipyard.
+I initially started to make an ECS to learn how it works. After a failed attempt and some research, I started to work on Shipyard.
 
 [Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: `SparseSet`.
 
