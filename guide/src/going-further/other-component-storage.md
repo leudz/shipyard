@@ -18,7 +18,7 @@ fn run(rcs: NonSendSync<View<Rc<usize>>>) {}
 
 ### Unique Storages
 
-When we known there'll only ever be exactly one instance of some component, it doesn't need to be attached to an entity. It also works well as global data while still being safe.
+When we know there'll only ever be exactly one instance of some component, it doesn't need to be attached to an entity. It also works well as global data while still being safe.
 
 As opposed to other storages, unique storages have to be initialized with `add_unique`. This will both create the storage and initialize its only component. We can then access this component with [`UniqueView`](https://docs.rs/shipyard/latest/shipyard/struct.UniqueView.html) and [`UniqueViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.UniqueViewMut.html).
 
