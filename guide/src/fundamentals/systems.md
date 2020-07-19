@@ -16,6 +16,22 @@ We have a system, let's run it!
 world.run(create_ints);
 ```
 
+### Passing Data to Systems
+
+The first argument doesn't have to be a view, you can pass any data to a
+system. You don't even have to own it. 
+
+```rust, noplaypen
+fn in_acid(season: &Season, positions: View<Position>, mut healths:
+ViewMut<Health>) {
+    // -- snip --
+}
+
+world.run_with_data(in_acid, &season);
+```
+Note: we call `world.run_with_data()` instead of `world.run` when we want to
+pass data to a system.
+
 ### Workloads
 
 A workload is a group of one or more systems that is assigned a name.  
