@@ -1,7 +1,7 @@
 # Systems
 
-Systems are a great way to organize code.
-A function only taking views as arguments is all you need.
+Systems are a great way to organize code.  
+A function with views as arguments is all you need.
 
 Here's an example:
 ```rust, noplaypen
@@ -18,19 +18,30 @@ world.run(create_ints);
 
 ### Passing Data to Systems
 
-The first argument doesn't have to be a view, you can pass any data to a
-system. You don't even have to own it. 
+The first argument doesn't have to be a view, you can pass any data to a system. You don't even have to own it. 
 
 ```rust, noplaypen
-fn in_acid(season: &Season, positions: View<Position>, mut healths:
-ViewMut<Health>) {
+fn in_acid(season: &Season, positions: View<Position>, mut healths: ViewMut<Health>) {
     // -- snip --
 }
 
 world.run_with_data(in_acid, &season);
 ```
-Note: we call `world.run_with_data()` instead of `world.run` when we want to
-pass data to a system.
+We call [`run_with_data`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run_with_data) instead of [`run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run) when we want to pass data to a system.
+
+If you want to pass multiple variables, you can use a tuple.
+
+```rust, noplaypen
+fn in_acid(
+    (season, precipitation): (&Season, &Precipitation),
+    positions: View<Position>,
+    mut healths: ViewMut<Health>,
+) {
+    // -- snip --
+}
+
+world.run_with_data(in_acid, (&season, &precipitation));
+```
 
 ### Workloads
 
