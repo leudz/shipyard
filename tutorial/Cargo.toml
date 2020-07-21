@@ -1,0 +1,10 @@
+[package]
+authors = ["leudz <dylan.ancel@gmail.com>"]
+edition = "2018"
+name = "shipyard_tutorial"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+rltk = "0.8.1"
+shipyard = {git = "https://github.com/leudz/shipyard"}

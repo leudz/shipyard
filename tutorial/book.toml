@@ -1,0 +1,9 @@
+[book]
+authors = ["leudz"]
+multilingual = false
+src = "src"
+title = "Shipyard Tutorial"
+
+[build]
+build-dir = "output"
+create-missing = false
