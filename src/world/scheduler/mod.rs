@@ -23,6 +23,7 @@ pub(crate) struct Scheduler {
 }
 
 impl Default for Scheduler {
+    #[allow(clippy::reversed_empty_ranges)]
     fn default() -> Self {
         Scheduler {
             systems: Vec::new(),
