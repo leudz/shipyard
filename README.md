@@ -10,9 +10,9 @@ Shipyard is an Entity Component System focused on usability and speed.
 If you have any question or want to follow the development more closely join the [Zulip](https://shipyard.zulipchat.com).
 
 There's two big learning resources:
-- (Soon™) The Tutorial for people new to ECS or preferring to learn by making a project.
+- (Soon™) The Tutorial for people new to ECS or who prefer to learn by making a project.
 - [The Guide](https://leudz.github.io/shipyard/guide) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
-  It also go more in depth and provide useful recipes for common patterns.
+  It also goes into greater depth and provides useful recipes.
 
 ## Simple Example <!-- omit in toc -->
 ```rust
@@ -73,16 +73,16 @@ fn main() {
 
 ## Let there be SparseSets
 
-I initially started to make an ECS to learn how it works. A failed attempt and some research later, I started to work on Shipyard.
+I initially started to make an ECS to learn how it works. After a failed attempt and some research, I started to work on Shipyard.
 
 [Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: `SparseSet`.
 
-It's extremely flexible and is the core data-structure behind Shipyard.  
-Today I wouldn't say Shipyard is better or worse than Specs, it's just different.
+It's extremely flexible and is the core data structure behind Shipyard.  
+I wouldn't say Shipyard is better or worse than Specs, it's just different.
 
 ## Systems
 
-Systems make it very easy to split your logic in manageable chunk. Shipyard takes the concept quite far.
+Systems make it very easy to split your logic in manageable chunks. Shipyard takes the concept quite far.
 
 You always start with a function or closure and almost always take a few views (reference to storage) as arguments.  
 The basic example shown above does just that:
