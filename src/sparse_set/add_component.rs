@@ -1,9 +1,10 @@
 use crate::error;
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
-use core::any::{type_name, TypeId};
+use core::any::type_name;
 
 /// Adds components to an existing entity.
 pub trait AddComponentUnchecked<T> {

@@ -19,13 +19,13 @@ pub use non_sync::NonSync;
 use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
 use crate::storage::{AllStorages, Entities};
+use crate::type_id::TypeId;
 #[cfg(feature = "parallel")]
 use crate::view::ThreadPoolView;
 use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 use alloc::vec::Vec;
-use core::any::TypeId;
 use core::convert::TryInto;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

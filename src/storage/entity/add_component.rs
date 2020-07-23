@@ -1,9 +1,10 @@
 use super::{Entities, EntityId};
 use crate::error;
 use crate::sparse_set::Pack;
+use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
-use core::any::{type_name, TypeId};
+use core::any::type_name;
 
 // No new storage will be created
 /// Adds components to an existing entity without creating new storage.

@@ -1,7 +1,8 @@
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
-use core::any::{Any, TypeId};
+use core::any::Any;
 
 pub(super) struct Unique<T>(pub(crate) T);
 

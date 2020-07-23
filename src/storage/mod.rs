@@ -1,43 +1,31 @@
 mod all;
 mod entity;
+mod storage_id;
 mod unique;
 
 pub use all::{AllStorages, DeleteAny};
 pub use entity::{Entities, EntitiesIter, EntityId};
+pub use storage_id::StorageId;
 
-pub(crate) use all::TypeIdHasher;
+pub(crate) use crate::type_id::TypeIdHasher;
+#[cfg(feature = "serde1")]
+pub(crate) use all::AllStoragesSerializer;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
+#[cfg(feature = "serde1")]
+use crate::serde_setup::GlobalDeConfig;
 use crate::sparse_set::SparseSet;
+use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::any::TypeId;
 use unique::Unique;
-
-/// Currently unused it'll replace `TypeId` in `AllStorages` in a future version.
-pub enum StorageId {
-    TypeId(TypeId),
-    Custom(u64),
-}
-
-impl From<TypeId> for StorageId {
-    fn from(type_id: TypeId) -> Self {
-        StorageId::TypeId(type_id)
-    }
-}
-
-impl From<u64> for StorageId {
-    fn from(int: u64) -> Self {
-        StorageId::Custom(int)
-    }
-}
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.  
 /// and box the `AtomicRefCell` so it doesn't move when the `HashMap` reallocates
-pub(crate) struct Storage(pub(super) Box<AtomicRefCell<dyn UnknownStorage>>);
+pub(crate) struct Storage(pub(crate) Box<AtomicRefCell<dyn UnknownStorage>>);
 
 #[cfg(not(feature = "non_send"))]
 unsafe impl Send for Storage {}
@@ -217,6 +205,39 @@ impl Storage {
     }
     pub(crate) fn clear(&mut self) -> Result<(), error::Borrow> {
         self.0.try_borrow_mut()?.clear();
+        Ok(())
+    }
+}
+
+#[cfg(feature = "serde1")]
+pub(crate) struct StorageDeserializer<'a> {
+    pub(crate) storage: &'a mut Storage,
+    pub(crate) de_config: GlobalDeConfig,
+}
+
+#[cfg(feature = "serde1")]
+impl<'de> serde::de::DeserializeSeed<'de> for StorageDeserializer<'_> {
+    type Value = ();
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let deserializer: &mut dyn crate::erased_serde::Deserializer<'de> =
+            &mut crate::erased_serde::Deserializer::erase(deserializer);
+
+        let storage = self
+            .storage
+            .0
+            .try_borrow_mut()
+            .map_err(|err| serde::de::Error::custom(err))?;
+        let de = storage
+            .deserialize()
+            .ok_or_else(|| serde::de::Error::custom("Type isn't serializable."))?;
+        drop(storage);
+
+        *self.storage = (de)(self.de_config, deserializer).map_err(serde::de::Error::custom)?;
+
         Ok(())
     }
 }

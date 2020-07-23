@@ -10,7 +10,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 If you have any question or want to follow the development more closely join the [Zulip](https://shipyard.zulipchat.com).
 
 There's two big learning resources:
-- (Soon™) The Tutorial for people new to ECS or who prefer to learn by making a project.
+- [The Tutorial](https://leudz.github.io/shipyard/tutorial) for people new to ECS or who prefer to learn by making a project.
 - [The Guide](https://leudz.github.io/shipyard/guide) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
   It also goes into greater depth and provides useful recipes.
 
@@ -59,10 +59,10 @@ fn main() {
 ## Table of Contents <!-- omit in toc -->
 - [Let there be SparseSets](#let-there-be-sparsesets)
 - [Systems](#systems)
-  - [Not just storage](#not-just-storage)
-  - [Return](#return)
-  - [Generics](#generics)
-  - [All at once](#all-at-once)
+    - [Not just storage](#not-just-storage)
+    - [Return](#return)
+    - [Generics](#generics)
+    - [All at once](#all-at-once)
 - [Unique Storage (Resource)](#unique-storage-resource)
 - [!Send and !Sync Components](#send-and-sync-components)
 - [Workload](#workload)
@@ -205,7 +205,7 @@ You can make workloads without it but I strongly recommended to use it.
 
 - **panic** *(default)* adds panicking functions
 - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
-- **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
+- **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 - **non_send** &mdash; adds methods and types required to work with `!Send` components
 - **non_sync** &mdash; adds methods and types required to work with `!Sync` components
 - **std** *(default)* &mdash; lets shipyard use the standard library
@@ -225,7 +225,9 @@ Licensed under either of
  * MIT license
    ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
-at your option.
+at your option.  
+The `erased_serde` module is a fork of [`erased_serde`](https://github.com/dtolnay/erased-serde). The original code is licensed under [MIT](src/erased_serde/ORIGINAL-MIT-LICENSE) or [APACHE-2.0](src/erased_serde/ORIGINAL-APACHE-LICENSE).  
+The modifications are licensed the same way as the rest of Shipyard's code.
 
 ## Contributing
 

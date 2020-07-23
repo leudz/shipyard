@@ -3,10 +3,16 @@ mod scheduler;
 pub use scheduler::WorkloadBuilder;
 
 use crate::atomic_refcell::AtomicRefCell;
+#[cfg(feature = "serde1")]
+use crate::atomic_refcell::RefMut;
 use crate::borrow::Borrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
+#[cfg(feature = "serde1")]
+use crate::serde_setup::{ExistingEntities, GlobalDeConfig, GlobalSerConfig, WithShared};
 use crate::storage::AllStorages;
+#[cfg(feature = "serde1")]
+use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
 use core::ops::Range;
 #[cfg(feature = "parallel")]
@@ -1199,5 +1205,194 @@ let i = world.run(sys1);
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
         self.try_entity_builder().unwrap()
+    }
+    /// Serializes the `World` the way `ser_config` defines it.
+    #[cfg(feature = "serde1")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
+    pub fn serialize<S>(
+        &self,
+        ser_config: GlobalSerConfig,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+        <S as serde::Serializer>::Ok: 'static,
+    {
+        if ser_config.same_binary == true
+            && ser_config.with_entities == true
+            && ser_config.with_shared == WithShared::PerStorage
+        {
+            serializer.serialize_newtype_struct(
+                "World",
+                &crate::storage::AllStoragesSerializer {
+                    all_storages: self.all_storages.try_borrow_mut().unwrap(),
+                    ser_config,
+                },
+            )
+        } else {
+            Err(serde::ser::Error::custom(
+                "ser_config other than default isn't implemented yet",
+            ))
+        }
+    }
+    /// Deserializes the `World` the way `de_config` defines it.
+    #[cfg(feature = "serde1")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
+    pub fn new_deserialized<'de, D>(
+        de_config: GlobalDeConfig,
+        deserializer: D,
+    ) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if de_config.existing_entities == ExistingEntities::AsNew
+            && de_config.with_shared == WithShared::PerStorage
+        {
+            let world = World::new();
+            deserializer.deserialize_struct(
+                "World",
+                &["metadata", "storages"],
+                WorldVisitor {
+                    all_storages: world
+                        .all_storages
+                        .try_borrow_mut()
+                        .map_err(serde::de::Error::custom)?,
+                    de_config,
+                },
+            )?;
+            Ok(world)
+        } else {
+            Err(serde::de::Error::custom(
+                "de_config other than default isn't implemented yet",
+            ))
+        }
+    }
+}
+
+#[cfg(feature = "serde1")]
+struct WorldVisitor<'a> {
+    all_storages: RefMut<'a, AllStorages>,
+    de_config: GlobalDeConfig,
+}
+
+#[cfg(feature = "serde1")]
+impl<'de, 'a> serde::de::Visitor<'de> for WorldVisitor<'a> {
+    type Value = ();
+
+    fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str("Could not format World")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut metadata: Vec<(StorageId, usize)> = Vec::new();
+
+        if let Some((name, types)) = map.next_entry()? {
+            match name {
+                "metadata" => (),
+                _ => todo!(),
+            }
+
+            metadata = types;
+        }
+
+        match map.next_key_seed(core::marker::PhantomData)? {
+            Some("storages") => (),
+            _ => todo!(),
+        }
+
+        map.next_value_seed(StoragesSeed {
+            metadata,
+            all_storages: self.all_storages,
+            de_config: self.de_config,
+        })?;
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "serde1")]
+struct StoragesSeed<'all> {
+    metadata: Vec<(StorageId, usize)>,
+    all_storages: RefMut<'all, AllStorages>,
+    de_config: GlobalDeConfig,
+}
+
+#[cfg(feature = "serde1")]
+impl<'de> serde::de::DeserializeSeed<'de> for StoragesSeed<'_> {
+    type Value = ();
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct StoragesVisitor<'all> {
+            metadata: Vec<(StorageId, usize)>,
+            all_storages: RefMut<'all, AllStorages>,
+            de_config: GlobalDeConfig,
+        }
+
+        impl<'de> serde::de::Visitor<'de> for StoragesVisitor<'_> {
+            type Value = ();
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                formatter.write_str("storages value")
+            }
+
+            fn visit_seq<A>(mut self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let storages = self.all_storages.storages();
+
+                for (i, (storage_id, deserialize_ptr)) in self.metadata.into_iter().enumerate() {
+                    let storage: &mut Storage =
+                        &mut storages.entry(storage_id).or_insert_with(|| {
+                            let deserialize =
+                                unsafe { crate::unknown_storage::deserialize_fn(deserialize_ptr) };
+
+                            let mut sparse_set = crate::sparse_set::SparseSet::<u8>::new();
+                            sparse_set.metadata.serde = Some(crate::sparse_set::SerdeInfos {
+                                serialization:
+                                    |sparse_set: &crate::sparse_set::SparseSet<u8>,
+                                    ser_config: GlobalSerConfig,
+                                    serializer: &mut dyn crate::erased_serde::Serializer| {
+                                        crate::erased_serde::Serialize::erased_serialize(
+                                            &crate::sparse_set::SparseSetSerializer {
+                                                sparse_set: &sparse_set,
+                                                ser_config,
+                                            },
+                                            serializer,
+                                        )
+                                    },
+                                deserialization: deserialize,
+                                with_shared: true,
+                            });
+
+                            Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
+                        });
+
+                    if seq
+                        .next_element_seed(crate::storage::StorageDeserializer {
+                            storage,
+                            de_config: self.de_config,
+                        })?
+                        .is_none()
+                    {
+                        return Err(serde::de::Error::invalid_length(i, &"more storages"));
+                    }
+                }
+
+                Ok(())
+            }
+        }
+
+        deserializer.deserialize_seq(StoragesVisitor {
+            metadata: self.metadata,
+            all_storages: self.all_storages,
+            de_config: self.de_config,
+        })
     }
 }

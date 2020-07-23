@@ -24,7 +24,7 @@ impl<'de> Deserialize<'de> for EntityId {
     {
         if deserializer.is_human_readable() {
             let (index, gen): (u64, u16) = Deserialize::deserialize(deserializer)?;
-            Ok(EntityId::new_from_pair(index, gen))
+            Ok(EntityId::new_from_pair_unchecked(index, gen))
         } else {
             Ok(EntityId(Deserialize::deserialize(deserializer)?))
         }

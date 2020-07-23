@@ -1,8 +1,8 @@
 use super::abstract_mut::AbstractMut;
 use crate::not::Not;
 use crate::sparse_set::{Metadata, Pack, RawWindowMut, Window, WindowMut};
+use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
-use core::any::TypeId;
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them

@@ -18,7 +18,7 @@ num_cpus = { version = "^1", optional = true }
 rayon = { version = "^1", optional = true }
 serde = { version = "^1", optional = true, default-features = false }
 parking_lot = { version = "^0.10" }
-hashbrown = "^0.7"
+hashbrown = "^0.8"
 
 [features]
 default = ["panic", "parallel"]
@@ -27,9 +27,11 @@ non_send = ["std"]
 non_sync = ["std"]
 std = []
 panic = []
+serde1 = ["serde"]
 
 [dev-dependencies]
 serde_json = "^1"
+serde_derive = "^1"
 
 [package.metadata.docs.rs]
 all-features = true

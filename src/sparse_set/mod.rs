@@ -1,5 +1,7 @@
 mod add_component;
 mod contains;
+#[cfg(feature = "serde1")]
+mod deser;
 mod metadata;
 pub mod sort;
 mod sparse_array;
@@ -10,6 +12,10 @@ pub use add_component::AddComponentUnchecked;
 pub use contains::Contains;
 pub use windows::{Window, WindowMut, WindowSort1};
 
+#[cfg(feature = "serde1")]
+pub(crate) use deser::SparseSetSerializer;
+#[cfg(feature = "serde1")]
+pub(crate) use metadata::SerdeInfos;
 pub(crate) use metadata::{
     LoosePack, Metadata, Pack, TightPack, UpdatePack, BUCKET_SIZE as SHARED_BUCKET_SIZE,
 };
@@ -17,11 +23,18 @@ pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
 
 use crate::error;
+#[cfg(feature = "serde1")]
+use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
+#[cfg(all(not(feature = "std"), feature = "serde1"))]
+use alloc::string::ToString;
 use alloc::vec::Vec;
-use core::any::{type_name, Any, TypeId};
+use core::any::{type_name, Any};
 use core::ptr;
+#[cfg(feature = "serde1")]
+use deser::SparseSetDeserializer;
 use sparse_array::{SparseArray, SparseSlice, SparseSliceMut};
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
@@ -897,24 +910,29 @@ impl<T> SparseSet<T> {
         self.dense.clear();
         self.data.clear();
     }
-    /// Shares `owned`'s component with `shared` entity.
-    /// Deleting `owned`'s component won't stop the sharing.
+    /// Shares `owned`'s component with `shared` entity.  
+    /// Deleting `owned`'s component won't stop the sharing.  
+    /// Trying to share an entity with itself won't do anything.
     pub fn try_share(&mut self, owned: EntityId, shared: EntityId) -> Result<(), error::Share> {
         self.sparse.allocate_at(shared);
 
-        if !self.contains_owned(shared) {
-            unsafe {
-                self.sparse
-                    .set_sparse_index_unchecked(shared, shared.gen() as usize);
+        if owned != shared {
+            if !self.contains_owned(shared) {
+                unsafe {
+                    self.sparse
+                        .set_sparse_index_unchecked(shared, shared.gen() as usize);
 
-                self.metadata
-                    .shared
-                    .set_sparse_index_unchecked(shared, owned);
+                    self.metadata
+                        .shared
+                        .set_sparse_index_unchecked(shared, owned);
+                }
+
+                Ok(())
+            } else {
+                Err(error::Share)
             }
-
-            Ok(())
         } else {
-            Err(error::Share)
+            Ok(())
         }
     }
     #[cfg(feature = "panic")]
@@ -1110,6 +1128,16 @@ impl<T> SparseSet<T> {
     }
 }
 
+#[cfg(feature = "serde1")]
+impl<T: serde::Serialize + for<'de> serde::Deserialize<'de> + 'static> SparseSet<T> {
+    /// Setup serialization for this storage.  
+    /// Needs to be called for a storage to be serialized.
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    pub fn setup_serde(&mut self, _ser_config: SerConfig) {
+        self.metadata.serde = Some(SerdeInfos::new());
+    }
+}
+
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
     fn index(&self, entity: EntityId) -> &Self::Output {
@@ -1150,6 +1178,33 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     }
     fn any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+    #[cfg(feature = "serde1")]
+    fn is_serializable(&self) -> bool {
+        self.metadata.serde.is_some()
+    }
+    #[cfg(feature = "serde1")]
+    fn skip_serialization(&self, _: GlobalSerConfig) -> bool {
+        false
+    }
+    #[cfg(feature = "serde1")]
+    fn serialize(
+        &self,
+        ser_config: GlobalSerConfig,
+        serializer: &mut dyn crate::erased_serde::Serializer,
+    ) -> crate::erased_serde::Result<crate::erased_serde::Ok> {
+        (self.metadata.serde.as_ref().unwrap().serialization)(self, ser_config, serializer)
+    }
+    #[cfg(feature = "serde1")]
+    fn deserialize(
+        &self,
+    ) -> Option<
+        fn(
+            GlobalDeConfig,
+            &mut dyn crate::erased_serde::Deserializer<'_>,
+        ) -> Result<crate::storage::Storage, crate::erased_serde::Error>,
+    > {
+        Some(self.metadata.serde.as_ref()?.deserialization)
     }
 }
 

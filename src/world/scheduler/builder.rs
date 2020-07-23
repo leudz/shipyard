@@ -4,13 +4,13 @@ use crate::borrow::Mutation;
 use crate::error;
 use crate::storage::AllStorages;
 use crate::system::System;
+use crate::type_id::TypeId;
 use crate::world::World;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
-use core::any::TypeId;
 use core::ops::Range;
 use hashbrown::hash_map::Entry;
 
@@ -125,7 +125,7 @@ impl<'a> WorkloadBuilder<'a> {
 
         let is_send_sync = F::is_send_sync();
         self.systems.push((
-            core::any::TypeId::of::<S>(),
+            TypeId::of::<S>(),
             type_name::<F>(),
             old_len..self.borrow_info.len(),
             is_send_sync,

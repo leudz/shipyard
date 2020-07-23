@@ -1,9 +1,9 @@
 use super::{IntoSortable, SparseSet};
 use crate::error;
 use crate::sparse_set::{EntityId, Pack};
+use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
-use core::any::TypeId;
 use core::cmp::Ordering;
 
 /// Struct used to sort a single storage.

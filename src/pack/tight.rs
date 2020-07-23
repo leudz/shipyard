@@ -1,10 +1,11 @@
 use crate::error;
 use crate::sparse_set::{Pack, TightPack as TightPackInfo};
+use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::any::{type_name, TypeId};
+use core::any::type_name;
 
 /// Trait used to tight pack storage(s).
 pub trait TightPack {

@@ -1,9 +1,10 @@
 use crate::error;
 use crate::sparse_set::{OldComponent, Pack};
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
-use core::any::{type_name, TypeId};
+use core::any::type_name;
 
 pub trait Removable {
     type Out;

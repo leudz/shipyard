@@ -1,21 +1,17 @@
 mod delete_any;
-mod hasher;
 
 pub use delete_any::DeleteAny;
 
-pub(crate) use hasher::TypeIdHasher;
-
-use super::{Entities, EntityId, Storage};
+use super::{Entities, EntityId, Storage, StorageId};
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::type_id::TypeId;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::any::TypeId;
 use core::cell::UnsafeCell;
-use core::hash::BuildHasherDefault;
 use hashbrown::{hash_map::Entry, HashMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
@@ -29,7 +25,7 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
     lock: RawRwLock,
-    storages: UnsafeCell<HashMap<TypeId, Storage, BuildHasherDefault<TypeIdHasher>>>,
+    storages: UnsafeCell<HashMap<StorageId, Storage>>,
     #[cfg(feature = "non_send")]
     thread_id: std::thread::ThreadId,
 }
@@ -48,14 +44,14 @@ impl AllStorages {
         #[cfg(feature = "std")]
         {
             storages.insert(
-                TypeId::of::<Entities>(),
+                TypeId::of::<Entities>().into(),
                 Storage(Box::new(AtomicRefCell::new(entities, None, true))),
             );
         }
         #[cfg(not(feature = "std"))]
         {
             storages.insert(
-                TypeId::of::<Entities>(),
+                TypeId::of::<Entities>().into(),
                 Storage(Box::new(AtomicRefCell::new(entities))),
             );
         }
@@ -68,7 +64,7 @@ impl AllStorages {
         }
     }
     pub(crate) fn entities(&self) -> Result<Ref<'_, Entities>, error::Borrow> {
-        let type_id = TypeId::of::<Entities>();
+        let type_id = TypeId::of::<Entities>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
@@ -86,7 +82,7 @@ impl AllStorages {
         }
     }
     pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, Entities>, error::Borrow> {
-        let type_id = TypeId::of::<Entities>();
+        let type_id = TypeId::of::<Entities>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
@@ -106,7 +102,7 @@ impl AllStorages {
     pub(crate) fn sparse_set<T: 'static + Send + Sync>(
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -132,7 +128,7 @@ impl AllStorages {
     pub(crate) fn sparse_set_mut<T: 'static + Send + Sync>(
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -160,7 +156,7 @@ impl AllStorages {
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
         // Sync components can be accessed by any thread with a shared access
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -188,7 +184,7 @@ impl AllStorages {
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
         // Sync components can only be accessed by the thread they were created in with a unique access
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -216,7 +212,7 @@ impl AllStorages {
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
         // Send components can be accessed by one thread at a time
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -244,7 +240,7 @@ impl AllStorages {
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
         // Send components can be accessed by one thread at a time
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -272,7 +268,7 @@ impl AllStorages {
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
         // !Send + !Sync components can only be accessed by the thread they were created in
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -300,7 +296,7 @@ impl AllStorages {
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
         // !Send + !Sync components can only be accessed by the thread they were created in
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         {
             self.lock.lock_shared();
             // SAFE we locked
@@ -324,7 +320,7 @@ impl AllStorages {
         sparse_set
     }
     pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
@@ -338,7 +334,7 @@ impl AllStorages {
         }
     }
     pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
@@ -354,7 +350,7 @@ impl AllStorages {
     /// Removes a unique storage.  
     /// Fails if the storage is borrowed.
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -399,7 +395,7 @@ impl AllStorages {
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -418,7 +414,7 @@ impl AllStorages {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_send")]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -437,7 +433,7 @@ impl AllStorages {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_sync")]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -457,7 +453,7 @@ impl AllStorages {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
-        let type_id = TypeId::of::<T>();
+        let type_id = TypeId::of::<T>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -522,7 +518,11 @@ impl AllStorages {
         }
 
         for storage in storage_to_unpack {
-            storages.get_mut(&storage).unwrap().unpack(entity).unwrap();
+            storages
+                .get_mut(&StorageId::TypeId(storage))
+                .unwrap()
+                .unpack(entity)
+                .unwrap();
         }
     }
     /// Deletes all entities and their components.
@@ -1147,5 +1147,71 @@ let i = all_storages.run(sys1);
             inner: self,
             borrow: Borrow::None,
         })
+    }
+    #[cfg(feature = "serde1")]
+    pub(crate) fn storages(&mut self) -> &mut HashMap<StorageId, Storage> {
+        // SAFE we have exclusive access
+        unsafe { &mut *self.storages.get() }
+    }
+}
+
+#[cfg(feature = "serde1")]
+pub(crate) struct AllStoragesSerializer<'a> {
+    pub(crate) all_storages: RefMut<'a, AllStorages>,
+    pub(crate) ser_config: crate::serde_setup::GlobalSerConfig,
+}
+
+#[cfg(feature = "serde1")]
+impl serde::Serialize for AllStoragesSerializer<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+    S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let all_storages = unsafe { &*self.all_storages.storages.get() };
+
+        let mut storages = Vec::with_capacity(all_storages.len());
+
+        let metadata = all_storages
+            .iter()
+            .filter_map(|(type_id, storage)| {
+                let storage = storage.0.try_borrow().unwrap();
+
+                if storage.is_serializable() && !storage.skip_serialization(self.ser_config) {
+                    let result = match storage.deserialize() {
+                        Some(deserialize) => Ok((
+                            type_id,
+                            crate::unknown_storage::deserialize_ptr(deserialize),
+                        )),
+                        None => Err(serde::ser::Error::custom(
+                            "Unknown storage's implementation is incorrect.",
+                        )),
+                    };
+
+                    storages.push(storage);
+
+                    Some(result)
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<_>, S::Error>>()?;
+
+        let mut state = serializer.serialize_struct("AllStorages", 2)?;
+
+        state.serialize_field("metadata", &metadata)?;
+        state.serialize_field(
+            "storages",
+            &storages
+                .iter()
+                .map(|storage| crate::unknown_storage::StorageSerializer {
+                    unknown_storage: &**storage,
+                    ser_config: self.ser_config,
+                })
+                .collect::<Vec<_>>(),
+        )?;
+
+        state.end()
     }
 }

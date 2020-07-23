@@ -122,7 +122,7 @@
 //!
 //! - **panic** *(default)* adds panicking functions
 //! - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
-//! - **serde** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
+//! - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 //! - **non_send** &mdash; add methods and types required to work with `!Send` components
 //! - **non_sync** &mdash; add methods and types required to work with `!Sync` components
 //! - **std** *(default)* &mdash; let shipyard use the standard library
@@ -148,6 +148,8 @@ mod atomic_refcell;
 mod borrow;
 mod delete;
 mod entity_builder;
+#[cfg(feature = "serde1")]
+mod erased_serde;
 /// Contains all error types.
 pub mod error;
 mod get;
@@ -155,10 +157,13 @@ mod iter;
 mod not;
 mod pack;
 mod remove;
+#[cfg(feature = "serde1")]
+mod serde_setup;
 mod sparse_set;
 mod storage;
 mod system;
 mod system_macro;
+mod type_id;
 mod unknown_storage;
 mod view;
 mod world;
@@ -185,11 +190,13 @@ pub use iter::{
 pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
+#[cfg(feature = "serde1")]
+pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
 pub use sparse_set::{
     sort, sort::IntoSortable, AddComponentUnchecked, Contains, OldComponent, SparseSet, Window,
     WindowMut,
 };
-pub use storage::{AllStorages, DeleteAny, Entities, EntityId};
+pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 #[cfg(feature = "parallel")]

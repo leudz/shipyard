@@ -155,3 +155,18 @@ fn shared_override() {
         })
         .unwrap();
 }
+
+#[test]
+fn self_shared() {
+    let world = World::new();
+
+    world
+        .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
+            let shared = entities.add_entity((), ());
+
+            u32s.try_share(shared, shared).unwrap();
+
+            assert!(u32s.get(shared).is_err());
+        })
+        .unwrap();
+}

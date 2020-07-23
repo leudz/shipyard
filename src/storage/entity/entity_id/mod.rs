@@ -1,4 +1,4 @@
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde1")]
 mod serde;
 
 use core::num::NonZeroU64;
@@ -41,10 +41,11 @@ impl EntityId {
         EntityId(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
 
-    /// Make a new EntityId with the given generation and index.
-    #[cfg(feature = "serde")]
+    /// Make a new `EntityId` with the given generation and index.  
+    /// It must be alive in the `World` it is used with.
+    #[cfg(feature = "serde1")]
     #[inline]
-    pub(crate) fn new_from_pair(index: u64, gen: u16) -> Self {
+    pub(crate) fn new_from_pair_unchecked(index: u64, gen: u16) -> Self {
         assert!(index < Self::INDEX_MASK);
         // SAFE never zero
         EntityId(unsafe {

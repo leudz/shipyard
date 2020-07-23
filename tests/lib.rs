@@ -2,7 +2,7 @@
 mod book;
 mod borrow;
 mod iteration;
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde1")]
 mod serde;
 mod window;
 mod workload;

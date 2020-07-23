@@ -1,8 +1,8 @@
 use crate::sparse_set::Pack;
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
-use core::any::TypeId;
 
 pub trait ViewAddEntity {
     type Component;
