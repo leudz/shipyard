@@ -1165,7 +1165,7 @@ pub(crate) struct AllStoragesSerializer<'a> {
 impl serde::Serialize for AllStoragesSerializer<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-    S: serde::Serializer,
+        S: serde::Serializer,
     {
         use serde::ser::SerializeStruct;
 
