@@ -449,7 +449,7 @@ impl Debug for Inserted {
             Self::NotUpdatePacked => fmt
                 .write_str("The storage isn't update packed. Use `view.update_pack()` to pack it."),
             Self::NotInbound => {
-                fmt.write_str("This window doesn't contain the inserted components.")
+                fmt.write_str("This window does not contain the inserted components.")
             }
         }
     }
@@ -477,7 +477,7 @@ impl Debug for Modified {
             Self::NotUpdatePacked => fmt
                 .write_str("The storage isn't update packed. Use `view.update_pack()` to pack it."),
             Self::NotInbound => {
-                fmt.write_str("This window doesn't contain the modified components.")
+                fmt.write_str("This window does not contain the modified components.")
             }
         }
     }
@@ -505,7 +505,7 @@ impl Debug for InsertedOrModified {
             Self::NotUpdatePacked => fmt
                 .write_str("The storage isn't update packed. Use `view.update_pack()` to pack it."),
             Self::NotInbound => {
-                fmt.write_str("This window doesn't contain the inserted or modified components.")
+                fmt.write_str("This window does not contain the inserted or modified components.")
             }
         }
     }
@@ -517,7 +517,7 @@ impl Display for InsertedOrModified {
     }
 }
 
-/// Error when using `get` with an entity that doesn't have any component in the requested storage(s).
+/// Error when using `get` with an entity that does not have any component in the requested storage(s).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MissingComponent {
     pub id: EntityId,
@@ -530,7 +530,7 @@ impl Error for MissingComponent {}
 impl Debug for MissingComponent {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         fmt.write_fmt(format_args!(
-            "{:?} doesn't have a {} component.",
+            "{:?} does not have a {} component.",
             self.id, self.name
         ))
     }
@@ -681,7 +681,7 @@ impl Debug for Apply {
         match self {
             Self::IdenticalIds => f.write_str("Cannot use apply with identical components."),
             Self::MissingComponent(id) => f.write_fmt(format_args!(
-                "Entity {:?} doesn't have any component in this storage.",
+                "Entity {:?} does not have any component in this storage.",
                 id
             )),
         }
