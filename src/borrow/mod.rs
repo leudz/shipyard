@@ -504,6 +504,30 @@ impl<'a, T: 'static> Borrow<'a> for FakeBorrow<T> {
     }
 }
 
+impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
+    fn try_borrow(
+        all_storages: &'a AtomicRefCell<AllStorages>,
+        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
+    ) -> Result<Self, error::GetStorage> {
+        #[cfg(feature = "parallel")]
+        {
+            Ok(T::try_borrow(all_storages, thread_pool).ok())
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            Ok(T::try_borrow(all_storages).ok())
+        }
+    }
+
+    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+        T::borrow_infos(infos);
+    }
+
+    fn is_send_sync() -> bool {
+        T::is_send_sync()
+    }
+}
+
 macro_rules! impl_borrow {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: Borrow<'a>),+> Borrow<'a> for ($($type,)+) {
