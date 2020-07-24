@@ -100,7 +100,7 @@ fn all_storages_double_borrow() {
 #[test]
 fn all_storages_option_borrow() {
     let world = World::new();
-    let all_storages = world.borrow::<AllStoragesViewMut>();
+    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
 
     let u32s = all_storages.try_borrow::<Option<View<u32>>>().unwrap();
 
