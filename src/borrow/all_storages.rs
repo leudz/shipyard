@@ -145,6 +145,12 @@ impl<'a, T: 'static> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMut<'a, T>>
     }
 }
 
+impl<'a, T: AllStoragesBorrow<'a>> AllStoragesBorrow<'a> for Option<T> {
+    fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
+        Ok(T::try_borrow(all_storages).ok())
+    }
+}
+
 macro_rules! impl_all_storages_borrow {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: AllStoragesBorrow<'a>),+> AllStoragesBorrow<'a> for ($($type,)+) {
