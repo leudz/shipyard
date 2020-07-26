@@ -52,8 +52,6 @@ impl Display for Borrow {
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
     StorageBorrow((&'static str, Borrow)),
-    Unique { name: &'static str, borrow: Borrow },
-    NonUnique((&'static str, Borrow)),
     MissingUnique(&'static str),
     Entities(Borrow),
 }
@@ -79,17 +77,7 @@ impl Debug for GetStorage {
                 Borrow::MultipleThreads => fmt.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
                 Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
             },
-            Self::Unique {name, borrow} => match borrow {
-                Borrow::Shared => fmt.write_fmt(format_args!("{}'s storage is unique.\nYou can access it with UniqueView instead of View.", name)),
-                Borrow::Unique => fmt.write_fmt(format_args!("{}'s storage is unique.\nYou can access it with UniqueViewMut instead of ViewMut.", name)),
-                _ => unreachable!()
-            },
             Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {}.\nYou can register it with: world.add_unique(/* your_unique */);", name)),
-            Self::NonUnique((name, mutation)) => match mutation {
-                Borrow::Shared => fmt.write_fmt(format_args!("{}'s storage isn't unique.\nYou might have forgotten to declare it, add world.add_unique(/* your_storage */) before accessing it.", name)),
-                Borrow::Unique => fmt.write_fmt(format_args!("{}'s storage isn't unique.\nYou might have forgotten to declare it, add world.add_unique(/* your_storage */) before accessing it.", name)),
-                _ => unreachable!(),
-            },
             Self::Entities(borrow) => match borrow {
                 Borrow::Unique => fmt.write_str("Cannot mutably borrow Entities storage while it's already borrowed."),
                 Borrow::Shared => {

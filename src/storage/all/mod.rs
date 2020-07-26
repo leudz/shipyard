@@ -2,7 +2,7 @@ mod delete_any;
 
 pub use delete_any::DeleteAny;
 
-use super::{Entities, EntityId, Storage, StorageId};
+use super::{Entities, EntityId, Storage, StorageId, Unique};
 use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::entity_builder::EntityBuilder;
@@ -320,7 +320,7 @@ impl AllStorages {
         sparse_set
     }
     pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
@@ -334,7 +334,7 @@ impl AllStorages {
         }
     }
     pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_shared();
         // SAFE we locked
         let storages = unsafe { &*self.storages.get() };
@@ -350,7 +350,7 @@ impl AllStorages {
     /// Removes a unique storage.  
     /// Fails if the storage is borrowed.
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -359,9 +359,6 @@ impl AllStorages {
             if let Some(get_storage) = entry.get().unique_mut::<T>().err() {
                 self.lock.unlock_exclusive();
                 match get_storage {
-                    error::GetStorage::NonUnique((name, _)) => {
-                        Err(error::UniqueRemove::NonUnique(name))
-                    }
                     error::GetStorage::StorageBorrow(infos) => {
                         Err(error::UniqueRemove::StorageBorrow(infos))
                     }
@@ -395,7 +392,7 @@ impl AllStorages {
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -414,7 +411,7 @@ impl AllStorages {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_send")]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -433,7 +430,7 @@ impl AllStorages {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "non_sync")]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -453,7 +450,7 @@ impl AllStorages {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
-        let type_id = TypeId::of::<T>().into();
+        let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };

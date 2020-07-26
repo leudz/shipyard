@@ -128,6 +128,15 @@ fn add_unique_while_borrowing() {
 }
 
 #[test]
+fn sparse_set_and_unique() {
+    let world = World::new();
+    world.try_add_unique(0u32).unwrap();
+    world
+        .try_borrow::<(UniqueViewMut<u32>, ViewMut<u32>)>()
+        .unwrap();
+}
+
+#[test]
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 fn exhaustive_list() {
     let world = World::new();

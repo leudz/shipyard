@@ -112,16 +112,7 @@ impl Storage {
             self.0.try_borrow().map_err(|borrow| {
                 error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
             })?,
-            |unknown| {
-                if let Some(storage) = unknown.sparse_set::<T>() {
-                    Ok(storage)
-                } else {
-                    Err(error::GetStorage::Unique {
-                        name: core::any::type_name::<T>(),
-                        borrow: error::Borrow::Shared,
-                    })
-                }
-            },
+            |unknown| Ok(unknown.sparse_set::<T>().unwrap()),
         )
     }
     /// Mutably borrows the component container.
@@ -132,16 +123,7 @@ impl Storage {
             self.0.try_borrow_mut().map_err(|borrow| {
                 error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
             })?,
-            |unknown| {
-                if let Some(storage) = unknown.sparse_set_mut::<T>() {
-                    Ok(storage)
-                } else {
-                    Err(error::GetStorage::Unique {
-                        name: core::any::type_name::<T>(),
-                        borrow: error::Borrow::Unique,
-                    })
-                }
-            },
+            |unknown| Ok(unknown.sparse_set_mut::<T>().unwrap()),
         )
     }
     /// Immutably borrows entities' storage.
@@ -161,16 +143,7 @@ impl Storage {
             self.0.try_borrow().map_err(|borrow| {
                 error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
             })?,
-            |unknown| {
-                if let Some(storage) = unknown.unique::<T>() {
-                    Ok(storage)
-                } else {
-                    Err(error::GetStorage::NonUnique((
-                        core::any::type_name::<T>(),
-                        error::Borrow::Shared,
-                    )))
-                }
-            },
+            |unknown| Ok(unknown.unique::<T>().unwrap()),
         )
     }
     pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
@@ -178,16 +151,7 @@ impl Storage {
             self.0.try_borrow_mut().map_err(|borrow| {
                 error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
             })?,
-            |unknown| {
-                if let Some(storage) = unknown.unique_mut::<T>() {
-                    Ok(storage)
-                } else {
-                    Err(error::GetStorage::NonUnique((
-                        core::any::type_name::<T>(),
-                        error::Borrow::Unique,
-                    )))
-                }
-            },
+            |unknown| Ok(unknown.unique_mut::<T>().unwrap()),
         )
     }
     /// Mutably borrows the container and delete `index`.
