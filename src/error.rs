@@ -592,7 +592,6 @@ pub enum UniqueRemove {
     AllStorages,
     MissingUnique(&'static str),
     StorageBorrow((&'static str, Borrow)),
-    NonUnique(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -608,7 +607,6 @@ impl Debug for UniqueRemove {
                 Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
                 _ => unreachable!()
             }
-            Self::NonUnique(name) => fmt.write_fmt(format_args!("{}'s storage isn't unique.", name)),
         }
     }
 }
