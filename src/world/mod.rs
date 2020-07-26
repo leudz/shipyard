@@ -35,10 +35,7 @@ impl Default for World {
             World {
                 all_storages: AtomicRefCell::new(AllStorages::new(), None, true),
                 #[cfg(feature = "parallel")]
-                thread_pool: ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get_physical())
-                    .build()
-                    .unwrap(),
+                thread_pool: ThreadPoolBuilder::new().build().unwrap(),
                 scheduler: AtomicRefCell::new(Default::default(), None, true),
             }
         }
@@ -47,10 +44,7 @@ impl Default for World {
             World {
                 all_storages: AtomicRefCell::new(AllStorages::new()),
                 #[cfg(feature = "parallel")]
-                thread_pool: ThreadPoolBuilder::new()
-                    .num_threads(num_cpus::get_physical())
-                    .build()
-                    .unwrap(),
+                thread_pool: ThreadPoolBuilder::new().build().unwrap(),
                 scheduler: AtomicRefCell::new(Default::default()),
             }
         }
@@ -66,25 +60,27 @@ impl World {
     /// Custom threads can be useful when working with wasm for example.
     #[cfg(feature = "parallel")]
     #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
-    pub fn new_with_custom_threads<F: FnMut(rayon::ThreadBuilder) -> Result<(), std::io::Error>>(
-        f: F,
-    ) -> Self {
+    pub fn new_with_custom_thread_pool(thread_pool: ThreadPool) -> Self {
         World {
             all_storages: AtomicRefCell::new(AllStorages::new(), None, true),
-            #[cfg(feature = "parallel")]
-            thread_pool: ThreadPoolBuilder::new()
-                .num_threads(num_cpus::get_physical())
-                .spawn_handler(f)
-                .build()
-                .unwrap(),
+            thread_pool,
             scheduler: AtomicRefCell::new(Default::default(), None, true),
         }
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "panic")]
@@ -92,10 +88,19 @@ impl World {
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         self.try_add_unique(component).unwrap();
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     pub fn try_add_unique<T: 'static + Send + Sync>(
@@ -105,10 +110,19 @@ impl World {
         self.all_storages.try_borrow()?.add_unique(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [NonSend]: struct.NonSend.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -123,11 +137,20 @@ impl World {
             .add_unique_non_send(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [NonSend]: struct.NonSend.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -136,10 +159,19 @@ impl World {
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
         self.try_add_unique_non_send::<T>(component).unwrap()
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [NonSync]: struct.NonSync.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -154,11 +186,20 @@ impl World {
             .add_unique_non_sync(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [NonSync]: struct.NonSync.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -167,10 +208,19 @@ impl World {
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         self.try_add_unique_non_sync::<T>(component).unwrap()
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [NonSendSync]: struct.NonSendSync.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -185,11 +235,20 @@ impl World {
             .add_unique_non_send_sync(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     /// [NonSendSync]: struct.NonSendSync.html
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -202,14 +261,34 @@ impl World {
         self.try_add_unique_non_send_sync::<T>(component).unwrap()
     }
     /// Removes a unique storage.
+    ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .try_borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
             .try_remove_unique::<T>()
     }
-    /// Removes a unique storage.
+    /// Removes a unique storage.  
     /// Unwraps errors.
+    ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
+    /// [AllStorages]: struct.AllStorages.html
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn remove_unique<T: 'static>(&self) -> T {
@@ -302,7 +381,19 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
+- [AllStorages] (shared) + storage (exclusive or shared) for all other views
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Unique storage didn't exist.
+
+### Example
 ```
 use shipyard::{EntitiesView, View, ViewMut, World};
 
@@ -313,6 +404,7 @@ let (entities, mut usizes) = world
     .try_borrow::<(EntitiesView, ViewMut<usize>)>()
     .unwrap();
 ```
+[AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [AllStoragesViewMut]: struct.AllStorages.html
@@ -429,7 +521,19 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
+- [AllStorages] (shared) + storage (exclusive or shared) for all other views
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Unique storage didn't exist.
+
+### Example
 ```
 use shipyard::{EntitiesView, View, ViewMut, World};
 
@@ -438,6 +542,7 @@ let world = World::new();
 let u32s = world.borrow::<View<u32>>();
 let (entities, mut usizes) = world.borrow::<(EntitiesView, ViewMut<usize>)>();
 ```
+[AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [AllStoragesViewMut]: struct.AllStorages.html
@@ -548,7 +653,19 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
+- [AllStorages] (shared) + storage (exclusive or shared) for all other views
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Unique storage didn't exist.
+
+### Example
 ```
 use shipyard::{EntityId, Get, ViewMut, World};
 
@@ -562,6 +679,7 @@ let world = World::new();
 
 world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
 ```
+[AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [AllStoragesViewMut]: struct.AllStorages.html
@@ -684,7 +802,19 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
+- [AllStorages] (shared) + storage (exclusive or shared) for all other views
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Unique storage didn't exist.
+
+### Example
 ```
 use shipyard::{EntityId, Get, ViewMut, World};
 
@@ -698,6 +828,7 @@ let world = World::new();
 
 world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
 ```
+[AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [AllStoragesViewMut]: struct.AllStorages.html
@@ -811,7 +942,19 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
+- [AllStorages] (shared) + storage (exclusive or shared) for all other views
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Unique storage didn't exist.
+
+### Example
 ```
 use shipyard::{View, ViewMut, World};
 
@@ -829,6 +972,7 @@ world
 
 let i = world.try_run(sys1).unwrap();
 ```
+[AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [AllStoragesViewMut]: struct.AllStorages.html
@@ -949,7 +1093,19 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
+- [AllStorages] (shared) + storage (exclusive or shared) for all other views
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Unique storage didn't exist.
+
+### Example
 ```
 use shipyard::{View, ViewMut, World};
 
@@ -965,6 +1121,7 @@ world.run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
 
 let i = world.run(sys1);
 ```
+[AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [AllStoragesViewMut]: struct.AllStorages.html
@@ -989,6 +1146,15 @@ let i = world.run(sys1);
         self.try_run(s).unwrap()
     }
     /// Modifies the current default workload to `name`.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload didn't exist.
     pub fn try_set_default_workload(
         &self,
         name: impl Into<Cow<'static, str>>,
@@ -1006,6 +1172,15 @@ let i = world.run(sys1);
     }
     /// Modifies the current default workload to `name`.  
     /// Unwraps errors.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload didn't exist.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
@@ -1014,6 +1189,15 @@ let i = world.run(sys1);
     /// A workload is a collection of systems. They will execute as much in parallel as possible.  
     /// They are evaluated first to last when they can't be parallelized.  
     /// The default workload will automatically be set to the first workload added.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload with an identical name already present.
     ///
     /// ### Example
     /// ```
@@ -1072,6 +1256,15 @@ let i = world.run(sys1);
     /// The default workload will automatically be set to the first workload added.  
     /// Unwraps errors.
     ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload with an identical name already present.
+    ///
     /// ### Example
     /// ```
     /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
@@ -1113,6 +1306,18 @@ let i = world.run(sys1);
         self.try_add_workload(name).unwrap()
     }
     /// Runs the `name` workload.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (shared)
+    /// - Systems' borrow as they are executed
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload wasn't found.
+    /// - Storage borrow failed.
+    /// - User error returned by system.
     pub fn try_run_workload(&self, name: impl AsRef<str> + Sync) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
@@ -1126,6 +1331,18 @@ let i = world.run(sys1);
     }
     /// Runs the `name` workload.  
     /// Unwraps error.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (shared)
+    /// - Systems' borrow as they are executed
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload wasn't found.
+    /// - Storage borrow failed.
+    /// - User error returned by system.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run_workload(&self, name: impl AsRef<str> + Sync) {
@@ -1166,7 +1383,18 @@ let i = world.run(sys1);
         }
         Ok(())
     }
-    /// Run the default workload.
+    /// Run the default workload if there is one.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (shared)
+    /// - Systems' borrow as they are executed
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Storage borrow failed.
+    /// - User error returned by system.
     pub fn try_run_default(&self) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
@@ -1177,36 +1405,75 @@ let i = world.run(sys1);
         }
         Ok(())
     }
-    /// Run the default workload.  
+    /// Run the default workload if there is one.  
     /// Unwraps error.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (shared)
+    /// - Systems' borrow as they are executed
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Storage borrow failed.
+    /// - User error returned by system.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn run_default(&self) {
         self.try_run_default().unwrap();
     }
     /// Used to create an entity without having to borrow its storage explicitly.  
-    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
-    /// Borrows [AllStorages].
+    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.
     ///
-    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
-    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
     /// [AllStorages]: struct.AllStorages.html
+    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
     pub fn try_entity_builder(&self) -> Result<EntityBuilder<'_, (), ()>, error::Borrow> {
         Ok(EntityBuilder::new(self.all_storages.try_borrow()?))
     }
     /// Used to create an entity without having to borrow its storage explicitly.  
     /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
-    /// Borrows [AllStorages], panics if already exclusively borrowed.
+    /// Unwraps error.
     ///
-    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
-    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    ///
     /// [AllStorages]: struct.AllStorages.html
+    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
+    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
         self.try_entity_builder().unwrap()
     }
-    /// Serializes the `World` the way `ser_config` defines it.
+    /// Serializes the [World] the way `ser_config` defines it.
+    ///
+    /// ### Borrows
+    ///
+    /// - [AllStorages] (exclusively)
+    ///
+    /// ### Errors
+    ///
+    /// - [AllStorages] borrow failed.
+    /// - Serialization error.
+    /// - Config not implemented. (temporary)
+    ///
+    /// [AllStorages]: struct.AllStorages.html
+    /// [World]: struct.World.html
     #[cfg(feature = "serde1")]
     #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
     pub fn serialize<S>(
@@ -1225,7 +1492,10 @@ let i = world.run(sys1);
             serializer.serialize_newtype_struct(
                 "World",
                 &crate::storage::AllStoragesSerializer {
-                    all_storages: self.all_storages.try_borrow_mut().unwrap(),
+                    all_storages: self
+                        .all_storages
+                        .try_borrow_mut()
+                        .map_err(|err| serde::ser::Error::custom(err))?,
                     ser_config,
                 },
             )
@@ -1235,7 +1505,14 @@ let i = world.run(sys1);
             ))
         }
     }
-    /// Deserializes the `World` the way `de_config` defines it.
+    /// Creates a new [World] from a deserializer the way `de_config` defines it.
+    ///
+    /// ### Errors
+    ///
+    /// - Deserialization error.
+    /// - Config not implemented. (temporary)
+    ///
+    /// [World]: struct.World.html
     #[cfg(feature = "serde1")]
     #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
     pub fn new_deserialized<'de, D>(

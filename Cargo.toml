@@ -14,7 +14,6 @@ repository = "https://github.com/leudz/shipyard"
 members = ["bunny_demo", "tutorial"]
 
 [dependencies]
-num_cpus = { version = "^1", optional = true }
 rayon = { version = "^1", optional = true }
 serde = { version = "^1", optional = true, default-features = false }
 parking_lot = { version = "^0.10" }
@@ -22,7 +21,7 @@ hashbrown = "^0.8"
 
 [features]
 default = ["panic", "parallel"]
-parallel = ["rayon", "num_cpus", "std"]
+parallel = ["rayon", "std"]
 non_send = ["std"]
 non_sync = ["std"]
 std = []
