@@ -265,10 +265,13 @@ impl World {
     /// ### Borrows
     ///
     /// - [AllStorages] (shared)
+    /// - `T` storage (exclusive)
     ///
     /// ### Errors
     ///
     /// - [AllStorages] borrow failed.
+    /// - `T` storage borrow failed.
+    /// - `T` storage did not exist.
     ///
     /// [AllStorages]: struct.AllStorages.html
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
@@ -283,10 +286,13 @@ impl World {
     /// ### Borrows
     ///
     /// - [AllStorages] (shared)
+    /// - `T` storage (exclusive)
     ///
     /// ### Errors
     ///
     /// - [AllStorages] borrow failed.
+    /// - `T` storage borrow failed.
+    /// - `T` storage did not exist.
     ///
     /// [AllStorages]: struct.AllStorages.html
     #[cfg(feature = "panic")]
@@ -392,7 +398,7 @@ You can use:
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
-- Unique storage didn't exist.
+- Unique storage did not exist.
 
 ### Example
 ```
@@ -533,7 +539,7 @@ You can use:
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
-- Unique storage didn't exist.
+- Unique storage did not exist.
 
 ### Example
 ```
@@ -666,7 +672,8 @@ You can use:
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
-- Unique storage didn't exist.
+- Unique storage did not exist.
+- Error returned by user.
 
 ### Example
 ```
@@ -816,7 +823,8 @@ You can use:
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
-- Unique storage didn't exist.
+- Unique storage did not exist.
+- Error returned by user.
 
 ### Example
 ```
@@ -957,7 +965,8 @@ You can use:
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
-- Unique storage didn't exist.
+- Unique storage did not exist.
+- Error returned by user.
 
 ### Example
 ```
@@ -1109,7 +1118,8 @@ You can use:
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
-- Unique storage didn't exist.
+- Unique storage did not exist.
+- Error returned by user.
 
 ### Example
 ```
@@ -1160,7 +1170,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
-    /// - Workload didn't exist.
+    /// - Workload did not exist.
     pub fn try_set_default_workload(
         &self,
         name: impl Into<Cow<'static, str>>,
@@ -1186,7 +1196,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
-    /// - Workload didn't exist.
+    /// - Workload did not exist.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
@@ -1321,7 +1331,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
-    /// - Workload wasn't found.
+    /// - Workload did not exist.
     /// - Storage borrow failed.
     /// - User error returned by system.
     pub fn try_run_workload(&self, name: impl AsRef<str> + Sync) -> Result<(), error::RunWorkload> {
@@ -1346,7 +1356,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
-    /// - Workload wasn't found.
+    /// - Workload did not exist.
     /// - Storage borrow failed.
     /// - User error returned by system.
     #[cfg(feature = "panic")]

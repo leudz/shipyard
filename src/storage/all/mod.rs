@@ -348,7 +348,15 @@ impl AllStorages {
         }
     }
     /// Removes a unique storage.  
-    /// Fails if the storage is borrowed.
+    ///
+    /// ### Borrows
+    ///
+    /// - `T` storage (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - `T` storage borrow failed.
+    /// - `T` storage did not exist.
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         let type_id = TypeId::of::<Unique<T>>().into();
         self.lock.lock_exclusive();
@@ -380,14 +388,22 @@ impl AllStorages {
         }
     }
     /// Removes a unique storage.  
-    /// Panics if the storage is borrowed.
+    /// Unwraps errors.
+    ///
+    /// ### Borrows
+    ///
+    /// - `T` storage (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - `T` storage borrow failed.
+    /// - `T` storage did not exist.
     pub fn remove_unique<T: 'static>(&self) -> T {
         self.try_remove_unique::<T>().unwrap()
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
-    /// Unwraps errors.
     ///
     /// [UniqueView]: struct.UniqueView.html
     /// [UniqueViewMut]: struct.UniqueViewMut.html
@@ -443,7 +459,6 @@ impl AllStorages {
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
-    /// Unwraps errors.
     ///
     /// [NonSync]: struct.NonSync.html
     /// [UniqueView]: struct.UniqueView.html
@@ -462,6 +477,7 @@ impl AllStorages {
     }
     /// Delete an entity and all its components.
     /// Returns `true` if `entity` was alive.
+    ///
     /// ### Example
     /// ```
     /// use shipyard::{AllStoragesViewMut, EntitiesViewMut, Get, View, ViewMut, World};
@@ -603,7 +619,17 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- Storage (exclusive or shared)
+
+### Errors
+
+- Storage borrow failed.
+- Unique storage did not exist.
+
+### Example
 ```
 use shipyard::{AllStoragesViewMut, EntitiesView, View, ViewMut, World};
 
@@ -703,7 +729,17 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- Storage (exclusive or shared)
+
+### Errors
+
+- Storage borrow failed.
+- Unique storage did not exist.
+
+### Example
 ```
 use shipyard::{AllStoragesViewMut, EntitiesView, View, ViewMut, World};
 
@@ -803,6 +839,15 @@ You can use:
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
     #[doc = "
+### Borrows
+
+- Storage (exclusive or shared)
+### Errors
+
+- Storage borrow failed.
+- Unique storage did not exist.
+- Error returned by user.
+
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [World]: struct.World.html
@@ -896,6 +941,16 @@ You can use:
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
     #[doc = "
+### Borrows
+
+- Storage (exclusive or shared)
+
+### Errors
+
+- Storage borrow failed.
+- Unique storage did not exist.
+- Error returned by user.
+
 [EntitiesView]: struct.Entities.html
 [EntitiesViewMut]: struct.Entities.html
 [World]: struct.World.html
@@ -988,7 +1043,17 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- Storage (exclusive or shared)
+### Errors
+
+- Storage borrow failed.
+- Unique storage did not exist.
+- Error returned by user.
+
+### Example
 ```
 use shipyard::{AllStoragesViewMut, View, ViewMut, World};
 
@@ -1096,7 +1161,18 @@ You can use:
         not(all(feature = "non_send", feature = "non_sync")),
         doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
     )]
-    #[doc = "### Example
+    #[doc = "
+### Borrows
+
+- Storage (exclusive or shared)
+
+### Errors
+
+- Storage borrow failed.
+- Unique storage did not exist.
+- Error returned by user.
+
+### Example
 ```
 use shipyard::{AllStoragesViewMut, View, ViewMut, World};
 
@@ -1140,7 +1216,6 @@ let i = all_storages.run(sys1);
     }
     /// Used to create an entity without having to borrow its storage explicitly.  
     /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
-    /// Borrows [AllStorages], panics if already exclusively borrowed.
     ///
     /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
     /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
