@@ -27,6 +27,20 @@ fn simple_borrow() {
 }
 
 #[test]
+fn option_borrow() {
+    let world = World::new();
+
+    let u32s = world.try_borrow::<Option<View<u32>>>().unwrap();
+
+    let u32s = u32s.unwrap();
+    assert_eq!(u32s.len(), 0);
+    drop(u32s);
+    let _i32s = world.try_borrow::<ViewMut<i32>>().unwrap();
+    let other_i32s = world.try_borrow::<Option<View<i32>>>().unwrap();
+    assert!(other_i32s.is_none());
+}
+
+#[test]
 fn all_storages_simple_borrow() {
     let world = World::new();
 
@@ -81,6 +95,21 @@ fn all_storages_double_borrow() {
     let u32s = all_storages.try_borrow::<ViewMut<u32>>().unwrap();
     drop(u32s);
     all_storages.try_borrow::<ViewMut<u32>>().unwrap();
+}
+
+#[test]
+fn all_storages_option_borrow() {
+    let world = World::new();
+    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+
+    let u32s = all_storages.try_borrow::<Option<View<u32>>>().unwrap();
+
+    let u32s = u32s.unwrap();
+    assert_eq!(u32s.len(), 0);
+    drop(u32s);
+    let _i32s = all_storages.try_borrow::<ViewMut<i32>>().unwrap();
+    let other_i32s = all_storages.try_borrow::<Option<View<i32>>>().unwrap();
+    assert!(other_i32s.is_none());
 }
 
 #[test]

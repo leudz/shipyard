@@ -304,7 +304,8 @@ You can use:
 * [EntitiesViewMut] for an exclusive reference to the entity storage
 * [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
+* `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
         all(feature = "parallel", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
@@ -444,7 +445,8 @@ You can use:
 * [EntitiesViewMut] for an exclusive reference to the entity storage
 * [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
+* `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
         all(feature = "parallel", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
@@ -576,7 +578,8 @@ You can use:
 * [EntitiesViewMut] for an exclusive reference to the entity storage
 * [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
+* `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
         all(feature = "parallel", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
@@ -725,7 +728,8 @@ You can use:
 * [EntitiesViewMut] for an exclusive reference to the entity storage
 * [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
+* `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
         all(feature = "parallel", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
@@ -865,7 +869,8 @@ You can use:
 * [EntitiesViewMut] for an exclusive reference to the entity storage
 * [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
+* `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
         all(feature = "parallel", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
@@ -1016,7 +1021,8 @@ You can use:
 * [EntitiesViewMut] for an exclusive reference to the entity storage
 * [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage"]
+* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
+* `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
         all(feature = "parallel", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
