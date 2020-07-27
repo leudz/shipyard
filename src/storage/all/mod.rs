@@ -72,11 +72,11 @@ impl AllStorages {
         let storage = &storages[&type_id];
         match storage.entities() {
             Ok(entities) => {
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 Ok(entities)
             }
             Err(err) => {
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 Err(err)
             }
         }
@@ -90,11 +90,11 @@ impl AllStorages {
         let storage = &storages[&type_id];
         match storage.entities_mut() {
             Ok(entities) => {
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 Ok(entities)
             }
             Err(err) => {
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 Err(err)
             }
         }
@@ -109,11 +109,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -122,7 +122,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(Storage::new::<T>)
             .sparse_set::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     pub(crate) fn sparse_set_mut<T: 'static + Send + Sync>(
@@ -135,11 +135,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set_mut::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -148,7 +148,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(Storage::new::<T>)
             .sparse_set_mut::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     #[cfg(feature = "non_send")]
@@ -163,11 +163,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -176,7 +176,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(|| Storage::new_non_send::<T>(self.thread_id))
             .sparse_set::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     #[cfg(feature = "non_send")]
@@ -191,11 +191,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set_mut::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -204,7 +204,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(|| Storage::new_non_send::<T>(self.thread_id))
             .sparse_set_mut::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     #[cfg(feature = "non_sync")]
@@ -219,11 +219,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -232,7 +232,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(Storage::new_non_sync::<T>)
             .sparse_set::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     #[cfg(feature = "non_sync")]
@@ -247,11 +247,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set_mut::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -260,7 +260,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(Storage::new_non_sync::<T>)
             .sparse_set_mut::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -275,11 +275,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -288,7 +288,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(|| Storage::new_non_send_sync::<T>(self.thread_id))
             .sparse_set::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -303,11 +303,11 @@ impl AllStorages {
             let storages = unsafe { &*self.storages.get() };
             if let Some(storage) = storages.get(&type_id) {
                 let sparse_set = storage.sparse_set_mut::<T>();
-                self.lock.unlock_shared();
+                unsafe { self.lock.unlock_shared() };
                 return sparse_set;
             }
         }
-        self.lock.unlock_shared();
+        unsafe { self.lock.unlock_shared() };
         self.lock.lock_exclusive();
         // SAFE we locked
         let storages = unsafe { &mut *self.storages.get() };
@@ -316,7 +316,7 @@ impl AllStorages {
             .entry(type_id)
             .or_insert_with(|| Storage::new_non_send_sync::<T>(self.thread_id))
             .sparse_set_mut::<T>();
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
         sparse_set
     }
     pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
@@ -326,10 +326,10 @@ impl AllStorages {
         let storages = unsafe { &*self.storages.get() };
         if let Some(storage) = storages.get(&type_id) {
             let unique = storage.unique::<T>();
-            self.lock.unlock_shared();
+            unsafe { self.lock.unlock_shared() };
             unique
         } else {
-            self.lock.unlock_shared();
+            unsafe { self.lock.unlock_shared() };
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
         }
     }
@@ -340,10 +340,10 @@ impl AllStorages {
         let storages = unsafe { &*self.storages.get() };
         if let Some(storage) = storages.get(&type_id) {
             let unique = storage.unique_mut::<T>();
-            self.lock.unlock_shared();
+            unsafe { self.lock.unlock_shared() };
             unique
         } else {
-            self.lock.unlock_shared();
+            unsafe { self.lock.unlock_shared() };
             Err(error::GetStorage::MissingUnique(core::any::type_name::<T>()))
         }
     }
@@ -365,7 +365,7 @@ impl AllStorages {
         if let Entry::Occupied(entry) = storages.entry(type_id) {
             // `.err()` to avoid borrowing `entry` in the `Ok` case
             if let Some(get_storage) = entry.get().unique_mut::<T>().err() {
-                self.lock.unlock_exclusive();
+                unsafe { self.lock.unlock_exclusive() };
                 match get_storage {
                     error::GetStorage::StorageBorrow(infos) => {
                         Err(error::UniqueRemove::StorageBorrow(infos))
@@ -376,12 +376,12 @@ impl AllStorages {
                 // We were able to lock the storage, we've still got exclusive access even though
                 // we released that lock as we're still holding the `AllStorages` lock.
                 let storage = entry.remove();
-                self.lock.unlock_exclusive();
+                unsafe { self.lock.unlock_exclusive() };
                 // SAFE T is a unique storage
                 unsafe { Ok(AtomicRefCell::into_unique::<T>(storage.0)) }
             }
         } else {
-            self.lock.unlock_exclusive();
+            unsafe { self.lock.unlock_exclusive() };
             Err(error::UniqueRemove::MissingUnique(
                 core::any::type_name::<T>(),
             ))
@@ -416,7 +416,7 @@ impl AllStorages {
         storages
             .entry(type_id)
             .or_insert_with(|| Storage::new_unique::<T>(component));
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
@@ -435,7 +435,7 @@ impl AllStorages {
         storages
             .entry(type_id)
             .or_insert_with(|| Storage::new_unique_non_send::<T>(component, self.thread_id));
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -454,7 +454,7 @@ impl AllStorages {
         storages
             .entry(type_id)
             .or_insert_with(|| Storage::new_unique_non_sync::<T>(component));
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -473,7 +473,7 @@ impl AllStorages {
         storages
             .entry(type_id)
             .or_insert_with(|| Storage::new_unique_non_send_sync::<T>(component, self.thread_id));
-        self.lock.unlock_exclusive();
+        unsafe { self.lock.unlock_exclusive() };
     }
     /// Delete an entity and all its components.
     /// Returns `true` if `entity` was alive.

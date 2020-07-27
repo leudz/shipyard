@@ -16,7 +16,7 @@ members = ["bunny_demo", "tutorial"]
 [dependencies]
 rayon = { version = "^1", optional = true }
 serde = { version = "^1", optional = true, default-features = false }
-parking_lot = { version = "^0.10" }
+parking_lot = "^0.11"
 hashbrown = "^0.8"
 
 [features]
