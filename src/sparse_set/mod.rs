@@ -81,6 +81,10 @@ impl<T> SparseSet<T> {
         &self.data
     }
     /// Returns a window over `range`.
+    ///
+    /// ### Errors
+    ///
+    /// - `range` was out of bounds.
     pub fn try_as_window<R: core::ops::RangeBounds<usize>>(
         &self,
         range: R,
@@ -89,17 +93,18 @@ impl<T> SparseSet<T> {
 
         let start = match range.start_bound() {
             Bound::Included(start) => *start,
-            Bound::Excluded(start) => *start + 1,
+            Bound::Excluded(start) => start.checked_add(1).unwrap_or(core::usize::MAX),
             Bound::Unbounded => 0,
         };
         let end = match range.end_bound() {
-            Bound::Included(end) => *end,
-            Bound::Excluded(end) => end.checked_sub(1).unwrap_or(0),
+            Bound::Included(end) => end.checked_add(1).unwrap_or(core::usize::MAX),
+            Bound::Excluded(end) => *end,
             Bound::Unbounded => self.len(),
         };
         let range = start..end;
 
-        if range.end <= self.len() {
+        let full_range = 0..self.len();
+        if full_range.contains(&start) && full_range.contains(&end.saturating_sub(1)) {
             Ok(Window::new(self, range))
         } else {
             Err(error::NotInbound::View(type_name::<T>()))
@@ -107,12 +112,20 @@ impl<T> SparseSet<T> {
     }
     /// Returns a window over `range`.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - `range` was out of bounds.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
         self.try_as_window(range).unwrap()
     }
     /// Returns a mutable window over `range`.
+    ///
+    /// ### Errors
+    ///
+    /// - `range` was out of bounds.
     pub fn try_as_window_mut<R: core::ops::RangeBounds<usize>>(
         &mut self,
         range: R,
@@ -121,22 +134,24 @@ impl<T> SparseSet<T> {
 
         let start = match range.start_bound() {
             Bound::Included(start) => *start,
-            Bound::Excluded(start) => *start + 1,
+            Bound::Excluded(start) => start.checked_add(1).unwrap_or(core::usize::MAX),
             Bound::Unbounded => 0,
         };
         let end = match range.end_bound() {
-            Bound::Included(end) => *end + 1,
+            Bound::Included(end) => end.checked_add(1).unwrap_or(core::usize::MAX),
             Bound::Excluded(end) => *end,
             Bound::Unbounded => self.len(),
         };
         let range = start..end;
 
-        if range.end <= self.len() {
+        let full_range = 0..self.len();
+        if full_range.contains(&start) && full_range.contains(&end.saturating_sub(1)) {
             if let Pack::Update(update) = &self.metadata.pack {
                 if !range.contains(&(update.inserted + update.modified)) {
                     return Err(error::NotInbound::UpdatePack);
                 }
             }
+
             Ok(WindowMut::new(self, range))
         } else {
             Err(error::NotInbound::View(type_name::<T>()))
@@ -144,6 +159,10 @@ impl<T> SparseSet<T> {
     }
     /// Returns a mutable window over `range`.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - `range` was out of bounds.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
@@ -431,6 +450,10 @@ impl<T> SparseSet<T> {
 
 impl<T> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage is tightly or loosly packed.
     pub fn try_remove(&mut self, entity: EntityId) -> Result<Option<OldComponent<T>>, error::Remove>
     where
         T: 'static,
@@ -460,6 +483,10 @@ impl<T> SparseSet<T> {
     }
     /// Removes `entity`'s component from this storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage is tightly or loosly packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn remove(&mut self, entity: EntityId) -> Option<OldComponent<T>>
@@ -587,6 +614,10 @@ impl<T> SparseSet<T> {
         }
     }
     /// Deletes `entity`'s component from this storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage is tightly or loosly packed.
     pub fn try_delete(&mut self, entity: EntityId) -> Result<(), error::Remove>
     where
         T: 'static,
@@ -606,6 +637,10 @@ impl<T> SparseSet<T> {
     }
     /// Deletes `entity`'s component from this storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage is tightly or loosly packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn delete(&mut self, entity: EntityId)
@@ -625,104 +660,156 @@ impl<T> SparseSet<T> {
 
 impl<T> SparseSet<T> {
     /// Returns the *inserted* section of an update packed storage.
-    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             Ok(Window::new(self, 0..pack.inserted))
         } else {
-            Err(error::Inserted::NotUpdatePacked)
+            Err(error::NotUpdatePack)
         }
     }
     /// Returns the *inserted* section of an update packed storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted(&self) -> Window<'_, T> {
         self.try_inserted().unwrap()
     }
     /// Returns the *inserted* section of an update packed storage mutably.
-    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::Inserted> {
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             let range = 0..pack.inserted;
             Ok(WindowMut::new(self, range))
         } else {
-            Err(error::Inserted::NotUpdatePacked)
+            Err(error::NotUpdatePack)
         }
     }
     /// Returns the *inserted* section of an update packed storage mutably.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_mut().unwrap()
     }
     /// Returns the *modified* section of an update packed storage.
-    pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    pub fn try_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             Ok(Window::new(
                 self,
                 pack.inserted..pack.inserted + pack.modified,
             ))
         } else {
-            Err(error::Modified::NotUpdatePacked)
+            Err(error::NotUpdatePack)
         }
     }
     /// Returns the *modified* section of an update packed storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn modified(&self) -> Window<'_, T> {
         self.try_modified().unwrap()
     }
     /// Returns the *modified* section of an update packed storage mutably.
-    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::Modified> {
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             let range = pack.inserted..pack.inserted + pack.modified;
             Ok(WindowMut::new(self, range))
         } else {
-            Err(error::Modified::NotUpdatePacked)
+            Err(error::NotUpdatePack)
         }
     }
     /// Returns the *modified* section of an update packed storage mutably.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_modified_mut().unwrap()
     }
     /// Returns the *inserted* and *modified* section of an update packed storage.
-    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             Ok(Window::new(self, 0..pack.inserted + pack.modified))
         } else {
-            Err(error::InsertedOrModified::NotUpdatePacked)
+            Err(error::NotUpdatePack)
         }
     }
     /// Returns the *inserted* and *modified* section of an update packed storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
         self.try_inserted_or_modified().unwrap()
     }
     /// Returns the *inserted* and *modified* section of an update packed storage mutably.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_inserted_or_modified_mut(
         &mut self,
-    ) -> Result<WindowMut<'_, T>, error::InsertedOrModified> {
+    ) -> Result<WindowMut<'_, T>, error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             let range = 0..pack.inserted + pack.modified;
             Ok(WindowMut::new(self, range))
         } else {
-            Err(error::InsertedOrModified::NotUpdatePacked)
+            Err(error::NotUpdatePack)
         }
     }
     /// Returns the *inserted* and *modified* section of an update packed wistoragenstoragedow mutably.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
         self.try_inserted_or_modified_mut().unwrap()
     }
     /// Returns the *deleted* components of an update packed storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             Ok(&pack.deleted)
@@ -732,12 +819,20 @@ impl<T> SparseSet<T> {
     }
     /// Returns the *deleted* components of an update packed storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn deleted(&self) -> &[(EntityId, T)] {
         self.try_deleted().unwrap()
     }
     /// Returns the ids of *removed* components of an update packed storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_removed(&self) -> Result<&[EntityId], error::NotUpdatePack> {
         if let Pack::Update(pack) = &self.metadata.pack {
             Ok(&pack.removed)
@@ -747,61 +842,105 @@ impl<T> SparseSet<T> {
     }
     /// Returns the ids of *removed* components of an update packed storage.
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn removed(&self) -> &[EntityId] {
         self.try_removed().unwrap()
     }
     /// Takes ownership of the *deleted* components of an update packed storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
         self.window_mut().try_take_deleted()
     }
     /// Takes ownership of the *deleted* components of an update packed storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
         self.try_take_deleted().unwrap()
     }
     /// Takes ownership of the ids of *removed* components of an update packed storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_take_removed(&mut self) -> Result<Vec<EntityId>, error::NotUpdatePack> {
         self.window_mut().try_take_removed()
     }
     /// Takes ownership of the ids of *removed* components of an update packed storage.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
         self.try_take_removed().unwrap()
     }
     /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
         self.window_mut().try_clear_inserted()
     }
     /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn clear_inserted(&mut self) {
         self.try_clear_inserted().unwrap()
     }
     /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_clear_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         self.window_mut().try_clear_modified()
     }
     /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn clear_modified(&mut self) {
         self.try_clear_modified().unwrap()
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     pub fn try_clear_inserted_and_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         self.window_mut().try_clear_inserted_and_modified()
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn clear_inserted_and_modified(&mut self) {
@@ -854,7 +993,12 @@ impl<T> SparseSet<T> {
     pub(crate) fn unpack(&mut self, entity: EntityId) {
         self.window_mut().unpack(entity)
     }
-    /// Update packs this storage making it track *inserted*, *modified* and *deleted* components.
+    /// Update packs this storage making it track *inserted*, *modified* and *deleted* components.  
+    /// Does nothing if the storage is already update packed.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage is already tightly or loosly packed.
     pub fn try_update_pack(&mut self) -> Result<(), error::Pack>
     where
         T: 'static,
@@ -871,11 +1015,16 @@ impl<T> SparseSet<T> {
             }
             Pack::Tight(_) => Err(error::Pack::AlreadyTightPack(type_name::<T>())),
             Pack::Loose(_) => Err(error::Pack::AlreadyLoosePack(type_name::<T>())),
-            Pack::Update(_) => Err(error::Pack::AlreadyUpdatePack(type_name::<T>())),
+            Pack::Update(_) => Ok(()),
         }
     }
     /// Update packs this storage making it track *inserted*, *modified* and *deleted* components.  
-    /// Unwraps errors.
+    /// Does nothing if the storage is already update packed.
+    /// Unwraps errors.  
+    ///
+    /// ### Errors
+    ///
+    /// - Storage is already tightly or loosly packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn update_pack(&mut self)
@@ -913,6 +1062,10 @@ impl<T> SparseSet<T> {
     /// Shares `owned`'s component with `shared` entity.  
     /// Deleting `owned`'s component won't stop the sharing.  
     /// Trying to share an entity with itself won't do anything.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` already had a owned component of this type.
     pub fn try_share(&mut self, owned: EntityId, shared: EntityId) -> Result<(), error::Share> {
         self.sparse.allocate_at(shared);
 
@@ -935,12 +1088,24 @@ impl<T> SparseSet<T> {
             Ok(())
         }
     }
+    /// Shares `owned`'s component with `shared` entity.  
+    /// Deleting `owned`'s component won't stop the sharing.  
+    /// Trying to share an entity with itself won't do anything.  
+    /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` already had a owned component of this type.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn share(&mut self, owned: EntityId, shared: EntityId) {
         self.try_share(owned, shared).unwrap()
     }
     /// Makes `entity` stop observing another entity.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` was not observing any entity.
     pub fn try_unshare(&mut self, entity: EntityId) -> Result<(), error::Unshare> {
         if self.contains_shared(entity) {
             unsafe {
@@ -956,16 +1121,21 @@ impl<T> SparseSet<T> {
             Err(error::Unshare)
         }
     }
+    /// Makes `entity` stop observing another entity.  
+    /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` was not observing any entity.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn unshare(&mut self, entity: EntityId) {
         self.try_unshare(entity).unwrap()
     }
-    /// Applies the given function `f` to the entities `a` and `b`.
-    ///
+    /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.
     ///
-    /// # Possible errors
+    /// ### Errors
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
@@ -1019,12 +1189,11 @@ impl<T> SparseSet<T> {
             Err(error::Apply::IdenticalIds)
         }
     }
-    /// Applies the given function `f` to the entities `a` and `b`.
-    ///
+    /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.  
     /// Unwraps errors.
     ///
-    /// # Possible errors
+    /// ### Errors
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
@@ -1033,11 +1202,10 @@ impl<T> SparseSet<T> {
     pub fn apply<R, F: FnOnce(&mut T, &T) -> R>(&mut self, a: EntityId, b: EntityId, f: F) -> R {
         self.try_apply(a, b, f).unwrap()
     }
-    /// Applies the given function `f` to the entities `a` and `b`.
-    ///
+    /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.
     ///
-    /// # Possible errors
+    /// ### Errors
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
@@ -1107,12 +1275,11 @@ impl<T> SparseSet<T> {
             Err(error::Apply::IdenticalIds)
         }
     }
-    /// Applies the given function `f` to the entities `a` and `b`.
-    ///
+    /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.  
     /// Unwraps errors.
     ///
-    /// # Possible errors
+    /// ### Errors
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
@@ -1217,6 +1384,7 @@ pub enum OldComponent<T> {
 }
 
 impl<T> OldComponent<T> {
+    /// Extracts the value inside `OldComponent`.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     pub fn unwrap_owned(self) -> T {

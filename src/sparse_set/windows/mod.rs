@@ -85,7 +85,7 @@ impl<'w, T> Window<'w, T> {
         self.dense.as_ptr()
     }
     /// Returns the *inserted* section of an update packed window.
-    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
+    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset == 0 && self.len() >= pack.inserted {
                 Ok(Window {
@@ -96,10 +96,10 @@ impl<'w, T> Window<'w, T> {
                     offset: 0,
                 })
             } else {
-                Err(error::Inserted::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::Inserted::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *inserted* section of an update packed window.  
@@ -110,7 +110,7 @@ impl<'w, T> Window<'w, T> {
         self.try_inserted().unwrap()
     }
     /// Returns the *modified* section of an update packed window.
-    pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
+    pub fn try_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset <= pack.inserted && self.len() >= pack.modified {
                 Ok(Window {
@@ -123,10 +123,10 @@ impl<'w, T> Window<'w, T> {
                     offset: (pack.inserted - self.offset),
                 })
             } else {
-                Err(error::Modified::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::Modified::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *modified* section of an update packed window.  
@@ -137,7 +137,7 @@ impl<'w, T> Window<'w, T> {
         self.try_modified().unwrap()
     }
     /// Returns the *inserted* and *modified* section of an update packed window.
-    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
+    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
                 Ok(Window {
@@ -148,10 +148,10 @@ impl<'w, T> Window<'w, T> {
                     offset: 0,
                 })
             } else {
-                Err(error::InsertedOrModified::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::InsertedOrModified::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *modified* section of an update packed window.  
@@ -415,7 +415,7 @@ impl<'w, T> WindowMut<'w, T> {
         self.as_non_mut().is_empty()
     }
     /// Returns the *inserted* section of an update packed window.
-    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::Inserted> {
+    pub fn try_inserted(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset == 0 && self.len() >= pack.inserted {
                 Ok(Window {
@@ -426,10 +426,10 @@ impl<'w, T> WindowMut<'w, T> {
                     offset: 0,
                 })
             } else {
-                Err(error::Inserted::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::Inserted::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *inserted* section of an update packed window.  
@@ -440,7 +440,7 @@ impl<'w, T> WindowMut<'w, T> {
         self.try_inserted().unwrap()
     }
     /// Returns the *inserted* section of an update packed window mutably.
-    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::Inserted> {
+    pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset == 0 && self.len() >= pack.inserted {
                 Ok(WindowMut {
@@ -451,10 +451,10 @@ impl<'w, T> WindowMut<'w, T> {
                     offset: 0,
                 })
             } else {
-                Err(error::Inserted::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::Inserted::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *inserted* section of an update packed window mutably.  
@@ -465,7 +465,7 @@ impl<'w, T> WindowMut<'w, T> {
         self.try_inserted_mut().unwrap()
     }
     /// Returns the *modified* section of an update packed window.
-    pub fn try_modified(&self) -> Result<Window<'_, T>, error::Modified> {
+    pub fn try_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset <= pack.inserted && self.len() >= pack.modified {
                 Ok(Window {
@@ -478,10 +478,10 @@ impl<'w, T> WindowMut<'w, T> {
                     offset: (pack.inserted - self.offset),
                 })
             } else {
-                Err(error::Modified::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::Modified::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *modified* section of an update packed window.  
@@ -492,7 +492,7 @@ impl<'w, T> WindowMut<'w, T> {
         self.try_modified().unwrap()
     }
     /// Returns the *modified* section of an update packed window mutably.
-    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::Modified> {
+    pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset <= pack.inserted && self.len() >= pack.modified {
                 Ok(WindowMut {
@@ -505,10 +505,10 @@ impl<'w, T> WindowMut<'w, T> {
                     metadata: &mut self.metadata,
                 })
             } else {
-                Err(error::Modified::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::Modified::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *modified* section of an update packed window mutably.  
@@ -519,7 +519,7 @@ impl<'w, T> WindowMut<'w, T> {
         self.try_modified_mut().unwrap()
     }
     /// Returns the *inserted* and *modified* section of an update packed window.
-    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::InsertedOrModified> {
+    pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
                 Ok(Window {
@@ -530,10 +530,10 @@ impl<'w, T> WindowMut<'w, T> {
                     offset: 0,
                 })
             } else {
-                Err(error::InsertedOrModified::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::InsertedOrModified::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *inserted* and *modified* section of an update packed window.  
@@ -546,7 +546,7 @@ impl<'w, T> WindowMut<'w, T> {
     /// Returns the *inserted* and *modified* section of an update packed window mutably.
     pub fn try_inserted_or_modified_mut(
         &mut self,
-    ) -> Result<WindowMut<'_, T>, error::InsertedOrModified> {
+    ) -> Result<WindowMut<'_, T>, error::UpdateWindow> {
         if let Pack::Update(pack) = &self.metadata.pack {
             if self.offset == 0 && self.len() >= pack.inserted + pack.modified {
                 Ok(WindowMut {
@@ -557,10 +557,10 @@ impl<'w, T> WindowMut<'w, T> {
                     offset: 0,
                 })
             } else {
-                Err(error::InsertedOrModified::NotInbound)
+                Err(error::UpdateWindow::OutOfBounds)
             }
         } else {
-            Err(error::InsertedOrModified::NotUpdatePacked)
+            Err(error::UpdateWindow::NotUpdatePacked)
         }
     }
     /// Returns the *inserted* and *modified* section of an update packed window mutably.  
