@@ -131,11 +131,17 @@ jobs:
           name: guide
           path: dist/guide
 
+      - name: duplicate guide
+        run: cp -r dist/guide dist/book
+
       - name: load bunny_demo
         uses: actions/download-artifact@v2
         with:
           name: bunny_demo
           path: dist/bunny_demo
+
+      - name: duplicate demo
+        run: cp -r dist/bunny_demo dist/demo
 
       - name: load tutorial
         uses: actions/download-artifact@v2
