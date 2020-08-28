@@ -7,14 +7,13 @@ use shipyard::*;
 fn duplicate_name() {
     let world = World::new();
 
-    world
-        .try_add_workload("")
-        .unwrap()
+    Workload::builder("")
         .try_with_system(system!(|| {}))
         .unwrap()
-        .build();
+        .add_to_world(&world)
+        .unwrap();
     assert_eq!(
-        world.try_add_workload("").err(),
+        Workload::builder("").add_to_world(&world).err(),
         Some(error::AddWorkload::AlreadyExists)
     );
 

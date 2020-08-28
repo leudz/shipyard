@@ -56,23 +56,39 @@ impl TryUniqueAdder for World {
 
 #[cfg(feature = "panic")]
 impl UniqueAdder for World {
+    #[track_caller]
     fn add_unique<T: 'static + Send + Sync>(&self, unique: T) {
-        self.try_add_unique(unique).unwrap()
+        match self.try_add_unique(unique) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 
     #[cfg(feature = "non_send")]
+    #[track_caller]
     fn add_unique_non_send<T: 'static + Sync>(&self, unique: T) {
-        self.try_add_unique_non_send(unique).unwrap()
+        match self.try_add_unique_non_send(unique) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 
     #[cfg(feature = "non_sync")]
+    #[track_caller]
     fn add_unique_non_sync<T: 'static + Send>(&self, unique: T) {
-        self.try_add_unique_non_sync(unique).unwrap()
+        match self.try_add_unique_non_sync(unique) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[track_caller]
     fn add_unique_non_send_sync<T: 'static>(&self, unique: T) {
-        self.try_add_unique_non_send_sync(unique).unwrap()
+        match self.try_add_unique_non_send_sync(unique) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 }
 

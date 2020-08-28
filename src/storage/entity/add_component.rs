@@ -53,8 +53,12 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
         }
     }
     #[cfg(feature = "panic")]
+    #[track_caller]
     fn add_component(self, component: T, entity: EntityId, entities: &Entities) {
-        self.try_add_component(component, entity, entities).unwrap()
+        match self.try_add_component(component, entity, entities) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 }
 
@@ -123,8 +127,12 @@ macro_rules! impl_add_component {
                 }
             }
             #[cfg(feature = "panic")]
+            #[track_caller]
             fn add_component(self, component: ($($type,)+), entity: EntityId, entities: &Entities) {
-                self.try_add_component(component, entity, entities).unwrap()
+                match self.try_add_component(component, entity, entities) {
+                    Ok(_) => (),
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 mod builder;
 
-pub use builder::WorkloadBuilder;
+pub use builder::{Workload, WorkloadBuilder};
 
 use crate::error;
 use crate::type_id::TypeId;

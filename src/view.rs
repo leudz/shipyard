@@ -54,6 +54,7 @@ impl DerefMut for AllStoragesViewMut<'_> {
 }
 
 /// Shared view over `Entities` storage.
+#[derive(Clone)]
 pub struct EntitiesView<'a> {
     entities: Ref<'a, Entities>,
     _all_borrow: Borrow<'a>,
@@ -138,6 +139,7 @@ impl DerefMut for EntitiesViewMut<'_> {
 }
 
 /// Shared view over a component storage.
+#[derive(Clone)]
 pub struct View<'a, T> {
     window: Window<'a, T>,
     _borrow: Borrow<'a>,
@@ -472,9 +474,10 @@ impl<T> DerefMut for UniqueViewMut<'_, T> {
     }
 }
 
+/// Shared view over the thread_pool.
 #[cfg(feature = "parallel")]
 #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
-/// Shared view over the thread_pool.
+#[derive(Clone)]
 pub struct ThreadPoolView<'a>(pub(crate) &'a rayon::ThreadPool);
 
 #[cfg(feature = "parallel")]

@@ -15,7 +15,7 @@ fn simple_sort() {
                 entities.add_entity(&mut usizes, 3);
                 entities.add_entity(&mut usizes, 1);
 
-                usizes.sort().unstable(Ord::cmp);
+                usizes.sort().try_unstable(Ord::cmp).unwrap();
 
                 let mut prev = 0;
                 (&mut usizes).iter().for_each(|&mut x| {
@@ -42,7 +42,8 @@ fn tight_sort() {
 
     (&mut usizes, &mut u32s)
         .sort()
-        .unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)));
+        .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
+        .unwrap();
 
     let mut prev = 0;
     (&mut usizes, &mut u32s)
@@ -69,7 +70,8 @@ fn loose_sort() {
 
     (&mut usizes, &mut u32s)
         .sort()
-        .unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)));
+        .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
+        .unwrap();
 
     let mut prev = 0;
     (&mut usizes, &mut u32s)
@@ -97,7 +99,8 @@ fn tight_loose_sort() {
 
     (&mut usizes, &mut u64s)
         .sort()
-        .unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)));
+        .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
+        .unwrap();
 
     if let iterators::Iter3::Loose(mut iter) = (&usizes, &u64s, &u32s).iter() {
         assert_eq!(iter.next(), Some((&6, &7, &8)));

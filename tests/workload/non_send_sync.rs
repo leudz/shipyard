@@ -19,11 +19,10 @@ fn basic() {
         )
         .unwrap();
 
-    world
-        .try_add_workload("Push")
-        .unwrap()
+    Workload::builder("Push")
         .with_system(system!(push))
-        .build();
+        .add_to_world(&world)
+        .unwrap();
     world.try_run_default().unwrap();
 
     world

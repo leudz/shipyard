@@ -1,18 +1,18 @@
 mod scheduler;
 
-pub use scheduler::WorkloadBuilder;
+pub use scheduler::{Workload, WorkloadBuilder};
 
 use crate::atomic_refcell::AtomicRefCell;
-#[cfg(feature = "serde1")]
-use crate::atomic_refcell::RefMut;
+// #[cfg(feature = "serde1")]
+// use crate::atomic_refcell::RefMut;
 use crate::borrow::Borrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
-#[cfg(feature = "serde1")]
-use crate::serde_setup::{ExistingEntities, GlobalDeConfig, GlobalSerConfig, WithShared};
+// #[cfg(feature = "serde1")]
+// use crate::serde_setup::{ExistingEntities, GlobalDeConfig, GlobalSerConfig, WithShared};
 use crate::storage::AllStorages;
-#[cfg(feature = "serde1")]
-use crate::storage::{Storage, StorageId};
+// #[cfg(feature = "serde1")]
+// use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
 use core::ops::Range;
 #[cfg(feature = "parallel")]
@@ -85,8 +85,12 @@ impl World {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
-        self.try_add_unique(component).unwrap();
+        match self.try_add_unique(component) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
@@ -156,8 +160,12 @@ impl World {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_send", feature = "panic"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "panic"))))]
+    #[track_caller]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        self.try_add_unique_non_send::<T>(component).unwrap()
+        match self.try_add_unique_non_send::<T>(component) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -205,8 +213,12 @@ impl World {
     /// [UniqueViewMut]: struct.UniqueViewMut.html
     #[cfg(all(feature = "non_sync", feature = "panic"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_sync", feature = "panic"))))]
+    #[track_caller]
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
-        self.try_add_unique_non_sync::<T>(component).unwrap()
+        match self.try_add_unique_non_sync::<T>(component) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -257,8 +269,12 @@ impl World {
         docsrs,
         doc(cfg(all(feature = "non_send", feature = "non_sync", feature = "panic")))
     )]
+    #[track_caller]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
-        self.try_add_unique_non_send_sync::<T>(component).unwrap()
+        match self.try_add_unique_non_send_sync::<T>(component) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Removes a unique storage.
     ///
@@ -297,8 +313,12 @@ impl World {
     /// [AllStorages]: struct.AllStorages.html
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn remove_unique<T: 'static>(&self) -> T {
-        self.try_remove_unique().unwrap()
+        match self.try_remove_unique() {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.
@@ -571,8 +591,12 @@ let (entities, mut usizes) = world.borrow::<(EntitiesView, ViewMut<usize>)>();
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> V {
-        self.try_borrow::<V>().unwrap()
+        match self.try_borrow::<V>() {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -861,12 +885,16 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
         &'s self,
         s: S,
         data: Data,
     ) -> R {
-        self.try_run_with_data(s, data).unwrap()
+        match self.try_run_with_data(s, data) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -1158,8 +1186,12 @@ let i = world.run(sys1);
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(&'s self, s: S) -> R {
-        self.try_run(s).unwrap()
+        match self.try_run(s) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Modifies the current default workload to `name`.
     ///
@@ -1199,127 +1231,12 @@ let i = world.run(sys1);
     /// - Workload did not exist.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
-        self.try_set_default_workload(name).unwrap();
-    }
-    /// A workload is a collection of systems. They will execute as much in parallel as possible.  
-    /// They are evaluated first to last when they can't be parallelized.  
-    /// The default workload will automatically be set to the first workload added.
-    ///
-    /// ### Borrows
-    ///
-    /// - Scheduler (exclusive)
-    ///
-    /// ### Errors
-    ///
-    /// - Scheduler borrow failed.
-    /// - Workload with an identical name already present.
-    ///
-    /// ### Example
-    /// ```
-    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
-    ///
-    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
-    ///         *x += y as usize;
-    ///     }
-    /// }
-    ///
-    /// fn check(usizes: View<usize>) {
-    ///     let mut iter = usizes.iter();
-    ///     assert_eq!(iter.next(), Some(&1));
-    ///     assert_eq!(iter.next(), Some(&5));
-    ///     assert_eq!(iter.next(), Some(&9));
-    /// }
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
-    ///     },
-    /// );
-    ///
-    /// world
-    ///     .try_add_workload("Add & Check")
-    ///     .unwrap()
-    ///     .with_system(system!(add))
-    ///     .with_system(system!(check))
-    ///     .build();
-    ///
-    /// world.run_default();
-    /// ```
-    pub fn try_add_workload(
-        &self,
-        name: impl Into<Cow<'static, str>>,
-    ) -> Result<WorkloadBuilder<'_>, error::AddWorkload> {
-        if let Ok(scheduler) = self.scheduler.try_borrow_mut() {
-            let name = name.into();
-
-            if scheduler.workloads.contains_key(&name) {
-                Err(error::AddWorkload::AlreadyExists)
-            } else {
-                Ok(WorkloadBuilder::new(scheduler, name))
-            }
-        } else {
-            Err(error::AddWorkload::Borrow)
+        match self.try_set_default_workload(name) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
         }
-    }
-    /// A workload is a collection of systems. They will execute as much in parallel as possible.  
-    /// They are evaluated first to last when they can't be parallelized.  
-    /// The default workload will automatically be set to the first workload added.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - Scheduler (exclusive)
-    ///
-    /// ### Errors
-    ///
-    /// - Scheduler borrow failed.
-    /// - Workload with an identical name already present.
-    ///
-    /// ### Example
-    /// ```
-    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
-    ///
-    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
-    ///         *x += y as usize;
-    ///     }
-    /// }
-    ///
-    /// fn check(usizes: View<usize>) {
-    ///     let mut iter = usizes.iter();
-    ///     assert_eq!(iter.next(), Some(&1));
-    ///     assert_eq!(iter.next(), Some(&5));
-    ///     assert_eq!(iter.next(), Some(&9));
-    /// }
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
-    ///     },
-    /// );
-    ///
-    /// world
-    ///     .add_workload("Add & Check")
-    ///     .with_system(system!(add))
-    ///     .with_system(system!(check))
-    ///     .build();
-    ///
-    /// world.run_default();
-    /// ```
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    pub fn add_workload(&self, name: impl Into<Cow<'static, str>>) -> WorkloadBuilder<'_> {
-        self.try_add_workload(name).unwrap()
     }
     /// Runs the `name` workload.
     ///
@@ -1361,8 +1278,12 @@ let i = world.run(sys1);
     /// - User error returned by system.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn run_workload(&self, name: impl AsRef<str> + Sync) {
-        self.try_run_workload(name).unwrap();
+        match self.try_run_workload(name) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     fn try_run_workload_index(
         &self,
@@ -1436,8 +1357,12 @@ let i = world.run(sys1);
     /// - User error returned by system.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn run_default(&self) {
-        self.try_run_default().unwrap();
+        match self.try_run_default() {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Used to create an entity without having to borrow its storage explicitly.  
     /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.
@@ -1473,219 +1398,274 @@ let i = world.run(sys1);
     /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
-        self.try_entity_builder().unwrap()
-    }
-    /// Serializes the [World] the way `ser_config` defines it.
-    ///
-    /// ### Borrows
-    ///
-    /// - [AllStorages] (exclusively)
-    ///
-    /// ### Errors
-    ///
-    /// - [AllStorages] borrow failed.
-    /// - Serialization error.
-    /// - Config not implemented. (temporary)
-    ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [World]: struct.World.html
-    #[cfg(feature = "serde1")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
-    pub fn serialize<S>(
-        &self,
-        ser_config: GlobalSerConfig,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-        <S as serde::Serializer>::Ok: 'static,
-    {
-        if ser_config.same_binary == true
-            && ser_config.with_entities == true
-            && ser_config.with_shared == WithShared::PerStorage
-        {
-            serializer.serialize_newtype_struct(
-                "World",
-                &crate::storage::AllStoragesSerializer {
-                    all_storages: self
-                        .all_storages
-                        .try_borrow_mut()
-                        .map_err(|err| serde::ser::Error::custom(err))?,
-                    ser_config,
-                },
-            )
-        } else {
-            Err(serde::ser::Error::custom(
-                "ser_config other than default isn't implemented yet",
-            ))
+        match self.try_entity_builder() {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
         }
     }
-    /// Creates a new [World] from a deserializer the way `de_config` defines it.
-    ///
-    /// ### Errors
-    ///
-    /// - Deserialization error.
-    /// - Config not implemented. (temporary)
-    ///
-    /// [World]: struct.World.html
-    #[cfg(feature = "serde1")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
-    pub fn new_deserialized<'de, D>(
-        de_config: GlobalDeConfig,
-        deserializer: D,
-    ) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        if de_config.existing_entities == ExistingEntities::AsNew
-            && de_config.with_shared == WithShared::PerStorage
-        {
-            let world = World::new();
-            deserializer.deserialize_struct(
-                "World",
-                &["metadata", "storages"],
-                WorldVisitor {
-                    all_storages: world
-                        .all_storages
-                        .try_borrow_mut()
-                        .map_err(serde::de::Error::custom)?,
-                    de_config,
-                },
-            )?;
-            Ok(world)
-        } else {
-            Err(serde::de::Error::custom(
-                "de_config other than default isn't implemented yet",
-            ))
-        }
-    }
+    // /// Serializes the [World] the way `ser_config` defines it.
+    // ///
+    // /// ### Borrows
+    // ///
+    // /// - [AllStorages] (exclusively)
+    // ///
+    // /// ### Errors
+    // ///
+    // /// - [AllStorages] borrow failed.
+    // /// - Serialization error.
+    // /// - Config not implemented. (temporary)
+    // ///
+    // /// [AllStorages]: struct.AllStorages.html
+    // /// [World]: struct.World.html
+    // #[cfg(feature = "serde1")]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
+    // pub fn serialize<S>(
+    //     &self,
+    //     ser_config: GlobalSerConfig,
+    //     serializer: S,
+    // ) -> Result<S::Ok, S::Error>
+    // where
+    //     S: serde::Serializer,
+    //     <S as serde::Serializer>::Ok: 'static,
+    // {
+    //     if ser_config.same_binary == true
+    //         && ser_config.with_entities == true
+    //         && ser_config.with_shared == WithShared::PerStorage
+    //     {
+    //         serializer.serialize_newtype_struct(
+    //             "World",
+    //             &crate::storage::AllStoragesSerializer {
+    //                 all_storages: self
+    //                     .all_storages
+    //                     .try_borrow_mut()
+    //                     .map_err(|err| serde::ser::Error::custom(err))?,
+    //                 ser_config,
+    //             },
+    //         )
+    //     } else {
+    //         Err(serde::ser::Error::custom(
+    //             "ser_config other than default isn't implemented yet",
+    //         ))
+    //     }
+    // }
+    // #[cfg(feature = "serde1")]
+    // pub fn deserialize<'de, D>(
+    //     &self,
+    //     de_config: GlobalDeConfig,
+    //     deserializer: D,
+    // ) -> Result<(), D::Error>
+    // where
+    //     D: serde::Deserializer<'de>,
+    // {
+    //     if de_config.existing_entities == ExistingEntities::AsNew
+    //         && de_config.with_shared == WithShared::PerStorage
+    //     {
+    //         Ok(())
+    //     } else {
+    //         Err(serde::de::Error::custom(
+    //             "de_config other than default isn't implemented yet",
+    //         ))
+    //     }
+    // }
+    // /// Creates a new [World] from a deserializer the way `de_config` defines it.
+    // ///
+    // /// ### Errors
+    // ///
+    // /// - Deserialization error.
+    // /// - Config not implemented. (temporary)
+    // ///
+    // /// [World]: struct.World.html
+    // #[cfg(feature = "serde1")]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
+    // pub fn new_deserialized<'de, D>(
+    //     de_config: GlobalDeConfig,
+    //     deserializer: D,
+    // ) -> Result<Self, D::Error>
+    // where
+    //     D: serde::Deserializer<'de>,
+    // {
+    //     if de_config.existing_entities == ExistingEntities::AsNew
+    //         && de_config.with_shared == WithShared::PerStorage
+    //     {
+    //         let world = World::new();
+    //         deserializer.deserialize_struct(
+    //             "World",
+    //             &["metadata", "storages"],
+    //             WorldVisitor {
+    //                 all_storages: world
+    //                     .all_storages
+    //                     .try_borrow_mut()
+    //                     .map_err(serde::de::Error::custom)?,
+    //                 de_config,
+    //             },
+    //         )?;
+    //         Ok(world)
+    //     } else {
+    //         Err(serde::de::Error::custom(
+    //             "de_config other than default isn't implemented yet",
+    //         ))
+    //     }
+    // }
 }
 
-#[cfg(feature = "serde1")]
-struct WorldVisitor<'a> {
-    all_storages: RefMut<'a, AllStorages>,
-    de_config: GlobalDeConfig,
-}
+// #[cfg(feature = "serde1")]
+// struct WorldVisitor<'a> {
+//     all_storages: RefMut<'a, AllStorages>,
+//     de_config: GlobalDeConfig,
+// }
 
-#[cfg(feature = "serde1")]
-impl<'de, 'a> serde::de::Visitor<'de> for WorldVisitor<'a> {
-    type Value = ();
+// #[cfg(feature = "serde1")]
+// impl<'de, 'a> serde::de::Visitor<'de> for WorldVisitor<'a> {
+//     type Value = ();
 
-    fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        formatter.write_str("Could not format World")
-    }
+//     fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//         formatter.write_str("Could not format World")
+//     }
 
-    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-    where
-        A: serde::de::MapAccess<'de>,
-    {
-        let mut metadata: Vec<(StorageId, usize)> = Vec::new();
+//     fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+//     where
+//         A: serde::de::MapAccess<'de>,
+//     {
+//         match map.next_key()? {
+//             Some("ser_infos") => (),
+//             Some(field) => {
+//                 return Err(serde::de::Error::unknown_field(
+//                     field,
+//                     &["ser_infos", "metadata", "storages"],
+//                 ))
+//             }
+//             None => return Err(serde::de::Error::missing_field("ser_infos")),
+//         };
 
-        if let Some((name, types)) = map.next_entry()? {
-            match name {
-                "metadata" => (),
-                _ => todo!(),
-            }
+//         let ser_infos: crate::serde_setup::SerInfos = map.next_value()?;
 
-            metadata = types;
-        }
+//         if ser_infos.same_binary {
+//             let metadata: Vec<(StorageId, usize)>;
 
-        match map.next_key_seed(core::marker::PhantomData)? {
-            Some("storages") => (),
-            _ => todo!(),
-        }
+//             match map.next_entry()? {
+//                 Some(("metadata", types)) => metadata = types,
+//                 Some((field, _)) => {
+//                     return Err(serde::de::Error::unknown_field(
+//                         field,
+//                         &["ser_infos", "metadata", "storages"],
+//                     ))
+//                 }
+//                 None => return Err(serde::de::Error::missing_field("metadata")),
+//             }
 
-        map.next_value_seed(StoragesSeed {
-            metadata,
-            all_storages: self.all_storages,
-            de_config: self.de_config,
-        })?;
+//             match map.next_key_seed(core::marker::PhantomData)? {
+//                 Some("storages") => (),
+//                 Some(field) => {
+//                     return Err(serde::de::Error::unknown_field(
+//                         field,
+//                         &["ser_infos", "metadata", "storages"],
+//                     ))
+//                 }
+//                 None => return Err(serde::de::Error::missing_field("storages")),
+//             }
 
-        Ok(())
-    }
-}
+//             map.next_value_seed(StoragesSeed {
+//                 metadata,
+//                 all_storages: self.all_storages,
+//                 de_config: self.de_config,
+//             })?;
+//         } else {
+//             todo!()
+//         }
 
-#[cfg(feature = "serde1")]
-struct StoragesSeed<'all> {
-    metadata: Vec<(StorageId, usize)>,
-    all_storages: RefMut<'all, AllStorages>,
-    de_config: GlobalDeConfig,
-}
+//         Ok(())
+//     }
+// }
 
-#[cfg(feature = "serde1")]
-impl<'de> serde::de::DeserializeSeed<'de> for StoragesSeed<'_> {
-    type Value = ();
+// #[cfg(feature = "serde1")]
+// struct StoragesSeed<'all> {
+//     metadata: Vec<(StorageId, usize)>,
+//     all_storages: RefMut<'all, AllStorages>,
+//     de_config: GlobalDeConfig,
+// }
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct StoragesVisitor<'all> {
-            metadata: Vec<(StorageId, usize)>,
-            all_storages: RefMut<'all, AllStorages>,
-            de_config: GlobalDeConfig,
-        }
+// #[cfg(feature = "serde1")]
+// impl<'de> serde::de::DeserializeSeed<'de> for StoragesSeed<'_> {
+//     type Value = ();
 
-        impl<'de> serde::de::Visitor<'de> for StoragesVisitor<'_> {
-            type Value = ();
+//     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         struct StoragesVisitor<'all> {
+//             metadata: Vec<(StorageId, usize)>,
+//             all_storages: RefMut<'all, AllStorages>,
+//             de_config: GlobalDeConfig,
+//         }
 
-            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                formatter.write_str("storages value")
-            }
+//         impl<'de> serde::de::Visitor<'de> for StoragesVisitor<'_> {
+//             type Value = ();
 
-            fn visit_seq<A>(mut self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
-                let storages = self.all_storages.storages();
+//             fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//                 formatter.write_str("storages value")
+//             }
 
-                for (i, (storage_id, deserialize_ptr)) in self.metadata.into_iter().enumerate() {
-                    let storage: &mut Storage =
-                        &mut storages.entry(storage_id).or_insert_with(|| {
-                            let deserialize =
-                                unsafe { crate::unknown_storage::deserialize_fn(deserialize_ptr) };
+//             fn visit_seq<A>(mut self, mut seq: A) -> Result<Self::Value, A::Error>
+//             where
+//                 A: serde::de::SeqAccess<'de>,
+//             {
+//                 let storages = self.all_storages.storages();
 
-                            let mut sparse_set = crate::sparse_set::SparseSet::<u8>::new();
-                            sparse_set.metadata.serde = Some(crate::sparse_set::SerdeInfos {
-                                serialization:
-                                    |sparse_set: &crate::sparse_set::SparseSet<u8>,
-                                    ser_config: GlobalSerConfig,
-                                    serializer: &mut dyn crate::erased_serde::Serializer| {
-                                        crate::erased_serde::Serialize::erased_serialize(
-                                            &crate::sparse_set::SparseSetSerializer {
-                                                sparse_set: &sparse_set,
-                                                ser_config,
-                                            },
-                                            serializer,
-                                        )
-                                    },
-                                deserialization: deserialize,
-                                with_shared: true,
-                            });
+//                 for (i, (storage_id, deserialize_ptr)) in self.metadata.into_iter().enumerate() {
+//                     let storage: &mut Storage =
+//                         &mut storages.entry(storage_id).or_insert_with(|| {
+//                             let deserialize =
+//                                 unsafe { crate::unknown_storage::deserialize_fn(deserialize_ptr) };
 
-                            Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
-                        });
+//                             let mut sparse_set = crate::sparse_set::SparseSet::<u8>::new();
+//                             sparse_set.metadata.serde = Some(crate::sparse_set::SerdeInfos {
+//                                 serialization:
+//                                     |sparse_set: &crate::sparse_set::SparseSet<u8>,
+//                                     ser_config: GlobalSerConfig,
+//                                     serializer: &mut dyn crate::erased_serde::Serializer| {
+//                                         crate::erased_serde::Serialize::erased_serialize(
+//                                             &crate::sparse_set::SparseSetSerializer {
+//                                                 sparse_set: &sparse_set,
+//                                                 ser_config,
+//                                             },
+//                                             serializer,
+//                                         )
+//                                     },
+//                                 deserialization: deserialize,
+//                                 with_shared: true,
+//                                 identifier: None,
+//                             });
 
-                    if seq
-                        .next_element_seed(crate::storage::StorageDeserializer {
-                            storage,
-                            de_config: self.de_config,
-                        })?
-                        .is_none()
-                    {
-                        return Err(serde::de::Error::invalid_length(i, &"more storages"));
-                    }
-                }
+//                             Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
+//                         });
 
-                Ok(())
-            }
-        }
+//                     if seq
+//                         .next_element_seed(crate::storage::StorageDeserializer {
+//                             storage,
+//                             de_config: self.de_config,
+//                         })?
+//                         .is_none()
+//                     {
+//                         return Err(serde::de::Error::invalid_length(i, &"more storages"));
+//                     }
+//                 }
 
-        deserializer.deserialize_seq(StoragesVisitor {
-            metadata: self.metadata,
-            all_storages: self.all_storages,
-            de_config: self.de_config,
-        })
-    }
-}
+//                 Ok(())
+//             }
+//         }
+
+//         deserializer.deserialize_seq(StoragesVisitor {
+//             metadata: self.metadata,
+//             all_storages: self.all_storages,
+//             de_config: self.de_config,
+//         })
+//     }
+// }
+
+// #[cfg(feature = "serde1")]
+// struct ExistingWorldVisitor<'a> {
+//     all_storages: RefMut<'a, AllStorages>,
+//     de_config: GlobalDeConfig,
+// }

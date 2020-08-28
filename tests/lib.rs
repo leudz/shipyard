@@ -97,12 +97,12 @@ fn system() {
         )
         .unwrap();
 
-    world
-        .try_add_workload("")
-        .unwrap()
+    Workload::builder("")
         .try_with_system(system!(system1))
         .unwrap()
-        .build();
+        .add_to_world(&world)
+        .unwrap();
+
     world.try_run_default().unwrap();
     world
         .try_run(|usizes: View<usize>| {
@@ -143,14 +143,14 @@ fn systems() {
         )
         .unwrap();
 
-    world
-        .try_add_workload("")
-        .unwrap()
+    Workload::builder("")
         .try_with_system(system!(system1))
         .unwrap()
         .try_with_system(system!(system2))
         .unwrap()
-        .build();
+        .add_to_world(&world)
+        .unwrap();
+
     world.try_run_default().unwrap();
     world
         .try_run(|usizes: View<usize>| {
@@ -337,11 +337,10 @@ fn two_workloads() {
     }
 
     let world = World::new();
-    world
-        .try_add_workload("")
-        .unwrap()
+    Workload::builder("")
         .with_system(system!(system1))
-        .build();
+        .add_to_world(&world)
+        .unwrap();
 
     rayon::scope(|s| {
         s.spawn(|_| world.try_run_default().unwrap());
@@ -361,11 +360,10 @@ fn two_bad_workloads() {
     }
 
     let world = World::new();
-    world
-        .try_add_workload("")
-        .unwrap()
+    Workload::builder("")
         .with_system(system!(system1))
-        .build();
+        .add_to_world(&world)
+        .unwrap();
 
     rayon::scope(|s| {
         s.spawn(|_| world.try_run_default().unwrap());

@@ -95,8 +95,12 @@ macro_rules! impl_delete {
                 Ok(())
             }
             #[cfg(feature = "panic")]
+            #[track_caller]
             fn delete(self, entity: EntityId) {
-                Delete::<($($type,)+)>::try_delete(self, entity).unwrap()
+                match Delete::<($($type,)+)>::try_delete(self, entity) {
+                    Ok(_) => (),
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

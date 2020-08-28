@@ -1,7 +1,7 @@
 mod add_component;
 mod contains;
-#[cfg(feature = "serde1")]
-mod deser;
+// #[cfg(feature = "serde1")]
+// mod deser;
 mod metadata;
 pub mod sort;
 mod sparse_array;
@@ -12,10 +12,12 @@ pub use add_component::AddComponentUnchecked;
 pub use contains::Contains;
 pub use windows::{Window, WindowMut, WindowSort1};
 
-#[cfg(feature = "serde1")]
-pub(crate) use deser::SparseSetSerializer;
-#[cfg(feature = "serde1")]
-pub(crate) use metadata::SerdeInfos;
+// #[cfg(feature = "serde1")]
+// pub(crate) use deser::SparseSetSerializer;
+// #[cfg(feature = "serde1")]
+// use hashbrown::HashMap;
+// #[cfg(feature = "serde1")]
+// pub(crate) use metadata::SerdeInfos;
 pub(crate) use metadata::{
     LoosePack, Metadata, Pack, TightPack, UpdatePack, BUCKET_SIZE as SHARED_BUCKET_SIZE,
 };
@@ -23,18 +25,20 @@ pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use windows::RawWindowMut;
 
 use crate::error;
-#[cfg(feature = "serde1")]
-use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
+// #[cfg(feature = "serde1")]
+// use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
+// #[cfg(feature = "serde1")]
+// use alloc::borrow::Cow;
 #[cfg(all(not(feature = "std"), feature = "serde1"))]
 use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
 use core::ptr;
-#[cfg(feature = "serde1")]
-use deser::SparseSetDeserializer;
+// #[cfg(feature = "serde1")]
+// use deser::SparseSetDeserializer;
 use sparse_array::{SparseArray, SparseSlice, SparseSliceMut};
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
@@ -118,8 +122,12 @@ impl<T> SparseSet<T> {
     /// - `range` was out of bounds.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
-        self.try_as_window(range).unwrap()
+        match self.try_as_window(range) {
+            Ok(window) => window,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns a mutable window over `range`.
     ///
@@ -165,11 +173,15 @@ impl<T> SparseSet<T> {
     /// - `range` was out of bounds.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
         &mut self,
         range: R,
     ) -> WindowMut<'_, T> {
-        self.try_as_window_mut(range).unwrap()
+        match self.try_as_window_mut(range) {
+            Ok(window) => window,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     pub(crate) fn clone_indices(&self) -> Vec<EntityId> {
         self.dense.clone()
@@ -256,8 +268,16 @@ impl<T> SparseSet<T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn id_at(&self, index: usize) -> EntityId {
-        self.try_id_at(index).unwrap()
+        match self.try_id_at(index) {
+            Some(id) => id,
+            None => panic!(
+                "Storage has {} components but trying to access the id at index {}.",
+                self.len(),
+                index
+            ),
+        }
     }
     pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
         self.index_of(entity)
@@ -489,11 +509,15 @@ impl<T> SparseSet<T> {
     /// - Storage is tightly or loosly packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn remove(&mut self, entity: EntityId) -> Option<OldComponent<T>>
     where
         T: 'static,
     {
-        self.try_remove(entity).unwrap()
+        match self.try_remove(entity) {
+            Ok(old_component) => old_component,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<OldComponent<T>> {
         match self.sparse.sparse_index(entity) {
@@ -643,11 +667,15 @@ impl<T> SparseSet<T> {
     /// - Storage is tightly or loosly packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn delete(&mut self, entity: EntityId)
     where
         T: 'static,
     {
-        self.try_delete(entity).unwrap()
+        match self.try_delete(entity) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     pub(crate) fn actual_delete(&mut self, entity: EntityId) {
         if let Some(OldComponent::Owned(component)) = self.actual_remove(entity) {
@@ -679,8 +707,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted(&self) -> Window<'_, T> {
-        self.try_inserted().unwrap()
+        match self.try_inserted() {
+            Ok(inserted) => inserted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* section of an update packed storage mutably.
     ///
@@ -703,8 +735,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
-        self.try_inserted_mut().unwrap()
+        match self.try_inserted_mut() {
+            Ok(inserted) => inserted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *modified* section of an update packed storage.
     ///
@@ -729,8 +765,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn modified(&self) -> Window<'_, T> {
-        self.try_modified().unwrap()
+        match self.try_modified() {
+            Ok(modified) => modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *modified* section of an update packed storage mutably.
     ///
@@ -753,8 +793,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
-        self.try_modified_mut().unwrap()
+        match self.try_modified_mut() {
+            Ok(modified) => modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* and *modified* section of an update packed storage.
     ///
@@ -776,8 +820,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
-        self.try_inserted_or_modified().unwrap()
+        match self.try_inserted_or_modified() {
+            Ok(inserted_or_modified) => inserted_or_modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* and *modified* section of an update packed storage mutably.
     ///
@@ -802,8 +850,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
-        self.try_inserted_or_modified_mut().unwrap()
+        match self.try_inserted_or_modified_mut() {
+            Ok(inserted_or_modified) => inserted_or_modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *deleted* components of an update packed storage.
     ///
@@ -825,8 +877,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn deleted(&self) -> &[(EntityId, T)] {
-        self.try_deleted().unwrap()
+        match self.try_deleted() {
+            Ok(deleted) => deleted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the ids of *removed* components of an update packed storage.
     ///
@@ -848,8 +904,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn removed(&self) -> &[EntityId] {
-        self.try_removed().unwrap()
+        match self.try_removed() {
+            Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Takes ownership of the *deleted* components of an update packed storage.
     ///
@@ -867,8 +927,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
-        self.try_take_deleted().unwrap()
+        match self.try_take_deleted() {
+            Ok(deleted) => deleted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Takes ownership of the ids of *removed* components of an update packed storage.
     ///
@@ -886,8 +950,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
-        self.try_take_removed().unwrap()
+        match self.try_take_removed() {
+            Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.
     ///
@@ -905,8 +973,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn clear_inserted(&mut self) {
-        self.try_clear_inserted().unwrap()
+        match self.try_clear_inserted() {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.
     ///
@@ -924,8 +996,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn clear_modified(&mut self) {
-        self.try_clear_modified().unwrap()
+        match self.try_clear_modified() {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.
     ///
@@ -943,8 +1019,12 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn clear_inserted_and_modified(&mut self) {
-        self.try_clear_inserted_and_modified().unwrap()
+        match self.try_clear_inserted_and_modified() {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     //          ▼ old end of pack
     //              ▼ new end of pack
@@ -1295,15 +1375,15 @@ impl<T> SparseSet<T> {
     }
 }
 
-#[cfg(feature = "serde1")]
-impl<T: serde::Serialize + for<'de> serde::Deserialize<'de> + 'static> SparseSet<T> {
-    /// Setup serialization for this storage.  
-    /// Needs to be called for a storage to be serialized.
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    pub fn setup_serde(&mut self, _ser_config: SerConfig) {
-        self.metadata.serde = Some(SerdeInfos::new());
-    }
-}
+// #[cfg(feature = "serde1")]
+// impl<T: serde::Serialize + for<'de> serde::Deserialize<'de> + 'static> SparseSet<T> {
+//     /// Setup serialization for this storage.
+//     /// Needs to be called for a storage to be serialized.
+//     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+//     pub fn setup_serde(&mut self, ser_config: SerConfig) {
+//         self.metadata.serde = Some(SerdeInfos::new(ser_config));
+//     }
+// }
 
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
@@ -1346,33 +1426,39 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     fn any_mut(&mut self) -> &mut dyn Any {
         self
     }
-    #[cfg(feature = "serde1")]
-    fn is_serializable(&self) -> bool {
-        self.metadata.serde.is_some()
-    }
-    #[cfg(feature = "serde1")]
-    fn skip_serialization(&self, _: GlobalSerConfig) -> bool {
-        false
-    }
-    #[cfg(feature = "serde1")]
-    fn serialize(
-        &self,
-        ser_config: GlobalSerConfig,
-        serializer: &mut dyn crate::erased_serde::Serializer,
-    ) -> crate::erased_serde::Result<crate::erased_serde::Ok> {
-        (self.metadata.serde.as_ref().unwrap().serialization)(self, ser_config, serializer)
-    }
-    #[cfg(feature = "serde1")]
-    fn deserialize(
-        &self,
-    ) -> Option<
-        fn(
-            GlobalDeConfig,
-            &mut dyn crate::erased_serde::Deserializer<'_>,
-        ) -> Result<crate::storage::Storage, crate::erased_serde::Error>,
-    > {
-        Some(self.metadata.serde.as_ref()?.deserialization)
-    }
+    //     #[cfg(feature = "serde1")]
+    //     fn should_serialize(&self, _: GlobalSerConfig) -> bool {
+    //         self.metadata.serde.is_some()
+    //     }
+    //     #[cfg(feature = "serde1")]
+    //     fn serialize_identifier(&self) -> Cow<'static, str> {
+    //         self.metadata
+    //             .serde
+    //             .as_ref()
+    //             .and_then(|serde| serde.identifier.as_ref())
+    //             .map(|identifier| identifier.0.clone())
+    //             .unwrap_or("".into())
+    //     }
+    //     #[cfg(feature = "serde1")]
+    //     fn serialize(
+    //         &self,
+    //         ser_config: GlobalSerConfig,
+    //         serializer: &mut dyn crate::erased_serde::Serializer,
+    //     ) -> crate::erased_serde::Result<crate::erased_serde::Ok> {
+    //         (self.metadata.serde.as_ref().unwrap().serialization)(self, ser_config, serializer)
+    //     }
+    //     #[cfg(feature = "serde1")]
+    //     fn deserialize(
+    //         &self,
+    //     ) -> Option<
+    //         fn(
+    //             GlobalDeConfig,
+    //             &HashMap<EntityId, EntityId>,
+    //             &mut dyn crate::erased_serde::Deserializer<'_>,
+    //         ) -> Result<crate::storage::Storage, crate::erased_serde::Error>,
+    //     > {
+    //         Some(self.metadata.serde.as_ref()?.deserialization)
+    //     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

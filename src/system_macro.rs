@@ -2,7 +2,7 @@
 ///
 /// ### Example
 /// ```
-/// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
+/// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, Workload, World};
 ///
 /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
 ///     for (x, &y) in (&mut usizes, &u32s).iter() {
@@ -27,11 +27,11 @@
 ///     },
 /// );
 ///
-/// world
-///     .add_workload("Add & Check")
+/// Workload::builder("Add & Check")
 ///     .with_system(system!(add))
 ///     .with_system(system!(check))
-///     .build();
+///     .add_to_world(&world)
+///     .unwrap();
 ///
 /// world.run_default();
 /// ```
@@ -53,7 +53,7 @@ macro_rules! system {
 /// ```
 /// #[cfg(feature = "std")]
 /// {
-/// use shipyard::{error::RunWorkload, try_system, EntitiesViewMut, World};
+/// use shipyard::{error::RunWorkload, try_system, EntitiesViewMut, Workload, World};
 /// use std::error::Error;
 /// use std::fmt::{Debug, Display, Formatter};
 ///
@@ -73,10 +73,10 @@ macro_rules! system {
 ///
 /// fn main() {
 ///     let world = World::new();
-///     world
-///         .add_workload("May fail")
+///     Workload::builder("May fail")
 ///         .with_system(try_system!(my_sys))
-///         .build();
+///         .add_to_world(&world)
+///         .unwrap();
 ///     match world.try_run_default().map_err(RunWorkload::custom_error) {
 ///         Err(Some(error)) => {
 ///             assert!(error.is::<TerribleError>());

@@ -398,8 +398,12 @@ impl AllStorages {
     ///
     /// - `T` storage borrow failed.
     /// - `T` storage did not exist.
+    #[track_caller]
     pub fn remove_unique<T: 'static>(&self) -> T {
-        self.try_remove_unique::<T>().unwrap()
+        match self.try_remove_unique::<T>() {
+            Ok(unique) => unique,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
@@ -764,8 +768,12 @@ world.run(|all_storages: AllStoragesViewMut| {
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> V {
-        self.try_borrow::<V>().unwrap()
+        match self.try_borrow::<V>() {
+            Ok(views) => views,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -966,12 +974,16 @@ You can use:
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::AllSystem<'s, (Data,), B, R>>(
         &'s self,
         s: S,
         data: Data,
     ) -> R {
-        self.try_run_with_data(s, data).unwrap()
+        match self.try_run_with_data(s, data) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -1204,8 +1216,12 @@ let i = all_storages.run(sys1);
     )]
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, s: S) -> R {
-        self.try_run(s).unwrap()
+        match self.try_run(s) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Deletes any entity with at least one of the given type(s).
     ///
@@ -1226,70 +1242,80 @@ let i = all_storages.run(sys1);
             borrow: Borrow::None,
         })
     }
-    #[cfg(feature = "serde1")]
-    pub(crate) fn storages(&mut self) -> &mut HashMap<StorageId, Storage> {
-        // SAFE we have exclusive access
-        unsafe { &mut *self.storages.get() }
-    }
+    // #[cfg(feature = "serde1")]
+    // pub(crate) fn storages(&mut self) -> &mut HashMap<StorageId, Storage> {
+    //     // SAFE we have exclusive access
+    //     unsafe { &mut *self.storages.get() }
+    // }
 }
 
-#[cfg(feature = "serde1")]
-pub(crate) struct AllStoragesSerializer<'a> {
-    pub(crate) all_storages: RefMut<'a, AllStorages>,
-    pub(crate) ser_config: crate::serde_setup::GlobalSerConfig,
-}
+// #[cfg(feature = "serde1")]
+// pub(crate) struct AllStoragesSerializer<'a> {
+//     pub(crate) all_storages: RefMut<'a, AllStorages>,
+//     pub(crate) ser_config: crate::serde_setup::GlobalSerConfig,
+// }
 
-#[cfg(feature = "serde1")]
-impl serde::Serialize for AllStoragesSerializer<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
+// #[cfg(feature = "serde1")]
+// impl serde::Serialize for AllStoragesSerializer<'_> {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         use serde::ser::SerializeStruct;
 
-        let all_storages = unsafe { &*self.all_storages.storages.get() };
+//         let all_storages = unsafe { &*self.all_storages.storages.get() };
 
-        let mut storages = Vec::with_capacity(all_storages.len());
+//         let mut storages = Vec::with_capacity(all_storages.len());
 
-        let metadata = all_storages
-            .iter()
-            .filter_map(|(type_id, storage)| {
-                let storage = storage.0.try_borrow().unwrap();
+//         let ser_infos = crate::serde_setup::SerInfos {
+//             same_binary: self.ser_config.same_binary,
+//             with_entities: self.ser_config.with_entities,
+//         };
 
-                if storage.is_serializable() && !storage.skip_serialization(self.ser_config) {
-                    let result = match storage.deserialize() {
-                        Some(deserialize) => Ok((
-                            type_id,
-                            crate::unknown_storage::deserialize_ptr(deserialize),
-                        )),
-                        None => Err(serde::ser::Error::custom(
-                            "Unknown storage's implementation is incorrect.",
-                        )),
-                    };
+//         let mut state = serializer.serialize_struct("AllStorages", 3)?;
 
-                    storages.push(storage);
+//         if ser_infos.same_binary {
+//             let metadata = all_storages
+//                 .iter()
+//                 .filter_map(|(type_id, storage)| {
+//                     let storage = storage.0.try_borrow().unwrap();
 
-                    Some(result)
-                } else {
-                    None
-                }
-            })
-            .collect::<Result<Vec<_>, S::Error>>()?;
+//                     if storage.should_serialize(self.ser_config) {
+//                         let result = match storage.deserialize() {
+//                             Some(deserialize) => Ok((
+//                                 type_id,
+//                                 crate::unknown_storage::deserialize_ptr(deserialize),
+//                             )),
+//                             None => Err(serde::ser::Error::custom(
+//                                 "Unknown storage's implementation is incorrect.",
+//                             )),
+//                         };
 
-        let mut state = serializer.serialize_struct("AllStorages", 2)?;
+//                         storages.push(storage);
 
-        state.serialize_field("metadata", &metadata)?;
-        state.serialize_field(
-            "storages",
-            &storages
-                .iter()
-                .map(|storage| crate::unknown_storage::StorageSerializer {
-                    unknown_storage: &**storage,
-                    ser_config: self.ser_config,
-                })
-                .collect::<Vec<_>>(),
-        )?;
+//                         Some(result)
+//                     } else {
+//                         None
+//                     }
+//                 })
+//                 .collect::<Result<Vec<_>, S::Error>>()?;
 
-        state.end()
-    }
-}
+//             state.serialize_field("ser_infos", &ser_infos)?;
+//             state.serialize_field("metadata", &metadata)?;
+//             state.serialize_field(
+//                 "storages",
+//                 &storages
+//                     .iter()
+//                     .map(|storage| crate::unknown_storage::StorageSerializer {
+//                         unknown_storage: &**storage,
+//                         ser_config: self.ser_config,
+//                     })
+//                     .collect::<Vec<_>>(),
+//             )?;
+//         } else {
+//             todo!()
+//         }
+
+//         state.end()
+//     }
+// }

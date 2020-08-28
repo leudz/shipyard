@@ -48,39 +48,39 @@ impl PartialEq<TypeId> for core::any::TypeId {
     }
 }
 
-#[cfg(feature = "serde1")]
-impl serde::Serialize for TypeId {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        serializer.serialize_newtype_struct("TypeId", &self.0)
-    }
-}
+// #[cfg(feature = "serde1")]
+// impl serde::Serialize for TypeId {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         serializer.serialize_newtype_struct("TypeId", &self.0)
+//     }
+// }
 
-#[cfg(feature = "serde1")]
-impl<'de> serde::Deserialize<'de> for TypeId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct TypeIdVisitor;
+// #[cfg(feature = "serde1")]
+// impl<'de> serde::Deserialize<'de> for TypeId {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         struct TypeIdVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for TypeIdVisitor {
-            type Value = TypeId;
+//         impl<'de> serde::de::Visitor<'de> for TypeIdVisitor {
+//             type Value = TypeId;
 
-            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                formatter.write_str("a type id")
-            }
+//             fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+//                 formatter.write_str("a type id")
+//             }
 
-            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                Ok(TypeId(serde::Deserialize::deserialize(deserializer)?))
-            }
-        }
+//             fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+//             where
+//                 D: serde::Deserializer<'de>,
+//             {
+//                 Ok(TypeId(serde::Deserialize::deserialize(deserializer)?))
+//             }
+//         }
 
-        deserializer.deserialize_newtype_struct("TypeId", TypeIdVisitor)
-    }
-}
+//         deserializer.deserialize_newtype_struct("TypeId", TypeIdVisitor)
+//     }
+// }

@@ -5,19 +5,19 @@ use core::marker::PhantomData;
 /// Can be useful to correctly schedule `Sync` types.
 /// ### Example:
 /// ```
-/// use shipyard::{system, FakeBorrow, View, World};
+/// use shipyard::{system, FakeBorrow, View, Workload, World};
 ///
 /// fn display_first(_: View<usize>) {}
 /// fn display_next(_: View<usize>) {}
 ///
 /// let world = World::new();
 ///
-/// world
-///     .add_workload("Display")
+/// Workload::builder("Display")
 ///     .with_system(system!(display_first))
 ///     .with_system(system!(|_: FakeBorrow<usize>| {}))
 ///     .with_system(system!(display_next))
-///     .build();
+///     .add_to_world(&world)
+///     .unwrap();
 /// ```
 pub struct FakeBorrow<T: ?Sized>(PhantomData<T>);
 

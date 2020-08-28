@@ -7,15 +7,15 @@ use shipyard::*;
 pub const TICK: &str = "TICK";
 
 pub fn register_workloads(world: &World) {
-    world
-        .add_workload(TICK)
+    Workload::builder(TICK)
         .with_system(system!(start))
         .with_system(system!(handle_controller))
         .with_system(system!(update))
         .with_system(system!(commit))
         .with_system(system!(render))
         .with_system(system!(end))
-        .build();
+        .add_to_world(&world)
+        .unwrap();
 }
 
 pub fn start(mut fps_counter: UniqueViewMut<FpsCounter>) {

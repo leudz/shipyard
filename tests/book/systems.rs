@@ -14,11 +14,11 @@ fn test() {
 
     world.run(create_ints);
 
-    world
-        .add_workload("Int cycle")
+    Workload::builder("Int cycle")
         .with_system((|world: &World| world.try_run(create_ints), create_ints))
         .with_system(system!(delete_ints))
-        .build();
+        .add_to_world(&world)
+        .unwrap();
     world.run_workload("Int cycle");
     world.run_default();
 }

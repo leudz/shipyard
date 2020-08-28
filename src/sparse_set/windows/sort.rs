@@ -58,7 +58,12 @@ impl<'tmp, 'w, T> WindowSort1<'tmp, 'w, T> {
     }
     /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[track_caller]
     pub fn unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
-        self.try_unstable(cmp).unwrap()
+        match self.try_unstable(cmp) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 }

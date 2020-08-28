@@ -83,8 +83,12 @@ impl<T: 'static> AddComponentUnchecked<T> for &mut ViewMut<'_, T> {
         }
     }
     #[cfg(feature = "panic")]
+    #[track_caller]
     fn add_component_unchecked(self, component: T, entity: EntityId) {
-        self.try_add_component_unchecked(component, entity).unwrap();
+        match self.try_add_component_unchecked(component, entity) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 }
 
@@ -148,8 +152,12 @@ macro_rules! impl_add_component_unchecked {
                     Ok(())
             }
             #[cfg(feature = "panic")]
+            #[track_caller]
             fn add_component_unchecked(self, component: ($($type,)+), entity: EntityId) {
-                self.try_add_component_unchecked(component, entity).unwrap();
+                match self.try_add_component_unchecked(component, entity) {
+                    Ok(_) => (),
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

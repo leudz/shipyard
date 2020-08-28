@@ -56,8 +56,13 @@ impl<'tmp, T> Sort1<'tmp, T> {
     }
     /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.  
     /// Unwraps errors.
+    #[cfg(feature = "panic")]
+    #[track_caller]
     pub fn unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
-        self.try_unstable(cmp).unwrap()
+        match self.try_unstable(cmp) {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
 }
 
@@ -232,8 +237,13 @@ macro_rules! impl_unstable_sort {
             }
             /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
             /// Unwraps errors.
+            #[cfg(feature = "panic")]
+            #[track_caller]
             pub fn unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, cmp: Cmp) {
-                self.try_unstable(cmp).unwrap()
+                match self.try_unstable(cmp) {
+                    Ok(_) => (),
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }
@@ -261,7 +271,10 @@ fn unstable_sort() {
         array.insert(i, entity_id);
     }
 
-    array.sort().unstable(|x: &u64, y: &u64| x.cmp(&y));
+    array
+        .sort()
+        .try_unstable(|x: &u64, y: &u64| x.cmp(&y))
+        .unwrap();
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
@@ -288,7 +301,10 @@ fn partially_sorted_unstable_sort() {
         assert!(array.insert(i, entity_id).is_none());
     }
 
-    array.sort().unstable(|x: &u64, y: &u64| x.cmp(&y));
+    array
+        .sort()
+        .try_unstable(|x: &u64, y: &u64| x.cmp(&y))
+        .unwrap();
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);

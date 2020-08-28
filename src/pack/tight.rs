@@ -114,9 +114,13 @@ macro_rules! impl_tight_pack {
             fn try_tight_pack(mut self) -> Result<(), error::Pack> {
                 ($(&mut self.$index,)+).try_tight_pack()
             }
-                #[cfg(feature = "panic")]
-                fn tight_pack(self) {
-                self.try_tight_pack().unwrap()
+            #[cfg(feature = "panic")]
+            #[track_caller]
+            fn tight_pack(self) {
+                match self.try_tight_pack() {
+                    Ok(_) => (),
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

@@ -13,6 +13,16 @@ pub struct EntityBuilder<'a, C, S> {
     storages: S,
 }
 
+impl Clone for EntityBuilder<'_, (), ()> {
+    fn clone(&self) -> Self {
+        EntityBuilder {
+            all_storages: self.all_storages.clone(),
+            components: (),
+            storages: (),
+        }
+    }
+}
+
 impl<'a> EntityBuilder<'a, (), ()> {
     pub(crate) fn new(all_storages: Ref<'a, AllStorages>) -> Self {
         EntityBuilder {
@@ -47,16 +57,18 @@ impl<'a> EntityBuilder<'a, (), ()> {
     /// Borrows the storage associated with it panics if its already borrowed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn with<T: 'static + Send + Sync>(
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        let storage = self.all_storages.clone().try_into().unwrap();
-
-        EntityBuilder {
-            all_storages: self.all_storages,
-            components: (component,),
-            storages: (storage,),
+        match self.all_storages.clone().try_into() {
+            Ok(storage) => EntityBuilder {
+                all_storages: self.all_storages,
+                components: (component,),
+                storages: (storage,),
+            },
+            Err(err) => panic!("{:?}", err),
         }
     }
 
@@ -87,16 +99,18 @@ impl<'a> EntityBuilder<'a, (), ()> {
     /// Borrows the storage associated with it panics if its already borrowed.
     #[cfg(all(feature = "non_send", feature = "panic"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "panic"))))]
+    #[track_caller]
     pub fn with_non_send<T: 'static + Sync>(
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        let storage = ViewMut::try_from_non_send(self.all_storages.clone()).unwrap();
-
-        EntityBuilder {
-            all_storages: self.all_storages,
-            components: (component,),
-            storages: (storage,),
+        match ViewMut::try_from_non_send(self.all_storages.clone()) {
+            Ok(storage) => EntityBuilder {
+                all_storages: self.all_storages,
+                components: (component,),
+                storages: (storage,),
+            },
+            Err(err) => panic!("{:?}", err),
         }
     }
 
@@ -127,16 +141,18 @@ impl<'a> EntityBuilder<'a, (), ()> {
     /// Borrows the storage associated with it panics if its already borrowed.
     #[cfg(all(feature = "non_sync", feature = "panic"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_sync", feature = "panic"))))]
+    #[track_caller]
     pub fn with_non_sync<T: 'static + Send>(
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        let storage = ViewMut::try_from_non_sync(self.all_storages.clone()).unwrap();
-
-        EntityBuilder {
-            all_storages: self.all_storages,
-            components: (component,),
-            storages: (storage,),
+        match ViewMut::try_from_non_sync(self.all_storages.clone()) {
+            Ok(storage) => EntityBuilder {
+                all_storages: self.all_storages,
+                components: (component,),
+                storages: (storage,),
+            },
+            Err(err) => panic!("{:?}", err),
         }
     }
 
@@ -171,16 +187,18 @@ impl<'a> EntityBuilder<'a, (), ()> {
         docsrs,
         doc(cfg(all(feature = "non_send", feature = "non_sync", feature = "panic")))
     )]
+    #[track_caller]
     pub fn with_non_send_sync<T: 'static>(
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        let storage = ViewMut::try_from_non_send_sync(self.all_storages.clone()).unwrap();
-
-        EntityBuilder {
-            all_storages: self.all_storages,
-            components: (component,),
-            storages: (storage,),
+        match ViewMut::try_from_non_send_sync(self.all_storages.clone()) {
+            Ok(storage) => EntityBuilder {
+                all_storages: self.all_storages,
+                components: (component,),
+                storages: (storage,),
+            },
+            Err(err) => panic!("{:?}", err),
         }
     }
 
@@ -199,8 +217,12 @@ impl<'a> EntityBuilder<'a, (), ()> {
     /// Borrows the `Entities` storage, panics if its already borrowed.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn build(self) -> EntityId {
-        self.try_build().unwrap()
+        match self.try_build() {
+            Ok(id) => id,
+            Err(err) => panic!("{:?}", err),
+        }
     }
 }
 
@@ -231,13 +253,15 @@ macro_rules! impl_entity_builder {
             /// Borrows the storage associated with it panics if its already borrowed.
             #[cfg(feature = "panic")]
             #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+            #[track_caller]
             pub fn with<T: 'static + Send + Sync>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                let storage = self.all_storages.clone().try_into().unwrap();
-
-                EntityBuilder {
-                    all_storages: self.all_storages,
-                    components: ($(self.components.$index,)+ component,),
-                    storages: ($(self.storages.$index,)+ storage,),
+                match self.all_storages.clone().try_into() {
+                    Ok(storage) => EntityBuilder {
+                        all_storages: self.all_storages,
+                        components: ($(self.components.$index,)+ component,),
+                        storages: ($(self.storages.$index,)+ storage,),
+                    },
+                    Err(err) => panic!("{:?}", err),
                 }
             }
 
@@ -268,13 +292,15 @@ macro_rules! impl_entity_builder {
             /// Borrows the storage associated with it panics if its already borrowed.
             #[cfg(all(feature = "non_send", feature = "panic"))]
             #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "panic"))))]
+            #[track_caller]
             pub fn with_non_send<T: 'static + Sync>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                let storage = ViewMut::try_from_non_send(self.all_storages.clone()).unwrap();
-
-                EntityBuilder {
-                    all_storages: self.all_storages,
-                    components: ($(self.components.$index,)+ component,),
-                    storages: ($(self.storages.$index,)+ storage,),
+                match ViewMut::try_from_non_send(self.all_storages.clone()) {
+                    Ok(storage) => EntityBuilder {
+                        all_storages: self.all_storages,
+                        components: ($(self.components.$index,)+ component,),
+                        storages: ($(self.storages.$index,)+ storage,),
+                    },
+                    Err(err) => panic!("{:?}", err),
                 }
             }
 
@@ -305,13 +331,15 @@ macro_rules! impl_entity_builder {
             /// Borrows the storage associated with it panics if its already borrowed.
             #[cfg(all(feature = "non_sync", feature = "panic"))]
             #[cfg_attr(docsrs, doc(cfg(all(feature = "non_sync", feature = "panic"))))]
+            #[track_caller]
             pub fn with_non_sync<T: 'static + Send>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                let storage = ViewMut::try_from_non_sync(self.all_storages.clone()).unwrap();
-
-                EntityBuilder {
-                    all_storages: self.all_storages,
-                    components: ($(self.components.$index,)+ component,),
-                    storages: ($(self.storages.$index,)+ storage,),
+                match ViewMut::try_from_non_sync(self.all_storages.clone()) {
+                    Ok(storage) => EntityBuilder {
+                        all_storages: self.all_storages,
+                        components: ($(self.components.$index,)+ component,),
+                        storages: ($(self.storages.$index,)+ storage,),
+                    },
+                    Err(err) => panic!("{:?}", err),
                 }
             }
 
@@ -342,13 +370,15 @@ macro_rules! impl_entity_builder {
             /// Borrows the storage associated with it, panics if its already borrowed.
             #[cfg(all(feature = "non_send", feature = "non_sync", feature = "panic"))]
             #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync", feature = "panic"))))]
+            #[track_caller]
             pub fn with_non_send_sync<T: 'static>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                let storage = ViewMut::try_from_non_send_sync(self.all_storages.clone()).unwrap();
-
-                EntityBuilder {
-                    all_storages: self.all_storages,
-                    components: ($(self.components.$index,)+ component,),
-                    storages: ($(self.storages.$index,)+ storage,),
+                match ViewMut::try_from_non_send_sync(self.all_storages.clone()) {
+                    Ok(storage) => EntityBuilder {
+                        all_storages: self.all_storages,
+                        components: ($(self.components.$index,)+ component,),
+                        storages: ($(self.storages.$index,)+ storage,),
+                    },
+                    Err(err) => panic!("{:?}", err),
                 }
             }
 
@@ -367,8 +397,12 @@ macro_rules! impl_entity_builder {
             /// Borrows the `Entities` storage, panics if its already borrowed.
             #[cfg(feature = "panic")]
             #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+            #[track_caller]
             pub fn build(self) -> EntityId where ($($storage_type,)+): ViewAddEntity<Component = ($($type,)+)> {
-                self.try_build().unwrap()
+                match self.try_build() {
+                    Ok(id) => id,
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }
@@ -390,8 +424,12 @@ macro_rules! entity_builder {
 
             #[cfg(feature = "panic")]
             #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+            #[track_caller]
             pub fn build(self) -> EntityId where ($($storage_type,)+): ViewAddEntity<Component = ($($type,)+)> {
-                self.try_build().unwrap()
+                match self.try_build() {
+                    Ok(id) => id,
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

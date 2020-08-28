@@ -144,8 +144,12 @@ macro_rules! impl_remove {
                 )+))
             }
             #[cfg(feature = "panic")]
+            #[track_caller]
             fn remove(self, entity: EntityId) -> <($($type,)+) as Removable>::Out {
-                Remove::<($($type,)+)>::try_remove(self, entity).unwrap()
+                match Remove::<($($type,)+)>::try_remove(self, entity) {
+                    Ok(out) => out,
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

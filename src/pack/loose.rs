@@ -113,8 +113,12 @@ macro_rules! impl_loose_pack {
                 Ok(())
             }
             #[cfg(feature = "panic")]
+            #[track_caller]
             fn loose_pack(self) {
-                LoosePack::<($($tight,)+)>::try_loose_pack(self).unwrap()
+                match LoosePack::<($($tight,)+)>::try_loose_pack(self) {
+                    Ok(_) => (),
+                    Err(err) => panic!("{:?}", err),
+                }
             }
         }
     }

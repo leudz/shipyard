@@ -136,7 +136,7 @@ where
                     serde::de::Error::invalid_length(0, &"struct SparseSet with 2 elements")
                 })?;
                 let data = seq.next_element()?.ok_or_else(|| {
-                    serde::de::Error::invalid_length(1usize, &"struct SparseSet with 2 elements")
+                    serde::de::Error::invalid_length(1, &"struct SparseSet with 2 elements")
                 })?;
                 let metadata = Metadata::default();
 

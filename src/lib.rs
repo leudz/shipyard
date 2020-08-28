@@ -94,15 +94,15 @@
 //!     },
 //! );
 //!
-//! world
-//!     .add_workload("Life")
+//! Workload::builder("Life")
 //!     .with_system(system!(meal))
 //!     .with_system(system!(age))
-//!     .build();
-//! world
-//!     .add_workload("Reproduction")
+//!     .add_to_world(&world)
+//!     .unwrap();
+//! Workload::builder("Reproduction")
 //!     .with_system(system!(reproduction))
-//!     .build();
+//!     .add_to_world(&world)
+//!     .unwrap();
 //!
 //! for day in 0..100 {
 //!     if day % 6 == 0 {
@@ -148,8 +148,8 @@ mod atomic_refcell;
 mod borrow;
 mod delete;
 mod entity_builder;
-#[cfg(feature = "serde1")]
-mod erased_serde;
+//#[cfg(feature = "serde1")]
+//mod erased_serde;
 /// Contains all error types.
 pub mod error;
 mod get;
@@ -157,8 +157,8 @@ mod iter;
 mod not;
 mod pack;
 mod remove;
-#[cfg(feature = "serde1")]
-mod serde_setup;
+//#[cfg(feature = "serde1")]
+//mod serde_setup;
 mod sparse_set;
 mod storage;
 mod system;
@@ -190,8 +190,8 @@ pub use iter::{
 pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
-#[cfg(feature = "serde1")]
-pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
+//#[cfg(feature = "serde1")]
+//pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
 pub use sparse_set::{
     sort, sort::IntoSortable, AddComponentUnchecked, Contains, OldComponent, SparseSet, Window,
     WindowMut,
@@ -204,4 +204,4 @@ pub use view::ThreadPoolView;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
-pub use world::{WorkloadBuilder, World};
+pub use world::{Workload, WorkloadBuilder, World};

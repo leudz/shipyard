@@ -106,8 +106,12 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted(&self) -> Window<'_, T> {
-        self.try_inserted().unwrap()
+        match self.try_inserted() {
+            Ok(inserted) => inserted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *modified* section of an update packed window.
     pub fn try_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
@@ -133,8 +137,12 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn modified(&self) -> Window<'_, T> {
-        self.try_modified().unwrap()
+        match self.try_modified() {
+            Ok(modified) => modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* and *modified* section of an update packed window.
     pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
@@ -158,8 +166,12 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
-        self.try_inserted_or_modified().unwrap()
+        match self.try_inserted_or_modified() {
+            Ok(inserted_or_modified) => inserted_or_modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *deleted* components of an update packed window.
     pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
@@ -173,8 +185,12 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn deleted(&self) -> &[(EntityId, T)] {
-        self.try_deleted().unwrap()
+        match self.try_deleted() {
+            Ok(deleted) => deleted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the ids of *removed* components of an update packed window.
     pub fn try_removed(&self) -> Result<&[EntityId], error::NotUpdatePack> {
@@ -188,8 +204,12 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn removed(&self) -> &[EntityId] {
-        self.try_removed().unwrap()
+        match self.try_removed() {
+            Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the `EntityId` at a given `index`.
     pub fn try_id_at(&self, index: usize) -> Option<EntityId> {
@@ -199,8 +219,16 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn id_at(&self, index: usize) -> EntityId {
-        self.try_id_at(index).unwrap()
+        match self.try_id_at(index) {
+            Some(id) => id,
+            None => panic!(
+                "Window contains {} components but trying to access the id at index {}.",
+                self.len(),
+                index
+            ),
+        }
     }
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.
     /// This index is only valid for this window.
@@ -281,8 +309,12 @@ impl<'w, T> Window<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
-        self.try_as_window(range).unwrap()
+        match self.try_as_window(range) {
+            Ok(window) => window,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     pub(crate) fn metadata(&self) -> &Metadata<T> {
         self.metadata
@@ -294,8 +326,12 @@ impl<'w, T> Window<'w, T> {
 
 impl<T> Index<EntityId> for Window<'_, T> {
     type Output = T;
+    #[track_caller]
     fn index(&self, entity: EntityId) -> &Self::Output {
-        self.get(entity).unwrap()
+        match self.get(entity) {
+            Some(component) => component,
+            None => panic!("Window does not contain entity {:?}.", entity),
+        }
     }
 }
 
@@ -436,8 +472,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted(&self) -> Window<'_, T> {
-        self.try_inserted().unwrap()
+        match self.try_inserted() {
+            Ok(inserted) => inserted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* section of an update packed window mutably.
     pub fn try_inserted_mut(&mut self) -> Result<WindowMut<'_, T>, error::UpdateWindow> {
@@ -461,8 +501,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_mut(&mut self) -> WindowMut<'_, T> {
-        self.try_inserted_mut().unwrap()
+        match self.try_inserted_mut() {
+            Ok(inserted) => inserted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *modified* section of an update packed window.
     pub fn try_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
@@ -488,8 +532,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn modified(&self) -> Window<'_, T> {
-        self.try_modified().unwrap()
+        match self.try_modified() {
+            Ok(modified) => modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *modified* section of an update packed window mutably.
     pub fn try_modified_mut(&mut self) -> Result<WindowMut<'_, T>, error::UpdateWindow> {
@@ -515,8 +563,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn modified_mut(&mut self) -> WindowMut<'_, T> {
-        self.try_modified_mut().unwrap()
+        match self.try_modified_mut() {
+            Ok(modified) => modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* and *modified* section of an update packed window.
     pub fn try_inserted_or_modified(&self) -> Result<Window<'_, T>, error::UpdateWindow> {
@@ -540,8 +592,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_or_modified(&self) -> Window<'_, T> {
-        self.try_inserted_or_modified().unwrap()
+        match self.try_inserted_or_modified() {
+            Ok(inserted_or_modified) => inserted_or_modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *inserted* and *modified* section of an update packed window mutably.
     pub fn try_inserted_or_modified_mut(
@@ -567,8 +623,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn inserted_or_modified_mut(&mut self) -> WindowMut<'_, T> {
-        self.try_inserted_or_modified_mut().unwrap()
+        match self.try_inserted_or_modified_mut() {
+            Ok(inserted_or_modified) => inserted_or_modified,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the *deleted* components of an update packed window.
     pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
@@ -582,8 +642,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn deleted(&self) -> &[(EntityId, T)] {
-        self.try_deleted().unwrap()
+        match self.try_deleted() {
+            Ok(deleted) => deleted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns the ids of *removed* components of an update packed window.
     pub fn try_removed(&self) -> Result<&[EntityId], error::NotUpdatePack> {
@@ -597,8 +661,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn removed(&self) -> &[EntityId] {
-        self.try_removed().unwrap()
+        match self.try_removed() {
+            Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Takes ownership of the *deleted* components of an update packed window.
     pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
@@ -614,8 +682,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
-        self.try_take_deleted().unwrap()
+        match self.try_take_deleted() {
+            Ok(deleted) => deleted,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Takes ownership of the ids of *removed* components of an update packed window.
     pub fn try_take_removed(&mut self) -> Result<Vec<EntityId>, error::NotUpdatePack> {
@@ -631,8 +703,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
-        self.try_take_removed().unwrap()
+        match self.try_take_removed() {
+            Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Moves all component in the *inserted* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
@@ -666,8 +742,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn clear_inserted(&mut self) {
-        self.try_clear_inserted().unwrap()
+        match self.try_clear_inserted() {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Moves all component in the *modified* section of an update packed window to the *neutral* section.
     pub fn try_clear_modified(&mut self) -> Result<(), error::NotUpdatePack> {
@@ -682,8 +762,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn clear_modified(&mut self) {
-        self.try_clear_modified().unwrap()
+        match self.try_clear_modified() {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed window to the *neutral* section.
     pub fn try_clear_inserted_and_modified(&mut self) -> Result<(), error::NotUpdatePack> {
@@ -699,8 +783,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn clear_inserted_and_modified(&mut self) {
-        self.try_clear_inserted_and_modified().unwrap()
+        match self.try_clear_inserted_and_modified() {
+            Ok(_) => (),
+            Err(err) => panic!("{:?}", err),
+        }
     }
     pub(crate) fn unpack(&mut self, entity: EntityId) {
         if self.contains(entity) {
@@ -760,8 +848,16 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn id_at(&self, index: usize) -> EntityId {
-        self.try_id_at(index).unwrap()
+        match self.try_id_at(index) {
+            Some(id) => id,
+            None => panic!(
+                "Window contains {} components but trying to access the id at index {}.",
+                self.len(),
+                index
+            ),
+        }
     }
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.
     /// This index is only valid for this window and until a modification happens.
@@ -816,8 +912,12 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn as_window<R: core::ops::RangeBounds<usize>>(&self, range: R) -> Window<'_, T> {
-        self.try_as_window(range).unwrap()
+        match self.try_as_window(range) {
+            Ok(window) => window,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     /// Returns a mutable window over `range`.
     pub fn try_as_window_mut<R: core::ops::RangeBounds<usize>>(
@@ -861,11 +961,15 @@ impl<'w, T> WindowMut<'w, T> {
     /// Unwraps errors.
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
     pub fn as_window_mut<R: core::ops::RangeBounds<usize>>(
         &mut self,
         range: R,
     ) -> WindowMut<'_, T> {
-        self.try_as_window_mut(range).unwrap()
+        match self.try_as_window_mut(range) {
+            Ok(window) => window,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     pub(crate) fn metadata(&self) -> &Metadata<T> {
         self.metadata
@@ -877,14 +981,22 @@ impl<'w, T> WindowMut<'w, T> {
 
 impl<T> Index<EntityId> for WindowMut<'_, T> {
     type Output = T;
+    #[track_caller]
     fn index(&self, entity: EntityId) -> &Self::Output {
-        self.get(entity).unwrap()
+        match self.get(entity) {
+            Some(component) => component,
+            None => panic!("Window does not contain entity {:?}.", entity),
+        }
     }
 }
 
 impl<T> IndexMut<EntityId> for WindowMut<'_, T> {
+    #[track_caller]
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
-        self.get_mut(entity).unwrap()
+        match self.get_mut(entity) {
+            Some(component) => component,
+            None => panic!("Window does not contain entity {:?}.", entity),
+        }
     }
 }
 
