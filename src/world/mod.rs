@@ -1,6 +1,8 @@
-mod scheduler;
+pub mod scheduler;
 
 pub use scheduler::{Workload, WorkloadBuilder};
+
+pub(crate) use scheduler::TypeInfo;
 
 use crate::atomic_refcell::AtomicRefCell;
 // #[cfg(feature = "serde1")]
@@ -14,7 +16,7 @@ use crate::storage::AllStorages;
 // #[cfg(feature = "serde1")]
 // use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
-use core::ops::Range;
+use alloc::vec::Vec;
 #[cfg(feature = "parallel")]
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use scheduler::Scheduler;
@@ -453,11 +455,11 @@ let (entities, mut usizes) = world
     pub fn try_borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
         #[cfg(feature = "parallel")]
         {
-            V::try_borrow(&self.all_storages, &self.thread_pool)
+            V::try_borrow(self)
         }
         #[cfg(not(feature = "parallel"))]
         {
-            V::try_borrow(&self.all_storages)
+            V::try_borrow(&self)
         }
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
@@ -740,11 +742,11 @@ world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
         Ok(s.run((data,), {
             #[cfg(feature = "parallel")]
             {
-                S::try_borrow(&self.all_storages, &self.thread_pool)?
+                S::try_borrow(self)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                S::try_borrow(&self.all_storages)?
+                S::try_borrow(&self)?
             }
         }))
     }
@@ -1040,11 +1042,11 @@ let i = world.try_run(sys1).unwrap();
         Ok(s.run((), {
             #[cfg(feature = "parallel")]
             {
-                S::try_borrow(&self.all_storages, &self.thread_pool)?
+                S::try_borrow(self)?
             }
             #[cfg(not(feature = "parallel"))]
             {
-                S::try_borrow(&self.all_storages)?
+                S::try_borrow(&self)?
             }
         }))
     }
@@ -1207,16 +1209,10 @@ let i = world.run(sys1);
         &self,
         name: impl Into<Cow<'static, str>>,
     ) -> Result<(), error::SetDefaultWorkload> {
-        if let Ok(mut scheduler) = self.scheduler.try_borrow_mut() {
-            if let Some(workload) = scheduler.workloads.get(&name.into()) {
-                scheduler.default = workload.clone();
-                Ok(())
-            } else {
-                Err(error::SetDefaultWorkload::MissingWorkload)
-            }
-        } else {
-            Err(error::SetDefaultWorkload::Borrow)
-        }
+        self.scheduler
+            .try_borrow_mut()
+            .map_err(|_| error::SetDefaultWorkload::Borrow)?
+            .set_default(name.into())
     }
     /// Modifies the current default workload to `name`.  
     /// Unwraps errors.
@@ -1251,16 +1247,15 @@ let i = world.run(sys1);
     /// - Workload did not exist.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn try_run_workload(&self, name: impl AsRef<str> + Sync) -> Result<(), error::RunWorkload> {
+    pub fn try_run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .try_borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
-        if let Some(range) = scheduler.workloads.get(name.as_ref()) {
-            self.try_run_workload_index(&*scheduler, range.clone())
-        } else {
-            Err(error::RunWorkload::MissingWorkload)
-        }
+
+        let batches = scheduler.workload(name.as_ref())?;
+
+        self.try_run_workload_index(&scheduler, batches)
     }
     /// Runs the `name` workload.  
     /// Unwraps error.
@@ -1288,9 +1283,9 @@ let i = world.run(sys1);
     fn try_run_workload_index(
         &self,
         scheduler: &Scheduler,
-        workload: Range<usize>,
+        batches: &[Vec<usize>],
     ) -> Result<(), error::RunWorkload> {
-        for batch in &scheduler.batch[workload] {
+        for batch in batches {
             if batch.len() == 1 {
                 scheduler.systems[batch[0]](self).map_err(|err| {
                     error::RunWorkload::Run((scheduler.system_names[batch[0]], err))
@@ -1337,8 +1332,9 @@ let i = world.run(sys1);
             .scheduler
             .try_borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
-        if !scheduler.batch.is_empty() {
-            self.try_run_workload_index(&scheduler, scheduler.default.clone())?
+
+        if !scheduler.is_empty() {
+            self.try_run_workload_index(&scheduler, scheduler.default_workload())?
         }
         Ok(())
     }

@@ -4,7 +4,7 @@ use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
 use core::any::Any;
 
-pub(super) struct Unique<T>(pub(crate) T);
+pub(crate) struct Unique<T>(pub(crate) T);
 
 impl<T: 'static> UnknownStorage for Unique<T> {
     fn delete(&mut self, _: EntityId, _: &mut Vec<TypeId>) {}

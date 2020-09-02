@@ -8,6 +8,7 @@ pub use entity::{Entities, EntitiesIter, EntityId};
 pub use storage_id::StorageId;
 
 pub(crate) use crate::type_id::TypeIdHasher;
+pub(crate) use unique::Unique;
 // #[cfg(feature = "serde1")]
 // pub(crate) use all::AllStoragesSerializer;
 
@@ -22,7 +23,6 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
-use unique::Unique;
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.  
