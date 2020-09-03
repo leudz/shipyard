@@ -10,7 +10,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 If you have any question or want to follow the development more closely join the [Zulip](https://shipyard.zulipchat.com).
 
 There's two big learning resources:
-- [The Tutorial](https://leudz.github.io/shipyard/tutorial) for people new to ECS or who prefer to learn by making a project.
+- [The Tutorial](https://leudz.github.io/shipyard/tutorial) (WIP) for people new to ECS or who prefer to learn by making a project.
 - [The Guide](https://leudz.github.io/shipyard/guide) for people that already know how to use an ECS and mostly want to learn Shipyard's syntax.  
   It also goes into greater depth and provides useful recipes.
 
