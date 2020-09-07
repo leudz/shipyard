@@ -1,8 +1,9 @@
 use core::marker::PhantomData;
 
-/// Mimics an exclusive borrow of `T` without actually doing it.
-///
+/// Mimics an exclusive borrow of `T` without actually borrowing anything.  
 /// Can be useful to correctly schedule `Sync` types.
+///
+/// Use [`Unique<T>`] for unique storage.
 /// ### Example:
 /// ```
 /// use shipyard::{system, FakeBorrow, View, Workload, World};
@@ -19,6 +20,8 @@ use core::marker::PhantomData;
 ///     .add_to_world(&world)
 ///     .unwrap();
 /// ```
+///
+/// [`Unique<T>`]: struct.Unique.html
 pub struct FakeBorrow<T: ?Sized>(PhantomData<T>);
 
 impl<T: ?Sized> FakeBorrow<T> {

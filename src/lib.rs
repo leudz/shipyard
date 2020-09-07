@@ -196,7 +196,7 @@ pub use sparse_set::{
     sort, sort::IntoSortable, AddComponentUnchecked, Contains, OldComponent, SparseSet, Window,
     WindowMut,
 };
-pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId};
+pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId, Unique};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 #[cfg(feature = "parallel")]
@@ -204,4 +204,5 @@ pub use view::ThreadPoolView;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
+pub use world::scheduler::info;
 pub use world::{Workload, WorkloadBuilder, World};

@@ -1,4 +1,6 @@
-use crate::borrow::Mutation;
+use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
+use super::Scheduler;
+use crate::borrow::Mutability;
 use crate::error;
 use crate::storage::AllStorages;
 use crate::system::System;
@@ -11,7 +13,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
 use core::ops::Range;
-use hashbrown::hash_map::Entry;
 
 /// Used to create a [`WorkloadBuilder`].
 ///
@@ -46,7 +47,7 @@ pub struct WorkloadBuilder {
         bool,
         Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
     )>,
-    borrow_info: Vec<(TypeId, Mutation)>,
+    borrow_info: Vec<TypeInfo>,
     name: Cow<'static, str>,
 }
 
@@ -159,24 +160,31 @@ impl WorkloadBuilder {
 
         let borrows = &self.borrow_info[old_len..];
 
-        if borrows.contains(&(TypeId::of::<AllStorages>(), Mutation::Unique)) && borrows.len() > 1 {
+        if borrows.contains(&TypeInfo {
+            name: "",
+            type_id: TypeId::of::<AllStorages>(),
+            mutability: Mutability::Exclusive,
+            is_send: true,
+            is_sync: true,
+        }) && borrows.len() > 1
+        {
             return Err(error::InvalidSystem::AllStorages);
         }
 
         let mid = borrows.len() / 2 + (borrows.len() % 2 != 0) as usize;
 
-        for (a_type_id, a_borrow) in &borrows[..mid] {
-            for (b_type_id, b_borrow) in &borrows[mid..] {
-                if a_type_id == b_type_id {
-                    match (a_borrow, b_borrow) {
-                        (Mutation::Unique, Mutation::Unique) => {
+        for a_type_info in &borrows[..mid] {
+            for b_type_info in &borrows[mid..] {
+                if a_type_info.type_id == b_type_info.type_id {
+                    match (a_type_info.mutability, b_type_info.mutability) {
+                        (Mutability::Exclusive, Mutability::Exclusive) => {
                             return Err(error::InvalidSystem::MultipleViewsMut)
                         }
-                        (Mutation::Unique, Mutation::Shared)
-                        | (Mutation::Shared, Mutation::Unique) => {
+                        (Mutability::Exclusive, Mutability::Shared)
+                        | (Mutability::Shared, Mutability::Exclusive) => {
                             return Err(error::InvalidSystem::MultipleViews)
                         }
-                        (Mutation::Shared, Mutation::Shared) => {}
+                        (Mutability::Shared, Mutability::Shared) => {}
                     }
                 }
             }
@@ -272,171 +280,373 @@ impl WorkloadBuilder {
             .try_borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
-        if self.systems.len() == 1 {
+        if self.systems.is_empty() {
+            // if the workload doesn't have systems we just register it with no batch
+            if scheduler.workloads.is_empty() {
+                scheduler.default = self.name.clone();
+                scheduler
+                    .workloads
+                    .insert(core::mem::take(&mut self.name), Vec::new());
+            } else {
+                match scheduler.workloads.entry(core::mem::take(&mut self.name)) {
+                    hashbrown::hash_map::Entry::Occupied(_) => {
+                        return Err(error::AddWorkload::AlreadyExists);
+                    }
+                    hashbrown::hash_map::Entry::Vacant(entry) => entry.insert(Vec::new()),
+                };
+            }
+        } else if self.systems.len() == 1 {
+            // with a single system there is just one batch configuration possible
+            let Scheduler {
+                systems,
+                system_names,
+                lookup_table,
+                workloads,
+                default,
+            } = &mut *scheduler;
+
+            let batches;
+
+            if workloads.is_empty() {
+                *default = self.name.clone();
+                batches = workloads
+                    .entry(core::mem::take(&mut self.name))
+                    .insert(Vec::new())
+                    .into_mut();
+            } else {
+                match workloads.entry(core::mem::take(&mut self.name)) {
+                    hashbrown::hash_map::Entry::Occupied(_) => {
+                        return Err(error::AddWorkload::AlreadyExists);
+                    }
+                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
+                };
+            }
+
             let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();
 
-            let mut name = "".into();
-            core::mem::swap(&mut name, &mut self.name);
+            let system_index = *lookup_table.entry(type_id).or_insert_with(|| {
+                systems.push(system);
+                system_names.push(system_name);
+                systems.len() - 1
+            });
 
-            let range = scheduler.batch.len()..(scheduler.batch.len() + 1);
-
-            match scheduler.workloads.entry(name) {
-                hashbrown::hash_map::Entry::Occupied(_) => {
-                    return Err(error::AddWorkload::AlreadyExists);
-                }
-                hashbrown::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(range.clone());
-                }
-            }
-
-            if scheduler.workloads.len() == 1 {
-                scheduler.default = range;
-            }
-
-            let len = scheduler.systems.len();
-            let system_index = match scheduler.lookup_table.entry(type_id) {
-                Entry::Vacant(vacant) => {
-                    vacant.insert(len);
-                    scheduler.systems.push(system);
-                    scheduler.system_names.push(system_name);
-                    scheduler.systems.len() - 1
-                }
-                Entry::Occupied(occupied) => *occupied.get(),
-            };
-
-            scheduler.batch.push(Box::new([system_index]));
+            batches.push(vec![system_index]);
         } else {
-            if scheduler.workloads.contains_key(&self.name) {
-                return Err(error::AddWorkload::AlreadyExists);
+            // with multiple systems we have to create batches
+            // a system can't be added to a batch older than the last one
+            // systems borrowing !Send and !Sync types are currently always scheduled on their own to make them run on World's thread
+            let Scheduler {
+                systems,
+                system_names,
+                lookup_table,
+                workloads,
+                default,
+            } = &mut *scheduler;
+
+            let batches;
+
+            if workloads.is_empty() {
+                *default = self.name.clone();
+                batches = workloads
+                    .entry(core::mem::take(&mut self.name))
+                    .insert(Vec::new())
+                    .into_mut();
+            } else {
+                match workloads.entry(core::mem::take(&mut self.name)) {
+                    hashbrown::hash_map::Entry::Occupied(_) => {
+                        return Err(error::AddWorkload::AlreadyExists);
+                    }
+                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
+                };
             }
 
-            let batch_start = scheduler.batch.len();
-            let mut new_batch = vec![Vec::new()];
-            let mut batch_info = vec![Vec::new()];
+            let mut batches_info: Vec<Vec<_>> = vec![];
 
-            for (type_id, name, info_range, is_send_sync, system) in self.systems.drain(..) {
-                let len = scheduler.systems.len();
-                let system_index = match scheduler.lookup_table.entry(type_id) {
-                    Entry::Vacant(vacant) => {
-                        vacant.insert(len);
-                        scheduler.systems.push(system);
-                        scheduler.system_names.push(name);
-                        scheduler.systems.len() - 1
-                    }
-                    Entry::Occupied(occupied) => *occupied.get(),
-                };
+            for (system_type_id, system_name, info_range, is_send_sync, system) in
+                self.systems.drain(..)
+            {
+                let system_index = *lookup_table.entry(system_type_id).or_insert_with(|| {
+                    systems.push(system);
+                    system_names.push(system_name);
+                    systems.len() - 1
+                });
 
                 if is_send_sync {
-                    let mut batch_index = new_batch.len();
-                    for batch in batch_info.iter().rev() {
-                        let mut conflict = false;
-                        for &(type_id, mutation) in &self.borrow_info[info_range.clone()] {
-                            match mutation {
-                                Mutation::Shared => {
-                                    for &(batch_type_id, mutation) in batch.iter() {
-                                        #[cfg(feature = "parallel")]
+                    let mut conflict = false;
+
+                    if let Some(last) = batches_info.last() {
+                        'outer: for &(type_id, mutability) in last.iter().rev() {
+                            for type_info in &self.borrow_info[info_range.clone()] {
+                                match type_info.mutability {
+                                    Mutability::Exclusive => {
+                                        if type_info.type_id == type_id
+                                            || type_info.type_id == TypeId::of::<AllStorages>()
+                                            || type_id == TypeId::of::<AllStorages>()
                                         {
-                                            if type_id == batch_type_id
-                                                && mutation == Mutation::Unique
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
-                                            {
-                                                conflict = true;
-                                                break;
-                                            }
+                                            conflict = true;
+                                            break 'outer;
                                         }
-                                        #[cfg(not(feature = "parallel"))]
+                                    }
+                                    Mutability::Shared => {
+                                        if (type_info.type_id == type_id
+                                            && mutability == Mutability::Exclusive)
+                                            || type_info.type_id == TypeId::of::<AllStorages>()
+                                            || type_id == TypeId::of::<AllStorages>()
                                         {
-                                            if type_id == batch_type_id
-                                                && mutation == Mutation::Unique
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
-                                            {
-                                                conflict = true;
-                                                break;
-                                            }
+                                            conflict = true;
+                                            break 'outer;
                                         }
                                     }
                                 }
-                                Mutation::Unique => {
-                                    for &(batch_type_id, _) in batch.iter() {
-                                        #[cfg(feature = "parallel")]
-                                        {
-                                            if type_id == batch_type_id
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
+                            }
+                        }
+                    }
+
+                    if conflict || batches.is_empty() {
+                        batches.push(vec![system_index]);
+                        batches_info.push(
+                            self.borrow_info[info_range]
+                                .iter()
+                                .map(|type_info| (type_info.type_id, type_info.mutability))
+                                .collect(),
+                        );
+                    } else {
+                        batches.last_mut().unwrap().push(system_index);
+                        batches_info.last_mut().unwrap().extend(
+                            self.borrow_info[info_range]
+                                .iter()
+                                .map(|type_info| (type_info.type_id, type_info.mutability)),
+                        );
+                    }
+                } else {
+                    batches.push(vec![system_index]);
+                    batches_info.push(vec![(TypeId::of::<AllStorages>(), Mutability::Exclusive)]);
+                }
+            }
+        }
+
+        Ok(())
+    }
+    /// Finishes the workload creation and store it in the [`World`].  
+    /// Returns a struct with describing how the workload has been split in batches.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    /// - Workload with an identical name already present.
+    ///
+    /// [`World`]: struct.World.html
+    pub fn add_to_world_with_info(
+        &mut self,
+        world: &World,
+    ) -> Result<WorkloadInfo, error::AddWorkload> {
+        let mut scheduler = world
+            .scheduler
+            .try_borrow_mut()
+            .map_err(|_| error::AddWorkload::Borrow)?;
+
+        let mut workload_info;
+
+        if self.systems.is_empty() {
+            // if the workload doesn't have systems we just register it with no batch
+            // and register the batch info
+            if scheduler.workloads.is_empty() {
+                scheduler.default = self.name.clone();
+                scheduler
+                    .workloads
+                    .insert(core::mem::take(&mut self.name), Vec::new());
+            } else {
+                match scheduler.workloads.entry(core::mem::take(&mut self.name)) {
+                    hashbrown::hash_map::Entry::Occupied(_) => {
+                        return Err(error::AddWorkload::AlreadyExists);
+                    }
+                    hashbrown::hash_map::Entry::Vacant(entry) => entry.insert(Vec::new()),
+                };
+            }
+
+            workload_info = WorkloadInfo {
+                name: core::mem::take(&mut self.name),
+                batch_info: Vec::new(),
+            };
+        } else if self.systems.len() == 1 {
+            // with a single system there is just one batch configuration possible
+            let Scheduler {
+                systems,
+                system_names,
+                lookup_table,
+                workloads,
+                default,
+            } = &mut *scheduler;
+
+            let batches;
+
+            if workloads.is_empty() {
+                *default = self.name.clone();
+                batches = workloads
+                    .entry(core::mem::take(&mut self.name))
+                    .insert(Vec::new())
+                    .into_mut();
+            } else {
+                match workloads.entry(core::mem::take(&mut self.name)) {
+                    hashbrown::hash_map::Entry::Occupied(_) => {
+                        return Err(error::AddWorkload::AlreadyExists);
+                    }
+                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
+                };
+            }
+
+            let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();
+
+            let system_index = *lookup_table.entry(type_id).or_insert_with(|| {
+                systems.push(system);
+                system_names.push(system_name);
+                systems.len() - 1
+            });
+
+            batches.push(vec![system_index]);
+
+            let batch_info = BatchInfo {
+                systems: vec![SystemInfo {
+                    name: system_name,
+                    borrow: core::mem::take(&mut self.borrow_info),
+                }],
+                conflict: None,
+            };
+
+            workload_info = WorkloadInfo {
+                name: core::mem::take(&mut self.name),
+                batch_info: vec![batch_info],
+            };
+        } else {
+            // with multiple systems we have to create batches
+            // a system can't be added to a batch older than the last one
+            // systems borrowing !Send and !Sync types are currently always scheduled on their own to make them run on World's thread
+            let Scheduler {
+                systems,
+                system_names,
+                lookup_table,
+                workloads,
+                default,
+            } = &mut *scheduler;
+
+            let batches;
+
+            if workloads.is_empty() {
+                *default = self.name.clone();
+                batches = workloads
+                    .entry(self.name.clone())
+                    .insert(Vec::new())
+                    .into_mut();
+            } else {
+                match workloads.entry(self.name.clone()) {
+                    hashbrown::hash_map::Entry::Occupied(_) => {
+                        return Err(error::AddWorkload::AlreadyExists);
+                    }
+                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
+                };
+            }
+
+            workload_info = WorkloadInfo {
+                name: self.name.clone(),
+                batch_info: vec![],
+            };
+
+            for (system_type_id, system_name, info_range, is_send_sync, system) in
+                self.systems.drain(..)
+            {
+                let system_index = *lookup_table.entry(system_type_id).or_insert_with(|| {
+                    systems.push(system);
+                    system_names.push(system_name);
+                    systems.len() - 1
+                });
+
+                let system_info = SystemInfo {
+                    name: system_name,
+                    borrow: self.borrow_info[info_range.clone()].to_vec(),
+                };
+
+                if is_send_sync {
+                    let mut conflict_info = None;
+
+                    if let Some(batch_info) = workload_info.batch_info.last() {
+                        'outer: for system_info in batch_info.systems.iter().rev() {
+                            for type_info in &self.borrow_info[info_range.clone()] {
+                                match type_info.mutability {
+                                    Mutability::Exclusive => {
+                                        for batch_type_info in &system_info.borrow {
+                                            if type_info.type_id == batch_type_info.type_id
+                                                || type_info.type_id == TypeId::of::<AllStorages>()
+                                                || batch_type_info.type_id
+                                                    == TypeId::of::<AllStorages>()
                                             {
-                                                conflict = true;
-                                                break;
+                                                conflict_info = Some(Conflict::Borrow {
+                                                    type_info: type_info.clone(),
+                                                    system: SystemId {
+                                                        name: system_info.name,
+                                                        type_id: TypeId::of::<()>(),
+                                                    },
+                                                });
+
+                                                break 'outer;
                                             }
                                         }
-                                        #[cfg(not(feature = "parallel"))]
-                                        {
-                                            if type_id == batch_type_id
-                                                || type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_id == TypeId::of::<AllStorages>()
+                                    }
+                                    Mutability::Shared => {
+                                        for batch_type_info in &system_info.borrow {
+                                            if (type_info.type_id == batch_type_info.type_id
+                                                && batch_type_info.mutability
+                                                    == Mutability::Exclusive)
+                                                || type_info.type_id == TypeId::of::<AllStorages>()
+                                                || batch_type_info.type_id
+                                                    == TypeId::of::<AllStorages>()
                                             {
-                                                conflict = true;
-                                                break;
+                                                conflict_info = Some(Conflict::Borrow {
+                                                    type_info: type_info.clone(),
+                                                    system: SystemId {
+                                                        name: system_info.name,
+                                                        type_id: TypeId::of::<()>(),
+                                                    },
+                                                });
+
+                                                break 'outer;
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-
-                        if conflict {
-                            break;
-                        } else {
-                            batch_index -= 1;
-                        }
                     }
 
-                    if batch_index == batch_info.len() {
-                        new_batch.push(vec![system_index]);
-                        batch_info.push(self.borrow_info[info_range].to_vec());
+                    if conflict_info.is_some() || batches.is_empty() {
+                        batches.push(vec![system_index]);
+                        workload_info.batch_info.push(BatchInfo {
+                            systems: vec![system_info],
+                            conflict: conflict_info,
+                        });
                     } else {
-                        new_batch[batch_index].push(system_index);
-                        batch_info[batch_index].extend_from_slice(&self.borrow_info[info_range]);
-                    }
-                } else {
-                    let last = new_batch.last_mut().unwrap();
-                    if last.is_empty() {
-                        last.push(system_index);
-                        new_batch.push(Vec::new());
-                        batch_info
+                        batches.last_mut().unwrap().push(system_index);
+                        workload_info
+                            .batch_info
                             .last_mut()
                             .unwrap()
-                            .push((TypeId::of::<AllStorages>(), Mutation::Unique));
-                        batch_info.push(Vec::new());
-                    } else {
-                        new_batch.push(vec![system_index]);
-                        new_batch.push(Vec::new());
-                        batch_info.push(vec![(TypeId::of::<AllStorages>(), Mutation::Unique)]);
-                        batch_info.push(Vec::new());
+                            .systems
+                            .push(system_info);
                     }
+                } else {
+                    batches.push(vec![system_index]);
+                    workload_info.batch_info.push(BatchInfo {
+                        systems: vec![system_info],
+                        conflict: Some(Conflict::NotSendSync),
+                    });
                 }
             }
-
-            if new_batch.last().unwrap().is_empty() {
-                new_batch.pop();
-            }
-
-            scheduler
-                .batch
-                .extend(new_batch.into_iter().map(Vec::into_boxed_slice));
-
-            if scheduler.workloads.is_empty() {
-                scheduler.default = batch_start..(scheduler.batch.len());
-            }
-
-            let mut name = "".into();
-            core::mem::swap(&mut name, &mut self.name);
-            let len = scheduler.batch.len();
-            scheduler.workloads.insert(name, batch_start..len);
         }
 
-        Ok(())
+        Ok(workload_info)
     }
 }
 
@@ -456,11 +666,9 @@ fn single_immutable() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
-    assert_eq!(scheduler.batch.len(), 1);
-    assert_eq!(&*scheduler.batch[0], &[0]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("System1"), Some(&(0..1)));
-    assert_eq!(scheduler.default, 0..1);
+    assert_eq!(scheduler.workloads.get("System1"), Some(&vec![vec![0]]));
+    assert_eq!(scheduler.default, "System1");
 }
 
 #[test]
@@ -479,11 +687,9 @@ fn single_mutable() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
-    assert_eq!(scheduler.batch.len(), 1);
-    assert_eq!(&*scheduler.batch[0], &[0]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("System1"), Some(&(0..1)));
-    assert_eq!(scheduler.default, 0..1);
+    assert_eq!(scheduler.workloads.get("System1"), Some(&vec![vec![0]]));
+    assert_eq!(scheduler.default, "System1");
 }
 
 #[test]
@@ -505,11 +711,9 @@ fn multiple_immutable() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 1);
-    assert_eq!(&*scheduler.batch[0], &[0, 1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..1)));
-    assert_eq!(scheduler.default, 0..1);
+    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0, 1]]));
+    assert_eq!(scheduler.default, "Systems");
 }
 
 #[test]
@@ -531,12 +735,12 @@ fn multiple_mutable() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Systems");
 }
 
 #[test]
@@ -558,12 +762,12 @@ fn multiple_mixed() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Systems");
 
     let world = World::new();
 
@@ -577,12 +781,12 @@ fn multiple_mixed() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Systems");
 }
 
 #[test]
@@ -602,11 +806,9 @@ fn all_storages() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
-    assert_eq!(scheduler.batch.len(), 1);
-    assert_eq!(&*scheduler.batch[0], &[0]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..1)));
-    assert_eq!(scheduler.default, 0..1);
+    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0]]));
+    assert_eq!(scheduler.default, "Systems");
 
     let world = World::new();
 
@@ -620,12 +822,12 @@ fn all_storages() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[0], &[0]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Systems");
 
     let world = World::new();
 
@@ -639,12 +841,12 @@ fn all_storages() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Systems");
 
     let world = World::new();
 
@@ -658,12 +860,12 @@ fn all_storages() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Systems");
 }
 
 #[cfg(feature = "non_send")]
@@ -691,12 +893,12 @@ fn non_send() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Test");
 
     let world = World::new();
 
@@ -710,12 +912,12 @@ fn non_send() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Test");
 
     let world = World::new();
 
@@ -729,12 +931,12 @@ fn non_send() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Test");
 
     let world = World::new();
 
@@ -748,12 +950,12 @@ fn non_send() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Test");
 
     let world = World::new();
 
@@ -767,12 +969,12 @@ fn non_send() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.batch.len(), 2);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Test"), Some(&(0..2)));
-    assert_eq!(scheduler.default, 0..2);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&vec![vec![0], vec![1]])
+    );
+    assert_eq!(scheduler.default, "Test");
 }
 
 #[test]
@@ -787,7 +989,7 @@ fn fake_borrow() {
         .try_with_system((|world: &World| world.try_run(system1), system1))
         .unwrap()
         .try_with_system((
-            |world: &World| world.try_run(|_: FakeBorrow<usize>| {}),
+            |world: &World| world.try_run(|| {}),
             |_: FakeBorrow<usize>| {},
         ))
         .unwrap()
@@ -798,11 +1000,85 @@ fn fake_borrow() {
 
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 3);
-    assert_eq!(scheduler.batch.len(), 3);
-    assert_eq!(&*scheduler.batch[0], &[0]);
-    assert_eq!(&*scheduler.batch[1], &[1]);
-    assert_eq!(&*scheduler.batch[2], &[2]);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&(0..3)));
-    assert_eq!(scheduler.default, 0..3);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1], vec![2]])
+    );
+    assert_eq!(scheduler.default, "Systems");
+}
+
+#[test]
+fn unique_fake_borrow() {
+    use crate::{FakeBorrow, Unique, UniqueView, View, World};
+
+    fn system1(_: UniqueView<'_, usize>, _: View<'_, usize>) {}
+    fn system2(_: View<'_, usize>) {}
+
+    let world = World::new();
+
+    Workload::builder("Systems")
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((
+            |world: &World| world.try_run(|| {}),
+            |_: FakeBorrow<Unique<usize>>| {},
+        ))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 5);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0, 1], vec![2, 3], vec![4]])
+    );
+    assert_eq!(scheduler.default, "Systems");
+}
+
+#[test]
+fn unique_and_non_unique() {
+    use crate::{UniqueViewMut, ViewMut, World};
+
+    fn system1(_: ViewMut<'_, usize>) {}
+    fn system2(_: UniqueViewMut<'_, usize>) {}
+
+    let world = World::new();
+
+    Workload::builder("Systems")
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 2);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0, 1]]));
+    assert_eq!(scheduler.default, "Systems");
+}
+
+#[test]
+fn empty_workload() {
+    use crate::World;
+
+    let world = World::new();
+
+    Workload::builder("Systems").add_to_world(&world).unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 0);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![]));
+    assert_eq!(scheduler.default, "Systems");
 }

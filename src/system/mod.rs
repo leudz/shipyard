@@ -2,24 +2,19 @@ mod all_storages;
 
 pub use all_storages::AllSystem;
 
-use crate::atomic_refcell::AtomicRefCell;
 use crate::borrow::Borrow;
-use crate::borrow::Mutation;
 use crate::error;
-use crate::storage::AllStorages;
-use crate::type_id::TypeId;
+use crate::world::TypeInfo;
+use crate::world::World;
 use alloc::vec::Vec;
 
 pub struct Nothing;
 
 pub trait System<'s, Data, B, R> {
     fn run(self, data: Data, b: B) -> R;
-    fn try_borrow(
-        all_storages: &'s AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'s rayon::ThreadPool,
-    ) -> Result<B, error::GetStorage>;
+    fn try_borrow(world: &'s World) -> Result<B, error::GetStorage>;
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>);
+    fn borrow_infos(infos: &mut Vec<TypeInfo>);
 
     fn is_send_sync() -> bool;
 }
@@ -32,14 +27,11 @@ where
     fn run(self, _: (), _: Nothing) -> R {
         (self)()
     }
-    fn try_borrow(
-        _: &'s AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'s rayon::ThreadPool,
-    ) -> Result<Nothing, error::GetStorage> {
+    fn try_borrow(_: &'s World) -> Result<Nothing, error::GetStorage> {
         Ok(Nothing)
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -54,14 +46,11 @@ where
     fn run(self, (data,): (Data,), _: Nothing) -> R {
         (self)(data)
     }
-    fn try_borrow(
-        _: &'s AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'s rayon::ThreadPool,
-    ) -> Result<Nothing, error::GetStorage> {
+    fn try_borrow(_: &'s World) -> Result<Nothing, error::GetStorage> {
         Ok(Nothing)
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -74,20 +63,17 @@ macro_rules! impl_system {
             fn run(self, _: (), b: ($($type,)+)) -> R {
                 (self)($(b.$index,)+)
             }
-            fn try_borrow(
-                all_storages: &'s AtomicRefCell<AllStorages>,
-                #[cfg(feature = "parallel")] thread_pool: &'s rayon::ThreadPool
-            ) -> Result<($($type,)+), error::GetStorage> {
+            fn try_borrow(world: &'s World) -> Result<($($type,)+), error::GetStorage> {
                 #[cfg(feature = "parallel")]
                 {
-                    Ok(($($type::try_borrow(all_storages, thread_pool)?,)+))
+                    Ok(($($type::try_borrow(world)?,)+))
                 }
                 #[cfg(not(feature = "parallel"))]
                 {
-                    Ok(($($type::try_borrow(all_storages)?,)+))
+                    Ok(($($type::try_borrow(world)?,)+))
                 }
             }
-            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+            fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_infos(infos);
                 )+
@@ -103,20 +89,17 @@ macro_rules! impl_system {
             fn run(self, (data,): (Data,), b: ($($type,)+)) -> R {
                 (self)(data, $(b.$index,)+)
             }
-            fn try_borrow(
-                all_storages: &'s AtomicRefCell<AllStorages>,
-                #[cfg(feature = "parallel")] thread_pool: &'s rayon::ThreadPool
-            ) -> Result<($($type,)+), error::GetStorage> {
+            fn try_borrow(world: &'s World) -> Result<($($type,)+), error::GetStorage> {
                 #[cfg(feature = "parallel")]
                 {
-                    Ok(($($type::try_borrow(all_storages, thread_pool)?,)+))
+                    Ok(($($type::try_borrow(world)?,)+))
                 }
                 #[cfg(not(feature = "parallel"))]
                 {
-                    Ok(($($type::try_borrow(all_storages)?,)+))
+                    Ok(($($type::try_borrow(world)?,)+))
                 }
             }
-            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+            fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_infos(infos);
                 )+

@@ -16,8 +16,8 @@ pub use non_send_sync::NonSendSync;
 #[cfg(feature = "non_sync")]
 pub use non_sync::NonSync;
 
-use crate::atomic_refcell::AtomicRefCell;
 use crate::error;
+use crate::storage::Unique;
 use crate::storage::{AllStorages, Entities};
 use crate::type_id::TypeId;
 #[cfg(feature = "parallel")]
@@ -25,40 +25,37 @@ use crate::view::ThreadPoolView;
 use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
+use crate::world::TypeInfo;
+use crate::world::World;
 use alloc::vec::Vec;
+use core::any::type_name;
 use core::convert::TryInto;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Mutation {
+pub enum Mutability {
     Shared,
-    Unique,
+    Exclusive,
 }
 
 pub trait Borrow<'a> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage>
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage>
     where
         Self: Sized;
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>);
+    fn borrow_infos(infos: &mut Vec<TypeInfo>);
 
     fn is_send_sync() -> bool;
 }
 
 impl<'a> Borrow<'a> for () {
-    fn try_borrow(
-        _: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage>
+    fn try_borrow(_: &'a World) -> Result<Self, error::GetStorage>
     where
         Self: Sized,
     {
         Ok(())
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -66,15 +63,18 @@ impl<'a> Borrow<'a> for () {
 }
 
 impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages.try_into()
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        (&world.all_storages).try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<AllStorages>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<AllStorages>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<AllStorages>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -83,18 +83,22 @@ impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
 }
 
 impl<'a> Borrow<'a> for EntitiesView<'a> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<Entities>(), Mutation::Shared));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<Entities>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<Entities>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -103,18 +107,22 @@ impl<'a> Borrow<'a> for EntitiesView<'a> {
 }
 
 impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<Entities>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<Entities>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Entities>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -124,14 +132,11 @@ impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
 
 #[cfg(feature = "parallel")]
 impl<'a> Borrow<'a> for ThreadPoolView<'a> {
-    fn try_borrow(
-        _: &'a AtomicRefCell<AllStorages>,
-        thread_pool: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        Ok(ThreadPoolView(thread_pool))
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        Ok(ThreadPoolView(&world.thread_pool))
     }
 
-    fn borrow_infos(_: &mut Vec<(TypeId, Mutation)>) {}
+    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
 
     fn is_send_sync() -> bool {
         true
@@ -139,18 +144,22 @@ impl<'a> Borrow<'a> for ThreadPoolView<'a> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Shared));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<Self>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<T>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -159,18 +168,22 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<Self>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<T>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -179,61 +192,73 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueView<'a, T> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <View<'a, T> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<Self>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
-        <View<'a, T> as Borrow>::is_send_sync()
+        true
     }
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMut<'a, T> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <ViewMut<'a, T> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<Self>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
-        <ViewMut<'a, T> as Borrow>::is_send_sync()
+        true
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         View::try_from_non_send(
-            all_storages
+            world
+                .all_storages
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
         .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<View<'a, T>>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<T>(),
+            is_send: false,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -243,20 +268,24 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         ViewMut::try_from_non_send(
-            all_storages
+            world
+                .all_storages
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
         .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<ViewMut<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<T>(),
+            is_send: false,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -266,19 +295,23 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
             .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSend<View<'a, T>> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<UniqueView<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: false,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -288,19 +321,23 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
             .map(NonSend)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSend<ViewMut<'a, T>> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<UniqueViewMut<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: false,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -310,20 +347,24 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         View::try_from_non_sync(
-            all_storages
+            world
+                .all_storages
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
         .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<View<'a, T>>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<T>(),
+            is_send: true,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -333,20 +374,24 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         ViewMut::try_from_non_sync(
-            all_storages
+            world
+                .all_storages
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
         .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<ViewMut<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<T>(),
+            is_send: true,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -356,64 +401,76 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
             .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSync<View<'a, T>> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<UniqueView<'a, T>>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: true,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
-        <NonSync<View<'a, T>> as Borrow>::is_send_sync()
+        false
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
             .map(NonSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSync<ViewMut<'a, T>> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<UniqueViewMut<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: true,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
-        <NonSync<ViewMut<'a, T>> as Borrow>::is_send_sync()
+        false
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         View::try_from_non_send_sync(
-            all_storages
+            world
+                .all_storages
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
         .map(NonSendSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<View<'a, T>>(),
+            mutability: Mutability::Shared,
+            type_id: TypeId::of::<T>(),
+            is_send: false,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -423,20 +480,24 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         ViewMut::try_from_non_send_sync(
-            all_storages
+            world
+                .all_storages
                 .try_borrow()
                 .map_err(error::GetStorage::AllStoragesBorrow)?,
         )
         .map(NonSendSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique));
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<ViewMut<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<T>(),
+            is_send: false,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -446,57 +507,68 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
             .map(NonSendSync)
     }
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSendSync<View<'a, T>> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<UniqueView<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: false,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
-        <NonSendSync<View<'a, T>> as Borrow>::is_send_sync()
+        false
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
-        all_storages
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
+        world
+            .all_storages
             .try_borrow()
             .map_err(error::GetStorage::AllStoragesBorrow)?
             .try_into()
             .map(NonSendSync)
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        <NonSendSync<ViewMut<'a, T>> as Borrow>::borrow_infos(infos)
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<UniqueViewMut<'a, T>>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<Unique<T>>(),
+            is_send: false,
+            is_sync: false,
+        });
     }
 
     fn is_send_sync() -> bool {
-        <NonSendSync<ViewMut<'a, T>> as Borrow>::is_send_sync()
+        false
     }
 }
 
-impl<'a, T: 'static> Borrow<'a> for FakeBorrow<T> {
-    fn try_borrow(
-        _: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] _: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+impl<T: 'static> Borrow<'_> for FakeBorrow<T> {
+    fn try_borrow(_: &World) -> Result<Self, error::GetStorage> {
         Ok(FakeBorrow::new())
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
-        infos.push((TypeId::of::<T>(), Mutation::Unique))
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+        infos.push(TypeInfo {
+            name: type_name::<T>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<T>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
@@ -505,21 +577,18 @@ impl<'a, T: 'static> Borrow<'a> for FakeBorrow<T> {
 }
 
 impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
-    fn try_borrow(
-        all_storages: &'a AtomicRefCell<AllStorages>,
-        #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
-    ) -> Result<Self, error::GetStorage> {
+    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         #[cfg(feature = "parallel")]
         {
-            Ok(T::try_borrow(all_storages, thread_pool).ok())
+            Ok(T::try_borrow(world).ok())
         }
         #[cfg(not(feature = "parallel"))]
         {
-            Ok(T::try_borrow(all_storages).ok())
+            Ok(T::try_borrow(world).ok())
         }
     }
 
-    fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
         T::borrow_infos(infos);
     }
 
@@ -531,25 +600,22 @@ impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
 macro_rules! impl_borrow {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: Borrow<'a>),+> Borrow<'a> for ($($type,)+) {
-            fn try_borrow(
-                all_storages: &'a AtomicRefCell<AllStorages>,
-                #[cfg(feature = "parallel")] thread_pool: &'a rayon::ThreadPool,
-            ) -> Result<Self, error::GetStorage> {
+            fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
                 #[cfg(feature = "parallel")]
                 {
                     Ok(($(
-                        <$type as Borrow>::try_borrow(all_storages, thread_pool)?,
+                        <$type as Borrow>::try_borrow(world)?,
                     )+))
                 }
                 #[cfg(not(feature = "parallel"))]
                 {
                     Ok(($(
-                        <$type as Borrow>::try_borrow(all_storages)?,
+                        <$type as Borrow>::try_borrow(world)?,
                     )+))
                 }
             }
 
-            fn borrow_infos(infos: &mut Vec<(TypeId, Mutation)>) {
+            fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_infos(infos);
                 )+

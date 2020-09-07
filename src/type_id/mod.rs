@@ -4,7 +4,7 @@ pub(crate) use hasher::TypeIdHasher;
 
 use core::hash::{Hash, Hasher};
 
-/// We have to make our own `TypeId` to be able to deserialize it.
+// We have to make our own `TypeId` to be able to deserialize it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct TypeId(u64);
 
