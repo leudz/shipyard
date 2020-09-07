@@ -977,33 +977,72 @@ fn non_send() {
     assert_eq!(scheduler.default, "Test");
 }
 
-// #[test]
-// fn fake_borrow() {
-//     use crate::{FakeBorrow, View, World};
+#[test]
+fn fake_borrow() {
+    use crate::{FakeBorrow, View, World};
 
-//     fn system1(_: View<'_, usize>) {}
+    fn system1(_: View<'_, usize>) {}
 
-//     let world = World::new();
+    let world = World::new();
 
-//     Workload::builder("Systems")
-//         .try_with_system((|world: &World| world.try_run(system1), system1))
-//         .unwrap()
-//         .try_with_system((
-//             |world: &World| world.try_run(|| {}),
-//             |_: FakeBorrow<View<'_, usize>>| {},
-//         ))
-//         .unwrap()
-//         .try_with_system((|world: &World| world.try_run(system1), system1))
-//         .unwrap()
-//         .add_to_world(&world)
-//         .unwrap();
+    Workload::builder("Systems")
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((
+            |world: &World| world.try_run(|| {}),
+            |_: FakeBorrow<usize>| {},
+        ))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
 
-//     let scheduler = world.scheduler.try_borrow_mut().unwrap();
-//     assert_eq!(scheduler.systems.len(), 3);
-//     assert_eq!(scheduler.workloads.len(), 1);
-//     assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0], vec![1], vec![2]]));
-//     assert_eq!(scheduler.default, "Systems");
-// }
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 3);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0], vec![1], vec![2]])
+    );
+    assert_eq!(scheduler.default, "Systems");
+}
+
+#[test]
+fn unique_fake_borrow() {
+    use crate::{FakeBorrow, Unique, UniqueView, View, World};
+
+    fn system1(_: UniqueView<'_, usize>, _: View<'_, usize>) {}
+    fn system2(_: View<'_, usize>) {}
+
+    let world = World::new();
+
+    Workload::builder("Systems")
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((
+            |world: &World| world.try_run(|| {}),
+            |_: FakeBorrow<Unique<usize>>| {},
+        ))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 5);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&vec![vec![0, 1], vec![2, 3], vec![4]])
+    );
+    assert_eq!(scheduler.default, "Systems");
+}
 
 #[test]
 fn unique_and_non_unique() {

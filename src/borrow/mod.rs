@@ -556,19 +556,19 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
     }
 }
 
-impl<'a, T: 'static + Borrow<'a>> Borrow<'a> for FakeBorrow<T> {
+impl<T: 'static> Borrow<'_> for FakeBorrow<T> {
     fn try_borrow(_: &World) -> Result<Self, error::GetStorage> {
         Ok(FakeBorrow::new())
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
-        let len = infos.len();
-
-        <T as Borrow<'_>>::borrow_infos(infos);
-
-        for type_info in &mut infos[len..] {
-            type_info.mutability = Mutability::Exclusive;
-        }
+        infos.push(TypeInfo {
+            name: type_name::<T>(),
+            mutability: Mutability::Exclusive,
+            type_id: TypeId::of::<T>(),
+            is_send: true,
+            is_sync: true,
+        });
     }
 
     fn is_send_sync() -> bool {
