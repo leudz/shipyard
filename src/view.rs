@@ -473,24 +473,3 @@ impl<T> DerefMut for UniqueViewMut<'_, T> {
         &mut self.unique
     }
 }
-
-/// Shared view over the thread_pool.
-#[cfg(feature = "parallel")]
-#[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
-#[derive(Clone)]
-pub struct ThreadPoolView<'a>(pub(crate) &'a rayon::ThreadPool);
-
-#[cfg(feature = "parallel")]
-impl AsRef<rayon::ThreadPool> for ThreadPoolView<'_> {
-    fn as_ref(&self) -> &rayon::ThreadPool {
-        &self.0
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl Deref for ThreadPoolView<'_> {
-    type Target = rayon::ThreadPool;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}

@@ -20,8 +20,6 @@ use crate::error;
 use crate::storage::Unique;
 use crate::storage::{AllStorages, Entities};
 use crate::type_id::TypeId;
-#[cfg(feature = "parallel")]
-use crate::view::ThreadPoolView;
 use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
@@ -124,19 +122,6 @@ impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
             is_sync: true,
         });
     }
-
-    fn is_send_sync() -> bool {
-        true
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl<'a> Borrow<'a> for ThreadPoolView<'a> {
-    fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        Ok(ThreadPoolView(&world.thread_pool))
-    }
-
-    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
 
     fn is_send_sync() -> bool {
         true

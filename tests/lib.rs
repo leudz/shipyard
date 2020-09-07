@@ -57,23 +57,6 @@ fn run() {
         .unwrap();
 }
 
-#[cfg(feature = "parallel")]
-#[cfg_attr(miri, ignore)]
-#[test]
-fn thread_pool() {
-    let world = World::new();
-    world
-        .try_run(|thread_pool: ThreadPoolView| {
-            use rayon::prelude::*;
-
-            let vec = vec![0, 1, 2, 3];
-            thread_pool.install(|| {
-                assert_eq!(vec.into_par_iter().sum::<i32>(), 6);
-            });
-        })
-        .unwrap();
-}
-
 #[test]
 fn system() {
     fn system1((mut usizes, u32s): (ViewMut<usize>, View<u32>)) {
@@ -184,11 +167,9 @@ fn simple_parallel_sum() {
         .unwrap();
 
     world
-        .try_run(|(usizes, thread_pool): (ViewMut<usize>, ThreadPoolView)| {
-            thread_pool.install(|| {
-                let sum: usize = (&usizes,).par_iter().cloned().sum();
-                assert_eq!(sum, 4);
-            });
+        .try_run(|usizes: ViewMut<usize>| {
+            let sum: usize = usizes.par_iter().cloned().sum();
+            assert_eq!(sum, 4);
         })
         .unwrap();
 }
@@ -217,26 +198,24 @@ fn tight_parallel_iterator() {
         .unwrap();
 
     world
-        .try_run(
-            |(mut usizes, u32s, thread_pool): (ViewMut<usize>, View<u32>, ThreadPoolView)| {
-                let counter = std::sync::atomic::AtomicUsize::new(0);
-                thread_pool.install(|| {
-                    if let ParIter2::Tight(iter) = (&mut usizes, &u32s).par_iter() {
-                        iter.for_each(|(x, y)| {
-                            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                            *x += *y as usize;
-                        });
-                    } else {
-                        panic!()
-                    }
+        .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
+            let counter = std::sync::atomic::AtomicUsize::new(0);
+
+            if let ParIter2::Tight(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(x, y)| {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    *x += *y as usize;
                 });
-                assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-                let mut iter = (&mut usizes).iter();
-                assert_eq!(iter.next(), Some(&mut 1));
-                assert_eq!(iter.next(), Some(&mut 5));
-                assert_eq!(iter.next(), None);
-            },
-        )
+            } else {
+                panic!()
+            }
+
+            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
+            let mut iter = (&mut usizes).iter();
+            assert_eq!(iter.next(), Some(&mut 1));
+            assert_eq!(iter.next(), Some(&mut 5));
+            assert_eq!(iter.next(), None);
+        })
         .unwrap();
 }
 
@@ -262,22 +241,20 @@ fn parallel_iterator() {
         .unwrap();
 
     world
-        .try_run(
-            |(mut usizes, u32s, thread_pool): (ViewMut<usize>, View<u32>, ThreadPoolView)| {
-                let counter = std::sync::atomic::AtomicUsize::new(0);
-                thread_pool.install(|| {
-                    (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
-                        counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                        *x += *y as usize;
-                    });
-                });
-                assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-                let mut iter = (&mut usizes).iter();
-                assert_eq!(iter.next(), Some(&mut 1));
-                assert_eq!(iter.next(), Some(&mut 5));
-                assert_eq!(iter.next(), None);
-            },
-        )
+        .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
+            let counter = std::sync::atomic::AtomicUsize::new(0);
+
+            (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                *x += *y as usize;
+            });
+
+            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
+            let mut iter = (&mut usizes).iter();
+            assert_eq!(iter.next(), Some(&mut 1));
+            assert_eq!(iter.next(), Some(&mut 5));
+            assert_eq!(iter.next(), None);
+        })
         .unwrap();
 }
 
@@ -305,26 +282,24 @@ fn loose_parallel_iterator() {
         .unwrap();
 
     world
-        .try_run(
-            |(mut usizes, u32s, thread_pool): (ViewMut<usize>, View<u32>, ThreadPoolView)| {
-                let counter = std::sync::atomic::AtomicUsize::new(0);
-                thread_pool.install(|| {
-                    if let ParIter2::Loose(iter) = (&mut usizes, &u32s).par_iter() {
-                        iter.for_each(|(x, y)| {
-                            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                            *x += *y as usize;
-                        });
-                    } else {
-                        panic!()
-                    }
+        .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
+            let counter = std::sync::atomic::AtomicUsize::new(0);
+
+            if let ParIter2::Loose(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(x, y)| {
+                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    *x += *y as usize;
                 });
-                assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-                let mut iter = (&mut usizes).iter();
-                assert_eq!(iter.next(), Some(&mut 1));
-                assert_eq!(iter.next(), Some(&mut 5));
-                assert_eq!(iter.next(), None);
-            },
-        )
+            } else {
+                panic!()
+            }
+
+            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
+            let mut iter = (&mut usizes).iter();
+            assert_eq!(iter.next(), Some(&mut 1));
+            assert_eq!(iter.next(), Some(&mut 5));
+            assert_eq!(iter.next(), None);
+        })
         .unwrap();
 }
 

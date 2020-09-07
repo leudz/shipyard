@@ -74,13 +74,11 @@
 //!     }
 //! }
 //!
-//! fn age(mut healths: ViewMut<Health>, thread_pool: ThreadPoolView) {
+//! fn age(mut healths: ViewMut<Health>) {
 //!     use rayon::prelude::ParallelIterator;
 //!
-//!     thread_pool.install(|| {
-//!         (&mut healths).par_iter().for_each(|health| {
-//!             health.0 -= 4.0;
-//!         });
+//!     (&mut healths).par_iter().for_each(|health| {
+//!         health.0 -= 4.0;
 //!     });
 //! }
 //!
@@ -199,8 +197,6 @@ pub use sparse_set::{
 pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId, Unique};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
-#[cfg(feature = "parallel")]
-pub use view::ThreadPoolView;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };

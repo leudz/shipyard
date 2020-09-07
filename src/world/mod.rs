@@ -17,15 +17,11 @@ use crate::storage::AllStorages;
 // use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
-#[cfg(feature = "parallel")]
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use scheduler::Scheduler;
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
-    #[cfg(feature = "parallel")]
-    pub(crate) thread_pool: ThreadPool,
     scheduler: AtomicRefCell<Scheduler>,
 }
 
@@ -36,8 +32,6 @@ impl Default for World {
         {
             World {
                 all_storages: AtomicRefCell::new(AllStorages::new(), None, true),
-                #[cfg(feature = "parallel")]
-                thread_pool: ThreadPoolBuilder::new().build().unwrap(),
                 scheduler: AtomicRefCell::new(Default::default(), None, true),
             }
         }
@@ -45,8 +39,6 @@ impl Default for World {
         {
             World {
                 all_storages: AtomicRefCell::new(AllStorages::new()),
-                #[cfg(feature = "parallel")]
-                thread_pool: ThreadPoolBuilder::new().build().unwrap(),
                 scheduler: AtomicRefCell::new(Default::default()),
             }
         }
@@ -57,17 +49,6 @@ impl World {
     /// Create an empty `World`.
     pub fn new() -> Self {
         Default::default()
-    }
-    /// Returns a new `World` with custom threads.  
-    /// Custom threads can be useful when working with wasm for example.
-    #[cfg(feature = "parallel")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
-    pub fn new_with_custom_thread_pool(thread_pool: ThreadPool) -> Self {
-        World {
-            all_storages: AtomicRefCell::new(AllStorages::new(), None, true),
-            thread_pool,
-            scheduler: AtomicRefCell::new(Default::default(), None, true),
-        }
     }
     /// Adds a new unique storage, unique storages store exactly one `T`.  
     /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
@@ -335,22 +316,6 @@ You can use:
 * [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
 * `Option<V>` with one or multiple views for fallible access to one or more storages"]
     #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
-    #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
     )]
@@ -442,10 +407,6 @@ let (entities, mut usizes) = world
 [ViewMut]: struct.ViewMut.html
 [UniqueView]: struct.UniqueView.html
 [UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(
-        feature = "parallel",
-        doc = "[ThreadPoolView]: struct.ThreadPoolView.html"
-    )]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -475,22 +436,6 @@ You can use:
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
 * [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
 * `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
@@ -581,10 +526,6 @@ let (entities, mut usizes) = world.borrow::<(EntitiesView, ViewMut<usize>)>();
 [ViewMut]: struct.ViewMut.html
 [UniqueView]: struct.UniqueView.html
 [UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(
-        feature = "parallel",
-        doc = "[ThreadPoolView]: struct.ThreadPoolView.html"
-    )]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -612,22 +553,6 @@ You can use:
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
 * [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
 * `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
@@ -724,10 +649,6 @@ world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
 [ViewMut]: struct.ViewMut.html
 [UniqueView]: struct.UniqueView.html
 [UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(
-        feature = "parallel",
-        doc = "[ThreadPoolView]: struct.ThreadPoolView.html"
-    )]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -763,22 +684,6 @@ You can use:
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
 * [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
 * `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
@@ -875,10 +780,6 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
 [ViewMut]: struct.ViewMut.html
 [UniqueView]: struct.UniqueView.html
 [UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(
-        feature = "parallel",
-        doc = "[ThreadPoolView]: struct.ThreadPoolView.html"
-    )]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -909,22 +810,6 @@ You can use:
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
 * [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
 * `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
@@ -1025,10 +910,6 @@ let i = world.try_run(sys1).unwrap();
 [ViewMut]: struct.ViewMut.html
 [UniqueView]: struct.UniqueView.html
 [UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(
-        feature = "parallel",
-        doc = "[ThreadPoolView]: struct.ThreadPoolView.html"
-    )]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -1062,22 +943,6 @@ You can use:
 * [UniqueView]\\<T\\> for a shared access to a `T` unique storage
 * [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
 * `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"parallel\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", docsrs),
-        doc = "    * [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        all(feature = "parallel", not(docsrs)),
-        doc = "* [ThreadPoolView] for a shared access to the `ThreadPool` used by the [World]"
-    )]
-    #[cfg_attr(
-        not(feature = "parallel"),
-        doc = "* ThreadPool: must activate the *parallel* feature"
-    )]
     #[cfg_attr(
         all(feature = "non_send", docsrs),
         doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
@@ -1176,10 +1041,6 @@ let i = world.run(sys1);
 [ViewMut]: struct.ViewMut.html
 [UniqueView]: struct.UniqueView.html
 [UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(
-        feature = "parallel",
-        doc = "[ThreadPoolView]: struct.ThreadPoolView.html"
-    )]
     #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
     #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
     #[cfg_attr(
@@ -1295,11 +1156,9 @@ let i = world.run(sys1);
                 {
                     use rayon::prelude::*;
 
-                    self.thread_pool.install(|| {
-                        batch.into_par_iter().try_for_each(|&index| {
-                            (scheduler.systems[index])(self).map_err(|err| {
-                                error::RunWorkload::Run((scheduler.system_names[index], err))
-                            })
+                    batch.into_par_iter().try_for_each(|&index| {
+                        (scheduler.systems[index])(self).map_err(|err| {
+                            error::RunWorkload::Run((scheduler.system_names[index], err))
                         })
                     })?
                 }

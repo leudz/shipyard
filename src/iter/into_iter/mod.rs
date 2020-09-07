@@ -39,23 +39,20 @@ pub trait IntoIter {
     /// ### Example
     /// ```
     /// use rayon::prelude::ParallelIterator;
-    /// use shipyard::{EntitiesViewMut, IntoIter, ThreadPoolView, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, IntoIter, ViewMut, World};
     ///
     /// let world = World::new();
     ///
     /// world.run(
     ///     |mut entities: EntitiesViewMut,
     ///      mut usizes: ViewMut<usize>,
-    ///      mut u32s: ViewMut<u32>,
-    ///      thread_pool: ThreadPoolView| {
+    ///      mut u32s: ViewMut<u32>,| {
     ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     ///
-    ///         thread_pool.install(|| {
-    ///             (&mut usizes, &u32s).par_iter().for_each(|(x, &y)| {
-    ///                 *x += y as usize;
-    ///             });
-    ///         })
+    ///         (&mut usizes, &u32s).par_iter().for_each(|(x, &y)| {
+    ///             *x += y as usize;
+    ///         });
     ///     },
     /// );
     /// ```
