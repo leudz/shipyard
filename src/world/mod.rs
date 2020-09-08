@@ -28,19 +28,15 @@ pub struct World {
 impl Default for World {
     /// Create an empty `World`.
     fn default() -> Self {
-        #[cfg(feature = "std")]
-        {
-            World {
-                all_storages: AtomicRefCell::new(AllStorages::new(), None, true),
-                scheduler: AtomicRefCell::new(Default::default(), None, true),
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            World {
-                all_storages: AtomicRefCell::new(AllStorages::new()),
-                scheduler: AtomicRefCell::new(Default::default()),
-            }
+        World {
+            #[cfg(not(feature = "non_send"))]
+            all_storages: AtomicRefCell::new(AllStorages::new()),
+            #[cfg(feature = "non_send")]
+            all_storages: AtomicRefCell::new_non_send(
+                AllStorages::new(),
+                std::thread::current().id(),
+            ),
+            scheduler: AtomicRefCell::new(Default::default()),
         }
     }
 }

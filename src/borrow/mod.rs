@@ -17,17 +17,14 @@ pub use non_send_sync::NonSendSync;
 pub use non_sync::NonSync;
 
 use crate::error;
-use crate::storage::Unique;
-use crate::storage::{AllStorages, Entities};
+use crate::storage::{AllStorages, Entities, Unique};
 use crate::type_id::TypeId;
 use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
-use crate::world::TypeInfo;
-use crate::world::World;
+use crate::world::{TypeInfo, World};
 use alloc::vec::Vec;
 use core::any::type_name;
-use core::convert::TryInto;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutability {
@@ -46,6 +43,7 @@ pub trait Borrow<'a> {
 }
 
 impl<'a> Borrow<'a> for () {
+    #[inline]
     fn try_borrow(_: &'a World) -> Result<Self, error::GetStorage>
     where
         Self: Sized,
@@ -61,8 +59,9 @@ impl<'a> Borrow<'a> for () {
 }
 
 impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        (&world.all_storages).try_into()
+        AllStoragesViewMut::new(&world.all_storages)
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -81,12 +80,14 @@ impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
 }
 
 impl<'a> Borrow<'a> for EntitiesView<'a> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
+        EntitiesView::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -105,12 +106,14 @@ impl<'a> Borrow<'a> for EntitiesView<'a> {
 }
 
 impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
+        EntitiesViewMut::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -129,12 +132,14 @@ impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
+        View::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -153,12 +158,14 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
+        ViewMut::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -177,12 +184,14 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueView<'a, T> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
+        UniqueView::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -201,12 +210,14 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueView<'a, T> {
 }
 
 impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMut<'a, T> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
+        UniqueViewMut::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -226,8 +237,9 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMut<'a, T> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        View::try_from_non_send(
+        View::from_ref_non_send(
             world
                 .all_storages
                 .try_borrow()
@@ -253,8 +265,9 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        ViewMut::try_from_non_send(
+        ViewMut::from_ref_non_send(
             world
                 .all_storages
                 .try_borrow()
@@ -280,13 +293,15 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
-            .map(NonSend)
+        UniqueView::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
+        .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -306,13 +321,15 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
-            .map(NonSend)
+        UniqueViewMut::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
+        .map(NonSend)
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -332,8 +349,9 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        View::try_from_non_sync(
+        View::from_ref_non_sync(
             world
                 .all_storages
                 .try_borrow()
@@ -359,8 +377,9 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        ViewMut::try_from_non_sync(
+        ViewMut::from_ref_non_sync(
             world
                 .all_storages
                 .try_borrow()
@@ -386,13 +405,15 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
-            .map(NonSync)
+        UniqueView::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
+        .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -412,13 +433,15 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
-            .map(NonSync)
+        UniqueViewMut::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
+        .map(NonSync)
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -438,8 +461,9 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        View::try_from_non_send_sync(
+        View::from_ref_non_send_sync(
             world
                 .all_storages
                 .try_borrow()
@@ -465,8 +489,9 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        ViewMut::try_from_non_send_sync(
+        ViewMut::from_ref_non_send_sync(
             world
                 .all_storages
                 .try_borrow()
@@ -492,13 +517,15 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
-            .map(NonSendSync)
+        UniqueView::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
+        .map(NonSendSync)
     }
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -517,13 +544,15 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        world
-            .all_storages
-            .try_borrow()
-            .map_err(error::GetStorage::AllStoragesBorrow)?
-            .try_into()
-            .map(NonSendSync)
+        UniqueViewMut::from_ref(
+            world
+                .all_storages
+                .try_borrow()
+                .map_err(error::GetStorage::AllStoragesBorrow)?,
+        )
+        .map(NonSendSync)
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -542,6 +571,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
 }
 
 impl<T: 'static> Borrow<'_> for FakeBorrow<T> {
+    #[inline]
     fn try_borrow(_: &World) -> Result<Self, error::GetStorage> {
         Ok(FakeBorrow::new())
     }
@@ -562,6 +592,7 @@ impl<T: 'static> Borrow<'_> for FakeBorrow<T> {
 }
 
 impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
+    #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
         #[cfg(feature = "parallel")]
         {
@@ -585,6 +616,7 @@ impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
 macro_rules! impl_borrow {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: Borrow<'a>),+> Borrow<'a> for ($($type,)+) {
+            #[inline]
             fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
                 #[cfg(feature = "parallel")]
                 {

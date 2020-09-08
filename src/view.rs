@@ -1,37 +1,17 @@
-use crate::atomic_refcell::{AtomicRefCell, Borrow};
-use crate::atomic_refcell::{Ref, RefMut};
+use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut, SharedBorrow};
 use crate::error;
 use crate::sparse_set::{SparseSet, Window};
 use crate::{AllStorages, Entities};
-use core::convert::TryFrom;
 use core::ops::{Deref, DerefMut};
-
-struct AllStoragesView<'a>(Ref<'a, AllStorages>);
-
-impl<'a> TryFrom<&'a AtomicRefCell<AllStorages>> for AllStoragesView<'a> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AtomicRefCell<AllStorages>) -> Result<Self, Self::Error> {
-        Ok(AllStoragesView(
-            all_storages
-                .try_borrow()
-                .map_err(error::GetStorage::AllStoragesBorrow)?,
-        ))
-    }
-}
-
-impl Deref for AllStoragesView<'_> {
-    type Target = AllStorages;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 /// Exclusive view over `AllStorages`.
 pub struct AllStoragesViewMut<'a>(RefMut<'a, AllStorages>);
 
-impl<'a> TryFrom<&'a AtomicRefCell<AllStorages>> for AllStoragesViewMut<'a> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AtomicRefCell<AllStorages>) -> Result<Self, Self::Error> {
+impl<'a> AllStoragesViewMut<'a> {
+    #[inline]
+    pub(crate) fn new(
+        all_storages: &'a AtomicRefCell<AllStorages>,
+    ) -> Result<Self, error::GetStorage> {
         Ok(AllStoragesViewMut(
             all_storages
                 .try_borrow_mut()
@@ -42,13 +22,30 @@ impl<'a> TryFrom<&'a AtomicRefCell<AllStorages>> for AllStoragesViewMut<'a> {
 
 impl Deref for AllStoragesViewMut<'_> {
     type Target = AllStorages;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl DerefMut for AllStoragesViewMut<'_> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl AsRef<AllStorages> for AllStoragesViewMut<'_> {
+    #[inline]
+    fn as_ref(&self) -> &AllStorages {
+        &self.0
+    }
+}
+
+impl AsMut<AllStorages> for AllStoragesViewMut<'_> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut AllStorages {
         &mut self.0
     }
 }
@@ -57,37 +54,36 @@ impl DerefMut for AllStoragesViewMut<'_> {
 #[derive(Clone)]
 pub struct EntitiesView<'a> {
     entities: Ref<'a, Entities>,
-    _all_borrow: Borrow<'a>,
+    all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<'a> TryFrom<Ref<'a, AllStorages>> for EntitiesView<'a> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
-        // SAFE all_storages and entities are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+impl<'a> EntitiesView<'a> {
+    #[inline]
+    pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+
         Ok(EntitiesView {
             entities: all_storages
                 .entities()
                 .map_err(error::GetStorage::Entities)?,
-            _all_borrow: all_borrow,
+            all_borrow: Some(all_borrow),
         })
     }
-}
-
-impl<'a> TryFrom<&'a AllStorages> for EntitiesView<'a> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+    #[inline]
+    pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
         Ok(EntitiesView {
             entities: all_storages
                 .entities()
                 .map_err(error::GetStorage::Entities)?,
-            _all_borrow: Borrow::None,
+            all_borrow: None,
         })
     }
 }
 
 impl Deref for EntitiesView<'_> {
     type Target = Entities;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.entities
     }
@@ -96,43 +92,43 @@ impl Deref for EntitiesView<'_> {
 /// Exclusive view over `Entities` storage.
 pub struct EntitiesViewMut<'a> {
     entities: RefMut<'a, Entities>,
-    _all_borrow: Borrow<'a>,
+    _all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<'a> TryFrom<Ref<'a, AllStorages>> for EntitiesViewMut<'a> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
-        // SAFE all_storages and entities are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+impl<'a> EntitiesViewMut<'a> {
+    #[inline]
+    pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+
         Ok(EntitiesViewMut {
             entities: all_storages
                 .entities_mut()
                 .map_err(error::GetStorage::Entities)?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-}
-
-impl<'a> TryFrom<&'a AllStorages> for EntitiesViewMut<'a> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+    #[inline]
+    pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
         Ok(EntitiesViewMut {
             entities: all_storages
                 .entities_mut()
                 .map_err(error::GetStorage::Entities)?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 impl Deref for EntitiesViewMut<'_> {
     type Target = Entities;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.entities
     }
 }
 
 impl DerefMut for EntitiesViewMut<'_> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.entities
     }
@@ -142,136 +138,138 @@ impl DerefMut for EntitiesViewMut<'_> {
 #[derive(Clone)]
 pub struct View<'a, T> {
     window: Window<'a, T>,
-    _borrow: Borrow<'a>,
-    _all_borrow: Borrow<'a>,
+    borrow: SharedBorrow<'a>,
+    all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for View<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
-        // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
-        // SAFE window is dropped before borrow
-        let (sparse_set, borrow) = unsafe { Ref::destructure(all_storages.sparse_set::<T>()?) };
+impl<'a, T: 'static + Send + Sync> View<'a, T> {
+    #[inline]
+    pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+        let (sparse_set, borrow) = unsafe { all_storages.sparse_set::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: all_borrow,
+            borrow,
+            all_borrow: Some(all_borrow),
         })
     }
-}
+    #[inline]
+    pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
+        let (sparse_set, borrow) = unsafe { all_storages.sparse_set::<T>()?.destructure() };
 
-impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for View<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
-        // SAFE window is dropped before borrow
-        let (sparse_set, borrow) = unsafe { Ref::destructure(all_storages.sparse_set::<T>()?) };
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: Borrow::None,
+            borrow,
+            all_borrow: None,
         })
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> View<'a, T> {
-    pub(crate) fn try_from_non_send(
+    #[inline]
+    pub(crate) fn from_ref_non_send(
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
-        // SAFE window is dropped before borrow
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
         let (sparse_set, borrow) =
-            unsafe { Ref::destructure(all_storages.sparse_set_non_send::<T>()?) };
+            unsafe { all_storages.sparse_set_non_send::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: all_borrow,
+            borrow,
+            all_borrow: Some(all_borrow),
         })
     }
-    pub(crate) fn try_storage_from_non_send(
+    #[inline]
+    pub(crate) fn from_reference_non_send(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE window is dropped before borrow
         let (sparse_set, borrow) =
-            unsafe { Ref::destructure(all_storages.sparse_set_non_send::<T>()?) };
+            unsafe { all_storages.sparse_set_non_send::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: Borrow::None,
+            borrow,
+            all_borrow: None,
         })
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> View<'a, T> {
-    pub(crate) fn try_from_non_sync(
+    #[inline]
+    pub(crate) fn from_ref_non_sync(
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
-        // SAFE window is dropped before borrow
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
         let (sparse_set, borrow) =
-            unsafe { Ref::destructure(all_storages.sparse_set_non_sync::<T>()?) };
+            unsafe { all_storages.sparse_set_non_sync::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: all_borrow,
+            borrow,
+            all_borrow: Some(all_borrow),
         })
     }
-    pub(crate) fn try_storage_from_non_sync(
+    #[inline]
+    pub(crate) fn from_reference_non_sync(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE window is dropped before borrow
         let (sparse_set, borrow) =
-            unsafe { Ref::destructure(all_storages.sparse_set_non_sync::<T>()?) };
+            unsafe { all_storages.sparse_set_non_sync::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: Borrow::None,
+            borrow,
+            all_borrow: None,
         })
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> View<'a, T> {
-    pub(crate) fn try_from_non_send_sync(
+    #[inline]
+    pub(crate) fn from_ref_non_send_sync(
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE all_storages and borrow are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
-        // SAFE window is dropped before borrow
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
         let (sparse_set, borrow) =
-            unsafe { Ref::destructure(all_storages.sparse_set_non_send_sync::<T>()?) };
+            unsafe { all_storages.sparse_set_non_send_sync::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: all_borrow,
+            borrow,
+            all_borrow: Some(all_borrow),
         })
     }
-    pub(crate) fn try_storage_from_non_send_sync(
+    #[inline]
+    pub(crate) fn from_reference_non_send_sync(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE window is dropped before borrow
         let (sparse_set, borrow) =
-            unsafe { Ref::destructure(all_storages.sparse_set_non_send_sync::<T>()?) };
+            unsafe { all_storages.sparse_set_non_send_sync::<T>()?.destructure() };
+
         Ok(View {
             window: sparse_set.window(),
-            _borrow: borrow,
-            _all_borrow: Borrow::None,
+            borrow,
+            all_borrow: None,
         })
     }
 }
 
 impl<'a, T> Deref for View<'a, T> {
     type Target = Window<'a, T>;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.window
     }
 }
 
 impl<'a, T> AsRef<Window<'a, T>> for View<'a, T> {
+    #[inline]
     fn as_ref(&self) -> &Window<'a, T> {
         &self.window
     }
@@ -280,117 +278,125 @@ impl<'a, T> AsRef<Window<'a, T>> for View<'a, T> {
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T> {
     sparse_set: RefMut<'a, SparseSet<T>>,
-    _all_borrow: Borrow<'a>,
+    _all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<'a, T: 'static + Send + Sync> TryFrom<Ref<'a, AllStorages>> for ViewMut<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
-        // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+impl<'a, T: 'static + Send + Sync> ViewMut<'a, T> {
+    #[inline]
+    pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_mut::<T>()?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-}
-
-impl<'a, T: 'static + Send + Sync> TryFrom<&'a AllStorages> for ViewMut<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+    #[inline]
+    pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_mut::<T>()?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 #[cfg(feature = "non_send")]
 impl<'a, T: 'static + Sync> ViewMut<'a, T> {
-    pub(crate) fn try_from_non_send(
+    #[inline]
+    pub(crate) fn from_ref_non_send(
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_non_send_mut::<T>()?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-    pub(crate) fn try_storage_from_non_send(
+    #[inline]
+    pub(crate) fn from_reference_non_send(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_non_send_mut::<T>()?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 #[cfg(feature = "non_sync")]
 impl<'a, T: 'static + Send> ViewMut<'a, T> {
-    pub(crate) fn try_from_non_sync(
+    #[inline]
+    pub(crate) fn from_ref_non_sync(
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_non_sync_mut::<T>()?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-    pub(crate) fn try_storage_from_non_sync(
+    #[inline]
+    pub(crate) fn from_reference_non_sync(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_non_sync_mut::<T>()?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 impl<'a, T: 'static> ViewMut<'a, T> {
-    pub(crate) fn try_from_non_send_sync(
+    #[inline]
+    pub(crate) fn from_ref_non_send_sync(
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
-        // SAFE all_storages and sprase_set are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_non_send_sync_mut::<T>()?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-    pub(crate) fn try_storage_from_non_send_sync(
+    #[inline]
+    pub(crate) fn from_reference_non_send_sync(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
         Ok(ViewMut {
             sparse_set: all_storages.sparse_set_non_send_sync_mut::<T>()?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 impl<T> Deref for ViewMut<'_, T> {
     type Target = SparseSet<T>;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.sparse_set
     }
 }
 
 impl<T> DerefMut for ViewMut<'_, T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.sparse_set
     }
 }
 
 impl<'a, T> AsRef<SparseSet<T>> for ViewMut<'a, T> {
+    #[inline]
     fn as_ref(&self) -> &SparseSet<T> {
         &self.sparse_set
     }
 }
 
 impl<'a, T> AsMut<SparseSet<T>> for ViewMut<'a, T> {
+    #[inline]
     fn as_mut(&mut self) -> &mut SparseSet<T> {
         &mut self.sparse_set
     }
@@ -399,35 +405,40 @@ impl<'a, T> AsMut<SparseSet<T>> for ViewMut<'a, T> {
 /// Shared view over a unique component storage.
 pub struct UniqueView<'a, T> {
     unique: Ref<'a, T>,
-    _all_borrow: Borrow<'a>,
+    _all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<'a, T: 'static> TryFrom<Ref<'a, AllStorages>> for UniqueView<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
-        // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+impl<'a, T: 'static> UniqueView<'a, T> {
+    #[inline]
+    pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
 
         Ok(UniqueView {
             unique: all_storages.unique::<T>()?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-}
-
-impl<'a, T: 'static> TryFrom<&'a AllStorages> for UniqueView<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+    #[inline]
+    pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
         Ok(UniqueView {
             unique: all_storages.unique::<T>()?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 impl<T> Deref for UniqueView<'_, T> {
     type Target = T;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
+        &self.unique
+    }
+}
+
+impl<T> AsRef<T> for UniqueView<'_, T> {
+    #[inline]
+    fn as_ref(&self) -> &T {
         &self.unique
     }
 }
@@ -435,41 +446,54 @@ impl<T> Deref for UniqueView<'_, T> {
 /// Exclusive view over a unique component storage.
 pub struct UniqueViewMut<'a, T> {
     unique: RefMut<'a, T>,
-    _all_borrow: Borrow<'a>,
+    _all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<'a, T: 'static> TryFrom<Ref<'a, AllStorages>> for UniqueViewMut<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: Ref<'a, AllStorages>) -> Result<Self, Self::Error> {
-        // SAFE all_storages and unique are dropped before all_borrow
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+impl<'a, T: 'static> UniqueViewMut<'a, T> {
+    #[inline]
+    pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
 
         Ok(UniqueViewMut {
             unique: all_storages.unique_mut::<T>()?,
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
-}
-
-impl<'a, T: 'static> TryFrom<&'a AllStorages> for UniqueViewMut<'a, T> {
-    type Error = error::GetStorage;
-    fn try_from(all_storages: &'a AllStorages) -> Result<Self, Self::Error> {
+    #[inline]
+    pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
         Ok(UniqueViewMut {
             unique: all_storages.unique_mut::<T>()?,
-            _all_borrow: Borrow::None,
+            _all_borrow: None,
         })
     }
 }
 
 impl<T> Deref for UniqueViewMut<'_, T> {
     type Target = T;
+
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.unique
     }
 }
 
 impl<T> DerefMut for UniqueViewMut<'_, T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.unique
+    }
+}
+
+impl<T> AsRef<T> for UniqueViewMut<'_, T> {
+    #[inline]
+    fn as_ref(&self) -> &T {
+        &self.unique
+    }
+}
+
+impl<T> AsMut<T> for UniqueViewMut<'_, T> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
         &mut self.unique
     }
 }

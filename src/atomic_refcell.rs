@@ -1,22 +1,24 @@
 use crate::error;
 use alloc::boxed::Box;
 use core::cell::UnsafeCell;
-use core::mem::ManuallyDrop;
-use core::sync::atomic::{AtomicUsize, Ordering};
-#[cfg(feature = "std")]
-use std::thread;
-#[cfg(feature = "std")]
-use thread::ThreadId;
+use core::marker::PhantomData;
+use core::mem::{ManuallyDrop, MaybeUninit};
+use parking_lot::lock_api::RawRwLock as _;
+#[cfg(feature = "non_sync")]
+use parking_lot::lock_api::RawRwLockDowngrade as _;
+use parking_lot::RawRwLock;
+#[cfg(feature = "non_send")]
+use std::thread::ThreadId;
 
 /// Threadsafe `RefCell`-like container.
 #[doc(hidden)]
 pub struct AtomicRefCell<T: ?Sized> {
-    borrow_state: BorrowState,
-    #[cfg(feature = "std")]
+    borrow_state: RawRwLock,
+    #[cfg(feature = "non_send")]
     send: Option<ThreadId>,
-    #[cfg(feature = "std")]
+    #[cfg(feature = "non_sync")]
     is_sync: bool,
-    _non_send: core::marker::PhantomData<*const ()>,
+    _non_send_sync: PhantomData<*const ()>,
     taken: bool,
     inner: ManuallyDrop<UnsafeCell<T>>,
 }
@@ -28,6 +30,7 @@ unsafe impl<T: ?Sized> Send for AtomicRefCell<T> {}
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
 
 impl<T: ?Sized> Drop for AtomicRefCell<T> {
+    #[inline]
     fn drop(&mut self) {
         if !self.taken {
             // SAFE we're in the Drop impl so it won't be accessed again
@@ -38,70 +41,194 @@ impl<T: ?Sized> Drop for AtomicRefCell<T> {
     }
 }
 
-impl<T: ?Sized> AtomicRefCell<T> {
+impl<T: Send + Sync> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
-    pub(crate) fn new(
-        value: T,
-        #[cfg(feature = "std")] send: Option<ThreadId>,
-        #[cfg(feature = "std")] is_sync: bool,
-    ) -> Self
-    where
-        T: Sized,
-    {
+    #[inline]
+    pub(crate) fn new(value: T) -> Self {
         AtomicRefCell {
-            borrow_state: Default::default(),
-            #[cfg(feature = "std")]
-            send,
-            #[cfg(feature = "std")]
-            is_sync,
-            _non_send: core::marker::PhantomData,
+            borrow_state: RawRwLock::INIT,
+            #[cfg(feature = "non_send")]
+            send: None,
+            #[cfg(feature = "non_sync")]
+            is_sync: true,
+            _non_send_sync: PhantomData,
             taken: false,
             inner: ManuallyDrop::new(UnsafeCell::new(value)),
         }
     }
+}
+
+#[cfg(feature = "non_send")]
+impl<T: Sync> AtomicRefCell<T> {
+    /// Creates a new `AtomicRefCell` containing `value`.
+    #[inline]
+    pub(crate) fn new_non_send(value: T, world_thread_id: ThreadId) -> Self {
+        AtomicRefCell {
+            borrow_state: RawRwLock::INIT,
+            send: Some(world_thread_id),
+            #[cfg(feature = "non_sync")]
+            is_sync: true,
+            _non_send_sync: PhantomData,
+            taken: false,
+            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+        }
+    }
+}
+
+#[cfg(feature = "non_sync")]
+impl<T: Send> AtomicRefCell<T> {
+    /// Creates a new `AtomicRefCell` containing `value`.
+    #[inline]
+    pub(crate) fn new_non_sync(value: T) -> Self {
+        AtomicRefCell {
+            borrow_state: RawRwLock::INIT,
+            #[cfg(feature = "non_send")]
+            send: None,
+            is_sync: false,
+            _non_send_sync: PhantomData,
+            taken: false,
+            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+        }
+    }
+}
+
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+impl<T> AtomicRefCell<T> {
+    /// Creates a new `AtomicRefCell` containing `value`.
+    #[inline]
+    pub(crate) fn new_non_send_sync(value: T, world_thread_id: ThreadId) -> Self {
+        AtomicRefCell {
+            borrow_state: RawRwLock::INIT,
+            send: Some(world_thread_id),
+            is_sync: false,
+            _non_send_sync: PhantomData,
+            taken: false,
+            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+        }
+    }
+}
+
+impl<T: ?Sized> AtomicRefCell<T> {
     /// Immutably borrows the wrapped value, returning an error if the value is currently mutably
     /// borrowed.
     ///
     /// The borrow lasts until the returned `Ref` exits scope. Multiple shared borrows can be
     /// taken out at the same time.
+    #[inline]
     pub(crate) fn try_borrow(&self) -> Result<Ref<'_, T>, error::Borrow> {
-        #[cfg(feature = "std")]
+        #[cfg(not(feature = "non_sync"))]
         {
-            Ok(Ref {
-                borrow: self.borrow_state.try_borrow(self.send, self.is_sync)?,
-                // SAFE we have the lock
-                inner: unsafe { &*self.inner.get() },
-            })
+            // if Send - accessible from any thread, shared xor unique
+            // if !Send - accessible from any thread, shared only if not world's thread
+            if self.borrow_state.try_lock_shared() {
+                Ok(Ref {
+                    inner: unsafe { &*self.inner.get() },
+                    borrow: SharedBorrow(&self.borrow_state),
+                })
+            } else {
+                Err(error::Borrow::Shared)
+            }
         }
-        #[cfg(not(feature = "std"))]
+        #[cfg(all(not(feature = "non_send"), feature = "non_sync"))]
         {
-            Ok(Ref {
-                borrow: self.borrow_state.try_borrow()?,
-                // SAFE we have the lock
-                inner: unsafe { &*self.inner.get() },
-            })
+            if self.is_sync {
+                // accessible from any thread, shared xor unique
+                if self.borrow_state.try_lock_shared() {
+                    Ok(Ref {
+                        inner: unsafe { &*self.inner.get() },
+                        borrow: SharedBorrow(&self.borrow_state),
+                    })
+                } else {
+                    Err(error::Borrow::Shared)
+                }
+            } else {
+                // accessible from one thread at a time
+                if self.borrow_state.try_lock_exclusive() {
+                    unsafe {
+                        self.borrow_state.downgrade();
+                    }
+
+                    Ok(Ref {
+                        inner: unsafe { &*self.inner.get() },
+                        borrow: SharedBorrow(&self.borrow_state),
+                    })
+                } else {
+                    Err(error::Borrow::Shared)
+                }
+            }
+        }
+        #[cfg(all(feature = "non_send", feature = "non_sync"))]
+        {
+            match (self.send, self.is_sync) {
+                (_, true) => {
+                    // if Send - accessible from any thread, shared xor unique
+                    // if !Send - accessible from any thread, shared only if not world's thread
+                    if self.borrow_state.try_lock_shared() {
+                        Ok(Ref {
+                            inner: unsafe { &*self.inner.get() },
+                            borrow: SharedBorrow(&self.borrow_state),
+                        })
+                    } else {
+                        Err(error::Borrow::Shared)
+                    }
+                }
+                (None, false) => {
+                    // accessible from one thread at a time
+                    if self.borrow_state.try_lock_exclusive() {
+                        unsafe {
+                            self.borrow_state.downgrade();
+                        }
+
+                        Ok(Ref {
+                            inner: unsafe { &*self.inner.get() },
+                            borrow: SharedBorrow(&self.borrow_state),
+                        })
+                    } else {
+                        Err(error::Borrow::Shared)
+                    }
+                }
+                (Some(thread_id), false) => {
+                    // accessible from world's thread only
+                    if thread_id != std::thread::current().id() {
+                        return Err(error::Borrow::WrongThread);
+                    }
+
+                    if self.borrow_state.try_lock_shared() {
+                        Ok(Ref {
+                            inner: unsafe { &*self.inner.get() },
+                            borrow: SharedBorrow(&self.borrow_state),
+                        })
+                    } else {
+                        Err(error::Borrow::Shared)
+                    }
+                }
+            }
         }
     }
     /// Mutably borrows the wrapped value, returning an error if the value is currently borrowed.
     ///
     /// The borrow lasts until the returned `RefMut` exits scope. The value cannot be borrowed while this borrow is
     /// active.
+    #[inline]
     pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<'_, T>, error::Borrow> {
-        #[cfg(feature = "std")]
+        #[cfg(feature = "non_send")]
         {
-            Ok(RefMut {
-                borrow: self.borrow_state.try_borrow_mut(self.send, self.is_sync)?,
-                // SAFE we have the lock
-                inner: unsafe { &mut *self.inner.get() },
-            })
+            // if Sync - accessible from any thread, shared only if not world thread
+            // if !Sync - accessible from world thread only
+            if let Some(thread_id) = self.send {
+                if thread_id != std::thread::current().id() {
+                    return Err(error::Borrow::WrongThread);
+                }
+            }
         }
-        #[cfg(not(feature = "std"))]
-        {
+
+        if self.borrow_state.try_lock_exclusive() {
             Ok(RefMut {
-                borrow: self.borrow_state.try_borrow_mut()?,
-                // SAFE we have the lock
                 inner: unsafe { &mut *self.inner.get() },
+                borrow: ExclusiveBorrow(&self.borrow_state),
             })
+        } else {
+            Err(error::Borrow::Unique)
         }
     }
 }
@@ -112,8 +239,6 @@ impl AtomicRefCell<dyn crate::unknown_storage::UnknownStorage> {
     /// `T` has to be a unique storage of the right type.
     #[allow(clippy::boxed_local)]
     pub unsafe fn into_unique<T: 'static>(mut this: Box<Self>) -> T {
-        use core::mem::MaybeUninit;
-
         let mut tmp: MaybeUninit<T> = MaybeUninit::uninit();
 
         this.taken = true;
@@ -126,260 +251,72 @@ impl AtomicRefCell<dyn crate::unknown_storage::UnknownStorage> {
     }
 }
 
-/// `BorrowState` keeps track of which borrow is currently active.
-// If `HIGH_BIT` is set, it is a unique borrow, in all other cases it is a shared borrowed
-#[doc(hidden)]
-pub struct BorrowState(AtomicUsize);
+pub(crate) struct SharedBorrow<'a>(&'a RawRwLock);
 
-const HIGH_BIT: usize = !(core::usize::MAX >> 1);
-const MAX_FAILED_BORROWS: usize = HIGH_BIT + (HIGH_BIT >> 1);
-
-impl BorrowState {
-    // Each borrow will add one, check if no unique borrow is active before returning
-    // Even in case of failure the incrementation leave the value in a valid state
-    pub(crate) fn try_borrow(
-        &self,
-        #[cfg(feature = "std")] send: Option<ThreadId>,
-        #[cfg(feature = "std")] is_sync: bool,
-    ) -> Result<Borrow<'_>, error::Borrow> {
-        #[cfg(feature = "std")]
-        {
-            match (send, is_sync) {
-                (None, true) => {
-                    // accessible from any thread, shared xor unique
-                    let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
-
-                    if new & HIGH_BIT != 0 {
-                        Err(Self::try_recover(self, new))
-                    } else {
-                        Ok(Borrow::Shared(self))
-                    }
-                }
-                (None, false) => {
-                    // accessible from one thread at a time
-                    match self
-                        .0
-                        .compare_exchange(0, 1, Ordering::Acquire, Ordering::Relaxed)
-                    {
-                        Ok(_) => Ok(Borrow::Shared(self)),
-                        _ => Err(error::Borrow::MultipleThreads),
-                    }
-                }
-                (Some(_), true) => {
-                    // accessible from any thread, shared only if not original thread
-                    let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
-
-                    if new & HIGH_BIT != 0 {
-                        Err(Self::try_recover(self, new))
-                    } else {
-                        Ok(Borrow::Shared(self))
-                    }
-                }
-                (Some(thread_id), false) => {
-                    // accessible from origianl thread only
-                    if thread_id == thread::current().id() {
-                        let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
-
-                        if new & HIGH_BIT != 0 {
-                            Err(Self::try_recover(self, new))
-                        } else {
-                            Ok(Borrow::Shared(self))
-                        }
-                    } else {
-                        Err(error::Borrow::WrongThread)
-                    }
-                }
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
-
-            if new & HIGH_BIT != 0 {
-                Err(Self::try_recover(self, new))
-            } else {
-                Ok(Borrow::Shared(self))
-            }
-        }
-    }
-    // Can only make a unique borrow when no borrows are active
-    // Use `compare_exchange` to keep the value in a valid state even in case of failure
-    pub(crate) fn try_borrow_mut(
-        &self,
-        #[cfg(feature = "std")] send: Option<ThreadId>,
-        #[cfg(feature = "std")] is_sync: bool,
-    ) -> Result<Borrow<'_>, error::Borrow> {
-        #[cfg(feature = "std")]
-        {
-            match (send, is_sync) {
-                (None, true) | (None, false) => {
-                    // accessible from one thread at a time
-                    match self
-                        .0
-                        .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
-                    {
-                        Ok(_) => Ok(Borrow::Unique(self)),
-                        _ => Err(error::Borrow::Unique),
-                    }
-                }
-                (Some(thread_id), true) | (Some(thread_id), false) => {
-                    // accessible from origianl thread only
-                    if thread_id == thread::current().id() {
-                        match self.0.compare_exchange(
-                            0,
-                            HIGH_BIT,
-                            Ordering::Acquire,
-                            Ordering::Relaxed,
-                        ) {
-                            Ok(_) => Ok(Borrow::Unique(self)),
-                            _ => Err(error::Borrow::Unique),
-                        }
-                    } else {
-                        Err(error::Borrow::WrongThread)
-                    }
-                }
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            match self
-                .0
-                .compare_exchange(0, HIGH_BIT, Ordering::Acquire, Ordering::Relaxed)
-            {
-                Ok(_) => Ok(Borrow::Unique(self)),
-                _ => Err(error::Borrow::Unique),
-            }
-        }
-    }
-    // In case of a failled shared borrow, check all possible causes and recover from it when possible
-    // If `new == HIGH_BIT` there is `isize::MAX` active or forgotten shared borrows
-    // If `new >= MAX_FAILED_BORROWS` there is a unique borrows and `isize::MAX` attenpts to borrow immutably
-    // In all other cases, a unique borrow is active
-    fn try_recover(&self, new: usize) -> error::Borrow {
-        if new == HIGH_BIT {
-            self.0.fetch_sub(1, Ordering::Release);
-            panic!("Too many shared borrows");
-        } else if new >= MAX_FAILED_BORROWS {
-            #[cfg(feature = "std")]
-            {
-                println!("Too many failed borrows");
-                std::process::exit(1);
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                // This isn't great but I don't know better
-                panic!("Too many failed borrows");
-            }
-        } else {
-            // Tries to go back to the previous state, even if it fails the state is still valid
-            // Going back only allow more tries before hitting `MAX_FAILED_BORROWS`
-            let _ = self
-                .0
-                .compare_exchange(new, new - 1, Ordering::Release, Ordering::Relaxed);
-            error::Borrow::Shared
-        }
-    }
-}
-
-impl Default for BorrowState {
-    fn default() -> Self {
-        BorrowState(AtomicUsize::new(0))
-    }
-}
-
-#[doc(hidden)]
-pub enum Borrow<'a> {
-    Shared(&'a BorrowState),
-    Unique(&'a BorrowState),
-    None,
-}
-
-impl Clone for Borrow<'_> {
-    fn clone(&self) -> Self {
-        match self {
-            Borrow::Shared(borrow) => {
-                #[cfg(feature = "std")]
-                {
-                    borrow.try_borrow(None, true).unwrap()
-                }
-                #[cfg(not(feature = "std"))]
-                {
-                    borrow.try_borrow().unwrap()
-                }
-            }
-            Borrow::Unique(_) => panic!("Can't clone a unique borrow."),
-            Borrow::None => Borrow::None,
-        }
-    }
-}
-
-impl<'a> Drop for Borrow<'a> {
+impl Drop for SharedBorrow<'_> {
+    #[inline]
     fn drop(&mut self) {
-        match self {
-            Borrow::Shared(borrow) => {
-                let old = borrow.0.fetch_sub(1, Ordering::Release);
-                debug_assert!(old & HIGH_BIT == 0);
-            }
-            Borrow::Unique(borrow) => {
-                borrow.0.store(0, Ordering::Release);
-            }
-            Borrow::None => {}
+        unsafe {
+            self.0.unlock_shared();
         }
     }
 }
 
-/// A wrapper type for a shared borrow from a `AtomicRefCell<T>`.
+impl Clone for SharedBorrow<'_> {
+    #[inline]
+    fn clone(&self) -> Self {
+        debug_assert!(self.0.try_lock_shared());
+
+        SharedBorrow(self.0)
+    }
+}
+
+pub(crate) struct ExclusiveBorrow<'a>(&'a RawRwLock);
+
+impl Drop for ExclusiveBorrow<'_> {
+    #[inline]
+    fn drop(&mut self) {
+        unsafe {
+            self.0.unlock_exclusive();
+        }
+    }
+}
+
 pub struct Ref<'a, T: ?Sized> {
-    pub(crate) inner: &'a T,
-    pub(crate) borrow: Borrow<'a>,
+    inner: &'a T,
+    borrow: SharedBorrow<'a>,
 }
 
-impl<'a, T: 'a + ?Sized> Ref<'a, T> {
-    /// Makes a new `Ref` for a component of the borrowed data.
-    pub(crate) fn map<U, F>(origin: Self, f: F) -> Ref<'a, U>
-    where
-        F: FnOnce(&T) -> &U,
-    {
+impl<'a, T: ?Sized> Ref<'a, T> {
+    #[inline]
+    pub(crate) fn map<U, F: Fn(&'a T) -> &'a U>(this: Self, f: F) -> Ref<'a, U> {
         Ref {
-            inner: f(origin.inner),
-            borrow: origin.borrow,
+            inner: f(this.inner),
+            borrow: this.borrow,
         }
-    }
-    /// Makes a new `Ref` for a component of the borrowed data, the operation can fail.
-    pub(crate) fn try_map<U, E, F>(origin: Self, f: F) -> Result<Ref<'a, U>, E>
-    where
-        F: FnOnce(&T) -> Result<&U, E>,
-    {
-        Ok(Ref {
-            inner: f(origin.inner)?,
-            borrow: origin.borrow,
-        })
     }
     /// Get the inner parts of the `Ref`.
     ///
     /// # Safety
     ///
     /// The reference has to be dropped before `Borrow`.
-    pub(crate) unsafe fn destructure(Ref { inner, borrow, .. }: Self) -> (&'a T, Borrow<'a>) {
-        (inner, borrow)
+    #[inline]
+    pub(crate) unsafe fn destructure(self) -> (&'a T, SharedBorrow<'a>) {
+        (self.inner, self.borrow)
     }
 }
 
 impl<T: ?Sized> core::ops::Deref for Ref<'_, T> {
     type Target = T;
 
-    fn deref(&self) -> &T {
-        self.inner
-    }
-}
-
-impl<T: ?Sized> AsRef<T> for Ref<'_, T> {
-    fn as_ref(&self) -> &T {
+    #[inline]
+    fn deref(&self) -> &Self::Target {
         self.inner
     }
 }
 
 impl<T: ?Sized> Clone for Ref<'_, T> {
+    #[inline]
     fn clone(&self) -> Self {
         Ref {
             inner: self.inner,
@@ -388,169 +325,180 @@ impl<T: ?Sized> Clone for Ref<'_, T> {
     }
 }
 
-/// A wrapper type for a unique borrow from a `AtomicRefCell<T>`.
 pub struct RefMut<'a, T: ?Sized> {
-    pub(crate) inner: &'a mut T,
-    pub(crate) borrow: Borrow<'a>,
+    inner: &'a mut T,
+    borrow: ExclusiveBorrow<'a>,
 }
 
-impl<'a, T: 'a + ?Sized> RefMut<'a, T> {
-    /// Makes a new `RefMut` for a component of the borrowed data.
-    pub(crate) fn map<U, F>(origin: Self, f: F) -> RefMut<'a, U>
-    where
-        F: FnOnce(&mut T) -> &mut U,
-    {
+impl<'a, T: ?Sized> RefMut<'a, T> {
+    #[inline]
+    pub(crate) fn map<U, F: Fn(&'a mut T) -> &'a mut U>(this: Self, f: F) -> RefMut<'a, U> {
         RefMut {
-            inner: f(origin.inner),
-            borrow: origin.borrow,
+            inner: f(this.inner),
+            borrow: this.borrow,
         }
-    }
-    /// Makes a new `RefMut` for a component of the borrowed data, the operation can fail.
-    pub(crate) fn try_map<U, E, F>(origin: Self, f: F) -> Result<RefMut<'a, U>, E>
-    where
-        F: FnOnce(&mut T) -> Result<&mut U, E>,
-    {
-        Ok(RefMut {
-            inner: f(origin.inner)?,
-            borrow: origin.borrow,
-        })
     }
 }
 
 impl<T: ?Sized> core::ops::Deref for RefMut<'_, T> {
     type Target = T;
 
-    fn deref(&self) -> &T {
+    #[inline]
+    fn deref(&self) -> &Self::Target {
         self.inner
     }
 }
 
 impl<T: ?Sized> core::ops::DerefMut for RefMut<'_, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.inner
-    }
-}
-
-impl<T: ?Sized> AsRef<T> for RefMut<'_, T> {
-    fn as_ref(&self) -> &T {
-        self.inner
-    }
-}
-
-impl<T: ?Sized> AsMut<T> for RefMut<'_, T> {
-    fn as_mut(&mut self) -> &mut T {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner
     }
 }
 
 #[test]
-fn reborrow() {
-    let refcell = {
-        #[cfg(feature = "std")]
-        {
-            AtomicRefCell::new(0, None, true)
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            AtomicRefCell::new(0)
-        }
-    };
-    let _first_borrow = refcell.try_borrow().unwrap();
+fn shared() {
+    let refcell = AtomicRefCell::new(0);
+    let first_borrow = refcell.try_borrow().unwrap();
 
     assert!(refcell.try_borrow().is_ok());
-    assert_eq!(
-        std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
-        std::mem::discriminant(&error::Borrow::Unique)
-    );
+    assert_eq!(refcell.try_borrow_mut().err(), Some(error::Borrow::Unique));
+
+    drop(first_borrow);
+
+    assert!(refcell.try_borrow_mut().is_ok());
 }
+
 #[test]
-fn unique_reborrow() {
-    let refcell = {
-        #[cfg(feature = "std")]
-        {
-            AtomicRefCell::new(0, None, true)
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            AtomicRefCell::new(0)
-        }
-    };
-    let _first_borrow = refcell.try_borrow_mut().unwrap();
+fn exclusive() {
+    let refcell = AtomicRefCell::new(0);
+    let first_borrow = refcell.try_borrow_mut().unwrap();
 
-    assert_eq!(
-        std::mem::discriminant(&refcell.try_borrow().err().unwrap()),
-        std::mem::discriminant(&error::Borrow::Shared)
-    );
-    assert_eq!(
-        std::mem::discriminant(&refcell.try_borrow_mut().err().unwrap()),
-        std::mem::discriminant(&error::Borrow::Unique)
-    );
+    assert_eq!(refcell.try_borrow().err(), Some(error::Borrow::Shared));
+    assert_eq!(refcell.try_borrow_mut().err(), Some(error::Borrow::Unique));
+
+    drop(first_borrow);
+
+    assert!(refcell.try_borrow_mut().is_ok());
 }
 
-#[cfg(feature = "parallel")]
-#[cfg_attr(miri, ignore)]
+#[cfg(all(feature = "std", not(feature = "non_send")))]
+#[test]
+fn shared_thread() {
+    use std::sync::Arc;
+
+    let refcell = Arc::new(AtomicRefCell::new(0));
+    let refcell_clone = refcell.clone();
+    let first_borrow = refcell.try_borrow().unwrap();
+
+    std::thread::spawn(move || {
+        refcell_clone.try_borrow().unwrap();
+        assert_eq!(
+            refcell_clone.try_borrow_mut().err(),
+            Some(error::Borrow::Unique)
+        );
+    })
+    .join()
+    .unwrap();
+
+    drop(first_borrow);
+
+    assert!(refcell.try_borrow_mut().is_ok());
+}
+
+#[cfg(all(feature = "std", not(feature = "non_send")))]
+#[test]
+fn exclusive_thread() {
+    use std::sync::Arc;
+
+    let refcell = Arc::new(AtomicRefCell::new(0));
+    let refcell_clone = refcell.clone();
+
+    std::thread::spawn(move || {
+        let _first_borrow = refcell_clone.try_borrow_mut();
+        assert_eq!(
+            refcell_clone.try_borrow_mut().err(),
+            Some(error::Borrow::Unique)
+        );
+    })
+    .join()
+    .unwrap();
+
+    refcell.try_borrow_mut().unwrap();
+}
+
+#[cfg(feature = "non_send")]
+#[test]
+fn non_send() {
+    let refcell = AtomicRefCell::new_non_send(0u32, std::thread::current().id());
+    let refcell_ptr: *const _ = &refcell;
+    let refcell_ptr = refcell_ptr as usize;
+
+    std::thread::spawn(move || unsafe {
+        (&*(refcell_ptr as *const AtomicRefCell<u32>))
+            .try_borrow()
+            .unwrap();
+        assert_eq!(
+            (&*(refcell_ptr as *const AtomicRefCell<u32>))
+                .try_borrow_mut()
+                .err(),
+            Some(error::Borrow::WrongThread)
+        );
+    })
+    .join()
+    .unwrap();
+
+    refcell.try_borrow().unwrap();
+    refcell.try_borrow_mut().unwrap();
+}
+
+#[cfg(feature = "non_sync")]
+#[test]
+fn non_sync() {
+    let refcell = AtomicRefCell::new_non_sync(0);
+
+    let refcell_ptr: *const _ = &refcell;
+    let refcell_ptr = refcell_ptr as usize;
+
+    std::thread::spawn(move || unsafe {
+        (&*(refcell_ptr as *const AtomicRefCell<u32>))
+            .try_borrow()
+            .unwrap();
+        (&*(refcell_ptr as *const AtomicRefCell<u32>))
+            .try_borrow_mut()
+            .unwrap();
+    })
+    .join()
+    .unwrap();
+
+    refcell.try_borrow().unwrap();
+    refcell.try_borrow_mut().unwrap();
+}
+
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
 #[test]
 fn non_send_sync() {
-    struct Test(*const ());
-    unsafe impl Sync for Test {}
+    let refcell = AtomicRefCell::new_non_send_sync(0u32, std::thread::current().id());
+    let refcell_ptr: *const _ = &refcell;
+    let refcell_ptr = refcell_ptr as usize;
 
-    let refcell = AtomicRefCell::new(Test(&()), Some(thread::current().id()), true);
-    refcell.try_borrow_mut().unwrap();
-    let borrow = refcell.try_borrow();
-    rayon::scope(|_| {
-        refcell.try_borrow().unwrap();
-    });
-    drop(borrow);
-    rayon::scope(|_| {
+    std::thread::spawn(move || unsafe {
         assert_eq!(
-            refcell.try_borrow_mut().err(),
+            (&*(refcell_ptr as *const AtomicRefCell<u32>))
+                .try_borrow()
+                .err(),
             Some(error::Borrow::WrongThread)
         );
-    });
-}
-
-#[cfg(feature = "parallel")]
-#[cfg_attr(miri, ignore)]
-#[test]
-fn non_sync_send() {
-    struct Test(*const ());
-    unsafe impl Send for Test {}
-
-    let refcell = AtomicRefCell::new(Test(&()), None, false);
-    refcell.try_borrow_mut().unwrap();
-    let borrow = refcell.try_borrow().unwrap();
-    rayon::scope(|_| {
         assert_eq!(
-            refcell.try_borrow().err(),
-            Some(error::Borrow::MultipleThreads)
+            (&*(refcell_ptr as *const AtomicRefCell<u32>))
+                .try_borrow_mut()
+                .err(),
+            Some(error::Borrow::WrongThread)
         );
-    });
-    rayon::scope(|_| {
-        assert_eq!(refcell.try_borrow_mut().err(), Some(error::Borrow::Unique));
-    });
-    drop(borrow);
-    rayon::scope(|_| {
-        refcell.try_borrow().unwrap();
-        refcell.try_borrow_mut().unwrap();
-    });
-}
+    })
+    .join()
+    .unwrap();
 
-#[cfg(feature = "parallel")]
-#[cfg_attr(miri, ignore)]
-#[test]
-fn non_send_non_sync() {
-    struct Test(*const ());
-
-    let refcell = AtomicRefCell::new(Test(&()), Some(thread::current().id()), false);
-    refcell.try_borrow_mut().unwrap();
     refcell.try_borrow().unwrap();
-    rayon::scope(|_| {
-        assert_eq!(refcell.try_borrow().err(), Some(error::Borrow::WrongThread));
-    });
-    rayon::scope(|_| {
-        assert_eq!(
-            refcell.try_borrow_mut().err(),
-            Some(error::Borrow::WrongThread)
-        );
-    });
+    refcell.try_borrow_mut().unwrap();
 }

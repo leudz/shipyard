@@ -21,6 +21,7 @@ use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::type_name;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
@@ -36,125 +37,127 @@ unsafe impl Sync for Storage {}
 
 impl Storage {
     /// Creates a new `Storage` storing elements of type T.
+    #[inline]
     pub(crate) fn new<T: 'static + Send + Sync>() -> Self {
         let sparse_set = SparseSet::<T>::new();
-        #[cfg(feature = "std")]
-        {
-            Storage(Box::new(AtomicRefCell::new(sparse_set, None, true)))
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            Storage(Box::new(AtomicRefCell::new(sparse_set)))
-        }
+        Storage(Box::new(AtomicRefCell::new(sparse_set)))
     }
     #[cfg(feature = "non_send")]
+    #[inline]
     pub(crate) fn new_non_send<T: 'static + Sync>(world_thread_id: std::thread::ThreadId) -> Self {
         let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new(
+        Storage(Box::new(AtomicRefCell::new_non_send(
             sparse_set,
-            Some(world_thread_id),
-            true,
+            world_thread_id,
         )))
     }
     #[cfg(feature = "non_sync")]
+    #[inline]
     pub(crate) fn new_non_sync<T: 'static + Send>() -> Self {
         let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new(sparse_set, None, false)))
+        Storage(Box::new(AtomicRefCell::new_non_sync(sparse_set)))
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[inline]
     pub(crate) fn new_non_send_sync<T: 'static>(world_thread_id: std::thread::ThreadId) -> Self {
         let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new(
+        Storage(Box::new(AtomicRefCell::new_non_send_sync(
             sparse_set,
-            Some(world_thread_id),
-            false,
+            world_thread_id,
         )))
     }
+    #[inline]
     pub(crate) fn new_unique<T: 'static + Send + Sync>(component: T) -> Self {
-        #[cfg(feature = "std")]
-        {
-            Storage(Box::new(AtomicRefCell::new(Unique(component), None, true)))
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            Storage(Box::new(AtomicRefCell::new(Unique(component))))
-        }
+        Storage(Box::new(AtomicRefCell::new(Unique(component))))
     }
     #[cfg(feature = "non_send")]
+    #[inline]
     pub(crate) fn new_unique_non_send<T: 'static + Sync>(
         component: T,
         world_thread_id: std::thread::ThreadId,
     ) -> Self {
-        Storage(Box::new(AtomicRefCell::new(
+        Storage(Box::new(AtomicRefCell::new_non_send(
             Unique(component),
-            Some(world_thread_id),
-            true,
+            world_thread_id,
         )))
     }
     #[cfg(feature = "non_sync")]
+    #[inline]
     pub(crate) fn new_unique_non_sync<T: 'static + Send>(component: T) -> Self {
-        Storage(Box::new(AtomicRefCell::new(Unique(component), None, false)))
+        Storage(Box::new(AtomicRefCell::new_non_sync(Unique(component))))
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[inline]
     pub(crate) fn new_unique_non_send_sync<T: 'static>(
         component: T,
         world_thread_id: std::thread::ThreadId,
     ) -> Self {
-        Storage(Box::new(AtomicRefCell::new(
+        Storage(Box::new(AtomicRefCell::new_non_send_sync(
             Unique(component),
-            Some(world_thread_id),
-            false,
+            world_thread_id,
         )))
     }
     /// Immutably borrows the component container.
+    #[inline]
     pub(crate) fn sparse_set<T: 'static>(
         &self,
     ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
-        Ref::try_map(
-            self.0.try_borrow().map_err(|borrow| {
-                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
-            })?,
-            |unknown| Ok(unknown.sparse_set::<T>().unwrap()),
-        )
+        let storage = self
+            .0
+            .try_borrow()
+            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
+
+        Ok(Ref::map(storage, |unknown| {
+            unknown.sparse_set::<T>().unwrap()
+        }))
     }
     /// Mutably borrows the component container.
+    #[inline]
     pub(crate) fn sparse_set_mut<T: 'static>(
         &self,
     ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
-        RefMut::try_map(
-            self.0.try_borrow_mut().map_err(|borrow| {
-                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
-            })?,
-            |unknown| Ok(unknown.sparse_set_mut::<T>().unwrap()),
-        )
+        let storage = self
+            .0
+            .try_borrow_mut()
+            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
+
+        Ok(RefMut::map(storage, |unknown| {
+            unknown.sparse_set_mut::<T>().unwrap()
+        }))
     }
     /// Immutably borrows entities' storage.
+    #[inline]
     pub(crate) fn entities(&self) -> Result<Ref<'_, Entities>, error::Borrow> {
         Ok(Ref::map(self.0.try_borrow()?, |unknown| {
             unknown.entities().unwrap()
         }))
     }
     /// Mutably borrows entities' storage.
+    #[inline]
     pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, Entities>, error::Borrow> {
         Ok(RefMut::map(self.0.try_borrow_mut()?, |unknown| {
             unknown.entities_mut().unwrap()
         }))
     }
+    #[inline]
     pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
-        Ref::try_map(
-            self.0.try_borrow().map_err(|borrow| {
-                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
-            })?,
-            |unknown| Ok(unknown.unique::<T>().unwrap()),
-        )
+        let storage = self
+            .0
+            .try_borrow()
+            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
+
+        Ok(Ref::map(storage, |unknown| unknown.unique::<T>().unwrap()))
     }
+    #[inline]
     pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
-        RefMut::try_map(
-            self.0.try_borrow_mut().map_err(|borrow| {
-                error::GetStorage::StorageBorrow((core::any::type_name::<T>(), borrow))
-            })?,
-            |unknown| Ok(unknown.unique_mut::<T>().unwrap()),
-        )
+        let storage = self
+            .0
+            .try_borrow_mut()
+            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
+
+        Ok(RefMut::map(storage, |unknown| {
+            unknown.unique_mut::<T>().unwrap()
+        }))
     }
     /// Mutably borrows the container and delete `index`.
     pub(crate) fn delete(

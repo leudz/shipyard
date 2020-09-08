@@ -3,7 +3,7 @@ mod delete_any;
 pub use delete_any::DeleteAny;
 
 use super::{Entities, EntityId, Storage, StorageId, Unique};
-use crate::atomic_refcell::{AtomicRefCell, Borrow, Ref, RefMut};
+use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
@@ -41,20 +41,10 @@ impl AllStorages {
 
         let entities = Entities::new();
 
-        #[cfg(feature = "std")]
-        {
-            storages.insert(
-                TypeId::of::<Entities>().into(),
-                Storage(Box::new(AtomicRefCell::new(entities, None, true))),
-            );
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            storages.insert(
-                TypeId::of::<Entities>().into(),
-                Storage(Box::new(AtomicRefCell::new(entities))),
-            );
-        }
+        storages.insert(
+            TypeId::of::<Entities>().into(),
+            Storage(Box::new(AtomicRefCell::new(entities))),
+        );
 
         AllStorages {
             storages: UnsafeCell::new(storages),
@@ -1237,10 +1227,7 @@ let i = all_storages.run(sys1);
     /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
     /// [AllStorages]: struct.AllStorages.html
     pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
-        EntityBuilder::new(Ref {
-            inner: self,
-            borrow: Borrow::None,
-        })
+        EntityBuilder::new_from_reference(self)
     }
     // #[cfg(feature = "serde1")]
     // pub(crate) fn storages(&mut self) -> &mut HashMap<StorageId, Storage> {
