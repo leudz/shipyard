@@ -102,7 +102,7 @@ impl WorkloadBuilder {
 
 impl WorkloadBuilder {
     /// Adds a system to the workload been created.  
-    /// It is strongly recommanded to use the [system] and [try_system] macros.  
+    /// It is strongly recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.
     ///
     /// ### Example:
@@ -202,7 +202,7 @@ impl WorkloadBuilder {
         Ok(self)
     }
     /// Adds a system to the workload been created.  
-    /// It is strongly recommanded to use the [system] and [try_system] macros.  
+    /// It is strongly recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.  
     /// Unwraps errors.
     ///
