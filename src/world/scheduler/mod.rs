@@ -23,6 +23,7 @@ pub(crate) struct Scheduler {
     pub(super) system_names: Vec<&'static str>,
     // system's `TypeId` to an index into both systems and system_names
     lookup_table: HashMap<TypeId, usize>,
+    /// workload name to list of "batches" (list of indexes into both systems and system_names)
     workloads: HashMap<Cow<'static, str>, Vec<Vec<usize>>>,
     default: Cow<'static, str>,
 }
