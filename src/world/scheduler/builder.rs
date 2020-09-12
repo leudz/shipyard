@@ -101,7 +101,7 @@ impl WorkloadBuilder {
 }
 
 impl WorkloadBuilder {
-    /// Adds a system to the workload been created.  
+    /// Adds a system to the workload being created.  
     /// It is strongly recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.
     ///
@@ -201,7 +201,7 @@ impl WorkloadBuilder {
 
         Ok(self)
     }
-    /// Adds a system to the workload been created.  
+    /// Adds a system to the workload being created.  
     /// It is strongly recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.  
     /// Unwraps errors.
@@ -283,7 +283,7 @@ impl WorkloadBuilder {
 
         self
     }
-    /// Finishes the workload creation and store it in the [`World`].
+    /// Finishes the workload creation and stores it in the [`World`].
     ///
     /// ### Borrows
     ///
@@ -448,7 +448,7 @@ impl WorkloadBuilder {
 
         Ok(())
     }
-    /// Finishes the workload creation and store it in the [`World`].  
+    /// Finishes the workload creation and stores it in the [`World`].  
     /// Returns a struct with describing how the workload has been split in batches.
     ///
     /// ### Borrows
