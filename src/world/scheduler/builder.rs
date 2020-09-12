@@ -262,6 +262,27 @@ impl WorkloadBuilder {
             Err(err) => panic!("{:?}", err),
         }
     }
+    /// Moves all systems of `other` into `Self`, leaving `other` empty.  
+    /// This allows us to collect systems in different builders before joining them together.
+    pub fn append(&mut self, other: &mut Self) -> &mut Self {
+        let offset_ranges_by = self.borrow_info.len();
+        self.borrow_info.extend(other.borrow_info.drain(..));
+        self.systems.extend(other.systems.drain(..).map(
+            |(type_id, type_name, mut borrow_info_range, is_send_sync, system_fn)| {
+                borrow_info_range.start += offset_ranges_by;
+                borrow_info_range.end += offset_ranges_by;
+                (
+                    type_id,
+                    type_name,
+                    borrow_info_range,
+                    is_send_sync,
+                    system_fn,
+                )
+            },
+        ));
+
+        self
+    }
     /// Finishes the workload creation and store it in the [`World`].
     ///
     /// ### Borrows
