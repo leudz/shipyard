@@ -811,6 +811,48 @@ fn multiple_mixed() {
 }
 
 #[test]
+fn append_optimizes_batches() {
+    use crate::{View, ViewMut, World};
+
+    fn systemA1(_: ViewMut<'_, usize>, _: ViewMut<'_, u32>) {}
+    fn systemA2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
+    fn systemB1(_: View<'_, usize>) {}
+
+    let world = World::new();
+
+    let mut group_a = Workload::builder("Group A");
+    group_a
+        .try_with_system((|world: &World| world.try_run(systemA1), systemA1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(systemA2), systemA2))
+        .unwrap();
+    let mut group_b = Workload::builder("Group B");
+    group_b
+        .try_with_system((|world: &World| world.try_run(systemB1), systemB1))
+        .unwrap();
+
+    let combined_info = Workload::builder("Combined")
+        .append(&mut group_a)
+        .append(&mut group_b)
+        .add_to_world_with_info(&world)
+        .unwrap();
+
+    assert_eq!(
+        combined_info.batch_info.len(),
+        2,
+        "systemB1 should move into second batch with systemA2"
+    );
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 3);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Combined"),
+        Some(&vec![vec![0], vec![1, 2]])
+    );
+    assert_eq!(scheduler.default, "Combined");
+}
+
+#[test]
 fn all_storages() {
     use crate::{AllStoragesViewMut, View, World};
 
