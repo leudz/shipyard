@@ -3,7 +3,7 @@ use shipyard::*;
 #[allow(unused)]
 fn ref_mut(ref mut u32s: ViewMut<u32>) {
     let id = EntityId::dead();
-    let i: &mut u32 = u32s.get(id).unwrap();
+    let i: Mut<u32> = u32s.get(id).unwrap();
 }
 
 #[allow(unused)]

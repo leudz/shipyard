@@ -1,5 +1,5 @@
 use crate::error;
-use crate::iter::{IntoIterIds, Shiperator};
+use crate::iter::{IntoIter, IntoWithId};
 use crate::sparse_set::{LoosePack as LoosePackInfo, Pack};
 use crate::type_id::TypeId;
 use crate::view::ViewMut;
@@ -59,10 +59,7 @@ macro_rules! impl_loose_pack {
                         Pack::Loose(_) => {
                             return Err(error::Pack::AlreadyLoosePack(type_name::<$tight>()));
                         },
-                        Pack::Update(_) => {
-                            return Err(error::Pack::AlreadyUpdatePack(type_name::<$tight>()))
-                        },
-                        Pack::NoPack => {}
+                        Pack::None => {}
                     }
                 )+
 
@@ -101,7 +98,7 @@ macro_rules! impl_loose_pack {
                 )+
 
                 // using an iterator we get all entities with all components
-                let entities: Vec<_> = ($(&mut *self.$tight_index,)+ $(&mut *self.$loose_index,)+).iter_ids().collect();
+                let entities: Vec<_> = ($(&mut *self.$tight_index,)+ $(&mut *self.$loose_index,)+).iter().ids().collect();
 
                 // we then use this list to pack the entity
                 for entity in entities {

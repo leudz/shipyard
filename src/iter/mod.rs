@@ -1,40 +1,55 @@
 mod abstract_mut;
-mod enumerate;
-mod filter;
+mod fast;
 mod into_abstract;
 mod into_iter;
-pub mod iterators;
-mod map;
-mod shiperator;
+#[allow(clippy::module_inception)]
+mod iter;
+mod loose;
+mod mixed;
+#[cfg(feature = "parallel")]
+mod par_iter;
+#[cfg(feature = "parallel")]
+mod par_loose;
+#[cfg(feature = "parallel")]
+mod par_mixed;
+#[cfg(feature = "parallel")]
+mod par_tight;
+mod tight;
 mod with_id;
 
-pub use enumerate::Enumerate;
-pub use filter::Filter;
-pub use into_iter::{IntoIter, IntoIterIds};
-pub use iterators::*;
-pub use map::Map;
-pub use shiperator::{
-    CurrentId, DoubleEndedShiperator, ExactSizeShiperator, IntoIterator, Shiperator,
-};
-pub use with_id::WithId;
+pub use fast::chunk::FastChunk;
+pub use fast::chunk_exact::FastChunkExact;
+pub use fast::into_iter::IntoFastIter;
+pub use fast::iter::FastIter;
+pub use fast::loose::FastLoose;
+pub use fast::mixed::FastMixed;
+#[cfg(feature = "parallel")]
+pub use fast::par_iter::FastParIter;
+#[cfg(feature = "parallel")]
+pub use fast::par_loose::FastParLoose;
+#[cfg(feature = "parallel")]
+pub use fast::par_mixed::FastParMixed;
+#[cfg(feature = "parallel")]
+pub use fast::par_tight::FastParTight;
+pub use fast::tight::FastTight;
+pub use into_iter::IntoIter;
+pub use iter::Iter;
+pub use loose::Loose;
+pub use mixed::Mixed;
+#[cfg(feature = "parallel")]
+pub use par_iter::ParIter;
+#[cfg(feature = "parallel")]
+pub use par_loose::ParLoose;
+#[cfg(feature = "parallel")]
+pub use par_mixed::ParMixed;
+#[cfg(feature = "parallel")]
+pub use par_tight::ParTight;
+pub use tight::Tight;
+pub use with_id::{IntoWithId, WithId};
 
-impl<T> IntoIterIds for T
-where
-    T: IntoIter,
-    <T as IntoIter>::IntoIter: CurrentId,
-{
-    #[allow(clippy::type_complexity)]
-    type IntoIterIds = Map<
-        WithId<<T as IntoIter>::IntoIter>,
-        fn(
-            (
-                <<T as IntoIter>::IntoIter as CurrentId>::Id,
-                <<T as IntoIter>::IntoIter as Shiperator>::Item,
-            ),
-        ) -> <<T as IntoIter>::IntoIter as CurrentId>::Id,
-    >;
-
-    fn iter_ids(self) -> Self::IntoIterIds {
-        self.iter().with_id().map(|(id, _)| id)
-    }
-}
+#[derive(Clone)]
+pub struct Inserted<Storage>(pub Storage);
+#[derive(Clone)]
+pub struct Modified<Storage>(pub Storage);
+#[derive(Clone)]
+pub struct InsertedOrModified<Storage>(pub Storage);

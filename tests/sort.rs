@@ -1,5 +1,4 @@
 use shipyard::error;
-use shipyard::iterators;
 use shipyard::*;
 
 #[test]
@@ -18,9 +17,9 @@ fn simple_sort() {
                 usizes.sort().try_unstable(Ord::cmp).unwrap();
 
                 let mut prev = 0;
-                (&mut usizes).iter().for_each(|&mut x| {
-                    assert!(prev <= x);
-                    prev = x;
+                (&mut usizes).iter().for_each(|x| {
+                    assert!(prev <= *x);
+                    prev = *x;
                 });
             },
         )
@@ -46,12 +45,10 @@ fn tight_sort() {
         .unwrap();
 
     let mut prev = 0;
-    (&mut usizes, &mut u32s)
-        .iter()
-        .for_each(|(&mut x, &mut y)| {
-            assert!(prev <= x + y as usize);
-            prev = x + y as usize;
-        });
+    (&mut usizes, &mut u32s).iter().for_each(|(x, y)| {
+        assert!(prev <= *x + *y as usize);
+        prev = *x + *y as usize;
+    });
 }
 
 #[test]
@@ -74,12 +71,10 @@ fn loose_sort() {
         .unwrap();
 
     let mut prev = 0;
-    (&mut usizes, &mut u32s)
-        .iter()
-        .for_each(|(&mut x, &mut y)| {
-            assert!(prev <= x + y as usize);
-            prev = x + y as usize;
-        });
+    (&mut usizes, &mut u32s).iter().for_each(|(x, y)| {
+        assert!(prev <= *x + *y as usize);
+        prev = *x + *y as usize;
+    });
 }
 
 #[test]
@@ -102,14 +97,14 @@ fn tight_loose_sort() {
         .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
         .unwrap();
 
-    if let iterators::Iter3::Loose(mut iter) = (&usizes, &u64s, &u32s).iter() {
+    if let iter::Iter::Loose(mut iter) = (&usizes, &u64s, &u32s).iter() {
         assert_eq!(iter.next(), Some((&6, &7, &8)));
         assert_eq!(iter.next(), Some((&0, &1, &2)));
         assert_eq!(iter.next(), None);
     } else {
         panic!("not loose");
     }
-    if let iterators::Iter2::Tight(mut iter) = (&usizes, &u64s).iter() {
+    if let iter::Iter::Tight(mut iter) = (&usizes, &u64s).iter() {
         assert_eq!(iter.next(), Some((&0, &1)));
         assert_eq!(iter.next(), Some((&3, &4)));
         assert_eq!(iter.next(), Some((&6, &7)));
@@ -117,7 +112,7 @@ fn tight_loose_sort() {
     } else {
         panic!("not tight");
     }
-    if let iterators::Iter2::NonPacked(mut iter) = (&usizes, &u32s).iter() {
+    if let iter::Iter::Mixed(mut iter) = (&usizes, &u32s).iter() {
         assert_eq!(iter.next(), Some((&6, &8)));
         assert_eq!(iter.next(), Some((&0, &2)));
         assert_eq!(iter.next(), None);
@@ -168,17 +163,5 @@ fn tight_sort_too_many_storages() {
             })
             .err(),
         Some(error::Sort::TooManyStorages)
-    );
-}
-
-#[test]
-fn update_sort() {
-    let world = World::new();
-    let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();
-
-    usizes.try_update_pack().unwrap();
-    assert_eq!(
-        usizes.sort().try_unstable(Ord::cmp).err(),
-        Some(error::Sort::MissingPackStorage)
     );
 }

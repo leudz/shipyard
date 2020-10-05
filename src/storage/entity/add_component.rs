@@ -31,15 +31,7 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
             match self.metadata.pack {
                 Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
                 Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
-                Pack::Update(_) => {
-                    if self.metadata.observer_types.is_empty() {
-                        self.insert(component, entity);
-                        Ok(())
-                    } else {
-                        Err(error::AddComponent::MissingPackStorage(type_name::<T>()))
-                    }
-                }
-                Pack::NoPack => {
+                Pack::None => {
                     if self.metadata.observer_types.is_empty() {
                         self.insert(component, entity);
                         Ok(())
@@ -72,7 +64,7 @@ macro_rules! impl_add_component {
                     // and list components we can pack
                     let mut should_pack = Vec::new();
                     // non packed storages should not pay the price of pack
-                    if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::NoPack) || !self.$index.metadata.observer_types.is_empty())||+ {
+                    if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::None) || !self.$index.metadata.observer_types.is_empty())||+ {
                         let mut type_ids = [$(TypeId::of::<$type>()),+];
                         type_ids.sort_unstable();
                         let mut add_types = [$(TypeId::of::<$add_type>()),*];
@@ -92,14 +84,13 @@ macro_rules! impl_add_component {
                             if self.$index.metadata.has_all_storages(&type_ids, &add_types) {
                                 if !should_pack.contains(&TypeId::of::<$type>()) {
                                     match &self.$index.metadata.pack {
-                                        Pack::Tight(pack) => if let Ok(types) = pack.is_packable(&real_types) {
-                                            should_pack.extend_from_slice(types);
+                                        Pack::Tight(pack) => if pack.is_packable(&real_types) {
+                                            should_pack.extend_from_slice(&pack.types);
                                         }
-                                        Pack::Loose(pack) => if let Ok(types) = pack.is_packable(&real_types) {
-                                            should_pack.extend_from_slice(types);
+                                        Pack::Loose(pack) => if pack.is_packable(&real_types) {
+                                            should_pack.extend_from_slice(&pack.tight_types);
                                         }
-                                        Pack::Update(_) => {}
-                                        Pack::NoPack => {}
+                                        Pack::None => {}
                                     }
                                 }
                             } else {

@@ -65,9 +65,9 @@ fn update() {
     let (mut entities, mut usizes) = world
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
-    usizes.try_update_pack().unwrap();
+    usizes.update_pack();
     let entity = entities.add_entity(&mut usizes, 0);
-    assert_eq!(usizes.try_inserted().unwrap().len(), 1);
+    assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes[entity], 0);
 }
 
@@ -77,11 +77,12 @@ fn cleared_update() {
     let (mut entities, mut usizes) = world
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
-    usizes.try_update_pack().unwrap();
+    usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
     usizes.try_clear_inserted_and_modified().unwrap();
+    assert_eq!(usizes.inserted().iter().count(), 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
-    assert_eq!(usizes.try_inserted().unwrap().len(), 1);
+    assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(*usizes.get(entity1).unwrap(), 1);
     assert_eq!(*usizes.get(entity2).unwrap(), 2);
 }
@@ -92,12 +93,12 @@ fn modified_update() {
     let (mut entities, mut usizes) = world
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
-    usizes.try_update_pack().unwrap();
+    usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
     usizes.try_clear_inserted_and_modified().unwrap();
     usizes[entity1] = 3;
     let entity2 = entities.add_entity(&mut usizes, 2);
-    assert_eq!(usizes.try_inserted().unwrap().len(), 1);
+    assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(*usizes.get(entity1).unwrap(), 3);
     assert_eq!(*usizes.get(entity2).unwrap(), 2);
 }

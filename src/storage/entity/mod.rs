@@ -156,14 +156,14 @@ impl Entities {
                     unsafe {
                         self.data
                             .get_unchecked_mut(entity_id.uindex())
-                            .set_index(EntityId::INDEX_MASK - 1)
+                            .set_index(EntityId::max_index())
                     };
                     *new = entity_id.uindex();
                 } else {
                     unsafe {
                         self.data
                             .get_unchecked_mut(entity_id.uindex())
-                            .set_index(EntityId::INDEX_MASK - 1)
+                            .set_index(EntityId::max_index())
                     };
                     self.list = Some((entity_id.uindex(), entity_id.uindex()));
                 }
@@ -223,13 +223,13 @@ impl UnknownStorage for Entities {
         let begin = self
             .data
             .iter()
-            .position(|id| id.gen() < ((1u64 << (EntityId::GEN_LEN + 1)) - 1))
+            .position(|id| id.gen() < EntityId::max_gen())
             .unwrap();
         let end = self
             .data
             .iter()
             .rev()
-            .position(|id| id.gen() < ((1u64 << (EntityId::GEN_LEN + 1)) - 1))
+            .position(|id| id.gen() < EntityId::max_gen())
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
     }
@@ -430,8 +430,6 @@ impl UnknownStorage for Entities {
 
 #[test]
 fn entities() {
-    use core::num::NonZeroU64;
-
     let mut entities = Entities::new();
 
     let key00 = entities.generate();
@@ -459,7 +457,7 @@ fn entities() {
     assert_eq!(key02.index(), 0);
     assert_eq!(key02.gen(), 2);
 
-    let last_key = EntityId(NonZeroU64::new(!(!0 >> 15) + 1).unwrap());
+    let last_key = EntityId::new_from_parts(0, EntityId::max_gen() as u16 - 1, 0);
     entities.data[0] = last_key;
     assert!(entities.delete_unchecked(last_key));
     assert_eq!(entities.list, None);

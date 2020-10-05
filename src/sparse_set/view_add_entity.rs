@@ -72,20 +72,15 @@ macro_rules! impl_view_add_entity {
                         sparse_sets.$index.pack(entity);
                     } else {
                         match &mut sparse_sets.$index.metadata.pack {
-                            Pack::Tight(pack) => if let Ok(types) = pack.is_packable(&sorted_type_ids) {
-                                if !types.is_empty() {
-                                    should_pack.extend_from_slice(&types);
-                                    sparse_sets.$index.pack(entity);
-                                }
+                            Pack::Tight(pack) => if pack.is_packable(&sorted_type_ids) {
+                                should_pack.extend_from_slice(&pack.types);
+                                sparse_sets.$index.pack(entity);
                             }
-                            Pack::Loose(pack) => if let Ok(types) = pack.is_packable(&sorted_type_ids) {
-                                if !types.is_empty() {
-                                    should_pack.extend_from_slice(&types);
-                                    sparse_sets.$index.pack(entity);
-                                }
+                            Pack::Loose(pack) => if pack.is_packable(&sorted_type_ids) {
+                                should_pack.extend_from_slice(&pack.tight_types);
+                                sparse_sets.$index.pack(entity);
                             }
-                            Pack::Update(_) => {}
-                            Pack::NoPack => {}
+                            Pack::None => {}
                         }
                     }
                 )+

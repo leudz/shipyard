@@ -55,7 +55,7 @@ impl Hierarchy for (EntitiesViewMut<'_>, ViewMut<'_, Parent>, ViewMut<'_, Child>
         let (entities, parents, children) = self;
 
         // either the designated parent already has a Parent component – and thus one or more children
-        if let Ok(p) = parents.get(parent) {
+        if let Ok(mut p) = parents.get(parent) {
             // increase the parent's children counter
             p.num_children += 1;
 

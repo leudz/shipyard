@@ -2,10 +2,10 @@
 ///
 /// ### Example
 /// ```
-/// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, Workload, World};
+/// use shipyard::{system, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
 ///
 /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-///     for (x, &y) in (&mut usizes, &u32s).iter() {
+///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
 ///         *x += y as usize;
 ///     }
 /// }

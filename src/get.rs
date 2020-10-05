@@ -1,5 +1,6 @@
 use crate::error;
-use crate::sparse_set::{Window, WindowMut};
+use crate::r#mut::Mut;
+use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
 use crate::view::{View, ViewMut};
 use core::any::type_name;
@@ -7,6 +8,7 @@ use core::any::type_name;
 /// Retrives components based on their type and entity id.
 pub trait Get {
     type Out;
+    type FastOut;
     /// Retrieve components of `entity`.
     ///
     /// Multiple components can be queried at the same time using a tuple.
@@ -25,41 +27,22 @@ pub trait Get {
     /// );
     /// ```
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
-}
-
-impl<'a: 'b, 'b, T: 'static> Get for &'b Window<'a, T> {
-    type Out = &'b T;
-    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-        self.get(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
-    }
-}
-
-impl<'a: 'b, 'b, T: 'static> Get for &'b WindowMut<'a, T> {
-    type Out = &'b T;
-    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-        self.get(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
-    }
-}
-
-impl<'a: 'b, 'b, T: 'static> Get for &'b mut WindowMut<'a, T> {
-    type Out = &'b mut T;
-    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-        self.get_mut(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
-    }
+    fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent>;
 }
 
 impl<'a: 'b, 'b, T: 'static> Get for &'b View<'a, T> {
     type Out = &'b T;
+    type FastOut = &'b T;
+
+    #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        (**self).get(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
+    }
+    #[inline]
+    fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
         (**self).get(entity).ok_or_else(|| error::MissingComponent {
             id: entity,
             name: type_name::<T>(),
@@ -69,7 +52,17 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b View<'a, T> {
 
 impl<'a: 'b, 'b, T: 'static> Get for &'b ViewMut<'a, T> {
     type Out = &'b T;
+    type FastOut = &'b T;
+
+    #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        (**self).get(entity).ok_or_else(|| error::MissingComponent {
+            id: entity,
+            name: type_name::<T>(),
+        })
+    }
+    #[inline]
+    fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
         (**self).get(entity).ok_or_else(|| error::MissingComponent {
             id: entity,
             name: type_name::<T>(),
@@ -78,8 +71,45 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b ViewMut<'a, T> {
 }
 
 impl<'a: 'b, 'b, T: 'static> Get for &'b mut ViewMut<'a, T> {
-    type Out = &'b mut T;
+    type Out = Mut<'b, T>;
+    type FastOut = &'b mut T;
+
+    #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        let index = self
+            .index_of(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })?;
+
+        if self.metadata.update.is_some() {
+            let SparseSet {
+                sparse: _,
+                dense,
+                data,
+                metadata: _,
+            } = &mut **self;
+
+            let entity = unsafe { dense.get_unchecked_mut(index) };
+
+            Ok(Mut {
+                flag: if !entity.is_inserted() {
+                    Some(entity)
+                } else {
+                    None
+                },
+                data: unsafe { data.get_unchecked_mut(index) },
+            })
+        } else {
+            Ok(Mut {
+                flag: None,
+                data: unsafe { self.data.get_unchecked_mut(index) },
+            })
+        }
+    }
+    #[inline]
+    fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
         self.get_mut(entity).ok_or_else(|| error::MissingComponent {
             id: entity,
             name: type_name::<T>(),
@@ -91,8 +121,14 @@ macro_rules! impl_get_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Get),+> Get for ($($type,)+) {
             type Out = ($($type::Out,)+);
+            type FastOut = ($($type::FastOut,)+);
+            #[inline]
             fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
                 Ok(($(self.$index.get(entity)?,)+))
+            }
+            #[inline]
+            fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
+                Ok(($(self.$index.fast_get(entity)?,)+))
             }
         }
     }

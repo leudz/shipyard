@@ -61,10 +61,7 @@ macro_rules! impl_tight_pack {
                         Pack::Loose(_) => {
                             return Err(error::Pack::AlreadyLoosePack(type_name::<$type>()));
                         },
-                        Pack::Update(_) => {
-                            return Err(error::Pack::AlreadyUpdatePack(type_name::<$type>()))
-                        },
-                        Pack::NoPack => {
+                        Pack::None => {
                             self.$index.metadata.pack = Pack::Tight(TightPackInfo::new(Arc::clone(&type_ids)));
                         }
                     }

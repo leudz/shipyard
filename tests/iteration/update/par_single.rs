@@ -8,7 +8,7 @@ fn filter() {
         .try_borrow::<(EntitiesViewMut, ViewMut<u32>)>()
         .unwrap();
 
-    u32s.try_update_pack().unwrap();
+    u32s.update_pack();
     entities.add_entity(&mut u32s, 0);
     entities.add_entity(&mut u32s, 1);
     entities.add_entity(&mut u32s, 2);
@@ -29,10 +29,15 @@ fn filter() {
 
     m_vec = (&mut u32s)
         .par_iter()
-        .filter(|&&mut x| x % 2 != 0)
+        .filter(|x| **x % 2 != 0)
+        .map(|mut x| {
+            *x += 1;
+            x
+        })
+        .map(|x| *x)
         .collect::<Vec<_>>();
-    assert_eq!(m_vec, vec![&mut 1, &mut 3, &mut 5]);
-    mod_vec = u32s.try_modified().unwrap().par_iter().collect::<Vec<_>>();
+    assert_eq!(m_vec, vec![2, 4, 6]);
+    mod_vec = u32s.modified().par_iter().collect::<Vec<_>>();
 
-    assert_eq!(mod_vec, vec![&0, &1, &2, &3, &4, &5]);
+    assert_eq!(mod_vec, vec![&2, &4, &6]);
 }

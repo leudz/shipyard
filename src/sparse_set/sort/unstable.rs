@@ -19,8 +19,7 @@ impl<'tmp, T> IntoSortable for &'tmp mut SparseSet<T> {
 impl<'tmp, T> Sort1<'tmp, T> {
     /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
     pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
-        if core::mem::discriminant(&self.0.metadata.pack) == core::mem::discriminant(&Pack::NoPack)
-        {
+        if core::mem::discriminant(&self.0.metadata.pack) == core::mem::discriminant(&Pack::None) {
             let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
 
             transform.sort_unstable_by(|&i, &j| {
@@ -45,7 +44,7 @@ impl<'tmp, T> Sort1<'tmp, T> {
             for i in 0..self.0.dense.len() {
                 let dense = self.0.dense[i];
                 unsafe {
-                    self.0.sparse.set_sparse_index_unchecked(dense, i);
+                    self.0.sparse.get_mut_unchecked(dense).set_index(i as u64);
                 }
             }
 
@@ -96,10 +95,10 @@ macro_rules! impl_unstable_sort {
                     if let PackSort::None = pack_sort {
                         match &self.$index.metadata.pack {
                             Pack::Tight(pack) => {
-                                if let Ok(types) = pack.is_packable(&type_ids) {
-                                    if types.len() == type_ids.len() {
+                                if pack.is_packable(&type_ids) {
+                                    if pack.types.len() == type_ids.len() {
                                         pack_sort = PackSort::Tight(pack.len);
-                                    } else if types.len() < type_ids.len() {
+                                    } else if pack.types.len() < type_ids.len() {
                                         return Err(error::Sort::TooManyStorages);
                                     } else {
                                         return Err(error::Sort::MissingPackStorage);
@@ -109,7 +108,7 @@ macro_rules! impl_unstable_sort {
                                 }
                             }
                             Pack::Loose(pack) => {
-                                if pack.is_packable(&type_ids).is_ok() {
+                                if pack.is_packable(&type_ids) {
                                     if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
                                         pack_sort = PackSort::Loose(pack.len);
                                     } else if pack.tight_types.len() + pack.loose_types.len() < type_ids.len() {
@@ -121,8 +120,7 @@ macro_rules! impl_unstable_sort {
                                     return Err(error::Sort::MissingPackStorage);
                                 }
                             }
-                            Pack::Update(_) => return Err(error::Sort::TooManyStorages),
-                            Pack::NoPack => return Err(error::Sort::TooManyStorages),
+                            Pack::None => return Err(error::Sort::TooManyStorages),
                         }
                     }
                 })+
@@ -155,7 +153,7 @@ macro_rules! impl_unstable_sort {
                                     // SAFE i is in bound
                                     let dense = *self.0.dense.get_unchecked(i);
                                     // SAFE dense can always index into sparse
-                                    self.$index.sparse.set_sparse_index_unchecked(dense, i);
+                                    self.$index.sparse.get_mut_unchecked(dense).set_index(i as u64);
                                 }
                             }
                         )*
@@ -166,7 +164,7 @@ macro_rules! impl_unstable_sort {
                         let mut dense: &[EntityId] = &[];
                         let mut packed = 0;
                         $(
-                            if self.$index.metadata.pack.is_loose() {
+                            if let Pack::Loose(_) = &self.$index.metadata.pack {
                                 dense = &self.$index.dense;
                                 packed |= 1 << $index;
                             }
@@ -184,9 +182,9 @@ macro_rules! impl_unstable_sort {
                                         // SAFE i is in bound
                                         let id = *dense.get_unchecked(i);
                                         // SAFE dense can always index into sparse
-                                        let index = self.$index.sparse.sparse_index(id).unwrap();
+                                        let index = self.$index.sparse.get_unchecked(id);
                                         // SAFE sparse can always index into data
-                                        self.$index.data.get_unchecked(index)
+                                        self.$index.data.get_unchecked(index.uindex())
                                     }
                                 }
                             ,)+),
@@ -199,9 +197,9 @@ macro_rules! impl_unstable_sort {
                                         // SAFE j is in bound
                                         let id = *dense.get_unchecked(j);
                                         // SAFE dense can always index into sparse
-                                        let index = self.$index.sparse.sparse_index(id).unwrap();
+                                        let index = self.$index.sparse.get_unchecked(id);
                                         // SAFE sparse can always index into data
-                                        self.$index.data.get_unchecked(index)
+                                        self.$index.data.get_unchecked(index.uindex())
                                     }
                                 }
                             ,)+)
@@ -225,7 +223,7 @@ macro_rules! impl_unstable_sort {
                                     // SAFE i is in bound
                                     let dense = *self.0.dense.get_unchecked(i);
                                     // SAFE dense can always index into sparse
-                                    self.$index.sparse.set_sparse_index_unchecked(dense, i);
+                                    self.$index.sparse.get_mut_unchecked(dense).set_index(i as u64);
                                 }
                             }
                         )*

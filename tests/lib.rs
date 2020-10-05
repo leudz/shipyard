@@ -4,12 +4,9 @@ mod borrow;
 mod iteration;
 #[cfg(feature = "serde1")]
 mod serde;
-mod window;
 mod workload;
 
 use shipyard::error;
-#[cfg(feature = "parallel")]
-use shipyard::iterators;
 use shipyard::*;
 
 #[test]
@@ -34,9 +31,9 @@ fn run() {
                 // if switched, the next two lines should trigger an shipyard::error
                 let _iter = (&mut usizes).iter();
                 let mut iter = (&mut usizes).iter();
-                assert_eq!(iter.next(), Some(&mut 0));
-                assert_eq!(iter.next(), Some(&mut 2));
-                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next().map(|x| *x), Some(0));
+                assert_eq!(iter.next().map(|x| *x), Some(2));
+                assert!(iter.next().is_none());
 
                 // possible to borrow twice as immutable
                 let mut iter = (&usizes, &u32s).iter();
@@ -49,9 +46,9 @@ fn run() {
                 // if switched, the next two lines should trigger an shipyard::error
                 let _iter = (&mut usizes, &u32s).iter();
                 let mut iter = (&mut usizes, &u32s).iter();
-                assert_eq!(iter.next(), Some((&mut 0, &1)));
-                assert_eq!(iter.next(), Some((&mut 2, &3)));
-                assert_eq!(iter.next(), None);
+                assert_eq!(iter.next().map(|(x, y)| (*x, *y)), Some((0, 1)));
+                assert_eq!(iter.next().map(|(x, y)| (*x, *y)), Some((2, 3)));
+                assert!(iter.next().is_none());
             },
         )
         .unwrap();
@@ -60,7 +57,7 @@ fn run() {
 #[test]
 fn system() {
     fn system1((mut usizes, u32s): (ViewMut<usize>, View<u32>)) {
-        (&mut usizes, &u32s).iter().for_each(|(x, y)| {
+        (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
             *x += *y as usize;
         });
     }
@@ -100,13 +97,13 @@ fn system() {
 #[test]
 fn systems() {
     fn system1((mut usizes, u32s): (ViewMut<usize>, View<u32>)) {
-        (&mut usizes, &u32s).iter().for_each(|(x, y)| {
+        (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
             *x += *y as usize;
         });
     }
 
     fn system2(mut usizes: ViewMut<usize>) {
-        (&mut usizes,).iter().for_each(|x| {
+        (&mut usizes,).iter().for_each(|(mut x,)| {
             *x += 1;
         });
     }
@@ -178,7 +175,7 @@ fn simple_parallel_sum() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn tight_parallel_iterator() {
-    use iterators::ParIter2;
+    use iter::ParIter;
     use rayon::prelude::*;
 
     let world = World::new();
@@ -191,6 +188,7 @@ fn tight_parallel_iterator() {
                 ViewMut<u32>,
             )| {
                 (&mut usizes, &mut u32s).try_tight_pack().unwrap();
+
                 entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
                 entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
             },
@@ -201,8 +199,8 @@ fn tight_parallel_iterator() {
         .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
             let counter = std::sync::atomic::AtomicUsize::new(0);
 
-            if let ParIter2::Tight(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(x, y)| {
+            if let ParIter::Tight(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(mut x, y)| {
                     counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     *x += *y as usize;
                 });
@@ -212,9 +210,9 @@ fn tight_parallel_iterator() {
 
             assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
             let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next(), Some(&mut 1));
-            assert_eq!(iter.next(), Some(&mut 5));
-            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next().map(|x| *x), Some(1));
+            assert_eq!(iter.next().map(|x| *x), Some(5));
+            assert!(iter.next().is_none());
         })
         .unwrap();
 }
@@ -244,16 +242,16 @@ fn parallel_iterator() {
         .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
             let counter = std::sync::atomic::AtomicUsize::new(0);
 
-            (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
+            (&mut usizes, &u32s).par_iter().for_each(|(mut x, y)| {
                 counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 *x += *y as usize;
             });
 
             assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
             let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next(), Some(&mut 1));
-            assert_eq!(iter.next(), Some(&mut 5));
-            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next().map(|x| *x), Some(1));
+            assert_eq!(iter.next().map(|x| *x), Some(5));
+            assert!(iter.next().is_none());
         })
         .unwrap();
 }
@@ -262,7 +260,6 @@ fn parallel_iterator() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn loose_parallel_iterator() {
-    use iterators::ParIter2;
     use rayon::prelude::*;
 
     let world = World::new();
@@ -285,8 +282,8 @@ fn loose_parallel_iterator() {
         .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
             let counter = std::sync::atomic::AtomicUsize::new(0);
 
-            if let ParIter2::Loose(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(x, y)| {
+            if let iter::ParIter::Loose(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(mut x, y)| {
                     counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     *x += *y as usize;
                 });
@@ -296,9 +293,9 @@ fn loose_parallel_iterator() {
 
             assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
             let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next(), Some(&mut 1));
-            assert_eq!(iter.next(), Some(&mut 5));
-            assert_eq!(iter.next(), None);
+            assert_eq!(iter.next().map(|x| *x), Some(1));
+            assert_eq!(iter.next().map(|x| *x), Some(5));
+            assert!(iter.next().is_none());
         })
         .unwrap();
 }
@@ -383,7 +380,7 @@ fn par_update_pack() {
     world
         .try_run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
-                usizes.try_update_pack().unwrap();
+                usizes.update_pack();
                 entities.add_entity(&mut usizes, 0);
                 entities.add_entity(&mut usizes, 1);
                 entities.add_entity(&mut usizes, 2);
@@ -393,21 +390,21 @@ fn par_update_pack() {
 
                 (&usizes).par_iter().sum::<usize>();
 
-                assert_eq!(usizes.try_modified().unwrap().len(), 0);
+                assert_eq!(usizes.modified().iter().count(), 0);
 
-                (&mut usizes).par_iter().for_each(|i| {
+                (&mut usizes).par_iter().for_each(|mut i| {
                     *i += 1;
                 });
 
-                let mut iter = usizes.try_inserted().unwrap().iter();
+                let mut iter = usizes.inserted().iter();
                 assert_eq!(iter.next(), None);
 
-                let mut iter = usizes.try_modified_mut().unwrap().iter();
-                assert_eq!(iter.next(), Some(&mut 1));
-                assert_eq!(iter.next(), Some(&mut 2));
-                assert_eq!(iter.next(), Some(&mut 3));
-                assert_eq!(iter.next(), Some(&mut 4));
-                assert_eq!(iter.next(), None);
+                let mut iter = usizes.modified_mut().iter();
+                assert_eq!(iter.next().map(|x| *x), Some(1));
+                assert_eq!(iter.next().map(|x| *x), Some(2));
+                assert_eq!(iter.next().map(|x| *x), Some(3));
+                assert_eq!(iter.next().map(|x| *x), Some(4));
+                assert!(iter.next().is_none());
             },
         )
         .unwrap();
@@ -417,7 +414,6 @@ fn par_update_pack() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_multiple_update_pack() {
-    use iterators::ParIter2;
     use rayon::prelude::*;
 
     let world = World::new();
@@ -429,7 +425,7 @@ fn par_multiple_update_pack() {
                 ViewMut<usize>,
                 ViewMut<u32>,
             )| {
-                u32s.try_update_pack().unwrap();
+                u32s.update_pack();
                 entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
                 entities.add_entity(&mut usizes, 2usize);
                 entities.add_entity((&mut usizes, &mut u32s), (4usize, 5u32));
@@ -444,29 +440,35 @@ fn par_multiple_update_pack() {
 
     world
         .try_run(|(mut usizes, mut u32s): (ViewMut<usize>, ViewMut<u32>)| {
-            if let ParIter2::NonPacked(iter) = (&usizes, &u32s).par_iter() {
+            if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
                 iter.for_each(|_| {});
             } else {
                 panic!("not packed");
             }
 
-            assert_eq!(u32s.try_modified().unwrap().len(), 0);
+            assert_eq!(u32s.modified().iter().count(), 0);
 
-            if let ParIter2::NonPacked(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|_| {});
+            if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(mut x, y)| {
+                    *x += *y as usize;
+                    *x -= *y as usize;
+                });
             } else {
                 panic!("not packed");
             }
 
-            assert_eq!(u32s.try_modified().unwrap().len(), 0);
+            assert_eq!(u32s.modified().iter().count(), 0);
 
-            if let ParIter2::NonPacked(iter) = (&usizes, &mut u32s).par_iter() {
-                iter.for_each(|_| {});
+            if let iter::ParIter::Mixed(iter) = (&usizes, &mut u32s).par_iter() {
+                iter.for_each(|(x, mut y)| {
+                    *y += *x as u32;
+                    *y -= *x as u32;
+                });
             } else {
                 panic!("not packed");
             }
 
-            let mut modified: Vec<_> = u32s.try_modified().unwrap().iter().collect();
+            let mut modified: Vec<_> = u32s.modified().iter().collect();
             modified.sort_unstable();
             assert_eq!(modified, vec![&1, &5, &7, &9]);
 
@@ -488,7 +490,7 @@ fn par_update_filter() {
     world
         .try_run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
-                usizes.try_update_pack().unwrap();
+                usizes.update_pack();
                 entities.add_entity(&mut usizes, 0);
                 entities.add_entity(&mut usizes, 1);
                 entities.add_entity(&mut usizes, 2);
@@ -499,16 +501,16 @@ fn par_update_filter() {
                 (&mut usizes)
                     .par_iter()
                     .filter(|x| **x % 2 == 0)
-                    .for_each(|i| {
+                    .for_each(|mut i| {
                         *i += 1;
                     });
 
-                let mut iter = usizes.try_inserted().unwrap().iter();
+                let mut iter = usizes.inserted().iter();
                 assert_eq!(iter.next(), None);
 
-                let mut modified: Vec<_> = usizes.try_modified().unwrap().iter().collect();
+                let mut modified: Vec<_> = usizes.modified().iter().collect();
                 modified.sort_unstable();
-                assert_eq!(modified, vec![&1, &1, &3, &3]);
+                assert_eq!(modified, vec![&1, &3]);
 
                 let mut iter: Vec<_> = (&usizes).iter().collect();
                 iter.sort_unstable();

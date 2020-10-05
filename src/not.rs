@@ -5,7 +5,7 @@ use core::ops::Not as NotOps;
 /// Get and iterators will skip entities that have this component.
 /// ### Example
 /// ```
-/// use shipyard::{EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, World};
+/// use shipyard::{EntitiesViewMut, IntoIter, View, ViewMut, World};
 ///
 /// let world = World::new();
 ///

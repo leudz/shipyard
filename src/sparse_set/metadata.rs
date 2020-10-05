@@ -16,27 +16,17 @@ use alloc::vec::Vec;
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<EntityId>();
 
-#[allow(clippy::enum_variant_names)]
-pub(crate) enum Pack<T> {
+pub(crate) enum Pack {
     Tight(TightPack),
     Loose(LoosePack),
-    Update(UpdatePack<T>),
-    NoPack,
-}
-
-impl<T> Pack<T> {
-    pub(crate) fn is_loose(&self) -> bool {
-        match self {
-            Pack::Loose(_) => true,
-            _ => false,
-        }
-    }
+    None,
 }
 
 pub struct Metadata<T> {
-    pub(crate) pack: Pack<T>,
+    pub(crate) pack: Pack,
     pub(crate) observer_types: Vec<TypeId>,
     pub(crate) shared: SparseArray<[EntityId; BUCKET_SIZE]>,
+    pub(crate) update: Option<UpdatePack<T>>,
     // #[cfg(feature = "serde1")]
     // pub(crate) serde: Option<SerdeInfos<T>>,
 }
@@ -44,9 +34,10 @@ pub struct Metadata<T> {
 impl<T> Default for Metadata<T> {
     fn default() -> Self {
         Metadata {
-            pack: Pack::NoPack,
+            pack: Pack::None,
             observer_types: Vec::new(),
             shared: SparseArray::new(),
+            update: None,
             // #[cfg(feature = "serde1")]
             // serde: None,
         }
@@ -63,7 +54,7 @@ impl<T> Metadata<T> {
             Pack::Loose(loose) => {
                 loose.has_all_storages(components, additionals, &self.observer_types)
             }
-            Pack::Update(_) | Pack::NoPack => {
+            Pack::None => {
                 if components.len() + additionals.len() < self.observer_types.len() {
                     return false;
                 }
@@ -113,10 +104,10 @@ impl TightPack {
         TightPack { types, len: 0 }
     }
     /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
-    pub(crate) fn is_packable(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+    pub(crate) fn is_packable(&self, components: &[TypeId]) -> bool {
         // the entity doesn't have enough components to be packed
         if components.len() < self.types.len() {
-            return Err(());
+            return false;
         }
 
         // current component index
@@ -136,10 +127,11 @@ impl TightPack {
                 .filter(|&&component| component == packed_type)
                 .is_none()
             {
-                return Err(());
+                return false;
             }
         }
-        Ok(&self.types)
+
+        true
     }
     /// Returns `true` if enough storages were passed in
     fn has_all_storages(
@@ -241,10 +233,10 @@ impl LoosePack {
         }
     }
     /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
-    pub(crate) fn is_packable(&self, components: &[TypeId]) -> Result<&[TypeId], ()> {
+    pub(crate) fn is_packable(&self, components: &[TypeId]) -> bool {
         if components.len() < self.tight_types.len() + self.loose_types.len() {
             // the entity doesn't have enough components to be packed
-            return Err(());
+            return false;
         }
 
         // current tight type
@@ -275,7 +267,7 @@ impl LoosePack {
                     {
                         tight += 1;
                     } else {
-                        return Err(());
+                        return false;
                     }
                 }
                 (Some(_), None) => unreachable!(),
@@ -292,18 +284,14 @@ impl LoosePack {
                     {
                         loose += 1;
                     } else {
-                        return Err(());
+                        return false;
                     }
                 }
                 (None, None) => break,
             }
         }
 
-        if tight == self.tight_types.len() && loose == self.loose_types.len() {
-            Ok(&self.tight_types)
-        } else {
-            Err(())
-        }
+        tight == self.tight_types.len() && loose == self.loose_types.len()
     }
     #[allow(clippy::cognitive_complexity)]
     /// Returns `true` if enough storages were passed in
@@ -616,15 +604,16 @@ impl LoosePack {
 }
 
 pub(crate) struct UpdatePack<T> {
-    pub(crate) inserted: usize,
-    pub(crate) modified: usize,
     pub(crate) removed: Vec<EntityId>,
     pub(crate) deleted: Vec<(EntityId, T)>,
 }
 
-impl<T> UpdatePack<T> {
-    pub(crate) fn first_non_mut(&self) -> usize {
-        self.inserted + self.modified
+impl<T> Default for UpdatePack<T> {
+    fn default() -> Self {
+        UpdatePack {
+            removed: Vec::new(),
+            deleted: Vec::new(),
+        }
     }
 }
 

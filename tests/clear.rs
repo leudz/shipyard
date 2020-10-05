@@ -223,7 +223,7 @@ fn update() {
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
 
-    usizes.try_update_pack().unwrap();
+    usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
     drop((entities, usizes));

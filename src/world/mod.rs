@@ -627,7 +627,7 @@ You can use:
 use shipyard::{EntityId, Get, ViewMut, World};
 
 fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<[f32; 2]>) {
-    if let Ok(pos) = (&mut positions).get(entity) {
+    if let Ok(mut pos) = (&mut positions).get(entity) {
         *pos = [x, y];
     }
 }
@@ -758,7 +758,7 @@ You can use:
 use shipyard::{EntityId, Get, ViewMut, World};
 
 fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<[f32; 2]>) {
-    if let Ok(pos) = (&mut positions).get(entity) {
+    if let Ok(mut pos) = (&mut positions).get(entity) {
         *pos = [x, y];
     }
 }

@@ -1,6 +1,5 @@
 use core::any::type_name;
 use shipyard::error;
-use shipyard::iterators;
 use shipyard::*;
 
 #[test]
@@ -15,13 +14,13 @@ fn no_pack() {
     let component = usizes.try_remove(entity1).unwrap();
     assert_eq!(component, Some(OldComponent::Owned(0usize)));
     assert_eq!(
-        (&mut usizes).get(entity1),
-        Err(error::MissingComponent {
+        (&mut usizes).get(entity1).err(),
+        Some(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!((&mut u32s).get(entity1), Ok(&mut 1));
+    assert_eq!(*(&mut u32s).get(entity1).unwrap(), 1);
     assert_eq!(usizes.get(entity2), Ok(&2));
     assert_eq!(u32s.get(entity2), Ok(&3));
 }
@@ -39,17 +38,17 @@ fn tight() {
     let component = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     assert_eq!(component, (Some(OldComponent::Owned(0usize)),));
     assert_eq!(
-        (&mut usizes).get(entity1),
-        Err(error::MissingComponent {
+        (&mut usizes).get(entity1).err(),
+        Some(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!((&mut u32s).get(entity1), Ok(&mut 1));
+    assert_eq!(*(&mut u32s).get(entity1).unwrap(), 1);
     assert_eq!(usizes.get(entity2), Ok(&2));
     assert_eq!(u32s.get(entity2), Ok(&3));
     let iter = (&usizes, &u32s).iter();
-    if let iterators::Iter2::Tight(mut iter) = iter {
+    if let iter::Iter::Tight(mut iter) = iter {
         assert_eq!(iter.next(), Some((&2, &3)));
         assert_eq!(iter.next(), None);
     } else {
@@ -70,13 +69,13 @@ fn loose() {
     let component = Remove::<(usize,)>::try_remove((&mut usizes, &mut u32s), entity1).unwrap();
     assert_eq!(component, (Some(OldComponent::Owned(0usize)),));
     assert_eq!(
-        (&mut usizes).get(entity1),
-        Err(error::MissingComponent {
+        (&mut usizes).get(entity1).err(),
+        Some(error::MissingComponent {
             id: entity1,
             name: type_name::<usize>(),
         })
     );
-    assert_eq!((&mut u32s).get(entity1), Ok(&mut 1));
+    assert_eq!(*(&mut u32s).get(entity1).unwrap(), 1);
     assert_eq!(usizes.get(entity2), Ok(&2));
     assert_eq!(u32s.get(entity2), Ok(&3));
     let mut iter = (&usizes, &u32s).iter();
@@ -105,7 +104,7 @@ fn tight_loose() {
     assert_eq!(iter.next(), Some((&6, &7)));
     assert_eq!(iter.next(), None);
     let iter = (&usizes, &u64s, &u32s).iter();
-    if let iterators::Iter3::Loose(mut iter) = iter {
+    if let iter::Iter::Mixed(mut iter) = iter {
         assert_eq!(iter.next(), Some((&6, &7, &8)));
         assert_eq!(iter.next(), Some((&3, &4, &5)));
         assert_eq!(iter.next(), None);
@@ -129,7 +128,7 @@ fn update() {
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
 
-    usizes.try_update_pack().unwrap();
+    usizes.update_pack();
 
     let entity1 = entities.add_entity(&mut usizes, 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
@@ -144,8 +143,8 @@ fn update() {
     );
     assert_eq!(usizes.get(entity2), Ok(&2));
     assert_eq!(usizes.len(), 1);
-    assert_eq!(usizes.try_inserted().unwrap().len(), 1);
-    assert_eq!(usizes.try_modified().unwrap().len(), 0);
+    assert_eq!(usizes.inserted().iter().count(), 1);
+    assert_eq!(usizes.modified().iter().count(), 0);
     assert_eq!(usizes.try_deleted().unwrap().len(), 0);
     assert_eq!(usizes.try_removed().unwrap(), &[entity1]);
 }

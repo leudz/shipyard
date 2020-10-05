@@ -12,7 +12,7 @@ impl Serialize for EntityId {
             tup.serialize_field(&(self.gen() as u16))?;
             tup.end()
         } else {
-            serializer.serialize_u64(self.0.get())
+            self.0.serialize(serializer)
         }
     }
 }
@@ -24,7 +24,7 @@ impl<'de> Deserialize<'de> for EntityId {
     {
         if deserializer.is_human_readable() {
             let (index, gen): (u64, u16) = Deserialize::deserialize(deserializer)?;
-            Ok(EntityId::new_from_pair_unchecked(index, gen))
+            Ok(EntityId::new_from_parts(index, gen, 0))
         } else {
             Ok(EntityId(Deserialize::deserialize(deserializer)?))
         }

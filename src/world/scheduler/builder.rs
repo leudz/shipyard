@@ -58,10 +58,10 @@ impl WorkloadBuilder {
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, Workload, World};
+    /// use shipyard::{system, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
     ///
     /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
+    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
     ///         *x += y as usize;
     ///     }
     /// }
@@ -101,16 +101,39 @@ impl WorkloadBuilder {
 }
 
 impl WorkloadBuilder {
+    pub fn append(&mut self, other: &mut Self) -> &mut Self {
+        let offset_ranges_by = self.borrow_info.len();
+        self.borrow_info.extend(other.borrow_info.drain(..));
+        self.systems.extend(other.systems.drain(..).map(
+            |(type_id, type_name, mut borrow_info_range, is_send_sync, system_fn)| {
+                borrow_info_range.start += offset_ranges_by;
+                borrow_info_range.end += offset_ranges_by;
+                (
+                    type_id,
+                    type_name,
+                    borrow_info_range,
+                    is_send_sync,
+                    system_fn,
+                )
+            },
+        ));
+
+        self
+    }
+    pub fn extend(&mut self, mut other: Self) -> &mut Self {
+        self.append(&mut other);
+        self
+    }
     /// Adds a system to the workload been created.  
     /// It is strongly recommanded to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, Workload, World};
+    /// use shipyard::{system, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
     ///
     /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
+    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
     ///         *x += y as usize;
     ///     }
     /// }
@@ -208,10 +231,10 @@ impl WorkloadBuilder {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{system, EntitiesViewMut, IntoIter, Shiperator, View, ViewMut, Workload, World};
+    /// use shipyard::{system, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
     ///
     /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (x, &y) in (&mut usizes, &u32s).iter() {
+    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
     ///         *x += y as usize;
     ///     }
     /// }

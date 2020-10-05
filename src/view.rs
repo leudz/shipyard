@@ -1,6 +1,7 @@
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut, SharedBorrow};
 use crate::error;
-use crate::sparse_set::{SparseSet, Window};
+use crate::iter::{Inserted, InsertedOrModified, Modified};
+use crate::sparse_set::SparseSet;
 use crate::{AllStorages, Entities};
 use core::ops::{Deref, DerefMut};
 
@@ -137,30 +138,36 @@ impl DerefMut for EntitiesViewMut<'_> {
 /// Shared view over a component storage.
 #[derive(Clone)]
 pub struct View<'a, T> {
-    window: Window<'a, T>,
-    borrow: SharedBorrow<'a>,
+    sparse_set: Ref<'a, SparseSet<T>>,
     all_borrow: Option<SharedBorrow<'a>>,
+}
+
+impl<T> View<'_, T> {
+    pub fn inserted(&self) -> Inserted<&Self> {
+        Inserted(self)
+    }
+    pub fn modified(&self) -> Modified<&Self> {
+        Modified(self)
+    }
+    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
+        InsertedOrModified(self)
+    }
 }
 
 impl<'a, T: 'static + Send + Sync> View<'a, T> {
     #[inline]
     pub(crate) fn from_ref(all_storages: Ref<'a, AllStorages>) -> Result<Self, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
-        let (sparse_set, borrow) = unsafe { all_storages.sparse_set::<T>()?.destructure() };
 
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set::<T>()?,
             all_borrow: Some(all_borrow),
         })
     }
     #[inline]
     pub(crate) fn from_reference(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage> {
-        let (sparse_set, borrow) = unsafe { all_storages.sparse_set::<T>()?.destructure() };
-
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set::<T>()?,
             all_borrow: None,
         })
     }
@@ -173,12 +180,9 @@ impl<'a, T: 'static + Sync> View<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
-        let (sparse_set, borrow) =
-            unsafe { all_storages.sparse_set_non_send::<T>()?.destructure() };
 
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set_non_send::<T>()?,
             all_borrow: Some(all_borrow),
         })
     }
@@ -186,12 +190,8 @@ impl<'a, T: 'static + Sync> View<'a, T> {
     pub(crate) fn from_reference_non_send(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
-        let (sparse_set, borrow) =
-            unsafe { all_storages.sparse_set_non_send::<T>()?.destructure() };
-
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set_non_send::<T>()?,
             all_borrow: None,
         })
     }
@@ -204,12 +204,9 @@ impl<'a, T: 'static + Send> View<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
-        let (sparse_set, borrow) =
-            unsafe { all_storages.sparse_set_non_sync::<T>()?.destructure() };
 
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set_non_sync::<T>()?,
             all_borrow: Some(all_borrow),
         })
     }
@@ -217,12 +214,8 @@ impl<'a, T: 'static + Send> View<'a, T> {
     pub(crate) fn from_reference_non_sync(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
-        let (sparse_set, borrow) =
-            unsafe { all_storages.sparse_set_non_sync::<T>()?.destructure() };
-
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set_non_sync::<T>()?,
             all_borrow: None,
         })
     }
@@ -235,12 +228,9 @@ impl<'a, T: 'static> View<'a, T> {
         all_storages: Ref<'a, AllStorages>,
     ) -> Result<Self, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
-        let (sparse_set, borrow) =
-            unsafe { all_storages.sparse_set_non_send_sync::<T>()?.destructure() };
 
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set_non_send_sync::<T>()?,
             all_borrow: Some(all_borrow),
         })
     }
@@ -248,30 +238,26 @@ impl<'a, T: 'static> View<'a, T> {
     pub(crate) fn from_reference_non_send_sync(
         all_storages: &'a AllStorages,
     ) -> Result<Self, error::GetStorage> {
-        let (sparse_set, borrow) =
-            unsafe { all_storages.sparse_set_non_send_sync::<T>()?.destructure() };
-
         Ok(View {
-            window: sparse_set.window(),
-            borrow,
+            sparse_set: all_storages.sparse_set_non_send_sync::<T>()?,
             all_borrow: None,
         })
     }
 }
 
 impl<'a, T> Deref for View<'a, T> {
-    type Target = Window<'a, T>;
+    type Target = SparseSet<T>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.window
+        &self.sparse_set
     }
 }
 
-impl<'a, T> AsRef<Window<'a, T>> for View<'a, T> {
+impl<'a, T> AsRef<SparseSet<T>> for View<'a, T> {
     #[inline]
-    fn as_ref(&self) -> &Window<'a, T> {
-        &self.window
+    fn as_ref(&self) -> &SparseSet<T> {
+        &self.sparse_set
     }
 }
 
@@ -279,6 +265,27 @@ impl<'a, T> AsRef<Window<'a, T>> for View<'a, T> {
 pub struct ViewMut<'a, T> {
     sparse_set: RefMut<'a, SparseSet<T>>,
     _all_borrow: Option<SharedBorrow<'a>>,
+}
+
+impl<T> ViewMut<'_, T> {
+    pub fn inserted(&self) -> Inserted<&Self> {
+        Inserted(self)
+    }
+    pub fn modified(&self) -> Modified<&Self> {
+        Modified(self)
+    }
+    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
+        InsertedOrModified(self)
+    }
+    pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
+        Inserted(self)
+    }
+    pub fn modified_mut(&mut self) -> Modified<&mut Self> {
+        Modified(self)
+    }
+    pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
+        InsertedOrModified(self)
+    }
 }
 
 impl<'a, T: 'static + Send + Sync> ViewMut<'a, T> {

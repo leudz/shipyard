@@ -1,45 +1,44 @@
-use super::{CurrentId, IntoIterator, Shiperator};
+use crate::storage::EntityId;
+use core::iter::Map;
 
-/// Shiperator yielding `EntityId` as well.
-#[derive(Clone, Copy)]
-pub struct WithId<I> {
-    iter: I,
+pub struct WithId<I>(pub I);
+
+pub trait IntoWithId {
+    fn with_id(self) -> WithId<Self>
+    where
+        Self: Sized;
+    #[allow(clippy::type_complexity)]
+    fn ids(self) -> Map<WithId<Self>, fn(<WithId<Self> as Iterator>::Item) -> EntityId>
+    where
+        Self: Sized + Iterator,
+        WithId<Self>: Iterator<Item = (EntityId, <Self as Iterator>::Item)>;
 }
 
-impl<I> WithId<I> {
-    pub(super) fn new(iter: I) -> Self {
-        WithId { iter }
+impl<I> IntoWithId for I
+where
+    I: Iterator,
+    WithId<I>: Iterator<Item = (EntityId, <Self as Iterator>::Item)>,
+{
+    fn with_id(self) -> WithId<Self> {
+        WithId(self)
     }
-}
-
-impl<I: CurrentId> Shiperator for WithId<I> {
-    type Item = (I::Id, I::Item);
-
-    fn first_pass(&mut self) -> Option<Self::Item> {
-        let item = self.iter.first_pass()?;
-        // SAFE first_pass is called before
-        Some((unsafe { self.iter.current_id() }, item))
-    }
-    fn post_process(&mut self) {
-        self.iter.post_process()
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-}
-
-impl<I: CurrentId> CurrentId for WithId<I> {
-    type Id = I::Id;
-
-    unsafe fn current_id(&self) -> Self::Id {
-        self.iter.current_id()
+    #[allow(clippy::type_complexity)]
+    fn ids(self) -> Map<WithId<Self>, fn(<WithId<Self> as Iterator>::Item) -> EntityId> {
+        self.with_id().map(|(id, _)| id)
     }
 }
 
-impl<I: CurrentId> core::iter::IntoIterator for WithId<I> {
-    type IntoIter = IntoIterator<Self>;
-    type Item = <Self as Shiperator>::Item;
-    fn into_iter(self) -> Self::IntoIter {
-        IntoIterator(self)
+pub trait LastId {
+    unsafe fn last_id(&self) -> EntityId;
+    unsafe fn last_id_back(&self) -> EntityId;
+}
+
+impl<I: Iterator + LastId> Iterator for WithId<I> {
+    type Item = (EntityId, <I as Iterator>::Item);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.0.next()?;
+
+        Some((unsafe { self.0.last_id() }, item))
     }
 }

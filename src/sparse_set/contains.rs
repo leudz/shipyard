@@ -1,4 +1,4 @@
-use crate::sparse_set::{SparseSet, Window, WindowMut};
+use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
 use crate::view::{View, ViewMut};
 
@@ -8,21 +8,9 @@ pub trait Contains {
     fn contains(self, entity: EntityId) -> bool;
 }
 
-impl<'a: 'b, 'b, T: 'static> Contains for &'b Window<'a, T> {
-    fn contains(self, entity: EntityId) -> bool {
-        Window::contains(self, entity)
-    }
-}
-
-impl<'a: 'b, 'b, T: 'static> Contains for &'b WindowMut<'a, T> {
-    fn contains(self, entity: EntityId) -> bool {
-        WindowMut::contains(self, entity)
-    }
-}
-
 impl<'a: 'b, 'b, T: 'static> Contains for &'b View<'a, T> {
     fn contains(self, entity: EntityId) -> bool {
-        Window::contains(&**self, entity)
+        SparseSet::contains(&*self, entity)
     }
 }
 

@@ -91,18 +91,18 @@ fn update() {
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
         .unwrap();
 
-    usizes.try_update_pack().unwrap();
+    usizes.update_pack();
     let entity = entities.add_entity((), ());
 
     entities.try_add_component(&mut usizes, 1, entity).unwrap();
 
-    let mut iter = usizes.try_inserted().unwrap().iter();
+    let mut iter = usizes.inserted().iter();
     assert_eq!(iter.next(), Some(&1));
     assert_eq!(iter.next(), None);
 
     entities.try_add_component(&mut usizes, 2, entity).unwrap();
 
-    let mut iter = usizes.try_inserted().unwrap().iter();
+    let mut iter = usizes.inserted().iter();
     assert_eq!(iter.next(), Some(&2));
     assert_eq!(iter.next(), None);
 
@@ -112,7 +112,7 @@ fn update() {
 
     entities.try_add_component(&mut usizes, 4, entity).unwrap();
 
-    let mut iter = usizes.try_modified().unwrap().iter();
+    let mut iter = usizes.modified().iter();
     assert_eq!(iter.next(), Some(&4));
     assert_eq!(iter.next(), None);
 
@@ -120,7 +120,7 @@ fn update() {
 
     entities.try_add_component(&mut usizes, 5, entity).unwrap();
 
-    let mut iter = usizes.try_modified().unwrap().iter();
+    let mut iter = usizes.modified().iter();
     assert_eq!(iter.next(), Some(&5));
     assert_eq!(iter.next(), None);
 }

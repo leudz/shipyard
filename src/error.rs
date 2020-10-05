@@ -167,7 +167,6 @@ pub enum Pack {
     GetStorage(GetStorage),
     AlreadyTightPack(&'static str),
     AlreadyLoosePack(&'static str),
-    AlreadyUpdatePack(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -189,10 +188,6 @@ impl Debug for Pack {
             )),
             Self::AlreadyLoosePack(type_name) => fmt.write_fmt(format_args!(
                 "{} storage is already loosely packed.",
-                type_name
-            )),
-            Self::AlreadyUpdatePack(type_name) => fmt.write_fmt(format_args!(
-                "{} storage is already has an update pack.",
                 type_name
             )),
         }
