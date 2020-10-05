@@ -101,31 +101,8 @@ impl WorkloadBuilder {
 }
 
 impl WorkloadBuilder {
-    pub fn append(&mut self, other: &mut Self) -> &mut Self {
-        let offset_ranges_by = self.borrow_info.len();
-        self.borrow_info.extend(other.borrow_info.drain(..));
-        self.systems.extend(other.systems.drain(..).map(
-            |(type_id, type_name, mut borrow_info_range, is_send_sync, system_fn)| {
-                borrow_info_range.start += offset_ranges_by;
-                borrow_info_range.end += offset_ranges_by;
-                (
-                    type_id,
-                    type_name,
-                    borrow_info_range,
-                    is_send_sync,
-                    system_fn,
-                )
-            },
-        ));
-
-        self
-    }
-    pub fn extend(&mut self, mut other: Self) -> &mut Self {
-        self.append(&mut other);
-        self
-    }
-    /// Adds a system to the workload been created.  
-    /// It is strongly recommanded to use the [system] and [try_system] macros.  
+    /// Adds a system to the workload being created.  
+    /// It is strongly recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.
     ///
     /// ### Example:
@@ -224,8 +201,8 @@ impl WorkloadBuilder {
 
         Ok(self)
     }
-    /// Adds a system to the workload been created.  
-    /// It is strongly recommanded to use the [system] and [try_system] macros.  
+    /// Adds a system to the workload being created.  
+    /// It is strongly recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.  
     /// Unwraps errors.
     ///
@@ -285,7 +262,28 @@ impl WorkloadBuilder {
             Err(err) => panic!("{:?}", err),
         }
     }
-    /// Finishes the workload creation and store it in the [`World`].
+    /// Moves all systems of `other` into `Self`, leaving `other` empty.  
+    /// This allows us to collect systems in different builders before joining them together.
+    pub fn append(&mut self, other: &mut Self) -> &mut Self {
+        let offset_ranges_by = self.borrow_info.len();
+        self.borrow_info.extend(other.borrow_info.drain(..));
+        self.systems.extend(other.systems.drain(..).map(
+            |(type_id, type_name, mut borrow_info_range, is_send_sync, system_fn)| {
+                borrow_info_range.start += offset_ranges_by;
+                borrow_info_range.end += offset_ranges_by;
+                (
+                    type_id,
+                    type_name,
+                    borrow_info_range,
+                    is_send_sync,
+                    system_fn,
+                )
+            },
+        ));
+
+        self
+    }
+    /// Finishes the workload creation and stores it in the [`World`].
     ///
     /// ### Borrows
     ///
@@ -450,7 +448,7 @@ impl WorkloadBuilder {
 
         Ok(())
     }
-    /// Finishes the workload creation and store it in the [`World`].  
+    /// Finishes the workload creation and stores it in the [`World`].  
     /// Returns a struct with describing how the workload has been split in batches.
     ///
     /// ### Borrows
