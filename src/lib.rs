@@ -62,9 +62,7 @@ pub use borrow::FakeBorrow;
 pub use delete::Delete;
 pub use entity_builder::EntityBuilder;
 pub use get::Get;
-pub use iter::{
-    Inserted, InsertedOrModified, IntoFastIter, IntoIter, IntoWithId, Modified, WithId,
-};
+pub use iter::{Inserted, InsertedOrModified, IntoFastIter, IntoIter, IntoWithId, Modified};
 pub use not::Not;
 pub use pack::{LoosePack, TightPack};
 pub use remove::Remove;
