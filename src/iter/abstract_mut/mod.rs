@@ -109,35 +109,23 @@ macro_rules! impl_abstract_mut {
             unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
                 ($(self.$index.get_datas(index.$index),)+)
             }
-            #[allow(unused_assignments)]
-            #[allow(clippy::eval_order_dependence)]
             #[inline]
             fn indices_of(&self, entity_id: EntityId, index: usize, mask: u16) -> Option<Self::Index> {
-                let mut i = 0;
-
                 Some(($({
-                    if mask & (1 << i) != 0 {
-                        i += 1;
+                    if mask & (1 << $index) != 0 {
                         index.into()
                     } else {
-                        i += 1;
-                        self.$index.indices_of(entity_id, 0, mask)?
+                        self.$index.indices_of(entity_id, index, mask)?
                     }
                 },)+))
             }
-            #[allow(unused_assignments)]
-            #[allow(clippy::eval_order_dependence)]
             #[inline]
             unsafe fn indices_of_unchecked(&self, entity: EntityId, index: usize, mask: u16) -> Self::Index {
-                let mut i = 0;
-
                 ($({
-                    if mask & (1 << i) != 0 {
-                        i += 1;
+                    if mask & (1 << $index) != 0 {
                         index.into()
                     } else {
-                        i += 1;
-                        self.$index.indices_of_unchecked(entity, 0, mask)
+                        self.$index.indices_of_unchecked(entity, index, mask)
                     }
                 },)+)
             }
