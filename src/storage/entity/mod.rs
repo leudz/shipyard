@@ -13,7 +13,6 @@ use crate::error;
 use crate::sparse_set::ViewAddEntity;
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
-use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 use add_component::AddComponent;
 // #[cfg(feature = "serde1")]
@@ -204,7 +203,12 @@ impl Entities {
 }
 
 impl UnknownStorage for Entities {
-    fn delete(&mut self, _entity: EntityId, _: &mut Vec<TypeId>) {}
+    fn any(&self) -> &dyn Any {
+        self
+    }
+    fn any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
     fn clear(&mut self) {
         if self.data.is_empty() {
             return;
@@ -232,13 +236,6 @@ impl UnknownStorage for Entities {
             .position(|id| id.gen() < EntityId::max_gen())
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
-    }
-    fn unpack(&mut self, _entity: EntityId) {}
-    fn any(&self) -> &dyn Any {
-        self
-    }
-    fn any_mut(&mut self) -> &mut dyn Any {
-        self
     }
     // #[cfg(feature = "serde1")]
     // fn should_serialize(&self, ser_config: GlobalSerConfig) -> bool {

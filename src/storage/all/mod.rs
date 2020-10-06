@@ -1234,6 +1234,18 @@ let i = all_storages.run(sys1);
     //     // SAFE we have exclusive access
     //     unsafe { &mut *self.storages.get() }
     // }
+    /// Shares all `owned`'s components with `shared` entity.  
+    /// Deleting `owned`'s component won't stop the sharing.  
+    /// Trying to share an entity with itself won't do anything.
+    pub fn share(&mut self, owned: EntityId, shared: EntityId) {
+        // SAFE we have unique access
+        let storages = unsafe { &mut *self.storages.get() };
+
+        for storage in storages.values_mut() {
+            // we have unique access to all storages so we can unwrap
+            storage.share(owned, shared).unwrap()
+        }
+    }
 }
 
 // #[cfg(feature = "serde1")]

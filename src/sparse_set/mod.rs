@@ -1085,6 +1085,14 @@ impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
     #[inline]
+    fn any(&self) -> &dyn Any {
+        self
+    }
+    #[inline]
+    fn any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+    #[inline]
     fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
         self.actual_delete(entity);
 
@@ -1109,12 +1117,8 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
         Self::unpack(self, entity);
     }
     #[inline]
-    fn any(&self) -> &dyn Any {
-        self
-    }
-    #[inline]
-    fn any_mut(&mut self) -> &mut dyn Any {
-        self
+    fn share(&mut self, owned: EntityId, shared: EntityId) {
+        let _ = Self::try_share(self, owned, shared);
     }
     //     #[cfg(feature = "serde1")]
     //     fn should_serialize(&self, _: GlobalSerConfig) -> bool {

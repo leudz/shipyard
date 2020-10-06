@@ -160,3 +160,27 @@ fn self_shared() {
         })
         .unwrap();
 }
+
+#[test]
+fn share_all() {
+    let world = World::new();
+
+    let mut all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    let (mut entities, mut u32s, mut usizes) = all_storages
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+        .unwrap();
+
+    let e0 = entities.add_entity(&mut u32s, 0);
+    let e1 = entities.add_entity(&mut usizes, 1);
+
+    drop((entities, u32s, usizes));
+
+    all_storages.share(e0, e1);
+
+    let (u32s, usizes) = all_storages
+        .try_borrow::<(View<u32>, View<usize>)>()
+        .unwrap();
+
+    assert_eq!(u32s.fast_get(e1), Ok(&0));
+    assert_eq!(usizes.fast_get(e1), Ok(&1));
+}

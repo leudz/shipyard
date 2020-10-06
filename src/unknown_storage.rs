@@ -13,11 +13,16 @@ use core::any::Any;
 // use hashbrown::HashMap;
 
 pub(super) trait UnknownStorage {
-    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>);
-    fn clear(&mut self);
-    fn unpack(&mut self, entity: EntityId);
     fn any(&self) -> &dyn Any;
     fn any_mut(&mut self) -> &mut dyn Any;
+    #[inline]
+    fn delete(&mut self, _: EntityId, _: &mut Vec<TypeId>) {}
+    #[inline]
+    fn clear(&mut self) {}
+    #[inline]
+    fn unpack(&mut self, _: EntityId) {}
+    #[inline]
+    fn share(&mut self, _: EntityId, _: EntityId) {}
     // #[cfg(feature = "serde1")]
     // fn should_serialize(&self, _: GlobalSerConfig) -> bool {
     //     false

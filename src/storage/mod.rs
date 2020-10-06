@@ -176,6 +176,10 @@ impl Storage {
         self.0.try_borrow_mut()?.clear();
         Ok(())
     }
+    pub(crate) fn share(&mut self, owned: EntityId, shared: EntityId) -> Result<(), error::Borrow> {
+        self.0.try_borrow_mut()?.share(owned, shared);
+        Ok(())
+    }
 }
 
 // #[cfg(feature = "serde1")]
