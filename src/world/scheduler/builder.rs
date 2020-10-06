@@ -814,21 +814,21 @@ fn multiple_mixed() {
 fn append_optimizes_batches() {
     use crate::{View, ViewMut, World};
 
-    fn systemA1(_: ViewMut<'_, usize>, _: ViewMut<'_, u32>) {}
-    fn systemA2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
-    fn systemB1(_: View<'_, usize>) {}
+    fn system_a1(_: ViewMut<'_, usize>, _: ViewMut<'_, u32>) {}
+    fn system_a2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
+    fn system_b1(_: View<'_, usize>) {}
 
     let world = World::new();
 
     let mut group_a = Workload::builder("Group A");
     group_a
-        .try_with_system((|world: &World| world.try_run(systemA1), systemA1))
+        .try_with_system((|world: &World| world.try_run(system_a1), system_a1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(systemA2), systemA2))
+        .try_with_system((|world: &World| world.try_run(system_a2), system_a2))
         .unwrap();
     let mut group_b = Workload::builder("Group B");
     group_b
-        .try_with_system((|world: &World| world.try_run(systemB1), systemB1))
+        .try_with_system((|world: &World| world.try_run(system_b1), system_b1))
         .unwrap();
 
     let combined_info = Workload::builder("Combined")
