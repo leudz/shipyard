@@ -185,12 +185,12 @@ impl<T> SparseSet<T> {
         }
     }
     #[inline]
-    pub(crate) fn get(&self, entity: EntityId) -> Option<&T> {
+    pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
         self.index_of(entity)
             .map(|index| unsafe { self.data.get_unchecked(index) })
     }
     #[inline]
-    pub(crate) fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
+    pub(crate) fn private_get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         let index = self.index_of(entity)?;
 
         if self.metadata.update.is_some() {
@@ -1072,14 +1072,14 @@ impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
     #[inline]
     fn index(&self, entity: EntityId) -> &Self::Output {
-        self.get(entity).unwrap()
+        self.private_get(entity).unwrap()
     }
 }
 
 impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
     #[inline]
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
-        self.get_mut(entity).unwrap()
+        self.private_get_mut(entity).unwrap()
     }
 }
 
@@ -1191,7 +1191,10 @@ fn insert() {
         .is_none());
     assert_eq!(array.dense, &[EntityId::new_from_parts(0, 0, 0)]);
     assert_eq!(array.data, &["0"]);
-    assert_eq!(array.get(EntityId::new_from_parts(0, 0, 0)), Some(&"0"));
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(0, 0, 0)),
+        Some(&"0")
+    );
 
     assert!(array
         .insert("1", EntityId::new_from_parts(1, 0, 0))
@@ -1204,8 +1207,14 @@ fn insert() {
         ]
     );
     assert_eq!(array.data, &["0", "1"]);
-    assert_eq!(array.get(EntityId::new_from_parts(0, 0, 0)), Some(&"0"));
-    assert_eq!(array.get(EntityId::new_from_parts(1, 0, 0)), Some(&"1"));
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(0, 0, 0)),
+        Some(&"0")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(1, 0, 0)),
+        Some(&"1")
+    );
 
     assert!(array
         .insert("5", EntityId::new_from_parts(5, 0, 0))
@@ -1220,11 +1229,11 @@ fn insert() {
     );
     assert_eq!(array.data, &["0", "1", "5"]);
     assert_eq!(
-        array.get_mut(EntityId::new_from_parts(5, 0, 0)),
+        array.private_get_mut(EntityId::new_from_parts(5, 0, 0)),
         Some(&mut "5")
     );
 
-    assert_eq!(array.get(EntityId::new_from_parts(4, 0, 0)), None);
+    assert_eq!(array.private_get(EntityId::new_from_parts(4, 0, 0)), None);
 }
 
 #[test]
@@ -1246,9 +1255,15 @@ fn remove() {
         ]
     );
     assert_eq!(array.data, &["10", "5"]);
-    assert_eq!(array.get(EntityId::new_from_parts(0, 0, 0)), None);
-    assert_eq!(array.get(EntityId::new_from_parts(5, 0, 0)), Some(&"5"));
-    assert_eq!(array.get(EntityId::new_from_parts(10, 0, 0)), Some(&"10"));
+    assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(5, 0, 0)),
+        Some(&"5")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(10, 0, 0)),
+        Some(&"10")
+    );
 
     array.insert("3", EntityId::new_from_parts(3, 0, 0));
     array.insert("100", EntityId::new_from_parts(100, 0, 0));
@@ -1262,11 +1277,23 @@ fn remove() {
         ]
     );
     assert_eq!(array.data, &["10", "5", "3", "100"]);
-    assert_eq!(array.get(EntityId::new_from_parts(0, 0, 0)), None);
-    assert_eq!(array.get(EntityId::new_from_parts(3, 0, 0)), Some(&"3"));
-    assert_eq!(array.get(EntityId::new_from_parts(5, 0, 0)), Some(&"5"));
-    assert_eq!(array.get(EntityId::new_from_parts(10, 0, 0)), Some(&"10"));
-    assert_eq!(array.get(EntityId::new_from_parts(100, 0, 0)), Some(&"100"));
+    assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(3, 0, 0)),
+        Some(&"3")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(5, 0, 0)),
+        Some(&"5")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(10, 0, 0)),
+        Some(&"10")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(100, 0, 0)),
+        Some(&"100")
+    );
 
     assert_eq!(
         array.try_remove(EntityId::new_from_parts(3, 0, 0)),
@@ -1281,11 +1308,20 @@ fn remove() {
         ]
     );
     assert_eq!(array.data, &["10", "5", "100"]);
-    assert_eq!(array.get(EntityId::new_from_parts(0, 0, 0)), None);
-    assert_eq!(array.get(EntityId::new_from_parts(3, 0, 0)), None);
-    assert_eq!(array.get(EntityId::new_from_parts(5, 0, 0)), Some(&"5"));
-    assert_eq!(array.get(EntityId::new_from_parts(10, 0, 0)), Some(&"10"));
-    assert_eq!(array.get(EntityId::new_from_parts(100, 0, 0)), Some(&"100"));
+    assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
+    assert_eq!(array.private_get(EntityId::new_from_parts(3, 0, 0)), None);
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(5, 0, 0)),
+        Some(&"5")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(10, 0, 0)),
+        Some(&"10")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(100, 0, 0)),
+        Some(&"100")
+    );
 
     assert_eq!(
         array.try_remove(EntityId::new_from_parts(100, 0, 0)),
@@ -1299,9 +1335,15 @@ fn remove() {
         ]
     );
     assert_eq!(array.data, &["10", "5"]);
-    assert_eq!(array.get(EntityId::new_from_parts(0, 0, 0)), None);
-    assert_eq!(array.get(EntityId::new_from_parts(3, 0, 0)), None);
-    assert_eq!(array.get(EntityId::new_from_parts(5, 0, 0)), Some(&"5"));
-    assert_eq!(array.get(EntityId::new_from_parts(10, 0, 0)), Some(&"10"));
-    assert_eq!(array.get(EntityId::new_from_parts(100, 0, 0)), None);
+    assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
+    assert_eq!(array.private_get(EntityId::new_from_parts(3, 0, 0)), None);
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(5, 0, 0)),
+        Some(&"5")
+    );
+    assert_eq!(
+        array.private_get(EntityId::new_from_parts(10, 0, 0)),
+        Some(&"10")
+    );
+    assert_eq!(array.private_get(EntityId::new_from_parts(100, 0, 0)), None);
 }

@@ -36,17 +36,21 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b View<'a, T> {
 
     #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-        (**self).get(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
+        (**self)
+            .private_get(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })
     }
     #[inline]
     fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
-        (**self).get(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
+        (**self)
+            .private_get(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })
     }
 }
 
@@ -56,17 +60,21 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b ViewMut<'a, T> {
 
     #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-        (**self).get(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
+        (**self)
+            .private_get(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })
     }
     #[inline]
     fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
-        (**self).get(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
+        (**self)
+            .private_get(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })
     }
 }
 
@@ -110,10 +118,11 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b mut ViewMut<'a, T> {
     }
     #[inline]
     fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent> {
-        self.get_mut(entity).ok_or_else(|| error::MissingComponent {
-            id: entity,
-            name: type_name::<T>(),
-        })
+        self.private_get_mut(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })
     }
 }
 

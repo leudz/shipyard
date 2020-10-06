@@ -280,7 +280,7 @@ fn unstable_sort() {
     for i in 0..100 {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(100 - i);
-        assert_eq!(array.get(entity_id), Some(&i));
+        assert_eq!(array.private_get(entity_id), Some(&i));
     }
 }
 
@@ -310,11 +310,11 @@ fn partially_sorted_unstable_sort() {
     for i in 0..20 {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(i);
-        assert_eq!(array.get(entity_id), Some(&i));
+        assert_eq!(array.private_get(entity_id), Some(&i));
     }
     for i in 20..100 {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(100 - i + 20);
-        assert_eq!(array.get(entity_id), Some(&i));
+        assert_eq!(array.private_get(entity_id), Some(&i));
     }
 }

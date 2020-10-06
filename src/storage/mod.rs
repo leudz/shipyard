@@ -233,15 +233,18 @@ fn delete() {
     storage.sparse_set_mut().unwrap().insert("test1", entity_id);
     entity_id.set_index(5);
     storage.delete(entity_id, &mut storage_to_unpack).unwrap();
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    assert_eq!(
+        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        None
+    );
     entity_id.set_index(10);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().get(entity_id),
+        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
         Some(&"test10")
     );
     entity_id.set_index(1);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().get(entity_id),
+        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
         Some(&"test1")
     );
     entity_id.set_index(10);
@@ -249,9 +252,18 @@ fn delete() {
     entity_id.set_index(1);
     storage.delete(entity_id, &mut storage_to_unpack).unwrap();
     entity_id.set_index(5);
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    assert_eq!(
+        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        None
+    );
     entity_id.set_index(10);
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    assert_eq!(
+        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        None
+    );
     entity_id.set_index(1);
-    assert_eq!(storage.sparse_set::<&str>().unwrap().get(entity_id), None);
+    assert_eq!(
+        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        None
+    );
 }
