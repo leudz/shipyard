@@ -324,7 +324,7 @@ macro_rules! impl_into_iter {
                                                 smallest = len;
                                                 smallest_dense = self.$index.dense();
                                                 factored_len = factor;
-                                                mask |= 1 << $index;
+                                                mask = 1 << $index;
                                             }
                                         } else {
                                             let factor = len * type_ids.len() * ACCESS_FACTOR;

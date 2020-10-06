@@ -470,7 +470,7 @@ fn par_multiple_update_pack() {
 
             let mut modified: Vec<_> = u32s.modified().iter().collect();
             modified.sort_unstable();
-            assert_eq!(modified, vec![&1, &5, &7, &9]);
+            assert_eq!(modified, vec![&1, &5, &9]);
 
             let mut iter: Vec<_> = (&u32s).iter().collect();
             iter.sort_unstable();
