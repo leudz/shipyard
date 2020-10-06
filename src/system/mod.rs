@@ -64,14 +64,7 @@ macro_rules! impl_system {
                 (self)($(b.$index,)+)
             }
             fn try_borrow(world: &'s World) -> Result<($($type,)+), error::GetStorage> {
-                #[cfg(feature = "parallel")]
-                {
-                    Ok(($($type::try_borrow(world)?,)+))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    Ok(($($type::try_borrow(world)?,)+))
-                }
+                Ok(($($type::try_borrow(world)?,)+))
             }
             fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
@@ -90,14 +83,7 @@ macro_rules! impl_system {
                 (self)(data, $(b.$index,)+)
             }
             fn try_borrow(world: &'s World) -> Result<($($type,)+), error::GetStorage> {
-                #[cfg(feature = "parallel")]
-                {
-                    Ok(($($type::try_borrow(world)?,)+))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    Ok(($($type::try_borrow(world)?,)+))
-                }
+                Ok(($($type::try_borrow(world)?,)+))
             }
             fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
