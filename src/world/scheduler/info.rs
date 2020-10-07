@@ -12,13 +12,14 @@ pub struct WorkloadInfo {
 #[derive(Debug, Clone)]
 pub struct BatchInfo {
     pub systems: Vec<SystemInfo>,
-    pub conflict: Option<Conflict>,
 }
 
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
     pub name: &'static str,
+    pub type_id: TypeId,
     pub borrow: Vec<TypeInfo>,
+    pub conflict: Option<Conflict>,
 }
 
 #[derive(Debug, Clone)]

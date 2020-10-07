@@ -16,8 +16,7 @@ use crate::storage::AllStorages;
 // #[cfg(feature = "serde1")]
 // use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
-use alloc::vec::Vec;
-use scheduler::Scheduler;
+use scheduler::{Batches, Scheduler};
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
@@ -1140,35 +1139,35 @@ let i = world.run(sys1);
     fn try_run_workload_index(
         &self,
         scheduler: &Scheduler,
-        batches: &[Vec<usize>],
+        batches: &Batches,
     ) -> Result<(), error::RunWorkload> {
-        for batch in batches {
-            if batch.len() == 1 {
-                scheduler.systems[batch[0]](self).map_err(|err| {
-                    error::RunWorkload::Run((scheduler.system_names[batch[0]], err))
-                })?;
-            } else {
-                #[cfg(feature = "parallel")]
-                {
+        #[cfg(feature = "parallel")]
+        {
+            for batch in &batches.parallel {
+                if batch.len() == 1 {
+                    scheduler.systems[batch[0]](self).map_err(|err| {
+                        error::RunWorkload::Run((scheduler.system_names[batch[0]], err))
+                    })?;
+                } else {
                     use rayon::prelude::*;
 
                     batch.into_par_iter().try_for_each(|&index| {
                         (scheduler.systems[index])(self).map_err(|err| {
                             error::RunWorkload::Run((scheduler.system_names[index], err))
                         })
-                    })?
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    batch.iter().try_for_each(|&index| {
-                        (scheduler.systems[index])(self).map_err(|err| {
-                            error::RunWorkload::Run((scheduler.system_names[index], err))
-                        })
-                    })?
+                    })?;
                 }
             }
+
+            Ok(())
         }
-        Ok(())
+        #[cfg(not(feature = "parallel"))]
+        {
+            batches.sequential.iter().try_for_each(|&index| {
+                (scheduler.systems[index])(self)
+                    .map_err(|err| error::RunWorkload::Run((scheduler.system_names[index], err)))
+            })
+        }
     }
     /// Run the default workload if there is one.
     ///

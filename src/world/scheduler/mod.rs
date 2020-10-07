@@ -13,6 +13,14 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 
+/// List of indexes into both systems and system_names
+#[derive(Default)]
+#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
+pub(super) struct Batches {
+    pub(super) parallel: Vec<Vec<usize>>,
+    pub(super) sequential: Vec<usize>,
+}
+
 // systems are stored in an array to easily find if a system was already added
 // this wouldn't be possible if they were in the HashMap
 //
@@ -23,8 +31,8 @@ pub(crate) struct Scheduler {
     pub(super) system_names: Vec<&'static str>,
     // system's `TypeId` to an index into both systems and system_names
     lookup_table: HashMap<TypeId, usize>,
-    /// workload name to list of "batches" (list of indexes into both systems and system_names)
-    workloads: HashMap<Cow<'static, str>, Vec<Vec<usize>>>,
+    /// workload name to list of "batches"
+    workloads: HashMap<Cow<'static, str>, Batches>,
     default: Cow<'static, str>,
 }
 
@@ -52,14 +60,14 @@ impl Scheduler {
             Err(error::SetDefaultWorkload::MissingWorkload)
         }
     }
-    pub(super) fn workload(&self, name: &str) -> Result<&[Vec<usize>], error::RunWorkload> {
+    pub(super) fn workload(&self, name: &str) -> Result<&Batches, error::RunWorkload> {
         if let Some(batches) = self.workloads.get(name) {
             Ok(batches)
         } else {
             Err(error::RunWorkload::MissingWorkload)
         }
     }
-    pub(super) fn default_workload(&self) -> &[Vec<usize>] {
+    pub(super) fn default_workload(&self) -> &Batches {
         &self.workloads[&self.default]
     }
     pub(super) fn is_empty(&self) -> bool {

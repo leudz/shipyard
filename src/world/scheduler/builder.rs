@@ -1,5 +1,5 @@
 use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
-use super::Scheduler;
+use super::{Batches, Scheduler};
 use crate::borrow::Mutability;
 use crate::error;
 use crate::storage::AllStorages;
@@ -301,47 +301,44 @@ impl WorkloadBuilder {
             .try_borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
+        let Scheduler {
+            systems,
+            system_names,
+            lookup_table,
+            workloads,
+            default,
+        } = &mut *scheduler;
+
         if self.systems.is_empty() {
             // if the workload doesn't have systems we just register it with no batch
-            if scheduler.workloads.is_empty() {
-                scheduler.default = self.name.clone();
-                scheduler
-                    .workloads
-                    .insert(core::mem::take(&mut self.name), Vec::new());
-            } else {
-                match scheduler.workloads.entry(core::mem::take(&mut self.name)) {
-                    hashbrown::hash_map::Entry::Occupied(_) => {
-                        return Err(error::AddWorkload::AlreadyExists);
+            let is_empty = workloads.is_empty();
+            match workloads.entry(core::mem::take(&mut self.name)) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    if is_empty {
+                        *default = entry.key().clone();
                     }
-                    hashbrown::hash_map::Entry::Vacant(entry) => entry.insert(Vec::new()),
-                };
-            }
+
+                    entry.insert(Batches::default());
+                }
+                hashbrown::hash_map::Entry::Occupied(_) => {
+                    return Err(error::AddWorkload::AlreadyExists);
+                }
+            };
         } else if self.systems.len() == 1 {
             // with a single system there is just one batch configuration possible
-            let Scheduler {
-                systems,
-                system_names,
-                lookup_table,
-                workloads,
-                default,
-            } = &mut *scheduler;
-
-            let batches;
-
-            if workloads.is_empty() {
-                *default = self.name.clone();
-                batches = workloads
-                    .entry(core::mem::take(&mut self.name))
-                    .insert(Vec::new())
-                    .into_mut();
-            } else {
-                match workloads.entry(core::mem::take(&mut self.name)) {
-                    hashbrown::hash_map::Entry::Occupied(_) => {
-                        return Err(error::AddWorkload::AlreadyExists);
+            let is_empty = workloads.is_empty();
+            let batches = match workloads.entry(core::mem::take(&mut self.name)) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    if is_empty {
+                        *default = entry.key().clone();
                     }
-                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
-                };
-            }
+
+                    entry.insert(Batches::default())
+                }
+                hashbrown::hash_map::Entry::Occupied(_) => {
+                    return Err(error::AddWorkload::AlreadyExists);
+                }
+            };
 
             let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();
 
@@ -351,35 +348,25 @@ impl WorkloadBuilder {
                 systems.len() - 1
             });
 
-            batches.push(vec![system_index]);
+            batches.parallel.push(vec![system_index]);
+            batches.sequential.push(system_index);
         } else {
             // with multiple systems we have to create batches
-            // a system can't be added to a batch older than the last one
+            // a system can't be added to a batch with a conflicting borrow and can't jump over a conflicting borrow either
             // systems borrowing !Send and !Sync types are currently always scheduled on their own to make them run on World's thread
-            let Scheduler {
-                systems,
-                system_names,
-                lookup_table,
-                workloads,
-                default,
-            } = &mut *scheduler;
-
-            let batches;
-
-            if workloads.is_empty() {
-                *default = self.name.clone();
-                batches = workloads
-                    .entry(core::mem::take(&mut self.name))
-                    .insert(Vec::new())
-                    .into_mut();
-            } else {
-                match workloads.entry(core::mem::take(&mut self.name)) {
-                    hashbrown::hash_map::Entry::Occupied(_) => {
-                        return Err(error::AddWorkload::AlreadyExists);
+            let is_empty = workloads.is_empty();
+            let batches = match workloads.entry(core::mem::take(&mut self.name)) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    if is_empty {
+                        *default = entry.key().clone();
                     }
-                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
-                };
-            }
+
+                    entry.insert(Batches::default())
+                }
+                hashbrown::hash_map::Entry::Occupied(_) => {
+                    return Err(error::AddWorkload::AlreadyExists);
+                }
+            };
 
             let mut batches_info: Vec<Vec<_>> = vec![];
 
@@ -392,11 +379,13 @@ impl WorkloadBuilder {
                     systems.len() - 1
                 });
 
-                if is_send_sync {
-                    let mut conflict = false;
+                batches.sequential.push(system_index);
 
-                    if let Some(last) = batches_info.last() {
-                        'outer: for &(type_id, mutability) in last.iter().rev() {
+                if is_send_sync {
+                    let mut valid = batches.parallel.len();
+
+                    'outer: for (i, batch_info) in batches_info.iter().enumerate().rev() {
+                        for &(type_id, mutability) in batch_info {
                             for type_info in &self.borrow_info[info_range.clone()] {
                                 match type_info.mutability {
                                     Mutability::Exclusive => {
@@ -404,7 +393,6 @@ impl WorkloadBuilder {
                                             || type_info.type_id == TypeId::of::<AllStorages>()
                                             || type_id == TypeId::of::<AllStorages>()
                                         {
-                                            conflict = true;
                                             break 'outer;
                                         }
                                     }
@@ -414,33 +402,34 @@ impl WorkloadBuilder {
                                             || type_info.type_id == TypeId::of::<AllStorages>()
                                             || type_id == TypeId::of::<AllStorages>()
                                         {
-                                            conflict = true;
                                             break 'outer;
                                         }
                                     }
                                 }
                             }
                         }
+
+                        valid = i;
                     }
 
-                    if conflict || batches.is_empty() {
-                        batches.push(vec![system_index]);
+                    if valid < batches.parallel.len() {
+                        batches.parallel[valid].push(system_index);
+                        batches_info[valid].extend(
+                            self.borrow_info[info_range]
+                                .iter()
+                                .map(|type_info| (type_info.type_id, type_info.mutability)),
+                        );
+                    } else {
+                        batches.parallel.push(vec![system_index]);
                         batches_info.push(
                             self.borrow_info[info_range]
                                 .iter()
                                 .map(|type_info| (type_info.type_id, type_info.mutability))
                                 .collect(),
                         );
-                    } else {
-                        batches.last_mut().unwrap().push(system_index);
-                        batches_info.last_mut().unwrap().extend(
-                            self.borrow_info[info_range]
-                                .iter()
-                                .map(|type_info| (type_info.type_id, type_info.mutability)),
-                        );
                     }
                 } else {
-                    batches.push(vec![system_index]);
+                    batches.parallel.push(vec![system_index]);
                     batches_info.push(vec![(TypeId::of::<AllStorages>(), Mutability::Exclusive)]);
                 }
             }
@@ -470,24 +459,32 @@ impl WorkloadBuilder {
             .try_borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
+        let Scheduler {
+            systems,
+            system_names,
+            lookup_table,
+            workloads,
+            default,
+        } = &mut *scheduler;
+
         let mut workload_info;
 
         if self.systems.is_empty() {
             // if the workload doesn't have systems we just register it with no batch
             // and register the batch info
-            if scheduler.workloads.is_empty() {
-                scheduler.default = self.name.clone();
-                scheduler
-                    .workloads
-                    .insert(core::mem::take(&mut self.name), Vec::new());
-            } else {
-                match scheduler.workloads.entry(core::mem::take(&mut self.name)) {
-                    hashbrown::hash_map::Entry::Occupied(_) => {
-                        return Err(error::AddWorkload::AlreadyExists);
+            let is_empty = workloads.is_empty();
+            match workloads.entry(self.name.clone()) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    if is_empty {
+                        *default = entry.key().clone();
                     }
-                    hashbrown::hash_map::Entry::Vacant(entry) => entry.insert(Vec::new()),
-                };
-            }
+
+                    entry.insert(Batches::default());
+                }
+                hashbrown::hash_map::Entry::Occupied(_) => {
+                    return Err(error::AddWorkload::AlreadyExists);
+                }
+            };
 
             workload_info = WorkloadInfo {
                 name: core::mem::take(&mut self.name),
@@ -495,30 +492,19 @@ impl WorkloadBuilder {
             };
         } else if self.systems.len() == 1 {
             // with a single system there is just one batch configuration possible
-            let Scheduler {
-                systems,
-                system_names,
-                lookup_table,
-                workloads,
-                default,
-            } = &mut *scheduler;
-
-            let batches;
-
-            if workloads.is_empty() {
-                *default = self.name.clone();
-                batches = workloads
-                    .entry(core::mem::take(&mut self.name))
-                    .insert(Vec::new())
-                    .into_mut();
-            } else {
-                match workloads.entry(core::mem::take(&mut self.name)) {
-                    hashbrown::hash_map::Entry::Occupied(_) => {
-                        return Err(error::AddWorkload::AlreadyExists);
+            let is_empty = workloads.is_empty();
+            let batches = match workloads.entry(self.name.clone()) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    if is_empty {
+                        *default = entry.key().clone();
                     }
-                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
-                };
-            }
+
+                    entry.insert(Batches::default())
+                }
+                hashbrown::hash_map::Entry::Occupied(_) => {
+                    return Err(error::AddWorkload::AlreadyExists);
+                }
+            };
 
             let (type_id, system_name, _, _, system) = self.systems.pop().unwrap();
 
@@ -528,14 +514,16 @@ impl WorkloadBuilder {
                 systems.len() - 1
             });
 
-            batches.push(vec![system_index]);
+            batches.parallel.push(vec![system_index]);
+            batches.sequential.push(system_index);
 
             let batch_info = BatchInfo {
                 systems: vec![SystemInfo {
                     name: system_name,
+                    type_id,
                     borrow: core::mem::take(&mut self.borrow_info),
+                    conflict: None,
                 }],
-                conflict: None,
             };
 
             workload_info = WorkloadInfo {
@@ -544,35 +532,24 @@ impl WorkloadBuilder {
             };
         } else {
             // with multiple systems we have to create batches
-            // a system can't be added to a batch older than the last one
+            // a system can't be added to a batch with a conflicting borrow and can't jump over a conflicting borrow either
             // systems borrowing !Send and !Sync types are currently always scheduled on their own to make them run on World's thread
-            let Scheduler {
-                systems,
-                system_names,
-                lookup_table,
-                workloads,
-                default,
-            } = &mut *scheduler;
-
-            let batches;
-
-            if workloads.is_empty() {
-                *default = self.name.clone();
-                batches = workloads
-                    .entry(self.name.clone())
-                    .insert(Vec::new())
-                    .into_mut();
-            } else {
-                match workloads.entry(self.name.clone()) {
-                    hashbrown::hash_map::Entry::Occupied(_) => {
-                        return Err(error::AddWorkload::AlreadyExists);
+            let is_empty = workloads.is_empty();
+            let batches = match workloads.entry(self.name.clone()) {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
+                    if is_empty {
+                        *default = entry.key().clone();
                     }
-                    hashbrown::hash_map::Entry::Vacant(entry) => batches = entry.insert(Vec::new()),
-                };
-            }
+
+                    entry.insert(Batches::default())
+                }
+                hashbrown::hash_map::Entry::Occupied(_) => {
+                    return Err(error::AddWorkload::AlreadyExists);
+                }
+            };
 
             workload_info = WorkloadInfo {
-                name: self.name.clone(),
+                name: core::mem::take(&mut self.name),
                 batch_info: vec![],
             };
 
@@ -585,51 +562,54 @@ impl WorkloadBuilder {
                     systems.len() - 1
                 });
 
-                let system_info = SystemInfo {
+                batches.sequential.push(system_index);
+
+                let mut system_info = SystemInfo {
                     name: system_name,
+                    type_id: system_type_id,
                     borrow: self.borrow_info[info_range.clone()].to_vec(),
+                    conflict: None,
                 };
 
                 if is_send_sync {
-                    let mut conflict_info = None;
+                    let mut valid = batches.parallel.len();
 
-                    if let Some(batch_info) = workload_info.batch_info.last() {
-                        'outer: for system_info in batch_info.systems.iter().rev() {
-                            for type_info in &self.borrow_info[info_range.clone()] {
-                                match type_info.mutability {
-                                    Mutability::Exclusive => {
-                                        for batch_type_info in &system_info.borrow {
-                                            if type_info.type_id == batch_type_info.type_id
+                    'outer: for (i, batch_info) in workload_info.batch_info.iter().enumerate().rev()
+                    {
+                        for system in &batch_info.systems {
+                            for system_type_info in system.borrow.iter() {
+                                for type_info in &self.borrow_info[info_range.clone()] {
+                                    match type_info.mutability {
+                                        Mutability::Exclusive => {
+                                            if type_info.type_id == system_type_info.type_id
                                                 || type_info.type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_info.type_id
+                                                || system_type_info.type_id
                                                     == TypeId::of::<AllStorages>()
                                             {
-                                                conflict_info = Some(Conflict::Borrow {
+                                                system_info.conflict = Some(Conflict::Borrow {
                                                     type_info: type_info.clone(),
                                                     system: SystemId {
-                                                        name: system_info.name,
-                                                        type_id: TypeId::of::<()>(),
+                                                        name: system.name,
+                                                        type_id: system.type_id,
                                                     },
                                                 });
 
                                                 break 'outer;
                                             }
                                         }
-                                    }
-                                    Mutability::Shared => {
-                                        for batch_type_info in &system_info.borrow {
-                                            if (type_info.type_id == batch_type_info.type_id
-                                                && batch_type_info.mutability
+                                        Mutability::Shared => {
+                                            if (type_info.type_id == system_type_info.type_id
+                                                && system_type_info.mutability
                                                     == Mutability::Exclusive)
                                                 || type_info.type_id == TypeId::of::<AllStorages>()
-                                                || batch_type_info.type_id
+                                                || system_type_info.type_id
                                                     == TypeId::of::<AllStorages>()
                                             {
-                                                conflict_info = Some(Conflict::Borrow {
+                                                system_info.conflict = Some(Conflict::Borrow {
                                                     type_info: type_info.clone(),
                                                     system: SystemId {
-                                                        name: system_info.name,
-                                                        type_id: TypeId::of::<()>(),
+                                                        name: system.name,
+                                                        type_id: system.type_id,
                                                     },
                                                 });
 
@@ -640,28 +620,24 @@ impl WorkloadBuilder {
                                 }
                             }
                         }
+
+                        valid = i;
                     }
 
-                    if conflict_info.is_some() || batches.is_empty() {
-                        batches.push(vec![system_index]);
+                    if valid < batches.parallel.len() {
+                        batches.parallel[valid].push(system_index);
+                        workload_info.batch_info[valid].systems.push(system_info);
+                    } else {
+                        batches.parallel.push(vec![system_index]);
                         workload_info.batch_info.push(BatchInfo {
                             systems: vec![system_info],
-                            conflict: conflict_info,
                         });
-                    } else {
-                        batches.last_mut().unwrap().push(system_index);
-                        workload_info
-                            .batch_info
-                            .last_mut()
-                            .unwrap()
-                            .systems
-                            .push(system_info);
                     }
                 } else {
-                    batches.push(vec![system_index]);
+                    system_info.conflict = Some(Conflict::NotSendSync);
+                    batches.parallel.push(vec![system_index]);
                     workload_info.batch_info.push(BatchInfo {
                         systems: vec![system_info],
-                        conflict: Some(Conflict::NotSendSync),
                     });
                 }
             }
@@ -688,7 +664,13 @@ fn single_immutable() {
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("System1"), Some(&vec![vec![0]]));
+    assert_eq!(
+        scheduler.workloads.get("System1"),
+        Some(&Batches {
+            parallel: vec![vec![0]],
+            sequential: vec![0],
+        })
+    );
     assert_eq!(scheduler.default, "System1");
 }
 
@@ -709,7 +691,13 @@ fn single_mutable() {
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("System1"), Some(&vec![vec![0]]));
+    assert_eq!(
+        scheduler.workloads.get("System1"),
+        Some(&Batches {
+            parallel: vec![vec![0]],
+            sequential: vec![0],
+        })
+    );
     assert_eq!(scheduler.default, "System1");
 }
 
@@ -733,7 +721,13 @@ fn multiple_immutable() {
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0, 1]]));
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&Batches {
+            parallel: vec![vec![0, 1]],
+            sequential: vec![0, 1]
+        })
+    );
     assert_eq!(scheduler.default, "Systems");
 }
 
@@ -759,7 +753,10 @@ fn multiple_mutable() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1],
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 }
@@ -786,7 +783,10 @@ fn multiple_mixed() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 
@@ -805,7 +805,10 @@ fn multiple_mixed() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 }
@@ -847,7 +850,10 @@ fn append_optimizes_batches() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Combined"),
-        Some(&vec![vec![0], vec![1, 2]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1, 2]],
+            sequential: vec![0, 1, 2]
+        })
     );
     assert_eq!(scheduler.default, "Combined");
 }
@@ -870,7 +876,13 @@ fn all_storages() {
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0]]));
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&Batches {
+            parallel: vec![vec![0]],
+            sequential: vec![0]
+        })
+    );
     assert_eq!(scheduler.default, "Systems");
 
     let world = World::new();
@@ -888,7 +900,10 @@ fn all_storages() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 
@@ -907,7 +922,10 @@ fn all_storages() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 
@@ -926,7 +944,10 @@ fn all_storages() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 }
@@ -959,7 +980,10 @@ fn non_send() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Test"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Test");
 
@@ -978,7 +1002,10 @@ fn non_send() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Test"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Test");
 
@@ -997,7 +1024,10 @@ fn non_send() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Test"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Test");
 
@@ -1016,7 +1046,10 @@ fn non_send() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Test"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Test");
 
@@ -1035,7 +1068,10 @@ fn non_send() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Test"),
-        Some(&vec![vec![0], vec![1]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
     );
     assert_eq!(scheduler.default, "Test");
 }
@@ -1066,7 +1102,10 @@ fn fake_borrow() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0], vec![1], vec![2]])
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1], vec![2]],
+            sequential: vec![0, 1, 2]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 }
@@ -1102,7 +1141,10 @@ fn unique_fake_borrow() {
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
         scheduler.workloads.get("Systems"),
-        Some(&vec![vec![0, 1], vec![2, 3], vec![4]])
+        Some(&Batches {
+            parallel: vec![vec![0, 1, 3], vec![2], vec![4]],
+            sequential: vec![0, 1, 2, 3, 4]
+        })
     );
     assert_eq!(scheduler.default, "Systems");
 }
@@ -1127,7 +1169,13 @@ fn unique_and_non_unique() {
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![vec![0, 1]]));
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&Batches {
+            parallel: vec![vec![0, 1]],
+            sequential: vec![0, 1]
+        })
+    );
     assert_eq!(scheduler.default, "Systems");
 }
 
@@ -1142,6 +1190,58 @@ fn empty_workload() {
     let scheduler = world.scheduler.try_borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 0);
     assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(scheduler.workloads.get("Systems"), Some(&vec![]));
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&Batches {
+            parallel: vec![],
+            sequential: vec![]
+        })
+    );
     assert_eq!(scheduler.default, "Systems");
+}
+
+#[test]
+fn append_ensures_multiple_batches_can_be_optimized_over() {
+    use crate::{View, ViewMut, World};
+
+    fn sys_a1(_: ViewMut<'_, usize>, _: ViewMut<'_, u32>) {}
+    fn sys_a2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
+    fn sys_b1(_: View<'_, usize>) {}
+    fn sys_c1(_: View<'_, u16>) {}
+
+    let world = World::new();
+
+    let mut group_a = Workload::builder("Group A");
+    group_a
+        .try_with_system((|world: &World| world.try_run(sys_a1), sys_a1))
+        .unwrap()
+        .try_with_system((|world: &World| world.try_run(sys_a2), sys_a2))
+        .unwrap();
+    let mut group_b = Workload::builder("Group B");
+    group_b
+        .try_with_system((|world: &World| world.try_run(sys_b1), sys_b1))
+        .unwrap();
+    let mut group_c = Workload::builder("Group C");
+    group_c
+        .try_with_system((|world: &World| world.try_run(sys_c1), sys_c1))
+        .unwrap();
+
+    dbg!(Workload::builder("Combined")
+        .append(&mut group_a)
+        .append(&mut group_b)
+        .append(&mut group_c)
+        .add_to_world_with_info(&world)
+        .unwrap());
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 4);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Combined"),
+        Some(&Batches {
+            parallel: vec![vec![0, 3], vec![1, 2]],
+            sequential: vec![0, 1, 2, 3]
+        })
+    );
+    assert_eq!(scheduler.default, "Combined");
 }
