@@ -32,7 +32,10 @@ mod entity_builder;
 pub mod error;
 mod get;
 mod not;
-mod pack;
+mod pack {
+    pub(crate) mod loose;
+    pub(crate) mod tight;
+}
 mod remove;
 //#[cfg(feature = "serde1")]
 //mod serde_setup;
@@ -64,7 +67,7 @@ pub use entity_builder::EntityBuilder;
 pub use get::Get;
 pub use iter::{Inserted, InsertedOrModified, IntoFastIter, IntoIter, IntoWithId, Modified};
 pub use not::Not;
-pub use pack::{LoosePack, TightPack};
+pub use pack::{loose::LoosePack, tight::TightPack};
 pub use remove::Remove;
 //#[cfg(feature = "serde1")]
 //pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
