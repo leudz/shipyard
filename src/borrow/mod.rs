@@ -594,14 +594,7 @@ impl<T: 'static> Borrow<'_> for FakeBorrow<T> {
 impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
     #[inline]
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-        #[cfg(feature = "parallel")]
-        {
-            Ok(T::try_borrow(world).ok())
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            Ok(T::try_borrow(world).ok())
-        }
+        Ok(T::try_borrow(world).ok())
     }
 
     fn borrow_infos(infos: &mut Vec<TypeInfo>) {
@@ -618,18 +611,9 @@ macro_rules! impl_borrow {
         impl<'a, $($type: Borrow<'a>),+> Borrow<'a> for ($($type,)+) {
             #[inline]
             fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage> {
-                #[cfg(feature = "parallel")]
-                {
-                    Ok(($(
-                        <$type as Borrow>::try_borrow(world)?,
-                    )+))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    Ok(($(
-                        <$type as Borrow>::try_borrow(world)?,
-                    )+))
-                }
+                Ok(($(
+                    <$type as Borrow>::try_borrow(world)?,
+                )+))
             }
 
             fn borrow_infos(infos: &mut Vec<TypeInfo>) {
