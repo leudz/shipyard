@@ -1,8 +1,14 @@
 use crate::atomic_refcell::{Ref, SharedBorrow};
+#[cfg(feature = "non_send")]
+use crate::borrow::NonSend;
+#[cfg(all(feature = "non_send", feature = "non_sync"))]
+use crate::borrow::NonSendSync;
+#[cfg(feature = "non_sync")]
+use crate::borrow::NonSync;
+use crate::borrow::{AllStoragesBorrow, EntitiesViewMut, ViewMut};
 use crate::error;
 use crate::sparse_set::ViewAddEntity;
 use crate::storage::{AllStorages, EntityId};
-use crate::view::{EntitiesViewMut, ViewMut};
 
 /// Keeps information to create an entity.
 pub struct EntityBuilder<'a, C, S> {
@@ -26,8 +32,8 @@ impl Clone for EntityBuilder<'_, (), ()> {
 
 impl<'a> EntityBuilder<'a, (), ()> {
     #[inline]
-    pub(crate) fn new(all_storages: Ref<'a, AllStorages>) -> Self {
-        let (all_storages, all_borrow) = unsafe { all_storages.destructure() };
+    pub(crate) fn new(all_storages: Ref<'a, &'a AllStorages>) -> Self {
+        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
 
         EntityBuilder {
             all_storages,
@@ -54,7 +60,7 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> Result<EntityBuilder<'a, (T,), (ViewMut<'a, T>,)>, error::Borrow> {
-        let storage = ViewMut::from_reference(self.all_storages).map_err(|err| {
+        let storage = self.all_storages.try_borrow().map_err(|err| {
             if let error::GetStorage::StorageBorrow((_, borrow)) = err {
                 borrow
             } else {
@@ -80,7 +86,7 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        match ViewMut::from_reference(self.all_storages) {
+        match self.all_storages.try_borrow() {
             Ok(storage) => EntityBuilder {
                 all_storages: self.all_storages,
                 all_borrow: self.all_borrow,
@@ -100,13 +106,17 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> Result<EntityBuilder<'a, (T,), (ViewMut<'a, T>,)>, error::Borrow> {
-        let storage = ViewMut::from_reference_non_send(self.all_storages).map_err(|err| {
-            if let error::GetStorage::StorageBorrow((_, borrow)) = err {
-                borrow
-            } else {
-                unreachable!()
-            }
-        })?;
+        let storage = self
+            .all_storages
+            .try_borrow::<NonSend<_>>()
+            .map(|view_mut| view_mut.0)
+            .map_err(|err| {
+                if let error::GetStorage::StorageBorrow((_, borrow)) = err {
+                    borrow
+                } else {
+                    unreachable!()
+                }
+            })?;
 
         Ok(EntityBuilder {
             all_storages: self.all_storages,
@@ -126,7 +136,11 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        match ViewMut::from_reference_non_send(self.all_storages) {
+        match self
+            .all_storages
+            .try_borrow::<NonSend<_>>()
+            .map(|view_mut| view_mut.0)
+        {
             Ok(storage) => EntityBuilder {
                 all_storages: self.all_storages,
                 all_borrow: self.all_borrow,
@@ -146,13 +160,17 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> Result<EntityBuilder<'a, (T,), (ViewMut<'a, T>,)>, error::Borrow> {
-        let storage = ViewMut::from_reference_non_sync(self.all_storages).map_err(|err| {
-            if let error::GetStorage::StorageBorrow((_, borrow)) = err {
-                borrow
-            } else {
-                unreachable!()
-            }
-        })?;
+        let storage = self
+            .all_storages
+            .try_borrow::<NonSync<_>>()
+            .map(|view_mut| view_mut.0)
+            .map_err(|err| {
+                if let error::GetStorage::StorageBorrow((_, borrow)) = err {
+                    borrow
+                } else {
+                    unreachable!()
+                }
+            })?;
 
         Ok(EntityBuilder {
             all_storages: self.all_storages,
@@ -172,7 +190,11 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        match ViewMut::from_reference_non_sync(self.all_storages) {
+        match self
+            .all_storages
+            .try_borrow::<NonSync<_>>()
+            .map(|view_mut| view_mut.0)
+        {
             Ok(storage) => EntityBuilder {
                 all_storages: self.all_storages,
                 all_borrow: self.all_borrow,
@@ -192,13 +214,17 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> Result<EntityBuilder<'a, (T,), (ViewMut<'a, T>,)>, error::Borrow> {
-        let storage = ViewMut::from_reference_non_send_sync(self.all_storages).map_err(|err| {
-            if let error::GetStorage::StorageBorrow((_, borrow)) = err {
-                borrow
-            } else {
-                unreachable!()
-            }
-        })?;
+        let storage = self
+            .all_storages
+            .try_borrow::<NonSendSync<_>>()
+            .map(|view_mut| view_mut.0)
+            .map_err(|err| {
+                if let error::GetStorage::StorageBorrow((_, borrow)) = err {
+                    borrow
+                } else {
+                    unreachable!()
+                }
+            })?;
 
         Ok(EntityBuilder {
             all_storages: self.all_storages,
@@ -221,7 +247,11 @@ impl<'a> EntityBuilder<'a, (), ()> {
         self,
         component: T,
     ) -> EntityBuilder<'a, (T,), (ViewMut<'a, T>,)> {
-        match ViewMut::from_reference_non_send_sync(self.all_storages) {
+        match self
+            .all_storages
+            .try_borrow::<NonSendSync<_>>()
+            .map(|view_mut| view_mut.0)
+        {
             Ok(storage) => EntityBuilder {
                 all_storages: self.all_storages,
                 all_borrow: self.all_borrow,
@@ -266,7 +296,7 @@ macro_rules! impl_entity_builder {
             /// Borrows the storage associated with it.
             #[inline]
             pub fn try_with<T: 'static + Send + Sync>(self, component: T) -> Result<EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)>, error::Borrow> {
-                let storage = ViewMut::from_reference(self.all_storages).map_err(|err| {
+                let storage = AllStoragesBorrow::try_borrow(self.all_storages).map_err(|err| {
                     if let error::GetStorage::StorageBorrow((_, borrow)) = err {
                         borrow
                     } else {
@@ -276,8 +306,8 @@ macro_rules! impl_entity_builder {
 
                 Ok(EntityBuilder {
                     all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                    all_borrow: self.all_borrow,
+                    components: ($(self.components.$index,)+ component,),
                     storages: ($(self.storages.$index,)+ storage,),
                 })
             }
@@ -290,11 +320,11 @@ macro_rules! impl_entity_builder {
             #[track_caller]
             #[inline]
             pub fn with<T: 'static + Send + Sync>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                match ViewMut::from_reference(self.all_storages) {
+                match self.all_storages.try_borrow() {
                     Ok(storage) => EntityBuilder {
                         all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                        all_borrow: self.all_borrow,
+                        components: ($(self.components.$index,)+ component,),
                         storages: ($(self.storages.$index,)+ storage,),
                     },
                     Err(err) => panic!("{:?}", err),
@@ -308,7 +338,10 @@ macro_rules! impl_entity_builder {
             #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
             #[inline]
             pub fn try_with_non_send<T: 'static + Sync>(self, component: T) -> Result<EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)>, error::Borrow> {
-                let storage = ViewMut::from_reference_non_send(self.all_storages)
+                let storage = self
+                    .all_storages
+                    .try_borrow::<NonSend<_>>()
+                    .map(|view_mut| view_mut.0)
                     .map_err(|err| {
                         if let error::GetStorage::StorageBorrow((_, borrow)) = err {
                             borrow
@@ -319,8 +352,8 @@ macro_rules! impl_entity_builder {
 
                 Ok(EntityBuilder {
                     all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                    all_borrow: self.all_borrow,
+                    components: ($(self.components.$index,)+ component,),
                     storages: ($(self.storages.$index,)+ storage,),
                 })
             }
@@ -333,11 +366,15 @@ macro_rules! impl_entity_builder {
             #[track_caller]
             #[inline]
             pub fn with_non_send<T: 'static + Sync>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                match ViewMut::from_reference_non_send(self.all_storages) {
+                match self
+                    .all_storages
+                    .try_borrow::<NonSend<_>>()
+                    .map(|view_mut| view_mut.0)
+                {
                     Ok(storage) => EntityBuilder {
                         all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                        all_borrow: self.all_borrow,
+                        components: ($(self.components.$index,)+ component,),
                         storages: ($(self.storages.$index,)+ storage,),
                     },
                     Err(err) => panic!("{:?}", err),
@@ -351,7 +388,10 @@ macro_rules! impl_entity_builder {
             #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
             #[inline]
             pub fn try_with_non_sync<T: 'static + Send>(self, component: T) -> Result<EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)>, error::Borrow> {
-                let storage = ViewMut::from_reference_non_sync(self.all_storages)
+                let storage = self
+                    .all_storages
+                    .try_borrow::<NonSync<_>>()
+                    .map(|view_mut| view_mut.0)
                     .map_err(|err| {
                         if let error::GetStorage::StorageBorrow((_, borrow)) = err {
                             borrow
@@ -362,8 +402,8 @@ macro_rules! impl_entity_builder {
 
                 Ok(EntityBuilder {
                     all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                    all_borrow: self.all_borrow,
+                    components: ($(self.components.$index,)+ component,),
                     storages: ($(self.storages.$index,)+ storage,),
                 })
             }
@@ -376,11 +416,15 @@ macro_rules! impl_entity_builder {
             #[track_caller]
             #[inline]
             pub fn with_non_sync<T: 'static + Send>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                match ViewMut::from_reference_non_sync(self.all_storages) {
+                match self
+                    .all_storages
+                    .try_borrow::<NonSync<_>>()
+                    .map(|view_mut| view_mut.0)
+                {
                     Ok(storage) => EntityBuilder {
                         all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                        all_borrow: self.all_borrow,
+                        components: ($(self.components.$index,)+ component,),
                         storages: ($(self.storages.$index,)+ storage,),
                     },
                     Err(err) => panic!("{:?}", err),
@@ -394,7 +438,10 @@ macro_rules! impl_entity_builder {
             #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
             #[inline]
             pub fn try_with_non_send_sync<T: 'static>(self, component: T) -> Result<EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)>, error::Borrow> {
-                let storage = ViewMut::from_reference_non_send_sync(self.all_storages)
+                let storage = self
+                    .all_storages
+                    .try_borrow::<NonSendSync<_>>()
+                    .map(|view_mut| view_mut.0)
                     .map_err(|err| {
                         if let error::GetStorage::StorageBorrow((_, borrow)) = err {
                             borrow
@@ -405,8 +452,8 @@ macro_rules! impl_entity_builder {
 
                 Ok(EntityBuilder {
                     all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                    all_borrow: self.all_borrow,
+                    components: ($(self.components.$index,)+ component,),
                     storages: ($(self.storages.$index,)+ storage,),
                 })
             }
@@ -419,11 +466,15 @@ macro_rules! impl_entity_builder {
             #[track_caller]
             #[inline]
             pub fn with_non_send_sync<T: 'static>(self, component: T) -> EntityBuilder<'a, ($($type,)+ T,), ($($storage_type,)+ ViewMut<'a, T>,)> {
-                match ViewMut::from_reference_non_send_sync(self.all_storages) {
+                match self
+                    .all_storages
+                    .try_borrow::<NonSendSync<_>>()
+                    .map(|view_mut| view_mut.0)
+                {
                     Ok(storage) => EntityBuilder {
                         all_storages: self.all_storages,
-            all_borrow: self.all_borrow,
-            components: ($(self.components.$index,)+ component,),
+                        all_borrow: self.all_borrow,
+                        components: ($(self.components.$index,)+ component,),
                         storages: ($(self.storages.$index,)+ storage,),
                     },
                     Err(err) => panic!("{:?}", err),

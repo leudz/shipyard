@@ -4,10 +4,10 @@ mod modified;
 mod not;
 
 use super::abstract_mut::AbstractMut;
+use crate::borrow::{View, ViewMut};
 use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
-use crate::view::{View, ViewMut};
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them
@@ -42,7 +42,7 @@ impl<'a, T: 'static> IntoAbstract for &'a View<'_, T> {
     }
     #[inline]
     fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        TypeId::of::<SparseSet<T>>()
     }
     #[inline]
     fn dense(&self) -> *const EntityId {
@@ -68,7 +68,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
     }
     #[inline]
     fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        TypeId::of::<SparseSet<T>>()
     }
     #[inline]
     fn dense(&self) -> *const EntityId {
@@ -94,7 +94,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
     }
     #[inline]
     fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        TypeId::of::<SparseSet<T>>()
     }
     #[inline]
     fn dense(&self) -> *const EntityId {

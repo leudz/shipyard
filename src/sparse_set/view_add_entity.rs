@@ -1,7 +1,7 @@
-use crate::sparse_set::Pack;
+use crate::borrow::ViewMut;
+use crate::sparse_set::{Pack, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
-use crate::view::ViewMut;
 use alloc::vec::Vec;
 
 pub trait ViewAddEntity {
@@ -60,7 +60,7 @@ macro_rules! impl_view_add_entity {
                     sparse_sets.$index.insert(component.$index, entity);
                 )+
 
-                let type_ids = [$(TypeId::of::<$type>()),+];
+                let type_ids = [$(TypeId::of::<SparseSet<$type>>()),+];
                 let mut sorted_type_ids = type_ids.clone();
                 sorted_type_ids.sort_unstable();
 

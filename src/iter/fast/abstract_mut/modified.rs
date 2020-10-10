@@ -1,5 +1,5 @@
 use super::FastAbstractMut;
-use crate::iter::Modified;
+use crate::pack::update::Modified;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
 use core::ops::Range;
 

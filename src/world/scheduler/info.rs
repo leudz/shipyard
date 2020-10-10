@@ -1,4 +1,5 @@
 use crate::borrow::Mutability;
+use crate::storage::StorageId;
 use crate::type_id::TypeId;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
@@ -41,20 +42,20 @@ pub struct SystemId {
 pub struct TypeInfo {
     pub name: &'static str,
     pub mutability: Mutability,
-    pub type_id: TypeId,
+    pub storage_id: StorageId,
     pub is_send: bool,
     pub is_sync: bool,
 }
 
 impl PartialEq for TypeInfo {
     fn eq(&self, rhs: &Self) -> bool {
-        self.type_id == rhs.type_id && self.mutability == rhs.mutability
+        self.storage_id == rhs.storage_id && self.mutability == rhs.mutability
     }
 }
 
 impl PartialEq<(TypeId, Mutability)> for TypeInfo {
     fn eq(&self, rhs: &(TypeId, Mutability)) -> bool {
-        self.type_id == rhs.0 && self.mutability == rhs.1
+        self.storage_id == rhs.0 && self.mutability == rhs.1
     }
 }
 
@@ -77,7 +78,7 @@ impl core::fmt::Debug for TypeInfo {
             ))?,
         }
         f.write_fmt(format_args!("    mutability: {:?}\n", self.mutability))?;
-        f.write_fmt(format_args!("    type_id: {:?}\n", self.type_id))?;
+        f.write_fmt(format_args!("    storage_id: {:?}\n", self.storage_id))?;
         f.write_str("}")
     }
 }

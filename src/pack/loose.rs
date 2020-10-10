@@ -1,8 +1,8 @@
+use crate::borrow::ViewMut;
 use crate::error;
 use crate::iter::{IntoIter, IntoWithId};
-use crate::sparse_set::{LoosePack as LoosePackInfo, Pack};
+use crate::sparse_set::{LoosePack as LoosePackInfo, Pack, SparseSet};
 use crate::type_id::TypeId;
-use crate::view::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -64,11 +64,11 @@ macro_rules! impl_loose_pack {
                 )+
 
                 // we gather and sort all TypeId
-                let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<$tight>()),+]);
+                let mut tight_types: Box<[_]> = Box::new([$(TypeId::of::<SparseSet<$tight>>()),+]);
                 tight_types.sort_unstable();
                 let tight_types: Arc<[_]> = tight_types.into();
 
-                let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<$loose>()),+]);
+                let mut loose_types: Box<[_]> = Box::new([$(TypeId::of::<SparseSet<$loose>>()),+]);
                 loose_types.sort_unstable();
                 let loose_types: Arc<[_]> = loose_types.into();
 

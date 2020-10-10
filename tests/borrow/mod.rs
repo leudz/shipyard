@@ -57,7 +57,7 @@ fn invalid_borrow() {
     assert_eq!(
         world.try_borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
-            core::any::type_name::<u32>(),
+            core::any::type_name::<SparseSet<u32>>(),
             error::Borrow::Unique
         )))
     );
@@ -72,7 +72,7 @@ fn all_storages_invalid_borrow() {
     assert_eq!(
         all_storages.try_borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
-            core::any::type_name::<u32>(),
+            core::any::type_name::<SparseSet<u32>>(),
             error::Borrow::Unique
         )))
     );
@@ -121,7 +121,7 @@ fn non_send_storage_in_other_thread() {
             assert_eq!(
                 world.try_borrow::<NonSend<ViewMut<NotSend>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
-                    type_name::<NotSend>(),
+                    type_name::<SparseSet<NotSend>>(),
                     error::Borrow::WrongThread
                 )))
             )
@@ -139,7 +139,7 @@ fn non_send_sync_storage_in_other_thread() {
             assert_eq!(
                 world.try_borrow::<NonSendSync<View<NotSendSync>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
-                    type_name::<NotSendSync>(),
+                    type_name::<SparseSet<NotSendSync>>(),
                     error::Borrow::WrongThread
                 )))
             )

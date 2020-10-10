@@ -31,6 +31,16 @@ impl From<u64> for StorageId {
     }
 }
 
+impl PartialEq<TypeId> for StorageId {
+    fn eq(&self, type_id: &TypeId) -> bool {
+        if let StorageId::TypeId(self_type_id) = self {
+            self_type_id == type_id
+        } else {
+            false
+        }
+    }
+}
+
 // #[cfg(feature = "serde1")]
 // impl serde::Serialize for StorageId {
 //     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

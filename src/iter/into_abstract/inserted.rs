@@ -1,9 +1,9 @@
 use super::IntoAbstract;
-use crate::iter::Inserted;
+use crate::borrow::{View, ViewMut};
+use crate::pack::update::Inserted;
 use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
-use crate::view::{View, ViewMut};
 
 impl<'tmp, 'v, T: 'static> IntoAbstract for Inserted<&'tmp View<'v, T>> {
     type AbsView = Inserted<&'tmp SparseSet<T>>;
@@ -19,7 +19,7 @@ impl<'tmp, 'v, T: 'static> IntoAbstract for Inserted<&'tmp View<'v, T>> {
         &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        TypeId::of::<SparseSet<T>>()
     }
     fn dense(&self) -> *const EntityId {
         self.0.dense.as_ptr()
@@ -40,7 +40,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Inserted<&'b ViewMut<'a, T>> {
         &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        TypeId::of::<SparseSet<T>>()
     }
     fn dense(&self) -> *const EntityId {
         self.0.dense.as_ptr()
@@ -61,7 +61,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Inserted<&'b mut ViewMut<'a, T>> {
         &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<T>()
+        TypeId::of::<SparseSet<T>>()
     }
     fn dense(&self) -> *const EntityId {
         self.0.dense.as_ptr()

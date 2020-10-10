@@ -34,7 +34,7 @@ use crate::unknown_storage::UnknownStorage;
 #[cfg(all(not(feature = "std"), feature = "serde1"))]
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use core::any::{type_name, Any};
+use core::any::type_name;
 // #[cfg(feature = "serde1")]
 // use deser::SparseSetDeserializer;
 use sparse_array::SparseArray;
@@ -1084,14 +1084,6 @@ impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
 }
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
-    #[inline]
-    fn any(&self) -> &dyn Any {
-        self
-    }
-    #[inline]
-    fn any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     #[inline]
     fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
         self.actual_delete(entity);

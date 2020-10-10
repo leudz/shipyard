@@ -324,7 +324,7 @@ fn two_workloads() {
 #[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
-    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow usize storage while it\'s already borrowed."
+    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<usize> storage while it\'s already borrowed."
 )]
 fn two_bad_workloads() {
     fn system1(_: ViewMut<usize>) {

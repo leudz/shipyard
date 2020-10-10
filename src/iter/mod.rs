@@ -46,10 +46,3 @@ pub use par_mixed::ParMixed;
 pub use par_tight::ParTight;
 pub use tight::Tight;
 pub use with_id::{IntoWithId, WithId};
-
-#[derive(Clone)]
-pub struct Inserted<Storage>(pub Storage);
-#[derive(Clone)]
-pub struct Modified<Storage>(pub Storage);
-#[derive(Clone)]
-pub struct InsertedOrModified<Storage>(pub Storage);

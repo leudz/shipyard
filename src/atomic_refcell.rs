@@ -1,8 +1,7 @@
 use crate::error;
-use alloc::boxed::Box;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
-use core::mem::{ManuallyDrop, MaybeUninit};
+use core::ops::{Deref, DerefMut};
 use parking_lot::lock_api::RawRwLock as _;
 #[cfg(feature = "non_sync")]
 use parking_lot::lock_api::RawRwLockDowngrade as _;
@@ -19,8 +18,7 @@ pub struct AtomicRefCell<T: ?Sized> {
     #[cfg(feature = "non_sync")]
     is_sync: bool,
     _non_send_sync: PhantomData<*const ()>,
-    taken: bool,
-    inner: ManuallyDrop<UnsafeCell<T>>,
+    inner: UnsafeCell<T>,
 }
 
 // AtomicRefCell can't be Send if it contains !Send components
@@ -28,18 +26,6 @@ pub struct AtomicRefCell<T: ?Sized> {
 unsafe impl<T: ?Sized> Send for AtomicRefCell<T> {}
 
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
-
-impl<T: ?Sized> Drop for AtomicRefCell<T> {
-    #[inline]
-    fn drop(&mut self) {
-        if !self.taken {
-            // SAFE we're in the Drop impl so it won't be accessed again
-            unsafe {
-                ManuallyDrop::drop(&mut self.inner);
-            }
-        }
-    }
-}
 
 impl<T: Send + Sync> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
@@ -52,8 +38,7 @@ impl<T: Send + Sync> AtomicRefCell<T> {
             #[cfg(feature = "non_sync")]
             is_sync: true,
             _non_send_sync: PhantomData,
-            taken: false,
-            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+            inner: UnsafeCell::new(value),
         }
     }
 }
@@ -69,8 +54,7 @@ impl<T: Sync> AtomicRefCell<T> {
             #[cfg(feature = "non_sync")]
             is_sync: true,
             _non_send_sync: PhantomData,
-            taken: false,
-            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+            inner: UnsafeCell::new(value),
         }
     }
 }
@@ -86,8 +70,7 @@ impl<T: Send> AtomicRefCell<T> {
             send: None,
             is_sync: false,
             _non_send_sync: PhantomData,
-            taken: false,
-            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+            inner: UnsafeCell::new(value),
         }
     }
 }
@@ -102,9 +85,15 @@ impl<T> AtomicRefCell<T> {
             send: Some(world_thread_id),
             is_sync: false,
             _non_send_sync: PhantomData,
-            taken: false,
-            inner: ManuallyDrop::new(UnsafeCell::new(value)),
+            inner: UnsafeCell::new(value),
         }
+    }
+}
+
+impl<T> AtomicRefCell<T> {
+    #[inline]
+    pub(crate) fn into_inner(self) -> T {
+        self.inner.into_inner()
     }
 }
 
@@ -115,7 +104,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `Ref` exits scope. Multiple shared borrows can be
     /// taken out at the same time.
     #[inline]
-    pub(crate) fn try_borrow(&self) -> Result<Ref<'_, T>, error::Borrow> {
+    pub(crate) fn try_borrow(&self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
         #[cfg(not(feature = "non_sync"))]
         {
             // if Send - accessible from any thread, shared xor unique
@@ -210,7 +199,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `RefMut` exits scope. The value cannot be borrowed while this borrow is
     /// active.
     #[inline]
-    pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<'_, T>, error::Borrow> {
+    pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
         #[cfg(feature = "non_send")]
         {
             // if Sync - accessible from any thread, shared only if not world thread
@@ -233,25 +222,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     }
 }
 
-impl AtomicRefCell<dyn crate::unknown_storage::UnknownStorage> {
-    /// # Safety
-    ///
-    /// `T` has to be a unique storage of the right type.
-    #[allow(clippy::boxed_local)]
-    pub unsafe fn into_unique<T: 'static>(mut this: Box<Self>) -> T {
-        let mut tmp: MaybeUninit<T> = MaybeUninit::uninit();
-
-        this.taken = true;
-        // SAFE both regions are valids
-        tmp.as_mut_ptr()
-            .copy_from_nonoverlapping((&*this.inner.get()).unique::<T>().unwrap(), 1);
-
-        // SAFE this is initialized
-        tmp.assume_init()
-    }
-}
-
-pub(crate) struct SharedBorrow<'a>(&'a RawRwLock);
+pub struct SharedBorrow<'a>(&'a RawRwLock);
 
 impl Drop for SharedBorrow<'_> {
     #[inline]
@@ -271,7 +242,7 @@ impl Clone for SharedBorrow<'_> {
     }
 }
 
-pub(crate) struct ExclusiveBorrow<'a>(&'a RawRwLock);
+pub struct ExclusiveBorrow<'a>(&'a RawRwLock);
 
 impl Drop for ExclusiveBorrow<'_> {
     #[inline]
@@ -282,57 +253,72 @@ impl Drop for ExclusiveBorrow<'_> {
     }
 }
 
-pub struct Ref<'a, T: ?Sized> {
-    inner: &'a T,
-    borrow: SharedBorrow<'a>,
+pub struct Ref<'a, T> {
+    pub inner: T,
+    pub borrow: SharedBorrow<'a>,
 }
 
-impl<'a, T: ?Sized> Ref<'a, T> {
+impl<'a, T> Ref<'a, T> {
+    /// Returns the inner parts of the `Ref`.
+    ///
+    /// # Safety
+    ///
+    /// The inner value and everything borrowing it must be dropped before `ExclusiveBorrow`.
     #[inline]
-    pub(crate) fn map<U, F: Fn(&'a T) -> &'a U>(this: Self, f: F) -> Ref<'a, U> {
+    pub unsafe fn destructure(this: Self) -> (T, SharedBorrow<'a>) {
+        (this.inner, this.borrow)
+    }
+}
+
+impl<'a, T: ?Sized> Ref<'a, &'a T> {
+    #[inline]
+    pub fn map<U, F: FnOnce(&T) -> &U>(this: Self, f: F) -> Ref<'a, &'a U> {
         Ref {
             inner: f(this.inner),
             borrow: this.borrow,
         }
     }
-    /// Get the inner parts of the `Ref`.
-    ///
-    /// # Safety
-    ///
-    /// The reference has to be dropped before `Borrow`.
+}
+
+impl<'a, T: Deref> Deref for Ref<'a, T> {
+    type Target = T::Target;
+
     #[inline]
-    pub(crate) unsafe fn destructure(self) -> (&'a T, SharedBorrow<'a>) {
-        (self.inner, self.borrow)
+    fn deref(&self) -> &T::Target {
+        self.inner.deref()
     }
 }
 
-impl<T: ?Sized> core::ops::Deref for Ref<'_, T> {
-    type Target = T;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        self.inner
-    }
-}
-
-impl<T: ?Sized> Clone for Ref<'_, T> {
+impl<T: Clone> Clone for Ref<'_, T> {
     #[inline]
     fn clone(&self) -> Self {
         Ref {
-            inner: self.inner,
+            inner: self.inner.clone(),
             borrow: self.borrow.clone(),
         }
     }
 }
 
-pub struct RefMut<'a, T: ?Sized> {
-    inner: &'a mut T,
+pub struct RefMut<'a, T> {
+    inner: T,
     borrow: ExclusiveBorrow<'a>,
 }
 
-impl<'a, T: ?Sized> RefMut<'a, T> {
+impl<'a, T> RefMut<'a, T> {
+    /// Returns the inner parts of the `RefMut`.
+    ///
+    /// # Safety
+    ///
+    /// The inner value and everything borrowing it must be dropped before `ExclusiveBorrow`.
     #[inline]
-    pub(crate) fn map<U, F: Fn(&'a mut T) -> &'a mut U>(this: Self, f: F) -> RefMut<'a, U> {
+    pub unsafe fn destructure(this: Self) -> (T, ExclusiveBorrow<'a>) {
+        (this.inner, this.borrow)
+    }
+}
+
+impl<'a, T: ?Sized> RefMut<'a, &'a mut T> {
+    #[inline]
+    pub(crate) fn map<U, F: FnOnce(&mut T) -> &mut U>(this: Self, f: F) -> RefMut<'a, &'a mut U> {
         RefMut {
             inner: f(this.inner),
             borrow: this.borrow,
@@ -340,19 +326,19 @@ impl<'a, T: ?Sized> RefMut<'a, T> {
     }
 }
 
-impl<T: ?Sized> core::ops::Deref for RefMut<'_, T> {
-    type Target = T;
+impl<'a, T: Deref> Deref for RefMut<'a, T> {
+    type Target = T::Target;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        self.inner
+        &self.inner
     }
 }
 
-impl<T: ?Sized> core::ops::DerefMut for RefMut<'_, T> {
+impl<'a, T: DerefMut> DerefMut for RefMut<'a, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.inner
+        &mut self.inner
     }
 }
 

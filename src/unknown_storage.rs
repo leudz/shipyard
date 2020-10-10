@@ -1,9 +1,8 @@
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, ANCHOR};
-use crate::sparse_set::SparseSet;
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
-use crate::storage::{Entities, EntityId};
+use crate::storage::EntityId;
 use crate::type_id::TypeId;
 // #[cfg(feature = "serde1")]
 // use alloc::borrow::Cow;
@@ -12,9 +11,29 @@ use core::any::Any;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
-pub(super) trait UnknownStorage {
-    fn any(&self) -> &dyn Any;
-    fn any_mut(&mut self) -> &mut dyn Any;
+pub trait SizedAny {
+    fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+}
+
+impl<T: 'static> SizedAny for T {
+    #[inline]
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    #[inline]
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+pub trait UnknownStorage: SizedAny {
+    fn any(&self) -> &dyn Any {
+        SizedAny::as_any(self)
+    }
+    fn any_mut(&mut self) -> &mut dyn Any {
+        SizedAny::as_any_mut(self)
+    }
     #[inline]
     fn delete(&mut self, _: EntityId, _: &mut Vec<TypeId>) {}
     #[inline]
@@ -55,27 +74,6 @@ pub(super) trait UnknownStorage {
     // > {
     //     None
     // }
-}
-
-impl dyn UnknownStorage {
-    pub(crate) fn sparse_set<T: 'static>(&self) -> Option<&SparseSet<T>> {
-        self.any().downcast_ref()
-    }
-    pub(crate) fn sparse_set_mut<T: 'static>(&mut self) -> Option<&mut SparseSet<T>> {
-        self.any_mut().downcast_mut()
-    }
-    pub(crate) fn entities(&self) -> Option<&Entities> {
-        self.any().downcast_ref()
-    }
-    pub(crate) fn entities_mut(&mut self) -> Option<&mut Entities> {
-        self.any_mut().downcast_mut()
-    }
-    pub(crate) fn unique<T: 'static>(&self) -> Option<&T> {
-        self.any().downcast_ref()
-    }
-    pub(crate) fn unique_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.any_mut().downcast_mut()
-    }
 }
 
 // #[cfg(feature = "serde1")]

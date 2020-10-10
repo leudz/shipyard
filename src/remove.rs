@@ -1,8 +1,8 @@
+use crate::borrow::ViewMut;
 use crate::error;
-use crate::sparse_set::{OldComponent, Pack};
+use crate::sparse_set::{OldComponent, Pack, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
-use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::type_name;
 
@@ -107,9 +107,9 @@ macro_rules! impl_remove {
             fn try_remove(self, entity: EntityId) -> Result<<($($type,)+) as Removable>::Out, error::Remove> {
                 // non packed storages should not pay the price of pack
                 if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::None) || !self.$index.metadata.observer_types.is_empty())||+ {
-                    let mut types = [$(TypeId::of::<$type>()),+];
+                    let mut types = [$(TypeId::of::<SparseSet<$type>>()),+];
                     types.sort_unstable();
-                    let mut add_types = [$(TypeId::of::<$add_type>()),*];
+                    let mut add_types = [$(TypeId::of::<SparseSet<$add_type>>()),*];
                     add_types.sort_unstable();
 
                     let mut should_unpack = Vec::with_capacity(types.len() + add_types.len());
@@ -132,7 +132,7 @@ macro_rules! impl_remove {
                     )+
 
                     $(
-                        if should_unpack.contains(&TypeId::of::<$add_type>()) {
+                        if should_unpack.contains(&TypeId::of::<SparseSet<$add_type>>()) {
                             self.$add_index.unpack(entity);
                         }
                     )*

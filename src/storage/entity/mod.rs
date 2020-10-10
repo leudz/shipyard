@@ -18,7 +18,6 @@ use add_component::AddComponent;
 // #[cfg(feature = "serde1")]
 // use alloc::borrow::Cow;
 use alloc::vec::Vec;
-use core::any::Any;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
@@ -51,9 +50,6 @@ impl Entities {
             data: Vec::new(),
             list: None,
         }
-    }
-    pub(super) fn delete(&mut self, entity: EntityId) -> bool {
-        self.delete_unchecked(entity)
     }
     /// Returns true if `entity` matches a living entity.
     pub fn is_alive(&self, entity: EntityId) -> bool {
@@ -203,12 +199,6 @@ impl Entities {
 }
 
 impl UnknownStorage for Entities {
-    fn any(&self) -> &dyn Any {
-        self
-    }
-    fn any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
     fn clear(&mut self) {
         if self.data.is_empty() {
             return;
@@ -487,8 +477,8 @@ fn iterator() {
 
     assert!(iter.next().is_none());
 
-    entities.delete(id0);
-    entities.delete(id1);
+    entities.delete_unchecked(id0);
+    entities.delete_unchecked(id1);
     entities.add_entity((), ());
 
     let mut iter = entities.iter();

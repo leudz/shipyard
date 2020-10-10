@@ -16,12 +16,10 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::GlobalDeConfig;
-use crate::sparse_set::SparseSet;
 use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::any::type_name;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
@@ -36,127 +34,16 @@ unsafe impl Send for Storage {}
 unsafe impl Sync for Storage {}
 
 impl Storage {
-    /// Creates a new `Storage` storing elements of type T.
     #[inline]
-    pub(crate) fn new<T: 'static + Send + Sync>() -> Self {
-        let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new(sparse_set)))
-    }
-    #[cfg(feature = "non_send")]
-    #[inline]
-    pub(crate) fn new_non_send<T: 'static + Sync>(world_thread_id: std::thread::ThreadId) -> Self {
-        let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new_non_send(
-            sparse_set,
-            world_thread_id,
-        )))
-    }
-    #[cfg(feature = "non_sync")]
-    #[inline]
-    pub(crate) fn new_non_sync<T: 'static + Send>() -> Self {
-        let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new_non_sync(sparse_set)))
-    }
-    #[cfg(all(feature = "non_send", feature = "non_sync"))]
-    #[inline]
-    pub(crate) fn new_non_send_sync<T: 'static>(world_thread_id: std::thread::ThreadId) -> Self {
-        let sparse_set = SparseSet::<T>::new();
-        Storage(Box::new(AtomicRefCell::new_non_send_sync(
-            sparse_set,
-            world_thread_id,
-        )))
-    }
-    #[inline]
-    pub(crate) fn new_unique<T: 'static + Send + Sync>(component: T) -> Self {
-        Storage(Box::new(AtomicRefCell::new(Unique(component))))
-    }
-    #[cfg(feature = "non_send")]
-    #[inline]
-    pub(crate) fn new_unique_non_send<T: 'static + Sync>(
-        component: T,
-        world_thread_id: std::thread::ThreadId,
-    ) -> Self {
-        Storage(Box::new(AtomicRefCell::new_non_send(
-            Unique(component),
-            world_thread_id,
-        )))
-    }
-    #[cfg(feature = "non_sync")]
-    #[inline]
-    pub(crate) fn new_unique_non_sync<T: 'static + Send>(component: T) -> Self {
-        Storage(Box::new(AtomicRefCell::new_non_sync(Unique(component))))
-    }
-    #[cfg(all(feature = "non_send", feature = "non_sync"))]
-    #[inline]
-    pub(crate) fn new_unique_non_send_sync<T: 'static>(
-        component: T,
-        world_thread_id: std::thread::ThreadId,
-    ) -> Self {
-        Storage(Box::new(AtomicRefCell::new_non_send_sync(
-            Unique(component),
-            world_thread_id,
-        )))
-    }
-    /// Immutably borrows the component container.
-    #[inline]
-    pub(crate) fn sparse_set<T: 'static>(
-        &self,
-    ) -> Result<Ref<'_, SparseSet<T>>, error::GetStorage> {
-        let storage = self
-            .0
-            .try_borrow()
-            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
-
-        Ok(Ref::map(storage, |unknown| {
-            unknown.sparse_set::<T>().unwrap()
-        }))
-    }
-    /// Mutably borrows the component container.
-    #[inline]
-    pub(crate) fn sparse_set_mut<T: 'static>(
-        &self,
-    ) -> Result<RefMut<'_, SparseSet<T>>, error::GetStorage> {
-        let storage = self
-            .0
-            .try_borrow_mut()
-            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
-
-        Ok(RefMut::map(storage, |unknown| {
-            unknown.sparse_set_mut::<T>().unwrap()
-        }))
-    }
-    /// Immutably borrows entities' storage.
-    #[inline]
-    pub(crate) fn entities(&self) -> Result<Ref<'_, Entities>, error::Borrow> {
-        Ok(Ref::map(self.0.try_borrow()?, |unknown| {
-            unknown.entities().unwrap()
-        }))
-    }
-    /// Mutably borrows entities' storage.
-    #[inline]
-    pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, Entities>, error::Borrow> {
-        Ok(RefMut::map(self.0.try_borrow_mut()?, |unknown| {
-            unknown.entities_mut().unwrap()
+    pub(crate) fn get<T: 'static>(&'_ self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
+        Ok(Ref::map(self.0.try_borrow()?, |storage| {
+            storage.any().downcast_ref::<T>().unwrap()
         }))
     }
     #[inline]
-    pub(crate) fn unique<T: 'static>(&self) -> Result<Ref<'_, T>, error::GetStorage> {
-        let storage = self
-            .0
-            .try_borrow()
-            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
-
-        Ok(Ref::map(storage, |unknown| unknown.unique::<T>().unwrap()))
-    }
-    #[inline]
-    pub(crate) fn unique_mut<T: 'static>(&self) -> Result<RefMut<'_, T>, error::GetStorage> {
-        let storage = self
-            .0
-            .try_borrow_mut()
-            .map_err(|borrow| error::GetStorage::StorageBorrow((type_name::<T>(), borrow)))?;
-
-        Ok(RefMut::map(storage, |unknown| {
-            unknown.unique_mut::<T>().unwrap()
+    pub(crate) fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
+        Ok(RefMut::map(self.0.try_borrow_mut()?, |storage| {
+            storage.any_mut().downcast_mut().unwrap()
         }))
     }
     /// Mutably borrows the container and delete `index`.
@@ -219,32 +106,51 @@ impl Storage {
 
 #[test]
 fn delete() {
-    let mut storage = Storage::new::<&'static str>();
+    use crate::sparse_set::SparseSet;
+
+    let mut storage = Storage(Box::new(AtomicRefCell::new(
+        SparseSet::<&'static str>::new(),
+    )));
     let mut entity_id = EntityId::zero();
     let mut storage_to_unpack = Vec::new();
     entity_id.set_index(5);
-    storage.sparse_set_mut().unwrap().insert("test5", entity_id);
+    storage
+        .get_mut::<SparseSet<&'static str>>()
+        .unwrap()
+        .insert("test5", entity_id);
     entity_id.set_index(10);
     storage
-        .sparse_set_mut()
+        .get_mut::<SparseSet<&'static str>>()
         .unwrap()
         .insert("test10", entity_id);
     entity_id.set_index(1);
-    storage.sparse_set_mut().unwrap().insert("test1", entity_id);
+    storage
+        .get_mut::<SparseSet<&'static str>>()
+        .unwrap()
+        .insert("test1", entity_id);
     entity_id.set_index(5);
     storage.delete(entity_id, &mut storage_to_unpack).unwrap();
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        storage
+            .get_mut::<SparseSet::<&'static str>>()
+            .unwrap()
+            .private_get(entity_id),
         None
     );
     entity_id.set_index(10);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        storage
+            .get_mut::<SparseSet::<&'static str>>()
+            .unwrap()
+            .private_get(entity_id),
         Some(&"test10")
     );
     entity_id.set_index(1);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        storage
+            .get_mut::<SparseSet::<&'static str>>()
+            .unwrap()
+            .private_get(entity_id),
         Some(&"test1")
     );
     entity_id.set_index(10);
@@ -253,17 +159,26 @@ fn delete() {
     storage.delete(entity_id, &mut storage_to_unpack).unwrap();
     entity_id.set_index(5);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        storage
+            .get_mut::<SparseSet::<&'static str>>()
+            .unwrap()
+            .private_get(entity_id),
         None
     );
     entity_id.set_index(10);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        storage
+            .get_mut::<SparseSet::<&'static str>>()
+            .unwrap()
+            .private_get(entity_id),
         None
     );
     entity_id.set_index(1);
     assert_eq!(
-        storage.sparse_set::<&str>().unwrap().private_get(entity_id),
+        storage
+            .get_mut::<SparseSet::<&'static str>>()
+            .unwrap()
+            .private_get(entity_id),
         None
     );
 }

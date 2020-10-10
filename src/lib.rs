@@ -35,6 +35,7 @@ mod not;
 mod pack {
     pub(crate) mod loose;
     pub(crate) mod tight;
+    pub(crate) mod update;
 }
 mod remove;
 //#[cfg(feature = "serde1")]
@@ -47,7 +48,6 @@ mod system;
 mod system_macro;
 mod type_id;
 mod unknown_storage;
-mod view;
 mod world;
 
 #[cfg(feature = "non_send")]
@@ -58,19 +58,21 @@ pub use crate::borrow::NonSendSync;
 #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
 pub use crate::borrow::NonSync;
 #[doc(hidden)]
-pub use crate::borrow::{AllStoragesBorrow, Borrow};
-#[doc(hidden)]
 pub use add_unique_macro::{AddUnique, Wrap};
-pub use borrow::FakeBorrow;
+pub use borrow::{
+    AllStoragesBorrow, AllStoragesViewMut, Borrow, EntitiesView, EntitiesViewMut, FakeBorrow,
+    Mutability, UniqueView, UniqueViewMut, View, ViewMut,
+};
 pub use delete::Delete;
 pub use entity_builder::EntityBuilder;
 pub use get::Get;
-pub use iter::{Inserted, InsertedOrModified, IntoFastIter, IntoIter, IntoWithId, Modified};
+pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use not::Not;
 pub use pack::{loose::LoosePack, tight::TightPack};
 pub use remove::Remove;
 //#[cfg(feature = "serde1")]
 //pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
+pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 pub use r#mut::Mut;
 pub use sparse_set::{
     sort, sort::IntoSortable, AddComponentUnchecked, Contains, OldComponent, SparseSet,
@@ -78,8 +80,7 @@ pub use sparse_set::{
 pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId, Unique};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
-pub use view::{
-    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
-};
+pub use type_id::TypeId;
+pub use unknown_storage::UnknownStorage;
 pub use world::scheduler::info;
 pub use world::{Workload, WorkloadBuilder, World};

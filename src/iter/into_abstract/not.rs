@@ -1,9 +1,9 @@
 use super::IntoAbstract;
+use crate::borrow::{View, ViewMut};
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
-use crate::view::{View, ViewMut};
 
 impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
     type AbsView = Not<&'b SparseSet<T>>;
@@ -19,7 +19,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
         &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<Not<T>>()
+        TypeId::of::<Not<SparseSet<T>>>()
     }
     fn dense(&self) -> *const EntityId {
         unreachable!()
@@ -40,7 +40,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
         &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<Not<T>>()
+        TypeId::of::<Not<SparseSet<T>>>()
     }
     fn dense(&self) -> *const EntityId {
         unreachable!()
@@ -61,7 +61,7 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
         &self.0.metadata
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<Not<T>>()
+        TypeId::of::<Not<SparseSet<T>>>()
     }
     fn dense(&self) -> *const EntityId {
         unreachable!()

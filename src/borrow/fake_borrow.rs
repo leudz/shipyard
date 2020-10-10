@@ -6,7 +6,7 @@ use core::marker::PhantomData;
 /// Use [`Unique<T>`] for unique storage.
 /// ### Example:
 /// ```
-/// use shipyard::{system, FakeBorrow, View, Workload, World};
+/// use shipyard::{system, FakeBorrow, SparseSet, View, Workload, World};
 ///
 /// fn display_first(_: View<usize>) {}
 /// fn display_next(_: View<usize>) {}
@@ -15,7 +15,7 @@ use core::marker::PhantomData;
 ///
 /// Workload::builder("Display")
 ///     .with_system(system!(display_first))
-///     .with_system(system!(|_: FakeBorrow<usize>| {}))
+///     .with_system(system!(|_: FakeBorrow<SparseSet<usize>>| {}))
 ///     .with_system(system!(display_next))
 ///     .add_to_world(&world)
 ///     .unwrap();

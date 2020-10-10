@@ -1,7 +1,5 @@
-use crate::storage::AllStorages;
-use crate::storage::EntityId;
-use crate::storage::TypeIdHasher;
-use crate::type_id::TypeId;
+use crate::sparse_set::SparseSet;
+use crate::storage::{AllStorages, EntityId, StorageId, TypeIdHasher};
 use core::hash::BuildHasherDefault;
 use hashbrown::hash_set::HashSet;
 
@@ -14,14 +12,13 @@ impl<T: 'static> DeleteAny for (T,) {
     fn delete_any(all_storages: &mut AllStorages) {
         // we have an exclusive reference so it's ok to not lock and still get a reference
         let storages = unsafe { &*all_storages.storages.get() };
-        if let Some(storage) = storages.get(&TypeId::of::<T>().into()) {
-            if let Ok(mut sparse_set) = storage.sparse_set_mut::<T>() {
-                let ids = sparse_set.dense.clone();
-                sparse_set.clear();
-                drop(sparse_set);
-                for id in ids {
-                    all_storages.delete(id);
-                }
+        if let Some(storage) = storages.get(&StorageId::of::<SparseSet<T>>()) {
+            let mut sparse_set = storage.get_mut::<SparseSet<T>>().unwrap();
+            let ids = sparse_set.dense.clone();
+            sparse_set.clear();
+            drop(sparse_set);
+            for id in ids {
+                all_storages.delete(id);
             }
         }
     }
@@ -36,8 +33,8 @@ macro_rules! impl_delete_any {
                 let mut ids: HashSet<EntityId, BuildHasherDefault<TypeIdHasher>> = HashSet::default();
 
                 $(
-                    if let Some(storage) = storages.get(&TypeId::of::<$type>().into()) {
-                        if let Ok(mut sparse_set) = storage.sparse_set_mut::<$type>() {
+                    if let Some(storage) = storages.get(&StorageId::of::<SparseSet<$type>>()) {
+                        if let Ok(mut sparse_set) = storage.get_mut::<SparseSet::<$type>>() {
                             ids.extend(&sparse_set.dense);
                             sparse_set.clear();
                         }

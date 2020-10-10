@@ -1,8 +1,8 @@
 use super::{IntoSortable, SparseSet};
+use crate::borrow::ViewMut;
 use crate::error;
 use crate::sparse_set::{EntityId, Pack};
 use crate::type_id::TypeId;
-use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
@@ -87,7 +87,7 @@ macro_rules! impl_unstable_sort {
                     None,
                 }
 
-                let mut type_ids = [$(TypeId::of::<$type>()),+];
+                let mut type_ids = [$(TypeId::of::<SparseSet<$type>>()),+];
                 type_ids.sort_unstable();
                 let mut pack_sort = PackSort::None;
 

@@ -1,6 +1,6 @@
 use super::AbstractMut;
 use super::Mut;
-use crate::iter::InsertedOrModified;
+use crate::pack::update::InsertedOrModified;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
 use crate::storage::EntityId;
 

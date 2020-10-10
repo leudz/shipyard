@@ -52,8 +52,8 @@ impl Display for Borrow {
 pub enum GetStorage {
     AllStoragesBorrow(Borrow),
     StorageBorrow((&'static str, Borrow)),
-    MissingUnique(&'static str),
     Entities(Borrow),
+    MissingStorage(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -77,7 +77,6 @@ impl Debug for GetStorage {
                 Borrow::MultipleThreads => fmt.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
                 Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
             },
-            Self::MissingUnique(name) => fmt.write_fmt(format_args!("No unique storage exists for {}.\nYou can register it with: world.add_unique(/* your_unique */);", name)),
             Self::Entities(borrow) => match borrow {
                 Borrow::Unique => fmt.write_str("Cannot mutably borrow Entities storage while it's already borrowed."),
                 Borrow::Shared => {
@@ -85,6 +84,7 @@ impl Debug for GetStorage {
                 },
                 _ => unreachable!(),
             },
+            Self::MissingStorage(name) => fmt.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", name)),
         }
     }
 }

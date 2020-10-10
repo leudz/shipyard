@@ -1,7 +1,7 @@
+use crate::borrow::ViewMut;
 use crate::error;
-use crate::sparse_set::{Pack, TightPack as TightPackInfo};
+use crate::sparse_set::{Pack, SparseSet, TightPack as TightPackInfo};
 use crate::type_id::TypeId;
-use crate::view::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -48,7 +48,7 @@ macro_rules! impl_tight_pack {
         #[allow(clippy::useless_let_if_seq)]
         impl<$($type: 'static),+> TightPack for ($(&mut ViewMut<'_, $type>,)+) {
             fn try_tight_pack(self) -> Result<(), error::Pack> {
-                let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<$type>(),)+]);
+                let mut type_ids: Box<[_]> = Box::new([$(TypeId::of::<SparseSet<$type>>(),)+]);
 
                 type_ids.sort_unstable();
                 let type_ids: Arc<[_]> = type_ids.into();

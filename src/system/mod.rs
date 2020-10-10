@@ -13,10 +13,7 @@ pub struct Nothing;
 pub trait System<'s, Data, B, R> {
     fn run(self, data: Data, b: B) -> R;
     fn try_borrow(world: &'s World) -> Result<B, error::GetStorage>;
-
     fn borrow_infos(infos: &mut Vec<TypeInfo>);
-
-    fn is_send_sync() -> bool;
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -27,15 +24,12 @@ where
     fn run(self, _: (), _: Nothing) -> R {
         (self)()
     }
+
     fn try_borrow(_: &'s World) -> Result<Nothing, error::GetStorage> {
         Ok(Nothing)
     }
 
     fn borrow_infos(_: &mut Vec<TypeInfo>) {}
-
-    fn is_send_sync() -> bool {
-        true
-    }
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -46,15 +40,12 @@ where
     fn run(self, (data,): (Data,), _: Nothing) -> R {
         (self)(data)
     }
+
     fn try_borrow(_: &'s World) -> Result<Nothing, error::GetStorage> {
         Ok(Nothing)
     }
 
     fn borrow_infos(_: &mut Vec<TypeInfo>) {}
-
-    fn is_send_sync() -> bool {
-        true
-    }
 }
 
 macro_rules! impl_system {
@@ -63,18 +54,15 @@ macro_rules! impl_system {
             fn run(self, _: (), b: ($($type,)+)) -> R {
                 (self)($(b.$index,)+)
             }
+
             fn try_borrow(world: &'s World) -> Result<($($type,)+), error::GetStorage> {
                 Ok(($($type::try_borrow(world)?,)+))
             }
+
             fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_infos(infos);
                 )+
-            }
-            fn is_send_sync() -> bool {
-                $(
-                    $type::is_send_sync()
-                )&&+
             }
         }
 
@@ -82,18 +70,15 @@ macro_rules! impl_system {
             fn run(self, (data,): (Data,), b: ($($type,)+)) -> R {
                 (self)(data, $(b.$index,)+)
             }
+
             fn try_borrow(world: &'s World) -> Result<($($type,)+), error::GetStorage> {
                 Ok(($($type::try_borrow(world)?,)+))
             }
+
             fn borrow_infos(infos: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_infos(infos);
                 )+
-            }
-            fn is_send_sync() -> bool {
-                $(
-                    $type::is_send_sync()
-                )&&+
             }
         }
     }

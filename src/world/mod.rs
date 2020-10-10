@@ -4,7 +4,7 @@ pub use scheduler::{Workload, WorkloadBuilder};
 
 pub(crate) use scheduler::TypeInfo;
 
-use crate::atomic_refcell::AtomicRefCell;
+use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 // #[cfg(feature = "serde1")]
 // use crate::atomic_refcell::RefMut;
 use crate::borrow::Borrow;
@@ -409,14 +409,7 @@ let (entities, mut usizes) = world
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
     pub fn try_borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
-        #[cfg(feature = "parallel")]
-        {
-            V::try_borrow(self)
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            V::try_borrow(&self)
-        }
+        V::try_borrow(self)
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.  
@@ -655,16 +648,7 @@ world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
         s: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        Ok(s.run((data,), {
-            #[cfg(feature = "parallel")]
-            {
-                S::try_borrow(self)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                S::try_borrow(&self)?
-            }
-        }))
+        Ok(s.run((data,), S::try_borrow(self)?))
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.  
@@ -915,16 +899,7 @@ let i = world.try_run(sys1).unwrap();
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
-        Ok(s.run((), {
-            #[cfg(feature = "parallel")]
-            {
-                S::try_borrow(self)?
-            }
-            #[cfg(not(feature = "parallel"))]
-            {
-                S::try_borrow(&self)?
-            }
-        }))
+        Ok(s.run((), S::try_borrow(self)?))
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Unwraps errors.
@@ -1254,6 +1229,12 @@ let i = world.run(sys1);
             Ok(r) => r,
             Err(err) => panic!("{:?}", err),
         }
+    }
+    pub fn all_storages(&self) -> Result<Ref<'_, &'_ AllStorages>, error::Borrow> {
+        self.all_storages.try_borrow()
+    }
+    pub fn all_storages_mut(&self) -> Result<RefMut<'_, &'_ mut AllStorages>, error::Borrow> {
+        self.all_storages.try_borrow_mut()
     }
     // /// Serializes the [World] the way `ser_config` defines it.
     // ///

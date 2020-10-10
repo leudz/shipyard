@@ -1,4 +1,4 @@
-use crate::view::{View, ViewMut};
+use crate::borrow::{View, ViewMut};
 use core::ops::Not as NotOps;
 
 /// Used to filter out components.
