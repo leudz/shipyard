@@ -1,4 +1,4 @@
-use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
+use super::info::{BatchInfo, Conflict, SystemInfo, TypeInfo, WorkloadInfo};
 use super::{Batches, Scheduler};
 use crate::borrow::Mutability;
 use crate::error;
@@ -567,64 +567,48 @@ impl WorkloadBuilder {
 
                 let mut valid = batches.parallel.len();
 
-                'batch: for (i, batch_info) in workload_info.batch_info.iter().enumerate().rev() {
-                    for system in &batch_info.systems {
-                        for system_type_info in system.borrow.iter() {
-                            for type_info in &self.borrow_info[info_range.clone()] {
-                                if !type_info.is_send || !type_info.is_sync {
-                                    system_info.conflict = Some(Conflict::NotSendSync);
-                                    batches.parallel.push(vec![system_index]);
-                                    workload_info.batch_info.push(BatchInfo {
-                                        systems: vec![system_info],
-                                    });
-                                    continue 'system;
-                                } else {
-                                    match type_info.mutability {
-                                        Mutability::Exclusive => {
-                                            if type_info.storage_id == system_type_info.storage_id
-                                                || type_info.storage_id
-                                                    == TypeId::of::<AllStorages>()
-                                                || system_type_info.storage_id
-                                                    == TypeId::of::<AllStorages>()
-                                            {
-                                                system_info.conflict = Some(Conflict::Borrow {
-                                                    type_info: type_info.clone(),
-                                                    system: SystemId {
-                                                        name: system.name,
-                                                        type_id: system.type_id,
-                                                    },
-                                                });
-
-                                                break 'batch;
-                                            }
+                'types: for type_info in &self.borrow_info[info_range.clone()] {
+                    if type_info.is_send && type_info.is_sync {
+                        for (i, batch_info) in workload_info.batch_info.iter().enumerate().rev() {
+                            for batch_info in batch_info.systems.iter().flat_map(|system| system.borrow.iter()) {
+                                match type_info.mutability {
+                                    Mutability::Exclusive => {
+                                        if type_info.storage_id == batch_info.storage_id
+                                            || type_info.storage_id == TypeId::of::<AllStorages>()
+                                            || batch_info.storage_id == TypeId::of::<AllStorages>()
+                                        {
+                                            break 'types;
                                         }
-                                        Mutability::Shared => {
-                                            if (type_info.storage_id == system_type_info.storage_id
-                                                && system_type_info.mutability
-                                                    == Mutability::Exclusive)
-                                                || type_info.storage_id
-                                                    == TypeId::of::<AllStorages>()
-                                                || system_type_info.storage_id
-                                                    == TypeId::of::<AllStorages>()
-                                            {
-                                                system_info.conflict = Some(Conflict::Borrow {
-                                                    type_info: type_info.clone(),
-                                                    system: SystemId {
-                                                        name: system.name,
-                                                        type_id: system.type_id,
-                                                    },
-                                                });
-
-                                                break 'batch;
-                                            }
+                                    }
+                                    Mutability::Shared => {
+                                        if (type_info.storage_id == batch_info.storage_id
+                                            && batch_info.mutability == Mutability::Exclusive)
+                                            || type_info.storage_id == TypeId::of::<AllStorages>()
+                                            || batch_info.storage_id == TypeId::of::<AllStorages>()
+                                        {
+                                            break 'types;
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
 
-                    valid = i;
+                            valid = i;
+                        }
+                    } else {
+                        system_info.borrow = vec![TypeInfo {
+                            name: type_name::<AllStorages>(),
+                            mutability: Mutability::Exclusive,
+                            storage_id: StorageId::of::<AllStorages>(),
+                            is_send: true,
+                            is_sync: true,
+                        }];
+                        system_info.conflict = Some(Conflict::NotSendSync);
+                        batches.parallel.push(vec![system_index]);
+                        workload_info.batch_info.push(BatchInfo {
+                            systems: vec![system_info],
+                        });
+                        continue 'system;
+                    }
                 }
 
                 if valid < batches.parallel.len() {

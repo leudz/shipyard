@@ -254,8 +254,8 @@ impl Drop for ExclusiveBorrow<'_> {
 }
 
 pub struct Ref<'a, T> {
-    pub inner: T,
-    pub borrow: SharedBorrow<'a>,
+    inner: T,
+    borrow: SharedBorrow<'a>,
 }
 
 impl<'a, T> Ref<'a, T> {
