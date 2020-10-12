@@ -1,9 +1,9 @@
 use super::IntoAbstract;
-use crate::borrow::{View, ViewMut};
 use crate::pack::update::Inserted;
 use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
+use crate::view::{View, ViewMut};
 
 impl<'tmp, 'v, T: 'static> IntoAbstract for Inserted<&'tmp View<'v, T>> {
     type AbsView = Inserted<&'tmp SparseSet<T>>;

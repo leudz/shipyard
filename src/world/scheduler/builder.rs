@@ -155,7 +155,7 @@ impl WorkloadBuilder {
         (system, _): (S, F),
     ) -> Result<&mut Self, error::InvalidSystem> {
         let old_len = self.borrow_info.len();
-        F::borrow_infos(&mut self.borrow_info);
+        F::borrow_info(&mut self.borrow_info);
 
         let borrows = &self.borrow_info[old_len..];
 

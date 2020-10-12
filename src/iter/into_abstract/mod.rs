@@ -4,10 +4,10 @@ mod modified;
 mod not;
 
 use super::abstract_mut::AbstractMut;
-use crate::borrow::{View, ViewMut};
 use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
+use crate::view::{View, ViewMut};
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them

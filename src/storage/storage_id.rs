@@ -41,6 +41,22 @@ impl PartialEq<TypeId> for StorageId {
     }
 }
 
+impl PartialOrd<TypeId> for StorageId {
+    fn partial_cmp(&self, type_id: &TypeId) -> Option<core::cmp::Ordering> {
+        if let StorageId::TypeId(self_type_id) = self {
+            self_type_id.partial_cmp(type_id)
+        } else {
+            Some(core::cmp::Ordering::Less)
+        }
+    }
+}
+
+impl Default for StorageId {
+    fn default() -> Self {
+        StorageId::Custom(core::u64::MAX)
+    }
+}
+
 // #[cfg(feature = "serde1")]
 // impl serde::Serialize for StorageId {
 //     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

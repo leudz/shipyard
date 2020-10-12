@@ -1,3 +1,7 @@
+mod view_info;
+
+pub use view_info::ViewInfo;
+
 use crate::atomic_refcell::{Ref, RefMut, SharedBorrow};
 use crate::pack::update::{Inserted, InsertedOrModified, Modified};
 use crate::sparse_set::SparseSet;
@@ -5,7 +9,7 @@ use crate::storage::{AllStorages, Entities, Unique};
 use core::ops::{Deref, DerefMut};
 
 /// Exclusive view over `AllStorages`.
-pub struct AllStoragesViewMut<'a>(pub(super) RefMut<'a, &'a mut AllStorages>);
+pub struct AllStoragesViewMut<'a>(pub(crate) RefMut<'a, &'a mut AllStorages>);
 
 impl Deref for AllStoragesViewMut<'_> {
     type Target = AllStorages;
@@ -39,8 +43,8 @@ impl AsMut<AllStorages> for AllStoragesViewMut<'_> {
 
 /// Shared view over `Entities` storage.
 pub struct EntitiesView<'a> {
-    pub(super) entities: Ref<'a, &'a Entities>,
-    pub(super) all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) entities: Ref<'a, &'a Entities>,
+    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl Deref for EntitiesView<'_> {
@@ -64,8 +68,8 @@ impl Clone for EntitiesView<'_> {
 
 /// Exclusive view over `Entities` storage.
 pub struct EntitiesViewMut<'a> {
-    pub(super) entities: RefMut<'a, &'a mut Entities>,
-    pub(super) _all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) entities: RefMut<'a, &'a mut Entities>,
+    pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl Deref for EntitiesViewMut<'_> {
@@ -86,8 +90,8 @@ impl DerefMut for EntitiesViewMut<'_> {
 
 /// Shared view over a component storage.
 pub struct View<'a, T> {
-    pub(super) sparse_set: Ref<'a, &'a SparseSet<T>>,
-    pub(super) all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) sparse_set: Ref<'a, &'a SparseSet<T>>,
+    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl<T> View<'_, T> {
@@ -130,8 +134,8 @@ impl<'a, T> Clone for View<'a, T> {
 
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T> {
-    pub(super) sparse_set: RefMut<'a, &'a mut SparseSet<T>>,
-    pub(super) _all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) sparse_set: RefMut<'a, &'a mut SparseSet<T>>,
+    pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl<T> ViewMut<'_, T> {
@@ -187,8 +191,8 @@ impl<'a, T> AsMut<SparseSet<T>> for ViewMut<'a, T> {
 
 /// Shared view over a unique component storage.
 pub struct UniqueView<'a, T> {
-    pub(super) unique: Ref<'a, &'a Unique<T>>,
-    pub(super) all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) unique: Ref<'a, &'a Unique<T>>,
+    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl<T> Deref for UniqueView<'_, T> {
@@ -219,8 +223,8 @@ impl<T> Clone for UniqueView<'_, T> {
 
 /// Exclusive view over a unique component storage.
 pub struct UniqueViewMut<'a, T> {
-    pub(super) unique: RefMut<'a, &'a mut Unique<T>>,
-    pub(super) _all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) unique: RefMut<'a, &'a mut Unique<T>>,
+    pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
 impl<T> Deref for UniqueViewMut<'_, T> {

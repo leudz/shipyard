@@ -1,8 +1,8 @@
-use crate::borrow::{View, ViewMut};
 use crate::error;
 use crate::r#mut::Mut;
 use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
+use crate::view::{View, ViewMut};
 use core::any::type_name;
 
 /// Retrives components based on their type and entity id.

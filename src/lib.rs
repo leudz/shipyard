@@ -40,6 +40,8 @@ mod pack {
 mod remove;
 //#[cfg(feature = "serde1")]
 //mod serde_setup;
+mod add_entity;
+mod contains;
 pub mod iter;
 mod r#mut;
 mod sparse_set;
@@ -48,6 +50,7 @@ mod system;
 mod system_macro;
 mod type_id;
 mod unknown_storage;
+mod view;
 mod world;
 
 #[cfg(feature = "non_send")]
@@ -57,12 +60,10 @@ pub use crate::borrow::NonSendSync;
 #[cfg(feature = "non_sync")]
 #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
 pub use crate::borrow::NonSync;
+pub use add_entity::AddEntity;
 #[doc(hidden)]
 pub use add_unique_macro::{AddUnique, Wrap};
-pub use borrow::{
-    AllStoragesBorrow, AllStoragesViewMut, Borrow, EntitiesView, EntitiesViewMut, FakeBorrow,
-    Mutability, UniqueView, UniqueViewMut, View, ViewMut,
-};
+pub use borrow::{AllStoragesBorrow, Borrow, FakeBorrow, Mutability};
 pub use delete::Delete;
 pub use entity_builder::EntityBuilder;
 pub use get::Get;
@@ -70,13 +71,16 @@ pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use not::Not;
 pub use pack::{loose::LoosePack, tight::TightPack};
 pub use remove::Remove;
+pub use view::{
+    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewInfo,
+    ViewMut,
+};
 //#[cfg(feature = "serde1")]
 //pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
 pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
+pub use contains::Contains;
 pub use r#mut::Mut;
-pub use sparse_set::{
-    sort, sort::IntoSortable, AddComponentUnchecked, Contains, OldComponent, SparseSet,
-};
+pub use sparse_set::{sort, sort::IntoSortable, AddComponentUnchecked, OldComponent, SparseSet};
 pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId, Unique};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};

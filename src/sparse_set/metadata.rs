@@ -13,6 +13,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
+use crate::storage::StorageId;
 
 pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<EntityId>();
 
@@ -105,6 +106,35 @@ impl TightPack {
     }
     /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
     pub(crate) fn is_packable(&self, components: &[TypeId]) -> bool {
+        // the entity doesn't have enough components to be packed
+        if components.len() < self.types.len() {
+            return false;
+        }
+
+        // current component index
+        let mut comp = 0;
+
+        // we know packed types are at most as many as components so we'll use them to drive the iteration
+        for &packed_type in &*self.types {
+            // we skip components with a lower TypeId
+            comp += components[comp..]
+                .iter()
+                .take_while(|&&component| component < packed_type)
+                .count();
+
+            // since both slices are sorted, if the types aren't equal it means components is missing a packed type
+            if components
+                .get(comp)
+                .filter(|&&component| component == packed_type)
+                .is_none()
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+    pub(crate) fn is_storage_packable(&self, components: &[StorageId]) -> bool {
         // the entity doesn't have enough components to be packed
         if components.len() < self.types.len() {
             return false;
@@ -234,6 +264,67 @@ impl LoosePack {
     }
     /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
     pub(crate) fn is_packable(&self, components: &[TypeId]) -> bool {
+        if components.len() < self.tight_types.len() + self.loose_types.len() {
+            // the entity doesn't have enough components to be packed
+            return false;
+        }
+
+        // current tight type
+        let mut tight = 0;
+        // current loose type
+        let mut loose = 0;
+        // current component
+        let mut comp = 0;
+
+        // we use the packed types to drive the iteration since there are at most the same count as components
+        loop {
+            // since both arrays are sorted and a value can't be in both we can iterate just once
+            // but we have to make sure to not stop the iteration too early when tight or loose ends
+            match (self.tight_types.get(tight), self.loose_types.get(loose)) {
+                (Some(&tight_type), loose_type)
+                    if loose_type.is_none() || tight_type < *loose_type.unwrap() =>
+                {
+                    // we skip components with a lower TypeId
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < tight_type)
+                        .count();
+
+                    if components
+                        .get(comp)
+                        .filter(|&&component| component == tight_type)
+                        .is_some()
+                    {
+                        tight += 1;
+                    } else {
+                        return false;
+                    }
+                }
+                (Some(_), None) => unreachable!(),
+                (_, Some(&loose_type)) => {
+                    comp += components[comp..]
+                        .iter()
+                        .take_while(|&&component| component < loose_type)
+                        .count();
+
+                    if components
+                        .get(comp)
+                        .filter(|&&component| component == loose_type)
+                        .is_some()
+                    {
+                        loose += 1;
+                    } else {
+                        return false;
+                    }
+                }
+                (None, None) => break,
+            }
+        }
+
+        tight == self.tight_types.len() && loose == self.loose_types.len()
+    }
+    /// Returns `Ok(packed_types)` if `components` contains at least all components in `self.types`
+    pub(crate) fn is_storage_packable(&self, components: &[StorageId]) -> bool {
         if components.len() < self.tight_types.len() + self.loose_types.len() {
             // the entity doesn't have enough components to be packed
             return false;

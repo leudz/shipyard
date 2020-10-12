@@ -13,7 +13,7 @@ pub struct Nothing;
 pub trait System<'s, Data, B, R> {
     fn run(self, data: Data, b: B) -> R;
     fn try_borrow(world: &'s World) -> Result<B, error::GetStorage>;
-    fn borrow_infos(infos: &mut Vec<TypeInfo>);
+    fn borrow_info(info: &mut Vec<TypeInfo>);
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -29,7 +29,7 @@ where
         Ok(Nothing)
     }
 
-    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
+    fn borrow_info(_: &mut Vec<TypeInfo>) {}
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -45,7 +45,7 @@ where
         Ok(Nothing)
     }
 
-    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
+    fn borrow_info(_: &mut Vec<TypeInfo>) {}
 }
 
 macro_rules! impl_system {
@@ -59,9 +59,9 @@ macro_rules! impl_system {
                 Ok(($($type::try_borrow(world)?,)+))
             }
 
-            fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+            fn borrow_info(info: &mut Vec<TypeInfo>) {
                 $(
-                    $type::borrow_infos(infos);
+                    $type::borrow_info(info);
                 )+
             }
         }
@@ -75,9 +75,9 @@ macro_rules! impl_system {
                 Ok(($($type::try_borrow(world)?,)+))
             }
 
-            fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+            fn borrow_info(info: &mut Vec<TypeInfo>) {
                 $(
-                    $type::borrow_infos(infos);
+                    $type::borrow_info(info);
                 )+
             }
         }

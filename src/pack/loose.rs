@@ -1,8 +1,8 @@
-use crate::borrow::ViewMut;
 use crate::error;
 use crate::iter::{IntoIter, IntoWithId};
 use crate::sparse_set::{LoosePack as LoosePackInfo, Pack, SparseSet};
 use crate::type_id::TypeId;
+use crate::view::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;

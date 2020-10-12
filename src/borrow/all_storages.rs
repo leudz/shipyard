@@ -1,7 +1,7 @@
-use super::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 use crate::error;
 use crate::sparse_set::SparseSet;
 use crate::storage::{AllStorages, Entities};
+use crate::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 #[cfg(feature = "non_send")]
 use crate::NonSend;
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -9,7 +9,9 @@ use crate::NonSendSync;
 #[cfg(feature = "non_sync")]
 use crate::NonSync;
 
+/// Allows a type to be borrowed by [`AllStorages::borrow`] and [`AllStorages::run`].
 pub trait AllStoragesBorrow<'a> {
+    /// This function is where the actual borrowing happens.
     fn try_borrow(all_storages: &'a AllStorages) -> Result<Self, error::GetStorage>
     where
         Self: Sized;

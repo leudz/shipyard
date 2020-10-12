@@ -1,15 +1,12 @@
 mod add_component;
-mod contains;
 // #[cfg(feature = "serde1")]
 // mod deser;
 mod metadata;
 pub mod sort;
 mod sparse_array;
-mod view_add_entity;
 mod window;
 
 pub use add_component::AddComponentUnchecked;
-pub use contains::Contains;
 
 // #[cfg(feature = "serde1")]
 // pub(crate) use deser::SparseSetSerializer;
@@ -20,7 +17,6 @@ pub use contains::Contains;
 pub(crate) use metadata::{
     LoosePack, Metadata, Pack, TightPack, BUCKET_SIZE as SHARED_BUCKET_SIZE,
 };
-pub(crate) use view_add_entity::ViewAddEntity;
 pub(crate) use window::FullRawWindowMut;
 
 use crate::error;

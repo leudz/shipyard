@@ -1,7 +1,7 @@
-use crate::borrow::ViewMut;
 use crate::error;
 use crate::sparse_set::{Pack, SparseSet, TightPack as TightPackInfo};
 use crate::type_id::TypeId;
+use crate::view::ViewMut;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;

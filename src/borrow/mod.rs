@@ -6,7 +6,6 @@ mod non_send;
 mod non_send_sync;
 #[cfg(feature = "non_sync")]
 mod non_sync;
-mod view;
 
 pub use all_storages::AllStoragesBorrow;
 pub use fake_borrow::FakeBorrow;
@@ -16,14 +15,14 @@ pub use non_send::NonSend;
 pub use non_send_sync::NonSendSync;
 #[cfg(feature = "non_sync")]
 pub use non_sync::NonSync;
-pub use view::{
-    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
-};
 
 use crate::atomic_refcell::Ref;
 use crate::error;
 use crate::sparse_set::SparseSet;
 use crate::storage::{AllStorages, Entities, StorageId, Unique};
+use crate::view::{
+    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+};
 use crate::world::{TypeInfo, World};
 use alloc::vec::Vec;
 use core::any::type_name;
@@ -34,12 +33,16 @@ pub enum Mutability {
     Exclusive,
 }
 
+/// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and worklaods.
 pub trait Borrow<'a> {
+    /// This function is where the actual borrowing happens.
     fn try_borrow(world: &'a World) -> Result<Self, error::GetStorage>
     where
         Self: Sized;
-
-    fn borrow_infos(infos: &mut Vec<TypeInfo>);
+    /// This information is used during workload creation to determine which systems can run in parallel.
+    ///
+    /// A borrow error might happen if the information is not correct.
+    fn borrow_info(info: &mut Vec<TypeInfo>);
 }
 
 impl<'a> Borrow<'a> for () {
@@ -51,7 +54,7 @@ impl<'a> Borrow<'a> for () {
         Ok(())
     }
 
-    fn borrow_infos(_: &mut Vec<TypeInfo>) {}
+    fn borrow_info(_: &mut Vec<TypeInfo>) {}
 }
 
 impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
@@ -64,7 +67,7 @@ impl<'a> Borrow<'a> for AllStoragesViewMut<'a> {
             .map_err(error::GetStorage::AllStoragesBorrow)
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
             name: type_name::<AllStorages>(),
             mutability: Mutability::Exclusive,
@@ -96,7 +99,7 @@ impl<'a> Borrow<'a> for EntitiesView<'a> {
             .map_err(error::GetStorage::Entities)
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
             name: type_name::<Entities>(),
             mutability: Mutability::Shared,
@@ -128,7 +131,7 @@ impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
             .map_err(error::GetStorage::Entities)
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
             name: type_name::<Entities>(),
             mutability: Mutability::Exclusive,
@@ -159,9 +162,9 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<Self>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: true,
@@ -193,9 +196,9 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<View<'a, T>>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: false,
@@ -227,9 +230,9 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<View<'a, T>>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: true,
@@ -261,9 +264,9 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<View<'a, T>>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: false,
@@ -292,9 +295,9 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<Self>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: true,
@@ -326,9 +329,9 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<ViewMut<'a, T>>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: false,
@@ -360,9 +363,9 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<ViewMut<'a, T>>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: true,
@@ -394,9 +397,9 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
             })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<ViewMut<'a, T>>(),
+            name: type_name::<SparseSet<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T>>(),
             is_send: false,
@@ -423,9 +426,9 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueView<'a, T> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<Self>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: true,
@@ -455,9 +458,9 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<UniqueView<'a, T>>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: false,
@@ -487,9 +490,9 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<UniqueView<'a, T>>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: true,
@@ -518,9 +521,9 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
             })
         })
     }
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<UniqueView<'a, T>>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: false,
@@ -547,9 +550,9 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMut<'a, T> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<Self>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: true,
@@ -579,9 +582,9 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<UniqueViewMut<'a, T>>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: false,
@@ -611,9 +614,9 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<UniqueViewMut<'a, T>>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: true,
@@ -643,9 +646,9 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
         })
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
-            name: type_name::<UniqueViewMut<'a, T>>(),
+            name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: false,
@@ -660,7 +663,7 @@ impl<T: 'static> Borrow<'_> for FakeBorrow<T> {
         Ok(FakeBorrow::new())
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
             name: type_name::<T>(),
             mutability: Mutability::Exclusive,
@@ -677,8 +680,8 @@ impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
         Ok(T::try_borrow(world).ok())
     }
 
-    fn borrow_infos(infos: &mut Vec<TypeInfo>) {
-        T::borrow_infos(infos);
+    fn borrow_info(infos: &mut Vec<TypeInfo>) {
+        T::borrow_info(infos);
     }
 }
 
@@ -692,9 +695,9 @@ macro_rules! impl_borrow {
                 )+))
             }
 
-            fn borrow_infos(infos: &mut Vec<TypeInfo>) {
+            fn borrow_info(infos: &mut Vec<TypeInfo>) {
                 $(
-                    $type::borrow_infos(infos);
+                    $type::borrow_info(infos);
                 )+
             }
         }

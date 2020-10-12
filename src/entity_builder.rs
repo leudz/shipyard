@@ -1,14 +1,15 @@
+use crate::add_entity::AddEntity;
 use crate::atomic_refcell::{Ref, SharedBorrow};
+use crate::borrow::AllStoragesBorrow;
 #[cfg(feature = "non_send")]
 use crate::borrow::NonSend;
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
 use crate::borrow::NonSendSync;
 #[cfg(feature = "non_sync")]
 use crate::borrow::NonSync;
-use crate::borrow::{AllStoragesBorrow, EntitiesViewMut, ViewMut};
 use crate::error;
-use crate::sparse_set::ViewAddEntity;
 use crate::storage::{AllStorages, EntityId};
+use crate::view::{EntitiesViewMut, ViewMut};
 
 /// Keeps information to create an entity.
 pub struct EntityBuilder<'a, C, S> {
@@ -485,7 +486,7 @@ macro_rules! impl_entity_builder {
             ///
             /// Borrows the `Entities` storage.
             #[inline]
-            pub fn try_build(self) -> Result<EntityId, error::GetStorage> where ($($storage_type,)+): ViewAddEntity<Component = ($($type,)+)> {
+            pub fn try_build(self) -> Result<EntityId, error::GetStorage> where ($($storage_type,)+): AddEntity<Component = ($($type,)+)> {
                 Ok(self
                     .all_storages
                     .try_borrow::<EntitiesViewMut<'_>>()?
@@ -499,7 +500,7 @@ macro_rules! impl_entity_builder {
             #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
             #[track_caller]
             #[inline]
-            pub fn build(self) -> EntityId where ($($storage_type,)+): ViewAddEntity<Component = ($($type,)+)> {
+            pub fn build(self) -> EntityId where ($($storage_type,)+): AddEntity<Component = ($($type,)+)> {
                 match self.try_build() {
                     Ok(id) => id,
                     Err(err) => panic!("{:?}", err),
@@ -517,7 +518,7 @@ macro_rules! entity_builder {
     ($(($type: ident, $storage_type: ident, $index: tt))+;) => {
         impl<'a, $($type: 'static,)+ $($storage_type),+> EntityBuilder<'a, ($($type,)+), ($($storage_type,)+)> {
             #[inline]
-            pub fn try_build(self) -> Result<EntityId, error::GetStorage> where ($($storage_type,)+): ViewAddEntity<Component = ($($type,)+)> {
+            pub fn try_build(self) -> Result<EntityId, error::GetStorage> where ($($storage_type,)+): AddEntity<Component = ($($type,)+)> {
                 Ok(self
                     .all_storages
                     .try_borrow::<EntitiesViewMut<'_>>()?
@@ -528,7 +529,7 @@ macro_rules! entity_builder {
             #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
             #[track_caller]
             #[inline]
-            pub fn build(self) -> EntityId where ($($storage_type,)+): ViewAddEntity<Component = ($($type,)+)> {
+            pub fn build(self) -> EntityId where ($($storage_type,)+): AddEntity<Component = ($($type,)+)> {
                 match self.try_build() {
                     Ok(id) => id,
                     Err(err) => panic!("{:?}", err),

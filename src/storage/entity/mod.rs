@@ -10,7 +10,7 @@ pub use iterator::EntitiesIter;
 use crate::error;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig};
-use crate::sparse_set::ViewAddEntity;
+use crate::add_entity::AddEntity;
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
 use crate::unknown_storage::UnknownStorage;
@@ -45,6 +45,7 @@ pub struct Entities {
 }
 
 impl Entities {
+    #[inline]
     pub(crate) fn new() -> Self {
         Entities {
             data: Vec::new(),
@@ -52,6 +53,7 @@ impl Entities {
         }
     }
     /// Returns true if `entity` matches a living entity.
+    #[inline]
     pub fn is_alive(&self, entity: EntityId) -> bool {
         // SAFE we're in bound
         entity.uindex() < self.data.len()
@@ -73,6 +75,7 @@ impl Entities {
     ///     entities.try_add_component(&mut u32s, 0, entity).unwrap();
     /// });
     /// ```
+    #[inline]
     pub fn try_add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,
@@ -99,6 +102,7 @@ impl Entities {
     /// });
     /// ```
     #[track_caller]
+    #[inline]
     pub fn add_component<C, S: AddComponent<C>>(
         &self,
         storages: S,
@@ -184,15 +188,13 @@ impl Entities {
     ///     },
     /// );
     /// ```
-    pub fn add_entity<T: ViewAddEntity>(
-        &mut self,
-        storages: T,
-        component: T::Component,
-    ) -> EntityId {
+    #[inline]
+    pub fn add_entity<T: AddEntity>(&mut self, storages: T, component: T::Component) -> EntityId {
         let entity_id = self.generate();
-        storages.add_entity(component, entity_id);
+        storages.add_entity(entity_id, component, &[]);
         entity_id
     }
+    #[inline]
     pub fn iter(&self) -> EntitiesIter<'_> {
         self.into_iter()
     }

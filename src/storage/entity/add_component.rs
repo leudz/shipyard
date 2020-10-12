@@ -1,8 +1,8 @@
 use super::{Entities, EntityId};
-use crate::borrow::ViewMut;
 use crate::error;
 use crate::sparse_set::{Pack, SparseSet};
 use crate::type_id::TypeId;
+use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::any::type_name;
 
