@@ -55,9 +55,11 @@ impl Entities {
     /// Returns true if `entity` matches a living entity.
     #[inline]
     pub fn is_alive(&self, entity: EntityId) -> bool {
-        // SAFE we're in bound
-        entity.uindex() < self.data.len()
-            && entity == unsafe { *self.data.get_unchecked(entity.uindex()) }
+        if let Some(&self_entity) = self.data.get(entity.uindex()) {
+            entity == self_entity
+        } else {
+            false
+        }
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.
@@ -115,19 +117,22 @@ impl Entities {
         }
     }
     pub(super) fn generate(&mut self) -> EntityId {
-        let index = self.list.map(|(_, old)| old);
         if let Some((new, ref mut old)) = self.list {
+            let old_index = *old;
+
             if new == *old {
                 self.list = None;
             } else {
-                // SAFE old is always valid
-                *old = unsafe { self.data.get_unchecked(*old).uindex() };
+                // SAFE old_index is always valid
+                *old = unsafe { self.data.get_unchecked(old_index).uindex() };
             }
-        }
-        if let Some(index) = index {
-            // SAFE index is always in bound
-            unsafe { self.data.get_unchecked_mut(index).set_index(index as u64) };
-            unsafe { *self.data.get_unchecked(index) }
+            // SAFE old_index is always valid
+            unsafe {
+                self.data
+                    .get_unchecked_mut(old_index)
+                    .set_index(old_index as u64);
+                *self.data.get_unchecked(old_index)
+            }
         } else {
             let entity_id = EntityId::new(self.data.len() as u64);
             self.data.push(entity_id);
@@ -167,6 +172,7 @@ impl Entities {
                     self.list = Some((entity_id.uindex(), entity_id.uindex()));
                 }
             }
+
             true
         } else {
             false
@@ -205,6 +211,7 @@ impl UnknownStorage for Entities {
         if self.data.is_empty() {
             return;
         }
+
         let mut last_alive = self.data.len() as u64 - 1;
         for (i, id) in self.data.iter_mut().enumerate().rev() {
             let target = last_alive;

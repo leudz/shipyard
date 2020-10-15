@@ -45,11 +45,8 @@ impl EntityId {
     pub(crate) fn set_index(&mut self, index: u64) {
         assert!(index < Self::INDEX_MASK);
         // SAFE never zero
-        self.0 = unsafe {
-            NonZeroU64::new_unchecked(
-                (index + 1) | (self.0.get() & (Self::GEN_MASK | Self::META_MASK)),
-            )
-        }
+        self.0 =
+            unsafe { NonZeroU64::new_unchecked((index + 1) | (self.0.get() & !Self::INDEX_MASK)) }
     }
     /// Returns the generation part of the EntityId.
     #[inline]
@@ -73,7 +70,7 @@ impl EntityId {
     }
     #[inline]
     pub(crate) fn is_modified(self) -> bool {
-        self.0.get() & Self::META_MASK == Self::MODIFIED
+        (self.0.get() & Self::META_MASK) == Self::MODIFIED
     }
     #[inline]
     pub(crate) fn set_modified(&mut self) {
@@ -83,7 +80,7 @@ impl EntityId {
     }
     #[inline]
     pub(crate) fn is_inserted(self) -> bool {
-        self.0.get() & Self::META_MASK == Self::INSERTED
+        (self.0.get() & Self::META_MASK) == Self::INSERTED
     }
     #[inline]
     pub(crate) fn set_inserted(&mut self) {
@@ -93,7 +90,7 @@ impl EntityId {
     }
     #[inline]
     pub(crate) fn is_shared(self) -> bool {
-        self.0.get() & Self::GEN_MASK == Self::SHARED
+        (self.0.get() & Self::GEN_MASK) == Self::SHARED
     }
     /// Make a new EntityId with the given index.
     #[inline]
@@ -106,11 +103,7 @@ impl EntityId {
     #[inline]
     pub(crate) fn new_shared(entity: Self) -> Self {
         // SAFE never zero
-        EntityId(unsafe {
-            NonZeroU64::new_unchecked(
-                (((entity.0.get() & Self::GEN_MASK) >> Self::INDEX_LEN) + 1) | Self::SHARED,
-            )
-        })
+        EntityId(unsafe { NonZeroU64::new_unchecked((entity.gen() + 1) | Self::SHARED) })
     }
 
     pub(crate) fn new_from_parts(index: u64, gen: u16, meta: u8) -> Self {
@@ -118,9 +111,8 @@ impl EntityId {
         assert!(gen as u64 <= Self::max_gen());
         assert!(
             meta == 0
-                || meta as u64 == Self::MODIFIED
-                || meta as u64 == Self::INSERTED
-                || meta as u64 == Self::SHARED
+                || meta as u64 == (Self::MODIFIED >> (Self::INDEX_LEN + Self::GEN_LEN))
+                || meta as u64 == (Self::INSERTED >> (Self::INDEX_LEN + Self::GEN_LEN))
         );
 
         EntityId(unsafe {
@@ -164,11 +156,11 @@ impl EntityId {
     }
     #[inline]
     pub(crate) fn max_gen() -> u64 {
-        !0 >> (Self::INDEX_LEN + Self::META_LEN)
+        Self::GEN_MASK >> Self::INDEX_LEN
     }
     #[inline]
     pub(crate) fn is_dead(self) -> bool {
-        self.0.get() & Self::GEN_MASK == Self::GEN_MASK
+        (self.0.get() & Self::GEN_MASK) == Self::GEN_MASK
     }
     #[inline]
     pub(crate) fn copy_index(&mut self, other: EntityId) {
@@ -208,7 +200,7 @@ impl EntityId {
 
 impl PartialEq for EntityId {
     fn eq(&self, other: &Self) -> bool {
-        self.0.get() & !Self::META_MASK == other.0.get() & !Self::META_MASK
+        (self.0.get() & !Self::META_MASK) == (other.0.get() & !Self::META_MASK)
     }
 }
 

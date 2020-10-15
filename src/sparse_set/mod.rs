@@ -206,13 +206,12 @@ impl<T> SparseSet<T> {
     /// Returns `None` if the entity isn't shared.
     #[inline]
     pub fn shared_id(&self, shared: EntityId) -> Option<EntityId> {
-        match self.sparse.get(shared) {
-            Some(sparse_entity)
-                if sparse_entity.is_shared() && sparse_entity.index() == shared.gen() =>
-            {
-                self.metadata.shared.shared_index(shared)
-            }
-            _ => None,
+        let sparse_entity = self.sparse.get(shared)?;
+
+        if sparse_entity.is_shared() && sparse_entity.index() == shared.gen() {
+            self.metadata.shared.shared_index(shared)
+        } else {
+            None
         }
     }
 }
@@ -370,37 +369,33 @@ impl<T> SparseSet<T> {
             }
 
             match &mut self.metadata.pack {
-                Pack::Tight(tight) => {
-                    if sparse_entity.uindex() < tight.len {
-                        tight.len -= 1;
+                Pack::Tight(tight) if sparse_entity.uindex() < tight.len => {
+                    tight.len -= 1;
 
-                        unsafe {
-                            self.sparse
-                                .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
-                                .copy_index(sparse_entity);
-                        }
-
-                        self.dense.swap(sparse_entity.uindex(), tight.len);
-                        self.data.swap(sparse_entity.uindex(), tight.len);
-
-                        sparse_entity.set_index(tight.len as u64);
+                    unsafe {
+                        self.sparse
+                            .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
+                            .copy_index(sparse_entity);
                     }
+
+                    self.dense.swap(sparse_entity.uindex(), tight.len);
+                    self.data.swap(sparse_entity.uindex(), tight.len);
+
+                    sparse_entity.set_index(tight.len as u64);
                 }
-                Pack::Loose(loose) => {
-                    if sparse_entity.uindex() < loose.len {
-                        loose.len -= 1;
+                Pack::Loose(loose) if sparse_entity.uindex() < loose.len => {
+                    loose.len -= 1;
 
-                        unsafe {
-                            self.sparse
-                                .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
-                                .copy_index(sparse_entity);
-                        }
-
-                        self.dense.swap(sparse_entity.uindex(), loose.len);
-                        self.data.swap(sparse_entity.uindex(), loose.len);
-
-                        sparse_entity.set_index(loose.len as u64);
+                    unsafe {
+                        self.sparse
+                            .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
+                            .copy_index(sparse_entity);
                     }
+
+                    self.dense.swap(sparse_entity.uindex(), loose.len);
+                    self.data.swap(sparse_entity.uindex(), loose.len);
+
+                    sparse_entity.set_index(loose.len as u64);
                 }
                 _ => {}
             }
@@ -768,42 +763,34 @@ impl<T> SparseSet<T> {
     pub(crate) fn unpack(&mut self, entity: EntityId) {
         if let Some(sparse_entity) = self.sparse.get(entity) {
             match &mut self.metadata.pack {
-                Pack::Tight(tight) => {
-                    if sparse_entity.uindex() < tight.len {
-                        tight.len -= 1;
+                Pack::Tight(tight) if sparse_entity.uindex() < tight.len => {
+                    tight.len -= 1;
 
-                        self.dense.swap(sparse_entity.uindex(), tight.len);
-                        self.data.swap(sparse_entity.uindex(), tight.len);
+                    self.dense.swap(sparse_entity.uindex(), tight.len);
+                    self.data.swap(sparse_entity.uindex(), tight.len);
 
-                        unsafe {
-                            self.sparse
-                                .get_mut_unchecked(
-                                    *self.dense.get_unchecked(sparse_entity.uindex()),
-                                )
-                                .copy_index(sparse_entity);
-                            self.sparse
-                                .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
-                                .set_index(tight.len as u64);
-                        }
+                    unsafe {
+                        self.sparse
+                            .get_mut_unchecked(*self.dense.get_unchecked(sparse_entity.uindex()))
+                            .copy_index(sparse_entity);
+                        self.sparse
+                            .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
+                            .set_index(tight.len as u64);
                     }
                 }
-                Pack::Loose(loose) => {
-                    if sparse_entity.uindex() < loose.len {
-                        loose.len -= 1;
+                Pack::Loose(loose) if sparse_entity.uindex() < loose.len => {
+                    loose.len -= 1;
 
-                        self.dense.swap(sparse_entity.uindex(), loose.len);
-                        self.data.swap(sparse_entity.uindex(), loose.len);
+                    self.dense.swap(sparse_entity.uindex(), loose.len);
+                    self.data.swap(sparse_entity.uindex(), loose.len);
 
-                        unsafe {
-                            self.sparse
-                                .get_mut_unchecked(
-                                    *self.dense.get_unchecked(sparse_entity.uindex()),
-                                )
-                                .copy_index(sparse_entity);
-                            self.sparse
-                                .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
-                                .set_index(loose.len as u64);
-                        }
+                    unsafe {
+                        self.sparse
+                            .get_mut_unchecked(*self.dense.get_unchecked(sparse_entity.uindex()))
+                            .copy_index(sparse_entity);
+                        self.sparse
+                            .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
+                            .set_index(loose.len as u64);
                     }
                 }
                 _ => {}

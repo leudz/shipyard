@@ -37,16 +37,13 @@ impl<'w, T> FullRawWindowMut<'w, T> {
     }
     #[inline]
     pub(crate) fn index_of_owned(&self, entity: EntityId) -> Option<usize> {
-        match self.sparse_index(entity) {
-            Some(sparse_entity)
-                if sparse_entity.is_owned()
-                    && entity.gen() == sparse_entity.gen()
-                    && sparse_entity.uindex() < self.dense_len =>
-            {
+        self.sparse_index(entity).and_then(|sparse_entity| {
+            if sparse_entity.is_owned() && entity.gen() == sparse_entity.gen() {
                 Some(sparse_entity.uindex())
+            } else {
+                None
             }
-            _ => None,
-        }
+        })
     }
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this window and until a modification happens.
@@ -66,6 +63,7 @@ impl<'w, T> FullRawWindowMut<'w, T> {
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
         if entity.bucket() < self.sparse_len {
             let bucket = unsafe { ptr::read(self.sparse.add(entity.bucket())) };
+
             if !bucket.is_null() {
                 Some(unsafe { ptr::read(bucket.add(entity.bucket_index())) })
             } else {
