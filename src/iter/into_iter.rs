@@ -254,6 +254,7 @@ macro_rules! impl_into_iter {
                                                     smallest = len;
                                                     smallest_dense = self.$index.dense();
                                                     factored_len = factor;
+                                                    mask = 0;
                                                 }
                                             }
                                         }
@@ -310,6 +311,7 @@ macro_rules! impl_into_iter {
                                                     smallest = len;
                                                     smallest_dense = self.$index.dense();
                                                     factored_len = factor;
+                                                    mask = 0;
                                                 }
                                             }
                                         }
@@ -333,6 +335,7 @@ macro_rules! impl_into_iter {
                                                 smallest = len;
                                                 smallest_dense = self.$index.dense();
                                                 factored_len = factor;
+                                                mask = 0;
                                             }
                                         }
                                     }
