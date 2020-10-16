@@ -224,7 +224,7 @@ impl Ord for EntityId {
 
 impl core::hash::Hash for EntityId {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        state.write_u64(self.0.get() & !Self::META_MASK);
     }
 }
 
