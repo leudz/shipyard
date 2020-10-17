@@ -301,10 +301,6 @@ impl<T> SparseSet<T> {
 
 impl<T> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage is tightly or loosly packed.
     #[inline]
     pub fn remove(&mut self, entity: EntityId) -> Option<OldComponent<T>>
     where
@@ -363,10 +359,6 @@ impl<T> SparseSet<T> {
         }
     }
     /// Deletes `entity`'s component from this storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage is tightly or loosly packed.
     #[inline]
     pub fn delete(&mut self, entity: EntityId) -> bool
     where

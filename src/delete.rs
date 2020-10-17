@@ -1,10 +1,11 @@
+use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
 use crate::view::ViewMut;
 
 /// Trait used to delete component(s).
 pub trait Delete {
     /// Deletes the component(s) of an entity, they won't be returned.  
-    /// A tuple is always needed, even for a single view.  
+    /// Returns `true` if all storages deleted a component.
     ///
     /// ### Example:
     /// ```
@@ -20,29 +21,51 @@ pub trait Delete {
     ///     },
     /// );
     /// ```
-    fn delete(self, entity: EntityId);
+    fn delete(&mut self, entity: EntityId) -> bool;
+}
+
+impl Delete for () {
+    #[inline]
+    fn delete(&mut self, _: EntityId) -> bool {
+        false
+    }
+}
+
+impl<T: 'static> Delete for ViewMut<'_, T> {
+    #[inline]
+    fn delete(&mut self, entity: EntityId) -> bool {
+        SparseSet::delete(&mut *self, entity)
+    }
+}
+
+impl<T: 'static> Delete for &mut ViewMut<'_, T> {
+    #[inline]
+    fn delete(&mut self, entity: EntityId) -> bool {
+        SparseSet::delete(&mut *self, entity)
+    }
 }
 
 macro_rules! impl_delete_component {
-    ($(($type: ident, $index: tt))+) => {
-        impl<$($type: 'static),+> Delete for ($(&'_ mut ViewMut<'_, $type>,)+) {
-            fn delete(self, entity: EntityId) {
+    ($(($storage: ident, $index: tt))+) => {
+        impl<$($storage: Delete),+> Delete for ($($storage,)+) {
+            #[inline]
+            fn delete(&mut self, entity: EntityId) -> bool {
                 $(
-                    self.$index.delete(entity);
-                )+
+                    self.$index.delete(entity)
+                )&&+
             }
         }
     }
 }
 
 macro_rules! delete_component {
-    ($(($type: ident, $index: tt))+; ($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_delete_component![$(($type, $index))*];
-        delete_component![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
+    ($(($storage: ident, $index: tt))+; ($storage1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_delete_component![$(($storage, $index))*];
+        delete_component![$(($storage, $index))* ($storage1, $index1); $(($queue_type, $queue_index))*];
     };
-    ($(($type: ident, $index: tt))+;) => {
-        impl_delete_component![$(($type, $index))*];
+    ($(($storage: ident, $index: tt))+;) => {
+        impl_delete_component![$(($storage, $index))*];
     }
 }
 
-delete_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+delete_component![(ViewA, 0); (ViewB, 1) (ViewC, 2) (ViewD, 3) (ViewE, 4) (ViewF, 5) (ViewG, 6) (ViewH, 7) (ViewI, 8) (ViewJ, 9)];

@@ -1,19 +1,14 @@
-use crate::sparse_set::OldComponent;
+use crate::sparse_set::{OldComponent, SparseSet};
 use crate::storage::EntityId;
 use crate::view::ViewMut;
 
 /// Removes component from entities.
 pub trait Remove {
     type Out;
-    /// Removes component in `entity`, if the entity had them, they will be returned.
+    /// Removes component in `entity`, if the entity had a component, they will be returned.
     ///
     /// Multiple components can be removed at the same time using a tuple.
     ///
-    /// `T` has to be a tuple even for a single type.
-    /// In this case use (T,).
-    ///
-    /// The compiler has trouble inferring the return types.
-    /// You'll often have to use the full path `Remove::<type>::remove`.
     /// ### Example
     /// ```
     /// use shipyard::{EntitiesViewMut, OldComponent, Remove, ViewMut, World};
@@ -26,18 +21,43 @@ pub trait Remove {
     ///     assert_eq!(old, (Some(OldComponent::Owned(0)), Some(OldComponent::Owned(1))));
     /// });
     /// ```
-    fn remove(self, entity: EntityId) -> Self::Out;
+    fn remove(&mut self, entity: EntityId) -> Self::Out;
+}
+
+impl Remove for () {
+    type Out = ();
+
+    #[inline]
+    fn remove(&mut self, _: EntityId) -> Self::Out {}
+}
+
+impl<T: 'static> Remove for ViewMut<'_, T> {
+    type Out = Option<OldComponent<T>>;
+
+    #[inline]
+    fn remove(&mut self, entity: EntityId) -> Self::Out {
+        SparseSet::remove(&mut *self, entity)
+    }
+}
+
+impl<T: 'static> Remove for &mut ViewMut<'_, T> {
+    type Out = Option<OldComponent<T>>;
+
+    #[inline]
+    fn remove(&mut self, entity: EntityId) -> Self::Out {
+        SparseSet::remove(&mut *self, entity)
+    }
 }
 
 macro_rules! impl_remove_component {
-    ($(($type: ident, $index: tt))+) => {
-        impl<$($type),+> Remove for ($(&'_ mut ViewMut<'_, $type>,)+) {
-            type Out = ($(Option<OldComponent<$type>>,)+);
+    ($(($storage: ident, $index: tt))+) => {
+        impl<$($storage: Remove),+> Remove for ($($storage,)+) {
+            type Out = ($($storage::Out,)+);
 
             #[inline]
-            fn remove(self, entity: EntityId) -> Self::Out {
+            fn remove(&mut self, entity: EntityId) -> Self::Out {
                 ($(
-                    self.$index.actual_remove(entity),
+                    self.$index.remove(entity),
                 )+)
             }
         }
@@ -45,13 +65,13 @@ macro_rules! impl_remove_component {
 }
 
 macro_rules! remove_component {
-    ($(($type: ident, $index: tt))+; ($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_remove_component![$(($type, $index))*];
-        remove_component![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
+    ($(($storage: ident, $index: tt))+; ($storage1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_remove_component![$(($storage, $index))*];
+        remove_component![$(($storage, $index))* ($storage1, $index1); $(($queue_type, $queue_index))*];
     };
-    ($(($type: ident, $index: tt))+;) => {
-        impl_remove_component![$(($type, $index))*];
+    ($(($storage: ident, $index: tt))+;) => {
+        impl_remove_component![$(($storage, $index))*];
     }
 }
 
-remove_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+remove_component![(ViewA, 0); (ViewB, 1) (ViewC, 2) (ViewD, 3) (ViewE, 4) (ViewF, 5) (ViewG, 6) (ViewH, 7) (ViewI, 8) (ViewJ, 9)];
