@@ -4,12 +4,9 @@ mod into_abstract;
 mod into_iter;
 #[allow(clippy::module_inception)]
 mod iter;
-mod loose;
 mod mixed;
 #[cfg(feature = "parallel")]
 mod par_iter;
-#[cfg(feature = "parallel")]
-mod par_loose;
 #[cfg(feature = "parallel")]
 mod par_mixed;
 #[cfg(feature = "parallel")]
@@ -34,12 +31,9 @@ pub use fast::par_tight::FastParTight;
 pub use fast::tight::FastTight;
 pub use into_iter::IntoIter;
 pub use iter::Iter;
-pub use loose::Loose;
 pub use mixed::Mixed;
 #[cfg(feature = "parallel")]
 pub use par_iter::ParIter;
-#[cfg(feature = "parallel")]
-pub use par_loose::ParLoose;
 #[cfg(feature = "parallel")]
 pub use par_mixed::ParMixed;
 #[cfg(feature = "parallel")]

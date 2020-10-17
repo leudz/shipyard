@@ -15,7 +15,7 @@ pub use add_component::AddComponentUnchecked;
 // #[cfg(feature = "serde1")]
 // pub(crate) use metadata::SerdeInfos;
 pub(crate) use metadata::{
-    LoosePack, Metadata, Pack, TightPack, BUCKET_SIZE as SHARED_BUCKET_SIZE,
+    Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE,
 };
 pub(crate) use window::FullRawWindowMut;
 
@@ -23,14 +23,12 @@ use crate::error;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
 use crate::storage::EntityId;
-use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 // #[cfg(feature = "serde1")]
 // use alloc::borrow::Cow;
 #[cfg(all(not(feature = "std"), feature = "serde1"))]
 use alloc::string::ToString;
 use alloc::vec::Vec;
-use core::any::type_name;
 // #[cfg(feature = "serde1")]
 // use deser::SparseSetDeserializer;
 use sparse_array::SparseArray;
@@ -77,10 +75,6 @@ impl<T> SparseSet<T> {
     #[inline]
     pub fn as_slice(&self) -> &[T] {
         &self.data
-    }
-    #[inline]
-    pub(crate) fn clone_indices(&self) -> Vec<EntityId> {
-        self.dense.clone()
     }
 }
 
@@ -317,87 +311,26 @@ impl<T> SparseSet<T> {
     ///
     /// - Storage is tightly or loosly packed.
     #[inline]
-    pub fn try_remove(&mut self, entity: EntityId) -> Result<Option<OldComponent<T>>, error::Remove>
-    where
-        T: 'static,
-    {
-        if self.metadata.observer_types.is_empty() {
-            match self.metadata.pack {
-                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
-                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
-                Pack::None => {
-                    let component = self.actual_remove(entity);
-
-                    if let Some(update) = &mut self.metadata.update {
-                        if let Some(OldComponent::Owned(_)) = &component {
-                            update.removed.push(entity);
-                        }
-                    }
-
-                    Ok(component)
-                }
-            }
-        } else {
-            Err(error::Remove::MissingPackStorage(type_name::<T>()))
-        }
-    }
-    /// Removes `entity`'s component from this storage.  
-    /// Unwraps errors.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage is tightly or loosly packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
     pub fn remove(&mut self, entity: EntityId) -> Option<OldComponent<T>>
     where
         T: 'static,
     {
-        match self.try_remove(entity) {
-            Ok(old_component) => old_component,
-            Err(err) => panic!("{:?}", err),
+        let component = self.actual_remove(entity);
+
+        if let Some(update) = &mut self.metadata.update {
+            if let Some(OldComponent::Owned(_)) = &component {
+                update.removed.push(entity);
+            }
         }
+
+        component
     }
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<OldComponent<T>> {
-        let mut sparse_entity = self.sparse.get(entity)?;
+        let sparse_entity = self.sparse.get(entity)?;
 
         if sparse_entity.is_owned() && entity.gen() >= sparse_entity.gen() {
             unsafe {
                 *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
-            }
-
-            match &mut self.metadata.pack {
-                Pack::Tight(tight) if sparse_entity.uindex() < tight.len => {
-                    tight.len -= 1;
-
-                    unsafe {
-                        self.sparse
-                            .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
-                            .copy_index(sparse_entity);
-                    }
-
-                    self.dense.swap(sparse_entity.uindex(), tight.len);
-                    self.data.swap(sparse_entity.uindex(), tight.len);
-
-                    sparse_entity.set_index(tight.len as u64);
-                }
-                Pack::Loose(loose) if sparse_entity.uindex() < loose.len => {
-                    loose.len -= 1;
-
-                    unsafe {
-                        self.sparse
-                            .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
-                            .copy_index(sparse_entity);
-                    }
-
-                    self.dense.swap(sparse_entity.uindex(), loose.len);
-                    self.data.swap(sparse_entity.uindex(), loose.len);
-
-                    sparse_entity.set_index(loose.len as u64);
-                }
-                _ => {}
             }
 
             self.dense.swap_remove(sparse_entity.uindex());
@@ -439,48 +372,18 @@ impl<T> SparseSet<T> {
     ///
     /// - Storage is tightly or loosly packed.
     #[inline]
-    pub fn try_delete(&mut self, entity: EntityId) -> Result<(), error::Remove>
+    pub fn delete(&mut self, entity: EntityId) -> bool
     where
         T: 'static,
     {
-        if self.metadata.observer_types.is_empty() {
-            match self.metadata.pack {
-                Pack::Tight(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
-                Pack::Loose(_) => Err(error::Remove::MissingPackStorage(type_name::<T>())),
-                _ => {
-                    self.actual_delete(entity);
-                    Ok(())
-                }
-            }
-        } else {
-            Err(error::Remove::MissingPackStorage(type_name::<T>()))
-        }
-    }
-    /// Deletes `entity`'s component from this storage.  
-    /// Unwraps errors.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage is tightly or loosly packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
-    pub fn delete(&mut self, entity: EntityId)
-    where
-        T: 'static,
-    {
-        match self.try_delete(entity) {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    #[inline]
-    pub(crate) fn actual_delete(&mut self, entity: EntityId) {
         if let Some(OldComponent::Owned(component)) = self.actual_remove(entity) {
             if let Some(update) = &mut self.metadata.update {
                 update.deleted.push((entity, component));
             }
+
+            true
+        } else {
+            false
         }
     }
 }
@@ -713,90 +616,6 @@ impl<T> SparseSet<T> {
             Err(err) => panic!("{:?}", err),
         }
     }
-    //          ▼ old end of pack
-    //              ▼ new end of pack
-    // [_ _ _ _ | _ | _ _ _ _ _]
-    //            ▲       ▼
-    //            ---------
-    //              pack
-    pub(crate) fn pack(&mut self, entity: EntityId) {
-        if let Some(sparse_entity) = self.sparse.get(entity) {
-            match &mut self.metadata.pack {
-                Pack::Tight(tight) => {
-                    if sparse_entity.uindex() >= tight.len {
-                        unsafe {
-                            self.sparse
-                                .get_mut_unchecked(entity)
-                                .set_index(tight.len as u64);
-                            self.sparse
-                                .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
-                                .copy_index(sparse_entity);
-                        }
-
-                        self.dense.swap(tight.len, sparse_entity.uindex());
-                        self.data.swap(tight.len, sparse_entity.uindex());
-
-                        tight.len += 1;
-                    }
-                }
-                Pack::Loose(loose) => {
-                    if sparse_entity.uindex() >= loose.len {
-                        unsafe {
-                            self.sparse
-                                .get_mut_unchecked(entity)
-                                .set_index(loose.len as u64);
-                            self.sparse
-                                .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
-                                .copy_index(sparse_entity);
-                        }
-
-                        self.dense.swap(loose.len, sparse_entity.uindex());
-                        self.data.swap(loose.len, sparse_entity.uindex());
-
-                        loose.len += 1;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    pub(crate) fn unpack(&mut self, entity: EntityId) {
-        if let Some(sparse_entity) = self.sparse.get(entity) {
-            match &mut self.metadata.pack {
-                Pack::Tight(tight) if sparse_entity.uindex() < tight.len => {
-                    tight.len -= 1;
-
-                    self.dense.swap(sparse_entity.uindex(), tight.len);
-                    self.data.swap(sparse_entity.uindex(), tight.len);
-
-                    unsafe {
-                        self.sparse
-                            .get_mut_unchecked(*self.dense.get_unchecked(sparse_entity.uindex()))
-                            .copy_index(sparse_entity);
-                        self.sparse
-                            .get_mut_unchecked(*self.dense.get_unchecked(tight.len))
-                            .set_index(tight.len as u64);
-                    }
-                }
-                Pack::Loose(loose) if sparse_entity.uindex() < loose.len => {
-                    loose.len -= 1;
-
-                    self.dense.swap(sparse_entity.uindex(), loose.len);
-                    self.data.swap(sparse_entity.uindex(), loose.len);
-
-                    unsafe {
-                        self.sparse
-                            .get_mut_unchecked(*self.dense.get_unchecked(sparse_entity.uindex()))
-                            .copy_index(sparse_entity);
-                        self.sparse
-                            .get_mut_unchecked(*self.dense.get_unchecked(loose.len))
-                            .set_index(loose.len as u64);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
     /// Update packs this storage making it track *inserted*, *modified*, *removed* and *deleted* components.  
     /// Does nothing if the storage is already update packed.
     #[inline]
@@ -818,11 +637,6 @@ impl<T> SparseSet<T> {
             unsafe {
                 *self.sparse.get_mut_unchecked(id) = EntityId::dead();
             }
-        }
-        match &mut self.metadata.pack {
-            Pack::Tight(tight) => tight.len = 0,
-            Pack::Loose(loose) => loose.len = 0,
-            Pack::None => {}
         }
 
         if let Some(update) = &mut self.metadata.update {
@@ -1068,28 +882,12 @@ impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
 
 impl<T: 'static> UnknownStorage for SparseSet<T> {
     #[inline]
-    fn delete(&mut self, entity: EntityId, storage_to_unpack: &mut Vec<TypeId>) {
-        self.actual_delete(entity);
-
-        storage_to_unpack.reserve(self.metadata.observer_types.len());
-
-        let mut i = 0;
-        for observer in self.metadata.observer_types.iter().copied() {
-            while i < storage_to_unpack.len() && observer < storage_to_unpack[i] {
-                i += 1;
-            }
-            if storage_to_unpack.is_empty() || observer != storage_to_unpack[i] {
-                storage_to_unpack.insert(i, observer);
-            }
-        }
+    fn delete(&mut self, entity: EntityId) {
+        SparseSet::delete(self, entity);
     }
     #[inline]
     fn clear(&mut self) {
         <Self>::clear(self)
-    }
-    #[inline]
-    fn unpack(&mut self, entity: EntityId) {
-        Self::unpack(self, entity);
     }
     #[inline]
     fn share(&mut self, owned: EntityId, shared: EntityId) {
@@ -1219,8 +1017,8 @@ fn remove() {
     array.insert("10", EntityId::new_from_parts(10, 0, 0));
 
     assert_eq!(
-        array.try_remove(EntityId::new_from_parts(0, 0, 0)),
-        Ok(Some(OldComponent::Owned("0")))
+        array.remove(EntityId::new_from_parts(0, 0, 0)),
+        Some(OldComponent::Owned("0"))
     );
     assert_eq!(
         array.dense,
@@ -1271,8 +1069,8 @@ fn remove() {
     );
 
     assert_eq!(
-        array.try_remove(EntityId::new_from_parts(3, 0, 0)),
-        Ok(Some(OldComponent::Owned("3")))
+        array.remove(EntityId::new_from_parts(3, 0, 0)),
+        Some(OldComponent::Owned("3"))
     );
     assert_eq!(
         array.dense,
@@ -1299,8 +1097,8 @@ fn remove() {
     );
 
     assert_eq!(
-        array.try_remove(EntityId::new_from_parts(100, 0, 0)),
-        Ok(Some(OldComponent::Owned("100")))
+        array.remove(EntityId::new_from_parts(100, 0, 0)),
+        Some(OldComponent::Owned("100"))
     );
     assert_eq!(
         array.dense,

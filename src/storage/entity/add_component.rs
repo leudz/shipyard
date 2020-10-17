@@ -1,10 +1,6 @@
 use super::{Entities, EntityId};
 use crate::error;
-use crate::sparse_set::{Pack, SparseSet};
-use crate::type_id::TypeId;
 use crate::view::ViewMut;
-use alloc::vec::Vec;
-use core::any::type_name;
 
 // No new storage will be created
 /// Adds components to an existing entity without creating new storage.
@@ -28,18 +24,8 @@ impl<T: 'static> AddComponent<T> for &mut ViewMut<'_, T> {
         entities: &Entities,
     ) -> Result<(), error::AddComponent> {
         if entities.is_alive(entity) {
-            match self.metadata.pack {
-                Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
-                Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
-                Pack::None => {
-                    if self.metadata.observer_types.is_empty() {
-                        self.insert(component, entity);
-                        Ok(())
-                    } else {
-                        Err(error::AddComponent::MissingPackStorage(type_name::<T>()))
-                    }
-                }
-            }
+            self.insert(component, entity);
+            Ok(())
         } else {
             Err(error::AddComponent::EntityIsNotAlive)
         }
@@ -60,56 +46,8 @@ macro_rules! impl_add_component {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponent<($($type,)+)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
             fn try_add_component(self, component: ($($type,)+), entity: EntityId, entities: &Entities) -> Result<(), error::AddComponent> {
                 if entities.is_alive(entity) {
-                    // checks if the caller has passed all necessary storages
-                    // and list components we can pack
-                    let mut should_pack = Vec::new();
-                    // non packed storages should not pay the price of pack
-                    if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::None) || !self.$index.metadata.observer_types.is_empty())||+ {
-                        let mut type_ids = [$(TypeId::of::<SparseSet<$type>>()),+];
-                        type_ids.sort_unstable();
-                        let mut add_types = [$(TypeId::of::<SparseSet<$add_type>>()),*];
-                        add_types.sort_unstable();
-                        let mut real_types = Vec::with_capacity(type_ids.len() + add_types.len());
-                        real_types.extend_from_slice(&type_ids);
-
-                        $(
-                            if self.$add_index.contains(entity) {
-                                real_types.push(TypeId::of::<SparseSet<$add_type>>());
-                            }
-                        )*
-                        real_types.sort_unstable();
-
-                        should_pack.reserve(real_types.len());
-                        $(
-                            if self.$index.metadata.has_all_storages(&type_ids, &add_types) {
-                                if !should_pack.contains(&TypeId::of::<SparseSet<$type>>()) {
-                                    match &self.$index.metadata.pack {
-                                        Pack::Tight(pack) => if pack.is_packable(&real_types) {
-                                            should_pack.extend_from_slice(&pack.types);
-                                        }
-                                        Pack::Loose(pack) => if pack.is_packable(&real_types) {
-                                            should_pack.extend_from_slice(&pack.tight_types);
-                                        }
-                                        Pack::None => {}
-                                    }
-                                }
-                            } else {
-                                return Err(error::AddComponent::MissingPackStorage(type_name::<$type>()));
-                            }
-                        )+
-
-                        $(
-                            if should_pack.contains(&TypeId::of::<SparseSet<$add_type>>()) {
-                                self.$add_index.pack(entity);
-                            }
-                        )*
-                    }
-
                     $(
                         self.$index.insert(component.$index, entity);
-                        if should_pack.contains(&TypeId::of::<SparseSet<$type>>()) {
-                            self.$index.pack(entity);
-                        }
                     )+
 
                     Ok(())

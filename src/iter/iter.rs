@@ -1,5 +1,4 @@
 use super::abstract_mut::AbstractMut;
-use super::loose::Loose;
 use super::mixed::Mixed;
 use super::tight::Tight;
 use super::with_id::LastId;
@@ -7,7 +6,6 @@ use crate::storage::EntityId;
 
 pub enum Iter<Storage> {
     Tight(Tight<Storage>),
-    Loose(Loose<Storage>),
     Mixed(Mixed<Storage>),
 }
 
@@ -21,7 +19,6 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         match self {
             Iter::Tight(tight) => tight.next(),
-            Iter::Loose(loose) => loose.next(),
             Iter::Mixed(mixed) => mixed.next(),
         }
     }
@@ -29,7 +26,6 @@ where
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self {
             Iter::Tight(tight) => tight.size_hint(),
-            Iter::Loose(loose) => loose.size_hint(),
             Iter::Mixed(mixed) => mixed.size_hint(),
         }
     }
@@ -41,7 +37,6 @@ where
     {
         match self {
             Iter::Tight(tight) => tight.fold(init, f),
-            Iter::Loose(loose) => loose.fold(init, f),
             Iter::Mixed(mixed) => mixed.fold(init, f),
         }
     }
@@ -55,7 +50,6 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         match self {
             Iter::Tight(tight) => tight.next_back(),
-            Iter::Loose(loose) => loose.next_back(),
             Iter::Mixed(mixed) => mixed.next_back(),
         }
     }
@@ -67,7 +61,6 @@ where
     {
         match self {
             Iter::Tight(tight) => tight.rfold(init, f),
-            Iter::Loose(loose) => loose.rfold(init, f),
             Iter::Mixed(mixed) => mixed.rfold(init, f),
         }
     }
@@ -78,7 +71,6 @@ impl<Storage: AbstractMut> LastId for Iter<Storage> {
     unsafe fn last_id(&self) -> EntityId {
         match self {
             Iter::Tight(tight) => tight.last_id(),
-            Iter::Loose(loose) => loose.last_id(),
             Iter::Mixed(mixed) => mixed.last_id(),
         }
     }
@@ -86,7 +78,6 @@ impl<Storage: AbstractMut> LastId for Iter<Storage> {
     unsafe fn last_id_back(&self) -> EntityId {
         match self {
             Iter::Tight(tight) => tight.last_id_back(),
-            Iter::Loose(loose) => loose.last_id_back(),
             Iter::Mixed(mixed) => mixed.last_id_back(),
         }
     }

@@ -33,8 +33,6 @@ pub mod error;
 mod get;
 mod not;
 mod pack {
-    pub(crate) mod loose;
-    pub(crate) mod tight;
     pub(crate) mod update;
 }
 mod remove;
@@ -69,7 +67,6 @@ pub use entity_builder::EntityBuilder;
 pub use get::Get;
 pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use not::Not;
-pub use pack::{loose::LoosePack, tight::TightPack};
 pub use remove::Remove;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewInfo,

@@ -1,6 +1,5 @@
 use super::abstract_mut::AbstractMut;
 use super::iter::Iter;
-use super::par_loose::ParLoose;
 use super::par_mixed::ParMixed;
 use super::par_tight::ParTight;
 use rayon::iter::plumbing::UnindexedConsumer;
@@ -8,7 +7,6 @@ use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 pub enum ParIter<Storage> {
     Tight(ParTight<Storage>),
-    Loose(ParLoose<Storage>),
     Mixed(ParMixed<Storage>),
 }
 
@@ -16,7 +14,6 @@ impl<Storage: AbstractMut> From<Iter<Storage>> for ParIter<Storage> {
     fn from(iter: Iter<Storage>) -> Self {
         match iter {
             Iter::Tight(tight) => ParIter::Tight(tight.into()),
-            Iter::Loose(loose) => ParIter::Loose(loose.into()),
             Iter::Mixed(mixed) => ParIter::Mixed(mixed.into()),
         }
     }
@@ -35,14 +32,12 @@ where
     {
         match self {
             ParIter::Tight(tight) => tight.drive(consumer),
-            ParIter::Loose(loose) => loose.drive(consumer),
             ParIter::Mixed(mixed) => mixed.drive_unindexed(consumer),
         }
     }
     fn opt_len(&self) -> Option<usize> {
         match self {
             ParIter::Tight(tight) => tight.opt_len(),
-            ParIter::Loose(loose) => loose.opt_len(),
             ParIter::Mixed(mixed) => mixed.opt_len(),
         }
     }

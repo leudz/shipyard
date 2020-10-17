@@ -1,7 +1,4 @@
 use super::{IntoSortable, SparseSet};
-use crate::error;
-use crate::sparse_set::{EntityId, Pack};
-use crate::type_id::TypeId;
 use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
@@ -18,49 +15,33 @@ impl<'tmp, T> IntoSortable for &'tmp mut SparseSet<T> {
 
 impl<'tmp, T> Sort1<'tmp, T> {
     /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
-    pub fn try_unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) -> Result<(), error::Sort> {
-        if core::mem::discriminant(&self.0.metadata.pack) == core::mem::discriminant(&Pack::None) {
-            let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
+    pub fn unstable(self, mut cmp: impl FnMut(&T, &T) -> Ordering) {
+        let mut transform: Vec<usize> = (0..self.0.dense.len()).collect();
 
-            transform.sort_unstable_by(|&i, &j| {
-                // SAFE dense and data have the same length
-                cmp(unsafe { self.0.data.get_unchecked(i) }, unsafe {
-                    self.0.data.get_unchecked(j)
-                })
-            });
+        transform.sort_unstable_by(|&i, &j| {
+            // SAFE dense and data have the same length
+            cmp(unsafe { self.0.data.get_unchecked(i) }, unsafe {
+                self.0.data.get_unchecked(j)
+            })
+        });
 
-            let mut pos;
-            for i in 0..transform.len() {
+        let mut pos;
+        for i in 0..transform.len() {
+            // SAFE we're in bound
+            pos = unsafe { *transform.get_unchecked(i) };
+            while pos < i {
                 // SAFE we're in bound
-                pos = unsafe { *transform.get_unchecked(i) };
-                while pos < i {
-                    // SAFE we're in bound
-                    pos = unsafe { *transform.get_unchecked(pos) };
-                }
-                self.0.dense.swap(i, pos);
-                self.0.data.swap(i, pos);
+                pos = unsafe { *transform.get_unchecked(pos) };
             }
-
-            for i in 0..self.0.dense.len() {
-                let dense = self.0.dense[i];
-                unsafe {
-                    self.0.sparse.get_mut_unchecked(dense).set_index(i as u64);
-                }
-            }
-
-            Ok(())
-        } else {
-            Err(error::Sort::MissingPackStorage)
+            self.0.dense.swap(i, pos);
+            self.0.data.swap(i, pos);
         }
-    }
-    /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.  
-    /// Unwraps errors.
-    #[cfg(feature = "panic")]
-    #[track_caller]
-    pub fn unstable(self, cmp: impl FnMut(&T, &T) -> Ordering) {
-        match self.try_unstable(cmp) {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
+
+        for i in 0..self.0.dense.len() {
+            let dense = self.0.dense[i];
+            unsafe {
+                self.0.sparse.get_mut_unchecked(dense).set_index(i as u64);
+            }
         }
     }
 }
@@ -75,173 +56,6 @@ macro_rules! impl_unstable_sort {
 
             fn sort(self) -> Self::IntoSortable {
                 $sort($(self.$index,)+)
-            }
-        }
-
-        impl<'tmp, 'view, $($type: 'static),+> $sort<'tmp, $($type),+> {
-            /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
-            pub fn try_unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, mut cmp: Cmp) -> Result<(), error::Sort> {
-                enum PackSort {
-                    Tight(usize),
-                    Loose(usize),
-                    None,
-                }
-
-                let mut type_ids = [$(TypeId::of::<SparseSet<$type>>()),+];
-                type_ids.sort_unstable();
-                let mut pack_sort = PackSort::None;
-
-                $({
-                    if let PackSort::None = pack_sort {
-                        match &self.$index.metadata.pack {
-                            Pack::Tight(pack) => {
-                                if pack.is_packable(&type_ids) {
-                                    if pack.types.len() == type_ids.len() {
-                                        pack_sort = PackSort::Tight(pack.len);
-                                    } else if pack.types.len() < type_ids.len() {
-                                        return Err(error::Sort::TooManyStorages);
-                                    } else {
-                                        return Err(error::Sort::MissingPackStorage);
-                                    }
-                                } else {
-                                    return Err(error::Sort::MissingPackStorage);
-                                }
-                            }
-                            Pack::Loose(pack) => {
-                                if pack.is_packable(&type_ids) {
-                                    if pack.tight_types.len() + pack.loose_types.len() == type_ids.len() {
-                                        pack_sort = PackSort::Loose(pack.len);
-                                    } else if pack.tight_types.len() + pack.loose_types.len() < type_ids.len() {
-                                        return Err(error::Sort::TooManyStorages);
-                                    } else {
-                                        return Err(error::Sort::MissingPackStorage);
-                                    }
-                                } else {
-                                    return Err(error::Sort::MissingPackStorage);
-                                }
-                            }
-                            Pack::None => return Err(error::Sort::TooManyStorages),
-                        }
-                    }
-                })+
-
-                match pack_sort {
-                    PackSort::Tight(len) => {
-                        let mut transform: Vec<usize> = (0..len).collect();
-
-                        // SAFE dense and data have the same length
-                        transform.sort_unstable_by(|&i, &j| cmp(
-                            ($(unsafe {self.$index.data.get_unchecked(i)},)+),
-                            ($(unsafe {self.$index.data.get_unchecked(j)},)+),
-                        ));
-
-                        let mut pos;
-                        $(
-                            for i in 0..transform.len() {
-                                // SAFE we're in bound
-                                pos = unsafe {*transform.get_unchecked(i)};
-                                while pos < i {
-                                    // SAFE we're in bound
-                                    pos = unsafe { *transform.get_unchecked(pos) };
-                                }
-                                self.$index.dense.swap(i, pos);
-                                self.$index.data.swap(i, pos);
-                            }
-
-                            for i in 0..self.$index.dense.len() {
-                                unsafe {
-                                    // SAFE i is in bound
-                                    let dense = *self.0.dense.get_unchecked(i);
-                                    // SAFE dense can always index into sparse
-                                    self.$index.sparse.get_mut_unchecked(dense).set_index(i as u64);
-                                }
-                            }
-                        )*
-
-                        Ok(())
-                    }
-                    PackSort::Loose(len) => {
-                        let mut dense: &[EntityId] = &[];
-                        let mut packed = 0;
-                        $(
-                            if let Pack::Loose(_) = &self.$index.metadata.pack {
-                                dense = &self.$index.dense;
-                                packed |= 1 << $index;
-                            }
-                        )+
-
-                        let mut transform: Vec<usize> = (0..len).collect();
-
-                        transform.sort_unstable_by(|&i, &j| cmp(
-                            ($(
-                                unsafe {
-                                    if packed & (1 << $index) != 0 {
-                                        // SAFE i is in bound
-                                        self.$index.data.get_unchecked(i)
-                                    } else {
-                                        // SAFE i is in bound
-                                        let id = *dense.get_unchecked(i);
-                                        // SAFE dense can always index into sparse
-                                        let index = self.$index.sparse.get_unchecked(id);
-                                        // SAFE sparse can always index into data
-                                        self.$index.data.get_unchecked(index.uindex())
-                                    }
-                                }
-                            ,)+),
-                            ($(
-                                unsafe {
-                                    if packed & (1 << $index) != 0 {
-                                        // SAFE j is in bound
-                                        self.$index.data.get_unchecked(j)
-                                    } else {
-                                        // SAFE j is in bound
-                                        let id = *dense.get_unchecked(j);
-                                        // SAFE dense can always index into sparse
-                                        let index = self.$index.sparse.get_unchecked(id);
-                                        // SAFE sparse can always index into data
-                                        self.$index.data.get_unchecked(index.uindex())
-                                    }
-                                }
-                            ,)+)
-                        ));
-
-                        let mut pos;
-                        $(
-                            for i in 0..transform.len() {
-                                // SAFE i is in bound
-                                pos = unsafe {*transform.get_unchecked(i)};
-                                while pos < i {
-                                    // SAFE pos is in bound
-                                    pos = unsafe { *transform.get_unchecked(pos) };
-                                }
-                                self.$index.dense.swap(i, pos);
-                                self.$index.data.swap(i, pos);
-                            }
-
-                            for i in 0..self.$index.dense.len() {
-                                unsafe {
-                                    // SAFE i is in bound
-                                    let dense = *self.0.dense.get_unchecked(i);
-                                    // SAFE dense can always index into sparse
-                                    self.$index.sparse.get_mut_unchecked(dense).set_index(i as u64);
-                                }
-                            }
-                        )*
-
-                        Ok(())
-                    }
-                    PackSort::None => unreachable!(),
-                }
-            }
-            /// Sorts the storage(s) using an unstable algorithm, it may reorder equal components.
-            /// Unwraps errors.
-            #[cfg(feature = "panic")]
-            #[track_caller]
-            pub fn unstable<Cmp: FnMut(($(&$type,)+), ($(&$type,)+)) -> Ordering>(self, cmp: Cmp) {
-                match self.try_unstable(cmp) {
-                    Ok(_) => (),
-                    Err(err) => panic!("{:?}", err),
-                }
             }
         }
     }
@@ -271,8 +85,7 @@ fn unstable_sort() {
 
     array
         .sort()
-        .try_unstable(|x: &u64, y: &u64| x.cmp(&y))
-        .unwrap();
+        .unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
@@ -301,8 +114,7 @@ fn partially_sorted_unstable_sort() {
 
     array
         .sort()
-        .try_unstable(|x: &u64, y: &u64| x.cmp(&y))
-        .unwrap();
+        .unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);

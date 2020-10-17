@@ -197,7 +197,7 @@ impl Entities {
     #[inline]
     pub fn add_entity<T: AddEntity>(&mut self, storages: T, component: T::Component) -> EntityId {
         let entity_id = self.generate();
-        storages.add_entity(entity_id, component, &[]);
+        storages.add_entity(entity_id, component);
         entity_id
     }
     #[inline]

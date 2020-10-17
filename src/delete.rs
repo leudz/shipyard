@@ -1,31 +1,8 @@
-use crate::error;
-use crate::sparse_set::{Pack, SparseSet};
 use crate::storage::EntityId;
-use crate::type_id::TypeId;
 use crate::view::ViewMut;
-use alloc::vec::Vec;
-use core::any::type_name;
 
 /// Trait used to delete component(s).
-pub trait Delete<T> {
-    /// Deletes the component(s) of an entity, they won't be returned.  
-    /// A tuple is always needed, even for a single view.
-    ///
-    /// ### Example:
-    /// ```
-    /// use shipyard::{Delete, EntitiesViewMut, ViewMut, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(
-    ///    |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///        let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///
-    ///        Delete::<(usize, u32)>::try_delete((&mut usizes, &mut u32s), entity).unwrap();
-    ///    },
-    /// );
-    /// ```
-    fn try_delete(self, entity: EntityId) -> Result<(), error::Remove>;
+pub trait Delete {
     /// Deletes the component(s) of an entity, they won't be returned.  
     /// A tuple is always needed, even for a single view.  
     /// Unwraps error.
@@ -44,80 +21,29 @@ pub trait Delete<T> {
     ///    },
     /// );
     /// ```
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn delete(self, entity: EntityId);
 }
 
-macro_rules! impl_delete {
-    // add is short for additional
-    ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
-        impl<$($type: 'static,)+ $($add_type: 'static),*> Delete<($($type,)*)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
-            fn try_delete(self, entity: EntityId) -> Result<(), error::Remove> {
-                // non packed storages should not pay the price of pack
-                if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::None) || !self.$index.metadata.observer_types.is_empty())||+ {
-                    let mut types = [$(TypeId::of::<SparseSet<$type>>()),+];
-                    types.sort_unstable();
-                    let mut add_types = [$(TypeId::of::<SparseSet<$add_type>>()),*];
-                    add_types.sort_unstable();
-
-                    let mut should_unpack = Vec::with_capacity(types.len() + add_types.len());
-                    $(
-                        if self.$index.metadata.has_all_storages(&types, &add_types) {
-                            match &self.$index.metadata.pack {
-                                Pack::Tight(pack) => {
-                                    should_unpack.extend_from_slice(&pack.types);
-                                    should_unpack.extend_from_slice(&self.$index.metadata.observer_types);
-                                }
-                                Pack::Loose(pack) => {
-                                    should_unpack.extend_from_slice(&pack.tight_types);
-                                    should_unpack.extend_from_slice(&self.$index.metadata.observer_types);
-                                }
-                                Pack::None => should_unpack.extend_from_slice(&self.$index.metadata.observer_types),
-                            }
-                        } else {
-                            return Err(error::Remove::MissingPackStorage(type_name::<$type>()));
-                        }
-                    )+
-
-                    $(
-                        if should_unpack.contains(&TypeId::of::<SparseSet<$add_type>>()) {
-                            self.$add_index.unpack(entity);
-                        }
-                    )*
-                }
-
-                $(
-                    self.$index.actual_delete(entity);
-                )+
-
-                Ok(())
-            }
-            #[cfg(feature = "panic")]
-            #[track_caller]
+macro_rules! impl_delete_component {
+    ($(($type: ident, $index: tt))+) => {
+        impl<$($type: 'static),+> Delete for ($(&'_ mut ViewMut<'_, $type>,)+) {
             fn delete(self, entity: EntityId) {
-                match Delete::<($($type,)+)>::try_delete(self, entity) {
-                    Ok(_) => (),
-                    Err(err) => panic!("{:?}", err),
-                }
+                $(
+                    self.$index.delete(entity);
+                )+
             }
         }
     }
 }
 
-macro_rules! delete {
-    (($type1: ident, $index1: tt) $(($type: ident, $index: tt))*;; ($queue_type1: ident, $queue_index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_delete![($type1, $index1) $(($type, $index))*;];
-        delete![($type1, $index1); $(($type, $index))* ($queue_type1, $queue_index1); $(($queue_type, $queue_index))*];
+macro_rules! delete_component {
+    ($(($type: ident, $index: tt))+; ($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_delete_component![$(($type, $index))*];
+        delete_component![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
-    // add is short for additional
-    ($(($type: ident, $index: tt))+; ($add_type1: ident, $add_index1: tt) $(($add_type: ident, $add_index: tt))*; $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_delete![$(($type, $index))+; ($add_type1, $add_index1) $(($add_type, $add_index))*];
-        delete![$(($type, $index))+ ($add_type1, $add_index1); $(($add_type, $add_index))*; $(($queue_type, $queue_index))*];
-    };
-    ($(($type: ident, $index: tt))+;;) => {
-        impl_delete![$(($type, $index))+;];
+    ($(($type: ident, $index: tt))+;) => {
+        impl_delete_component![$(($type, $index))*];
     }
 }
 
-delete![(A, 0);; (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+delete_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

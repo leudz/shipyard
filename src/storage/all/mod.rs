@@ -9,7 +9,6 @@ use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::any::type_name;
 use core::cell::UnsafeCell;
 use hashbrown::{hash_map::Entry, HashMap};
@@ -600,22 +599,12 @@ impl AllStorages {
     }
     /// Deletes all components from an entity without deleting it.
     pub fn strip(&mut self, entity: EntityId) {
-        // no need to lock here since we have a unique access
-        let mut storage_to_unpack = Vec::new();
         // SAFE we have unique access
         let storages = unsafe { &mut *self.storages.get() };
 
         for storage in storages.values_mut() {
             // we have unique access to all storages so we can unwrap
-            storage.delete(entity, &mut storage_to_unpack).unwrap();
-        }
-
-        for storage in storage_to_unpack {
-            storages
-                .get_mut(&StorageId::TypeId(storage))
-                .unwrap()
-                .unpack(entity)
-                .unwrap();
+            storage.delete(entity).unwrap();
         }
     }
     /// Deletes all entities and their components.

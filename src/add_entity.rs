@@ -1,20 +1,17 @@
-use crate::sparse_set::Pack;
 use crate::storage::EntityId;
-use crate::storage::StorageId;
 use crate::view::{ViewInfo, ViewMut};
-use tinyvec::TinyVec;
 
 pub trait AddEntity {
     type Component;
 
-    fn add_entity(self, entity: EntityId, component: Self::Component, component_list: &[StorageId]);
+    fn add_entity(self, entity: EntityId, component: Self::Component);
 }
 
 impl AddEntity for () {
     type Component = ();
 
     #[inline]
-    fn add_entity(self, _: EntityId, _: Self::Component, _: &[StorageId]) {}
+    fn add_entity(self, _: EntityId, _: Self::Component) {}
 }
 
 impl<T: 'static> AddEntity for ViewMut<'_, T> {
@@ -25,9 +22,8 @@ impl<T: 'static> AddEntity for ViewMut<'_, T> {
         mut self,
         entity: EntityId,
         component: Self::Component,
-        component_list: &[StorageId],
     ) {
-        (&mut self).add_entity(entity, component, component_list);
+        (&mut self).add_entity(entity, component);
     }
 }
 
@@ -39,23 +35,8 @@ impl<T: 'static> AddEntity for &mut ViewMut<'_, T> {
         self,
         entity: EntityId,
         component: Self::Component,
-        component_list: &[StorageId],
     ) {
         self.insert(component, entity);
-
-        match &self.metadata.pack {
-            Pack::Tight(tight) => {
-                if tight.is_storage_packable(component_list) {
-                    self.pack(entity);
-                }
-            }
-            Pack::Loose(loose) => {
-                if loose.is_storage_packable(component_list) {
-                    self.pack(entity);
-                }
-            }
-            Pack::None => {}
-        }
     }
 }
 
@@ -67,9 +48,8 @@ impl<T: 'static> AddEntity for (ViewMut<'_, T>,) {
         self,
         entity: EntityId,
         component: Self::Component,
-        component_list: &[StorageId],
     ) {
-        self.0.add_entity(entity, component.0, component_list);
+        self.0.add_entity(entity, component.0);
     }
 }
 
@@ -81,9 +61,8 @@ impl<T: 'static> AddEntity for (&mut ViewMut<'_, T>,) {
         self,
         entity: EntityId,
         component: Self::Component,
-        component_list: &[StorageId],
     ) {
-        self.0.add_entity(entity, component.0, component_list);
+        self.0.add_entity(entity, component.0);
     }
 }
 
@@ -93,17 +72,9 @@ macro_rules! impl_view_add_entity {
             type Component = ($($type::Component,)+);
 
             #[inline]
-            fn add_entity(self, entity: EntityId , components: Self::Component, _: &[StorageId]) {
-                let mut storage_info = TinyVec::new();
-
+            fn add_entity(self, entity: EntityId , components: Self::Component) {
                 $(
-                    $type::storage_info(&mut storage_info);
-                )+
-
-                storage_info.sort_unstable();
-
-                $(
-                    self.$index.add_entity(entity, components.$index, &storage_info);
+                    self.$index.add_entity(entity, components.$index);
                 )+
             }
         }

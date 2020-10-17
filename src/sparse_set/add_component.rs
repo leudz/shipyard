@@ -1,10 +1,5 @@
-use crate::error;
-use crate::sparse_set::{Pack, SparseSet};
 use crate::storage::EntityId;
-use crate::type_id::TypeId;
 use crate::view::ViewMut;
-use alloc::vec::Vec;
-use core::any::type_name;
 
 /// Adds components to an existing entity.
 pub trait AddComponentUnchecked<T> {
@@ -26,129 +21,32 @@ pub trait AddComponentUnchecked<T> {
     /// ```
     ///
     /// [`Entities::try_add_component`]: https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.try_add_component
-    fn try_add_component_unchecked(
+    fn add_component_unchecked(
         self,
         component: T,
         entity: EntityId,
-    ) -> Result<(), error::AddComponent>;
-    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
-    /// This function does not check `entity` is alive. It's possible to add components to removed entities.  
-    /// Use [`Entities::add_component`] if you're unsure.  
-    /// Unwraps errors.
-    ///
-    /// ### Example
-    /// ```
-    /// use shipyard::{World, EntitiesViewMut, ViewMut, AddComponentUnchecked};
-    ///
-    /// let world = World::new();
-    ///
-    /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
-    ///
-    /// world.run(|mut u32s: ViewMut<u32>| {
-    ///     u32s.add_component_unchecked(0, entity);
-    /// });
-    /// ```
-    ///
-    /// [`Entities::add_component`]: https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.add_component
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    fn add_component_unchecked(self, component: T, entity: EntityId);
+    );
 }
 
 impl<T: 'static> AddComponentUnchecked<T> for &mut ViewMut<'_, T> {
-    fn try_add_component_unchecked(
+    #[inline]
+    fn add_component_unchecked(
         self,
         component: T,
         entity: EntityId,
-    ) -> Result<(), error::AddComponent> {
-        match self.metadata.pack {
-            Pack::Tight(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
-            Pack::Loose(_) => Err(error::AddComponent::MissingPackStorage(type_name::<T>())),
-            Pack::None => {
-                if self.metadata.observer_types.is_empty() {
-                    self.insert(component, entity);
-                    Ok(())
-                } else {
-                    Err(error::AddComponent::MissingPackStorage(type_name::<T>()))
-                }
-            }
-        }
-    }
-    #[cfg(feature = "panic")]
-    #[track_caller]
-    fn add_component_unchecked(self, component: T, entity: EntityId) {
-        match self.try_add_component_unchecked(component, entity) {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
-        }
+    ) {
+        self.insert(component, entity);
     }
 }
 
 macro_rules! impl_add_component_unchecked {
     ($(($type: ident, $index: tt))+; $(($add_type: ident, $add_index: tt))*) => {
         impl<$($type: 'static,)+ $($add_type: 'static),*> AddComponentUnchecked<($($type,)+)> for ($(&mut ViewMut<'_, $type>,)+ $(&mut ViewMut<'_, $add_type>,)*) {
-            fn try_add_component_unchecked(self, component: ($($type,)+), entity: EntityId) -> Result<(), error::AddComponent> {
-                    // checks if the caller has passed all necessary storages
-                    // and list components we can pack
-                    let mut should_pack = Vec::new();
-                    // non packed storages should not pay the price of pack
-                    if $(core::mem::discriminant(&self.$index.metadata.pack) != core::mem::discriminant(&Pack::None) || !self.$index.metadata.observer_types.is_empty())||+ {
-                        let mut type_ids = [$(TypeId::of::<SparseSet<$type>>()),+];
-                        type_ids.sort_unstable();
-                        let mut add_types = [$(TypeId::of::<SparseSet<$add_type>>()),*];
-                        add_types.sort_unstable();
-                        let mut real_types = Vec::with_capacity(type_ids.len() + add_types.len());
-                        real_types.extend_from_slice(&type_ids);
-
-                        $(
-                            if self.$add_index.contains(entity) {
-                                real_types.push(TypeId::of::<SparseSet<$add_type>>());
-                            }
-                        )*
-                        real_types.sort_unstable();
-
-                        should_pack.reserve(real_types.len());
-                        $(
-                            if self.$index.metadata.has_all_storages(&type_ids, &add_types) {
-                                if !should_pack.contains(&TypeId::of::<$type>()) {
-                                    match &self.$index.metadata.pack {
-                                        Pack::Tight(pack) => if pack.is_packable(&real_types) {
-                                            should_pack.extend_from_slice(&pack.types);
-                                        }
-                                        Pack::Loose(pack) => if pack.is_packable(&real_types) {
-                                            should_pack.extend_from_slice(&pack.tight_types);
-                                        }
-                                        Pack::None => {}
-                                    }
-                                }
-                            } else {
-                                return Err(error::AddComponent::MissingPackStorage(type_name::<$type>()));
-                            }
-                        )+
-
-                        $(
-                            if should_pack.contains(&TypeId::of::<$add_type>()) {
-                                self.$add_index.pack(entity);
-                            }
-                        )*
-                    }
-
-                    $(
-                        self.$index.insert(component.$index, entity);
-                        if should_pack.contains(&TypeId::of::<$type>()) {
-                            self.$index.pack(entity);
-                        }
-                    )+
-
-                    Ok(())
-            }
-            #[cfg(feature = "panic")]
-            #[track_caller]
+            #[inline]
             fn add_component_unchecked(self, component: ($($type,)+), entity: EntityId) {
-                match self.try_add_component_unchecked(component, entity) {
-                    Ok(_) => (),
-                    Err(err) => panic!("{:?}", err),
-                }
+                $(
+                    self.$index.insert(component.$index, entity);
+                )+
             }
         }
     }

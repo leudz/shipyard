@@ -260,8 +260,6 @@ fn parallel_iterator() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn loose_parallel_iterator() {
-    use rayon::prelude::*;
-
     let world = World::new();
 
     world

@@ -3,10 +3,8 @@
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
 use crate::storage::EntityId;
-use crate::type_id::TypeId;
 // #[cfg(feature = "serde1")]
 // use alloc::borrow::Cow;
-use alloc::vec::Vec;
 use core::any::Any;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
@@ -35,11 +33,9 @@ pub trait UnknownStorage: SizedAny {
         SizedAny::as_any_mut(self)
     }
     #[inline]
-    fn delete(&mut self, _: EntityId, _: &mut Vec<TypeId>) {}
+    fn delete(&mut self, _: EntityId) {}
     #[inline]
     fn clear(&mut self) {}
-    #[inline]
-    fn unpack(&mut self, _: EntityId) {}
     #[inline]
     fn share(&mut self, _: EntityId, _: EntityId) {}
     // #[cfg(feature = "serde1")]

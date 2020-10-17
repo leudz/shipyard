@@ -16,10 +16,8 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::GlobalDeConfig;
-use crate::type_id::TypeId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
@@ -50,13 +48,8 @@ impl Storage {
     pub(crate) fn delete(
         &mut self,
         entity: EntityId,
-        storage_to_unpack: &mut Vec<TypeId>,
     ) -> Result<(), error::Borrow> {
-        self.0.try_borrow_mut()?.delete(entity, storage_to_unpack);
-        Ok(())
-    }
-    pub(crate) fn unpack(&mut self, entity: EntityId) -> Result<(), error::Borrow> {
-        self.0.try_borrow_mut()?.unpack(entity);
+        self.0.try_borrow_mut()?.delete(entity);
         Ok(())
     }
     pub(crate) fn clear(&mut self) -> Result<(), error::Borrow> {
@@ -112,7 +105,6 @@ fn delete() {
         SparseSet::<&'static str>::new(),
     )));
     let mut entity_id = EntityId::zero();
-    let mut storage_to_unpack = Vec::new();
     entity_id.set_index(5);
     storage
         .get_mut::<SparseSet<&'static str>>()
@@ -129,7 +121,7 @@ fn delete() {
         .unwrap()
         .insert("test1", entity_id);
     entity_id.set_index(5);
-    storage.delete(entity_id, &mut storage_to_unpack).unwrap();
+    storage.delete(entity_id).unwrap();
     assert_eq!(
         storage
             .get_mut::<SparseSet::<&'static str>>()
@@ -154,9 +146,9 @@ fn delete() {
         Some(&"test1")
     );
     entity_id.set_index(10);
-    storage.delete(entity_id, &mut storage_to_unpack).unwrap();
+    storage.delete(entity_id).unwrap();
     entity_id.set_index(1);
-    storage.delete(entity_id, &mut storage_to_unpack).unwrap();
+    storage.delete(entity_id).unwrap();
     entity_id.set_index(5);
     assert_eq!(
         storage
