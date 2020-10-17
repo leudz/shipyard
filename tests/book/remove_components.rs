@@ -16,6 +16,6 @@ fn multiple() {
     let world = World::new();
 
     world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-        let (_i, _j) = Remove::<(u32, usize)>::remove((&mut u32s, &mut usizes), entity_id);
+        let (_i, _j) = (&mut u32s, &mut usizes).remove(entity_id);
     });
 }

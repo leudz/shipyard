@@ -18,8 +18,4 @@ pub fn init_world(img_area: Area, stage_area: Area, hud: Hud, renderer: SceneRen
     world.add_unique_non_send_sync(hud);
 
     world
-        .borrow::<(ViewMut<Position>, ViewMut<Speed>, ViewMut<Gravity>)>()
-        .tight_pack();
-
-    world
 }

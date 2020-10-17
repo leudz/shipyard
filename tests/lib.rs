@@ -174,52 +174,6 @@ fn simple_parallel_sum() {
 #[cfg(feature = "parallel")]
 #[cfg_attr(miri, ignore)]
 #[test]
-fn tight_parallel_iterator() {
-    use iter::ParIter;
-    use rayon::prelude::*;
-
-    let world = World::new();
-
-    world
-        .try_run(
-            |(mut entities, mut usizes, mut u32s): (
-                EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
-            )| {
-                (&mut usizes, &mut u32s).try_tight_pack().unwrap();
-
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-            },
-        )
-        .unwrap();
-
-    world
-        .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
-            let counter = std::sync::atomic::AtomicUsize::new(0);
-
-            if let ParIter::Tight(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(mut x, y)| {
-                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    *x += *y as usize;
-                });
-            } else {
-                panic!()
-            }
-
-            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-            let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next().map(|x| *x), Some(1));
-            assert_eq!(iter.next().map(|x| *x), Some(5));
-            assert!(iter.next().is_none());
-        })
-        .unwrap();
-}
-
-#[cfg(feature = "parallel")]
-#[cfg_attr(miri, ignore)]
-#[test]
 fn parallel_iterator() {
     use rayon::prelude::*;
 
@@ -246,48 +200,6 @@ fn parallel_iterator() {
                 counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 *x += *y as usize;
             });
-
-            assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
-            let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next().map(|x| *x), Some(1));
-            assert_eq!(iter.next().map(|x| *x), Some(5));
-            assert!(iter.next().is_none());
-        })
-        .unwrap();
-}
-
-#[cfg(feature = "parallel")]
-#[cfg_attr(miri, ignore)]
-#[test]
-fn loose_parallel_iterator() {
-    let world = World::new();
-
-    world
-        .try_run(
-            |(mut entities, mut usizes, mut u32s): (
-                EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
-            )| {
-                LoosePack::<(usize,)>::try_loose_pack((&mut usizes, &mut u32s)).unwrap();
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-            },
-        )
-        .unwrap();
-
-    world
-        .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
-            let counter = std::sync::atomic::AtomicUsize::new(0);
-
-            if let iter::ParIter::Loose(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(mut x, y)| {
-                    counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                    *x += *y as usize;
-                });
-            } else {
-                panic!()
-            }
 
             assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
             let mut iter = (&mut usizes).iter();
@@ -362,7 +274,7 @@ fn add_component_with_old_key() {
         .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
     assert_eq!(
-        entities.try_add_component((&mut usizes, &mut u32s), (1, 2), entity),
+        entities.try_add_component(entity, (&mut usizes, &mut u32s), (1, 2)),
         Err(error::AddComponent::EntityIsNotAlive)
     );
 }
@@ -527,12 +439,12 @@ fn contains() {
             |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
                 let entity = entities.add_entity((), ());
 
-                entities.try_add_component(&mut usizes, 0, entity).unwrap();
+                entities.try_add_component(entity, &mut usizes, 0).unwrap();
 
                 assert!(usizes.contains(entity));
                 assert!(!(&usizes, &u32s).contains(entity));
 
-                entities.try_add_component(&mut u32s, 1, entity).unwrap();
+                entities.try_add_component(entity, &mut u32s, 1).unwrap();
 
                 assert!((&usizes, &u32s).contains(entity));
             },

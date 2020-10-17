@@ -137,7 +137,6 @@ impl Display for NewEntity {
 /// passed in the add_component call even if no components are added.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
-    MissingPackStorage(&'static str),
     EntityIsNotAlive,
 }
 
@@ -147,80 +146,14 @@ impl Error for AddComponent {}
 impl Debug for AddComponent {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
-            Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing {} storage, to add a packed component you have to pass all storages packed with it. Even if you just add one component.", type_id)),
-            Self::EntityIsNotAlive => fmt.write_str("Entity has to be alive to add component to it."),
+            Self::EntityIsNotAlive => {
+                fmt.write_str("Entity has to be alive to add component to it.")
+            }
         }
     }
 }
 
 impl Display for AddComponent {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
-/// Error occuring when a pack can't be made.  
-/// It could be a borrow issue or one of the storage could already have
-/// an incompatible pack or the storage could be unique.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Pack {
-    GetStorage(GetStorage),
-    AlreadyTightPack(&'static str),
-    AlreadyLoosePack(&'static str),
-}
-
-#[cfg(feature = "std")]
-impl Error for Pack {}
-
-impl From<GetStorage> for Pack {
-    fn from(get_storage: GetStorage) -> Self {
-        Pack::GetStorage(get_storage)
-    }
-}
-
-impl Debug for Pack {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match self {
-            Self::GetStorage(get_storage) => Debug::fmt(get_storage, fmt),
-            Self::AlreadyTightPack(type_name) => fmt.write_fmt(format_args!(
-                "{} storage is already tightly packed.",
-                type_name
-            )),
-            Self::AlreadyLoosePack(type_name) => fmt.write_fmt(format_args!(
-                "{} storage is already loosely packed.",
-                type_name
-            )),
-        }
-    }
-}
-
-impl Display for Pack {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
-/// When removing components if one of them is packed owned, all storages packed
-/// with it must be passed to the function.
-///
-/// This error occurs when there is a missing storage, `TypeId` will indicate which storage.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Remove {
-    MissingPackStorage(&'static str),
-}
-
-#[cfg(feature = "std")]
-impl Error for Remove {}
-
-impl Debug for Remove {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match self {
-            Self::MissingPackStorage(type_id) => fmt.write_fmt(format_args!("Missing {} storage, to remove a packed component you have to pass all storages packed with it. Even if you just remove one component.", type_id))
-        }
-    }
-}
-
-impl Display for Remove {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, fmt)
     }
@@ -372,31 +305,6 @@ impl Display for Run {
     }
 }
 
-/// Error occuring when trying to sort a packed storage but providing too few or too many storages.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Sort {
-    MissingPackStorage,
-    TooManyStorages,
-}
-
-#[cfg(feature = "std")]
-impl Error for Sort {}
-
-impl Debug for Sort {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match self {
-            Self::MissingPackStorage => fmt.write_str("The storage you want to sort is packed, you may be able to sort the whole pack by passing all storages packed with it to the function. Some packs can't be sorted."),
-            Self::TooManyStorages => fmt.write_str("You provided too many storages non packed together. Only single storage and storages packed together can be sorted."),
-        }
-    }
-}
-
-impl Display for Sort {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
 /// Error when trying to use update pack related function on non update packed storage.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NotUpdatePack;
@@ -411,35 +319,6 @@ impl Debug for NotUpdatePack {
 }
 
 impl Display for NotUpdatePack {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
-/// Error when trying to access the *inserted* section of an update packed storage but the storage isn't update packed or the section isn't present in the window.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum UpdateWindow {
-    NotUpdatePacked,
-    OutOfBounds,
-}
-
-#[cfg(feature = "std")]
-impl Error for UpdateWindow {}
-
-impl Debug for UpdateWindow {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match self {
-            Self::NotUpdatePacked => fmt.write_str(
-                "The storage isn't update packed. Use `view_mut.update_pack()` to pack it.",
-            ),
-            Self::OutOfBounds => {
-                fmt.write_str("This window does not contain the components you want.")
-            }
-        }
-    }
-}
-
-impl Display for UpdateWindow {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, fmt)
     }
@@ -465,36 +344,6 @@ impl Debug for MissingComponent {
 }
 
 impl Display for MissingComponent {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, fmt)
-    }
-}
-
-/// Error related to window slicing, the range could be too big or trying to access an invalid range of an update packed window.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum NotInbound {
-    View(&'static str),
-    Window,
-    UpdatePack,
-}
-
-#[cfg(feature = "std")]
-impl Error for NotInbound {}
-
-impl Debug for NotInbound {
-    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        match self {
-            Self::View(name) => fmt.write_fmt(format_args!(
-                "There isn't enough {} components to fill this range.",
-                name,
-            )),
-            Self::Window => fmt.write_str("This window is too small to fill this range."),
-            Self::UpdatePack => fmt.write_str("With update packed storages windows including *regular* components have to include the first non modified component.")
-        }
-    }
-}
-
-impl Display for NotInbound {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, fmt)
     }

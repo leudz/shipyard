@@ -5,7 +5,6 @@ use crate::view::ViewMut;
 pub trait Delete {
     /// Deletes the component(s) of an entity, they won't be returned.  
     /// A tuple is always needed, even for a single view.  
-    /// Unwraps error.
     ///
     /// ### Example:
     /// ```
@@ -14,11 +13,11 @@ pub trait Delete {
     /// let world = World::new();
     ///
     /// world.run(
-    ///    |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///        let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
     ///
-    ///        Delete::<(usize, u32)>::delete((&mut usizes, &mut u32s), entity);
-    ///    },
+    ///         (&mut usizes, &mut u32s).delete(entity);
+    ///     },
     /// );
     /// ```
     fn delete(self, entity: EntityId);

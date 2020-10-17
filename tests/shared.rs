@@ -14,7 +14,7 @@ fn get() {
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert_eq!(u32s.get(shared), Ok(&0));
 
-                    assert_eq!(u32s.try_remove(shared).unwrap(), Some(OldComponent::Shared));
+                    assert_eq!(u32s.remove(shared), Some(OldComponent::Shared));
                     assert_eq!(u32s.get(owned), Ok(&0));
                     assert!(u32s.get(shared).is_err());
 
@@ -53,7 +53,7 @@ fn get_mut() {
                     assert_eq!(*(&mut u32s).get(owned).unwrap(), 0);
                     assert_eq!(*(&mut u32s).get(shared).unwrap(), 0);
 
-                    assert_eq!(u32s.try_remove(shared).unwrap(), Some(OldComponent::Shared));
+                    assert_eq!(u32s.remove(shared), Some(OldComponent::Shared));
                     assert_eq!(*(&mut u32s).get(owned).unwrap(), 0);
                     assert!((&mut u32s).get(shared).is_err());
 
@@ -136,11 +136,11 @@ fn shared_override() {
 
             u32s.try_share(owned, shared).unwrap();
 
-            u32s.try_remove(owned).unwrap();
-            entities.try_add_component(&mut u32s, 1, shared).unwrap();
+            u32s.remove(owned);
+            entities.try_add_component(shared, &mut u32s, 1).unwrap();
 
             u32s.get(shared).unwrap();
-            u32s.try_remove(shared).unwrap();
+            u32s.remove(shared);
             assert!(u32s.get(shared).is_err());
         })
         .unwrap();

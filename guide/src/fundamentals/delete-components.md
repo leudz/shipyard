@@ -12,7 +12,7 @@ world.run(|mut u32s: ViewMut<u32>| {
 
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-    Delete::<(u32, usize)>::delete((&mut u32s, &mut usizes), entity_id);
+    (&mut u32s, &mut usizes).delete(entity_id);
 });
 ```
 

@@ -5,7 +5,6 @@ mod delete_entities;
 mod get;
 mod hierarchy;
 mod iterators;
-mod packs;
 mod remove_components;
 mod run;
 mod syntactic_peculiarities;

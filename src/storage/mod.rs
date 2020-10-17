@@ -45,10 +45,7 @@ impl Storage {
         }))
     }
     /// Mutably borrows the container and delete `index`.
-    pub(crate) fn delete(
-        &mut self,
-        entity: EntityId,
-    ) -> Result<(), error::Borrow> {
+    pub(crate) fn delete(&mut self, entity: EntityId) -> Result<(), error::Borrow> {
         self.0.try_borrow_mut()?.delete(entity);
         Ok(())
     }
@@ -109,17 +106,17 @@ fn delete() {
     storage
         .get_mut::<SparseSet<&'static str>>()
         .unwrap()
-        .insert("test5", entity_id);
+        .insert(entity_id, "test5");
     entity_id.set_index(10);
     storage
         .get_mut::<SparseSet<&'static str>>()
         .unwrap()
-        .insert("test10", entity_id);
+        .insert(entity_id, "test10");
     entity_id.set_index(1);
     storage
         .get_mut::<SparseSet<&'static str>>()
         .unwrap()
-        .insert("test1", entity_id);
+        .insert(entity_id, "test1");
     entity_id.set_index(5);
     storage.delete(entity_id).unwrap();
     assert_eq!(

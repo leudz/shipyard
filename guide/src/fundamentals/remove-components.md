@@ -16,7 +16,7 @@ There is no need for `Entities` here. You can call the `remove` method directly 
 
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-    let (i, j) = Remove::<(u32, usize)>::remove((&mut u32s, &mut usizes), entity_id);
+    let (_i, _j) = (&mut u32s, &mut usizes).remove(entity_id);
 });
 ```
 

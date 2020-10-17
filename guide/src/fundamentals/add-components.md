@@ -7,7 +7,7 @@ Adding a second component of the same type to an entity will simply replace the 
 
 ```rust, noplaypen
 world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
-    entities.add_component(&mut u32s, 0, entity_id);
+    entities.add_component(entity_id, &mut u32s, 0);
 });
 ```
 
@@ -24,7 +24,7 @@ We use tuples for multiple components just as with [`add_entity`](https://docs.r
 ```rust, noplaypen
 world.run(
     |entities: EntitiesView, mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-        entities.add_component((&mut u32s, &mut usizes), (0, 10), entity_id);
+        entities.add_component(entity_id, (&mut u32s, &mut usizes), (0, 10));
     },
 );
 ```

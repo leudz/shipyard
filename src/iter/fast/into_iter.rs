@@ -9,6 +9,8 @@ use crate::iter::into_abstract::IntoAbstract;
 use crate::storage::EntityId;
 use core::ptr;
 
+const ACCESS_FACTOR: usize = 3;
+
 pub trait IntoFastIter {
     type IntoIter;
     #[cfg(feature = "parallel")]
@@ -167,16 +169,21 @@ macro_rules! impl_into_iter {
                     return None;
                 }
 
+                let type_ids = [self.$index1.type_id(), $(self.$index.type_id()),+];
                 let mut smallest = core::usize::MAX;
                 let mut smallest_dense = ptr::null();
                 let mut mask: u16 = 0;
+                let mut factored_len = core::usize::MAX;
 
                 if let Some((len, is_exact)) = self.$index1.len() {
                     smallest = len;
                     smallest_dense = self.$index1.dense();
 
                     if is_exact {
+                        factored_len = len + len * (type_ids.len() - 1) * ACCESS_FACTOR;
                         mask = 1 << $index1;
+                    } else {
+                        factored_len = len * type_ids.len() * ACCESS_FACTOR;
                     }
                 }
 
@@ -189,19 +196,28 @@ macro_rules! impl_into_iter {
 
                     if let Some((len, is_exact)) = self.$index.len() {
                         if is_exact {
-                            if len < smallest {
+                            let factor = len + len * (type_ids.len() - 1) * ACCESS_FACTOR;
+
+                            if factor < factored_len {
                                 smallest = len;
                                 smallest_dense = self.$index.dense();
-                                mask |= 1 << $index;
+                                mask = 1 << $index;
+                                factored_len = factor;
                             }
                         } else {
-                            if len < smallest {
+                            let factor = len * type_ids.len() * ACCESS_FACTOR;
+
+                            if factor < factored_len {
                                 smallest = len;
                                 smallest_dense = self.$index.dense();
+                                mask = 0;
+                                factored_len = factor;
                             }
                         }
                     }
                 )+
+
+                drop(factored_len);
 
                 if smallest == core::usize::MAX {
                     Some(FastIter::Mixed(FastMixed {

@@ -21,7 +21,7 @@ fn key_equality() {
     world
         .try_run(
             |(ref mut entities, ref mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
-                entities.try_add_component(u32s, 42, e1).unwrap();
+                entities.try_add_component(e1, u32s, 42).unwrap();
             },
         )
         .unwrap();

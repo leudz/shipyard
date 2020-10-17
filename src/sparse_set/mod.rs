@@ -1,4 +1,3 @@
-mod add_component;
 // #[cfg(feature = "serde1")]
 // mod deser;
 mod metadata;
@@ -6,17 +5,13 @@ pub mod sort;
 mod sparse_array;
 mod window;
 
-pub use add_component::AddComponentUnchecked;
-
 // #[cfg(feature = "serde1")]
 // pub(crate) use deser::SparseSetSerializer;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 // #[cfg(feature = "serde1")]
 // pub(crate) use metadata::SerdeInfos;
-pub(crate) use metadata::{
-    Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE,
-};
+pub(crate) use metadata::{Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE};
 pub(crate) use window::FullRawWindowMut;
 
 use crate::error;
@@ -226,7 +221,7 @@ impl<T> SparseSet<T> {
     ///
     /// In case `entity` had a component of this type, the new component will be considered `modified`.
     /// In all other cases it'll be considered `inserted`.
-    pub(crate) fn insert(&mut self, value: T, mut entity: EntityId) -> Option<OldComponent<T>> {
+    pub(crate) fn insert(&mut self, mut entity: EntityId, value: T) -> Option<OldComponent<T>> {
         self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
@@ -325,6 +320,7 @@ impl<T> SparseSet<T> {
 
         component
     }
+    #[inline]
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<OldComponent<T>> {
         let sparse_entity = self.sparse.get(entity)?;
 
@@ -960,7 +956,7 @@ fn insert() {
     let mut array = SparseSet::new();
 
     assert!(array
-        .insert("0", EntityId::new_from_parts(0, 0, 0))
+        .insert(EntityId::new_from_parts(0, 0, 0), "0")
         .is_none());
     assert_eq!(array.dense, &[EntityId::new_from_parts(0, 0, 0)]);
     assert_eq!(array.data, &["0"]);
@@ -970,7 +966,7 @@ fn insert() {
     );
 
     assert!(array
-        .insert("1", EntityId::new_from_parts(1, 0, 0))
+        .insert(EntityId::new_from_parts(1, 0, 0), "1")
         .is_none());
     assert_eq!(
         array.dense,
@@ -990,7 +986,7 @@ fn insert() {
     );
 
     assert!(array
-        .insert("5", EntityId::new_from_parts(5, 0, 0))
+        .insert(EntityId::new_from_parts(5, 0, 0), "5")
         .is_none());
     assert_eq!(
         array.dense,
@@ -1012,9 +1008,9 @@ fn insert() {
 #[test]
 fn remove() {
     let mut array = SparseSet::new();
-    array.insert("0", EntityId::new_from_parts(0, 0, 0));
-    array.insert("5", EntityId::new_from_parts(5, 0, 0));
-    array.insert("10", EntityId::new_from_parts(10, 0, 0));
+    array.insert(EntityId::new_from_parts(0, 0, 0), "0");
+    array.insert(EntityId::new_from_parts(5, 0, 0), "5");
+    array.insert(EntityId::new_from_parts(10, 0, 0), "10");
 
     assert_eq!(
         array.remove(EntityId::new_from_parts(0, 0, 0)),
@@ -1038,8 +1034,8 @@ fn remove() {
         Some(&"10")
     );
 
-    array.insert("3", EntityId::new_from_parts(3, 0, 0));
-    array.insert("100", EntityId::new_from_parts(100, 0, 0));
+    array.insert(EntityId::new_from_parts(3, 0, 0), "3");
+    array.insert(EntityId::new_from_parts(100, 0, 0), "100");
     assert_eq!(
         array.dense,
         &[

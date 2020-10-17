@@ -1,5 +1,7 @@
 # Packs
 
+/!\ Tight and loose packs are currently unavailable. They will be back.
+
 [`SparseSet`](https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html)s are very flexible, so much so that we can use their internal layout to encode additional information.
 
 Quick overview compared to non packed storage:

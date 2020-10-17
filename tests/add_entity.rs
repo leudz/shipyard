@@ -23,43 +23,6 @@ fn no_pack() {
 }
 
 #[test]
-fn tight() {
-    let world = World::new();
-    let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u32s).try_tight_pack().unwrap();
-    let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
-}
-
-#[test]
-fn loose() {
-    let world = World::new();
-    let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u32s).try_loose_pack().unwrap();
-    let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&0, &1));
-}
-
-#[test]
-fn tight_loose() {
-    let world = World::new();
-    let (mut entities, mut usizes, mut u64s, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u64s).try_tight_pack().unwrap();
-    LoosePack::<(u32,)>::try_loose_pack((&mut u32s, &mut usizes, &mut u64s)).unwrap();
-    let entity1 = entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2));
-    assert_eq!((&usizes, &u64s, &u32s).get(entity1).unwrap(), (&0, &1, &2));
-}
-
-#[test]
 fn update() {
     let world = World::new();
     let (mut entities, mut usizes) = world
@@ -101,38 +64,6 @@ fn modified_update() {
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(*usizes.get(entity1).unwrap(), 3);
     assert_eq!(*usizes.get(entity2).unwrap(), 2);
-}
-
-#[test]
-fn not_all_tight() {
-    let world = World::new();
-
-    let (mut entities, mut u32s, mut u16s, mut f32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<u16>, ViewMut<f32>)>()
-        .unwrap();
-
-    (&mut u32s, &mut u16s).try_tight_pack().unwrap();
-
-    entities.add_entity((&mut u32s, &mut u16s, &mut f32s), (0, 0, 0.));
-    entities.add_entity((&mut f32s, &mut u16s, &mut u32s), (0., 0, 0));
-
-    assert!((&mut u32s, &mut u16s).iter().count() > 0);
-}
-
-#[test]
-fn not_all_loose() {
-    let world = World::new();
-
-    let (mut entities, mut u32s, mut u16s, mut f32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<u16>, ViewMut<f32>)>()
-        .unwrap();
-
-    (&mut u32s, &mut u16s).try_loose_pack().unwrap();
-
-    entities.add_entity((&mut u32s, &mut u16s, &mut f32s), (0, 0, 0.));
-    entities.add_entity((&mut f32s, &mut u16s, &mut u32s), (0., 0, 0));
-
-    assert!((&mut u32s, &mut u16s).iter().count() > 0);
 }
 
 #[test]

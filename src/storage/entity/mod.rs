@@ -1,4 +1,3 @@
-mod add_component;
 mod entity_id;
 mod iterator;
 
@@ -13,8 +12,8 @@ use crate::error;
 use crate::add_entity::AddEntity;
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
+use crate::add_component::AddComponent;
 use crate::unknown_storage::UnknownStorage;
-use add_component::AddComponent;
 // #[cfg(feature = "serde1")]
 // use alloc::borrow::Cow;
 use alloc::vec::Vec;
@@ -66,7 +65,6 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// # use shipyard::*;
     /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
     ///
     /// let world = World::new();
@@ -74,17 +72,23 @@ impl Entities {
     /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
     ///
     /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
-    ///     entities.try_add_component(&mut u32s, 0, entity).unwrap();
+    ///     entities.try_add_component(entity, &mut u32s, 0).unwrap();
     /// });
     /// ```
     #[inline]
-    pub fn try_add_component<C, S: AddComponent<C>>(
+    pub fn try_add_component<S: AddComponent>(
         &self,
-        storages: S,
-        component: C,
         entity: EntityId,
+        mut storages: S,
+        component: S::Component,
     ) -> Result<(), error::AddComponent> {
-        storages.try_add_component(component, entity, &self)
+        if self.is_alive(entity) {
+            storages.add_component_unchecked(entity, component);
+
+            Ok(())
+        } else {
+            Err(error::AddComponent::EntityIsNotAlive)
+        }
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.  
@@ -92,7 +96,6 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// # use shipyard::*;
     /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
     ///
     /// let world = World::new();
@@ -100,20 +103,21 @@ impl Entities {
     /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
     ///
     /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
-    ///     entities.add_component(&mut u32s, 0, entity);
+    ///     entities.add_component(entity, &mut u32s, 0);
     /// });
     /// ```
     #[track_caller]
     #[inline]
-    pub fn add_component<C, S: AddComponent<C>>(
+    pub fn add_component<S: AddComponent>(
         &self,
-        storages: S,
-        component: C,
         entity: EntityId,
+        mut storages: S,
+        component: S::Component,
     ) {
-        match storages.try_add_component(component, entity, &self) {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
+        if self.is_alive(entity) {
+            storages.add_component_unchecked(entity, component);
+        } else {
+            panic!("{:?}", error::AddComponent::EntityIsNotAlive);
         }
     }
     pub(super) fn generate(&mut self) -> EntityId {

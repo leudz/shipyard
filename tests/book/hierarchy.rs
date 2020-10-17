@@ -68,26 +68,26 @@ impl Hierarchy for (EntitiesViewMut<'_>, ViewMut<'_, Parent>, ViewMut<'_, Child>
             children[next].prev = id;
 
             // add the Child component to the new entity
-            entities.add_component(children, Child { parent, prev, next }, id);
+            entities.add_component(id, children, Child { parent, prev, next });
         } else {
             // in this case our designated parent is missing a Parent component
             // we don't need to change any links, just insert both components
             entities.add_component(
+                id,
                 children,
                 Child {
                     parent,
                     prev: id,
                     next: id,
                 },
-                id,
             );
             entities.add_component(
+                parent,
                 parents,
                 Parent {
                     num_children: 1,
                     first_child: id,
                 },
-                parent,
             );
         }
     }
@@ -343,11 +343,11 @@ fn test_sorting() {
     let e3 = hierarchy.attach_new(root);
     let e4 = hierarchy.attach_new(root);
 
-    hierarchy.0.add_component(&mut usizes, 7, e0);
-    hierarchy.0.add_component(&mut usizes, 5, e1);
-    hierarchy.0.add_component(&mut usizes, 6, e2);
-    hierarchy.0.add_component(&mut usizes, 1, e3);
-    hierarchy.0.add_component(&mut usizes, 3, e4);
+    hierarchy.0.add_component(e0, &mut usizes, 7);
+    hierarchy.0.add_component(e1, &mut usizes, 5);
+    hierarchy.0.add_component(e2, &mut usizes, 6);
+    hierarchy.0.add_component(e3, &mut usizes, 1);
+    hierarchy.0.add_component(e4, &mut usizes, 3);
 
     assert!((&hierarchy.1, &hierarchy.2)
         .children(root)

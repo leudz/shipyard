@@ -5,17 +5,23 @@ use crate::view::{View, ViewMut};
 /// Checks if an entity has some components.
 pub trait Contains {
     /// Returns true if all storages contains `entity`.
-    fn contains(self, entity: EntityId) -> bool;
+    fn contains(&self, entity: EntityId) -> bool;
 }
 
 impl<'a: 'b, 'b, T: 'static> Contains for &'b View<'a, T> {
-    fn contains(self, entity: EntityId) -> bool {
+    fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(&*self, entity)
     }
 }
 
 impl<'a: 'b, 'b, T: 'static> Contains for &'b ViewMut<'a, T> {
-    fn contains(self, entity: EntityId) -> bool {
+    fn contains(&self, entity: EntityId) -> bool {
+        SparseSet::contains(&**self, entity)
+    }
+}
+
+impl<'a: 'b, 'b, T: 'static> Contains for &'b mut ViewMut<'a, T> {
+    fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(&**self, entity)
     }
 }
@@ -23,7 +29,7 @@ impl<'a: 'b, 'b, T: 'static> Contains for &'b ViewMut<'a, T> {
 macro_rules! impl_contains {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Contains),+> Contains for ($($type,)+) {
-            fn contains(self, entity: EntityId) -> bool {
+            fn contains(&self, entity: EntityId) -> bool {
                 $(self.$index.contains(entity))&&+
             }
         }

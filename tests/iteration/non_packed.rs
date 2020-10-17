@@ -184,11 +184,9 @@ fn with_id() {
 fn empty() {
     let world = World::new();
 
-    let (mut usizes, mut u32s) = world
+    let (usizes, u32s) = world
         .try_borrow::<(ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
-
-    (&mut usizes, &mut u32s).try_tight_pack().unwrap();
 
     assert!(u32s.iter().next().is_none());
     assert!(u32s.iter().with_id().next().is_none());

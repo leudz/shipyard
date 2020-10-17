@@ -1,4 +1,3 @@
-use shipyard::error;
 use shipyard::*;
 
 #[test]
@@ -14,7 +13,7 @@ fn simple_sort() {
                 entities.add_entity(&mut usizes, 3);
                 entities.add_entity(&mut usizes, 1);
 
-                usizes.sort().try_unstable(Ord::cmp).unwrap();
+                usizes.sort().unstable(Ord::cmp);
 
                 let mut prev = 0;
                 (&mut usizes).iter().for_each(|x| {
@@ -24,144 +23,4 @@ fn simple_sort() {
             },
         )
         .unwrap();
-}
-
-#[test]
-fn tight_sort() {
-    let world = World::new();
-    let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u32s).try_tight_pack().unwrap();
-    entities.add_entity((&mut usizes, &mut u32s), (10usize, 3u32));
-    entities.add_entity((&mut usizes, &mut u32s), (5usize, 9u32));
-    entities.add_entity((&mut usizes, &mut u32s), (1usize, 5u32));
-    entities.add_entity((&mut usizes, &mut u32s), (3usize, 54u32));
-
-    (&mut usizes, &mut u32s)
-        .sort()
-        .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
-        .unwrap();
-
-    let mut prev = 0;
-    (&mut usizes, &mut u32s).iter().for_each(|(x, y)| {
-        assert!(prev <= *x + *y as usize);
-        prev = *x + *y as usize;
-    });
-}
-
-#[test]
-fn loose_sort() {
-    let world = World::new();
-    let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u32s).try_loose_pack().unwrap();
-
-    entities.add_entity((&mut usizes, &mut u32s), (10usize, 3u32));
-    entities.add_entity((&mut usizes, &mut u32s), (5usize, 9u32));
-    entities.add_entity((&mut usizes, &mut u32s), (1usize, 5u32));
-    entities.add_entity((&mut usizes, &mut u32s), (3usize, 54u32));
-
-    (&mut usizes, &mut u32s)
-        .sort()
-        .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
-        .unwrap();
-
-    let mut prev = 0;
-    (&mut usizes, &mut u32s).iter().for_each(|(x, y)| {
-        assert!(prev <= *x + *y as usize);
-        prev = *x + *y as usize;
-    });
-}
-
-#[test]
-fn tight_loose_sort() {
-    let world = World::new();
-    let (mut entities, mut usizes, mut u64s, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u64s).try_tight_pack().unwrap();
-    LoosePack::<(u32,)>::try_loose_pack((&mut u32s, &mut usizes, &mut u64s)).unwrap();
-
-    entities.add_entity((&mut usizes, &mut u64s), (3, 4));
-    entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (6, 7, 8));
-    entities.add_entity((&mut usizes,), (5,));
-    entities.add_entity((&mut usizes, &mut u64s, &mut u32s), (0, 1, 2));
-
-    (&mut usizes, &mut u64s)
-        .sort()
-        .try_unstable(|(&x1, &y1), (&x2, &y2)| (x1 + y1 as usize).cmp(&(x2 + y2 as usize)))
-        .unwrap();
-
-    if let iter::Iter::Loose(mut iter) = (&usizes, &u64s, &u32s).iter() {
-        assert_eq!(iter.next(), Some((&6, &7, &8)));
-        assert_eq!(iter.next(), Some((&0, &1, &2)));
-        assert_eq!(iter.next(), None);
-    } else {
-        panic!("not loose");
-    }
-    if let iter::Iter::Tight(mut iter) = (&usizes, &u64s).iter() {
-        assert_eq!(iter.next(), Some((&0, &1)));
-        assert_eq!(iter.next(), Some((&3, &4)));
-        assert_eq!(iter.next(), Some((&6, &7)));
-        assert_eq!(iter.next(), None);
-    } else {
-        panic!("not tight");
-    }
-    if let iter::Iter::Mixed(mut iter) = (&usizes, &u32s).iter() {
-        assert_eq!(iter.next(), Some((&6, &8)));
-        assert_eq!(iter.next(), Some((&0, &2)));
-        assert_eq!(iter.next(), None);
-    }
-}
-
-#[test]
-fn tight_sort_missing_storage() {
-    let world = World::new();
-    let (mut usizes, mut u64s) = world
-        .try_borrow::<(ViewMut<usize>, ViewMut<u64>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u64s).try_tight_pack().unwrap();
-    assert_eq!(
-        usizes.sort().try_unstable(Ord::cmp).err(),
-        Some(error::Sort::MissingPackStorage)
-    );
-}
-
-#[test]
-fn loose_sort_missing_storage() {
-    let world = World::new();
-    let (mut usizes, mut u64s) = world
-        .try_borrow::<(ViewMut<usize>, ViewMut<u64>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u64s).try_loose_pack().unwrap();
-    assert_eq!(
-        usizes.sort().try_unstable(Ord::cmp).err(),
-        Some(error::Sort::MissingPackStorage)
-    );
-}
-
-#[test]
-fn tight_sort_too_many_storages() {
-    let world = World::new();
-    let (mut usizes, mut u64s, mut u32s) = world
-        .try_borrow::<(ViewMut<usize>, ViewMut<u64>, ViewMut<u32>)>()
-        .unwrap();
-
-    (&mut usizes, &mut u64s).try_tight_pack().unwrap();
-    assert_eq!(
-        (&mut usizes, &mut u64s, &mut u32s)
-            .sort()
-            .try_unstable(|(&x1, &y1, &z1), (&x2, &y2, &z2)| {
-                (x1 + y1 as usize + z1 as usize).cmp(&(x2 + y2 as usize + z2 as usize))
-            })
-            .err(),
-        Some(error::Sort::TooManyStorages)
-    );
 }

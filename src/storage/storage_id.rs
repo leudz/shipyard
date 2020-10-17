@@ -1,3 +1,5 @@
+use core::cmp::Ordering;
+
 use crate::type_id::TypeId;
 
 /// Id of a storage, can be a `TypeId` or a user defined `u64`.
@@ -42,11 +44,11 @@ impl PartialEq<TypeId> for StorageId {
 }
 
 impl PartialOrd<TypeId> for StorageId {
-    fn partial_cmp(&self, type_id: &TypeId) -> Option<core::cmp::Ordering> {
+    fn partial_cmp(&self, type_id: &TypeId) -> Option<Ordering> {
         if let StorageId::TypeId(self_type_id) = self {
             self_type_id.partial_cmp(type_id)
         } else {
-            Some(core::cmp::Ordering::Less)
+            Some(Ordering::Less)
         }
     }
 }

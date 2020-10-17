@@ -1,7 +1,3 @@
-mod view_info;
-
-pub use view_info::ViewInfo;
-
 use crate::atomic_refcell::{Ref, RefMut, SharedBorrow};
 use crate::pack::update::{Inserted, InsertedOrModified, Modified};
 use crate::sparse_set::SparseSet;

@@ -1,4 +1,4 @@
-use crate::sparse_set::{OldComponent};
+use crate::sparse_set::OldComponent;
 use crate::storage::EntityId;
 use crate::view::ViewMut;
 
@@ -14,8 +14,6 @@ pub trait Remove {
     ///
     /// The compiler has trouble inferring the return types.
     /// You'll often have to use the full path `Remove::<type>::remove`.
-    ///
-    /// Unwraps errors.
     /// ### Example
     /// ```
     /// use shipyard::{EntitiesViewMut, OldComponent, Remove, ViewMut, World};
@@ -24,23 +22,8 @@ pub trait Remove {
     ///
     /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///     let old = Remove::<(usize, u32)>::remove((&mut usizes, &mut u32s), entity1);
+    ///     let old = (&mut usizes, &mut u32s).remove(entity1);
     ///     assert_eq!(old, (Some(OldComponent::Owned(0)), Some(OldComponent::Owned(1))));
-    /// });
-    /// ```
-    /// When using packed storages you have to pass all storages packed with it,
-    /// even if you don't remove any component from it.
-    /// ### Example
-    /// ```
-    /// use shipyard::{EntitiesViewMut, OldComponent, Remove, TightPack, ViewMut, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///     (&mut usizes, &mut u32s).tight_pack();
-    ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///     let old = Remove::<(usize,)>::remove((&mut usizes, &mut u32s), entity1);
-    ///     assert_eq!(old, (Some(OldComponent::Owned(0)),));
     /// });
     /// ```
     fn remove(self, entity: EntityId) -> Self::Out;
@@ -51,6 +34,7 @@ macro_rules! impl_remove_component {
         impl<$($type),+> Remove for ($(&'_ mut ViewMut<'_, $type>,)+) {
             type Out = ($(Option<OldComponent<$type>>,)+);
 
+            #[inline]
             fn remove(self, entity: EntityId) -> Self::Out {
                 ($(
                     self.$index.actual_remove(entity),

@@ -1,5 +1,5 @@
 use crate::storage::EntityId;
-use crate::view::{ViewInfo, ViewMut};
+use crate::view::ViewMut;
 
 pub trait AddEntity {
     type Component;
@@ -18,11 +18,7 @@ impl<T: 'static> AddEntity for ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
-    fn add_entity(
-        mut self,
-        entity: EntityId,
-        component: Self::Component,
-    ) {
+    fn add_entity(mut self, entity: EntityId, component: Self::Component) {
         (&mut self).add_entity(entity, component);
     }
 }
@@ -31,12 +27,8 @@ impl<T: 'static> AddEntity for &mut ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
-    fn add_entity(
-        self,
-        entity: EntityId,
-        component: Self::Component,
-    ) {
-        self.insert(component, entity);
+    fn add_entity(self, entity: EntityId, component: Self::Component) {
+        self.insert(entity, component);
     }
 }
 
@@ -44,11 +36,7 @@ impl<T: 'static> AddEntity for (ViewMut<'_, T>,) {
     type Component = (T,);
 
     #[inline]
-    fn add_entity(
-        self,
-        entity: EntityId,
-        component: Self::Component,
-    ) {
+    fn add_entity(self, entity: EntityId, component: Self::Component) {
         self.0.add_entity(entity, component.0);
     }
 }
@@ -57,18 +45,14 @@ impl<T: 'static> AddEntity for (&mut ViewMut<'_, T>,) {
     type Component = (T,);
 
     #[inline]
-    fn add_entity(
-        self,
-        entity: EntityId,
-        component: Self::Component,
-    ) {
+    fn add_entity(self, entity: EntityId, component: Self::Component) {
         self.0.add_entity(entity, component.0);
     }
 }
 
 macro_rules! impl_view_add_entity {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: AddEntity + ViewInfo),+> AddEntity for ($($type,)+) {
+        impl<$($type: AddEntity),+> AddEntity for ($($type,)+) {
             type Component = ($($type::Component,)+);
 
             #[inline]

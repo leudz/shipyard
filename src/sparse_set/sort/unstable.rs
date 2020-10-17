@@ -80,12 +80,10 @@ fn unstable_sort() {
     for i in (0..100).rev() {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(100 - i);
-        array.insert(i, entity_id);
+        array.insert(entity_id, i);
     }
 
-    array
-        .sort()
-        .unstable(|x: &u64, y: &u64| x.cmp(&y));
+    array.sort().unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
@@ -104,17 +102,15 @@ fn partially_sorted_unstable_sort() {
     for i in 0..20 {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(i);
-        assert!(array.insert(i, entity_id).is_none());
+        assert!(array.insert(entity_id, i).is_none());
     }
     for i in (20..100).rev() {
         let mut entity_id = crate::storage::EntityId::zero();
         entity_id.set_index(100 - i + 20);
-        assert!(array.insert(i, entity_id).is_none());
+        assert!(array.insert(entity_id, i).is_none());
     }
 
-    array
-        .sort()
-        .unstable(|x: &u64, y: &u64| x.cmp(&y));
+    array.sort().unstable(|x: &u64, y: &u64| x.cmp(&y));
 
     for window in array.data.windows(2) {
         assert!(window[0] < window[1]);
