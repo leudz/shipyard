@@ -191,19 +191,25 @@ pub struct UniqueView<'a, T> {
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }
 
+impl<T> UniqueView<'_, T> {
+    pub fn is_modified(unique: &Self) -> bool {
+        unique.unique.is_modified
+    }
+}
+
 impl<T> Deref for UniqueView<'_, T> {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.unique.0
+        &self.unique.value
     }
 }
 
 impl<T> AsRef<T> for UniqueView<'_, T> {
     #[inline]
     fn as_ref(&self) -> &T {
-        &self.unique.0
+        &self.unique.value
     }
 }
 
@@ -223,32 +229,43 @@ pub struct UniqueViewMut<'a, T> {
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
+impl<T> UniqueViewMut<'_, T> {
+    pub fn is_modified(unique: &Self) -> bool {
+        unique.unique.is_modified
+    }
+    pub fn clear_modified(unique: &mut Self) {
+        unique.unique.is_modified = false;
+    }
+}
+
 impl<T> Deref for UniqueViewMut<'_, T> {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.unique.0
+        &self.unique.value
     }
 }
 
 impl<T> DerefMut for UniqueViewMut<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.unique.0
+        self.unique.is_modified = true;
+        &mut self.unique.value
     }
 }
 
 impl<T> AsRef<T> for UniqueViewMut<'_, T> {
     #[inline]
     fn as_ref(&self) -> &T {
-        &self.unique.0
+        &self.unique.value
     }
 }
 
 impl<T> AsMut<T> for UniqueViewMut<'_, T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
-        &mut self.unique.0
+        self.unique.is_modified = true;
+        &mut self.unique.value
     }
 }

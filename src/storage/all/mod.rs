@@ -452,7 +452,7 @@ impl AllStorages {
                         unique_ptr as *mut u8,
                         alloc::alloc::Layout::new::<AtomicRefCell<Unique<T>>>(),
                     );
-                    Ok(unique.into_inner().0)
+                    Ok(unique.into_inner().value)
                 }
             }
         } else {
@@ -489,9 +489,12 @@ impl AllStorages {
 
         self.lock.lock_exclusive();
         let storages = unsafe { &mut *self.storages.get() };
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage(Box::new(AtomicRefCell::new(Unique(component)))));
+        storages.entry(storage_id).or_insert_with(|| {
+            Storage(Box::new(AtomicRefCell::new(Unique {
+                value: component,
+                is_modified: false,
+            })))
+        });
         unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -509,7 +512,10 @@ impl AllStorages {
         let storages = unsafe { &mut *self.storages.get() };
         storages.entry(storage_id).or_insert_with(|| {
             Storage(Box::new(AtomicRefCell::new_non_send(
-                Unique(component),
+                Unique {
+                    value: component,
+                    is_modified: false,
+                },
                 self.thread_id,
             )))
         });
@@ -528,9 +534,12 @@ impl AllStorages {
 
         self.lock.lock_exclusive();
         let storages = unsafe { &mut *self.storages.get() };
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage(Box::new(AtomicRefCell::new_non_sync(Unique(component)))));
+        storages.entry(storage_id).or_insert_with(|| {
+            Storage(Box::new(AtomicRefCell::new_non_sync(Unique {
+                value: component,
+                is_modified: false,
+            })))
+        });
         unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -548,7 +557,10 @@ impl AllStorages {
         let storages = unsafe { &mut *self.storages.get() };
         storages.entry(storage_id).or_insert_with(|| {
             Storage(Box::new(AtomicRefCell::new_non_send_sync(
-                Unique(component),
+                Unique {
+                    value: component,
+                    is_modified: false,
+                },
                 self.thread_id,
             )))
         });
