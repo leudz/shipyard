@@ -5,7 +5,9 @@ use super::mixed::Mixed;
 #[cfg(feature = "parallel")]
 use super::par_iter::ParIter;
 use super::tight::Tight;
+use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
@@ -16,6 +18,7 @@ pub trait IntoIter {
     type IntoParIter;
 
     fn iter(self) -> Self::IntoIter;
+    fn iter_by<D: 'static>(self) -> Self::IntoIter;
     #[cfg(feature = "parallel")]
     fn par_iter(self) -> Self::IntoParIter;
 }
@@ -49,6 +52,10 @@ impl<T: IntoAbstract> IntoIter for T {
                 storage: self.into_abstract(),
             }),
         }
+    }
+    #[inline]
+    fn iter_by<D: 'static>(self) -> Self::IntoIter {
+        self.iter()
     }
     #[cfg(feature = "parallel")]
     #[inline]
@@ -89,6 +96,10 @@ where
                 storage: (self.0.into_abstract(),),
             }),
         }
+    }
+    #[inline]
+    fn iter_by<D: 'static>(self) -> Self::IntoIter {
+        self.iter()
     }
     #[cfg(feature = "parallel")]
     #[inline]
@@ -180,6 +191,89 @@ macro_rules! impl_into_iter {
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
                     })
+                }
+            }
+            fn iter_by<Driver: 'static>(self) -> Self::IntoIter {
+                let type_id = TypeId::of::<SparseSet<Driver>>();
+                let mut found = false;
+                let mut smallest = core::usize::MAX;
+                let mut smallest_dense = ptr::null();
+                let mut smallest_shared = ptr::null();
+                let mut smallest_sparse = ptr::null();
+                let mut mask: u16 = 0;
+
+                if self.$index1.type_id() == type_id {
+                    found = true;
+
+                    match self.$index1.len() {
+                        Some((len, is_exact)) => {
+                            if is_exact {
+                                smallest = len;
+                                smallest_dense = self.$index1.dense();
+                                smallest_shared = self.$index1.shared();
+                                smallest_sparse = self.$index1.sparse();
+                                mask = 1 << $index1;
+                            } else {
+                                smallest = len;
+                                smallest_dense = self.$index1.dense();
+                                smallest_shared = self.$index1.shared();
+                                smallest_sparse = self.$index1.sparse();
+                            }
+                        }
+                        None => {}
+                    }
+                }
+
+                $(
+                    if !found && self.$index.type_id() == type_id {
+                        found = true;
+
+                        match self.$index.len() {
+                            Some((len, is_exact)) => {
+                                if is_exact {
+                                    smallest = len;
+                                    smallest_dense = self.$index.dense();
+                                    smallest_shared = self.$index.shared();
+                                    smallest_sparse = self.$index.sparse();
+                                    mask = 1 << $index;
+                                } else {
+                                    smallest = len;
+                                    smallest_dense = self.$index.dense();
+                                    smallest_shared = self.$index.shared();
+                                    smallest_sparse = self.$index.sparse();
+                                }
+                            }
+                            None => {}
+                        }
+                    }
+                )+
+
+                if found {
+                    if smallest == core::usize::MAX {
+                        Iter::Mixed(Mixed {
+                            current: 0,
+                            end: 0,
+                            mask,
+                            indices: smallest_dense,
+                            shared: smallest_shared,
+                            sparse: smallest_sparse,
+                            last_id: EntityId::dead(),
+                            storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                        })
+                    } else {
+                        Iter::Mixed(Mixed {
+                            current: 0,
+                            end: smallest,
+                            mask,
+                            indices: smallest_dense,
+                            shared: smallest_shared,
+                            sparse: smallest_sparse,
+                            last_id: EntityId::dead(),
+                            storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                        })
+                    }
+                } else {
+                    self.iter()
                 }
             }
             #[cfg(feature = "parallel")]

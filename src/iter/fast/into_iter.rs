@@ -6,7 +6,9 @@ use super::par_iter::FastParIter;
 use super::tight::FastTight;
 use crate::iter::abstract_mut::AbstractMut;
 use crate::iter::into_abstract::IntoAbstract;
+use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
+use crate::type_id::TypeId;
 use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
@@ -19,6 +21,9 @@ pub trait IntoFastIter {
     fn try_fast_iter(self) -> Option<Self::IntoIter>;
     #[cfg(feature = "panic")]
     fn fast_iter(self) -> Self::IntoIter;
+    fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter>;
+    #[cfg(feature = "panic")]
+    fn fast_iter_by<D: 'static>(self) -> Self::IntoIter;
     #[cfg(feature = "parallel")]
     fn try_fast_par_iter(self) -> Option<Self::IntoParIter>;
     #[cfg(all(feature = "panic", feature = "parallel"))]
@@ -73,6 +78,17 @@ where
             Some(iter) => iter,
             None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
         }
+    }
+    #[inline]
+    fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter> {
+        self.try_fast_iter()
+    }
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
+    #[inline]
+    fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
+        self.fast_iter()
     }
     #[cfg(feature = "parallel")]
     #[inline]
@@ -140,6 +156,17 @@ where
             Some(iter) => iter,
             None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
         }
+    }
+    #[inline]
+    fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter> {
+        self.try_fast_iter()
+    }
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
+    #[inline]
+    fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
+        self.fast_iter()
     }
     #[cfg(feature = "parallel")]
     #[inline]
@@ -263,6 +290,112 @@ macro_rules! impl_into_iter {
                 match self.try_fast_iter() {
                     Some(iter) => iter,
                     None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
+                }
+            }
+            #[inline]
+            fn try_fast_iter_by<Driver: 'static>(self) -> Option<Self::IntoIter> {
+                if self.$index1.metadata().update.is_some()
+                    && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
+                {
+                    return None;
+                }
+
+                let type_id = TypeId::of::<SparseSet<Driver>>();
+                let mut found = false;
+                let mut smallest = core::usize::MAX;
+                let mut smallest_dense = ptr::null();
+                let mut smallest_shared = ptr::null();
+                let mut smallest_sparse = ptr::null();
+                let mut mask: u16 = 0;
+
+                if self.$index1.type_id() == type_id {
+                    found = true;
+
+                    match self.$index1.len() {
+                        Some((len, is_exact)) => {
+                            if is_exact {
+                                smallest = len;
+                                smallest_dense = self.$index1.dense();
+                                smallest_shared = self.$index1.shared();
+                                smallest_sparse = self.$index1.sparse();
+                                mask = 1 << $index1;
+                            } else {
+                                smallest = len;
+                                smallest_dense = self.$index1.dense();
+                                smallest_shared = self.$index1.shared();
+                                smallest_sparse = self.$index1.sparse();
+                            }
+                        }
+                        None => {}
+                    }
+                }
+
+                $(
+                    if self.$index.metadata().update.is_some()
+                        && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
+                    {
+                        return None;
+                    }
+
+                    if !found && self.$index.type_id() == type_id {
+                        found = true;
+
+                        match self.$index.len() {
+                            Some((len, is_exact)) => {
+                                if is_exact {
+                                    smallest = len;
+                                    smallest_dense = self.$index.dense();
+                                    smallest_shared = self.$index.shared();
+                                    smallest_sparse = self.$index.sparse();
+                                    mask = 1 << $index;
+                                } else {
+                                    smallest = len;
+                                    smallest_dense = self.$index.dense();
+                                    smallest_shared = self.$index.shared();
+                                    smallest_sparse = self.$index.sparse();
+                                }
+                            }
+                            None => {}
+                        }
+                    }
+                )+
+
+                if found {
+                    if smallest == core::usize::MAX {
+                        Some(FastIter::Mixed(FastMixed {
+                            current: 0,
+                            end: 0,
+                            mask,
+                            indices: smallest_dense,
+                            shared: smallest_shared,
+                            sparse: smallest_sparse,
+                            last_id: EntityId::dead(),
+                            storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                        }))
+                    } else {
+                        Some(FastIter::Mixed(FastMixed {
+                            current: 0,
+                            end: smallest,
+                            mask,
+                            indices: smallest_dense,
+                            shared: smallest_shared,
+                            sparse: smallest_sparse,
+                            last_id: EntityId::dead(),
+                            storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                        }))
+                    }
+                } else {
+                    self.try_fast_iter()
+                }
+            }
+            #[cfg(feature = "panic")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+            #[track_caller]
+            #[inline]
+            fn fast_iter_by<Driver: 'static>(self) -> Self::IntoIter {
+                match self.try_fast_iter_by::<Driver>() {
+                    Some(iter) => iter,
+                    None => panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified."),
                 }
             }
             #[cfg(feature = "parallel")]

@@ -218,3 +218,83 @@ fn not() {
         panic!()
     }
 }
+
+#[test]
+fn iter_by() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+
+    u32s.sort().unstable(|x, y| x.cmp(y).reverse());
+
+    let mut iter = (&u32s, &i16s).iter_by::<u32>();
+    assert_eq!(iter.next(), Some((&4, &14)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), Some((&0, &10)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&i16s, &u32s).iter_by::<u32>();
+    assert_eq!(iter.next(), Some((&14, &4)));
+    assert_eq!(iter.next(), Some((&12, &2)));
+    assert_eq!(iter.next(), Some((&10, &0)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&u32s, &i16s).iter_by::<i16>();
+    assert_eq!(iter.next(), Some((&0, &10)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), Some((&4, &14)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&i16s, &u32s).iter_by::<i16>();
+    assert_eq!(iter.next(), Some((&10, &0)));
+    assert_eq!(iter.next(), Some((&12, &2)));
+    assert_eq!(iter.next(), Some((&14, &4)));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn fast_iter_by() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut i16s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity((&mut u32s, &mut i16s), (4, 14));
+
+    u32s.sort().unstable(|x, y| x.cmp(y).reverse());
+
+    let mut iter = (&u32s, &i16s).try_fast_iter_by::<u32>().unwrap();
+    assert_eq!(iter.next(), Some((&4, &14)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), Some((&0, &10)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&i16s, &u32s).try_fast_iter_by::<u32>().unwrap();
+    assert_eq!(iter.next(), Some((&14, &4)));
+    assert_eq!(iter.next(), Some((&12, &2)));
+    assert_eq!(iter.next(), Some((&10, &0)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&u32s, &i16s).try_fast_iter_by::<i16>().unwrap();
+    assert_eq!(iter.next(), Some((&0, &10)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), Some((&4, &14)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&i16s, &u32s).try_fast_iter_by::<i16>().unwrap();
+    assert_eq!(iter.next(), Some((&10, &0)));
+    assert_eq!(iter.next(), Some((&12, &2)));
+    assert_eq!(iter.next(), Some((&14, &4)));
+    assert_eq!(iter.next(), None);
+}
