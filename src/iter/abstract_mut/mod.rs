@@ -2,6 +2,7 @@ mod inserted;
 mod inserted_or_modified;
 mod modified;
 mod not;
+mod with_shared;
 
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};

@@ -184,3 +184,105 @@ fn share_all() {
     assert_eq!(u32s.fast_get(e1), Ok(&0));
     assert_eq!(usizes.fast_get(e1), Ok(&1));
 }
+
+#[test]
+fn iter_driver() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+        .unwrap();
+
+    let owned = entities.add_entity(&mut u32s, 0);
+    let shared = entities.add_entity(&mut usizes, 1);
+    entities.add_entity(&mut usizes, 3);
+    entities.add_entity(&mut usizes, 5);
+    entities.add_entity(&mut usizes, 7);
+    entities.add_entity(&mut usizes, 9);
+    entities.add_entity(&mut usizes, 11);
+    entities.add_entity(&mut usizes, 13);
+    u32s.try_share(owned, shared).unwrap();
+
+    let mut iter = u32s.with_shared().iter();
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&usizes, u32s.with_shared()).iter();
+    assert_eq!(iter.next(), Some((&1, &0)));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn iter_non_driver() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+        .unwrap();
+
+    let owned = entities.add_entity(&mut u32s, 0);
+    let shared = entities.add_entity(&mut usizes, 1);
+    entities.add_entity(&mut u32s, 2);
+    entities.add_entity(&mut u32s, 4);
+    entities.add_entity(&mut u32s, 6);
+    entities.add_entity(&mut u32s, 8);
+    entities.add_entity(&mut u32s, 10);
+    entities.add_entity(&mut u32s, 12);
+    u32s.try_share(owned, shared).unwrap();
+
+    let mut iter = (&usizes, u32s.with_shared()).iter();
+    assert_eq!(iter.next(), Some((&1, &0)));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn fast_iter_driver() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+        .unwrap();
+
+    let owned = entities.add_entity(&mut u32s, 0);
+    let shared = entities.add_entity(&mut usizes, 1);
+    entities.add_entity(&mut usizes, 3);
+    entities.add_entity(&mut usizes, 5);
+    entities.add_entity(&mut usizes, 7);
+    entities.add_entity(&mut usizes, 9);
+    entities.add_entity(&mut usizes, 11);
+    entities.add_entity(&mut usizes, 13);
+    u32s.try_share(owned, shared).unwrap();
+
+    let mut iter = u32s.with_shared().try_fast_iter().unwrap();
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&usizes, u32s.with_shared()).try_fast_iter().unwrap();
+    assert_eq!(iter.next(), Some((&1, &0)));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn fast_iter_non_driver() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut usizes) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+        .unwrap();
+
+    let owned = entities.add_entity(&mut u32s, 0);
+    let shared = entities.add_entity(&mut usizes, 1);
+    entities.add_entity(&mut u32s, 2);
+    entities.add_entity(&mut u32s, 4);
+    entities.add_entity(&mut u32s, 6);
+    entities.add_entity(&mut u32s, 8);
+    entities.add_entity(&mut u32s, 10);
+    entities.add_entity(&mut u32s, 12);
+    u32s.try_share(owned, shared).unwrap();
+
+    let mut iter = (&usizes, u32s.with_shared()).try_fast_iter().unwrap();
+    assert_eq!(iter.next(), Some((&1, &0)));
+    assert_eq!(iter.next(), None);
+}

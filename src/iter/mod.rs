@@ -18,12 +18,9 @@ pub use fast::chunk::FastChunk;
 pub use fast::chunk_exact::FastChunkExact;
 pub use fast::into_iter::IntoFastIter;
 pub use fast::iter::FastIter;
-pub use fast::loose::FastLoose;
 pub use fast::mixed::FastMixed;
 #[cfg(feature = "parallel")]
 pub use fast::par_iter::FastParIter;
-#[cfg(feature = "parallel")]
-pub use fast::par_loose::FastParLoose;
 #[cfg(feature = "parallel")]
 pub use fast::par_mixed::FastParMixed;
 #[cfg(feature = "parallel")]

@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
 
-pub(crate) struct SparseArray<T>(Vec<Option<Box<T>>>);
+pub struct SparseArray<T>(Vec<Option<Box<T>>>);
 
 impl<T> SparseArray<T> {
     #[inline]
@@ -13,7 +13,7 @@ impl<T> SparseArray<T> {
         SparseArray(Vec::new())
     }
     #[inline]
-    pub(super) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
     #[inline]
@@ -58,9 +58,23 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
             None => unreachable_unchecked(),
         }
     }
+    #[inline]
+    pub(crate) unsafe fn get_at_unchecked(&self, index: usize) -> EntityId {
+        match self.0.get_unchecked(index / crate::sparse_set::BUCKET_SIZE) {
+            Some(bucket) => EntityId::new_from_parts(
+                index as u64,
+                bucket
+                    .get_unchecked(index % crate::sparse_set::BUCKET_SIZE)
+                    .index() as u16,
+                0,
+            ),
+            None => unreachable_unchecked(),
+        }
+    }
 }
 
 impl SparseArray<[EntityId; crate::sparse_set::metadata::BUCKET_SIZE]> {
+    #[inline]
     pub(crate) fn allocate_at(&mut self, entity: EntityId) {
         if entity.shared_bucket() >= self.0.len() {
             self.0.resize(entity.shared_bucket() + 1, None);
@@ -74,18 +88,34 @@ impl SparseArray<[EntityId; crate::sparse_set::metadata::BUCKET_SIZE]> {
             }
         }
     }
+    #[inline]
     pub(super) fn shared_index(&self, entity: EntityId) -> Option<EntityId> {
         self.0
             .get(entity.shared_bucket())?
             .as_ref()
             .map(|bucket| unsafe { *bucket.get_unchecked(entity.shared_bucket_index()) })
     }
+    #[inline]
     pub(super) unsafe fn set_sparse_index_unchecked(&mut self, shared: EntityId, owned: EntityId) {
         self.allocate_at(shared);
 
         match self.0.get_unchecked_mut(shared.shared_bucket()) {
             Some(bucket) => *bucket.get_unchecked_mut(shared.shared_bucket_index()) = owned,
             None => unreachable_unchecked(),
+        }
+    }
+    #[inline]
+    pub(crate) fn is_valid(&self, index: usize) -> bool {
+        if let Some(bucket) = self.0.get(index / crate::sparse_set::metadata::BUCKET_SIZE) {
+            bucket
+                .as_ref()
+                .map(|bucket| unsafe {
+                    *bucket.get_unchecked(index % crate::sparse_set::metadata::BUCKET_SIZE)
+                })
+                .filter(EntityId::is_dead)
+                .is_none()
+        } else {
+            false
         }
     }
 }

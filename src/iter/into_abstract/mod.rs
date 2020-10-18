@@ -2,9 +2,11 @@ mod inserted;
 mod inserted_or_modified;
 mod modified;
 mod not;
+mod with_shared;
 
 use super::abstract_mut::AbstractMut;
 use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
+use crate::sparse_set::{SparseArray, BUCKET_SIZE, SHARED_BUCKET_SIZE};
 use crate::storage::EntityId;
 use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
@@ -22,6 +24,14 @@ pub trait IntoAbstract {
     fn metadata(&self) -> &Metadata<Self::Pack>;
     fn type_id(&self) -> TypeId;
     fn dense(&self) -> *const EntityId;
+    #[inline]
+    fn shared(&self) -> *const SparseArray<[EntityId; SHARED_BUCKET_SIZE]> {
+        core::ptr::null()
+    }
+    #[inline]
+    fn sparse(&self) -> *const SparseArray<[EntityId; BUCKET_SIZE]> {
+        core::ptr::null()
+    }
 }
 
 impl<'a, T: 'static> IntoAbstract for &'a View<'_, T> {

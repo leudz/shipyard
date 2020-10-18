@@ -1,6 +1,5 @@
 use super::abstract_mut::FastAbstractMut;
 use super::iter::FastIter;
-use super::par_loose::FastParLoose;
 use super::par_mixed::FastParMixed;
 use super::par_tight::FastParTight;
 use rayon::iter::plumbing::UnindexedConsumer;
@@ -8,7 +7,6 @@ use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 pub enum FastParIter<Storage> {
     Tight(FastParTight<Storage>),
-    Loose(FastParLoose<Storage>),
     Mixed(FastParMixed<Storage>),
 }
 
@@ -16,7 +14,6 @@ impl<Storage: FastAbstractMut> From<FastIter<Storage>> for FastParIter<Storage> 
     fn from(iter: FastIter<Storage>) -> Self {
         match iter {
             FastIter::Tight(tight) => FastParIter::Tight(tight.into()),
-            FastIter::Loose(loose) => FastParIter::Loose(loose.into()),
             FastIter::Mixed(mixed) => FastParIter::Mixed(mixed.into()),
         }
     }
@@ -35,14 +32,12 @@ where
     {
         match self {
             FastParIter::Tight(tight) => tight.drive(consumer),
-            FastParIter::Loose(loose) => loose.drive(consumer),
             FastParIter::Mixed(mixed) => mixed.drive_unindexed(consumer),
         }
     }
     fn opt_len(&self) -> Option<usize> {
         match self {
             FastParIter::Tight(tight) => tight.opt_len(),
-            FastParIter::Loose(loose) => loose.opt_len(),
             FastParIter::Mixed(mixed) => mixed.opt_len(),
         }
     }

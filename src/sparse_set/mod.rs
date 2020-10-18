@@ -12,6 +12,7 @@ mod window;
 // #[cfg(feature = "serde1")]
 // pub(crate) use metadata::SerdeInfos;
 pub(crate) use metadata::{Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE};
+pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
 
 use crate::error;
@@ -26,7 +27,6 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 // #[cfg(feature = "serde1")]
 // use deser::SparseSetDeserializer;
-use sparse_array::SparseArray;
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
 

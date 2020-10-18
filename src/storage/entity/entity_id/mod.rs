@@ -106,6 +106,7 @@ impl EntityId {
         EntityId(unsafe { NonZeroU64::new_unchecked((entity.gen() + 1) | Self::SHARED) })
     }
 
+    #[inline]
     pub(crate) fn new_from_parts(index: u64, gen: u16, meta: u8) -> Self {
         assert!(index < Self::INDEX_MASK);
         assert!(gen as u64 <= Self::max_gen());
@@ -159,7 +160,7 @@ impl EntityId {
         Self::GEN_MASK >> Self::INDEX_LEN
     }
     #[inline]
-    pub(crate) fn is_dead(self) -> bool {
+    pub(crate) fn is_dead(&self) -> bool {
         (self.0.get() & Self::GEN_MASK) == Self::GEN_MASK
     }
     #[inline]

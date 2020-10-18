@@ -1,4 +1,5 @@
 use crate::atomic_refcell::{Ref, RefMut, SharedBorrow};
+use crate::pack::shared::WithShared;
 use crate::pack::update::{Inserted, InsertedOrModified, Modified};
 use crate::sparse_set::SparseSet;
 use crate::storage::{AllStorages, Entities, Unique};
@@ -100,6 +101,9 @@ impl<T> View<'_, T> {
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
+    pub fn with_shared(&self) -> WithShared<&Self> {
+        WithShared(self)
+    }
 }
 
 impl<'a, T> Deref for View<'a, T> {
@@ -152,6 +156,9 @@ impl<T> ViewMut<'_, T> {
     }
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
+    }
+    pub fn with_shared(&self) -> WithShared<&Self> {
+        WithShared(self)
     }
 }
 
