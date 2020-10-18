@@ -12,9 +12,10 @@ use crate::entity_builder::EntityBuilder;
 use crate::error;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::{ExistingEntities, GlobalDeConfig, GlobalSerConfig, WithShared};
-use crate::storage::AllStorages;
+use crate::storage::{AllStorages, StorageId};
 // #[cfg(feature = "serde1")]
 // use crate::storage::{Storage, StorageId};
+use crate::unknown_storage::UnknownStorage;
 use alloc::borrow::Cow;
 use scheduler::{Batches, Scheduler};
 
@@ -1235,6 +1236,28 @@ let i = world.run(sys1);
     }
     pub fn all_storages_mut(&self) -> Result<RefMut<'_, &'_ mut AllStorages>, error::Borrow> {
         self.all_storages.try_borrow_mut()
+    }
+    pub fn try_add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
+        &self,
+        storage_id: StorageId,
+        storage: S,
+    ) -> Result<(), error::Borrow> {
+        let _ = self
+            .all_storages
+            .try_borrow()?
+            .custom_storage_or_insert_by_id(storage_id, || storage);
+
+        Ok(())
+    }
+    pub fn add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
+        &self,
+        storage_id: StorageId,
+        storage: S,
+    ) {
+        match self.try_add_custom_storage(storage_id, storage) {
+            Ok(r) => r,
+            Err(err) => panic!("{:?}", err),
+        }
     }
     // /// Serializes the [World] the way `ser_config` defines it.
     // ///

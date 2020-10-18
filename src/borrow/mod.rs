@@ -90,13 +90,10 @@ impl<'a> Borrow<'a> for EntitiesView<'a> {
             )
         };
 
-        all_storages
-            .private_get_or_insert(Entities::new)
-            .map(|entities| EntitiesView {
-                entities,
-                all_borrow: Some(all_borrow),
-            })
-            .map_err(error::GetStorage::Entities)
+        all_storages.entities().map(|entities| EntitiesView {
+            entities,
+            all_borrow: Some(all_borrow),
+        })
     }
 
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
@@ -122,13 +119,10 @@ impl<'a> Borrow<'a> for EntitiesViewMut<'a> {
             )
         };
 
-        all_storages
-            .private_get_or_insert_mut(Entities::new)
-            .map(|entities| EntitiesViewMut {
-                entities,
-                _all_borrow: Some(all_borrow),
-            })
-            .map_err(error::GetStorage::Entities)
+        all_storages.entities_mut().map(|entities| EntitiesViewMut {
+            entities,
+            _all_borrow: Some(all_borrow),
+        })
     }
 
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
@@ -155,7 +149,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for View<'a, T> {
         };
 
         all_storages
-            .get_or_insert(SparseSet::new)
+            .custom_storage_or_insert(SparseSet::new)
             .map(|sparse_set| View {
                 sparse_set,
                 all_borrow: Some(all_borrow),
@@ -187,7 +181,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<View<'a, T>> {
         };
 
         all_storages
-            .get_or_insert_non_send(SparseSet::new)
+            .custom_storage_or_insert_non_send(SparseSet::new)
             .map(|sparse_set| {
                 NonSend(View {
                     sparse_set,
@@ -221,7 +215,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<View<'a, T>> {
         };
 
         all_storages
-            .get_or_insert_non_sync(SparseSet::new)
+            .custom_storage_or_insert_non_sync(SparseSet::new)
             .map(|sparse_set| {
                 NonSync(View {
                     sparse_set,
@@ -255,7 +249,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<View<'a, T>> {
         };
 
         all_storages
-            .get_or_insert_non_send_sync(SparseSet::new)
+            .custom_storage_or_insert_non_send_sync(SparseSet::new)
             .map(|sparse_set| {
                 NonSendSync(View {
                     sparse_set,
@@ -288,7 +282,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
         };
 
         all_storages
-            .get_or_insert_mut(SparseSet::new)
+            .custom_storage_or_insert_mut(SparseSet::new)
             .map(|sparse_set| ViewMut {
                 sparse_set,
                 _all_borrow: Some(all_borrow),
@@ -320,7 +314,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
         };
 
         all_storages
-            .get_or_insert_non_send_mut(SparseSet::new)
+            .custom_storage_or_insert_non_send_mut(SparseSet::new)
             .map(|sparse_set| {
                 NonSend(ViewMut {
                     sparse_set,
@@ -354,7 +348,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
         };
 
         all_storages
-            .get_or_insert_non_sync_mut(SparseSet::new)
+            .custom_storage_or_insert_non_sync_mut(SparseSet::new)
             .map(|sparse_set| {
                 NonSync(ViewMut {
                     sparse_set,
@@ -388,7 +382,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
         };
 
         all_storages
-            .get_or_insert_non_send_sync_mut(SparseSet::new)
+            .custom_storage_or_insert_non_send_sync_mut(SparseSet::new)
             .map(|sparse_set| {
                 NonSendSync(ViewMut {
                     sparse_set,
@@ -420,7 +414,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueView<'a, T> {
             )
         };
 
-        all_storages.get().map(|unique| UniqueView {
+        all_storages.custom_storage().map(|unique| UniqueView {
             unique,
             all_borrow: Some(all_borrow),
         })
@@ -450,7 +444,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueView<'a, T>> {
             )
         };
 
-        all_storages.get().map(|unique| {
+        all_storages.custom_storage().map(|unique| {
             NonSend(UniqueView {
                 unique,
                 all_borrow: Some(all_borrow),
@@ -482,7 +476,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueView<'a, T>> {
             )
         };
 
-        all_storages.get().map(|unique| {
+        all_storages.custom_storage().map(|unique| {
             NonSync(UniqueView {
                 unique,
                 all_borrow: Some(all_borrow),
@@ -514,7 +508,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueView<'a, T>> {
             )
         };
 
-        all_storages.get().map(|unique| {
+        all_storages.custom_storage().map(|unique| {
             NonSendSync(UniqueView {
                 unique,
                 all_borrow: Some(all_borrow),
@@ -544,10 +538,12 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMut<'a, T> {
             )
         };
 
-        all_storages.get_mut().map(|unique| UniqueViewMut {
-            unique,
-            _all_borrow: Some(all_borrow),
-        })
+        all_storages
+            .custom_storage_mut()
+            .map(|unique| UniqueViewMut {
+                unique,
+                _all_borrow: Some(all_borrow),
+            })
     }
 
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
@@ -574,7 +570,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMut<'a, T>> {
             )
         };
 
-        all_storages.get_mut().map(|unique| {
+        all_storages.custom_storage_mut().map(|unique| {
             NonSend(UniqueViewMut {
                 unique,
                 _all_borrow: Some(all_borrow),
@@ -606,7 +602,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMut<'a, T>> {
             )
         };
 
-        all_storages.get_mut().map(|unique| {
+        all_storages.custom_storage_mut().map(|unique| {
             NonSync(UniqueViewMut {
                 unique,
                 _all_borrow: Some(all_borrow),
@@ -638,7 +634,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMut<'a, T>> {
             )
         };
 
-        all_storages.get_mut().map(|unique| {
+        all_storages.custom_storage_mut().map(|unique| {
             NonSendSync(UniqueViewMut {
                 unique,
                 _all_borrow: Some(all_borrow),
