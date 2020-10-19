@@ -159,6 +159,9 @@ impl Display for AddComponent {
     }
 }
 
+/// Error type returned by [`WorkloadBuilder::add_to_world`].
+///
+/// [`WorkloadBuilder::add_to_world`]: ../struct.WorkloadBuilder.html#method.add_to_world
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddWorkload {
     AlreadyExists,
@@ -212,8 +215,11 @@ impl Display for SetDefaultWorkload {
     }
 }
 
-/// Error related to `run_default` and `run_workload`.  
+/// Error returned by [`try_run_default`] and [`try_run_workload`].  
 /// The error can be a storage error, problem with the scheduler's borrowing, a non existant workload or a custom error.
+///
+/// [`try_run_default`]: ../struct.World.html#method.try_run_default
+/// [`try_run_workload`]: ../struct.World.html#method.try_run_workload
 pub enum RunWorkload {
     Scheduler,
     Run((&'static str, Run)),
@@ -260,8 +266,11 @@ impl Display for RunWorkload {
     }
 }
 
-/// Error returned by `World::try_run` and `AllStorages::try_run`.  
+/// Error returned by [`World::try_run`] and [`AllStorages::try_run`].  
 /// Can refer to an invalid storage borrow or a custom error.
+///
+/// [`World::try_run`]: ../struct.World.html#method.try_run
+/// [`AllStorages::try_run`]: ../struct.AllStorages.html#method.try_run
 pub enum Run {
     GetStorage(GetStorage),
     #[cfg(feature = "std")]
@@ -324,7 +333,9 @@ impl Display for NotUpdatePack {
     }
 }
 
-/// Error when using `get` with an entity that does not have any component in the requested storage(s).
+/// Error when using [`get`] with an entity that does not have any component in the requested storage(s).
+///
+/// [`get`]: ../trait.Get.html
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MissingComponent {
     pub id: EntityId,
@@ -376,6 +387,10 @@ impl Display for InvalidSystem {
     }
 }
 
+/// Error returned by [`World::try_remove_unique`] and [`AllStorages::try_remove_unique`].
+///
+/// [`World::try_remove_unique`]: ../struct.World.html#method.try_remove_unique
+/// [`AllStorages::try_remove_unique`]: ../struct.AllStorages.html#method.try_remove_unique
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UniqueRemove {
     AllStorages,
@@ -406,6 +421,9 @@ impl Display for UniqueRemove {
     }
 }
 
+/// Error returned by [`SparseSet::try_share`].
+///
+/// [`SparseSet::try_share`]: ../struct.SparseSet.html#method.try_share
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Share;
 
@@ -424,6 +442,9 @@ impl Display for Share {
     }
 }
 
+/// Error returned by [`SparseSet::try_unshare`].
+///
+/// [`SparseSet::try_unshare`]: ../struct.SparseSet.html#method.try_unshare
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Unshare;
 
@@ -442,6 +463,10 @@ impl Display for Unshare {
     }
 }
 
+/// Error returned by [`try_apply`] and [`try_apply_mut`].
+///
+/// [`try_apply`]: ../struct.SparseSet.html#method.try_apply
+/// [`try_apply_mut`]: ../struct.SparseSet.html#method.try_apply_mut
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Apply {
     IdenticalIds,

@@ -12,14 +12,80 @@ use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
 
+/// Trait used to create iterators.
+///
+/// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
+/// This trait serves as substitute.
 pub trait IntoIter {
     type IntoIter;
     #[cfg(feature = "parallel")]
     type IntoParIter;
 
+    /// Returns an iterator over `SparseSet`.
+    ///
+    /// Yields [`Mut`] for mutable components.  
+    /// It `deref`s to the component and will flag mutation.  
+    /// [`fast_iter`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
+    ///
+    /// ### Example
+    /// ```
+    /// use shipyard::{EntitiesViewMut, IntoIter, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    ///         for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    ///             *x += y as usize;
+    ///         }
+    ///     },
+    /// );
+    /// ```
+    /// [`Mut`]: ../struct.Mut.html
+    /// [`fast_iter`]: trait.IntoFastIter.html
     fn iter(self) -> Self::IntoIter;
+    /// Returns an iterator over `SparseSet`, its order is based on `D`.
+    ///
+    /// Returns [`Mut`] when yielding mutable components.  
+    /// It `deref`s to the component and will flag mutation.  
+    /// [`fast_iter_by`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
+    ///
+    /// [`Mut`]: ../struct.Mut.html
+    /// [`fast_iter_by`]: trait.IntoFastIter.html
     fn iter_by<D: 'static>(self) -> Self::IntoIter;
+    /// Returns a parallel iterator over `SparseSet`.
+    ///
+    /// Yields [`Mut`] for mutable components.  
+    /// It `deref`s to the component and will flag mutation.  
+    /// [`fast_par_iter`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
+    ///
+    /// ### Example
+    /// ```
+    /// use rayon::prelude::ParallelIterator;
+    /// use shipyard::{EntitiesViewMut, IntoIter, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut,
+    ///      mut usizes: ViewMut<usize>,
+    ///      mut u32s: ViewMut<u32>,| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    ///         (&mut usizes, &u32s).par_iter().for_each(|(mut x, &y)| {
+    ///             *x += y as usize;
+    ///         });
+    ///     },
+    /// );
+    /// ```
+    /// [`Mut`]: ../struct.Mut.html
+    /// [`fast_par_iter`]: trait.IntoFastIter.html
     #[cfg(feature = "parallel")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     fn par_iter(self) -> Self::IntoParIter;
 }
 

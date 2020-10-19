@@ -13,20 +13,135 @@ use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
 
+/// Trait used to create iterators. Yields `&mut T` for mutable components. Doesn't work with update packed storage.
+///
+/// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
+/// This trait serves as substitute.
 pub trait IntoFastIter {
     type IntoIter;
     #[cfg(feature = "parallel")]
     type IntoParIter;
 
+    /// Returns an iterator over `SparseSet`. Returns `None` if one of the storage is update packed.
+    ///
+    /// [`iter`] can be used for update packed storage.
+    ///
+    /// ### Example
+    /// ```
+    /// use shipyard::{EntitiesViewMut, IntoFastIter, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    ///         for (x, &y) in (&mut usizes, &u32s).try_fast_iter().unwrap() {
+    ///             *x += y as usize;
+    ///         }
+    ///     },
+    /// );
+    /// ```
+    /// [`iter`]: trait.IntoIter.html
     fn try_fast_iter(self) -> Option<Self::IntoIter>;
+    /// Returns an iterator over `SparseSet`.  
+    /// Panics if one of the storage is update packed.
+    ///
+    /// [`iter`] can be used for update packed storage.
+    ///
+    /// ### Example
+    /// ```
+    /// use shipyard::{EntitiesViewMut, IntoFastIter, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    ///         for (x, &y) in (&mut usizes, &u32s).fast_iter() {
+    ///             *x += y as usize;
+    ///         }
+    ///     },
+    /// );
+    /// ```
+    /// [`iter`]: trait.IntoIter.html
     #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn fast_iter(self) -> Self::IntoIter;
+    /// Returns an iterator over `SparseSet`, its order is based on `D`. Returns `None` if one of the storage is update packed.
+    ///
+    /// [`iter_by`] can be used for update packed storage.
+    ///
+    /// [`iter_by`]: trait.IntoIter.html
     fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter>;
+    /// Returns an iterator over `SparseSet`, its order is based on `D`.  
+    /// Panics if one of the storage is update packed.
+    ///
+    /// [`iter_by`] can be used for update packed storage.
+    ///
+    /// [`iter_by`]: trait.IntoIter.html
     #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter;
+    /// Returns a parallel iterator over `SparseSet`. Returns `None` if one of the storage is update packed.
+    ///
+    /// [`par_iter`] can be used for update packed storage.
+    ///
+    /// ### Example
+    /// ```
+    /// use rayon::prelude::ParallelIterator;
+    /// use shipyard::{EntitiesViewMut, IntoFastIter, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut,
+    ///      mut usizes: ViewMut<usize>,
+    ///      mut u32s: ViewMut<u32>,| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    ///         (&mut usizes, &u32s).try_fast_par_iter().unwrap().for_each(|(x, &y)| {
+    ///             *x += y as usize;
+    ///         });
+    ///     },
+    /// );
+    /// ```
+    /// [`par_iter`]: trait.IntoIter.html
     #[cfg(feature = "parallel")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     fn try_fast_par_iter(self) -> Option<Self::IntoParIter>;
+    /// Returns a parallel iterator over `SparseSet`.  
+    /// Panics if one of the storage is update packed.
+    ///
+    /// [`par_iter`] can be used for update packed storage.
+    ///
+    /// ### Example
+    /// ```
+    /// use rayon::prelude::ParallelIterator;
+    /// use shipyard::{EntitiesViewMut, IntoFastIter, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.run(
+    ///     |mut entities: EntitiesViewMut,
+    ///      mut usizes: ViewMut<usize>,
+    ///      mut u32s: ViewMut<u32>,| {
+    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    ///         (&mut usizes, &u32s).fast_par_iter().for_each(|(x, &y)| {
+    ///             *x += y as usize;
+    ///         });
+    ///     },
+    /// );
+    /// ```
+    /// [`par_iter`]: trait.IntoIter.html
     #[cfg(all(feature = "panic", feature = "parallel"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "panic", feature = "parallel"))))]
     fn fast_par_iter(self) -> Self::IntoParIter;
 }
 

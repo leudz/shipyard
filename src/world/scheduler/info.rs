@@ -1,3 +1,5 @@
+//! Contains types for displaying workload information.
+
 use crate::borrow::Mutability;
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
