@@ -105,7 +105,7 @@ fn strip() {
 }
 
 #[test]
-fn strip_except() {
+fn retain() {
     let world = World::new();
 
     let (entity1, entity2) = world
@@ -125,7 +125,7 @@ fn strip_except() {
 
     world
         .try_run(|mut all_storages: AllStoragesViewMut| {
-            all_storages.strip_except::<SparseSet<u32>>(entity1);
+            all_storages.retain::<SparseSet<u32>>(entity1);
         })
         .unwrap();
 

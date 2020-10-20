@@ -1,8 +1,8 @@
 mod delete_any;
-mod strip_except;
+mod retain;
 
 pub use delete_any::{CustomDeleteAny, DeleteAny};
-pub use strip_except::StripExcept;
+pub use retain::Retain;
 
 use super::{Entities, EntityId, Storage, StorageId, Unique};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
@@ -257,11 +257,11 @@ impl AllStorages {
         }
     }
     /// Deletes all components (except the ones in `S`) from an entity without deleting it.
-    pub fn strip_except<S: StripExcept>(&mut self, entity: EntityId) {
-        S::strip_except(self, entity);
+    pub fn retain<S: Retain>(&mut self, entity: EntityId) {
+        S::retain(self, entity);
     }
     /// Deletes all components (except the ones in `excluded_storage`) from an entity without deleting it.
-    pub fn strip_except_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+    pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         // SAFE we have unique access
         let storages = unsafe { &mut *self.storages.get() };
 

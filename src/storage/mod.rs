@@ -3,7 +3,7 @@ mod entity;
 mod storage_id;
 mod unique;
 
-pub use all::{AllStorages, CustomDeleteAny, DeleteAny, StripExcept};
+pub use all::{AllStorages, CustomDeleteAny, DeleteAny, Retain};
 pub use entity::{Entities, EntitiesIter, EntityId};
 pub use storage_id::StorageId;
 pub use unique::Unique;
