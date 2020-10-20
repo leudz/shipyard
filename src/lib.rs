@@ -77,7 +77,9 @@ pub use pack::update::{Inserted, InsertedOrModified, Modified};
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use sparse_set::{sort, sort::IntoSortable, OldComponent, SparseSet};
-pub use storage::{AllStorages, DeleteAny, Entities, EntityId, StorageId, Unique};
+pub use storage::{
+    AllStorages, CustomDeleteAny, DeleteAny, Entities, EntityId, StorageId, StripExcept, Unique,
+};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 pub use type_id::TypeId;

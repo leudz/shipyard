@@ -3,12 +3,11 @@ mod entity;
 mod storage_id;
 mod unique;
 
-pub use all::{AllStorages, DeleteAny};
+pub use all::{AllStorages, CustomDeleteAny, DeleteAny, StripExcept};
 pub use entity::{Entities, EntitiesIter, EntityId};
 pub use storage_id::StorageId;
 pub use unique::Unique;
 
-pub(crate) use crate::type_id::TypeIdHasher;
 // #[cfg(feature = "serde1")]
 // pub(crate) use all::AllStoragesSerializer;
 

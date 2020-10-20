@@ -21,7 +21,7 @@ fn simple() {
                 )
                 .unwrap();
 
-            all_storages.delete_any::<(u32,)>();
+            all_storages.delete_any::<SparseSet<u32>>();
 
             all_storages
                 .try_run(|entities: EntitiesView| {

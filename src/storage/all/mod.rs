@@ -1,6 +1,8 @@
 mod delete_any;
+mod strip_except;
 
-pub use delete_any::DeleteAny;
+pub use delete_any::{CustomDeleteAny, DeleteAny};
+pub use strip_except::StripExcept;
 
 use super::{Entities, EntityId, Storage, StorageId, Unique};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
@@ -254,7 +256,11 @@ impl AllStorages {
             storage.delete(entity);
         }
     }
-    /// Deletes all components from an entity without deleting it.
+    /// Deletes all components (except the ones in `S`) from an entity without deleting it.
+    pub fn strip_except<S: StripExcept>(&mut self, entity: EntityId) {
+        S::strip_except(self, entity);
+    }
+    /// Deletes all components (except the ones in `excluded_storage`) from an entity without deleting it.
     pub fn strip_except_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         // SAFE we have unique access
         let storages = unsafe { &mut *self.storages.get() };
@@ -952,7 +958,7 @@ let i = all_storages.run(sys1);
     /// `T` has to be a tuple even for a single type.  
     /// In this case use (T,).
     pub fn delete_any<T: DeleteAny>(&mut self) {
-        T::delete_any(self)
+        T::delete_any(self);
     }
     /// Used to create an entity without having to borrow its storage explicitly.  
     /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.
