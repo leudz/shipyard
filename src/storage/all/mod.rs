@@ -954,9 +954,6 @@ let i = all_storages.run(sys1);
         }
     }
     /// Deletes any entity with at least one of the given type(s).
-    ///
-    /// `T` has to be a tuple even for a single type.  
-    /// In this case use (T,).
     pub fn delete_any<T: DeleteAny>(&mut self) {
         T::delete_any(self);
     }
