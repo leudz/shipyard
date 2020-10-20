@@ -103,3 +103,50 @@ fn strip() {
         })
         .unwrap();
 }
+
+#[test]
+fn strip_except() {
+    let world = World::new();
+
+    let (entity1, entity2) = world
+        .try_run(
+            |(mut entities, mut usizes, mut u32s): (
+                EntitiesViewMut,
+                ViewMut<usize>,
+                ViewMut<u32>,
+            )| {
+                (
+                    entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)),
+                    entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)),
+                )
+            },
+        )
+        .unwrap();
+
+    world
+        .try_run(|mut all_storages: AllStoragesViewMut| {
+            all_storages.strip_except::<SparseSet<u32>>(entity1);
+        })
+        .unwrap();
+
+    world
+        .try_run(|(mut usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
+            assert_eq!(
+                (&mut usizes).get(entity1).err(),
+                Some(error::MissingComponent {
+                    id: entity1,
+                    name: type_name::<usize>(),
+                })
+            );
+            assert_eq!((&u32s).get(entity1), Ok(&1));
+            assert_eq!(usizes.get(entity2), Ok(&2));
+            assert_eq!(u32s.get(entity2), Ok(&3));
+        })
+        .unwrap();
+
+    world
+        .try_run(|mut all_storages: AllStoragesViewMut| {
+            assert!(all_storages.delete(entity1));
+        })
+        .unwrap();
+}
