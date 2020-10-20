@@ -220,6 +220,14 @@ impl<T: ?Sized> AtomicRefCell<T> {
             Err(error::Borrow::Unique)
         }
     }
+    /// ### Safety
+    ///
+    /// Can't be used with `AllStorages`.
+    #[inline]
+    pub(crate) unsafe fn get_mut(&mut self) -> &'_ mut T {
+        // SAFE we have exclusive access
+        &mut *self.inner.get()
+    }
 }
 
 pub struct SharedBorrow<'a>(&'a RawRwLock);

@@ -1,5 +1,6 @@
 use crate::sparse_set::SparseSet;
 use crate::storage::{AllStorages, EntityId, StorageId, TypeIdHasher};
+use alloc::vec::Vec;
 use core::hash::BuildHasherDefault;
 use hashbrown::hash_set::HashSet;
 
@@ -10,16 +11,22 @@ pub trait DeleteAny {
 
 impl<T: 'static> DeleteAny for (T,) {
     fn delete_any(all_storages: &mut AllStorages) {
-        // we have an exclusive reference so it's ok to not lock and still get a reference
-        let storages = unsafe { &*all_storages.storages.get() };
-        if let Some(storage) = storages.get(&StorageId::of::<SparseSet<T>>()) {
-            let mut sparse_set = storage.get_mut::<SparseSet<T>>().unwrap();
-            let ids = sparse_set.dense.clone();
-            sparse_set.clear();
-            drop(sparse_set);
-            for id in ids {
-                all_storages.delete(id);
+        let mut ids = Vec::new();
+
+        {
+            // we have an exclusive reference so it's ok to not lock and still get a reference
+            let storages = unsafe { &mut *all_storages.storages.get() };
+
+            if let Some(storage) = storages.get_mut(&StorageId::of::<SparseSet<T>>()) {
+                // SAFE this is not `AllStorages`
+                let sparse_set = storage.get_mut_exclusive::<SparseSet<T>>();
+                ids = sparse_set.dense.clone();
+                sparse_set.clear();
             }
+        }
+
+        for id in ids {
+            all_storages.delete(id);
         }
     }
 }
@@ -28,18 +35,21 @@ macro_rules! impl_delete_any {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: 'static),+> DeleteAny for ($($type,)+) {
             fn delete_any(all_storages: &mut AllStorages) {
-                // we have an exclusive reference so it's ok to not lock and still get a reference
-                let storages = unsafe { &*all_storages.storages.get() };
                 let mut ids: HashSet<EntityId, BuildHasherDefault<TypeIdHasher>> = HashSet::default();
 
-                $(
-                    if let Some(storage) = storages.get(&StorageId::of::<SparseSet<$type>>()) {
-                        if let Ok(mut sparse_set) = storage.get_mut::<SparseSet::<$type>>() {
+                {
+                    // we have an exclusive reference so it's ok to not lock and still get a reference
+                    let storages = unsafe { &mut *all_storages.storages.get() };
+
+                    $(
+                        if let Some(storage) = storages.get_mut(&StorageId::of::<SparseSet<$type>>()) {
+                            // SAFE this is not `AllStorages`
+                            let sparse_set = storage.get_mut_exclusive::<SparseSet::<$type>>();
                             ids.extend(&sparse_set.dense);
                             sparse_set.clear();
                         }
-                    }
-                )+
+                    )+
+                }
 
                 for id in ids {
                     all_storages.delete(id);

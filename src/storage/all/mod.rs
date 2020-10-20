@@ -251,7 +251,19 @@ impl AllStorages {
 
         for storage in storages.values_mut() {
             // we have unique access to all storages so we can unwrap
-            storage.delete(entity).unwrap();
+            storage.delete(entity);
+        }
+    }
+    /// Deletes all components from an entity without deleting it.
+    pub fn strip_except_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+        // SAFE we have unique access
+        let storages = unsafe { &mut *self.storages.get() };
+
+        for (storage_id, storage) in storages.iter_mut() {
+            if !excluded_storage.contains(storage_id) {
+                // we have unique access to all storages so we can unwrap
+                storage.delete(entity);
+            }
         }
     }
     /// Deletes all entities and their components.
@@ -261,7 +273,7 @@ impl AllStorages {
 
         for storage in storages.values_mut() {
             // we have unique access to all storages so we can unwrap
-            storage.clear().unwrap()
+            storage.clear();
         }
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
@@ -965,7 +977,7 @@ let i = all_storages.run(sys1);
 
         for storage in storages.values_mut() {
             // we have unique access to all storages so we can unwrap
-            storage.share(owned, shared).unwrap()
+            storage.share(owned, shared);
         }
     }
     pub(crate) fn entities(&self) -> Result<Ref<'_, &'_ Entities>, error::GetStorage> {

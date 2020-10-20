@@ -33,29 +33,40 @@ unsafe impl Sync for Storage {}
 
 impl Storage {
     #[inline]
-    pub(crate) fn get<T: 'static>(&'_ self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
+    fn get<T: 'static>(&'_ self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
         Ok(Ref::map(self.0.try_borrow()?, |storage| {
             storage.any().downcast_ref::<T>().unwrap()
         }))
     }
     #[inline]
-    pub(crate) fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
+    fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
         Ok(RefMut::map(self.0.try_borrow_mut()?, |storage| {
             storage.any_mut().downcast_mut().unwrap()
         }))
     }
+    #[inline]
+    fn get_mut_exclusive<T: 'static>(&mut self) -> &'_ mut T {
+        // SAFE this is not `AllStorages`
+        unsafe { self.0.get_mut().any_mut().downcast_mut().unwrap() }
+    }
     /// Mutably borrows the container and delete `index`.
-    pub(crate) fn delete(&mut self, entity: EntityId) -> Result<(), error::Borrow> {
-        self.0.try_borrow_mut()?.delete(entity);
-        Ok(())
+    fn delete(&mut self, entity: EntityId) {
+        // SAFE this is not `AllStorages`
+        unsafe {
+            self.0.get_mut().delete(entity);
+        }
     }
-    pub(crate) fn clear(&mut self) -> Result<(), error::Borrow> {
-        self.0.try_borrow_mut()?.clear();
-        Ok(())
+    fn clear(&mut self) {
+        // SAFE this is not `AllStorages`
+        unsafe {
+            self.0.get_mut().clear();
+        }
     }
-    pub(crate) fn share(&mut self, owned: EntityId, shared: EntityId) -> Result<(), error::Borrow> {
-        self.0.try_borrow_mut()?.share(owned, shared);
-        Ok(())
+    fn share(&mut self, owned: EntityId, shared: EntityId) {
+        // SAFE this is not `AllStorages`
+        unsafe {
+            self.0.get_mut().share(owned, shared);
+        }
     }
 }
 
@@ -118,7 +129,7 @@ fn delete() {
         .unwrap()
         .insert(entity_id, "test1");
     entity_id.set_index(5);
-    storage.delete(entity_id).unwrap();
+    storage.delete(entity_id);
     assert_eq!(
         storage
             .get_mut::<SparseSet::<&'static str>>()
@@ -143,9 +154,9 @@ fn delete() {
         Some(&"test1")
     );
     entity_id.set_index(10);
-    storage.delete(entity_id).unwrap();
+    storage.delete(entity_id);
     entity_id.set_index(1);
-    storage.delete(entity_id).unwrap();
+    storage.delete(entity_id);
     entity_id.set_index(5);
     assert_eq!(
         storage
