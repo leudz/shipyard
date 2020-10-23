@@ -930,44 +930,42 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Registers an event triggered when adding a component.
+    /// Registers a callback triggered when a component is inserted and run immediately.
     ///
-    /// Events will run one after the other based on the order they were added.  
+    /// Callbacks will run one after the other based on the order they were added.  
     /// They will run after the component is already in the `SparseSet`.  
-    /// Adding components inside an event will also trigger `on_insert` events.  
-    /// Events won't trigger if the entity had already an owned component in this storage.
+    /// Inserting components to an entity that already owns a component in this storage will not trigger `on_insert` event.
     #[inline]
     pub fn on_insert(&mut self, f: fn(EntityId, &mut Self)) {
         self.metadata.local_on_insert.push(f);
     }
-    /// Registers an event triggered when `ViewMut` is dropped.
+    /// Registers a callback triggered when a component is inserted and run when `ViewMut` is dropped.
     ///
-    /// Events will run one after the other based on the order they were added.  
-    /// `on_insert_global` events run before `on_remove_global`.  
-    /// It is not possible to remove unique storage inside a global event.
+    /// Callbacks will run one after the other based on the order they were added.  
+    /// `on_insert_global` callbacks run before `on_remove_global`.  
+    /// It is not possible to remove unique storages inside a global callback.
     #[inline]
     pub fn on_insert_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
         self.metadata.global_on_insert.push(f);
     }
-    /// Registers an event triggered when removeing or deleting a component.
+    /// Registers a callback triggered when a component is removed or deleted and run immediately.
     ///
-    /// Events will run one after the other based on the order they were added.  
+    /// Callbacks will run one after the other based on the order they were added.  
     /// They will run before the component is removed from the `SparseSet`.  
-    /// Removing components inside an event will also trigger `on_remove` events.
     #[inline]
     pub fn on_remove(&mut self, f: fn(EntityId, &mut Self)) {
         self.metadata.local_on_remove.push(f);
     }
-    /// Registers an event triggered when `ViewMut` is dropped or when deleting components using `AllStorages`.
+    /// Registers a callback triggered when a component is removed or deleted and run when `ViewMut` is dropped or when deleting components using `AllStorages`.
     ///
-    /// Events will run one after the other based on the order they were added.  
-    /// `on_remove_global` events run after `on_insert_global`.  
-    /// It is not possible to remove unique storage inside a global event.
+    /// Callbacks will run one after the other based on the order they were added.  
+    /// `on_remove_global` callbacks run after `on_insert_global`.  
+    /// It is not possible to remove unique storages inside a global callback.
     #[inline]
     pub fn on_remove_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
         self.metadata.global_on_remove.push(f);
     }
-    /// Schedules a `on_insert_global` events for `entity`.
+    /// Schedules a `on_insert_global` event for `entity`.
     #[inline]
     fn schedule_insert_global(&mut self, entity: EntityId) {
         if !self.metadata.global_on_insert.is_empty() {
@@ -985,7 +983,7 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Schedules a `on_remove_global` events for `entity`.
+    /// Schedules a `on_remove_global` event for `entity`.
     #[inline]
     fn schedule_remove_global(&mut self, entity: EntityId) {
         if !self.metadata.global_on_remove.is_empty() {

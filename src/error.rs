@@ -396,7 +396,7 @@ pub enum UniqueRemove {
     AllStorages,
     MissingUnique(&'static str),
     StorageBorrow((&'static str, Borrow)),
-    InsideEvent(&'static str),
+    InsideCallback(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -412,7 +412,7 @@ impl Debug for UniqueRemove {
                 Borrow::WrongThread => fmt.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
                 _ => unreachable!()
             }
-            Self::InsideEvent(name) => fmt.write_fmt(format_args!("Cannot remove {} unique storage inside global event.", name)),
+            Self::InsideCallback(name) => fmt.write_fmt(format_args!("Cannot remove {} unique storage inside global callback.", name)),
         }
     }
 }

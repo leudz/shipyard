@@ -15,7 +15,7 @@ use core::cell::UnsafeCell;
 use indexmap::{map::Entry, IndexMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
-/// Contains all components present in the World.
+/// Contains all storages present in the `World`.
 // The lock is held very briefly:
 // - shared: when trying to find a storage
 // - unique: when adding a storage
@@ -28,7 +28,7 @@ pub struct AllStorages {
     storages: UnsafeCell<IndexMap<StorageId, Storage>>,
     #[cfg(feature = "non_send")]
     thread_id: std::thread::ThreadId,
-    inside_event: UnsafeCell<bool>,
+    inside_callback: UnsafeCell<bool>,
 }
 
 #[cfg(not(feature = "non_send"))]
@@ -47,7 +47,7 @@ impl AllStorages {
             lock: RawRwLock::INIT,
             #[cfg(feature = "non_send")]
             thread_id: std::thread::current().id(),
-            inside_event: UnsafeCell::new(false),
+            inside_callback: UnsafeCell::new(false),
         }
     }
     /// Removes a unique storage.  
@@ -66,9 +66,9 @@ impl AllStorages {
         self.lock.lock_exclusive();
 
         {
-            if unsafe { *self.inside_event.get() } {
+            if unsafe { *self.inside_callback.get() } {
                 unsafe { self.lock.unlock_exclusive() };
-                return Err(error::UniqueRemove::InsideEvent(type_name::<T>()));
+                return Err(error::UniqueRemove::InsideCallback(type_name::<T>()));
             }
 
             // SAFE we locked
@@ -265,7 +265,7 @@ impl AllStorages {
                 has_event = false;
                 let storages = unsafe { &*self.storages.get() };
 
-                unsafe { *self.inside_event.get() = true };
+                unsafe { *self.inside_callback.get() = true };
                 let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
                     .try_borrow_mut()
                     .unwrap();
@@ -312,7 +312,7 @@ impl AllStorages {
                 has_event = false;
                 let storages = unsafe { &*self.storages.get() };
 
-                unsafe { *self.inside_event.get() = true };
+                unsafe { *self.inside_callback.get() = true };
                 let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
                     .try_borrow_mut()
                     .unwrap();
@@ -352,7 +352,7 @@ impl AllStorages {
                 has_event = false;
                 let storages = unsafe { &*self.storages.get() };
 
-                unsafe { *self.inside_event.get() = true };
+                unsafe { *self.inside_callback.get() = true };
                 let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
                     .try_borrow_mut()
                     .unwrap();
