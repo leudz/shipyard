@@ -135,6 +135,7 @@ impl<'a, T> Clone for View<'a, T> {
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T> {
     pub(crate) sparse_set: RefMut<'a, &'a mut SparseSet<T>>,
+    pub(crate) all_storages: &'a AllStorages,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
@@ -159,6 +160,13 @@ impl<T> ViewMut<'_, T> {
     }
     pub fn with_shared(&self) -> WithShared<&Self> {
         WithShared(self)
+    }
+}
+
+impl<T> Drop for ViewMut<'_, T> {
+    fn drop(&mut self) {
+        self.sparse_set.run_on_insert_global(self.all_storages);
+        self.sparse_set.run_on_remove_global(self.all_storages);
     }
 }
 

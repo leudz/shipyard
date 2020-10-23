@@ -10,10 +10,9 @@ use crate::borrow::AllStoragesBorrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::unknown_storage::UnknownStorage;
-use alloc::boxed::Box;
 use core::any::type_name;
 use core::cell::UnsafeCell;
-use hashbrown::{hash_map::Entry, HashMap};
+use indexmap::{map::Entry, IndexMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
 /// Contains all components present in the World.
@@ -26,9 +25,10 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
     lock: RawRwLock,
-    storages: UnsafeCell<HashMap<StorageId, Storage>>,
+    storages: UnsafeCell<IndexMap<StorageId, Storage>>,
     #[cfg(feature = "non_send")]
     thread_id: std::thread::ThreadId,
+    inside_event: UnsafeCell<bool>,
 }
 
 #[cfg(not(feature = "non_send"))]
@@ -38,20 +38,16 @@ unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     pub(crate) fn new() -> Self {
-        let mut storages = HashMap::default();
+        let mut storages = IndexMap::new();
 
-        let entities = Entities::new();
-
-        storages.insert(
-            StorageId::of::<Entities>(),
-            Storage(Box::new(AtomicRefCell::new(entities))),
-        );
+        storages.insert(StorageId::of::<Entities>(), Storage::new(Entities::new()));
 
         AllStorages {
             storages: UnsafeCell::new(storages),
             lock: RawRwLock::INIT,
             #[cfg(feature = "non_send")]
             thread_id: std::thread::current().id(),
+            inside_event: UnsafeCell::new(false),
         }
     }
     /// Removes a unique storage.  
@@ -65,36 +61,49 @@ impl AllStorages {
     /// - `T` storage borrow failed.
     /// - `T` storage did not exist.
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
-        let type_id = StorageId::of::<Unique<T>>();
+        let storage_id = StorageId::of::<Unique<T>>();
 
         self.lock.lock_exclusive();
-        // SAFE we locked
-        let storages = unsafe { &mut *self.storages.get() };
-        if let Entry::Occupied(entry) = storages.entry(type_id) {
-            // `.err()` to avoid borrowing `entry` in the `Ok` case
-            if let Some(err) = entry.get().get_mut::<Unique<T>>().err() {
-                unsafe { self.lock.unlock_exclusive() };
-                Err(error::UniqueRemove::StorageBorrow((type_name::<T>(), err)))
-            } else {
-                // We were able to lock the storage, we've still got exclusive access even though
-                // we released that lock as we're still holding the `AllStorages` lock.
-                let storage = entry.remove();
-                unsafe { self.lock.unlock_exclusive() };
 
-                let ptr = Box::into_raw(storage.0);
-                let unique_ptr: *mut AtomicRefCell<Unique<T>> = ptr as _;
-                unsafe {
-                    let unique = core::ptr::read(unique_ptr);
-                    alloc::alloc::dealloc(
-                        unique_ptr as *mut u8,
-                        alloc::alloc::Layout::new::<AtomicRefCell<Unique<T>>>(),
-                    );
-                    Ok(unique.into_inner().value)
-                }
+        {
+            if unsafe { *self.inside_event.get() } {
+                unsafe { self.lock.unlock_exclusive() };
+                return Err(error::UniqueRemove::InsideEvent(type_name::<T>()));
             }
-        } else {
-            unsafe { self.lock.unlock_exclusive() };
-            Err(error::UniqueRemove::MissingUnique(type_name::<T>()))
+
+            // SAFE we locked
+            let storages = unsafe { &mut *self.storages.get() };
+
+            let storage = if let Entry::Occupied(entry) = storages.entry(storage_id) {
+                // `.err()` to avoid borrowing `entry` in the `Ok` case
+                if let Some(err) = entry.get().get_mut::<Unique<T>>().err() {
+                    unsafe { self.lock.unlock_exclusive() };
+                    return Err(error::UniqueRemove::StorageBorrow((type_name::<T>(), err)));
+                } else {
+                    // We were able to lock the storage, we've still got exclusive access even though
+                    // we released that lock as we're still holding the `AllStorages` lock.
+                    let storage = entry.remove();
+                    unsafe { self.lock.unlock_exclusive() };
+                    storage
+                }
+            } else {
+                unsafe { self.lock.unlock_exclusive() };
+                return Err(error::UniqueRemove::MissingUnique(type_name::<T>()));
+            };
+
+            let unique_ptr: *mut AtomicRefCell<Unique<T>> = storage.0 as _;
+
+            core::mem::forget(storage);
+
+            unsafe {
+                let unique = core::ptr::read(unique_ptr);
+                alloc::alloc::dealloc(
+                    unique_ptr as *mut u8,
+                    alloc::alloc::Layout::new::<AtomicRefCell<Unique<T>>>(),
+                );
+
+                Ok(unique.into_inner().value)
+            }
         }
     }
     /// Removes a unique storage.  
@@ -126,12 +135,9 @@ impl AllStorages {
 
         self.lock.lock_exclusive();
         let storages = unsafe { &mut *self.storages.get() };
-        storages.entry(storage_id).or_insert_with(|| {
-            Storage(Box::new(AtomicRefCell::new(Unique {
-                value: component,
-                is_modified: false,
-            })))
-        });
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| Storage::new(Unique::new(component)));
         unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -147,15 +153,9 @@ impl AllStorages {
 
         self.lock.lock_exclusive();
         let storages = unsafe { &mut *self.storages.get() };
-        storages.entry(storage_id).or_insert_with(|| {
-            Storage(Box::new(AtomicRefCell::new_non_send(
-                Unique {
-                    value: component,
-                    is_modified: false,
-                },
-                self.thread_id,
-            )))
-        });
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| Storage::new_non_send(Unique::new(component), self.thread_id));
         unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -171,12 +171,9 @@ impl AllStorages {
 
         self.lock.lock_exclusive();
         let storages = unsafe { &mut *self.storages.get() };
-        storages.entry(storage_id).or_insert_with(|| {
-            Storage(Box::new(AtomicRefCell::new_non_sync(Unique {
-                value: component,
-                is_modified: false,
-            })))
-        });
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| Storage::new_non_sync(Unique::new(component)));
         unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -192,15 +189,9 @@ impl AllStorages {
 
         self.lock.lock_exclusive();
         let storages = unsafe { &mut *self.storages.get() };
-        storages.entry(storage_id).or_insert_with(|| {
-            Storage(Box::new(AtomicRefCell::new_non_send_sync(
-                Unique {
-                    value: component,
-                    is_modified: false,
-                },
-                self.thread_id,
-            )))
-        });
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| Storage::new_non_send_sync(Unique::new(component), self.thread_id));
         unsafe { self.lock.unlock_exclusive() };
     }
     /// Delete an entity and all its components.
@@ -248,12 +239,42 @@ impl AllStorages {
     }
     /// Deletes all components from an entity without deleting it.
     pub fn strip(&mut self, entity: EntityId) {
-        // SAFE we have unique access
-        let storages = unsafe { &mut *self.storages.get() };
+        let mut i = 0;
+        let mut has_event = false;
 
-        for storage in storages.values_mut() {
-            // we have unique access to all storages so we can unwrap
-            storage.delete(entity);
+        loop {
+            {
+                let storages = unsafe { &mut *self.storages.get() };
+
+                while i < storages.len() {
+                    let storage =
+                        unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
+
+                    storage.delete(entity);
+
+                    if storage.has_remove_event_to_dispatch() {
+                        has_event = true;
+                        break;
+                    }
+
+                    i += 1;
+                }
+            }
+
+            if has_event {
+                has_event = false;
+                let storages = unsafe { &*self.storages.get() };
+
+                unsafe { *self.inside_event.get() = true };
+                let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
+                    .try_borrow_mut()
+                    .unwrap();
+                storage.run_on_remove_global(self);
+
+                i += 1;
+            } else {
+                return;
+            }
         }
     }
     /// Deletes all components (except the ones in `S`) from an entity without deleting it.
@@ -262,24 +283,85 @@ impl AllStorages {
     }
     /// Deletes all components (except the ones in `excluded_storage`) from an entity without deleting it.
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
-        // SAFE we have unique access
-        let storages = unsafe { &mut *self.storages.get() };
+        let mut i = 0;
+        let mut has_event = false;
 
-        for (storage_id, storage) in storages.iter_mut() {
-            if !excluded_storage.contains(storage_id) {
-                // we have unique access to all storages so we can unwrap
-                storage.delete(entity);
+        loop {
+            {
+                let storages = unsafe { &mut *self.storages.get() };
+
+                while i < storages.len() {
+                    let (storage_id, storage) = storages.get_index_mut(i).unwrap();
+
+                    if !excluded_storage.contains(&*storage_id) {
+                        let storage = unsafe { (&mut *storage.0).get_mut() };
+
+                        storage.delete(entity);
+
+                        if storage.has_remove_event_to_dispatch() {
+                            has_event = true;
+                            break;
+                        }
+                    }
+
+                    i += 1;
+                }
+            }
+
+            if has_event {
+                has_event = false;
+                let storages = unsafe { &*self.storages.get() };
+
+                unsafe { *self.inside_event.get() = true };
+                let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
+                    .try_borrow_mut()
+                    .unwrap();
+                storage.run_on_remove_global(self);
+
+                i += 1;
+            } else {
+                return;
             }
         }
     }
     /// Deletes all entities and their components.
     pub fn clear(&mut self) {
-        // SAFE we have unique access
-        let storages = unsafe { &mut *self.storages.get() };
+        let mut i = 0;
+        let mut has_event = false;
 
-        for storage in storages.values_mut() {
-            // we have unique access to all storages so we can unwrap
-            storage.clear();
+        loop {
+            {
+                let storages = unsafe { &mut *self.storages.get() };
+
+                while i < storages.len() {
+                    let storage =
+                        unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
+
+                    storage.clear();
+
+                    if storage.has_remove_event_to_dispatch() {
+                        has_event = true;
+                        break;
+                    }
+
+                    i += 1;
+                }
+            }
+
+            if has_event {
+                has_event = false;
+                let storages = unsafe { &*self.storages.get() };
+
+                unsafe { *self.inside_event.get() = true };
+                let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
+                    .try_borrow_mut()
+                    .unwrap();
+                storage.run_on_remove_global(self);
+
+                i += 1;
+            } else {
+                return;
+            }
         }
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
@@ -1072,7 +1154,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| Storage(Box::new(AtomicRefCell::new(f()))))
+                .or_insert_with(|| Storage::new(f()))
                 .get();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1113,9 +1195,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| {
-                    Storage(Box::new(AtomicRefCell::new_non_send(f(), self.thread_id)))
-                })
+                .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
                 .get();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1157,7 +1237,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| Storage(Box::new(AtomicRefCell::new_non_sync(f()))))
+                .or_insert_with(|| Storage::new_non_sync(f()))
                 .get();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1197,12 +1277,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| {
-                    Storage(Box::new(AtomicRefCell::new_non_send_sync(
-                        f(),
-                        self.thread_id,
-                    )))
-                })
+                .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
                 .get();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1240,7 +1315,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| Storage(Box::new(AtomicRefCell::new(f()))))
+                .or_insert_with(|| Storage::new(f()))
                 .get_mut();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1280,9 +1355,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| {
-                    Storage(Box::new(AtomicRefCell::new_non_send(f(), self.thread_id)))
-                })
+                .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
                 .get_mut();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1322,7 +1395,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| Storage(Box::new(AtomicRefCell::new_non_sync(f()))))
+                .or_insert_with(|| Storage::new_non_sync(f()))
                 .get_mut();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
@@ -1363,12 +1436,7 @@ let i = all_storages.run(sys1);
             let storages = unsafe { &mut *self.storages.get() };
             let storage = storages
                 .entry(storage_id)
-                .or_insert_with(|| {
-                    Storage(Box::new(AtomicRefCell::new_non_send_sync(
-                        f(),
-                        self.thread_id,
-                    )))
-                })
+                .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
                 .get_mut();
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))

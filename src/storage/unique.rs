@@ -9,3 +9,12 @@ pub struct Unique<T> {
 }
 
 impl<T: 'static> UnknownStorage for Unique<T> {}
+
+impl<T> Unique<T> {
+    pub(crate) fn new(value: T) -> Self {
+        Unique {
+            value,
+            is_modified: false,
+        }
+    }
+}

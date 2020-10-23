@@ -13,59 +13,82 @@ pub use unique::Unique;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
-// #[cfg(feature = "serde1")]
-// use crate::serde_setup::GlobalDeConfig;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
+#[cfg(feature = "non_send")]
+use std::thread::ThreadId;
+// #[cfg(feature = "serde1")]
+// use crate::serde_setup::GlobalDeConfig;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.  
 /// and box the `AtomicRefCell` so it doesn't move when the `HashMap` reallocates
-pub(crate) struct Storage(pub(crate) Box<AtomicRefCell<dyn UnknownStorage>>);
+pub(crate) struct Storage(*mut AtomicRefCell<dyn UnknownStorage>);
 
 #[cfg(not(feature = "non_send"))]
 unsafe impl Send for Storage {}
 
 unsafe impl Sync for Storage {}
 
+impl Drop for Storage {
+    fn drop(&mut self) {
+        unsafe {
+            Box::from_raw(self.0);
+        }
+    }
+}
+
 impl Storage {
     #[inline]
-    fn get<T: 'static>(&'_ self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
-        Ok(Ref::map(self.0.try_borrow()?, |storage| {
+    fn new<T: UnknownStorage + Send + Sync + 'static>(value: T) -> Self {
+        Storage(Box::into_raw(Box::new(AtomicRefCell::new(value))))
+    }
+    #[cfg(feature = "non_send")]
+    #[inline]
+    fn new_non_send<T: UnknownStorage + Sync + 'static>(value: T, thread_id: ThreadId) -> Self {
+        Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_send(
+            value, thread_id,
+        ))))
+    }
+    #[cfg(feature = "non_sync")]
+    #[inline]
+    fn new_non_sync<T: UnknownStorage + Send + 'static>(value: T) -> Self {
+        Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_sync(value))))
+    }
+    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[inline]
+    fn new_non_send_sync<T: UnknownStorage + 'static>(value: T, thread_id: ThreadId) -> Self {
+        Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_send_sync(
+            value, thread_id,
+        ))))
+    }
+    #[inline]
+    fn get<T: 'static>(&self) -> Result<Ref<'_, &T>, error::Borrow> {
+        Ok(Ref::map(unsafe { &*self.0 }.try_borrow()?, |storage| {
             storage.any().downcast_ref::<T>().unwrap()
         }))
     }
     #[inline]
-    fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
-        Ok(RefMut::map(self.0.try_borrow_mut()?, |storage| {
-            storage.any_mut().downcast_mut().unwrap()
-        }))
+    fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &mut T>, error::Borrow> {
+        Ok(RefMut::map(
+            unsafe { &*self.0 }.try_borrow_mut()?,
+            |storage| storage.any_mut().downcast_mut().unwrap(),
+        ))
     }
     #[inline]
-    fn get_mut_exclusive<T: 'static>(&mut self) -> &'_ mut T {
+    fn get_mut_exclusive<T: 'static>(&mut self) -> &mut T {
         // SAFE this is not `AllStorages`
-        unsafe { self.0.get_mut().any_mut().downcast_mut().unwrap() }
+        unsafe { (&mut *self.0).get_mut() }
+            .any_mut()
+            .downcast_mut()
+            .unwrap()
     }
-    /// Mutably borrows the container and delete `index`.
-    fn delete(&mut self, entity: EntityId) {
-        // SAFE this is not `AllStorages`
-        unsafe {
-            self.0.get_mut().delete(entity);
-        }
-    }
-    fn clear(&mut self) {
-        // SAFE this is not `AllStorages`
-        unsafe {
-            self.0.get_mut().clear();
-        }
-    }
+    #[inline]
     fn share(&mut self, owned: EntityId, shared: EntityId) {
         // SAFE this is not `AllStorages`
-        unsafe {
-            self.0.get_mut().share(owned, shared);
-        }
+        unsafe { (&mut *self.0).get_mut() }.share(owned, shared);
     }
 }
 
@@ -108,9 +131,9 @@ impl Storage {
 fn delete() {
     use crate::sparse_set::SparseSet;
 
-    let mut storage = Storage(Box::new(AtomicRefCell::new(
-        SparseSet::<&'static str>::new(),
-    )));
+    let storage = Storage(Box::into_raw(Box::new(AtomicRefCell::new(SparseSet::<
+        &'static str,
+    >::new()))));
     let mut entity_id = EntityId::zero();
     entity_id.set_index(5);
     storage
@@ -128,7 +151,10 @@ fn delete() {
         .unwrap()
         .insert(entity_id, "test1");
     entity_id.set_index(5);
-    storage.delete(entity_id);
+    unsafe { &*storage.0 }
+        .try_borrow_mut()
+        .unwrap()
+        .delete(entity_id);
     assert_eq!(
         storage
             .get_mut::<SparseSet::<&'static str>>()
@@ -153,9 +179,15 @@ fn delete() {
         Some(&"test1")
     );
     entity_id.set_index(10);
-    storage.delete(entity_id);
+    unsafe { &*storage.0 }
+        .try_borrow_mut()
+        .unwrap()
+        .delete(entity_id);
     entity_id.set_index(1);
-    storage.delete(entity_id);
+    unsafe { &*storage.0 }
+        .try_borrow_mut()
+        .unwrap()
+        .delete(entity_id);
     entity_id.set_index(5);
     assert_eq!(
         storage

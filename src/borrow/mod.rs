@@ -285,6 +285,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMut<'a, T> {
             .custom_storage_or_insert_mut(SparseSet::new)
             .map(|sparse_set| ViewMut {
                 sparse_set,
+                all_storages,
                 _all_borrow: Some(all_borrow),
             })
     }
@@ -318,6 +319,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMut<'a, T>> {
             .map(|sparse_set| {
                 NonSend(ViewMut {
                     sparse_set,
+                    all_storages,
                     _all_borrow: Some(all_borrow),
                 })
             })
@@ -352,6 +354,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMut<'a, T>> {
             .map(|sparse_set| {
                 NonSync(ViewMut {
                     sparse_set,
+                    all_storages,
                     _all_borrow: Some(all_borrow),
                 })
             })
@@ -386,6 +389,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMut<'a, T>> {
             .map(|sparse_set| {
                 NonSendSync(ViewMut {
                     sparse_set,
+                    all_storages,
                     _all_borrow: Some(all_borrow),
                 })
             })

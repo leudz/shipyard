@@ -1,11 +1,12 @@
+use crate::storage::AllStorages;
+use crate::storage::EntityId;
+use core::any::Any;
+// #[cfg(feature = "serde1")]
+// use alloc::borrow::Cow;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, ANCHOR};
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
-use crate::storage::EntityId;
-// #[cfg(feature = "serde1")]
-// use alloc::borrow::Cow;
-use core::any::Any;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
@@ -33,11 +34,17 @@ pub trait UnknownStorage: SizedAny {
         SizedAny::as_any_mut(self)
     }
     #[inline]
-    fn delete(&mut self, _: EntityId) {}
+    fn delete(&mut self, _entity: EntityId) {}
     #[inline]
     fn clear(&mut self) {}
     #[inline]
-    fn share(&mut self, _: EntityId, _: EntityId) {}
+    fn share(&mut self, _owned: EntityId, _shared: EntityId) {}
+    #[inline]
+    fn has_remove_event_to_dispatch(&self) -> bool {
+        false
+    }
+    #[inline]
+    fn run_on_remove_global(&mut self, _all_storages: &AllStorages) {}
     // #[cfg(feature = "serde1")]
     // fn should_serialize(&self, _: GlobalSerConfig) -> bool {
     //     false

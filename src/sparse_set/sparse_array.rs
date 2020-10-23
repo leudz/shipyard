@@ -52,7 +52,7 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
         }
     }
     #[inline]
-    pub(super) unsafe fn get_mut_unchecked(&mut self, entity: EntityId) -> &mut EntityId {
+    pub(crate) unsafe fn get_mut_unchecked(&mut self, entity: EntityId) -> &mut EntityId {
         match self.0.get_unchecked_mut(entity.bucket()) {
             Some(bucket) => bucket.get_unchecked_mut(entity.bucket_index()),
             None => unreachable_unchecked(),
