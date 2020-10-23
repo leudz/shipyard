@@ -974,15 +974,15 @@ impl<T> SparseSet<T> {
     pub fn on_insert(&mut self, f: fn(EntityId, &mut Self)) {
         self.metadata.local_on_insert.push(f);
     }
-    /// Registers a callback triggered when a component is inserted and run when `ViewMut` is dropped.
-    ///
-    /// Callbacks will run one after the other based on the order they were added.  
-    /// `on_insert_global` callbacks run before `on_remove_global`.  
-    /// It is not possible to remove unique storages inside a global callback.
-    #[inline]
-    pub fn on_insert_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
-        self.metadata.global_on_insert.push(f);
-    }
+    // /// Registers a callback triggered when a component is inserted and run when `ViewMut` is dropped.
+    // ///
+    // /// Callbacks will run one after the other based on the order they were added.
+    // /// `on_insert_global` callbacks run before `on_remove_global`.
+    // /// It is not possible to remove unique storages inside a global callback.
+    // #[inline]
+    // fn on_insert_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
+    //     self.metadata.global_on_insert.push(f);
+    // }
     /// Registers a callback triggered when a component is removed or deleted and run immediately.
     ///
     /// Callbacks will run one after the other based on the order they were added.  
@@ -991,15 +991,15 @@ impl<T> SparseSet<T> {
     pub fn on_remove(&mut self, f: fn(EntityId, &mut Self)) {
         self.metadata.local_on_remove.push(f);
     }
-    /// Registers a callback triggered when a component is removed or deleted and run when `ViewMut` is dropped or when deleting components using `AllStorages`.
-    ///
-    /// Callbacks will run one after the other based on the order they were added.  
-    /// `on_remove_global` callbacks run after `on_insert_global`.  
-    /// It is not possible to remove unique storages inside a global callback.
-    #[inline]
-    pub fn on_remove_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
-        self.metadata.global_on_remove.push(f);
-    }
+    // /// Registers a callback triggered when a component is removed or deleted and run when `ViewMut` is dropped or when deleting components using `AllStorages`.
+    // ///
+    // /// Callbacks will run one after the other based on the order they were added.
+    // /// `on_remove_global` callbacks run after `on_insert_global`.
+    // /// It is not possible to remove unique storages inside a global callback.
+    // #[inline]
+    // fn on_remove_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
+    //     self.metadata.global_on_remove.push(f);
+    // }
     /// Schedules a `on_insert_global` event for `entity`.
     #[inline]
     fn schedule_insert_global(&mut self, entity: EntityId) {
