@@ -51,6 +51,19 @@ fn update() {
     assert_eq!(usizes.modified().iter().count(), 0);
     assert_eq!(usizes.try_deleted().unwrap().len(), 0);
     assert_eq!(usizes.try_removed().unwrap(), &[entity1]);
+
+    let mut iter = usizes.try_removed_or_deleted().unwrap();
+    assert_eq!(iter.next(), Some(entity1));
+    assert_eq!(iter.next(), None);
+
+    drop(iter);
+
+    usizes.delete(entity2);
+
+    let mut iter = usizes.try_removed_or_deleted().unwrap();
+    assert_eq!(iter.next(), Some(entity1));
+    assert_eq!(iter.next(), Some(entity2));
+    assert_eq!(iter.next(), None);
 }
 
 #[test]

@@ -31,7 +31,7 @@ use alloc::vec::Vec;
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
 
-/// Component storage.
+/// `SparseSet` component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
 // Only usize can be added. On insertion, the number is pushed into the dense vector
 // and sparse[number] is set to dense.len() - 1.
@@ -220,7 +220,7 @@ impl<T> SparseSet<T> {
     ///
     /// # Update pack
     ///
-    /// In case `entity` had a component of this type, the new component will be considered `modified`.
+    /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
     pub(crate) fn insert(&mut self, mut entity: EntityId, value: T) -> Option<OldComponent<T>> {
         self.sparse.allocate_at(entity);
@@ -428,7 +428,7 @@ impl<T> SparseSet<T> {
             Err(error::NotUpdatePack)
         }
     }
-    /// Returns the ids of *removed* components of an update packed storage.
+    /// Returns the ids of *removed* components of an update packed storage.  
     /// Unwraps errors.
     ///
     /// ### Errors
@@ -441,6 +441,41 @@ impl<T> SparseSet<T> {
     pub fn removed(&self) -> &[EntityId] {
         match self.try_removed() {
             Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
+    }
+    /// Returns the ids of *removed* or *deleted* components of an update packed storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    #[inline]
+    pub fn try_removed_or_deleted(
+        &self,
+    ) -> Result<impl Iterator<Item = EntityId> + '_, error::NotUpdatePack> {
+        if let Some(update) = &self.metadata.update {
+            Ok(update
+                .removed
+                .iter()
+                .copied()
+                .chain(update.deleted.iter().map(|(id, _)| id).copied()))
+        } else {
+            Err(error::NotUpdatePack)
+        }
+    }
+    /// Returns the ids of *removed* or *deleted* components of an update packed storage.  
+    /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    #[cfg(feature = "panic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    #[track_caller]
+    #[inline]
+    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
+        match self.try_removed_or_deleted() {
+            Ok(removed_or_deleted) => removed_or_deleted,
             Err(err) => panic!("{:?}", err),
         }
     }
