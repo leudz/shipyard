@@ -12,10 +12,12 @@ use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
 
-/// Trait used to create iterators.
+/// Trait used to create iterators. Yields [`Mut`] for mutable components.
 ///
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
+///
+/// [`Mut`]: ../struct.Mut.html
 pub trait IntoIter {
     type IntoIter;
     #[cfg(feature = "parallel")]

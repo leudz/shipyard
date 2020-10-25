@@ -1,3 +1,5 @@
+//! Contains types used to sort storages.
+
 mod unstable;
 
 use super::SparseSet;
