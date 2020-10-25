@@ -6,17 +6,24 @@ use crate::type_id::TypeId;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
+/// Contains information related to a workload.
+///
+/// A workload is a collection of systems with parallelism calculated based on the types borrow by the systems.
 #[derive(Debug, Clone)]
 pub struct WorkloadInfo {
     pub name: Cow<'static, str>,
     pub batch_info: Vec<BatchInfo>,
 }
 
+/// Contains information related to a batch.
+///
+/// A batch is a collection of system that can safely run in parallel.
 #[derive(Debug, Clone)]
 pub struct BatchInfo {
     pub systems: Vec<SystemInfo>,
 }
 
+/// Contains information related to a system.
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
     pub name: &'static str,
@@ -25,6 +32,7 @@ pub struct SystemInfo {
     pub conflict: Option<Conflict>,
 }
 
+/// Pinpoints the type and system that made a system unable to get into a batch.
 #[derive(Debug, Clone)]
 pub enum Conflict {
     Borrow {
@@ -34,12 +42,14 @@ pub enum Conflict {
     NotSendSync,
 }
 
+/// Identify a system.
 #[derive(Debug, Clone)]
 pub struct SystemId {
     pub name: &'static str,
     pub type_id: TypeId,
 }
 
+/// Identify a type.
 #[derive(Clone, Eq)]
 pub struct TypeInfo {
     pub name: &'static str,
