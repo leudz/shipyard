@@ -1,5 +1,4 @@
 use super::{IntoSortable, SparseSet};
-use crate::view::ViewMut;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
@@ -45,33 +44,6 @@ impl<'tmp, T> Sort1<'tmp, T> {
         }
     }
 }
-
-macro_rules! impl_unstable_sort {
-    ($sort: ident; $(($type: ident, $index: tt))+) => {
-        /// Struct used to sort multiple storages.
-        pub struct $sort<'tmp, $($type),+>($(&'tmp mut SparseSet<$type>,)+);
-
-        impl<'tmp, $($type),+> IntoSortable for ($(&'tmp mut ViewMut<'_, $type>,)+) {
-            type IntoSortable = $sort<'tmp, $($type,)+>;
-
-            fn sort(self) -> Self::IntoSortable {
-                $sort($(self.$index,)+)
-            }
-        }
-    }
-}
-
-macro_rules! unstable_sort {
-    ($($sort: ident)*; $sort1: ident $($queue_sort: ident)*;$(($type: ident, $index: tt))+; ($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_unstable_sort![$sort1; $(($type, $index))*];
-        unstable_sort![$($sort)* $sort1; $($queue_sort)*; $(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
-    };
-    ($($sort: ident)+; $sort1: ident; $(($type: ident, $index: tt))+;) => {
-        impl_unstable_sort![$sort1; $(($type, $index))*];
-    }
-}
-
-unstable_sort![;Sort2 Sort3 Sort4 Sort5 Sort6 Sort7 Sort8 Sort9 Sort10;(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
 
 #[test]
 fn unstable_sort() {
