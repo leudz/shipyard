@@ -6,6 +6,6 @@ fn test() {
     let world = World::new();
 
     world.run(|mut all_storages: AllStoragesViewMut| {
-        all_storages.delete(entity_id);
+        all_storages.delete_entity(entity_id);
     });
 }

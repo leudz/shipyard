@@ -22,7 +22,10 @@ fn on_remove() {
 
     drop((entities, u32s));
 
-    world.try_borrow::<AllStoragesViewMut>().unwrap().delete(e1);
+    world
+        .try_borrow::<AllStoragesViewMut>()
+        .unwrap()
+        .delete_entity(e1);
 
     assert_eq!(unsafe { &*E }, &[e0, e1]);
 }

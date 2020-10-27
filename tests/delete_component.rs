@@ -106,7 +106,7 @@ fn strip() {
 
     world
         .try_run(|mut all_storages: AllStoragesViewMut| {
-            assert!(all_storages.delete(entity1));
+            assert!(all_storages.delete_entity(entity1));
         })
         .unwrap();
 }
@@ -153,7 +153,7 @@ fn retain() {
 
     world
         .try_run(|mut all_storages: AllStoragesViewMut| {
-            assert!(all_storages.delete(entity1));
+            assert!(all_storages.delete_entity(entity1));
         })
         .unwrap();
 }

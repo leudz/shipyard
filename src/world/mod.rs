@@ -5,19 +5,20 @@ pub use scheduler::{Workload, WorkloadBuilder};
 pub(crate) use scheduler::TypeInfo;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-// #[cfg(feature = "serde1")]
-// use crate::atomic_refcell::RefMut;
 use crate::borrow::Borrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
-// #[cfg(feature = "serde1")]
-// use crate::serde_setup::{ExistingEntities, GlobalDeConfig, GlobalSerConfig, WithShared};
-use crate::storage::{AllStorages, StorageId};
-// #[cfg(feature = "serde1")]
-// use crate::storage::{Storage, StorageId};
+use crate::sparse_set::{AddComponent, DeleteComponent, Remove};
+use crate::storage::{AllStorages, DeleteAny, EntityId, Retain, StorageId};
 use crate::unknown_storage::UnknownStorage;
 use alloc::borrow::Cow;
 use scheduler::{Batches, Scheduler};
+// #[cfg(feature = "serde1")]
+// use crate::atomic_refcell::RefMut;
+// #[cfg(feature = "serde1")]
+// use crate::serde_setup::{ExistingEntities, GlobalDeConfig, GlobalSerConfig, WithShared};
+// #[cfg(feature = "serde1")]
+// use crate::storage::{Storage, StorageId};
 
 /// Holds all components and keeps track of entities and what they own.
 pub struct World {
@@ -1362,6 +1363,55 @@ let i = world.run(sys1);
     //         ))
     //     }
     // }
+}
+
+impl World {
+    #[inline]
+    pub fn add_entity<T: AddComponent>(&mut self, component: T) -> EntityId {
+        self.all_storages.get_mut().add_entity(component)
+    }
+    #[inline]
+    pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
+        self.all_storages.get_mut().add_component(entity, component)
+    }
+    #[inline]
+    pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
+        self.all_storages.get_mut().remove::<T>(entity)
+    }
+    #[inline]
+    pub fn delete_component<T: DeleteComponent>(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().delete_component::<T>(entity)
+    }
+    #[inline]
+    pub fn delete_entity(&mut self, entity: EntityId) -> bool {
+        self.all_storages.get_mut().delete_entity(entity)
+    }
+    #[inline]
+    pub fn strip(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().strip(entity);
+    }
+    #[inline]
+    pub fn delete_any<T: DeleteAny>(&mut self) {
+        self.all_storages.get_mut().delete_any::<T>();
+    }
+    #[inline]
+    pub fn retain<S: Retain>(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().retain::<S>(entity);
+    }
+    #[inline]
+    pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+        self.all_storages
+            .get_mut()
+            .retain_storage(entity, excluded_storage);
+    }
+    #[inline]
+    pub fn clear(&mut self) {
+        self.all_storages.get_mut().clear();
+    }
+    #[inline]
+    pub fn share(&mut self, owned: EntityId, shared: EntityId) {
+        self.all_storages.get_mut().share(owned, shared);
+    }
 }
 
 // #[cfg(feature = "serde1")]

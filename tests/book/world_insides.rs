@@ -30,7 +30,7 @@ fn test2() {
     );
 
     world.run(|mut all_storages: AllStoragesViewMut| {
-        all_storages.delete(entity0);
-        all_storages.delete(entity1);
+        all_storages.delete_entity(entity0);
+        all_storages.delete_entity(entity1);
     });
 }

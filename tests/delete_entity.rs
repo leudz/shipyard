@@ -14,8 +14,8 @@ fn no_pack() {
     drop((entities, usizes, u32s));
 
     let mut all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
-    assert!(all_storages.delete(entity1));
-    assert!(!all_storages.delete(entity1));
+    assert!(all_storages.delete_entity(entity1));
+    assert!(!all_storages.delete_entity(entity1));
     drop(all_storages);
 
     let (usizes, u32s) = world.try_borrow::<(View<usize>, View<u32>)>().unwrap();
@@ -50,8 +50,8 @@ fn update() {
     drop((entities, usizes));
 
     let mut all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
-    assert!(all_storages.delete(entity1));
-    assert!(!all_storages.delete(entity1));
+    assert!(all_storages.delete_entity(entity1));
+    assert!(!all_storages.delete_entity(entity1));
     drop(all_storages);
 
     let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();

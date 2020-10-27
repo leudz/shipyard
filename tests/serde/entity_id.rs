@@ -19,7 +19,7 @@ fn entity_id_serde() {
 
     // delete the first entity
     world.run(|mut all_storages: AllStoragesViewMut| {
-        assert!(all_storages.delete(entity_id0));
+        assert!(all_storages.delete_entity(entity_id0));
     });
 
     // add 2 more

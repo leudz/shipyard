@@ -26,7 +26,7 @@ impl<T: 'static + UnknownStorage + CustomDeleteAny> DeleteAny for T {
         }
 
         for id in ids {
-            all_storages.delete(id);
+            all_storages.delete_entity(id);
         }
     }
 }
@@ -49,7 +49,7 @@ macro_rules! impl_delete_any {
                 }
 
                 for id in ids {
-                    all_storages.delete(id);
+                    all_storages.delete_entity(id);
                 }
             }
         }

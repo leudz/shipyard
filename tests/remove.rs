@@ -82,7 +82,7 @@ fn old_key() {
 
     world
         .try_run(|mut all_storages: AllStoragesViewMut| {
-            all_storages.delete(entity);
+            all_storages.delete_entity(entity);
         })
         .unwrap();
 

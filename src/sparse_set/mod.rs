@@ -1,11 +1,17 @@
+mod add_component;
+mod delete_component;
 mod metadata;
+mod remove;
 pub mod sort;
 mod sparse_array;
 mod window;
 // #[cfg(feature = "serde1")]
 // mod deser;
 
+pub(crate) use add_component::AddComponent;
+pub(crate) use delete_component::DeleteComponent;
 pub(crate) use metadata::{Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE};
+pub(crate) use remove::Remove;
 pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
 // #[cfg(feature = "serde1")]

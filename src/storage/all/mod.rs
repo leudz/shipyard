@@ -9,6 +9,7 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
+use crate::sparse_set::{AddComponent, DeleteComponent, Remove};
 use crate::unknown_storage::UnknownStorage;
 use core::any::type_name;
 use core::cell::UnsafeCell;
@@ -213,7 +214,7 @@ impl AllStorages {
     /// );
     ///
     /// world.run(|mut all_storages: AllStoragesViewMut| {
-    ///     all_storages.delete(entity1);
+    ///     all_storages.delete_entity(entity1);
     /// });
     ///
     /// world.run(|usizes: View<usize>, u32s: View<u32>| {
@@ -223,7 +224,7 @@ impl AllStorages {
     ///     assert_eq!(u32s.get(entity2), Ok(&3));
     /// });
     /// ```
-    pub fn delete(&mut self, entity: EntityId) -> bool {
+    pub fn delete_entity(&mut self, entity: EntityId) -> bool {
         // no need to lock here since we have a unique access
         let mut entities = self.entities_mut().unwrap();
 
@@ -363,6 +364,25 @@ impl AllStorages {
                 return;
             }
         }
+    }
+    #[inline]
+    pub fn add_entity<T: AddComponent>(&mut self, component: T) -> EntityId {
+        let entity = self.exclusive_storage_mut::<Entities>().unwrap().generate();
+        component.add_component(self, entity);
+
+        entity
+    }
+    #[inline]
+    pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
+        component.add_component(self, entity);
+    }
+    #[inline]
+    pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
+        T::remove(self, entity)
+    }
+    #[inline]
+    pub fn delete_component<T: DeleteComponent>(&mut self, entity: EntityId) {
+        T::delete_component(self, entity);
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.
@@ -1441,6 +1461,40 @@ let i = all_storages.run(sys1);
             unsafe { self.lock.unlock_exclusive() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
         }
+    }
+    pub(crate) fn exclusive_storage_mut<T: 'static>(
+        &mut self,
+    ) -> Result<&mut T, error::GetStorage> {
+        self.exclusive_storage_mut_by_id(StorageId::of::<T>())
+    }
+    pub fn exclusive_storage_mut_by_id<T: 'static>(
+        &mut self,
+        storage_id: StorageId,
+    ) -> Result<&mut T, error::GetStorage> {
+        let storages = unsafe { &mut *self.storages.get() };
+        let storage = storages.get_mut(&storage_id);
+        if let Some(storage) = storage {
+            let storage = storage.get_mut_exclusive::<T>();
+            Ok(storage)
+        } else {
+            Err(error::GetStorage::MissingStorage(type_name::<T>()))
+        }
+    }
+    pub(crate) fn exclusive_storage_or_insert_mut<T, F>(
+        &mut self,
+        storage_id: StorageId,
+        f: F,
+    ) -> &mut T
+    where
+        T: 'static + UnknownStorage + Send + Sync,
+        F: FnOnce() -> T,
+    {
+        let storages = unsafe { &mut *self.storages.get() };
+
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| Storage::new(f()))
+            .get_mut_exclusive()
     }
 }
 

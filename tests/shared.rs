@@ -28,7 +28,7 @@ fn get() {
                 })
                 .unwrap();
 
-            all_storages.delete(owned);
+            all_storages.delete_entity(owned);
 
             all_storages
                 .try_run(|u32s: View<u32>| {
@@ -66,7 +66,7 @@ fn get_mut() {
                 })
                 .unwrap();
 
-            all_storages.delete(owned);
+            all_storages.delete_entity(owned);
 
             all_storages
                 .try_run(|mut u32s: ViewMut<u32>| {
