@@ -88,7 +88,7 @@ fn dead_entity() {
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
-    world.add_component(entity, (1u32,)).unwrap();
+    assert!(world.add_component(entity, (1u32,)).is_err());
 
     let u32s = world.try_borrow::<View<u32>>().unwrap();
     assert!(u32s.get(entity).is_err());

@@ -1347,10 +1347,8 @@ let i = world.run(sys1);
     ///
     /// let entity_builder = world.try_entity_builder().unwrap();
     /// let entity = entity_builder
-    ///     .try_with(0u32)
-    ///     .unwrap()
-    ///     .try_with(1usize)
-    ///     .unwrap()
+    ///     .with(0u32)
+    ///     .with(1usize)
     ///     .try_build()
     ///     .unwrap();
     /// ```

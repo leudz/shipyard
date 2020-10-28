@@ -200,6 +200,13 @@ impl<'a, T> AsMut<SparseSet<T>> for ViewMut<'a, T> {
     }
 }
 
+impl<'a, T> AsMut<Self> for ViewMut<'a, T> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut Self {
+        self
+    }
+}
+
 /// Shared view over a unique component storage.
 pub struct UniqueView<'a, T> {
     pub(crate) unique: Ref<'a, &'a Unique<T>>,
