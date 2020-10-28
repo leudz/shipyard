@@ -1573,9 +1573,13 @@ impl World {
     pub fn add_entity<C: AddComponent>(&mut self, component: C) -> EntityId {
         self.all_storages.get_mut().add_entity(component)
     }
-    /// Add components to an existing entity, does nothing if the entity is not alive.  
+    /// Adds components to an existing entity.  
     /// If the entity already owned a component it will be replaced.  
     /// `component` must always be a tuple, even for a single component.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` is not alive.
     ///
     /// ### Example
     ///
@@ -1587,12 +1591,16 @@ impl World {
     /// // make an empty entity
     /// let entity = world.add_entity(());
     ///
-    /// world.add_component(entity, (0u32,));
+    /// world.add_component(entity, (0u32,)).unwrap();
     /// // entity already had a `u32` component so it will be replaced
-    /// world.add_component(entity, (1u32, 11usize));
+    /// world.add_component(entity, (1u32, 11usize)).unwrap();
     /// ```
     #[inline]
-    pub fn add_component<C: AddComponent>(&mut self, entity: EntityId, component: C) {
+    pub fn add_component<C: AddComponent>(
+        &mut self,
+        entity: EntityId,
+        component: C,
+    ) -> Result<(), error::AddComponent> {
         self.all_storages.get_mut().add_component(entity, component)
     }
     /// Removes components from an entity.  

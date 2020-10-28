@@ -10,9 +10,9 @@ fn no_pack() {
     let entity10 = world.add_entity(());
     let entity20 = world.add_entity(());
 
-    world.add_component(entity10, (10usize, 30u32));
-    world.add_component(entity20, (20usize,));
-    world.add_component(entity20, (50u32,));
+    world.add_component(entity10, (10usize, 30u32)).unwrap();
+    world.add_component(entity20, (20usize,)).unwrap();
+    world.add_component(entity20, (50u32,)).unwrap();
 
     let (usizes, u32s) = world.try_borrow::<(View<usize>, View<u32>)>().unwrap();
 
@@ -35,7 +35,7 @@ fn update() {
 
     let entity = world.add_entity(());
 
-    world.add_component(entity, (1usize,));
+    world.add_component(entity, (1usize,)).unwrap();
 
     world
         .try_run(|usizes: View<usize>| {
@@ -45,7 +45,7 @@ fn update() {
         })
         .unwrap();
 
-    world.add_component(entity, (2usize,));
+    world.add_component(entity, (2usize,)).unwrap();
 
     world
         .try_run(|mut usizes: ViewMut<usize>| {
@@ -59,7 +59,7 @@ fn update() {
         })
         .unwrap();
 
-    world.add_component(entity, (4usize,));
+    world.add_component(entity, (4usize,)).unwrap();
 
     world
         .try_run(|mut usizes: ViewMut<usize>| {
@@ -71,7 +71,7 @@ fn update() {
         })
         .unwrap();
 
-    world.add_component(entity, (5usize,));
+    world.add_component(entity, (5usize,)).unwrap();
 
     world
         .try_run(|usizes: View<usize>| {
@@ -88,7 +88,7 @@ fn dead_entity() {
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
-    world.add_component(entity, (1u32,));
+    world.add_component(entity, (1u32,)).unwrap();
 
     let u32s = world.try_borrow::<View<u32>>().unwrap();
     assert!(u32s.get(entity).is_err());

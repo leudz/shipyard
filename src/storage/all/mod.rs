@@ -373,13 +373,21 @@ impl AllStorages {
         entity
     }
     #[inline]
-    pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
+    pub fn add_component<T: AddComponent>(
+        &mut self,
+        entity: EntityId,
+        component: T,
+    ) -> Result<(), error::AddComponent> {
         if self
             .exclusive_storage_mut::<Entities>()
             .unwrap()
             .is_alive(entity)
         {
             component.add_component(self, entity);
+
+            Ok(())
+        } else {
+            Err(error::AddComponent::EntityIsNotAlive)
         }
     }
     #[inline]
