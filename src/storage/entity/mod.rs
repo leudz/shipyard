@@ -182,8 +182,9 @@ impl Entities {
             false
         }
     }
-    /// Stores `component` in a new entity, the `EntityId` to this entity is returned.  
+    /// Stores `component` in a new entity and returns its `EntityId`.  
     /// Multiple components can be added at the same time using a tuple.
+    ///
     /// ### Example:
     /// ```
     /// use shipyard::{EntitiesViewMut, Get, ViewMut, World};

@@ -20,14 +20,14 @@ use scheduler::{Batches, Scheduler};
 // #[cfg(feature = "serde1")]
 // use crate::storage::{Storage, StorageId};
 
-/// Holds all components and keeps track of entities and what they own.
+/// `World` contains all data this library will manipulate.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
     scheduler: AtomicRefCell<Scheduler>,
 }
 
 impl Default for World {
-    /// Create an empty `World`.
+    /// Creates an empty `World`.
     fn default() -> Self {
         World {
             #[cfg(not(feature = "non_send"))]
@@ -43,26 +43,39 @@ impl Default for World {
 }
 
 impl World {
-    /// Create an empty `World`.
+    /// Creates an empty `World`.
     pub fn new() -> Self {
         Default::default()
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.add_unique(0u32);
+    ///
+    /// let i = world.borrow::<UniqueView<u32>>();
+    /// assert_eq!(*i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     #[track_caller]
@@ -72,21 +85,34 @@ impl World {
             Err(err) => panic!("{:?}", err),
         }
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.try_add_unique(0u32).unwrap();
+    ///
+    /// let i = world.try_borrow::<UniqueView<u32>>().unwrap();
+    /// assert_eq!(*i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
     pub fn try_add_unique<T: 'static + Send + Sync>(
         &self,
         component: T,
@@ -94,22 +120,36 @@ impl World {
         self.all_storages.try_borrow()?.add_unique(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [NonSend]: struct.NonSend.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{NonSend, UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Send` type
+    /// world.try_add_unique_non_send(0u32).unwrap();
+    ///
+    /// let i = world.try_borrow::<NonSend<UniqueView<u32>>>().unwrap();
+    /// assert_eq!(**i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`NonSend`]: struct.NonSend.html
     #[cfg(feature = "non_send")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn try_add_unique_non_send<T: 'static + Sync>(
@@ -121,23 +161,37 @@ impl World {
             .add_unique_non_send(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [NonSend]: struct.NonSend.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{NonSend, UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Send` type
+    /// world.add_unique_non_send(0u32);
+    ///
+    /// let i = world.borrow::<NonSend<UniqueView<u32>>>();
+    /// assert_eq!(**i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`NonSend`]: struct.NonSend.html
     #[cfg(all(feature = "non_send", feature = "panic"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "panic"))))]
     #[track_caller]
@@ -147,22 +201,36 @@ impl World {
             Err(err) => panic!("{:?}", err),
         }
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [NonSync]: struct.NonSync.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{NonSync, UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Sync` type
+    /// world.try_add_unique_non_sync(0u32).unwrap();
+    ///
+    /// let i = world.try_borrow::<NonSync<UniqueView<u32>>>().unwrap();
+    /// assert_eq!(**i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`NonSync`]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn try_add_unique_non_sync<T: 'static + Send>(
@@ -174,23 +242,37 @@ impl World {
             .add_unique_non_sync(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [NonSync]: struct.NonSync.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{NonSync, UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Sync` type
+    /// world.add_unique_non_sync(0u32);
+    ///
+    /// let i = world.borrow::<NonSync<UniqueView<u32>>>();
+    /// assert_eq!(**i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`NonSync`]: struct.NonSync.html
     #[cfg(all(feature = "non_sync", feature = "panic"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_sync", feature = "panic"))))]
     #[track_caller]
@@ -200,22 +282,36 @@ impl World {
             Err(err) => panic!("{:?}", err),
         }
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [NonSendSync]: struct.NonSendSync.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{NonSendSync, UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
+    /// world.try_add_unique_non_send_sync(0u32).unwrap();
+    ///
+    /// let i = world.try_borrow::<NonSendSync<UniqueView<u32>>>().unwrap();
+    /// assert_eq!(**i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`NonSendSync`]: struct.NonSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn try_add_unique_non_send_sync<T: 'static>(
@@ -227,23 +323,37 @@ impl World {
             .add_unique_non_send_sync(component);
         Ok(())
     }
-    /// Adds a new unique storage, unique storages store exactly one `T`.  
-    /// To access a unique storage value, use [NonSendSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Adds a new unique storage, unique storages store a single value.  
+    /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.  
     /// Unwraps errors.
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
+    /// - [`AllStorages`] (shared)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
+    /// - [`AllStorages`] borrow failed.
     ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [NonSendSync]: struct.NonSendSync.html
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{NonSendSync, UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
+    /// world.add_unique_non_send_sync(0u32);
+    ///
+    /// let i = world.borrow::<NonSendSync<UniqueView<u32>>>();
+    /// assert_eq!(**i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`NonSendSync`]: struct.NonSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync", feature = "panic"))]
     #[cfg_attr(
         docsrs,
@@ -260,16 +370,29 @@ impl World {
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
-    /// - `T` storage (exclusive)
+    /// - [`AllStorages`] (shared)
+    /// - `Unique<T>` storage (exclusive)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
-    /// - `T` storage borrow failed.
-    /// - `T` storage did not exist.
+    /// - [`AllStorages`] borrow failed.
+    /// - `Unique<T>` storage borrow failed.
+    /// - `Unique<T>` storage did not exist.
     ///
-    /// [AllStorages]: struct.AllStorages.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.try_add_unique(0u32).unwrap();
+    ///
+    /// let i = world.try_remove_unique::<u32>().unwrap();
+    /// assert_eq!(i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .try_borrow()
@@ -281,16 +404,29 @@ impl World {
     ///
     /// ### Borrows
     ///
-    /// - [AllStorages] (shared)
-    /// - `T` storage (exclusive)
+    /// - [`AllStorages`] (shared)
+    /// - `Unique<T>` storage (exclusive)
     ///
     /// ### Errors
     ///
-    /// - [AllStorages] borrow failed.
-    /// - `T` storage borrow failed.
-    /// - `T` storage did not exist.
+    /// - [`AllStorages`] borrow failed.
+    /// - `Unique<T>` storage borrow failed.
+    /// - `Unique<T>` storage did not exist.
     ///
-    /// [AllStorages]: struct.AllStorages.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{UniqueView, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// world.add_unique(0u32);
+    ///
+    /// let i = world.remove_unique::<u32>();
+    /// assert_eq!(i, 0);
+    /// ```
+    ///
+    /// [`AllStorages`]: struct.AllStorages.html
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     #[track_caller]
@@ -300,7 +436,7 @@ impl World {
             Err(err) => panic!("{:?}", err),
         }
     }
-    #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
+    #[doc = "Borrows the requested storages, if they don't exist they'll get created.  
 You can use a tuple to get multiple storages at once.
 
 You can use:
@@ -413,7 +549,7 @@ let (entities, mut usizes) = world
     pub fn try_borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
         V::try_borrow(self)
     }
-    #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
+    #[doc = "Borrows the requested storages, if they don't exist they'll get created.  
 You can use a tuple to get multiple storages at once.  
 Unwraps errors.
 
@@ -1202,6 +1338,23 @@ let i = world.run(sys1);
     ///
     /// - [AllStorages] borrow failed.
     ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let world = World::new();
+    ///
+    /// let entity_builder = world.try_entity_builder().unwrap();
+    /// let entity = entity_builder
+    ///     .try_with(0u32)
+    ///     .unwrap()
+    ///     .try_with(1usize)
+    ///     .unwrap()
+    ///     .try_build()
+    ///     .unwrap();
+    /// ```
+    ///
     /// [AllStorages]: struct.AllStorages.html
     /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
     /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
@@ -1220,6 +1373,20 @@ let i = world.run(sys1);
     ///
     /// - [AllStorages] borrow failed.
     ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let world = World::new();
+    ///
+    /// let entity_builder = world.entity_builder();
+    /// let entity = entity_builder
+    ///     .with(0u32)
+    ///     .with(1usize)
+    ///     .build();
+    /// ```
+    ///
     /// [AllStorages]: struct.AllStorages.html
     /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
     /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
@@ -1232,12 +1399,29 @@ let i = world.run(sys1);
             Err(err) => panic!("{:?}", err),
         }
     }
+    /// Returns a `Ref<&AllStorages>`, used to implement custom storages.   
+    /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
+    ///
+    /// ### Errors
+    ///
+    /// - `AllStorages` is already borrowed.
     pub fn all_storages(&self) -> Result<Ref<'_, &'_ AllStorages>, error::Borrow> {
         self.all_storages.try_borrow()
     }
+    /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.   
+    /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
+    ///
+    /// ### Errors
+    ///
+    /// - `AllStorages` is already borrowed.
     pub fn all_storages_mut(&self) -> Result<RefMut<'_, &'_ mut AllStorages>, error::Borrow> {
         self.all_storages.try_borrow_mut()
     }
+    /// Inserts a custom storage to the `World`.
+    ///
+    /// ### Errors
+    ///
+    /// - `AllStorages` is already borrowed exclusively.
     pub fn try_add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
         &self,
         storage_id: StorageId,
@@ -1250,6 +1434,12 @@ let i = world.run(sys1);
 
         Ok(())
     }
+    /// Inserts a custom storage to the `World`.  
+    /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - `AllStorages` is already borrowed exclusively.
     pub fn add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
         &self,
         storage_id: StorageId,
@@ -1366,48 +1556,200 @@ let i = world.run(sys1);
 }
 
 impl World {
+    /// Creates a new entity with the componnets passed as argument and returns its `EntityId`.  
+    /// `component` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity0 = world.add_entity((0u32,));
+    /// let entity1 = world.add_entity((1u32, 11usize));
+    /// ```
     #[inline]
-    pub fn add_entity<T: AddComponent>(&mut self, component: T) -> EntityId {
+    pub fn add_entity<C: AddComponent>(&mut self, component: C) -> EntityId {
         self.all_storages.get_mut().add_entity(component)
     }
+    /// Add components to an existing entity, does nothing if the entity is not alive.  
+    /// If the entity already owned a component it will be replaced.  
+    /// `component` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// // make an empty entity
+    /// let entity = world.add_entity(());
+    ///
+    /// world.add_component(entity, (0u32,));
+    /// // entity already had a `u32` component so it will be replaced
+    /// world.add_component(entity, (1u32, 11usize));
+    /// ```
     #[inline]
-    pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
+    pub fn add_component<C: AddComponent>(&mut self, entity: EntityId, component: C) {
         self.all_storages.get_mut().add_component(entity, component)
     }
+    /// Removes components from an entity.  
+    /// `C` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{OldComponent, World};
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((0u32, 1usize));
+    ///
+    /// let (i,) = world.remove::<(u32,)>(entity);
+    /// assert_eq!(i, Some(OldComponent::Owned(0)));
+    /// ```
     #[inline]
-    pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
-        self.all_storages.get_mut().remove::<T>(entity)
+    pub fn remove<C: Remove>(&mut self, entity: EntityId) -> C::Out {
+        self.all_storages.get_mut().remove::<C>(entity)
     }
+    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
+    /// `C` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((0u32, 1usize));
+    ///
+    /// world.delete_component::<(u32,)>(entity);
+    /// ```
     #[inline]
-    pub fn delete_component<T: DeleteComponent>(&mut self, entity: EntityId) {
-        self.all_storages.get_mut().delete_component::<T>(entity)
+    pub fn delete_component<C: DeleteComponent>(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().delete_component::<C>(entity)
     }
+    /// Deletes an entity with all its components. Returns true if the entity were alive.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((0u32, 1usize));
+    ///
+    /// assert!(world.delete_entity(entity));
+    /// ```
     #[inline]
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().delete_entity(entity)
     }
+    /// Deletes all components of an entity without deleting the entity.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((0u32, 1usize));
+    ///
+    /// world.strip(entity);
+    /// ```
     #[inline]
     pub fn strip(&mut self, entity: EntityId) {
         self.all_storages.get_mut().strip(entity);
     }
+    /// Deletes all entities with any of the given components.  
+    /// The storage's type has to be used and not the component.  
+    /// `SparseSet` is the default storage.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{SparseSet, World};
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity0 = world.add_entity((0u32,));
+    /// let entity1 = world.add_entity((1usize,));
+    /// let entity2 = world.add_entity(("2",));
+    ///
+    /// // deletes `entity2`
+    /// world.delete_any::<SparseSet<&str>>();
+    /// // deletes `entity0` and `entity1`
+    /// world.delete_any::<(SparseSet<u32>, SparseSet<usize>)>();
+    /// ```
     #[inline]
-    pub fn delete_any<T: DeleteAny>(&mut self) {
-        self.all_storages.get_mut().delete_any::<T>();
+    pub fn delete_any<S: DeleteAny>(&mut self) {
+        self.all_storages.get_mut().delete_any::<S>();
     }
+    /// Deletes all components of an entity except the ones passed in `S`.
+    /// The storage's type has to be used and not the component.  
+    /// `SparseSet` is the default storage.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{SparseSet, World};
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((0u32, 1usize));
+    ///
+    /// world.retain::<SparseSet<u32>>(entity);
+    /// ```
     #[inline]
     pub fn retain<S: Retain>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().retain::<S>(entity);
     }
+    /// Same as `retain` but uses `StorageId` and not generics.  
+    /// You should only use this method if you use a custom storage with a runtime id.
     #[inline]
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         self.all_storages
             .get_mut()
             .retain_storage(entity, excluded_storage);
     }
+    /// Deletes all entities and components in the `World`.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// world.clear();
+    /// ```
     #[inline]
     pub fn clear(&mut self) {
         self.all_storages.get_mut().clear();
     }
+    /// Shares all `owned`'s components with `shared` entity.  
+    /// Deleting `owned`'s component won't stop the sharing.
+    /// Deletes all entities and components in the `World`.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Get, View, World};
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let owned = world.add_entity((0u32,));
+    /// let shared = world.add_entity(());
+    ///
+    /// world.share(owned, shared);
+    ///
+    /// assert_eq!(world.borrow::<View<u32>>().get(shared), Ok(&0));
+    /// ```
     #[inline]
     pub fn share(&mut self, owned: EntityId, shared: EntityId) {
         self.all_storages.get_mut().share(owned, shared);
