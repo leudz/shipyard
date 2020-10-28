@@ -81,3 +81,15 @@ fn update() {
         })
         .unwrap();
 }
+
+#[test]
+fn dead_entity() {
+    let mut world = World::new();
+
+    let entity = world.add_entity(());
+    world.delete_entity(entity);
+    world.add_component(entity, (1u32,));
+
+    let u32s = world.try_borrow::<View<u32>>().unwrap();
+    assert!(u32s.get(entity).is_err());
+}

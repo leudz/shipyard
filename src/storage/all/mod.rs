@@ -374,7 +374,13 @@ impl AllStorages {
     }
     #[inline]
     pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
-        component.add_component(self, entity);
+        if self
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(entity)
+        {
+            component.add_component(self, entity);
+        }
     }
     #[inline]
     pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
@@ -1075,7 +1081,6 @@ let i = all_storages.run(sys1);
     // }
     /// Shares all `owned`'s components with `shared` entity.  
     /// Deleting `owned`'s component won't stop the sharing.  
-    /// Trying to share an entity with itself won't do anything.
     pub fn share(&mut self, owned: EntityId, shared: EntityId) {
         // SAFE we have unique access
         let storages = unsafe { &mut *self.storages.get() };
