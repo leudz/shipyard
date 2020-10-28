@@ -18,7 +18,7 @@ dependencies = ["clean"]
 
 [tasks.clean]
 command = "cargo"
-args = ["clean"]
+args = ["clean", "-p", "shipyard"]
 
 [tasks.clippy]
 env = { "RUSTFLAGS" = "-D warnings" }
