@@ -7,7 +7,6 @@ pub use retain::Retain;
 use super::{Entities, EntityId, Storage, StorageId, Unique};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
-use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::reserve::BulkEntitiesIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
@@ -1077,15 +1076,6 @@ let i = all_storages.run(sys1);
     /// Deletes any entity with at least one of the given type(s).
     pub fn delete_any<T: DeleteAny>(&mut self) {
         T::delete_any(self);
-    }
-    /// Used to create an entity without having to borrow its storage explicitly.  
-    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.
-    ///
-    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
-    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
-    /// [AllStorages]: struct.AllStorages.html
-    pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
-        EntityBuilder::new_from_reference(self)
     }
     // #[cfg(feature = "serde1")]
     // pub(crate) fn storages(&mut self) -> &mut HashMap<StorageId, Storage> {

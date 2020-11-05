@@ -24,7 +24,6 @@ extern crate alloc;
 mod atomic_refcell;
 mod borrow;
 mod delete;
-mod entity_builder;
 /// Contains all error types.
 pub mod error;
 mod get;
@@ -66,7 +65,6 @@ pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 pub use borrow::{AllStoragesBorrow, Borrow, FakeBorrow, Mutability};
 pub use contains::Contains;
 pub use delete::Delete;
-pub use entity_builder::EntityBuilder;
 pub use get::Get;
 pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use not::Not;

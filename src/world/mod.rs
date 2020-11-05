@@ -6,7 +6,6 @@ pub(crate) use scheduler::TypeInfo;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::Borrow;
-use crate::entity_builder::EntityBuilder;
 use crate::error;
 use crate::reserve::BulkEntitiesIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
@@ -1324,76 +1323,6 @@ let i = world.run(sys1);
     #[track_caller]
     pub fn run_default(&self) {
         match self.try_run_default() {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Used to create an entity without having to borrow its storage explicitly.  
-    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.
-    ///
-    /// ### Borrows
-    ///
-    /// - [AllStorages] (shared)
-    ///
-    /// ### Errors
-    ///
-    /// - [AllStorages] borrow failed.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::World;
-    ///
-    /// let world = World::new();
-    ///
-    /// let entity_builder = world.try_entity_builder().unwrap();
-    /// let entity = entity_builder
-    ///     .with(0u32)
-    ///     .with(1usize)
-    ///     .try_build()
-    ///     .unwrap();
-    /// ```
-    ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
-    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
-    pub fn try_entity_builder(&self) -> Result<EntityBuilder<'_, (), ()>, error::Borrow> {
-        Ok(EntityBuilder::new(self.all_storages.try_borrow()?))
-    }
-    /// Used to create an entity without having to borrow its storage explicitly.  
-    /// The entity is only added when [EntityBuilder::try_build] or [EntityBuilder::build] is called.  
-    /// Unwraps error.
-    ///
-    /// ### Borrows
-    ///
-    /// - [AllStorages] (shared)
-    ///
-    /// ### Errors
-    ///
-    /// - [AllStorages] borrow failed.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::World;
-    ///
-    /// let world = World::new();
-    ///
-    /// let entity_builder = world.entity_builder();
-    /// let entity = entity_builder
-    ///     .with(0u32)
-    ///     .with(1usize)
-    ///     .build();
-    /// ```
-    ///
-    /// [AllStorages]: struct.AllStorages.html
-    /// [EntityBuilder::build]: struct.EntityBuilder.html#method.build
-    /// [EntityBuilder::try_build]: struct.EntityBuilder.html#method.try_build
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn entity_builder(&self) -> EntityBuilder<'_, (), ()> {
-        match self.try_entity_builder() {
             Ok(r) => r,
             Err(err) => panic!("{:?}", err),
         }
