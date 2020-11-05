@@ -9,7 +9,8 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
-use crate::sparse_set::{AddComponent, DeleteComponent, Remove};
+use crate::reserve::BulkEntitiesIter;
+use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::unknown_storage::UnknownStorage;
 use core::any::type_name;
 use core::cell::UnsafeCell;
@@ -371,6 +372,10 @@ impl AllStorages {
         component.add_component(self, entity);
 
         entity
+    }
+    #[inline]
+    pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntitiesIter<'_> {
+        source.bulk_add_entity(self)
     }
     #[inline]
     pub fn add_component<T: AddComponent>(

@@ -1,4 +1,5 @@
 mod add_component;
+mod bulk_add_entity;
 mod delete_component;
 mod metadata;
 mod remove;
@@ -9,6 +10,7 @@ mod window;
 // mod deser;
 
 pub(crate) use add_component::AddComponent;
+pub(crate) use bulk_add_entity::BulkAddEntity;
 pub(crate) use delete_component::DeleteComponent;
 pub(crate) use metadata::{Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE};
 pub(crate) use remove::Remove;
@@ -548,6 +550,29 @@ impl<T> SparseSet<T> {
     pub fn take_removed(&mut self) -> Vec<EntityId> {
         match self.try_take_removed() {
             Ok(removed) => removed,
+            Err(err) => panic!("{:?}", err),
+        }
+    }
+    /// Takes ownership of the *removed* and *deleted* components of an update packed storage.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    #[allow(clippy::type_complexity)]
+    pub fn try_take_removed_and_deleted(
+        &mut self,
+    ) -> Result<(Vec<EntityId>, Vec<(EntityId, T)>), error::NotUpdatePack> {
+        Ok((self.try_take_removed()?, self.try_take_deleted().unwrap()))
+    }
+    /// Takes ownership of the *removed* and *deleted* components of an update packed storage.  
+    /// Unmraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - Storage isn't update packed.
+    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
+        match self.try_take_removed_and_deleted() {
+            Ok(removed_and_deleted) => removed_and_deleted,
             Err(err) => panic!("{:?}", err),
         }
     }

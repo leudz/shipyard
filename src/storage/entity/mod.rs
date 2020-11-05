@@ -4,19 +4,21 @@ mod iterator;
 pub use entity_id::EntityId;
 pub use iterator::EntitiesIter;
 
+use crate::add_component::AddComponent;
+use crate::add_entity::AddEntity;
+use crate::error;
+use crate::reserve::{BulkEntitiesIter, BulkReserve};
+use crate::unknown_storage::UnknownStorage;
+use alloc::vec::Vec;
+use core::iter::repeat_with;
 // #[cfg(feature = "serde1")]
 // use crate::atomic_refcell::AtomicRefCell;
-use crate::error;
 // #[cfg(feature = "serde1")]
 // use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig};
-use crate::add_entity::AddEntity;
 // #[cfg(feature = "serde1")]
 // use crate::storage::Storage;
-use crate::add_component::AddComponent;
-use crate::unknown_storage::UnknownStorage;
 // #[cfg(feature = "serde1")]
 // use alloc::borrow::Cow;
-use alloc::vec::Vec;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
@@ -39,7 +41,7 @@ use alloc::vec::Vec;
 // Removed entities are added to one end and removed from the other.
 // Dead entities are simply never added to the linked list.
 pub struct Entities {
-    data: Vec<EntityId>,
+    pub(crate) data: Vec<EntityId>,
     list: Option<(usize, usize)>,
 }
 
@@ -120,7 +122,7 @@ impl Entities {
             panic!("{:?}", error::AddComponent::EntityIsNotAlive);
         }
     }
-    pub(super) fn generate(&mut self) -> EntityId {
+    pub(crate) fn generate(&mut self) -> EntityId {
         if let Some((new, ref mut old)) = self.list {
             let old_index = *old;
 
@@ -142,6 +144,11 @@ impl Entities {
             self.data.push(entity_id);
             entity_id
         }
+    }
+    pub(crate) fn bulk_generate(&mut self, count: usize) -> &[EntityId] {
+        self.data.extend((0..count as u64).map(EntityId::new));
+
+        &self.data[self.data.len() - count..self.data.len()]
     }
     /// Delete an entity, returns true if the entity was alive.  
     /// If the entity has components, they will not be deleted and still be accessible using this id.
@@ -200,11 +207,57 @@ impl Entities {
     /// );
     /// ```
     #[inline]
-    pub fn add_entity<T: AddEntity>(&mut self, storages: T, component: T::Component) -> EntityId {
+    pub fn add_entity<T: AddEntity>(
+        &mut self,
+        mut storages: T,
+        component: T::Component,
+    ) -> EntityId {
         let entity_id = self.generate();
         storages.add_entity(entity_id, component);
         entity_id
     }
+    /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.  
+    /// Multiple components can be added at the same time using a tuple.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{EntitiesViewMut, ViewMut, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// let (mut entities, mut usizes, mut u32s) =
+    ///     world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
+    ///
+    /// let entity0 = entities.bulk_add_entity((), (0..1).map(|_| {})).next();
+    /// let entity1 = entities.bulk_add_entity(&mut u32s, 1..2).next();
+    /// let new_entities =
+    ///     entities.bulk_add_entity((&mut u32s, &mut usizes), (10..20).map(|i| (i as u32, i)));
+    /// ```
+    pub fn bulk_add_entity<T: AddEntity + BulkReserve, I: IntoIterator<Item = T::Component>>(
+        &mut self,
+        mut storages: T,
+        component: I,
+    ) -> BulkEntitiesIter<'_> {
+        let mut iter = component.into_iter();
+        let len = iter.size_hint().0;
+
+        let entities_len = self.data.len();
+        let new_entities = self.bulk_generate(len);
+
+        storages.bulk_reserve(new_entities);
+        for (component, id) in (&mut iter).zip(new_entities.iter().copied()) {
+            storages.add_entity(id, component)
+        }
+
+        // have to use two loops because of self borrow
+        for (component, id) in iter.zip(repeat_with(|| self.generate())) {
+            storages.add_entity(id, component)
+        }
+
+        BulkEntitiesIter(self.data[entities_len..].iter().copied())
+    }
+    /// Creates an iterator over all entities.
     #[inline]
     pub fn iter(&self) -> EntitiesIter<'_> {
         self.into_iter()

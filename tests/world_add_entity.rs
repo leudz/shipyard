@@ -75,3 +75,63 @@ fn modified_update() {
         })
         .unwrap();
 }
+
+#[test]
+fn bulk_single() {
+    let mut world = World::new();
+
+    let entities = world
+        .bulk_add_entity((0..5).map(|i| (i as u32,)))
+        .collect::<Vec<_>>();
+
+    let u32s = world.try_borrow::<View<u32>>().unwrap();
+    let mut iter = u32s.iter();
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), Some(&2));
+    assert_eq!(iter.next(), Some(&3));
+    assert_eq!(iter.next(), Some(&4));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = u32s.iter().ids().zip(entities);
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn bulk() {
+    let mut world = World::new();
+
+    let entities = world
+        .bulk_add_entity((0..5).map(|i| (i as u32, i as usize)))
+        .collect::<Vec<_>>();
+
+    let (u32s, usizes) = world.try_borrow::<(View<u32>, View<usize>)>().unwrap();
+    let mut iter = (&u32s, &usizes).iter();
+    assert_eq!(iter.next(), Some((&0, &0)));
+    assert_eq!(iter.next(), Some((&1, &1)));
+    assert_eq!(iter.next(), Some((&2, &2)));
+    assert_eq!(iter.next(), Some((&3, &3)));
+    assert_eq!(iter.next(), Some((&4, &4)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = u32s.iter().ids().zip(entities.clone());
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = usizes.iter().ids().zip(entities);
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
+    assert_eq!(iter.next(), None);
+}

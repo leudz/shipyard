@@ -37,6 +37,18 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
             }
         }
     }
+    pub(crate) fn bulk_allocate(&mut self, start: EntityId, end: EntityId) {
+        if end.bucket() >= self.0.len() {
+            self.0.resize(end.bucket() + 1, None);
+        }
+        for bucket_index in start.bucket()..end.bucket() + 1 {
+            let bucket = unsafe { self.0.get_unchecked_mut(bucket_index) };
+
+            if bucket.is_none() {
+                *bucket = Some(Box::new([EntityId::dead(); crate::sparse_set::BUCKET_SIZE]));
+            }
+        }
+    }
     #[inline]
     pub(super) fn get(&self, entity: EntityId) -> Option<EntityId> {
         self.0

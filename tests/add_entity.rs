@@ -141,3 +141,23 @@ fn builder_non_send_sync() {
         .try_build()
         .unwrap();
 }
+
+#[test]
+fn bulk() {
+    let world = World::default();
+
+    let (mut entities, mut usizes, mut u32s) = world
+        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .unwrap();
+
+    entities.bulk_add_entity((), (0..1).map(|_| {}));
+    let mut new_entities = entities
+        .bulk_add_entity((&mut usizes, &mut u32s), (0..2).map(|i| (i as usize, i)))
+        .collect::<Vec<_>>()
+        .into_iter();
+
+    let mut iter = (&usizes, &u32s).iter().ids();
+    assert_eq!(new_entities.next(), iter.next());
+    assert_eq!(new_entities.next(), iter.next());
+    assert_eq!(new_entities.next(), None);
+}

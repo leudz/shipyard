@@ -8,7 +8,8 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::Borrow;
 use crate::entity_builder::EntityBuilder;
 use crate::error;
-use crate::sparse_set::{AddComponent, DeleteComponent, Remove};
+use crate::reserve::BulkEntitiesIter;
+use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::storage::{AllStorages, DeleteAny, EntityId, Retain, StorageId};
 use crate::unknown_storage::UnknownStorage;
 use alloc::borrow::Cow;
@@ -1554,7 +1555,7 @@ let i = world.run(sys1);
 }
 
 impl World {
-    /// Creates a new entity with the componnets passed as argument and returns its `EntityId`.  
+    /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
     /// `component` must always be a tuple, even for a single component.
     ///
     /// ### Example
@@ -1570,6 +1571,27 @@ impl World {
     #[inline]
     pub fn add_entity<C: AddComponent>(&mut self, component: C) -> EntityId {
         self.all_storages.get_mut().add_entity(component)
+    }
+    /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.  
+    /// `source` must always yield a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::World;
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity0 = world.bulk_add_entity((0..1).map(|_| {})).next();
+    /// let entity1 = world.bulk_add_entity((1..2).map(|i| (i as u32,))).next();
+    /// let new_entities = world.bulk_add_entity((10..20).map(|i| (i as u32, i)));
+    /// ```
+    #[inline]
+    pub fn bulk_add_entity<T: BulkAddEntity + 'static>(
+        &mut self,
+        source: T,
+    ) -> BulkEntitiesIter<'_> {
+        self.all_storages.get_mut().bulk_add_entity(source)
     }
     /// Adds components to an existing entity.  
     /// If the entity already owned a component it will be replaced.  
