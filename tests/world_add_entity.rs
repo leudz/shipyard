@@ -134,4 +134,12 @@ fn bulk() {
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next(), None);
+
+    drop((u32s, usizes));
+
+    world.bulk_add_entity((0..5).map(|i| (i as u32, i as usize)));
+
+    let (u32s, usizes) = world.try_borrow::<(View<u32>, View<usize>)>().unwrap();
+    assert_eq!(u32s.len(), 10);
+    assert_eq!(usizes.len(), 10);
 }

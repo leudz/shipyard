@@ -84,4 +84,11 @@ fn bulk() {
     assert_eq!(new_entities.next(), iter.next());
     assert_eq!(new_entities.next(), iter.next());
     assert_eq!(new_entities.next(), None);
+
+    entities
+        .bulk_add_entity((&mut usizes, &mut u32s), (0..2).map(|i| (i as usize, i)))
+        .collect::<Vec<_>>()
+        .into_iter();
+
+    assert_eq!(usizes.len(), 4);
 }

@@ -146,7 +146,8 @@ impl Entities {
         }
     }
     pub(crate) fn bulk_generate(&mut self, count: usize) -> &[EntityId] {
-        self.data.extend((0..count as u64).map(EntityId::new));
+        self.data
+            .extend((self.data.len() as u64..(self.data.len() + count) as u64).map(EntityId::new));
 
         &self.data[self.data.len() - count..self.data.len()]
     }
