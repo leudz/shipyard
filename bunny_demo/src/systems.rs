@@ -39,30 +39,26 @@ pub fn handle_controller(
         let stage_size = &stage_area.0;
         let img_size = &img_area.0;
 
-        positions.reserve(N_BUNNIES_PER_TICK);
-        speeds.reserve(N_BUNNIES_PER_TICK);
-        gravities.reserve(N_BUNNIES_PER_TICK);
+        entities.bulk_add_entity(
+            (&mut positions, &mut speeds, &mut gravities),
+            (0..N_BUNNIES_PER_TICK).map(|count| {
+                //alternate between corners
+                let pos_x = match count % 2 {
+                    0 => 0.0f64,
+                    _ => (stage_size.width - img_size.width) as f64,
+                };
 
-        for count in 0..N_BUNNIES_PER_TICK {
-            //alternate between corners
-            let pos_x = match count % 2 {
-                0 => 0.0f64,
-                _ => (stage_size.width - img_size.width) as f64,
-            };
+                let pos_y = (stage_size.height - img_size.height) as f64;
+                let position = Point { x: pos_x, y: pos_y };
 
-            let pos_y = (stage_size.height - img_size.height) as f64;
-            let position = Point { x: pos_x, y: pos_y };
+                let mut speed = Point::new_random();
 
-            let mut speed = Point::new_random();
+                speed.x *= 10.0;
+                speed.y = (speed.y * 10.0) - 5.0;
 
-            speed.x *= 10.0;
-            speed.y = (speed.y * 10.0) - 5.0;
-
-            entities.add_entity(
-                (&mut positions, &mut speeds, &mut gravities),
-                (Position(position), Speed(speed), Gravity(START_GRAVITY)),
-            );
-        }
+                (Position(position), Speed(speed), Gravity(START_GRAVITY))
+            }),
+        );
 
         instance_positions.0.resize(len * 2, 0.0);
     }
