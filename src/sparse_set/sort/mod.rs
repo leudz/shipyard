@@ -1,4 +1,4 @@
-//! Contains types used to sort storages.
+//! Types used to sort storages.
 
 mod unstable;
 

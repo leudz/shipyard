@@ -1,3 +1,5 @@
+//! All error types.
+
 use crate::EntityId;
 use alloc::boxed::Box;
 use core::fmt::{Debug, Display, Formatter};

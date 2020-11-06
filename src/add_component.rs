@@ -14,11 +14,10 @@ pub trait AddComponent {
     ///
     /// let world = World::new();
     ///
-    /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
+    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
+    /// let entity = entities.add_entity((), ());
     ///
-    /// world.run(|mut u32s: ViewMut<u32>| {
-    ///     u32s.add_component_unchecked(entity, 0);
-    /// });
+    /// u32s.add_component_unchecked(entity, 0);
     /// ```
     ///
     /// [`Entities::add_component`]: https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.add_component

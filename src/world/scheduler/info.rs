@@ -1,4 +1,4 @@
-//! Contains types for displaying workload information.
+//! Types for displaying workload information.
 
 use crate::borrow::Mutability;
 use crate::storage::StorageId;

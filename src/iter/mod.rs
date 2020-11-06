@@ -1,4 +1,4 @@
-//! Contains all iterators type and traits.
+//! Iterators types and traits.
 
 mod abstract_mut;
 mod fast;

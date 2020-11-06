@@ -24,7 +24,6 @@ extern crate alloc;
 mod atomic_refcell;
 mod borrow;
 mod delete;
-/// Contains all error types.
 pub mod error;
 mod get;
 mod not;
