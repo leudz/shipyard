@@ -3,6 +3,13 @@ use crate::ViewMut;
 use core::iter::{Copied, DoubleEndedIterator, ExactSizeIterator, FusedIterator, Iterator};
 use core::slice::Iter;
 
+/// Iterator over newly bulk added entities.
+///
+/// Obtained from [`World::bulk_add_entity`], [`AllStorages::bulk_add_entity`] and [`Entities::bulk_add_entity`].
+///
+/// [`World::bulk_add_entity`]: struct.World.html#method.bulk_add_entity
+/// [`AllStorages::bulk_add_entity`]: struct.AllStorages.html#method.bulk_add_entity
+/// [`Entities::bulk_add_entity`]: struct.Entities.html#method.bulk_add_entity
 #[derive(Clone, Debug)]
 pub struct BulkEntitiesIter<'a>(pub(crate) Copied<Iter<'a, EntityId>>);
 
