@@ -9,7 +9,7 @@ use core::hash::{Hash, Hasher};
 pub struct TypeId(u64);
 
 impl TypeId {
-    pub fn of<T: ?Sized + 'static>() -> Self {
+    pub(crate) fn of<T: ?Sized + 'static>() -> Self {
         core::any::TypeId::of::<T>().into()
     }
 }

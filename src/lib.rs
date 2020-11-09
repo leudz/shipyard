@@ -78,7 +78,6 @@ pub use storage::{
 };
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
-pub use type_id::TypeId;
 pub use unknown_storage::UnknownStorage;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
