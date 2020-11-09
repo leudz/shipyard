@@ -2,7 +2,7 @@ use core::cmp::Ordering;
 
 use crate::type_id::TypeId;
 
-/// Id of a storage, can be a `TypeId` or a user defined `u64`.
+/// Id of a storage, can be a `TypeId` or `u64`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StorageId {
     TypeId(TypeId),
