@@ -11,9 +11,9 @@ use core::slice::Iter;
 /// [`AllStorages::bulk_add_entity`]: struct.AllStorages.html#method.bulk_add_entity
 /// [`Entities::bulk_add_entity`]: struct.Entities.html#method.bulk_add_entity
 #[derive(Clone, Debug)]
-pub struct BulkEntitiesIter<'a>(pub(crate) Copied<Iter<'a, EntityId>>);
+pub struct BulkEntityIter<'a>(pub(crate) Copied<Iter<'a, EntityId>>);
 
-impl<'a> Iterator for BulkEntitiesIter<'a> {
+impl<'a> Iterator for BulkEntityIter<'a> {
     type Item = EntityId;
 
     fn next(&mut self) -> Option<EntityId> {
@@ -44,7 +44,7 @@ impl<'a> Iterator for BulkEntitiesIter<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for BulkEntitiesIter<'a> {
+impl<'a> DoubleEndedIterator for BulkEntityIter<'a> {
     fn next_back(&mut self) -> Option<EntityId> {
         self.0.next_back()
     }
@@ -57,13 +57,13 @@ impl<'a> DoubleEndedIterator for BulkEntitiesIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for BulkEntitiesIter<'a> {
+impl<'a> ExactSizeIterator for BulkEntityIter<'a> {
     fn len(&self) -> usize {
         self.0.len()
     }
 }
 
-impl<'a> FusedIterator for BulkEntitiesIter<'a> {}
+impl<'a> FusedIterator for BulkEntityIter<'a> {}
 
 pub trait BulkReserve {
     fn bulk_reserve(&mut self, _new_entities: &[EntityId]) {}

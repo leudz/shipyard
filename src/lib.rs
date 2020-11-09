@@ -71,7 +71,7 @@ pub use pack::shared::WithShared;
 pub use pack::update::{Inserted, InsertedOrModified, Modified};
 pub use r#mut::Mut;
 pub use remove::Remove;
-pub use reserve::{BulkEntitiesIter, BulkReserve};
+pub use reserve::{BulkEntityIter, BulkReserve};
 pub use sparse_set::{sort, sort::IntoSortable, OldComponent, SparseSet};
 pub use storage::{
     AllStorages, CustomDeleteAny, DeleteAny, Entities, EntityId, Retain, StorageId, Unique,

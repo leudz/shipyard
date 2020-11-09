@@ -7,7 +7,7 @@ pub(crate) use scheduler::TypeInfo;
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::Borrow;
 use crate::error;
-use crate::reserve::BulkEntitiesIter;
+use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::storage::{AllStorages, DeleteAny, EntityId, Retain, StorageId};
 use crate::unknown_storage::UnknownStorage;
@@ -1516,10 +1516,7 @@ impl World {
     /// let new_entities = world.bulk_add_entity((10..20).map(|i| (i as u32, i)));
     /// ```
     #[inline]
-    pub fn bulk_add_entity<T: BulkAddEntity + 'static>(
-        &mut self,
-        source: T,
-    ) -> BulkEntitiesIter<'_> {
+    pub fn bulk_add_entity<T: BulkAddEntity + 'static>(&mut self, source: T) -> BulkEntityIter<'_> {
         self.all_storages.get_mut().bulk_add_entity(source)
     }
     /// Adds components to an existing entity.  

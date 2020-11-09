@@ -1,17 +1,17 @@
-use crate::reserve::BulkEntitiesIter;
+use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
 use crate::storage::{AllStorages, Entities, EntityId};
 use core::iter::IntoIterator;
 
 pub trait BulkAddEntity {
-    fn bulk_add_entity(self, all_storages: &mut AllStorages) -> BulkEntitiesIter<'_>;
+    fn bulk_add_entity(self, all_storages: &mut AllStorages) -> BulkEntityIter<'_>;
 }
 
 impl<I: IntoIterator> BulkAddEntity for I
 where
     I::Item: BulkInsert,
 {
-    fn bulk_add_entity(self, all_storages: &mut AllStorages) -> BulkEntitiesIter<'_> {
+    fn bulk_add_entity(self, all_storages: &mut AllStorages) -> BulkEntityIter<'_> {
         <I::Item as BulkInsert>::bulk_insert(all_storages, self)
     }
 }
@@ -20,7 +20,7 @@ pub trait BulkInsert {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
-    ) -> BulkEntitiesIter<'_>
+    ) -> BulkEntityIter<'_>
     where
         Self: Sized;
 }
@@ -29,7 +29,7 @@ impl BulkInsert for () {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
-    ) -> BulkEntitiesIter<'_>
+    ) -> BulkEntityIter<'_>
     where
         Self: Sized,
     {
@@ -43,7 +43,7 @@ impl BulkInsert for () {
         for _ in iter.skip(len) {
             entities.generate();
         }
-        BulkEntitiesIter(entities.data[entities_len..].iter().copied())
+        BulkEntityIter(entities.data[entities_len..].iter().copied())
     }
 }
 
@@ -51,7 +51,7 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
-    ) -> BulkEntitiesIter<'_> {
+    ) -> BulkEntityIter<'_> {
         let iter = iter.into_iter();
         let len = iter.size_hint().0;
 
@@ -105,7 +105,7 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
 
         drop((entities, sparse_set));
 
-        BulkEntitiesIter(
+        BulkEntityIter(
             all_storages
                 .exclusive_storage_mut::<Entities>()
                 .unwrap()
@@ -120,7 +120,7 @@ macro_rules! impl_bulk_insert {
     (($type1: ident, $sparse_set1: ident, $index1: tt) $(($type: ident, $sparse_set: ident, $index: tt))*) => {
         impl<$type1: 'static + Send + Sync, $($type: 'static + Send + Sync,)*> BulkInsert for ($type1, $($type,)*) {
             #[allow(non_snake_case)]
-            fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntitiesIter<'_> {
+            fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();
                 let len = iter.size_hint().0;
 
@@ -199,7 +199,7 @@ macro_rules! impl_bulk_insert {
 
                 drop((entities, $sparse_set1, $($sparse_set),*));
 
-                BulkEntitiesIter(all_storages.exclusive_storage_mut::<Entities>().unwrap().data[entities_len..].iter().copied())
+                BulkEntityIter(all_storages.exclusive_storage_mut::<Entities>().unwrap().data[entities_len..].iter().copied())
             }
         }
     };

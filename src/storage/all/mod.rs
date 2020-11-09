@@ -8,7 +8,7 @@ use super::{Entities, EntityId, Storage, StorageId, Unique};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
 use crate::error;
-use crate::reserve::BulkEntitiesIter;
+use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::unknown_storage::UnknownStorage;
 use core::any::type_name;
@@ -373,7 +373,7 @@ impl AllStorages {
         entity
     }
     #[inline]
-    pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntitiesIter<'_> {
+    pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
         source.bulk_add_entity(self)
     }
     #[inline]

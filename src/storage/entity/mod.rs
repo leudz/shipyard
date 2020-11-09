@@ -7,7 +7,7 @@ pub use iterator::EntitiesIter;
 use crate::add_component::AddComponent;
 use crate::add_entity::AddEntity;
 use crate::error;
-use crate::reserve::{BulkEntitiesIter, BulkReserve};
+use crate::reserve::{BulkEntityIter, BulkReserve};
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
 use core::iter::repeat_with;
@@ -239,7 +239,7 @@ impl Entities {
         &mut self,
         mut storages: T,
         component: I,
-    ) -> BulkEntitiesIter<'_> {
+    ) -> BulkEntityIter<'_> {
         let mut iter = component.into_iter();
         let len = iter.size_hint().0;
 
@@ -256,7 +256,7 @@ impl Entities {
             storages.add_entity(id, component)
         }
 
-        BulkEntitiesIter(self.data[entities_len..].iter().copied())
+        BulkEntityIter(self.data[entities_len..].iter().copied())
     }
     /// Creates an iterator over all entities.
     #[inline]
