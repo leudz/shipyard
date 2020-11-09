@@ -263,7 +263,7 @@ impl<T> SparseSet<T> {
                 if entity.gen() == sparse_entity.gen() {
                     old_component = Some(OldComponent::Owned(old_data));
                 } else {
-                    old_component = Some(OldComponent::OldGenOwned(old_data));
+                    old_component = None;
                 }
 
                 sparse_entity.copy_gen(entity);
@@ -282,7 +282,7 @@ impl<T> SparseSet<T> {
             if entity.gen() == sparse_entity.index() {
                 old_component = Some(OldComponent::Shared);
             } else {
-                old_component = Some(OldComponent::OldGenShared);
+                old_component = None;
             }
 
             unsafe {
@@ -355,7 +355,7 @@ impl<T> SparseSet<T> {
             if entity.gen() == sparse_entity.gen() {
                 Some(OldComponent::Owned(component))
             } else {
-                Some(OldComponent::OldGenOwned(component))
+                None
             }
         } else if sparse_entity.is_shared() && entity.gen() >= sparse_entity.index() {
             unsafe {
@@ -369,7 +369,7 @@ impl<T> SparseSet<T> {
             if entity.gen() == sparse_entity.index() {
                 Some(OldComponent::Shared)
             } else {
-                Some(OldComponent::OldGenShared)
+                None
             }
         } else {
             None
@@ -1153,9 +1153,7 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum OldComponent<T> {
     Owned(T),
-    OldGenOwned(T),
     Shared,
-    OldGenShared,
 }
 
 impl<T> OldComponent<T> {
@@ -1166,13 +1164,7 @@ impl<T> OldComponent<T> {
     pub fn unwrap_owned(self) -> T {
         match self {
             Self::Owned(component) => component,
-            Self::OldGenOwned(_) => {
-                panic!("Called `OldComponent::unwrap_owned` on a `OldGenOwned` variant")
-            }
             Self::Shared => panic!("Called `OldComponent::unwrap_owned` on a `Shared` variant"),
-            Self::OldGenShared => {
-                panic!("Called `OldComponent::unwrap_owned` on a `OldShared` variant")
-            }
         }
     }
 }

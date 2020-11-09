@@ -120,8 +120,8 @@ fn newer_key() {
                 let new_entity = entities.add_entity((), ());
                 let (old_usize, old_u32) = (&mut usizes, &mut u32s).remove(new_entity);
 
-                assert_eq!(old_usize, Some(OldComponent::OldGenOwned(0)));
-                assert_eq!(old_u32, Some(OldComponent::OldGenOwned(1)));
+                assert_eq!(old_usize, None);
+                assert_eq!(old_u32, None);
                 assert_eq!(usizes.len(), 0);
                 assert_eq!(u32s.len(), 0);
             },

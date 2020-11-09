@@ -107,8 +107,8 @@ fn newer_key() {
     let new_entity = world.add_entity(());
     let (old_usize, old_u32) = world.remove::<(usize, u32)>(new_entity);
 
-    assert_eq!(old_usize, Some(OldComponent::OldGenOwned(0)));
-    assert_eq!(old_u32, Some(OldComponent::OldGenOwned(1)));
+    assert_eq!(old_usize, None);
+    assert_eq!(old_u32, None);
 
     world
         .try_run(|(usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
