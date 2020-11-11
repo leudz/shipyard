@@ -61,6 +61,18 @@ impl AllStorages {
     ///
     /// - `T` storage borrow failed.
     /// - `T` storage did not exist.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// all_storages.add_unique(0usize);
+    /// let i = all_storages.try_remove_unique::<usize>().unwrap();
+    /// ```
     pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         let storage_id = StorageId::of::<Unique<T>>();
 
@@ -118,6 +130,18 @@ impl AllStorages {
     ///
     /// - `T` storage borrow failed.
     /// - `T` storage did not exist.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// all_storages.add_unique(0usize);
+    /// let i = all_storages.remove_unique::<usize>();
+    /// ```
     #[track_caller]
     pub fn remove_unique<T: 'static>(&self) -> T {
         match self.try_remove_unique::<T>() {
@@ -126,11 +150,22 @@ impl AllStorages {
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [UniqueView] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.  
+    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
+    /// Does nothing if the storage already exists.
     ///
-    /// [UniqueView]: struct.UniqueView.html
-    /// [UniqueViewMut]: struct.UniqueViewMut.html
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// all_storages.add_unique(0usize);
+    /// ```
+    ///
+    /// [`UniqueView`]: struct.UniqueView.html
+    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         let storage_id = StorageId::of::<Unique<T>>();
 
@@ -199,25 +234,19 @@ impl AllStorages {
     /// Returns `true` if `entity` was alive.
     ///
     /// ### Example
+    ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, EntitiesViewMut, Get, View, ViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Get, View, World};
     ///
     /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
     ///
-    /// let [entity1, entity2] = world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         [
-    ///             entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32)),
-    ///             entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32)),
-    ///         ]
-    ///     },
-    /// );
+    /// let entity1 = all_storages.add_entity((0usize, 1u32));
+    /// let entity2 = all_storages.add_entity((2usize, 3u32));
     ///
-    /// world.run(|mut all_storages: AllStoragesViewMut| {
-    ///     all_storages.delete_entity(entity1);
-    /// });
+    /// all_storages.delete_entity(entity1);
     ///
-    /// world.run(|usizes: View<usize>, u32s: View<u32>| {
+    /// all_storages.run(|usizes: View<usize>, u32s: View<u32>| {
     ///     assert!((&usizes).get(entity1).is_err());
     ///     assert!((&u32s).get(entity1).is_err());
     ///     assert_eq!(usizes.get(entity2), Ok(&2));
@@ -239,6 +268,19 @@ impl AllStorages {
         }
     }
     /// Deletes all components from an entity without deleting it.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity = all_storages.add_entity((0u32, 1usize));
+    ///
+    /// all_storages.strip(entity);
+    /// ```
     pub fn strip(&mut self, entity: EntityId) {
         let mut i = 0;
         let mut has_event = false;
@@ -278,11 +320,28 @@ impl AllStorages {
             }
         }
     }
-    /// Deletes all components (except the ones in `S`) from an entity without deleting it.
+    /// Deletes all components of an entity except the ones passed in `S`.  
+    /// The storage's type has to be used and not the component.  
+    /// `SparseSet` is the default storage.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, SparseSet, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity = all_storages.add_entity((0u32, 1usize));
+    ///
+    /// all_storages.retain::<SparseSet<u32>>(entity);
+    /// ```
     pub fn retain<S: Retain>(&mut self, entity: EntityId) {
         S::retain(self, entity);
     }
-    /// Deletes all components (except the ones in `excluded_storage`) from an entity without deleting it.
+    /// Deletes all components of an entity except the ones passed in `S`.  
+    /// This is identical to `retain` but uses `StorageId` and not generics.  
+    /// You should only use this method if you use a custom storage with a runtime id.
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         let mut i = 0;
         let mut has_event = false;
@@ -325,7 +384,18 @@ impl AllStorages {
             }
         }
     }
-    /// Deletes all entities and their components.
+    /// Deletes all entities and components in the `World`.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// all_storages.clear();
+    /// ```
     pub fn clear(&mut self) {
         let mut i = 0;
         let mut has_event = false;
@@ -365,6 +435,20 @@ impl AllStorages {
             }
         }
     }
+    /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
+    /// `component` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity0 = all_storages.add_entity((0u32,));
+    /// let entity1 = all_storages.add_entity((1u32, 11usize));
+    /// ```
     #[inline]
     pub fn add_entity<T: AddComponent>(&mut self, component: T) -> EntityId {
         let entity = self.exclusive_storage_mut::<Entities>().unwrap().generate();
@@ -372,10 +456,48 @@ impl AllStorages {
 
         entity
     }
+    /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.  
+    /// `source` must always yield a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let mut world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity0 = all_storages.bulk_add_entity((0..1).map(|_| {})).next();
+    /// let entity1 = all_storages.bulk_add_entity((1..2).map(|i| (i as u32,))).next();
+    /// let new_entities = all_storages.bulk_add_entity((10..20).map(|i| (i as u32, i)));
+    /// ```
     #[inline]
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
         source.bulk_add_entity(self)
     }
+    /// Adds components to an existing entity.  
+    /// If the entity already owned a component it will be replaced.  
+    /// `component` must always be a tuple, even for a single component.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` is not alive.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let mut world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// // make an empty entity
+    /// let entity = all_storages.add_entity(());
+    ///
+    /// all_storages.add_component(entity, (0u32,)).unwrap();
+    /// // entity already had a `u32` component so it will be replaced
+    /// all_storages.add_component(entity, (1u32, 11usize)).unwrap();
+    /// ```
     #[inline]
     pub fn add_component<T: AddComponent>(
         &mut self,
@@ -394,13 +516,44 @@ impl AllStorages {
             Err(error::AddComponent::EntityIsNotAlive)
         }
     }
+    /// Removes components from an entity.  
+    /// `C` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, OldComponent, World};
+    ///
+    /// let mut world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity = all_storages.add_entity((0u32, 1usize));
+    ///
+    /// let (i,) = all_storages.remove::<(u32,)>(entity);
+    /// assert_eq!(i, Some(OldComponent::Owned(0)));
+    /// ```
     #[inline]
     pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
         T::remove(self, entity)
     }
+    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
+    /// `C` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, OldComponent, World};
+    ///
+    /// let mut world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity = all_storages.add_entity((0u32, 1usize));
+    ///
+    /// all_storages.delete_component::<(u32,)>(entity);
+    /// ```
     #[inline]
-    pub fn delete_component<T: DeleteComponent>(&mut self, entity: EntityId) {
-        T::delete_component(self, entity);
+    pub fn delete_component<C: DeleteComponent>(&mut self, entity: EntityId) {
+        C::delete_component(self, entity);
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.
@@ -1073,7 +1226,27 @@ let i = all_storages.run(sys1);
             Err(err) => panic!("{:?}", err),
         }
     }
-    /// Deletes any entity with at least one of the given type(s).
+    /// Deletes any entity with at least one of the given type(s).  
+    /// The storage's type has to be used and not the component.  
+    /// `SparseSet` is the default storage.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, SparseSet, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
+    ///
+    /// let entity0 = all_storages.add_entity((0u32,));
+    /// let entity1 = all_storages.add_entity((1usize,));
+    /// let entity2 = all_storages.add_entity(("2",));
+    ///
+    /// // deletes `entity2`
+    /// all_storages.delete_any::<SparseSet<&str>>();
+    /// // deletes `entity0` and `entity1`
+    /// all_storages.delete_any::<(SparseSet<u32>, SparseSet<usize>)>();
+    /// ```
     pub fn delete_any<T: DeleteAny>(&mut self) {
         T::delete_any(self);
     }
