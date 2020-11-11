@@ -1644,7 +1644,7 @@ impl World {
     pub fn delete_any<S: DeleteAny>(&mut self) {
         self.all_storages.get_mut().delete_any::<S>();
     }
-    /// Deletes all components of an entity except the ones passed in `S`.
+    /// Deletes all components of an entity except the ones passed in `S`.  
     /// The storage's type has to be used and not the component.  
     /// `SparseSet` is the default storage.
     ///
