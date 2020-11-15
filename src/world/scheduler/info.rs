@@ -1,8 +1,9 @@
 //! Types for displaying workload information.
 
+pub use crate::type_id::TypeId;
+
 use crate::borrow::Mutability;
 use crate::storage::StorageId;
-use crate::type_id::TypeId;
 use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
