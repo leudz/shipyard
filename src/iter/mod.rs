@@ -38,4 +38,4 @@ pub use par_mixed::ParMixed;
 #[cfg(feature = "parallel")]
 pub use par_tight::ParTight;
 pub use tight::Tight;
-pub use with_id::{IntoWithId, WithId};
+pub use with_id::{IntoWithId, LastId, WithId};

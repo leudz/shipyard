@@ -29,7 +29,13 @@ where
 }
 
 pub trait LastId {
+    /// ### Safety
+    ///
+    /// `Iterator::next` has to be called before it.
     unsafe fn last_id(&self) -> EntityId;
+    /// ### Safety
+    ///
+    /// `DoubleEndedIterator::next_back` has to be called before it.
     unsafe fn last_id_back(&self) -> EntityId;
 }
 

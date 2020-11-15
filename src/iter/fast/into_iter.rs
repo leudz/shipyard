@@ -18,7 +18,7 @@ const ACCESS_FACTOR: usize = 3;
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
 pub trait IntoFastIter {
-    type IntoIter;
+    type IntoIter: Iterator;
     #[cfg(feature = "parallel")]
     type IntoParIter;
 
@@ -148,6 +148,7 @@ pub trait IntoFastIter {
 impl<T: IntoAbstract> IntoFastIter for T
 where
     T::AbsView: FastAbstractMut,
+    <T::AbsView as AbstractMut>::Index: Clone,
 {
     type IntoIter = FastIter<T::AbsView>;
     #[cfg(feature = "parallel")]
@@ -225,7 +226,7 @@ where
 impl<T: IntoAbstract> IntoFastIter for (T,)
 where
     T::AbsView: FastAbstractMut,
-    <T::AbsView as AbstractMut>::Index: From<usize>,
+    <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = FastIter<(T::AbsView,)>;
     #[cfg(feature = "parallel")]
@@ -302,7 +303,7 @@ where
 
 macro_rules! impl_into_iter {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))+) => {
-        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoFastIter for ($type1, $($type,)+) where $type1::AbsView: FastAbstractMut, $($type::AbsView: FastAbstractMut,)+ <$type1::AbsView as AbstractMut>::Index: From<usize>, $(<$type::AbsView as AbstractMut>::Index: From<usize>),+ {
+        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoFastIter for ($type1, $($type,)+) where $type1::AbsView: FastAbstractMut, $($type::AbsView: FastAbstractMut,)+ <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
             type IntoIter = FastIter<($type1::AbsView, $($type::AbsView,)+)>;
             #[cfg(feature = "parallel")]
             type IntoParIter = FastParIter<($type1::AbsView, $($type::AbsView,)+)>;

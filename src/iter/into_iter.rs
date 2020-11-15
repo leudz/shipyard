@@ -19,7 +19,7 @@ const ACCESS_FACTOR: usize = 3;
 ///
 /// [`Mut`]: ../struct.Mut.html
 pub trait IntoIter {
-    type IntoIter;
+    type IntoIter: Iterator;
     #[cfg(feature = "parallel")]
     type IntoParIter;
 
@@ -91,7 +91,10 @@ pub trait IntoIter {
     fn par_iter(self) -> Self::IntoParIter;
 }
 
-impl<T: IntoAbstract> IntoIter for T {
+impl<T: IntoAbstract> IntoIter for T
+where
+    <T::AbsView as AbstractMut>::Index: Clone,
+{
     type IntoIter = Iter<T::AbsView>;
     #[cfg(feature = "parallel")]
     type IntoParIter = ParIter<T::AbsView>;
@@ -134,7 +137,7 @@ impl<T: IntoAbstract> IntoIter for T {
 
 impl<T: IntoAbstract> IntoIter for (T,)
 where
-    <T::AbsView as AbstractMut>::Index: From<usize>,
+    <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<(T::AbsView,)>;
     #[cfg(feature = "parallel")]
@@ -178,7 +181,7 @@ where
 
 macro_rules! impl_into_iter {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))+) => {
-        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+) where <$type1::AbsView as AbstractMut>::Index: From<usize>, $(<$type::AbsView as AbstractMut>::Index: From<usize>),+ {
+        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+) where <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
             type IntoIter = Iter<($type1::AbsView, $($type::AbsView,)+)>;
             #[cfg(feature = "parallel")]
             type IntoParIter = ParIter<($type1::AbsView, $($type::AbsView,)+)>;
