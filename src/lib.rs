@@ -28,7 +28,6 @@ pub mod error;
 mod get;
 mod not;
 mod pack {
-    pub(crate) mod shared;
     pub(crate) mod update;
 }
 mod add_component;
@@ -67,12 +66,11 @@ pub use delete::Delete;
 pub use get::Get;
 pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use not::Not;
-pub use pack::shared::WithShared;
 pub use pack::update::{Inserted, InsertedOrModified, Modified};
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
-pub use sparse_set::{sort, sort::IntoSortable, OldComponent, SparseSet};
+pub use sparse_set::{sort, sort::IntoSortable, SparseSet};
 pub use storage::{
     AllStorages, CustomDeleteAny, DeleteAny, Entities, EntityId, Retain, StorageId, Unique,
 };

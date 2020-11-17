@@ -522,7 +522,7 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, OldComponent, World};
+    /// use shipyard::{AllStoragesViewMut, World};
     ///
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
@@ -530,7 +530,7 @@ impl AllStorages {
     /// let entity = all_storages.add_entity((0u32, 1usize));
     ///
     /// let (i,) = all_storages.remove::<(u32,)>(entity);
-    /// assert_eq!(i, Some(OldComponent::Owned(0)));
+    /// assert_eq!(i, Some(0));
     /// ```
     #[inline]
     pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
@@ -542,7 +542,7 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, OldComponent, World};
+    /// use shipyard::{AllStoragesViewMut, World};
     ///
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>();
@@ -1249,22 +1249,6 @@ let i = all_storages.run(sys1);
     /// ```
     pub fn delete_any<T: DeleteAny>(&mut self) {
         T::delete_any(self);
-    }
-    // #[cfg(feature = "serde1")]
-    // pub(crate) fn storages(&mut self) -> &mut HashMap<StorageId, Storage> {
-    //     // SAFE we have exclusive access
-    //     unsafe { &mut *self.storages.get() }
-    // }
-    /// Shares all `owned`'s components with `shared` entity.  
-    /// Deleting `owned`'s component won't stop the sharing.  
-    pub fn share(&mut self, owned: EntityId, shared: EntityId) {
-        // SAFE we have unique access
-        let storages = unsafe { &mut *self.storages.get() };
-
-        for storage in storages.values_mut() {
-            // we have unique access to all storages so we can unwrap
-            storage.share(owned, shared);
-        }
     }
     pub(crate) fn entities(&self) -> Result<Ref<'_, &'_ Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();

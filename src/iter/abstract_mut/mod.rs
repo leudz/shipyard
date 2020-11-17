@@ -2,7 +2,6 @@ mod inserted;
 mod inserted_or_modified;
 mod modified;
 mod not;
-mod with_shared;
 
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
@@ -38,11 +37,11 @@ impl<'tmp, T> AbstractMut for &'tmp SparseSet<T> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        self.index_of_owned(entity_id)
+        self.index_of(entity_id)
     }
     #[inline]
     unsafe fn indices_of_unchecked(&self, entity_id: EntityId, _: usize, _: u16) -> Self::Index {
-        self.index_of_owned_unchecked(entity_id)
+        self.index_of_unchecked(entity_id)
     }
     #[inline]
     unsafe fn get_id(&self, index: usize) -> EntityId {
@@ -84,11 +83,11 @@ impl<'tmp, T> AbstractMut for FullRawWindowMut<'tmp, T> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        self.index_of_owned(entity_id)
+        self.index_of(entity_id)
     }
     #[inline]
     unsafe fn indices_of_unchecked(&self, entity_id: EntityId, _: usize, _: u16) -> Self::Index {
-        self.index_of_owned_unchecked(entity_id)
+        self.index_of_unchecked(entity_id)
     }
     #[inline]
     unsafe fn get_id(&self, index: usize) -> EntityId {

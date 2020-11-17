@@ -13,10 +13,7 @@ use alloc::vec::Vec;
 // #[cfg(feature = "serde1")]
 // use hashbrown::HashMap;
 
-pub(crate) const BUCKET_SIZE: usize = 128 / core::mem::size_of::<EntityId>();
-
 pub struct Metadata<T> {
-    pub(crate) shared: SparseArray<[EntityId; BUCKET_SIZE]>,
     pub(crate) update: Option<UpdatePack<T>>,
     pub(super) local_on_insert: Vec<fn(EntityId, &mut SparseSet<T>)>,
     pub(super) local_on_remove: Vec<fn(EntityId, &mut SparseSet<T>)>,
@@ -33,7 +30,6 @@ pub struct Metadata<T> {
 impl<T> Default for Metadata<T> {
     fn default() -> Self {
         Metadata {
-            shared: SparseArray::new(),
             update: None,
             local_on_insert: Vec::new(),
             local_on_remove: Vec::new(),

@@ -85,11 +85,6 @@ impl Storage {
             .downcast_mut()
             .unwrap()
     }
-    #[inline]
-    fn share(&mut self, owned: EntityId, shared: EntityId) {
-        // SAFE this is not `AllStorages`
-        unsafe { (&mut *self.0).get_mut() }.share(owned, shared);
-    }
 }
 
 // #[cfg(feature = "serde1")]

@@ -135,8 +135,6 @@ impl Display for NewEntity {
     }
 }
 
-/// If a storage is packed_owned all storages packed with it have to be
-/// passed in the add_component call even if no components are added.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
     EntityIsNotAlive,
@@ -422,48 +420,6 @@ impl Debug for UniqueRemove {
 impl Display for UniqueRemove {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, fmt)
-    }
-}
-
-/// Error returned by [`SparseSet::try_share`].
-///
-/// [`SparseSet::try_share`]: ../struct.SparseSet.html#method.try_share
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Share;
-
-#[cfg(feature = "std")]
-impl Error for Share {}
-
-impl Debug for Share {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        f.write_str("Cannot share the component of this entity because it already owns one.")
-    }
-}
-
-impl Display for Share {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
-    }
-}
-
-/// Error returned by [`SparseSet::try_unshare`].
-///
-/// [`SparseSet::try_unshare`]: ../struct.SparseSet.html#method.try_unshare
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Unshare;
-
-#[cfg(feature = "std")]
-impl Error for Unshare {}
-
-impl Debug for Unshare {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        f.write_str("Cannot unshare the component of this entity because it's not shared.")
-    }
-}
-
-impl Display for Unshare {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
     }
 }
 

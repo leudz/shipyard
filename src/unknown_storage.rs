@@ -38,8 +38,6 @@ pub trait UnknownStorage: SizedAny {
     #[inline]
     fn clear(&mut self) {}
     #[inline]
-    fn share(&mut self, _owned: EntityId, _shared: EntityId) {}
-    #[inline]
     fn has_remove_event_to_dispatch(&self) -> bool {
         false
     }

@@ -12,7 +12,7 @@ mod window;
 pub(crate) use add_component::AddComponent;
 pub(crate) use bulk_add_entity::BulkAddEntity;
 pub(crate) use delete_component::DeleteComponent;
-pub(crate) use metadata::{Metadata, BUCKET_SIZE as SHARED_BUCKET_SIZE};
+pub(crate) use metadata::Metadata;
 pub(crate) use remove::Remove;
 pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
@@ -48,12 +48,8 @@ pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
 // and if set dense[sparse[number]] != number.
 // We can't be limited to store solely integers, this is why there is a third vector.
 // It mimics the dense vector in regard to insertion/deletion.
-//
-// An entity is shared is self.shared > 0, the sparse index isn't usize::MAX and dense doesn't point back
-// Shared components don't qualify for packs
 
-// shared info in only present in sparse
-// inserted and modified info is only present in dense
+// Inserted and modified info is only present in dense
 pub struct SparseSet<T> {
     pub(crate) sparse: SparseArray<[EntityId; BUCKET_SIZE]>,
     pub(crate) dense: Vec<EntityId>,
@@ -83,24 +79,10 @@ impl<T> SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
-    /// Returns `true` if `entity` owns or shares a component in this storage.
-    ///
-    /// In case it shares a component, returns `true` even if there is no owned component at the end of the shared chain.
+    /// Returns `true` if `entity` owns a component in this storage.
     #[inline]
     pub fn contains(&self, entity: EntityId) -> bool {
         self.index_of(entity).is_some()
-    }
-    /// Returns `true` if `entity` owns a component in this storage.
-    #[inline]
-    pub fn contains_owned(&self, entity: EntityId) -> bool {
-        self.index_of_owned(entity).is_some()
-    }
-    /// Returns `true` if `entity` shares a component in this storage.  
-    ///
-    /// Returns `true` even if there is no owned component at the end of the shared chain.
-    #[inline]
-    pub fn contains_shared(&self, entity: EntityId) -> bool {
-        self.shared_id(entity).is_some()
     }
     /// Returns the length of the storage.
     #[inline]
@@ -115,38 +97,19 @@ impl<T> SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
-    /// Returns the index of `entity`'s owned component in the `dense` and `data` vectors.
-    ///
-    /// In case `entity` is shared `index_of` will follow the shared chain to find the owned one at the end.  
+    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this storage and until a modification happens.
     #[inline]
     pub fn index_of(&self, entity: EntityId) -> Option<usize> {
-        self.index_of_owned(entity).or_else(|| {
-            let sparse_entity = self.sparse.get(entity)?;
-
-            if sparse_entity.is_shared() && sparse_entity.index() == entity.gen() {
-                self.metadata
-                    .shared
-                    .shared_index(entity)
-                    .and_then(|id| self.index_of(id))
-            } else {
-                None
-            }
-        })
-    }
-    /// Returns the index of `entity`'s owned component in the `dense` and `data` vectors.  
-    /// This index is only valid for this storage and until a modification happens.
-    #[inline]
-    pub fn index_of_owned(&self, entity: EntityId) -> Option<usize> {
         self.sparse.get(entity).and_then(|sparse_entity| {
-            if sparse_entity.is_owned() && entity.gen() == sparse_entity.gen() {
+            if entity.gen() == sparse_entity.gen() {
                 Some(sparse_entity.uindex())
             } else {
                 None
             }
         })
     }
-    /// Returns the index of `entity`'s owned component in the `dense` and `data` vectors.  
+    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this storage and until a modification happens.
     ///
     /// # Safety
@@ -154,29 +117,13 @@ impl<T> SparseSet<T> {
     /// `entity` has to own a component of this type.  
     /// The index is only valid until a modification occurs in the storage.
     #[inline]
-    pub unsafe fn index_of_owned_unchecked(&self, entity: EntityId) -> usize {
+    pub unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
         self.sparse.get_unchecked(entity).uindex()
     }
     /// Returns the `EntityId` at a given `index`.
     #[inline]
-    pub fn try_id_at(&self, index: usize) -> Option<EntityId> {
+    pub fn id_at(&self, index: usize) -> Option<EntityId> {
         self.dense.get(index).copied()
-    }
-    /// Returns the `EntityId` at a given `index`.  
-    /// Unwraps errors.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
-    pub fn id_at(&self, index: usize) -> EntityId {
-        match self.try_id_at(index) {
-            Some(id) => id,
-            None => panic!(
-                "Storage has {} components but trying to access the id at index {}.",
-                self.len(),
-                index
-            ),
-        }
     }
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
@@ -199,38 +146,16 @@ impl<T> SparseSet<T> {
 
         Some(unsafe { self.data.get_unchecked_mut(index) })
     }
-    /// Returns the `EntityId` `shared` entity points to.
-    ///
-    /// Returns `None` if the entity isn't shared.
-    #[inline]
-    pub fn shared_id(&self, shared: EntityId) -> Option<EntityId> {
-        let sparse_entity = self.sparse.get(shared)?;
-
-        if sparse_entity.is_shared() && sparse_entity.index() == shared.gen() {
-            self.metadata.shared.shared_index(shared)
-        } else {
-            None
-        }
-    }
 }
 
 impl<T> SparseSet<T> {
     /// Inserts `value` in the `SparseSet`.
     ///
-    /// If an `entity` with the same index but a greater generation already has a component of this type, does nothing and returns `None`.
-    ///
-    /// Returns what was present at its place, one of the following:
-    /// - None - no value present, either `entity` never had this component or it was removed/deleted
-    /// - Some(OldComponent::Owned) - `entity` already had this component, it is no replaced
-    /// - Some(OldComponent::OldGenOwned) - `entity` didn't have a component but an entity with the same index did and it wasn't removed with the entity
-    /// - Some(OldComponent::Shared) - `entity` shared a component
-    /// - Some(OldComponent::OldShared) - `entity` didn't have a component but an entity with the same index shared one and it wasn't removed with the entity
-    ///
     /// # Update pack
     ///
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
-    pub(crate) fn insert(&mut self, mut entity: EntityId, value: T) -> Option<OldComponent<T>> {
+    pub(crate) fn insert(&mut self, mut entity: EntityId, value: T) -> Option<T> {
         self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
@@ -254,56 +179,26 @@ impl<T> SparseSet<T> {
             self.run_on_insert(entity);
 
             old_component = None;
-        } else if sparse_entity.is_owned() {
-            if entity.gen() >= sparse_entity.gen() {
-                let old_data = unsafe {
-                    core::mem::replace(self.data.get_unchecked_mut(sparse_entity.uindex()), value)
-                };
+        } else if entity.gen() >= sparse_entity.gen() {
+            let old_data = unsafe {
+                core::mem::replace(self.data.get_unchecked_mut(sparse_entity.uindex()), value)
+            };
 
-                if entity.gen() == sparse_entity.gen() {
-                    old_component = Some(OldComponent::Owned(old_data));
-                } else {
-                    old_component = None;
-                }
-
-                sparse_entity.copy_gen(entity);
-
-                let dense_entity = unsafe { self.dense.get_unchecked_mut(sparse_entity.uindex()) };
-
-                if self.metadata.update.is_some() && !dense_entity.is_inserted() {
-                    dense_entity.set_modified();
-                }
-
-                dense_entity.copy_index_gen(entity);
-            } else {
-                old_component = None;
-            }
-        } else if entity.gen() >= sparse_entity.index() {
-            if entity.gen() == sparse_entity.index() {
-                old_component = Some(OldComponent::Shared);
+            if entity.gen() == sparse_entity.gen() {
+                old_component = Some(old_data);
             } else {
                 old_component = None;
             }
 
-            unsafe {
-                self.metadata
-                    .shared
-                    .set_sparse_index_unchecked(entity, EntityId::dead());
+            sparse_entity.copy_gen(entity);
+
+            let dense_entity = unsafe { self.dense.get_unchecked_mut(sparse_entity.uindex()) };
+
+            if self.metadata.update.is_some() && !dense_entity.is_inserted() {
+                dense_entity.set_modified();
             }
 
-            *sparse_entity =
-                EntityId::new_from_parts(self.dense.len() as u64, entity.gen() as u16, 0);
-
-            if self.metadata.update.is_some() {
-                entity.set_inserted();
-            } else {
-                entity.clear_meta();
-            }
-
-            self.dense.push(entity);
-            self.data.push(value);
-
-            self.run_on_insert(entity);
+            dense_entity.copy_index_gen(entity);
         } else {
             old_component = None;
         }
@@ -315,14 +210,14 @@ impl<T> SparseSet<T> {
 impl<T> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
     #[inline]
-    pub fn remove(&mut self, entity: EntityId) -> Option<OldComponent<T>>
+    pub fn remove(&mut self, entity: EntityId) -> Option<T>
     where
         T: 'static,
     {
         let component = self.actual_remove(entity);
 
         if let Some(update) = &mut self.metadata.update {
-            if let Some(OldComponent::Owned(_)) = &component {
+            if component.is_some() {
                 update.removed.push(entity);
             }
         }
@@ -330,10 +225,10 @@ impl<T> SparseSet<T> {
         component
     }
     #[inline]
-    pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<OldComponent<T>> {
+    pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
-        if sparse_entity.is_owned() && entity.gen() >= sparse_entity.gen() {
+        if entity.gen() >= sparse_entity.gen() {
             self.run_on_remove(entity);
 
             let sparse_entity = self.sparse.get(entity)?;
@@ -353,21 +248,7 @@ impl<T> SparseSet<T> {
             }
 
             if entity.gen() == sparse_entity.gen() {
-                Some(OldComponent::Owned(component))
-            } else {
-                None
-            }
-        } else if sparse_entity.is_shared() && entity.gen() >= sparse_entity.index() {
-            unsafe {
-                *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
-
-                self.metadata
-                    .shared
-                    .set_sparse_index_unchecked(entity, EntityId::dead());
-            }
-
-            if entity.gen() == sparse_entity.index() {
-                Some(OldComponent::Shared)
+                Some(component)
             } else {
                 None
             }
@@ -381,7 +262,7 @@ impl<T> SparseSet<T> {
     where
         T: 'static,
     {
-        if let Some(OldComponent::Owned(component)) = self.actual_remove(entity) {
+        if let Some(component) = self.actual_remove(entity) {
             if let Some(update) = &mut self.metadata.update {
                 update.deleted.push((entity, component));
             }
@@ -711,87 +592,6 @@ impl<T> SparseSet<T> {
         self.dense.clear();
         self.data.clear();
     }
-    /// Shares `owned`'s component with `shared` entity.  
-    /// Deleting `owned`'s component won't stop the sharing.  
-    /// Trying to share an entity with itself won't do anything.
-    ///
-    /// ### Errors
-    ///
-    /// - `entity` already had a owned component of this type.
-    #[inline]
-    pub fn try_share(&mut self, owned: EntityId, shared: EntityId) -> Result<(), error::Share> {
-        if owned != shared {
-            self.sparse.allocate_at(shared);
-
-            if !self.contains_owned(shared) {
-                unsafe {
-                    *self.sparse.get_mut_unchecked(shared) = EntityId::new_shared(shared);
-
-                    self.metadata
-                        .shared
-                        .set_sparse_index_unchecked(shared, owned);
-                }
-
-                Ok(())
-            } else {
-                Err(error::Share)
-            }
-        } else {
-            Ok(())
-        }
-    }
-    /// Shares `owned`'s component with `shared` entity.  
-    /// Deleting `owned`'s component won't stop the sharing.  
-    /// Trying to share an entity with itself won't do anything.  
-    /// Unwraps errors.
-    ///
-    /// ### Errors
-    ///
-    /// - `entity` already had a owned component of this type.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[inline]
-    pub fn share(&mut self, owned: EntityId, shared: EntityId) {
-        match self.try_share(owned, shared) {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Makes `entity` stop observing another entity.
-    ///
-    /// ### Errors
-    ///
-    /// - `entity` was not observing any entity.
-    #[inline]
-    pub fn try_unshare(&mut self, entity: EntityId) -> Result<(), error::Unshare> {
-        if self.contains_shared(entity) {
-            unsafe {
-                *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
-                self.metadata
-                    .shared
-                    .set_sparse_index_unchecked(entity, EntityId::dead());
-            }
-
-            Ok(())
-        } else {
-            Err(error::Unshare)
-        }
-    }
-    /// Makes `entity` stop observing another entity.  
-    /// Unwraps errors.
-    ///
-    /// ### Errors
-    ///
-    /// - `entity` was not observing any entity.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[inline]
-    pub fn unshare(&mut self, entity: EntityId) {
-        match self.try_unshare(entity) {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
-        }
-    }
     /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.
     ///
@@ -1104,10 +904,6 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
         <Self>::clear(self);
     }
     #[inline]
-    fn share(&mut self, owned: EntityId, shared: EntityId) {
-        let _ = Self::try_share(self, owned, shared);
-    }
-    #[inline]
     fn has_remove_event_to_dispatch(&self) -> bool {
         !self.metadata.on_remove_ids_dense.is_empty()
     }
@@ -1148,25 +944,6 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     //     > {
     //         Some(self.metadata.serde.as_ref()?.deserialization)
     //     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
-pub enum OldComponent<T> {
-    Owned(T),
-    Shared,
-}
-
-impl<T> OldComponent<T> {
-    /// Extracts the value inside `OldComponent`.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[inline]
-    pub fn unwrap_owned(self) -> T {
-        match self {
-            Self::Owned(component) => component,
-            Self::Shared => panic!("Called `OldComponent::unwrap_owned` on a `Shared` variant"),
-        }
-    }
 }
 
 #[test]
@@ -1230,10 +1007,7 @@ fn remove() {
     array.insert(EntityId::new_from_parts(5, 0, 0), "5");
     array.insert(EntityId::new_from_parts(10, 0, 0), "10");
 
-    assert_eq!(
-        array.remove(EntityId::new_from_parts(0, 0, 0)),
-        Some(OldComponent::Owned("0"))
-    );
+    assert_eq!(array.remove(EntityId::new_from_parts(0, 0, 0)), Some("0"));
     assert_eq!(
         array.dense,
         &[
@@ -1282,10 +1056,7 @@ fn remove() {
         Some(&"100")
     );
 
-    assert_eq!(
-        array.remove(EntityId::new_from_parts(3, 0, 0)),
-        Some(OldComponent::Owned("3"))
-    );
+    assert_eq!(array.remove(EntityId::new_from_parts(3, 0, 0)), Some("3"));
     assert_eq!(
         array.dense,
         &[
@@ -1312,7 +1083,7 @@ fn remove() {
 
     assert_eq!(
         array.remove(EntityId::new_from_parts(100, 0, 0)),
-        Some(OldComponent::Owned("100"))
+        Some("100")
     );
     assert_eq!(
         array.dense,

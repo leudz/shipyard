@@ -1,4 +1,4 @@
-use crate::sparse_set::{OldComponent, SparseSet};
+use crate::sparse_set::SparseSet;
 use crate::storage::EntityId;
 use crate::view::ViewMut;
 
@@ -11,14 +11,14 @@ pub trait Remove {
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, OldComponent, Remove, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, Remove, ViewMut, World};
     ///
     /// let world = World::new();
     ///
     /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
     ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     ///     let old = (&mut usizes, &mut u32s).remove(entity1);
-    ///     assert_eq!(old, (Some(OldComponent::Owned(0)), Some(OldComponent::Owned(1))));
+    ///     assert_eq!(old, (Some(0), Some(1)));
     /// });
     /// ```
     fn remove(&mut self, entity: EntityId) -> Self::Out;
@@ -32,7 +32,7 @@ impl Remove for () {
 }
 
 impl<T: 'static> Remove for ViewMut<'_, T> {
-    type Out = Option<OldComponent<T>>;
+    type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
@@ -41,7 +41,7 @@ impl<T: 'static> Remove for ViewMut<'_, T> {
 }
 
 impl<T: 'static> Remove for &mut ViewMut<'_, T> {
-    type Out = Option<OldComponent<T>>;
+    type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {

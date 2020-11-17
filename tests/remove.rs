@@ -12,7 +12,7 @@ fn no_pack() {
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
     let entity2 = entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
     let component = usizes.remove(entity1);
-    assert_eq!(component, Some(OldComponent::Owned(0usize)));
+    assert_eq!(component, Some(0usize));
     assert_eq!(
         (&mut usizes).get(entity1).err(),
         Some(error::MissingComponent {
@@ -37,7 +37,7 @@ fn update() {
     let entity1 = entities.add_entity(&mut usizes, 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
     let component = usizes.remove(entity1);
-    assert_eq!(component, Some(OldComponent::Owned(0)));
+    assert_eq!(component, Some(0));
     assert_eq!(
         usizes.get(entity1),
         Err(error::MissingComponent {

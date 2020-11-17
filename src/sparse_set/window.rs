@@ -36,9 +36,9 @@ impl<'w, T> FullRawWindowMut<'w, T> {
         }
     }
     #[inline]
-    pub(crate) fn index_of_owned(&self, entity: EntityId) -> Option<usize> {
+    pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
         self.sparse_index(entity).and_then(|sparse_entity| {
-            if sparse_entity.is_owned() && entity.gen() == sparse_entity.gen() {
+            if entity.gen() == sparse_entity.gen() {
                 Some(sparse_entity.uindex())
             } else {
                 None
@@ -52,8 +52,8 @@ impl<'w, T> FullRawWindowMut<'w, T> {
     /// `entity` has to own a component in this storage.  
     /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
     #[inline]
-    pub(crate) unsafe fn index_of_owned_unchecked(&self, entity: EntityId) -> usize {
-        if let Some(index) = self.index_of_owned(entity) {
+    pub(crate) unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
+        if let Some(index) = self.index_of(entity) {
             index
         } else {
             unreachable!()

@@ -18,7 +18,7 @@ impl<'tmp, T> AbstractMut for Modified<&'tmp SparseSet<T>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0.index_of_owned(entity_id) {
+        if let Some(index) = self.0.index_of(entity_id) {
             if unsafe { (*self.0.dense.get_unchecked(index)).is_modified() } {
                 Some(index)
             } else {
@@ -57,7 +57,7 @@ impl<'tmp, T> AbstractMut for Modified<FullRawWindowMut<'tmp, T>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0.index_of_owned(entity_id) {
+        if let Some(index) = self.0.index_of(entity_id) {
             if unsafe { (*self.0.dense.add(index)).is_modified() } {
                 Some(index)
             } else {

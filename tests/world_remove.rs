@@ -10,7 +10,7 @@ fn no_pack() {
     let entity2 = world.add_entity((2usize, 3u32));
 
     let (component,) = world.remove::<(usize,)>(entity1);
-    assert_eq!(component, Some(OldComponent::Owned(0usize)));
+    assert_eq!(component, Some(0usize));
 
     let (usizes, u32s) = world.try_borrow::<(View<usize>, View<u32>)>().unwrap();
     assert_eq!(
@@ -35,7 +35,7 @@ fn update() {
     let entity2 = world.add_entity((2usize,));
 
     let (component,) = world.remove::<(usize,)>(entity1);
-    assert_eq!(component, Some(OldComponent::Owned(0)));
+    assert_eq!(component, Some(0));
 
     world
         .try_run(|usizes: View<usize>| {

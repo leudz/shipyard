@@ -9,7 +9,6 @@ use core::num::NonZeroU64;
 // a generation of !0 is used as a dead entity
 // dead entities don't have any component
 //
-// shared entities have the generation !0 - 1
 // inserted and modified component are flagged using metadata
 #[derive(Clone, Copy, Eq)]
 #[repr(transparent)]
@@ -24,7 +23,6 @@ impl EntityId {
     const GEN_MASK: u64 = (!Self::INDEX_MASK) & (!Self::META_MASK);
     const META_MASK: u64 = !(!0 >> Self::META_LEN);
     const MAX_GEN: u64 = Self::GEN_MASK >> Self::INDEX_LEN;
-    const SHARED: u64 = ((Self::GEN_MASK >> Self::INDEX_LEN) - 1) << Self::INDEX_LEN;
     const MODIFIED: u64 = 1 << (Self::INDEX_LEN + Self::GEN_LEN);
     const INSERTED: u64 = 2 << (Self::INDEX_LEN + Self::GEN_LEN);
 
@@ -88,22 +86,12 @@ impl EntityId {
             self.0 = NonZeroU64::new_unchecked((self.0.get() & !Self::META_MASK) | Self::INSERTED);
         }
     }
-    #[inline]
-    pub(crate) fn is_shared(self) -> bool {
-        (self.0.get() & Self::GEN_MASK) == Self::SHARED
-    }
     /// Make a new EntityId with the given index.
     #[inline]
     pub(crate) fn new(index: u64) -> Self {
         assert!(index < Self::INDEX_MASK);
         // SAFE never zero
         EntityId(unsafe { NonZeroU64::new_unchecked(index + 1) })
-    }
-
-    #[inline]
-    pub(crate) fn new_shared(entity: Self) -> Self {
-        // SAFE never zero
-        EntityId(unsafe { NonZeroU64::new_unchecked((entity.gen() + 1) | Self::SHARED) })
     }
 
     #[inline]
@@ -144,14 +132,6 @@ impl EntityId {
         self.uindex() % crate::sparse_set::BUCKET_SIZE
     }
     #[inline]
-    pub(crate) fn shared_bucket(self) -> usize {
-        self.uindex() / crate::sparse_set::SHARED_BUCKET_SIZE
-    }
-    #[inline]
-    pub(crate) fn shared_bucket_index(self) -> usize {
-        self.uindex() % crate::sparse_set::SHARED_BUCKET_SIZE
-    }
-    #[inline]
     pub(crate) fn max_index() -> u64 {
         Self::INDEX_MASK - 1
     }
@@ -186,10 +166,6 @@ impl EntityId {
                 (self.0.get() & Self::META_MASK) | (other.0.get() & !Self::META_MASK),
             );
         }
-    }
-    #[inline]
-    pub(crate) fn is_owned(self) -> bool {
-        self.gen() < Self::MAX_GEN - 1
     }
     #[inline]
     pub(crate) fn clear_meta(&mut self) {

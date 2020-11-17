@@ -1,4 +1,4 @@
-use crate::sparse_set::{OldComponent, SparseSet};
+use crate::sparse_set::SparseSet;
 use crate::storage::{AllStorages, EntityId, StorageId};
 
 pub trait Remove {
@@ -7,7 +7,7 @@ pub trait Remove {
 }
 
 impl<T: 'static + Send + Sync> Remove for (T,) {
-    type Out = (Option<OldComponent<T>>,);
+    type Out = (Option<T>,);
 
     #[inline]
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {
@@ -20,7 +20,7 @@ impl<T: 'static + Send + Sync> Remove for (T,) {
 macro_rules! impl_remove_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: 'static + Send + Sync,)+> Remove for ($($type,)+) {
-            type Out = ($(Option<OldComponent<$type>>,)+);
+            type Out = ($(Option<$type>,)+);
 
             fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {
                 ($(

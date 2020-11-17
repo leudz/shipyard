@@ -1555,14 +1555,14 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{OldComponent, World};
+    /// use shipyard::World;
     ///
     /// let mut world = World::new();
     ///
     /// let entity = world.add_entity((0u32, 1usize));
     ///
     /// let (i,) = world.remove::<(u32,)>(entity);
-    /// assert_eq!(i, Some(OldComponent::Owned(0)));
+    /// assert_eq!(i, Some(0));
     /// ```
     #[inline]
     pub fn remove<C: Remove>(&mut self, entity: EntityId) -> C::Out {
@@ -1685,28 +1685,6 @@ impl World {
     #[inline]
     pub fn clear(&mut self) {
         self.all_storages.get_mut().clear();
-    }
-    /// Shares all `owned`'s components with `shared` entity.  
-    /// Deleting `owned`'s component won't stop the sharing.
-    /// Deletes all entities and components in the `World`.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{Get, View, World};
-    ///
-    /// let mut world = World::new();
-    ///
-    /// let owned = world.add_entity((0u32,));
-    /// let shared = world.add_entity(());
-    ///
-    /// world.share(owned, shared);
-    ///
-    /// assert_eq!(world.borrow::<View<u32>>().get(shared), Ok(&0));
-    /// ```
-    #[inline]
-    pub fn share(&mut self, owned: EntityId, shared: EntityId) {
-        self.all_storages.get_mut().share(owned, shared);
     }
 }
 

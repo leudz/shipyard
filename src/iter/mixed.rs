@@ -1,6 +1,5 @@
 use super::abstract_mut::AbstractMut;
 use super::with_id::LastId;
-use crate::sparse_set::{SparseArray, BUCKET_SIZE, SHARED_BUCKET_SIZE};
 use crate::storage::EntityId;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::UnindexedProducer;
@@ -8,8 +7,6 @@ use rayon::iter::plumbing::UnindexedProducer;
 pub struct Mixed<Storage> {
     pub(super) storage: Storage,
     pub(super) indices: *const EntityId,
-    pub(super) sparse: *const SparseArray<[EntityId; BUCKET_SIZE]>,
-    pub(super) shared: *const SparseArray<[EntityId; SHARED_BUCKET_SIZE]>,
     pub(super) current: usize,
     pub(super) end: usize,
     pub(super) mask: u16,
@@ -31,24 +28,6 @@ impl<Storage: AbstractMut> Iterator for Mixed<Storage> {
             if let Some(data_indices) = self.storage.indices_of(id, self.current - 1, self.mask) {
                 self.last_id = id;
                 return Some(unsafe { self.storage.get_datas(data_indices) });
-            }
-        }
-
-        if let Some(shared) = unsafe { self.shared.as_ref() } {
-            while self.current - self.end % SHARED_BUCKET_SIZE < shared.len() * SHARED_BUCKET_SIZE {
-                self.current += 1;
-
-                if shared.is_valid(self.current - 1 - self.end % SHARED_BUCKET_SIZE) {
-                    let id = unsafe {
-                        (&*self.sparse)
-                            .get_at_unchecked(self.current - 1 - self.end % SHARED_BUCKET_SIZE)
-                    };
-
-                    if let Some(data_indices) = self.storage.indices_of(id, 0, 0) {
-                        self.last_id = id;
-                        return Some(unsafe { self.storage.get_datas(data_indices) });
-                    }
-                }
             }
         }
 
@@ -75,24 +54,6 @@ impl<Storage: AbstractMut> Iterator for Mixed<Storage> {
             }
         }
 
-        if let Some(shared) = unsafe { self.shared.as_ref() } {
-            while self.current - self.end % SHARED_BUCKET_SIZE < shared.len() {
-                self.current += 1;
-
-                if shared.is_valid(self.current - 1 - self.end % SHARED_BUCKET_SIZE) {
-                    let id = unsafe {
-                        (&*self.sparse)
-                            .get_at_unchecked(self.current - 1 - self.end % SHARED_BUCKET_SIZE)
-                    };
-
-                    if let Some(data_indices) = self.storage.indices_of(id, 0, 0) {
-                        self.last_id = id;
-                        init = f(init, unsafe { self.storage.get_datas(data_indices) });
-                    }
-                }
-            }
-        }
-
         init
     }
 }
@@ -111,24 +72,6 @@ impl<Storage: AbstractMut> DoubleEndedIterator for Mixed<Storage> {
             {
                 self.last_id = id;
                 return Some(unsafe { self.storage.get_datas(data_indices) });
-            }
-        }
-
-        if let Some(shared) = unsafe { self.shared.as_ref() } {
-            while self.current - self.end % SHARED_BUCKET_SIZE < shared.len() * SHARED_BUCKET_SIZE {
-                self.current += 1;
-
-                if shared.is_valid(self.current - 1 - self.end % SHARED_BUCKET_SIZE) {
-                    let id = unsafe {
-                        (&*self.sparse)
-                            .get_at_unchecked(self.current - 1 - self.end % SHARED_BUCKET_SIZE)
-                    };
-
-                    if let Some(data_indices) = self.storage.indices_of(id, 0, 0) {
-                        self.last_id = id;
-                        return Some(unsafe { self.storage.get_datas(data_indices) });
-                    }
-                }
             }
         }
 
@@ -152,24 +95,6 @@ impl<Storage: AbstractMut> DoubleEndedIterator for Mixed<Storage> {
             {
                 self.last_id = id;
                 init = f(init, unsafe { self.storage.get_datas(data_indices) });
-            }
-        }
-
-        if let Some(shared) = unsafe { self.shared.as_ref() } {
-            while self.current - self.end % SHARED_BUCKET_SIZE < shared.len() {
-                self.current += 1;
-
-                if shared.is_valid(self.current - 1 - self.end % SHARED_BUCKET_SIZE) {
-                    let id = unsafe {
-                        (&*self.sparse)
-                            .get_at_unchecked(self.current - 1 - self.end % SHARED_BUCKET_SIZE)
-                    };
-
-                    if let Some(data_indices) = self.storage.indices_of(id, 0, 0) {
-                        self.last_id = id;
-                        init = f(init, unsafe { self.storage.get_datas(data_indices) });
-                    }
-                }
             }
         }
 
@@ -200,8 +125,6 @@ impl<Storage: AbstractMut + Clone + Send> UnindexedProducer for Mixed<Storage> {
             let clone = Mixed {
                 storage: self.storage.clone(),
                 indices: self.indices,
-                sparse: self.sparse,
-                shared: self.shared,
                 current: self.current + (len / 2),
                 end: self.end,
                 mask: self.mask,

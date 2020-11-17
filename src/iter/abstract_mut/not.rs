@@ -13,7 +13,7 @@ impl<'w, T> AbstractMut for Not<&'w SparseSet<T>> {
     unsafe fn get_datas(&self, _: Self::Index) -> Self::Out {}
     #[inline]
     fn indices_of(&self, entity: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if self.0.index_of_owned(entity).is_some() {
+        if self.0.index_of(entity).is_some() {
             None
         } else {
             Some(core::usize::MAX)
@@ -39,7 +39,7 @@ impl<'w, T> AbstractMut for Not<FullRawWindowMut<'w, T>> {
     unsafe fn get_datas(&self, _: Self::Index) -> Self::Out {}
     #[inline]
     fn indices_of(&self, entity: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if self.0.index_of_owned(entity).is_some() {
+        if self.0.index_of(entity).is_some() {
             None
         } else {
             Some(core::usize::MAX)
