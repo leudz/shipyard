@@ -6,8 +6,6 @@ mod remove;
 pub mod sort;
 mod sparse_array;
 mod window;
-// #[cfg(feature = "serde1")]
-// mod deser;
 
 pub(crate) use add_component::AddComponent;
 pub(crate) use bulk_add_entity::BulkAddEntity;
@@ -16,26 +14,12 @@ pub(crate) use metadata::Metadata;
 pub(crate) use remove::Remove;
 pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
-// #[cfg(feature = "serde1")]
-// pub(crate) use deser::SparseSetSerializer;
-// #[cfg(feature = "serde1")]
-// use hashbrown::HashMap;
-// #[cfg(feature = "serde1")]
-// pub(crate) use metadata::SerdeInfos;
 
 use crate::error;
 use crate::storage::AllStorages;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
-#[cfg(all(not(feature = "std"), feature = "serde1"))]
-use alloc::string::ToString;
 use alloc::vec::Vec;
-// #[cfg(feature = "serde1")]
-// use alloc::borrow::Cow;
-// #[cfg(feature = "serde1")]
-// use crate::serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
-// #[cfg(feature = "serde1")]
-// use deser::SparseSetDeserializer;
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
 
@@ -869,16 +853,6 @@ impl<T> SparseSet<T> {
     }
 }
 
-// #[cfg(feature = "serde1")]
-// impl<T: serde::Serialize + for<'de> serde::Deserialize<'de> + 'static> SparseSet<T> {
-//     /// Setup serialization for this storage.
-//     /// Needs to be called for a storage to be serialized.
-//     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-//     pub fn setup_serde(&mut self, ser_config: SerConfig) {
-//         self.metadata.serde = Some(SerdeInfos::new(ser_config));
-//     }
-// }
-
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
     #[inline]
@@ -911,39 +885,6 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     fn run_on_remove_global(&mut self, all_storages: &AllStorages) {
         self.run_on_remove_global(all_storages);
     }
-    //     #[cfg(feature = "serde1")]
-    //     fn should_serialize(&self, _: GlobalSerConfig) -> bool {
-    //         self.metadata.serde.is_some()
-    //     }
-    //     #[cfg(feature = "serde1")]
-    //     fn serialize_identifier(&self) -> Cow<'static, str> {
-    //         self.metadata
-    //             .serde
-    //             .as_ref()
-    //             .and_then(|serde| serde.identifier.as_ref())
-    //             .map(|identifier| identifier.0.clone())
-    //             .unwrap_or("".into())
-    //     }
-    //     #[cfg(feature = "serde1")]
-    //     fn serialize(
-    //         &self,
-    //         ser_config: GlobalSerConfig,
-    //         serializer: &mut dyn crate::erased_serde::Serializer,
-    //     ) -> crate::erased_serde::Result<crate::erased_serde::Ok> {
-    //         (self.metadata.serde.as_ref().unwrap().serialization)(self, ser_config, serializer)
-    //     }
-    //     #[cfg(feature = "serde1")]
-    //     fn deserialize(
-    //         &self,
-    //     ) -> Option<
-    //         fn(
-    //             GlobalDeConfig,
-    //             &HashMap<EntityId, EntityId>,
-    //             &mut dyn crate::erased_serde::Deserializer<'_>,
-    //         ) -> Result<crate::storage::Storage, crate::erased_serde::Error>,
-    //     > {
-    //         Some(self.metadata.serde.as_ref()?.deserialization)
-    //     }
 }
 
 #[test]

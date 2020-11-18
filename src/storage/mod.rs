@@ -8,19 +8,12 @@ pub use entity::{Entities, EntitiesIter, EntityId};
 pub use storage_id::StorageId;
 pub use unique::Unique;
 
-// #[cfg(feature = "serde1")]
-// pub(crate) use all::AllStoragesSerializer;
-
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 #[cfg(feature = "non_send")]
 use std::thread::ThreadId;
-// #[cfg(feature = "serde1")]
-// use crate::serde_setup::GlobalDeConfig;
-// #[cfg(feature = "serde1")]
-// use hashbrown::HashMap;
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.  
@@ -86,41 +79,6 @@ impl Storage {
             .unwrap()
     }
 }
-
-// #[cfg(feature = "serde1")]
-// pub(crate) struct StorageDeserializer<'a> {
-//     pub(crate) storage: &'a mut Storage,
-//     pub(crate) entities_map: &'a HashMap<EntityId, EntityId>,
-//     pub(crate) de_config: GlobalDeConfig,
-// }
-
-// #[cfg(feature = "serde1")]
-// impl<'de> serde::de::DeserializeSeed<'de> for StorageDeserializer<'_> {
-//     type Value = ();
-
-//     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         let deserializer: &mut dyn crate::erased_serde::Deserializer<'de> =
-//             &mut crate::erased_serde::Deserializer::erase(deserializer);
-
-//         let storage = self
-//             .storage
-//             .0
-//             .try_borrow_mut()
-//             .map_err(|err| serde::de::Error::custom(err))?;
-//         let de = storage
-//             .deserialize()
-//             .ok_or_else(|| serde::de::Error::custom("Type isn't serializable."))?;
-//         drop(storage);
-
-//         *self.storage = (de)(self.de_config, self.entities_map, deserializer)
-//             .map_err(serde::de::Error::custom)?;
-
-//         Ok(())
-//     }
-// }
 
 #[test]
 fn delete() {

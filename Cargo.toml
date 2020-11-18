@@ -30,7 +30,6 @@ serde1 = ["serde"]
 std = []
 
 [dev-dependencies]
-serde_derive = "^1"
 serde_json = "^1"
 
 [package.metadata.docs.rs]

@@ -45,10 +45,6 @@ mod type_id;
 mod unknown_storage;
 mod view;
 mod world;
-//#[cfg(feature = "serde1")]
-//mod erased_serde;
-//#[cfg(feature = "serde1")]
-//mod serde_setup;
 
 #[cfg(feature = "non_send")]
 pub use crate::borrow::NonSend;
@@ -82,5 +78,3 @@ pub use view::{
 };
 pub use world::scheduler::info;
 pub use world::{Workload, WorkloadBuilder, World};
-//#[cfg(feature = "serde1")]
-//pub use serde_setup::{GlobalDeConfig, GlobalSerConfig, SerConfig};
