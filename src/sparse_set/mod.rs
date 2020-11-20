@@ -606,12 +606,8 @@ impl<T> SparseSet<T> {
         b: EntityId,
         f: F,
     ) -> Result<R, error::Apply> {
-        let a_index = self
-            .index_of(a)
-            .ok_or(error::Apply::MissingComponent(a))?;
-        let b_index = self
-            .index_of(b)
-            .ok_or(error::Apply::MissingComponent(b))?;
+        let a_index = self.index_of(a).ok_or(error::Apply::MissingComponent(a))?;
+        let b_index = self.index_of(b).ok_or(error::Apply::MissingComponent(b))?;
 
         if a_index != b_index {
             if self.metadata.update.is_some() {
@@ -663,12 +659,8 @@ impl<T> SparseSet<T> {
         b: EntityId,
         f: F,
     ) -> Result<R, error::Apply> {
-        let a_index = self
-            .index_of(a)
-            .ok_or(error::Apply::MissingComponent(a))?;
-        let b_index = self
-            .index_of(b)
-            .ok_or(error::Apply::MissingComponent(b))?;
+        let a_index = self.index_of(a).ok_or(error::Apply::MissingComponent(a))?;
+        let b_index = self.index_of(b).ok_or(error::Apply::MissingComponent(b))?;
 
         if a_index != b_index {
             if self.metadata.update.is_some() {
