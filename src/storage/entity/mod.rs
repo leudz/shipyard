@@ -253,6 +253,84 @@ impl Entities {
     pub fn iter(&self) -> EntitiesIter<'_> {
         self.into_iter()
     }
+    /// Make the given entity alive.  
+    /// Does nothing if an entity with a greater generation is already at the index.  
+    /// Returns `true` if the entity is successfully spawned.
+    pub fn spawn(&mut self, entity: EntityId) -> bool {
+        if let Some(&old_entity) = self.data.get(entity.index() as usize) {
+            if self.is_alive(old_entity) {
+                if old_entity.gen() <= entity.gen() {
+                    self.data[entity.uindex()] = entity;
+
+                    true
+                } else {
+                    false
+                }
+            } else if let Some((new, old)) = self.list {
+                if old_entity.gen() <= entity.gen() + 1 {
+                    // pop from removed list
+                    if entity.uindex() == old {
+                        if new == old {
+                            self.list = None;
+                        } else {
+                            self.list = Some((new, self.data[entity.uindex()].uindex()));
+                        }
+                    } else {
+                        let mut current_index = old;
+
+                        while self.data[current_index].index() != entity.index()
+                            && self.data[current_index].uindex() != new
+                        {
+                            current_index = self.data[current_index].uindex();
+                        }
+
+                        if self.data[current_index].uindex() == new {
+                            self.data[current_index].set_index(EntityId::max_index());
+                            self.list = Some((current_index, old));
+                        } else {
+                            let next_index = self.data[self.data[current_index].uindex()].index();
+                            self.data[current_index].set_index(next_index);
+                        }
+                    }
+
+                    self.data[entity.uindex()] = entity;
+
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            let old_len = self.data.len();
+            self.data.resize(entity.uindex() + 1, EntityId::new(0));
+
+            if self.data.len() - old_len > 1 {
+                // add to removed list
+                if let Some((new, _)) = &mut self.list {
+                    self.data[*new].set_index(old_len as u64);
+
+                    *new = entity.uindex() - 1;
+                } else {
+                    self.list = Some((entity.uindex() - 1, old_len));
+                }
+
+                for (e, index) in self.data[old_len..entity.uindex() - 1]
+                    .iter_mut()
+                    .zip(old_len as u64 + 1..)
+                {
+                    e.set_index(index);
+                }
+
+                self.data[entity.uindex() - 1].set_index(EntityId::max_index());
+            }
+
+            self.data[entity.uindex()] = entity;
+
+            true
+        }
+    }
 }
 
 impl UnknownStorage for Entities {

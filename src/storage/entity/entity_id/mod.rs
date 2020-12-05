@@ -26,13 +26,13 @@ impl EntityId {
     const MODIFIED: u64 = 1 << (Self::INDEX_LEN + Self::GEN_LEN);
     const INSERTED: u64 = 2 << (Self::INDEX_LEN + Self::GEN_LEN);
 
-    /// Returns the index part of the EntityId.  
+    /// Returns the index part of the `EntityId`.  
     /// ⚠️ You shouldn't use it to index a storage.
     #[inline]
     pub fn index(self) -> u64 {
         (self.0.get() & Self::INDEX_MASK) - 1
     }
-    /// Returns the index part of the EntityId as an usize.  
+    /// Returns the index part of the `EntityId` as an usize.  
     /// ⚠️ You shouldn't use it to index a storage.
     #[inline]
     pub fn uindex(self) -> usize {
@@ -46,7 +46,7 @@ impl EntityId {
         self.0 =
             unsafe { NonZeroU64::new_unchecked((index + 1) | (self.0.get() & !Self::INDEX_MASK)) }
     }
-    /// Returns the generation part of the EntityId.
+    /// Returns the generation part of the `EntityId`.
     #[inline]
     pub fn gen(self) -> u64 {
         (self.0.get() & Self::GEN_MASK) >> Self::INDEX_LEN
@@ -86,7 +86,7 @@ impl EntityId {
             self.0 = NonZeroU64::new_unchecked((self.0.get() & !Self::META_MASK) | Self::INSERTED);
         }
     }
-    /// Make a new EntityId with the given index.
+    /// Make a new `EntityId` with the given index.
     #[inline]
     pub(crate) fn new(index: u64) -> Self {
         assert!(index < Self::INDEX_MASK);
@@ -117,7 +117,7 @@ impl EntityId {
     pub(crate) fn zero() -> Self {
         EntityId(NonZeroU64::new(1).unwrap())
     }
-    /// Returns a dead EntityId, it can be used as a null entity.
+    /// Returns a dead `EntityId`, it can be used as a null entity.
     #[inline]
     pub fn dead() -> Self {
         // SAFE not zero

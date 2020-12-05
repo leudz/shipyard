@@ -1,0 +1,209 @@
+use shipyard::*;
+
+#[test]
+fn alive() {
+    let mut world = World::new();
+    world.add_entity((0u32,));
+    let entity = world.add_entity((1u32,));
+    world.add_entity((2u32,));
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity));
+
+    assert!(entities.is_alive(entity));
+}
+
+#[test]
+fn single_dead() {
+    let mut world = World::new();
+    world.add_entity((0u32,));
+    let entity = world.add_entity((1u32,));
+    world.add_entity((2u32,));
+
+    world.delete_entity(entity);
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity));
+
+    assert!(entities.is_alive(entity));
+}
+
+#[cfg(feature = "serde1")]
+#[test]
+fn multiple_dead_first() {
+    let mut world = World::new();
+    let entity0 = world.add_entity((0u32,));
+    let entity1 = world.add_entity((1u32,));
+    let entity2 = world.add_entity((2u32,));
+
+    world.delete_entity(entity1);
+    world.delete_entity(entity0);
+    world.delete_entity(entity2);
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity1));
+
+    assert!(entities.is_alive(entity1));
+    assert!(!entities.is_alive(entity0));
+    assert!(!entities.is_alive(entity2));
+
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(entity0.index(), 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(entity2.index(), 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(3, 0)
+    );
+}
+
+#[cfg(feature = "serde1")]
+#[test]
+fn multiple_dead_middle() {
+    let mut world = World::new();
+    let entity0 = world.add_entity((0u32,));
+    let entity1 = world.add_entity((1u32,));
+    let entity2 = world.add_entity((2u32,));
+
+    world.delete_entity(entity0);
+    world.delete_entity(entity1);
+    world.delete_entity(entity2);
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity1));
+
+    assert!(entities.is_alive(entity1));
+    assert!(!entities.is_alive(entity0));
+    assert!(!entities.is_alive(entity2));
+
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(entity0.index(), 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(entity2.index(), 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(3, 0)
+    );
+}
+
+#[cfg(feature = "serde1")]
+#[test]
+fn multiple_dead_last() {
+    let mut world = World::new();
+    let entity0 = world.add_entity((0u32,));
+    let entity1 = world.add_entity((1u32,));
+    let entity2 = world.add_entity((2u32,));
+
+    world.delete_entity(entity0);
+    world.delete_entity(entity2);
+    world.delete_entity(entity1);
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity1));
+
+    assert!(entities.is_alive(entity1));
+    assert!(!entities.is_alive(entity0));
+    assert!(!entities.is_alive(entity2));
+
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(entity0.index(), 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(entity2.index(), 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(3, 0)
+    );
+}
+
+#[cfg(feature = "serde1")]
+#[test]
+fn new_world_empty() {
+    let world = World::new();
+    let entity = EntityId::from_index_and_gen(3, 0);
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity));
+
+    assert!(entities.is_alive(entity));
+
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(0, 0)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(1, 0)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(2, 0)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(4, 0)
+    );
+}
+
+#[cfg(feature = "serde1")]
+#[test]
+fn new_world() {
+    let mut world = World::new();
+    let entity = EntityId::from_index_and_gen(5, 0);
+
+    let entity0 = world.add_entity((0u32,));
+    let entity1 = world.add_entity((1u32,));
+    let entity2 = world.add_entity((2u32,));
+
+    world.delete_entity(entity0);
+    world.delete_entity(entity1);
+    world.delete_entity(entity2);
+
+    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+
+    assert!(entities.spawn(entity));
+
+    assert!(entities.is_alive(entity));
+
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(0, 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(1, 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(2, 1)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(3, 0)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(4, 0)
+    );
+    assert_eq!(
+        entities.add_entity((), ()),
+        EntityId::from_index_and_gen(6, 0)
+    );
+}
