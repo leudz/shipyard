@@ -4,18 +4,6 @@ use super::EntityId;
 use serde::{ser::SerializeTupleStruct, Deserialize, Deserializer, Serialize, Serializer};
 
 impl EntityId {
-    /// Modify the generation of the `EntityId`.
-    #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
-    pub fn set_gen(&mut self, gen: u32) {
-        assert!(gen as u64 <= Self::max_gen());
-        // SAFE never zero
-        self.0 = unsafe {
-            NonZeroU64::new_unchecked(
-                (self.0.get() & !Self::GEN_MASK) | (gen as u64) << Self::INDEX_LEN,
-            )
-        };
-    }
-
     /// Make an `EntityId` from an index and generation.
     #[cfg_attr(docsrs, doc(cfg(feature = "serde1")))]
     pub fn from_index_and_gen(index: u64, gen: u32) -> EntityId {
