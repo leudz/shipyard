@@ -5,23 +5,23 @@ use shipyard::*;
 #[test]
 fn unique_storage() {
     let world = World::default();
-    world.try_add_unique(0usize).unwrap();
+    world.add_unique(0usize).unwrap();
 
     world
-        .try_run(|mut x: UniqueViewMut<usize>| {
+        .run(|mut x: UniqueViewMut<usize>| {
             *x += 1;
         })
         .unwrap();
     world
-        .try_run(|x: UniqueView<usize>| {
+        .run(|x: UniqueView<usize>| {
             assert_eq!(*x, 1);
         })
         .unwrap();
 
-    world.try_remove_unique::<usize>().unwrap();
+    world.remove_unique::<usize>().unwrap();
 
     if let Some(shipyard::error::Run::GetStorage(get_error)) = world
-        .try_run(|mut x: UniqueViewMut<usize>| {
+        .run(|mut x: UniqueViewMut<usize>| {
             *x += 1;
         })
         .err()
@@ -34,14 +34,14 @@ fn unique_storage() {
         panic!()
     }
 
-    world.try_add_unique(0usize).unwrap();
+    world.add_unique(0usize).unwrap();
 }
 
 #[test]
 fn not_unique_storage() {
     let world = World::new();
 
-    match world.try_run(|_: UniqueView<usize>| {}).err() {
+    match world.run(|_: UniqueView<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
             error::GetStorage::MissingStorage(type_name::<Unique<usize>>())
@@ -49,7 +49,7 @@ fn not_unique_storage() {
         _ => panic!(),
     }
 
-    match world.try_run(|_: UniqueViewMut<usize>| {}).err() {
+    match world.run(|_: UniqueViewMut<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
             error::GetStorage::MissingStorage(type_name::<Unique<usize>>())
@@ -57,7 +57,7 @@ fn not_unique_storage() {
         _ => panic!(),
     }
 
-    match world.try_remove_unique::<usize>().err() {
+    match world.remove_unique::<usize>().err() {
         Some(error::UniqueRemove::MissingUnique(name)) => assert_eq!(name, type_name::<usize>()),
         _ => panic!(),
     }
@@ -74,19 +74,19 @@ fn non_send() {
 
     let world = World::default();
     world
-        .try_add_unique_non_send(NonSendStruct {
+        .add_unique_non_send(NonSendStruct {
             value: 0,
             _phantom: core::marker::PhantomData,
         })
         .unwrap();
 
     world
-        .try_run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
+        .run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
             x.value += 1;
         })
         .unwrap();
     world
-        .try_run(|x: NonSend<UniqueView<NonSendStruct>>| {
+        .run(|x: NonSend<UniqueView<NonSendStruct>>| {
             assert_eq!(x.value, 1);
         })
         .unwrap();
@@ -103,19 +103,19 @@ fn non_sync() {
 
     let world = World::default();
     world
-        .try_add_unique_non_sync(NonSyncStruct {
+        .add_unique_non_sync(NonSyncStruct {
             value: 0,
             _phantom: core::marker::PhantomData,
         })
         .unwrap();
 
     world
-        .try_run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
+        .run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
             x.value += 1;
         })
         .unwrap();
     world
-        .try_run(|x: NonSync<UniqueView<NonSyncStruct>>| {
+        .run(|x: NonSync<UniqueView<NonSyncStruct>>| {
             assert_eq!(x.value, 1);
         })
         .unwrap();
@@ -131,19 +131,19 @@ fn non_send_sync() {
 
     let world = World::default();
     world
-        .try_add_unique_non_send_sync(NonSendSyncStruct {
+        .add_unique_non_send_sync(NonSendSyncStruct {
             value: 0,
             _phantom: core::marker::PhantomData,
         })
         .unwrap();
 
     world
-        .try_run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
+        .run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
             x.value += 1;
         })
         .unwrap();
     world
-        .try_run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
+        .run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
             assert_eq!(x.value, 1);
         })
         .unwrap();
@@ -154,11 +154,11 @@ fn non_send_sync() {
 fn non_send_remove() {
     let world: &'static World = Box::leak(Box::new(World::new()));
 
-    world.add_unique_non_send(0usize);
+    world.add_unique_non_send(0usize).unwrap();
 
     std::thread::spawn(move || {
         if let Some(shipyard::error::UniqueRemove::StorageBorrow(infos)) =
-            world.try_remove_unique::<usize>().err()
+            world.remove_unique::<usize>().err()
         {
             assert_eq!(
                 infos,

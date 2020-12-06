@@ -61,7 +61,7 @@ impl Entities {
     ///
     /// let world = World::new();
     ///
-    /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
+    /// let entity = world.borrow::<EntitiesViewMut>().unwrap().add_entity((), ());
     ///
     /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
     ///     entities.try_add_component(entity, &mut u32s, 0).unwrap();
@@ -92,7 +92,7 @@ impl Entities {
     ///
     /// let world = World::new();
     ///
-    /// let entity = world.borrow::<EntitiesViewMut>().add_entity((), ());
+    /// let entity = world.borrow::<EntitiesViewMut>().unwrap().add_entity((), ());
     ///
     /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
     ///     entities.add_component(entity, &mut u32s, 0);
@@ -218,7 +218,7 @@ impl Entities {
     /// let world = World::new();
     ///
     /// let (mut entities, mut usizes, mut u32s) =
-    ///     world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>();
+    ///     world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
     ///
     /// let entity0 = entities.bulk_add_entity((), (0..1).map(|_| {})).next();
     /// let entity1 = entities.bulk_add_entity(&mut u32s, 1..2).next();

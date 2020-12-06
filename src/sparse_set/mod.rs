@@ -15,7 +15,6 @@ pub(crate) use remove::Remove;
 pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
 
-use crate::error;
 use crate::storage::AllStorages;
 use crate::storage::EntityId;
 use crate::unknown_storage::UnknownStorage;
@@ -259,46 +258,18 @@ impl<T> SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
-    /// Returns the *deleted* components of an update packed storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_deleted(&self) -> Result<&[(EntityId, T)], error::NotUpdatePack> {
-        if let Some(update) = &self.metadata.update {
-            Ok(&update.deleted)
-        } else {
-            Err(error::NotUpdatePack)
-        }
-    }
     /// Returns the *deleted* components of an update packed storage.  
     /// Unwraps errors.
     ///
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn deleted(&self) -> &[(EntityId, T)] {
-        match self.try_deleted() {
-            Ok(deleted) => deleted,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Returns the ids of *removed* components of an update packed storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_removed(&self) -> Result<&[EntityId], error::NotUpdatePack> {
         if let Some(update) = &self.metadata.update {
-            Ok(&update.removed)
+            &update.deleted
         } else {
-            Err(error::NotUpdatePack)
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Returns the ids of *removed* components of an update packed storage.  
@@ -307,33 +278,12 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn removed(&self) -> &[EntityId] {
-        match self.try_removed() {
-            Ok(removed) => removed,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Returns the ids of *removed* or *deleted* components of an update packed storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_removed_or_deleted(
-        &self,
-    ) -> Result<impl Iterator<Item = EntityId> + '_, error::NotUpdatePack> {
         if let Some(update) = &self.metadata.update {
-            Ok(update
-                .removed
-                .iter()
-                .copied()
-                .chain(update.deleted.iter().map(|(id, _)| id).copied()))
+            &update.removed
         } else {
-            Err(error::NotUpdatePack)
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Returns the ids of *removed* or *deleted* components of an update packed storage.  
@@ -342,31 +292,16 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        match self.try_removed_or_deleted() {
-            Ok(removed_or_deleted) => removed_or_deleted,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Takes ownership of the *deleted* components of an update packed storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_take_deleted(&mut self) -> Result<Vec<(EntityId, T)>, error::NotUpdatePack> {
-        if let Some(update) = &mut self.metadata.update {
-            let mut vec = Vec::with_capacity(update.deleted.capacity());
-
-            core::mem::swap(&mut vec, &mut update.deleted);
-
-            Ok(vec)
+        if let Some(update) = &self.metadata.update {
+            update
+                .removed
+                .iter()
+                .copied()
+                .chain(update.deleted.iter().map(|(id, _)| id).copied())
         } else {
-            Err(error::NotUpdatePack)
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Takes ownership of the *deleted* components of an update packed storage.  
@@ -375,31 +310,16 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
-        match self.try_take_deleted() {
-            Ok(deleted) => deleted,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Takes ownership of the ids of *removed* components of an update packed storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_take_removed(&mut self) -> Result<Vec<EntityId>, error::NotUpdatePack> {
         if let Some(update) = &mut self.metadata.update {
-            let mut vec = Vec::with_capacity(update.removed.capacity());
+            let mut vec = Vec::with_capacity(update.deleted.capacity());
 
-            core::mem::swap(&mut vec, &mut update.removed);
+            core::mem::swap(&mut vec, &mut update.deleted);
 
-            Ok(vec)
+            vec
         } else {
-            Err(error::NotUpdatePack)
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Takes ownership of the ids of *removed* components of an update packed storage.  
@@ -408,26 +328,17 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
-        match self.try_take_removed() {
-            Ok(removed) => removed,
-            Err(err) => panic!("{:?}", err),
+        if let Some(update) = &mut self.metadata.update {
+            let mut vec = Vec::with_capacity(update.removed.capacity());
+
+            core::mem::swap(&mut vec, &mut update.removed);
+
+            vec
+        } else {
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
-    }
-    /// Takes ownership of the *removed* and *deleted* components of an update packed storage.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[allow(clippy::type_complexity)]
-    pub fn try_take_removed_and_deleted(
-        &mut self,
-    ) -> Result<(Vec<EntityId>, Vec<(EntityId, T)>), error::NotUpdatePack> {
-        Ok((self.try_take_removed()?, self.try_take_deleted().unwrap()))
     }
     /// Takes ownership of the *removed* and *deleted* components of an update packed storage.  
     /// Unmraps errors.
@@ -436,29 +347,7 @@ impl<T> SparseSet<T> {
     ///
     /// - Storage isn't update packed.
     pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
-        match self.try_take_removed_and_deleted() {
-            Ok(removed_and_deleted) => removed_and_deleted,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_clear_inserted(&mut self) -> Result<(), error::NotUpdatePack> {
-        if self.metadata.update.is_some() {
-            for id in &mut *self.dense {
-                if id.is_inserted() {
-                    id.clear_meta();
-                }
-            }
-
-            Ok(())
-        } else {
-            Err(error::NotUpdatePack)
-        }
+        (self.take_removed(), self.take_deleted())
     }
     /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.  
     /// Unwraps errors.
@@ -466,33 +355,16 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn clear_inserted(&mut self) {
-        match self.try_clear_inserted() {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_clear_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         if self.metadata.update.is_some() {
             for id in &mut *self.dense {
-                if id.is_modified() {
+                if id.is_inserted() {
                     id.clear_meta();
                 }
             }
-
-            Ok(())
         } else {
-            Err(error::NotUpdatePack)
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.  
@@ -501,31 +373,16 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn clear_modified(&mut self) {
-        match self.try_clear_modified() {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.
-    ///
-    /// ### Errors
-    ///
-    /// - Storage isn't update packed.
-    #[inline]
-    pub fn try_clear_inserted_and_modified(&mut self) -> Result<(), error::NotUpdatePack> {
         if self.metadata.update.is_some() {
             for id in &mut *self.dense {
-                id.clear_meta();
+                if id.is_modified() {
+                    id.clear_meta();
+                }
             }
-
-            Ok(())
         } else {
-            Err(error::NotUpdatePack)
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.  
@@ -534,14 +391,14 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     pub fn clear_inserted_and_modified(&mut self) {
-        match self.try_clear_inserted_and_modified() {
-            Ok(_) => (),
-            Err(err) => panic!("{:?}", err),
+        if self.metadata.update.is_some() {
+            for id in &mut *self.dense {
+                id.clear_meta();
+            }
+        } else {
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Update packs this storage making it track *inserted*, *modified*, *removed* and *deleted* components.  
@@ -549,6 +406,12 @@ impl<T> SparseSet<T> {
     #[inline]
     pub fn update_pack(&mut self) {
         self.metadata.update.get_or_insert_with(Default::default);
+    }
+
+    /// Returns `true` if the `SparseSet` is update packed.
+    #[inline]
+    pub fn is_update_packed(&self) -> bool {
+        self.metadata.update.is_some()
     }
 }
 
@@ -577,21 +440,27 @@ impl<T> SparseSet<T> {
         self.data.clear();
     }
     /// Applies the given function `f` to the entities `a` and `b`.  
-    /// The two entities shouldn't point to the same component.
+    /// The two entities shouldn't point to the same component.  
+    /// Unwraps errors.
     ///
     /// ### Errors
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
     #[inline]
-    pub fn try_apply<R, F: FnOnce(&mut T, &T) -> R>(
-        &mut self,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> Result<R, error::Apply> {
-        let a_index = self.index_of(a).ok_or(error::Apply::MissingComponent(a))?;
-        let b_index = self.index_of(b).ok_or(error::Apply::MissingComponent(b))?;
+    pub fn apply<R, F: FnOnce(&mut T, &T) -> R>(&mut self, a: EntityId, b: EntityId, f: F) -> R {
+        let a_index = self.index_of(a).unwrap_or_else(move || {
+            panic!(
+                "Entity {:?} does not have any component in this storage.",
+                a
+            )
+        });
+        let b_index = self.index_of(b).unwrap_or_else(move || {
+            panic!(
+                "Entity {:?} does not have any component in this storage.",
+                b
+            )
+        });
 
         if a_index != b_index {
             if self.metadata.update.is_some() {
@@ -607,9 +476,9 @@ impl<T> SparseSet<T> {
             let a = unsafe { &mut *self.data.as_mut_ptr().add(a_index) };
             let b = unsafe { &*self.data.as_mut_ptr().add(b_index) };
 
-            Ok(f(a, b))
+            f(a, b)
         } else {
-            Err(error::Apply::IdenticalIds)
+            panic!("Cannot use apply with identical components.");
         }
     }
     /// Applies the given function `f` to the entities `a` and `b`.  
@@ -620,31 +489,25 @@ impl<T> SparseSet<T> {
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     #[inline]
-    pub fn apply<R, F: FnOnce(&mut T, &T) -> R>(&mut self, a: EntityId, b: EntityId, f: F) -> R {
-        match self.try_apply(a, b, f) {
-            Ok(result) => result,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Applies the given function `f` to the entities `a` and `b`.  
-    /// The two entities shouldn't point to the same component.
-    ///
-    /// ### Errors
-    ///
-    /// - MissingComponent - if one of the entity doesn't have any component in the storage.
-    /// - IdenticalIds - if the two entities point to the same component.
-    #[inline]
-    pub fn try_apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
+    pub fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
         &mut self,
         a: EntityId,
         b: EntityId,
         f: F,
-    ) -> Result<R, error::Apply> {
-        let a_index = self.index_of(a).ok_or(error::Apply::MissingComponent(a))?;
-        let b_index = self.index_of(b).ok_or(error::Apply::MissingComponent(b))?;
+    ) -> R {
+        let a_index = self.index_of(a).unwrap_or_else(move || {
+            panic!(
+                "Entity {:?} does not have any component in this storage.",
+                a
+            )
+        });
+        let b_index = self.index_of(b).unwrap_or_else(move || {
+            panic!(
+                "Entity {:?} does not have any component in this storage.",
+                b
+            )
+        });
 
         if a_index != b_index {
             if self.metadata.update.is_some() {
@@ -665,31 +528,9 @@ impl<T> SparseSet<T> {
             let a = unsafe { &mut *self.data.as_mut_ptr().add(a_index) };
             let b = unsafe { &mut *self.data.as_mut_ptr().add(b_index) };
 
-            Ok(f(a, b))
+            f(a, b)
         } else {
-            Err(error::Apply::IdenticalIds)
-        }
-    }
-    /// Applies the given function `f` to the entities `a` and `b`.  
-    /// The two entities shouldn't point to the same component.  
-    /// Unwraps errors.
-    ///
-    /// ### Errors
-    ///
-    /// - MissingComponent - if one of the entity doesn't have any component in the storage.
-    /// - IdenticalIds - if the two entities point to the same component.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[inline]
-    pub fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
-        &mut self,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> R {
-        match self.try_apply_mut(a, b, f) {
-            Ok(result) => result,
-            Err(err) => panic!("{:?}", err),
+            panic!("Cannot use apply with identical components.");
         }
     }
 }

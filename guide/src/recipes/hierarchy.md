@@ -170,7 +170,7 @@ And lastly a simple usage example:
 ```rust, noplaypen
 let world = World::new();
 
-let mut hierarchy = world.borrow::<(EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>)>();
+let mut hierarchy = world.borrow::<(EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>)>().unwrap();
 
 let root1 = hierarchy.0.add_entity((), ());
 let root2 = hierarchy.0.add_entity((), ());
@@ -348,7 +348,7 @@ Cool. Let's extend the former usage example into a little test.
 fn test_hierarchy() {
     let world = World::new();
 
-    let mut hierarchy = world.borrow::<(EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>)>();
+    let mut hierarchy = world.borrow::<(EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>)>().unwrap();
 
     let root1 = hierarchy.0.add_entity((), ());
     let root2 = hierarchy.0.add_entity((), ());
@@ -479,7 +479,7 @@ fn test_sorting() {
     let (mut hierarchy, mut usizes) = world.borrow::<(
         (EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>),
         ViewMut<usize>,
-    )>();
+    )>().unwrap();
     
     let root = hierarchy.0.add_entity((), ());
 

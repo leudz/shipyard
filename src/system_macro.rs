@@ -39,7 +39,7 @@
 macro_rules! system {
     ($function: expr) => {{
         (
-            |world: &$crate::World| world.try_run($function).map(drop),
+            |world: &$crate::World| world.run($function).map(drop),
             $function,
         )
     }};
@@ -77,7 +77,7 @@ macro_rules! system {
 ///         .with_system(try_system!(my_sys))
 ///         .add_to_world(&world)
 ///         .unwrap();
-///     match world.try_run_default().map_err(RunWorkload::custom_error) {
+///     match world.run_default().map_err(RunWorkload::custom_error) {
 ///         Err(Some(error)) => {
 ///             assert!(error.is::<TerribleError>());
 ///         }
@@ -92,7 +92,7 @@ macro_rules! try_system {
         (
             |world: &$crate::World| {
                 world
-                    .try_run($function)?
+                    .run($function)?
                     .map_err($crate::error::Run::from_custom)
             },
             $function,

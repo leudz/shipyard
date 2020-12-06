@@ -4,31 +4,37 @@ use shipyard::*;
 fn single() {
     let world = World::new();
 
-    world.run(|u32s: View<u32>| {
-        for i in u32s.iter() {
-            dbg!(i);
-        }
-    });
+    world
+        .run(|u32s: View<u32>| {
+            for i in u32s.iter() {
+                dbg!(i);
+            }
+        })
+        .unwrap();
 }
 
 #[test]
 fn with_id() {
     let world = World::new();
 
-    world.run(|u32s: View<u32>| {
-        for (id, i) in u32s.iter().with_id() {
-            println!("{} belongs to entity {:?}", i, id);
-        }
-    });
+    world
+        .run(|u32s: View<u32>| {
+            for (id, i) in u32s.iter().with_id() {
+                println!("{} belongs to entity {:?}", i, id);
+            }
+        })
+        .unwrap();
 }
 
 #[test]
 fn multiple() {
     let world = World::new();
 
-    world.run(|u32s: View<u32>, usizes: View<usize>| {
-        for (_i, _j) in (&u32s, &usizes).iter() {
-            // -- snip --
-        }
-    });
+    world
+        .run(|u32s: View<u32>, usizes: View<usize>| {
+            for (_i, _j) in (&u32s, &usizes).iter() {
+                // -- snip --
+            }
+        })
+        .unwrap();
 }

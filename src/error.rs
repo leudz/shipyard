@@ -215,11 +215,11 @@ impl Display for SetDefaultWorkload {
     }
 }
 
-/// Error returned by [`try_run_default`] and [`try_run_workload`].  
+/// Error returned by [`run_default`] and [`run_workload`].  
 /// The error can be a storage error, problem with the scheduler's borrowing, a non existant workload or a custom error.
 ///
-/// [`try_run_default`]: ../struct.World.html#method.try_run_default
-/// [`try_run_workload`]: ../struct.World.html#method.try_run_workload
+/// [`run_default`]: ../struct.World.html#method.run_default
+/// [`run_workload`]: ../struct.World.html#method.run_workload
 pub enum RunWorkload {
     Scheduler,
     Run((&'static str, Run)),
@@ -266,11 +266,11 @@ impl Display for RunWorkload {
     }
 }
 
-/// Error returned by [`World::try_run`] and [`AllStorages::try_run`].  
+/// Error returned by [`World::run`] and [`AllStorages::run`].  
 /// Can refer to an invalid storage borrow or a custom error.
 ///
-/// [`World::try_run`]: ../struct.World.html#method.try_run
-/// [`AllStorages::try_run`]: ../struct.AllStorages.html#method.try_run
+/// [`World::run`]: ../struct.World.html#method.run
+/// [`AllStorages::run`]: ../struct.AllStorages.html#method.run
 pub enum Run {
     GetStorage(GetStorage),
     #[cfg(feature = "std")]
@@ -387,10 +387,10 @@ impl Display for InvalidSystem {
     }
 }
 
-/// Error returned by [`World::try_remove_unique`] and [`AllStorages::try_remove_unique`].
+/// Error returned by [`World::remove_unique`] and [`AllStorages::remove_unique`].
 ///
-/// [`World::try_remove_unique`]: ../struct.World.html#method.try_remove_unique
-/// [`AllStorages::try_remove_unique`]: ../struct.AllStorages.html#method.try_remove_unique
+/// [`World::remove_unique`]: ../struct.World.html#method.remove_unique
+/// [`AllStorages::remove_unique`]: ../struct.AllStorages.html#method.remove_unique
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UniqueRemove {
     AllStorages,
@@ -423,10 +423,10 @@ impl Display for UniqueRemove {
     }
 }
 
-/// Error returned by [`try_apply`] and [`try_apply_mut`].
+/// Error returned by [`apply`] and [`apply_mut`].
 ///
-/// [`try_apply`]: ../struct.SparseSet.html#method.try_apply
-/// [`try_apply_mut`]: ../struct.SparseSet.html#method.try_apply_mut
+/// [`apply`]: ../struct.SparseSet.html#method.apply
+/// [`apply_mut`]: ../struct.SparseSet.html#method.apply_mut
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Apply {
     IdenticalIds,

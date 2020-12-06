@@ -1,4 +1,3 @@
-#[cfg(feature = "panic")]
 mod book;
 mod borrow;
 mod iteration;
@@ -13,7 +12,7 @@ use shipyard::*;
 fn run() {
     let world = World::new();
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -65,7 +64,7 @@ fn system() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -83,9 +82,9 @@ fn system() {
         .add_to_world(&world)
         .unwrap();
 
-    world.try_run_default().unwrap();
+    world.run_default().unwrap();
     world
-        .try_run(|usizes: View<usize>| {
+        .run(|usizes: View<usize>| {
             let mut iter = usizes.iter();
             assert_eq!(iter.next(), Some(&1));
             assert_eq!(iter.next(), Some(&5));
@@ -111,7 +110,7 @@ fn systems() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -131,9 +130,9 @@ fn systems() {
         .add_to_world(&world)
         .unwrap();
 
-    world.try_run_default().unwrap();
+    world.run_default().unwrap();
     world
-        .try_run(|usizes: View<usize>| {
+        .run(|usizes: View<usize>| {
             let mut iter = usizes.iter();
             assert_eq!(iter.next(), Some(&2));
             assert_eq!(iter.next(), Some(&6));
@@ -151,7 +150,7 @@ fn simple_parallel_sum() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -164,7 +163,7 @@ fn simple_parallel_sum() {
         .unwrap();
 
     world
-        .try_run(|usizes: ViewMut<usize>| {
+        .run(|usizes: ViewMut<usize>| {
             let sum: usize = usizes.par_iter().cloned().sum();
             assert_eq!(sum, 4);
         })
@@ -180,7 +179,7 @@ fn parallel_iterator() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -193,7 +192,7 @@ fn parallel_iterator() {
         .unwrap();
 
     world
-        .try_run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
+        .run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
             let counter = std::sync::atomic::AtomicUsize::new(0);
 
             (&mut usizes, &u32s).par_iter().for_each(|(mut x, y)| {
@@ -225,8 +224,8 @@ fn two_workloads() {
         .unwrap();
 
     rayon::scope(|s| {
-        s.spawn(|_| world.try_run_default().unwrap());
-        s.spawn(|_| world.try_run_default().unwrap());
+        s.spawn(|_| world.run_default().unwrap());
+        s.spawn(|_| world.run_default().unwrap());
     });
 }
 
@@ -248,8 +247,8 @@ fn two_bad_workloads() {
         .unwrap();
 
     rayon::scope(|s| {
-        s.spawn(|_| world.try_run_default().unwrap());
-        s.spawn(|_| world.try_run_default().unwrap());
+        s.spawn(|_| world.run_default().unwrap());
+        s.spawn(|_| world.run_default().unwrap());
     });
 }
 
@@ -259,19 +258,19 @@ fn add_component_with_old_key() {
 
     let entity = {
         let (mut entities, mut usizes, mut u32s) = world
-            .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+            .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
             .unwrap();
         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32))
     };
 
     world
-        .try_run(|mut all_storages: AllStoragesViewMut| {
+        .run(|mut all_storages: AllStoragesViewMut| {
             all_storages.delete_entity(entity);
         })
         .unwrap();
 
     let (entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
     assert_eq!(
         entities.try_add_component(entity, (&mut usizes, &mut u32s), (1, 2)),
@@ -288,7 +287,7 @@ fn par_update_pack() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
                 usizes.update_pack();
                 entities.add_entity(&mut usizes, 0);
@@ -296,7 +295,7 @@ fn par_update_pack() {
                 entities.add_entity(&mut usizes, 2);
                 entities.add_entity(&mut usizes, 3);
 
-                usizes.try_clear_inserted().unwrap();
+                usizes.clear_inserted();
 
                 (&usizes).par_iter().sum::<usize>();
 
@@ -329,7 +328,7 @@ fn par_multiple_update_pack() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -343,13 +342,13 @@ fn par_multiple_update_pack() {
                 entities.add_entity((&mut usizes, &mut u32s), (8usize, 9u32));
                 entities.add_entity((&mut usizes,), (10usize,));
 
-                u32s.try_clear_inserted().unwrap();
+                u32s.clear_inserted();
             },
         )
         .unwrap();
 
     world
-        .try_run(|(mut usizes, mut u32s): (ViewMut<usize>, ViewMut<u32>)| {
+        .run(|(mut usizes, mut u32s): (ViewMut<usize>, ViewMut<u32>)| {
             if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
                 iter.for_each(|_| {});
             } else {
@@ -398,7 +397,7 @@ fn par_update_filter() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
                 usizes.update_pack();
                 entities.add_entity(&mut usizes, 0);
@@ -406,7 +405,7 @@ fn par_update_filter() {
                 entities.add_entity(&mut usizes, 2);
                 entities.add_entity(&mut usizes, 3);
 
-                usizes.try_clear_inserted().unwrap();
+                usizes.clear_inserted();
 
                 (&mut usizes)
                     .par_iter()
@@ -435,7 +434,7 @@ fn contains() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
                 let entity = entities.add_entity((), ());
 

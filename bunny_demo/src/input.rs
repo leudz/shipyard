@@ -9,13 +9,13 @@ pub fn start(world: Rc<World>, canvas: &HtmlCanvasElement) {
     EventListener::new(canvas, "pointerdown", {
         let world = Rc::clone(&world);
         move |_| {
-            *world.borrow::<UniqueViewMut<Controller>>() = Controller::Adding;
+            *world.borrow::<UniqueViewMut<Controller>>().unwrap() = Controller::Adding;
         }
     })
     .forget();
 
     EventListener::new(canvas, "pointerup", move |_| {
-        *world.borrow::<UniqueViewMut<Controller>>() = Controller::Waiting;
+        *world.borrow::<UniqueViewMut<Controller>>().unwrap() = Controller::Waiting;
     })
     .forget();
 }

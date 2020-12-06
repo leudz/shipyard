@@ -5,7 +5,7 @@ fn simple_sort() {
     let world = World::new();
 
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
                 entities.add_entity(&mut usizes, 5);
                 entities.add_entity(&mut usizes, 2);

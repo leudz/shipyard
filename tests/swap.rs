@@ -5,12 +5,11 @@ fn no_pack() {
     let world = World::new();
 
     world
-        .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
+        .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
             let entity0 = entities.add_entity(&mut u32s, 0);
             let entity1 = entities.add_entity(&mut u32s, 1);
 
-            u32s.try_apply_mut(entity0, entity1, core::mem::swap)
-                .unwrap();
+            u32s.apply_mut(entity0, entity1, core::mem::swap);
 
             assert_eq!(u32s[entity0], 1);
             assert_eq!(u32s[entity1], 0);
@@ -23,17 +22,16 @@ fn update() {
     let world = World::new();
 
     world
-        .try_run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
+        .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
             u32s.update_pack();
 
             let entity0 = entities.add_entity(&mut u32s, 0);
 
-            u32s.try_clear_inserted().unwrap();
+            u32s.clear_inserted();
 
             let entity1 = entities.add_entity(&mut u32s, 1);
 
-            u32s.try_apply_mut(entity0, entity1, core::mem::swap)
-                .unwrap();
+            u32s.apply_mut(entity0, entity1, core::mem::swap);
 
             assert_eq!(u32s[entity0], 1);
             assert_eq!(u32s[entity1], 0);

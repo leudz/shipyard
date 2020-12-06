@@ -14,7 +14,7 @@ pub trait AddComponent {
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
+    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
     /// let entity = entities.add_entity((), ());
     ///
     /// u32s.add_component_unchecked(entity, 0);

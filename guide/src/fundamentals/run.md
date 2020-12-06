@@ -6,7 +6,7 @@ It takes a single argument, a function or a closure and executes it:
 ```rust, noplaypen
 world.run(|mut all_storages: AllStoragesViewMut| {
     // -- snip --
-});
+}).unwrap();
 ```
 
 In this example we ask the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) for an [`AllStoragesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.AllStoragesViewMut.html), which is an exclusive view over [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html), the storage holding all components and entities.
@@ -26,8 +26,8 @@ world.run(|all_storages: AllStoragesViewMut| {
 
     all_storages.run(|usizes: View<usize>| {
         // -- snip --
-    });
-});
+    }).unwrap();
+}).unwrap();
 ```
 
 You can find a complete list of all views in [`run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run)'s [documentation](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run).

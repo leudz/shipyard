@@ -22,31 +22,9 @@ pub trait IntoFastIter {
     #[cfg(feature = "parallel")]
     type IntoParIter;
 
-    /// Returns an iterator over `SparseSet`. Returns `None` if one of the storage is update packed.
-    ///
-    /// [`iter`] can be used for update packed storage.
-    ///
-    /// ### Example
-    /// ```
-    /// use shipyard::{EntitiesViewMut, IntoFastIter, ViewMut, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-    ///
-    ///         for (x, &y) in (&mut usizes, &u32s).try_fast_iter().unwrap() {
-    ///             *x += y as usize;
-    ///         }
-    ///     },
-    /// );
-    /// ```
-    /// [`iter`]: trait.IntoIter.html
-    fn try_fast_iter(self) -> Option<Self::IntoIter>;
     /// Returns an iterator over `SparseSet`.  
-    /// Panics if one of the storage is update packed.
+    /// Panics if one of the storage is update packed.  
+    /// You can check if a `SparseSet` is update packed with [`SparseSet::is_update_packed`].
     ///
     /// [`iter`] can be used for update packed storage.
     ///
@@ -68,52 +46,15 @@ pub trait IntoFastIter {
     /// );
     /// ```
     /// [`iter`]: trait.IntoIter.html
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
+    /// [`SparseSet::is_update_packed`]: ../struct.SparseSet.html#method.is_update_packed
     fn fast_iter(self) -> Self::IntoIter;
-    /// Returns an iterator over `SparseSet`, its order is based on `D`. Returns `None` if one of the storage is update packed.
-    ///
-    /// [`iter_by`] can be used for update packed storage.
-    ///
-    /// [`iter_by`]: trait.IntoIter.html
-    fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter>;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.  
     /// Panics if one of the storage is update packed.
     ///
     /// [`iter_by`] can be used for update packed storage.
     ///
     /// [`iter_by`]: trait.IntoIter.html
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter;
-    /// Returns a parallel iterator over `SparseSet`. Returns `None` if one of the storage is update packed.
-    ///
-    /// [`par_iter`] can be used for update packed storage.
-    ///
-    /// ### Example
-    /// ```
-    /// use rayon::prelude::ParallelIterator;
-    /// use shipyard::{EntitiesViewMut, IntoFastIter, ViewMut, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut,
-    ///      mut usizes: ViewMut<usize>,
-    ///      mut u32s: ViewMut<u32>,| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
-    ///
-    ///         (&mut usizes, &u32s).try_fast_par_iter().unwrap().for_each(|(x, &y)| {
-    ///             *x += y as usize;
-    ///         });
-    ///     },
-    /// );
-    /// ```
-    /// [`par_iter`]: trait.IntoIter.html
-    #[cfg(feature = "parallel")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
-    fn try_fast_par_iter(self) -> Option<Self::IntoParIter>;
     /// Returns a parallel iterator over `SparseSet`.  
     /// Panics if one of the storage is update packed.
     ///
@@ -140,8 +81,7 @@ pub trait IntoFastIter {
     /// );
     /// ```
     /// [`par_iter`]: trait.IntoIter.html
-    #[cfg(all(feature = "panic", feature = "parallel"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "panic", feature = "parallel"))))]
+    #[cfg(feature = "parallel")]
     fn fast_par_iter(self) -> Self::IntoParIter;
 }
 
@@ -155,11 +95,11 @@ where
     type IntoParIter = FastParIter<T::AbsView>;
 
     #[inline]
-    fn try_fast_iter(self) -> Option<Self::IntoIter> {
+    fn fast_iter(self) -> Self::IntoIter {
         if self.metadata().update.is_none()
             || self.len().map(|(_, is_exact)| !is_exact).unwrap_or(true)
         {
-            Some(match self.len() {
+            match self.len() {
                 Some((len, true)) => FastIter::Tight(FastTight {
                     current: 0,
                     end: len,
@@ -178,46 +118,19 @@ where
                     end: 0,
                     storage: self.into_abstract(),
                 }),
-            })
+            }
         } else {
-            None
+            panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
         }
     }
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
-    fn fast_iter(self) -> Self::IntoIter {
-        match self.try_fast_iter() {
-            Some(iter) => iter,
-            None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
-        }
-    }
-    #[inline]
-    fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter> {
-        self.try_fast_iter()
-    }
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
         self.fast_iter()
     }
     #[cfg(feature = "parallel")]
     #[inline]
-    fn try_fast_par_iter(self) -> Option<Self::IntoParIter> {
-        self.try_fast_iter().map(Into::into)
-    }
-    #[cfg(all(feature = "panic", feature = "parallel"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
     fn fast_par_iter(self) -> Self::IntoParIter {
-        match self.try_fast_par_iter() {
-            Some(iter) => iter,
-            None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
-        }
+        self.fast_iter().into()
     }
 }
 
@@ -231,11 +144,11 @@ where
     type IntoParIter = FastParIter<(T::AbsView,)>;
 
     #[inline]
-    fn try_fast_iter(self) -> Option<Self::IntoIter> {
+    fn fast_iter(self) -> Self::IntoIter {
         if self.0.metadata().update.is_none()
             || self.0.len().map(|(_, is_exact)| !is_exact).unwrap_or(true)
         {
-            Some(match self.0.len() {
+            match self.0.len() {
                 Some((len, true)) => FastIter::Tight(FastTight {
                     current: 0,
                     end: len,
@@ -254,46 +167,19 @@ where
                     end: 0,
                     storage: (self.0.into_abstract(),),
                 }),
-            })
+            }
         } else {
-            None
+            panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
         }
     }
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
-    fn fast_iter(self) -> Self::IntoIter {
-        match self.try_fast_iter() {
-            Some(iter) => iter,
-            None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
-        }
-    }
-    #[inline]
-    fn try_fast_iter_by<D: 'static>(self) -> Option<Self::IntoIter> {
-        self.try_fast_iter()
-    }
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
     #[inline]
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
         self.fast_iter()
     }
     #[cfg(feature = "parallel")]
     #[inline]
-    fn try_fast_par_iter(self) -> Option<Self::IntoParIter> {
-        self.try_fast_iter().map(Into::into)
-    }
-    #[cfg(all(feature = "panic", feature = "parallel"))]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    #[inline]
     fn fast_par_iter(self) -> Self::IntoParIter {
-        match self.try_fast_par_iter() {
-            Some(iter) => iter,
-            None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
-        }
+        self.fast_iter().into()
     }
 }
 
@@ -305,11 +191,11 @@ macro_rules! impl_into_iter {
             type IntoParIter = FastParIter<($type1::AbsView, $($type::AbsView,)+)>;
 
             #[allow(clippy::drop_copy)]
-            fn try_fast_iter(self) -> Option<Self::IntoIter> {
+            fn fast_iter(self) -> Self::IntoIter {
                 if self.$index1.metadata().update.is_some()
                     && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                 {
-                    return None;
+                    panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
                 }
 
                 let type_ids = [self.$index1.type_id(), $(self.$index.type_id()),+];
@@ -334,7 +220,7 @@ macro_rules! impl_into_iter {
                     if self.$index.metadata().update.is_some()
                         && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                     {
-                        return None;
+                        panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
                     }
 
                     if let Some((len, is_exact)) = self.$index.len() {
@@ -363,41 +249,30 @@ macro_rules! impl_into_iter {
                 drop(factored_len);
 
                 if smallest == core::usize::MAX {
-                    Some(FastIter::Mixed(FastMixed {
+                    FastIter::Mixed(FastMixed {
                         current: 0,
                         end: 0,
                         mask,
                         indices: smallest_dense,
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
-                    }))
+                    })
                 } else {
-                    Some(FastIter::Mixed(FastMixed {
+                    FastIter::Mixed(FastMixed {
                         current: 0,
                         end: smallest,
                         mask,
                         indices: smallest_dense,
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
-                    }))
+                    })
                 }
             }
-            #[cfg(feature = "panic")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-            #[track_caller]
-            #[inline]
-            fn fast_iter(self) -> Self::IntoIter {
-                match self.try_fast_iter() {
-                    Some(iter) => iter,
-                    None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
-                }
-            }
-            #[inline]
-            fn try_fast_iter_by<Driver: 'static>(self) -> Option<Self::IntoIter> {
+            fn fast_iter_by<Driver: 'static>(self) -> Self::IntoIter {
                 if self.$index1.metadata().update.is_some()
                     && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                 {
-                    return None;
+                    panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified.");
                 }
 
                 let type_id = TypeId::of::<SparseSet<Driver>>();
@@ -428,7 +303,7 @@ macro_rules! impl_into_iter {
                     if self.$index.metadata().update.is_some()
                         && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                     {
-                        return None;
+                        panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified.");
                     }
 
                     if !found && self.$index.type_id() == type_id {
@@ -452,52 +327,32 @@ macro_rules! impl_into_iter {
 
                 if found {
                     if smallest == core::usize::MAX {
-                        Some(FastIter::Mixed(FastMixed {
+                        FastIter::Mixed(FastMixed {
                             current: 0,
                             end: 0,
                             mask,
                             indices: smallest_dense,
                             last_id: EntityId::dead(),
                             storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
-                        }))
+                        })
                     } else {
-                        Some(FastIter::Mixed(FastMixed {
+                        FastIter::Mixed(FastMixed {
                             current: 0,
                             end: smallest,
                             mask,
                             indices: smallest_dense,
                             last_id: EntityId::dead(),
                             storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
-                        }))
+                        })
                     }
                 } else {
-                    self.try_fast_iter()
-                }
-            }
-            #[cfg(feature = "panic")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-            #[track_caller]
-            #[inline]
-            fn fast_iter_by<Driver: 'static>(self) -> Self::IntoIter {
-                match self.try_fast_iter_by::<Driver>() {
-                    Some(iter) => iter,
-                    None => panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified."),
+                    self.fast_iter()
                 }
             }
             #[cfg(feature = "parallel")]
             #[inline]
-            fn try_fast_par_iter(self) -> Option<Self::IntoParIter> {
-                Some(self.try_fast_iter()?.into())
-            }
-            #[cfg(all(feature = "panic", feature = "parallel"))]
-            #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-            #[track_caller]
-            #[inline]
             fn fast_par_iter(self) -> Self::IntoParIter {
-                match self.try_fast_par_iter() {
-                    Some(iter) => iter,
-                    None => panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified."),
-                }
+                self.fast_iter().into()
             }
         }
     }

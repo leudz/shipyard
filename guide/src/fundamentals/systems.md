@@ -13,7 +13,7 @@ fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>) {
 We have a system, let's run it!
 
 ```rust, noplaypen
-world.run(create_ints);
+world.run(create_ints).unwrap();
 ```
 
 ### Passing Data to Systems
@@ -40,7 +40,7 @@ fn in_acid(
     // -- snip --
 }
 
-world.run_with_data(in_acid, (&season, &precipitation));
+world.run_with_data(in_acid, (&season, &precipitation)).unwrap();
 ```
 
 ### Workloads
@@ -56,11 +56,11 @@ fn delete_ints(mut u32s: ViewMut<u32>) {
     // -- snip --
 }
 
-world
-    .add_workload("Int cycle")
-    .with_system((|world: &World| world.try_run(create_ints), create_ints))
+Workload::builder("Int cycle")
+    .with_system((|world: &World| world.run(create_ints), create_ints))
     .with_system(system!(delete_ints))
-    .build();
+    .add_to_world(&world)
+    .unwrap();
 ```
 
 The repetition in [`with_system`](https://docs.rs/shipyard/latest/shipyard/struct.WorkloadBuilder.html#method.with_system)'s argument is needed for now.
@@ -71,9 +71,9 @@ As opposed to [`run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html
 Workloads are stored in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), ready to be run again and again.
 
 ```rust, noplaypen
-world.run_workload("Int cycle");
+world.run_workload("Int cycle").unwrap();
 // or
-world.run_default();
+world.run_default().unwrap();
 ```
 
 [`run_default`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) will run the first workload added in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run_default), or the one you choose with [`set_default_workload`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.set_default_workload).

@@ -5,9 +5,11 @@ fn single() {
     let entity_id = EntityId::dead();
     let world = World::new();
 
-    world.run(|mut u32s: ViewMut<u32>| {
-        u32s.delete(entity_id);
-    });
+    world
+        .run(|mut u32s: ViewMut<u32>| {
+            u32s.delete(entity_id);
+        })
+        .unwrap();
 }
 
 #[test]
@@ -15,9 +17,11 @@ fn multiple() {
     let entity_id = EntityId::dead();
     let world = World::new();
 
-    world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-        (&mut u32s, &mut usizes).delete(entity_id);
-    });
+    world
+        .run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
+            (&mut u32s, &mut usizes).delete(entity_id);
+        })
+        .unwrap();
 }
 
 #[test]
@@ -25,7 +29,9 @@ fn strip() {
     let entity_id = EntityId::dead();
     let world = World::new();
 
-    world.run(|mut all_storages: AllStoragesViewMut| {
-        all_storages.strip(entity_id);
-    });
+    world
+        .run(|mut all_storages: AllStoragesViewMut| {
+            all_storages.strip(entity_id);
+        })
+        .unwrap();
 }

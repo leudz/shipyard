@@ -7,7 +7,7 @@ For components, "remove" and "delete" have different meanings. A remove returns 
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>| {
     let i = u32s.remove(entity_id);
-});
+}).unwrap();
 ```
 
 There is no need for `Entities` here. You can call the `remove` method directly on the component storage view.
@@ -17,7 +17,7 @@ There is no need for `Entities` here. You can call the `remove` method directly 
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
     let (_i, _j) = (&mut u32s, &mut usizes).remove(entity_id);
-});
+}).unwrap();
 ```
 
 We have to use the explicit syntax in this case because we could be trying to remove just `u32`. We'll see later why we'd want that.

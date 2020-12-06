@@ -43,44 +43,6 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - [`AllStorages`] (shared)
-    ///
-    /// ### Errors
-    ///
-    /// - [`AllStorages`] borrow failed.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{UniqueView, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// world.add_unique(0u32);
-    ///
-    /// let i = world.borrow::<UniqueView<u32>>();
-    /// assert_eq!(*i, 0);
-    /// ```
-    ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
-        match self.try_add_unique(component) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
@@ -98,19 +60,16 @@ impl World {
     ///
     /// let world = World::new();
     ///
-    /// world.try_add_unique(0u32).unwrap();
+    /// world.add_unique(0u32).unwrap();
     ///
-    /// let i = world.try_borrow::<UniqueView<u32>>().unwrap();
+    /// let i = world.borrow::<UniqueView<u32>>().unwrap();
     /// assert_eq!(*i, 0);
     /// ```
     ///
     /// [`AllStorages`]: struct.AllStorages.html
     /// [`UniqueView`]: struct.UniqueView.html
     /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    pub fn try_add_unique<T: 'static + Send + Sync>(
-        &self,
-        component: T,
-    ) -> Result<(), error::Borrow> {
+    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) -> Result<(), error::Borrow> {
         self.all_storages.try_borrow()?.add_unique(component);
         Ok(())
     }
@@ -134,9 +93,9 @@ impl World {
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Send` type
-    /// world.try_add_unique_non_send(0u32).unwrap();
+    /// world.add_unique_non_send(0u32).unwrap();
     ///
-    /// let i = world.try_borrow::<NonSend<UniqueView<u32>>>().unwrap();
+    /// let i = world.borrow::<NonSend<UniqueView<u32>>>().unwrap();
     /// assert_eq!(**i, 0);
     /// ```
     ///
@@ -146,7 +105,7 @@ impl World {
     /// [`NonSend`]: struct.NonSend.html
     #[cfg(feature = "non_send")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
-    pub fn try_add_unique_non_send<T: 'static + Sync>(
+    pub fn add_unique_non_send<T: 'static + Sync>(
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
@@ -156,46 +115,6 @@ impl World {
         Ok(())
     }
     /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - [`AllStorages`] (shared)
-    ///
-    /// ### Errors
-    ///
-    /// - [`AllStorages`] borrow failed.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{NonSend, UniqueView, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// // I'm using `u32` here but imagine it's a `!Send` type
-    /// world.add_unique_non_send(0u32);
-    ///
-    /// let i = world.borrow::<NonSend<UniqueView<u32>>>();
-    /// assert_eq!(**i, 0);
-    /// ```
-    ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    /// [`NonSend`]: struct.NonSend.html
-    #[cfg(all(feature = "non_send", feature = "panic"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "panic"))))]
-    #[track_caller]
-    pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        match self.try_add_unique_non_send::<T>(component) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    /// Adds a new unique storage, unique storages store a single value.  
     /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].  
     /// Does nothing if the storage already exists.
     ///
@@ -215,9 +134,9 @@ impl World {
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Sync` type
-    /// world.try_add_unique_non_sync(0u32).unwrap();
+    /// world.add_unique_non_sync(0u32).unwrap();
     ///
-    /// let i = world.try_borrow::<NonSync<UniqueView<u32>>>().unwrap();
+    /// let i = world.borrow::<NonSync<UniqueView<u32>>>().unwrap();
     /// assert_eq!(**i, 0);
     /// ```
     ///
@@ -227,7 +146,7 @@ impl World {
     /// [`NonSync`]: struct.NonSync.html
     #[cfg(feature = "non_sync")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
-    pub fn try_add_unique_non_sync<T: 'static + Send>(
+    pub fn add_unique_non_sync<T: 'static + Send>(
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
@@ -235,46 +154,6 @@ impl World {
             .try_borrow()?
             .add_unique_non_sync(component);
         Ok(())
-    }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - [`AllStorages`] (shared)
-    ///
-    /// ### Errors
-    ///
-    /// - [`AllStorages`] borrow failed.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{NonSync, UniqueView, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// // I'm using `u32` here but imagine it's a `!Sync` type
-    /// world.add_unique_non_sync(0u32);
-    ///
-    /// let i = world.borrow::<NonSync<UniqueView<u32>>>();
-    /// assert_eq!(**i, 0);
-    /// ```
-    ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    /// [`NonSync`]: struct.NonSync.html
-    #[cfg(all(feature = "non_sync", feature = "panic"))]
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "non_sync", feature = "panic"))))]
-    #[track_caller]
-    pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
-        match self.try_add_unique_non_sync::<T>(component) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].  
@@ -296,9 +175,9 @@ impl World {
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
-    /// world.try_add_unique_non_send_sync(0u32).unwrap();
+    /// world.add_unique_non_send_sync(0u32).unwrap();
     ///
-    /// let i = world.try_borrow::<NonSendSync<UniqueView<u32>>>().unwrap();
+    /// let i = world.borrow::<NonSendSync<UniqueView<u32>>>().unwrap();
     /// assert_eq!(**i, 0);
     /// ```
     ///
@@ -308,57 +187,11 @@ impl World {
     /// [`NonSendSync`]: struct.NonSync.html
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
-    pub fn try_add_unique_non_send_sync<T: 'static>(
-        &self,
-        component: T,
-    ) -> Result<(), error::Borrow> {
+    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) -> Result<(), error::Borrow> {
         self.all_storages
             .try_borrow()?
             .add_unique_non_send_sync(component);
         Ok(())
-    }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - [`AllStorages`] (shared)
-    ///
-    /// ### Errors
-    ///
-    /// - [`AllStorages`] borrow failed.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{NonSendSync, UniqueView, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
-    /// world.add_unique_non_send_sync(0u32);
-    ///
-    /// let i = world.borrow::<NonSendSync<UniqueView<u32>>>();
-    /// assert_eq!(**i, 0);
-    /// ```
-    ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    /// [`NonSendSync`]: struct.NonSync.html
-    #[cfg(all(feature = "non_send", feature = "non_sync", feature = "panic"))]
-    #[cfg_attr(
-        docsrs,
-        doc(cfg(all(feature = "non_send", feature = "non_sync", feature = "panic")))
-    )]
-    #[track_caller]
-    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
-        match self.try_add_unique_non_send_sync::<T>(component) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     /// Removes a unique storage.
     ///
@@ -380,55 +213,18 @@ impl World {
     ///
     /// let world = World::new();
     ///
-    /// world.try_add_unique(0u32).unwrap();
+    /// world.add_unique(0u32).unwrap();
     ///
-    /// let i = world.try_remove_unique::<u32>().unwrap();
+    /// let i = world.remove_unique::<u32>().unwrap();
     /// assert_eq!(i, 0);
     /// ```
     ///
     /// [`AllStorages`]: struct.AllStorages.html
-    pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+    pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .try_borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
             .try_remove_unique::<T>()
-    }
-    /// Removes a unique storage.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - [`AllStorages`] (shared)
-    /// - `Unique<T>` storage (exclusive)
-    ///
-    /// ### Errors
-    ///
-    /// - [`AllStorages`] borrow failed.
-    /// - `Unique<T>` storage borrow failed.
-    /// - `Unique<T>` storage did not exist.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{UniqueView, World};
-    ///
-    /// let world = World::new();
-    ///
-    /// world.add_unique(0u32);
-    ///
-    /// let i = world.remove_unique::<u32>();
-    /// assert_eq!(i, 0);
-    /// ```
-    ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn remove_unique<T: 'static>(&self) -> T {
-        match self.try_remove_unique() {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     #[doc = "Borrows the requested storages, if they don't exist they'll get created.  
 You can use a tuple to get multiple storages at once.
@@ -520,9 +316,9 @@ use shipyard::{EntitiesView, View, ViewMut, World};
 
 let world = World::new();
 
-let u32s = world.try_borrow::<View<u32>>().unwrap();
+let u32s = world.borrow::<View<u32>>().unwrap();
 let (entities, mut usizes) = world
-    .try_borrow::<(EntitiesView, ViewMut<usize>)>()
+    .borrow::<(EntitiesView, ViewMut<usize>)>()
     .unwrap();
 ```
 [AllStorages]: struct.AllStorages.html
@@ -540,126 +336,8 @@ let (entities, mut usizes) = world
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn try_borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
+    pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
         V::try_borrow(self)
-    }
-    #[doc = "Borrows the requested storages, if they don't exist they'll get created.  
-You can use a tuple to get multiple storages at once.  
-Unwraps errors.
-
-You can use:
-* [View]\\<T\\> for a shared access to `T` storage
-* [ViewMut]\\<T\\> for an exclusive access to `T` storage
-* [EntitiesView] for a shared access to the entity storage
-* [EntitiesViewMut] for an exclusive reference to the entity storage
-* [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
-* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
-* `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "non_send", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", docsrs),
-        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", not(docsrs)),
-        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
-    )]
-    #[cfg_attr(
-        not(feature = "non_send"),
-        doc = "* NonSend: must activate the *non_send* feature"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", not(docsrs)),
-        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
-    )]
-    #[cfg_attr(
-        not(feature = "non_sync"),
-        doc = "* NonSync: must activate the *non_sync* feature"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync", docsrs),
-        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync", not(docsrs)),
-        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
-    )]
-    #[cfg_attr(
-        not(all(feature = "non_send", feature = "non_sync")),
-        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
-    )]
-    #[doc = "
-### Borrows
-
-- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
-- [AllStorages] (shared) + storage (exclusive or shared) for all other views
-
-### Errors
-
-- [AllStorages] borrow failed.
-- Storage borrow failed.
-- Unique storage did not exist.
-
-### Example
-```
-use shipyard::{EntitiesView, View, ViewMut, World};
-
-let world = World::new();
-
-let u32s = world.borrow::<View<u32>>();
-let (entities, mut usizes) = world.borrow::<(EntitiesView, ViewMut<usize>)>();
-```
-[AllStorages]: struct.AllStorages.html
-[EntitiesView]: struct.Entities.html
-[EntitiesViewMut]: struct.Entities.html
-[AllStoragesViewMut]: struct.AllStorages.html
-[World]: struct.World.html
-[View]: struct.View.html
-[ViewMut]: struct.ViewMut.html
-[UniqueView]: struct.UniqueView.html
-[UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
-    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
-        doc = "[NonSendSync]: struct.NonSendSync.html"
-    )]
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> V {
-        match self.try_borrow::<V>() {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -758,7 +436,7 @@ fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<[f32; 2]>
 
 let world = World::new();
 
-world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
+world.run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
 ```
 [AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
@@ -775,140 +453,12 @@ world.try_run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn try_run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
+    pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
         &'s self,
         s: S,
         data: Data,
     ) -> Result<R, error::Run> {
         Ok(s.run((data,), S::try_borrow(self)?))
-    }
-    #[doc = "Borrows the requested storages and runs the function.  
-Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.  
-Unwraps errors.
-
-You can use:
-* [View]\\<T\\> for a shared access to `T` storage
-* [ViewMut]\\<T\\> for an exclusive access to `T` storage
-* [EntitiesView] for a shared access to the entity storage
-* [EntitiesViewMut] for an exclusive reference to the entity storage
-* [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
-* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
-* `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "non_send", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", docsrs),
-        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", not(docsrs)),
-        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
-    )]
-    #[cfg_attr(
-        not(feature = "non_send"),
-        doc = "* NonSend: must activate the *non_send* feature"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", not(docsrs)),
-        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
-    )]
-    #[cfg_attr(
-        not(feature = "non_sync"),
-        doc = "* NonSync: must activate the *non_sync* feature"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync", docsrs),
-        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync", not(docsrs)),
-        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
-    )]
-    #[cfg_attr(
-        not(all(feature = "non_send", feature = "non_sync")),
-        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
-    )]
-    #[doc = "
-### Borrows
-
-- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
-- [AllStorages] (shared) + storage (exclusive or shared) for all other views
-
-### Errors
-
-- [AllStorages] borrow failed.
-- Storage borrow failed.
-- Unique storage did not exist.
-- Error returned by user.
-
-### Example
-```
-use shipyard::{EntityId, Get, ViewMut, World};
-
-fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<[f32; 2]>) {
-    if let Ok(mut pos) = (&mut positions).get(entity) {
-        *pos = [x, y];
-    }
-}
-
-let world = World::new();
-
-world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
-```
-[AllStorages]: struct.AllStorages.html
-[EntitiesView]: struct.Entities.html
-[EntitiesViewMut]: struct.Entities.html
-[AllStoragesViewMut]: struct.AllStorages.html
-[World]: struct.World.html
-[View]: struct.View.html
-[ViewMut]: struct.ViewMut.html
-[UniqueView]: struct.UniqueView.html
-[UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
-    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
-        doc = "[NonSendSync]: struct.NonSendSync.html"
-    )]
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
-        &'s self,
-        s: S,
-        data: Data,
-    ) -> R {
-        match self.try_run_with_data(s, data) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -1005,12 +555,12 @@ fn sys1(i32s: View<i32>) -> i32 {
 let world = World::new();
 
 world
-    .try_run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
+    .run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
         // -- snip --
     })
     .unwrap();
 
-let i = world.try_run(sys1).unwrap();
+let i = world.run(sys1).unwrap();
 ```
 [AllStorages]: struct.AllStorages.html
 [EntitiesView]: struct.Entities.html
@@ -1027,136 +577,11 @@ let i = world.try_run(sys1).unwrap();
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: struct.NonSendSync.html"
     )]
-    pub fn try_run<'s, B, R, S: crate::system::System<'s, (), B, R>>(
+    pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
         Ok(s.run((), S::try_borrow(self)?))
-    }
-    #[doc = "Borrows the requested storages and runs the function.  
-Unwraps errors.
-
-You can use:
-* [View]\\<T\\> for a shared access to `T` storage
-* [ViewMut]\\<T\\> for an exclusive access to `T` storage
-* [EntitiesView] for a shared access to the entity storage
-* [EntitiesViewMut] for an exclusive reference to the entity storage
-* [AllStoragesViewMut] for an exclusive access to the storage of all components, ⚠️ can't coexist with any other storage borrow
-* [UniqueView]\\<T\\> for a shared access to a `T` unique storage
-* [UniqueViewMut]\\<T\\> for an exclusive access to a `T` unique storage
-* `Option<V>` with one or multiple views for fallible access to one or more storages"]
-    #[cfg_attr(
-        all(feature = "non_send", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", docsrs),
-        doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", not(docsrs)),
-        doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
-[NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
-    )]
-    #[cfg_attr(
-        not(feature = "non_send"),
-        doc = "* NonSend: must activate the *non_send* feature"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", not(docsrs)),
-        doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
-[NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
-    )]
-    #[cfg_attr(
-        not(feature = "non_sync"),
-        doc = "* NonSync: must activate the *non_sync* feature"
-    )]
-    #[cfg_attr(
-        all(feature = "non_sync", docsrs),
-        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"non_send\"</code> and <code style=\"background-color: #C4ECFF\">feature=\"non_sync\"</code></strong> only:</span>"
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync", docsrs),
-        doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
-    )]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync", not(docsrs)),
-        doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
-[NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
-    )]
-    #[cfg_attr(
-        not(all(feature = "non_send", feature = "non_sync")),
-        doc = "* NonSendSync: must activate the *non_send* and *non_sync* features"
-    )]
-    #[doc = "
-### Borrows
-
-- [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
-- [AllStorages] (shared) + storage (exclusive or shared) for all other views
-
-### Errors
-
-- [AllStorages] borrow failed.
-- Storage borrow failed.
-- Unique storage did not exist.
-- Error returned by user.
-
-### Example
-```
-use shipyard::{View, ViewMut, World};
-
-fn sys1(i32s: View<i32>) -> i32 {
-    0
-}
-
-let world = World::new();
-
-world.run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
-    // -- snip --
-});
-
-let i = world.run(sys1);
-```
-[AllStorages]: struct.AllStorages.html
-[EntitiesView]: struct.Entities.html
-[EntitiesViewMut]: struct.Entities.html
-[AllStoragesViewMut]: struct.AllStorages.html
-[World]: struct.World.html
-[View]: struct.View.html
-[ViewMut]: struct.ViewMut.html
-[UniqueView]: struct.UniqueView.html
-[UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
-    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
-    #[cfg_attr(
-        all(feature = "non_send", feature = "non_sync"),
-        doc = "[NonSendSync]: struct.NonSendSync.html"
-    )]
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(&'s self, s: S) -> R {
-        match self.try_run(s) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     /// Modifies the current default workload to `name`.
     ///
@@ -1168,7 +593,7 @@ let i = world.run(sys1);
     ///
     /// - Scheduler borrow failed.
     /// - Workload did not exist.
-    pub fn try_set_default_workload(
+    pub fn set_default_workload(
         &self,
         name: impl Into<Cow<'static, str>>,
     ) -> Result<(), error::SetDefaultWorkload> {
@@ -1176,26 +601,6 @@ let i = world.run(sys1);
             .try_borrow_mut()
             .map_err(|_| error::SetDefaultWorkload::Borrow)?
             .set_default(name.into())
-    }
-    /// Modifies the current default workload to `name`.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - Scheduler (exclusive)
-    ///
-    /// ### Errors
-    ///
-    /// - Scheduler borrow failed.
-    /// - Workload did not exist.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn set_default_workload(&self, name: impl Into<Cow<'static, str>>) {
-        match self.try_set_default_workload(name) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     /// Runs the `name` workload.
     ///
@@ -1210,7 +615,7 @@ let i = world.run(sys1);
     /// - Workload did not exist.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn try_run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
+    pub fn run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .try_borrow()
@@ -1218,32 +623,9 @@ let i = world.run(sys1);
 
         let batches = scheduler.workload(name.as_ref())?;
 
-        self.try_run_workload_index(&scheduler, batches)
+        self.run_workload_index(&scheduler, batches)
     }
-    /// Runs the `name` workload.  
-    /// Unwraps error.
-    ///
-    /// ### Borrows
-    ///
-    /// - Scheduler (shared)
-    /// - Systems' borrow as they are executed
-    ///
-    /// ### Errors
-    ///
-    /// - Scheduler borrow failed.
-    /// - Workload did not exist.
-    /// - Storage borrow failed.
-    /// - User error returned by system.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn run_workload(&self, name: impl AsRef<str> + Sync) {
-        match self.try_run_workload(name) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
-    }
-    fn try_run_workload_index(
+    fn run_workload_index(
         &self,
         scheduler: &Scheduler,
         batches: &Batches,
@@ -1288,38 +670,16 @@ let i = world.run(sys1);
     /// - Scheduler borrow failed.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn try_run_default(&self) -> Result<(), error::RunWorkload> {
+    pub fn run_default(&self) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .try_borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
 
         if !scheduler.is_empty() {
-            self.try_run_workload_index(&scheduler, scheduler.default_workload())?
+            self.run_workload_index(&scheduler, scheduler.default_workload())?
         }
         Ok(())
-    }
-    /// Run the default workload if there is one.  
-    /// Unwraps error.
-    ///
-    /// ### Borrows
-    ///
-    /// - Scheduler (shared)
-    /// - Systems' borrow as they are executed
-    ///
-    /// ### Errors
-    ///
-    /// - Scheduler borrow failed.
-    /// - Storage borrow failed.
-    /// - User error returned by system.
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn run_default(&self) {
-        match self.try_run_default() {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
     /// Returns a `Ref<&AllStorages>`, used to implement custom storages.   
     /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.

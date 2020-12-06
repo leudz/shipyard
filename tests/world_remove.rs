@@ -12,7 +12,7 @@ fn no_pack() {
     let (component,) = world.remove::<(usize,)>(entity1);
     assert_eq!(component, Some(0usize));
 
-    let (usizes, u32s) = world.try_borrow::<(View<usize>, View<u32>)>().unwrap();
+    let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
     assert_eq!(
         (&usizes).get(entity1).err(),
         Some(error::MissingComponent {
@@ -29,7 +29,7 @@ fn no_pack() {
 fn update() {
     let mut world = World::new();
 
-    drop(world.try_borrow::<ViewMut<usize>>().unwrap().update_pack());
+    drop(world.borrow::<ViewMut<usize>>().unwrap().update_pack());
 
     let entity1 = world.add_entity((0usize,));
     let entity2 = world.add_entity((2usize,));
@@ -38,7 +38,7 @@ fn update() {
     assert_eq!(component, Some(0));
 
     world
-        .try_run(|usizes: View<usize>| {
+        .run(|usizes: View<usize>| {
             assert_eq!(
                 usizes.get(entity1),
                 Err(error::MissingComponent {
@@ -50,10 +50,10 @@ fn update() {
             assert_eq!(usizes.len(), 1);
             assert_eq!(usizes.inserted().iter().count(), 1);
             assert_eq!(usizes.modified().iter().count(), 0);
-            assert_eq!(usizes.try_deleted().unwrap().len(), 0);
-            assert_eq!(usizes.try_removed().unwrap(), &[entity1]);
+            assert_eq!(usizes.deleted().len(), 0);
+            assert_eq!(usizes.removed(), &[entity1]);
 
-            let mut iter = usizes.try_removed_or_deleted().unwrap();
+            let mut iter = usizes.removed_or_deleted();
             assert_eq!(iter.next(), Some(entity1));
             assert_eq!(iter.next(), None);
 
@@ -64,8 +64,8 @@ fn update() {
     world.delete_component::<(usize,)>(entity2);
 
     world
-        .try_run(|usizes: View<usize>| {
-            let mut iter = usizes.try_removed_or_deleted().unwrap();
+        .run(|usizes: View<usize>| {
+            let mut iter = usizes.removed_or_deleted();
             assert_eq!(iter.next(), Some(entity1));
             assert_eq!(iter.next(), Some(entity2));
             assert_eq!(iter.next(), None);
@@ -93,12 +93,12 @@ fn newer_key() {
     let entity = world.add_entity((0usize, 1u32));
 
     world
-        .try_borrow::<EntitiesViewMut>()
+        .borrow::<EntitiesViewMut>()
         .unwrap()
         .delete_unchecked(entity);
 
     world
-        .try_run(|(usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
+        .run(|(usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
             assert_eq!(usizes.len(), 1);
             assert_eq!(u32s.len(), 1);
         })
@@ -111,7 +111,7 @@ fn newer_key() {
     assert_eq!(old_u32, None);
 
     world
-        .try_run(|(usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
+        .run(|(usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
             assert_eq!(usizes.len(), 0);
             assert_eq!(u32s.len(), 0);
         })

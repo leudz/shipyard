@@ -4,7 +4,7 @@ use shipyard::*;
 fn no_pack() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
 
     let entity0 = entities.add_entity(&mut usizes, 0);
@@ -32,9 +32,7 @@ fn no_pack() {
 #[test]
 fn update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
-        .unwrap();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
 
     usizes.update_pack();
     let entity = entities.add_entity((), ());
@@ -51,7 +49,7 @@ fn update() {
     assert_eq!(iter.next(), Some(&2));
     assert_eq!(iter.next(), None);
 
-    usizes.try_clear_inserted().unwrap();
+    usizes.clear_inserted();
 
     usizes[entity] = 3;
 
@@ -61,7 +59,7 @@ fn update() {
     assert_eq!(iter.next(), Some(&4));
     assert_eq!(iter.next(), None);
 
-    usizes.try_clear_modified().unwrap();
+    usizes.clear_modified();
 
     entities.try_add_component(entity, &mut usizes, 5).unwrap();
 
@@ -74,7 +72,7 @@ fn update() {
 fn no_pack_unchecked() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
 
     let entity1 = entities.add_entity((), ());

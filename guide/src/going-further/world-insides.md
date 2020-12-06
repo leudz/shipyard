@@ -27,7 +27,7 @@ world.run(
         let _entity1 = entities.add_entity(&mut f32s, 20.0);
         let _entity2 = entities.add_entity(&mut u32s, 30);
     },
-);
+).unwrap();
 ```
 When we create the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) there is no component storage in it, [`run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run) will create an empty storage for `u32` and `f32`.
 We then create `entity0`, `u32`'s storage now looks like this:
@@ -75,12 +75,12 @@ let [entity0, entity1] = world.run(
 
         result
     },
-);
+).unwrap();
 
 world.run(|mut all_storages: AllStoragesViewMut| {
     all_storages.delete_entity(entity0);
     all_storages.delete_entity(entity1);
-});
+}).unwrap();
 ```
 
 Let's take a look at what happens to [`Entities`](https://docs.rs/shipyard/latest/shipyard/struct.Entities.html) as we run this code.  After adding all three entries, it looks something like this:

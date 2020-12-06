@@ -4,9 +4,7 @@ use shipyard::*;
 #[test]
 fn filter() {
     let world = World::new();
-    let (mut entities, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>)>()
-        .unwrap();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
 
     u32s.update_pack();
     entities.add_entity(&mut u32s, 0);
@@ -15,7 +13,7 @@ fn filter() {
     entities.add_entity(&mut u32s, 3);
     entities.add_entity(&mut u32s, 4);
     entities.add_entity(&mut u32s, 5);
-    u32s.try_clear_inserted().unwrap();
+    u32s.clear_inserted();
 
     let im_vec;
     let m_vec;
