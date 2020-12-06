@@ -772,15 +772,15 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Registers a callback triggered when a component is inserted and run immediately.
-    ///
-    /// Callbacks will run one after the other based on the order they were added.  
-    /// They will run after the component is already in the `SparseSet`.  
-    /// Inserting components to an entity that already owns a component in this storage will not trigger `on_insert` event.
-    #[inline]
-    pub fn on_insert(&mut self, f: fn(EntityId, &mut Self)) {
-        self.metadata.local_on_insert.push(f);
-    }
+    // /// Registers a callback triggered when a component is inserted and run immediately.
+    // ///
+    // /// Callbacks will run one after the other based on the order they were added.
+    // /// They will run after the component is already in the `SparseSet`.
+    // /// Inserting components to an entity that already owns a component in this storage will not trigger `on_insert` event.
+    // #[inline]
+    // fn on_insert(&mut self, f: fn(EntityId, &mut Self)) {
+    //     self.metadata.local_on_insert.push(f);
+    // }
     // /// Registers a callback triggered when a component is inserted and run when `ViewMut` is dropped.
     // ///
     // /// Callbacks will run one after the other based on the order they were added.
@@ -790,14 +790,14 @@ impl<T> SparseSet<T> {
     // fn on_insert_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
     //     self.metadata.global_on_insert.push(f);
     // }
-    /// Registers a callback triggered when a component is removed or deleted and run immediately.
-    ///
-    /// Callbacks will run one after the other based on the order they were added.  
-    /// They will run before the component is removed from the `SparseSet`.  
-    #[inline]
-    pub fn on_remove(&mut self, f: fn(EntityId, &mut Self)) {
-        self.metadata.local_on_remove.push(f);
-    }
+    // /// Registers a callback triggered when a component is removed or deleted and run immediately.
+    // ///
+    // /// Callbacks will run one after the other based on the order they were added.
+    // /// They will run before the component is removed from the `SparseSet`.
+    // #[inline]
+    // fn on_remove(&mut self, f: fn(EntityId, &mut Self)) {
+    //     self.metadata.local_on_remove.push(f);
+    // }
     // /// Registers a callback triggered when a component is removed or deleted and run when `ViewMut` is dropped or when deleting components using `AllStorages`.
     // ///
     // /// Callbacks will run one after the other based on the order they were added.

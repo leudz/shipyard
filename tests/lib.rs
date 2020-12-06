@@ -5,10 +5,6 @@ mod iteration;
 #[cfg(feature = "serde1")]
 mod serde;
 mod workload;
-mod events {
-    mod on_insert;
-    mod on_remove;
-}
 
 use shipyard::error;
 use shipyard::*;
