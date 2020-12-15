@@ -264,6 +264,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn deleted(&self) -> &[(EntityId, T)] {
         if let Some(update) = &self.metadata.update {
@@ -278,6 +279,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn removed(&self) -> &[EntityId] {
         if let Some(update) = &self.metadata.update {
@@ -292,6 +294,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
         if let Some(update) = &self.metadata.update {
@@ -310,6 +313,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
         if let Some(update) = &mut self.metadata.update {
@@ -328,6 +332,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
         if let Some(update) = &mut self.metadata.update {
@@ -355,6 +360,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn clear_inserted(&mut self) {
         if self.metadata.update.is_some() {
@@ -373,6 +379,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn clear_modified(&mut self) {
         if self.metadata.update.is_some() {
@@ -391,6 +398,7 @@ impl<T> SparseSet<T> {
     /// ### Errors
     ///
     /// - Storage isn't update packed.
+    #[track_caller]
     #[inline]
     pub fn clear_inserted_and_modified(&mut self) {
         if self.metadata.update.is_some() {
@@ -447,6 +455,7 @@ impl<T> SparseSet<T> {
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
+    #[track_caller]
     #[inline]
     pub fn apply<R, F: FnOnce(&mut T, &T) -> R>(&mut self, a: EntityId, b: EntityId, f: F) -> R {
         let a_index = self.index_of(a).unwrap_or_else(move || {
@@ -489,6 +498,7 @@ impl<T> SparseSet<T> {
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
+    #[track_caller]
     #[inline]
     pub fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
         &mut self,
@@ -688,6 +698,7 @@ impl<T> SparseSet<T> {
 
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
+    #[track_caller]
     #[inline]
     fn index(&self, entity: EntityId) -> &Self::Output {
         self.private_get(entity).unwrap()
@@ -695,6 +706,7 @@ impl<T> core::ops::Index<EntityId> for SparseSet<T> {
 }
 
 impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
+    #[track_caller]
     #[inline]
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
         self.private_get_mut(entity).unwrap()

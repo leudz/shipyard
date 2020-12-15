@@ -241,6 +241,7 @@ impl WorkloadBuilder {
     ///
     /// [system]: macro.system.html
     /// [try_system]: macro.try_system.html
+    #[track_caller]
     pub fn with_system<
         'a,
         B,
