@@ -51,7 +51,7 @@ impl AllStorages {
             inside_callback: UnsafeCell::new(false),
         }
     }
-    /// Removes a unique storage.  
+    /// Removes a unique storage.
     ///
     /// ### Borrows
     ///
@@ -71,9 +71,9 @@ impl AllStorages {
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
     /// all_storages.add_unique(0usize);
-    /// let i = all_storages.try_remove_unique::<usize>().unwrap();
+    /// let i = all_storages.remove_unique::<usize>().unwrap();
     /// ```
-    pub fn try_remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+    pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         let storage_id = StorageId::of::<Unique<T>>();
 
         self.lock.lock_exclusive();
@@ -117,36 +117,6 @@ impl AllStorages {
 
                 Ok(unique.into_inner().value)
             }
-        }
-    }
-    /// Removes a unique storage.  
-    /// Unwraps errors.
-    ///
-    /// ### Borrows
-    ///
-    /// - `T` storage (exclusive)
-    ///
-    /// ### Errors
-    ///
-    /// - `T` storage borrow failed.
-    /// - `T` storage did not exist.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
-    ///
-    /// let world = World::new();
-    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
-    ///
-    /// all_storages.add_unique(0usize);
-    /// let i = all_storages.remove_unique::<usize>();
-    /// ```
-    #[track_caller]
-    pub fn remove_unique<T: 'static>(&self) -> T {
-        match self.try_remove_unique::<T>() {
-            Ok(unique) => unique,
-            Err(err) => panic!("{:?}", err),
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  

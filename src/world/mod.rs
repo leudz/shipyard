@@ -224,7 +224,7 @@ impl World {
         self.all_storages
             .try_borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
-            .try_remove_unique::<T>()
+            .remove_unique::<T>()
     }
     #[doc = "Borrows the requested storages, if they don't exist they'll get created.  
 You can use a tuple to get multiple storages at once.
@@ -704,7 +704,7 @@ let i = world.run(sys1).unwrap();
     /// ### Errors
     ///
     /// - `AllStorages` is already borrowed exclusively.
-    pub fn try_add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
+    pub fn add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
         &self,
         storage_id: StorageId,
         storage: S,
@@ -715,22 +715,6 @@ let i = world.run(sys1).unwrap();
             .custom_storage_or_insert_by_id(storage_id, || storage);
 
         Ok(())
-    }
-    /// Inserts a custom storage to the `World`.  
-    /// Unwraps errors.
-    ///
-    /// ### Errors
-    ///
-    /// - `AllStorages` is already borrowed exclusively.
-    pub fn add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
-        &self,
-        storage_id: StorageId,
-        storage: S,
-    ) {
-        match self.try_add_custom_storage(storage_id, storage) {
-            Ok(r) => r,
-            Err(err) => panic!("{:?}", err),
-        }
     }
 }
 

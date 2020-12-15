@@ -5,7 +5,6 @@ mod iteration;
 mod serde;
 mod workload;
 
-use shipyard::error;
 use shipyard::*;
 
 #[test]
@@ -253,6 +252,7 @@ fn two_bad_workloads() {
 }
 
 #[test]
+#[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn add_component_with_old_key() {
     let world = World::new();
 
@@ -272,10 +272,8 @@ fn add_component_with_old_key() {
     let (entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
-    assert_eq!(
-        entities.try_add_component(entity, (&mut usizes, &mut u32s), (1, 2)),
-        Err(error::AddComponent::EntityIsNotAlive)
-    );
+
+    entities.add_component(entity, (&mut usizes, &mut u32s), (1, 2));
 }
 
 #[cfg(feature = "parallel")]
@@ -438,12 +436,12 @@ fn contains() {
             |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
                 let entity = entities.add_entity((), ());
 
-                entities.try_add_component(entity, &mut usizes, 0).unwrap();
+                entities.add_component(entity, &mut usizes, 0);
 
                 assert!(usizes.contains(entity));
                 assert!(!(&usizes, &u32s).contains(entity));
 
-                entities.try_add_component(entity, &mut u32s, 1).unwrap();
+                entities.add_component(entity, &mut u32s, 1);
 
                 assert!((&usizes, &u32s).contains(entity));
             },

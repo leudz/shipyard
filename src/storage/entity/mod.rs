@@ -43,7 +43,7 @@ impl Entities {
             list: None,
         }
     }
-    /// Returns true if `entity` matches a living entity.
+    /// Returns `true` if `entity` matches a living entity.
     #[inline]
     pub fn is_alive(&self, entity: EntityId) -> bool {
         if let Some(&self_entity) = self.data.get(entity.uindex()) {
@@ -53,38 +53,12 @@ impl Entities {
         }
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
-    /// `Entities` is only borrowed immutably.
-    ///
-    /// ### Example
-    /// ```
-    /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
-    ///
-    /// let world = World::new();
-    ///
-    /// let entity = world.borrow::<EntitiesViewMut>().unwrap().add_entity((), ());
-    ///
-    /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
-    ///     entities.try_add_component(entity, &mut u32s, 0).unwrap();
-    /// });
-    /// ```
-    #[inline]
-    pub fn try_add_component<S: AddComponent>(
-        &self,
-        entity: EntityId,
-        mut storages: S,
-        component: S::Component,
-    ) -> Result<(), error::AddComponent> {
-        if self.is_alive(entity) {
-            storages.add_component_unchecked(entity, component);
-
-            Ok(())
-        } else {
-            Err(error::AddComponent::EntityIsNotAlive)
-        }
-    }
-    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.  
     /// Unwraps errors.
+    ///
+    /// ### Errors
+    ///
+    /// - `entity` is not alive.
     ///
     /// ### Example
     /// ```

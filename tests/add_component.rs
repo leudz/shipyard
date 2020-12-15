@@ -12,13 +12,9 @@ fn no_pack() {
 
     let entity10 = entities.add_entity((), ());
     let entity20 = entities.add_entity((), ());
-    entities
-        .try_add_component(entity10, (&mut usizes, &mut u32s), (10, 30))
-        .unwrap();
-    entities
-        .try_add_component(entity20, &mut usizes, 20)
-        .unwrap();
-    entities.try_add_component(entity20, &mut u32s, 50).unwrap();
+    entities.add_component(entity10, (&mut usizes, &mut u32s), (10, 30));
+    entities.add_component(entity20, &mut usizes, 20);
+    entities.add_component(entity20, &mut u32s, 50);
     assert_eq!(usizes.get(entity0).unwrap(), &0);
     assert_eq!(u32s.get(entity1).unwrap(), &1);
     assert_eq!((&usizes, &u32s).get(entity10).unwrap(), (&10, &30));
@@ -37,13 +33,13 @@ fn update() {
     usizes.update_pack();
     let entity = entities.add_entity((), ());
 
-    entities.try_add_component(entity, &mut usizes, 1).unwrap();
+    entities.add_component(entity, &mut usizes, 1);
 
     let mut iter = usizes.inserted().iter();
     assert_eq!(iter.next(), Some(&1));
     assert_eq!(iter.next(), None);
 
-    entities.try_add_component(entity, &mut usizes, 2).unwrap();
+    entities.add_component(entity, &mut usizes, 2);
 
     let mut iter = usizes.inserted().iter();
     assert_eq!(iter.next(), Some(&2));
@@ -53,7 +49,7 @@ fn update() {
 
     usizes[entity] = 3;
 
-    entities.try_add_component(entity, &mut usizes, 4).unwrap();
+    entities.add_component(entity, &mut usizes, 4);
 
     let mut iter = usizes.modified().iter();
     assert_eq!(iter.next(), Some(&4));
@@ -61,7 +57,7 @@ fn update() {
 
     usizes.clear_modified();
 
-    entities.try_add_component(entity, &mut usizes, 5).unwrap();
+    entities.add_component(entity, &mut usizes, 5);
 
     let mut iter = usizes.modified().iter();
     assert_eq!(iter.next(), Some(&5));
