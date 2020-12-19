@@ -7,9 +7,9 @@ use core::slice::Iter;
 ///
 /// Obtained from [`World::bulk_add_entity`], [`AllStorages::bulk_add_entity`] and [`Entities::bulk_add_entity`].
 ///
-/// [`World::bulk_add_entity`]: struct.World.html#method.bulk_add_entity
-/// [`AllStorages::bulk_add_entity`]: struct.AllStorages.html#method.bulk_add_entity
-/// [`Entities::bulk_add_entity`]: struct.Entities.html#method.bulk_add_entity
+/// [`World::bulk_add_entity`]: crate::World::bulk_add_entity()
+/// [`AllStorages::bulk_add_entity`]: crate::AllStorages::bulk_add_entity()
+/// [`Entities::bulk_add_entity`]: crate::Entities#method::bulk_add_entity()
 #[derive(Clone, Debug)]
 pub struct BulkEntityIter<'a>(pub(crate) Copied<Iter<'a, EntityId>>);
 

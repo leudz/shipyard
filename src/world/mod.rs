@@ -66,9 +66,9 @@ impl World {
     /// assert_eq!(*i, 0);
     /// ```
     ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
+    /// [`AllStorages`]: crate::AllStorages
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) -> Result<(), error::Borrow> {
         self.all_storages.try_borrow()?.add_unique(component);
         Ok(())
@@ -99,10 +99,10 @@ impl World {
     /// assert_eq!(**i, 0);
     /// ```
     ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    /// [`NonSend`]: struct.NonSend.html
+    /// [`AllStorages`]: crate::AllStorages
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
+    /// [`NonSend`]: crate::NonSend
     #[cfg(feature = "non_send")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
     pub fn add_unique_non_send<T: 'static + Sync>(
@@ -140,10 +140,10 @@ impl World {
     /// assert_eq!(**i, 0);
     /// ```
     ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    /// [`NonSync`]: struct.NonSync.html
+    /// [`AllStorages`]: crate::AllStorages
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
+    /// [`NonSync`]: crate::NonSync
     #[cfg(feature = "non_sync")]
     #[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
     pub fn add_unique_non_sync<T: 'static + Send>(
@@ -181,10 +181,10 @@ impl World {
     /// assert_eq!(**i, 0);
     /// ```
     ///
-    /// [`AllStorages`]: struct.AllStorages.html
-    /// [`UniqueView`]: struct.UniqueView.html
-    /// [`UniqueViewMut`]: struct.UniqueViewMut.html
-    /// [`NonSendSync`]: struct.NonSync.html
+    /// [`AllStorages`]: crate::AllStorages
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
+    /// [`NonSendSync`]: crate::NonSync
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) -> Result<(), error::Borrow> {
@@ -219,7 +219,7 @@ impl World {
     /// assert_eq!(i, 0);
     /// ```
     ///
-    /// [`AllStorages`]: struct.AllStorages.html
+    /// [`AllStorages`]: crate::AllStorages
     pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .try_borrow()
@@ -321,20 +321,20 @@ let (entities, mut usizes) = world
     .borrow::<(EntitiesView, ViewMut<usize>)>()
     .unwrap();
 ```
-[AllStorages]: struct.AllStorages.html
-[EntitiesView]: struct.Entities.html
-[EntitiesViewMut]: struct.Entities.html
-[AllStoragesViewMut]: struct.AllStorages.html
-[World]: struct.World.html
-[View]: struct.View.html
-[ViewMut]: struct.ViewMut.html
-[UniqueView]: struct.UniqueView.html
-[UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
-    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+[AllStorages]: crate::AllStorages
+[EntitiesView]: crate::Entities
+[EntitiesViewMut]: crate::Entities
+[AllStoragesViewMut]: crate::AllStorages
+[World]: crate::World
+[View]: crate::View
+[ViewMut]: crate::ViewMut
+[UniqueView]: crate::UniqueView
+[UniqueViewMut]: crate::UniqueViewMut"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: crate::NonSend")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync"),
-        doc = "[NonSendSync]: struct.NonSendSync.html"
+        doc = "[NonSendSync]: crate::NonSendSync"
     )]
     pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
         V::try_borrow(self)
@@ -438,20 +438,20 @@ let world = World::new();
 
 world.run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
 ```
-[AllStorages]: struct.AllStorages.html
-[EntitiesView]: struct.Entities.html
-[EntitiesViewMut]: struct.Entities.html
-[AllStoragesViewMut]: struct.AllStorages.html
-[World]: struct.World.html
-[View]: struct.View.html
-[ViewMut]: struct.ViewMut.html
-[UniqueView]: struct.UniqueView.html
-[UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
-    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+[AllStorages]: crate::AllStorages
+[EntitiesView]: crate::Entities
+[EntitiesViewMut]: crate::Entities
+[AllStoragesViewMut]: crate::AllStorages
+[World]: crate::World
+[View]: crate::View
+[ViewMut]: crate::ViewMut
+[UniqueView]: crate::UniqueView
+[UniqueViewMut]: crate::UniqueViewMut"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: crate::NonSend")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync"),
-        doc = "[NonSendSync]: struct.NonSendSync.html"
+        doc = "[NonSendSync]: crate::NonSendSync"
     )]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
         &'s self,
@@ -562,20 +562,20 @@ world
 
 let i = world.run(sys1).unwrap();
 ```
-[AllStorages]: struct.AllStorages.html
-[EntitiesView]: struct.Entities.html
-[EntitiesViewMut]: struct.Entities.html
-[AllStoragesViewMut]: struct.AllStorages.html
-[World]: struct.World.html
-[View]: struct.View.html
-[ViewMut]: struct.ViewMut.html
-[UniqueView]: struct.UniqueView.html
-[UniqueViewMut]: struct.UniqueViewMut.html"]
-    #[cfg_attr(feature = "non_send", doc = "[NonSend]: struct.NonSend.html")]
-    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: struct.NonSync.html")]
+[AllStorages]: crate::AllStorages
+[EntitiesView]: crate::Entities
+[EntitiesViewMut]: crate::Entities
+[AllStoragesViewMut]: crate::AllStorages
+[World]: crate::World
+[View]: crate::View
+[ViewMut]: crate::ViewMut
+[UniqueView]: crate::UniqueView
+[UniqueViewMut]: crate::UniqueViewMut"]
+    #[cfg_attr(feature = "non_send", doc = "[NonSend]: crate::NonSend")]
+    #[cfg_attr(feature = "non_sync", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(
         all(feature = "non_send", feature = "non_sync"),
-        doc = "[NonSendSync]: struct.NonSendSync.html"
+        doc = "[NonSendSync]: crate::NonSendSync"
     )]
     pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(
         &'s self,

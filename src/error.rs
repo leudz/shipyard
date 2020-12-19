@@ -165,7 +165,7 @@ impl Display for AddComponent {
 
 /// Error type returned by [`WorkloadBuilder::add_to_world`].
 ///
-/// [`WorkloadBuilder::add_to_world`]: ../struct.WorkloadBuilder.html#method.add_to_world
+/// [`WorkloadBuilder::add_to_world`]: crate::WorkloadBuilder::add_to_world()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddWorkload {
     AlreadyExists,
@@ -222,8 +222,8 @@ impl Display for SetDefaultWorkload {
 /// Error returned by [`run_default`] and [`run_workload`].  
 /// The error can be a storage error, problem with the scheduler's borrowing, a non existant workload or a custom error.
 ///
-/// [`run_default`]: ../struct.World.html#method.run_default
-/// [`run_workload`]: ../struct.World.html#method.run_workload
+/// [`run_default`]: crate::World#method::run_default()
+/// [`run_workload`]: crate::World#method::run_workload()
 pub enum RunWorkload {
     Scheduler,
     Run((&'static str, Run)),
@@ -273,8 +273,8 @@ impl Display for RunWorkload {
 /// Error returned by [`World::run`] and [`AllStorages::run`].  
 /// Can refer to an invalid storage borrow or a custom error.
 ///
-/// [`World::run`]: ../struct.World.html#method.run
-/// [`AllStorages::run`]: ../struct.AllStorages.html#method.run
+/// [`World::run`]: crate::World::run()
+/// [`AllStorages::run`]: crate::AllStorages::run()
 pub enum Run {
     GetStorage(GetStorage),
     #[cfg(feature = "std")]
@@ -339,7 +339,7 @@ impl Display for NotUpdatePack {
 
 /// Error when using [`get`] with an entity that does not have any component in the requested storage(s).
 ///
-/// [`get`]: ../trait.Get.html
+/// [`get`]: crate::Get
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MissingComponent {
     pub id: EntityId,
@@ -393,8 +393,8 @@ impl Display for InvalidSystem {
 
 /// Error returned by [`World::remove_unique`] and [`AllStorages::remove_unique`].
 ///
-/// [`World::remove_unique`]: ../struct.World.html#method.remove_unique
-/// [`AllStorages::remove_unique`]: ../struct.AllStorages.html#method.remove_unique
+/// [`World::remove_unique`]: crate::World::remove_unique()
+/// [`AllStorages::remove_unique`]: crate::AllStorages::remove_unique()
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UniqueRemove {
     AllStorages,
@@ -429,8 +429,8 @@ impl Display for UniqueRemove {
 
 /// Error returned by [`apply`] and [`apply_mut`].
 ///
-/// [`apply`]: ../struct.SparseSet.html#method.apply
-/// [`apply_mut`]: ../struct.SparseSet.html#method.apply_mut
+/// [`apply`]: crate::SparseSet::apply()
+/// [`apply_mut`]: crate::SparseSet::apply_mut()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Apply {
     IdenticalIds,

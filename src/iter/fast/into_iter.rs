@@ -45,15 +45,15 @@ pub trait IntoFastIter {
     ///     },
     /// );
     /// ```
-    /// [`iter`]: trait.IntoIter.html
-    /// [`SparseSet::is_update_packed`]: ../struct.SparseSet.html#method.is_update_packed
+    /// [`iter`]: crate::IntoIter
+    /// [`SparseSet::is_update_packed`]: crate::SparseSet::is_update_packed()
     fn fast_iter(self) -> Self::IntoIter;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.  
     /// Panics if one of the storage is update packed.
     ///
     /// [`iter_by`] can be used for update packed storage.
     ///
-    /// [`iter_by`]: trait.IntoIter.html
+    /// [`iter_by`]: crate::IntoIter
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter;
     /// Returns a parallel iterator over `SparseSet`.  
     /// Panics if one of the storage is update packed.
@@ -80,7 +80,7 @@ pub trait IntoFastIter {
     ///     },
     /// );
     /// ```
-    /// [`par_iter`]: trait.IntoIter.html
+    /// [`par_iter`]: crate::IntoIter
     #[cfg(feature = "parallel")]
     fn fast_par_iter(self) -> Self::IntoParIter;
 }

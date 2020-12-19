@@ -18,15 +18,15 @@ use core::ops::Range;
 ///
 /// You can also use [`WorkloadBuilder::new`] or [`WorkloadBuilder::default`].
 ///
-/// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
-/// [`WorkloadBuilder::new`]: struct.WorkloadBuilder.html#method.new
-/// [`WorkloadBuilder::default`]: struct.WorkloadBuilder.html#impl-Default
+/// [`WorkloadBuilder`]: crate::WorkloadBuilder
+/// [`WorkloadBuilder::new`]: crate::WorkloadBuilder::new()
+/// [`WorkloadBuilder::default`]: crate::WorkloadBuilder::default()
 pub struct Workload;
 
 impl Workload {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
-    /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
+    /// [`WorkloadBuilder`]: crate::WorkloadBuilder
     pub fn builder<N: Into<Cow<'static, str>>>(name: N) -> WorkloadBuilder {
         WorkloadBuilder::new(name)
     }
@@ -53,7 +53,7 @@ pub struct WorkloadBuilder {
 impl WorkloadBuilder {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
-    /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
+    /// [`WorkloadBuilder`]: crate::WorkloadBuilder
     ///
     /// ### Example
     /// ```
@@ -142,8 +142,8 @@ impl WorkloadBuilder {
     /// world.run_default();
     /// ```
     ///
-    /// [system]: macro.system.html
-    /// [try_system]: macro.try_system.html
+    /// [system]: crate::system!
+    /// [try_system]: crate::try_system!
     pub fn try_with_system<
         'a,
         B,
@@ -239,8 +239,8 @@ impl WorkloadBuilder {
     /// world.run_default();
     /// ```
     ///
-    /// [system]: macro.system.html
-    /// [try_system]: macro.try_system.html
+    /// [system]: crate::system!
+    /// [try_system]: crate::try_system!
     #[track_caller]
     pub fn with_system<
         'a,
@@ -283,7 +283,7 @@ impl WorkloadBuilder {
     /// - Scheduler borrow failed.
     /// - Workload with an identical name already present.
     ///
-    /// [`World`]: struct.World.html
+    /// [`World`]: crate::World
     pub fn add_to_world(&mut self, world: &World) -> Result<(), error::AddWorkload> {
         self.add_to_world_with_info(world).map(drop)
     }
@@ -299,7 +299,7 @@ impl WorkloadBuilder {
     /// - Scheduler borrow failed.
     /// - Workload with an identical name already present.
     ///
-    /// [`World`]: struct.World.html
+    /// [`World`]: crate::World
     #[allow(clippy::blocks_in_if_conditions)]
     pub fn add_to_world_with_info(
         &mut self,

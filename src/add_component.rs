@@ -20,7 +20,7 @@ pub trait AddComponent {
     /// u32s.add_component_unchecked(entity, 0);
     /// ```
     ///
-    /// [`Entities::add_component`]: https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.add_component
+    /// [`Entities::add_component`]: crate::Entities::add_component()
     fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component);
 }
 
