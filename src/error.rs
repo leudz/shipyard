@@ -135,6 +135,10 @@ impl Display for NewEntity {
     }
 }
 
+/// Retured by [`AllStorages::add_component`] and [`World::add_component`].
+///
+/// [`AllStorages::add_component`]: crate::storage::AllStorages::add_component()
+/// [`World::add_component`]: crate::world::World::add_component()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
     EntityIsNotAlive,
