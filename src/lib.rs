@@ -40,6 +40,7 @@ mod reserve;
 mod sparse_set;
 mod storage;
 mod system;
+#[cfg_attr(test, macro_use)] 
 mod system_macro;
 mod type_id;
 mod unknown_storage;
@@ -77,4 +78,4 @@ pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 pub use world::scheduler::info;
-pub use world::{Workload, WorkloadBuilder, World};
+pub use world::{Workload, WorkloadBuilder, WorkloadSystem, World};

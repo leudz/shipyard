@@ -1,7 +1,7 @@
 mod builder;
 pub mod info;
 
-pub use builder::{Workload, WorkloadBuilder};
+pub use builder::{Workload, WorkloadBuilder, WorkloadSystem};
 
 pub(crate) use info::TypeInfo;
 

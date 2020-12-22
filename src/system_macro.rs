@@ -38,10 +38,10 @@
 #[macro_export]
 macro_rules! system {
     ($function: expr) => {{
-        (
+        $crate::WorkloadSystem::from_system((
             |world: &$crate::World| world.try_run($function).map(drop),
             $function,
-        )
+        ))
     }};
 }
 
@@ -89,13 +89,13 @@ macro_rules! system {
 #[macro_export]
 macro_rules! try_system {
     ($function: expr) => {{
-        (
+        $crate::WorkloadSystem::from_system((
             |world: &$crate::World| {
                 world
                     .try_run($function)?
                     .map_err($crate::error::Run::from_custom)
             },
             $function,
-        )
+        ))
     }};
 }

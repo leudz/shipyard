@@ -52,6 +52,8 @@ pub struct WorkloadSystem {
     borrow_constraints: Vec<TypeInfo>,
 }
 
+pub type SystemResult = Result<WorkloadSystem, error::InvalidSystem>;
+
 impl WorkloadSystem {
     pub fn from_system<
         'a,
@@ -185,7 +187,7 @@ impl WorkloadBuilder {
     /// );
     ///
     /// Workload::builder("Add & Check")
-    ///     .try_with_system((|world: &World| world.try_run(add), add))
+    ///     .try_with_system(system!(add))
     ///     .unwrap()
     ///     .try_with_system(system!(check))
     ///     .unwrap()
@@ -197,17 +199,11 @@ impl WorkloadBuilder {
     ///
     /// [system]: macro.system.html
     /// [try_system]: macro.try_system.html
-    pub fn try_with_system<
-        'a,
-        B,
-        R,
-        F: System<'a, (), B, R>,
-        S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
-    >(
+    pub fn try_with_system(
         &mut self,
-        (system, f): (S, F),
+        system: SystemResult,
     ) -> Result<&mut Self, error::InvalidSystem> {
-        self.systems.push(WorkloadSystem::from_system((system, f))?);
+        self.systems.push(system?);
 
         Ok(self)
     }
@@ -244,7 +240,7 @@ impl WorkloadBuilder {
     /// );
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system((|world: &World| world.try_run(add), add))
+    ///     .with_system(system!(add))
     ///     .with_system(system!(check))
     ///     .add_to_world(&world)
     ///     .unwrap();
@@ -257,16 +253,7 @@ impl WorkloadBuilder {
     #[cfg(feature = "panic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
     #[track_caller]
-    pub fn with_system<
-        'a,
-        B,
-        R,
-        F: System<'a, (), B, R>,
-        S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
-    >(
-        &mut self,
-        system: (S, F),
-    ) -> &mut Self {
+    pub fn with_system(&mut self, system: SystemResult) -> &mut Self {
         match self.try_with_system(system) {
             Ok(s) => s,
             Err(err) => panic!("{:?}", err),
@@ -544,7 +531,7 @@ fn single_immutable() {
     let world = World::new();
 
     Workload::builder("System1")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -571,7 +558,7 @@ fn single_mutable() {
     let world = World::new();
 
     Workload::builder("System1")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -599,9 +586,9 @@ fn multiple_immutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -629,9 +616,9 @@ fn multiple_mutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -659,9 +646,9 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -681,9 +668,9 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -713,14 +700,12 @@ fn append_optimizes_batches() {
 
     let mut group_a = Workload::builder("Group A");
     group_a
-        .try_with_system((|world: &World| world.try_run(system_a1), system_a1))
+        .try_with_system(system!(system_a1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system_a2), system_a2))
+        .try_with_system(system!(system_a2))
         .unwrap();
     let mut group_b = Workload::builder("Group B");
-    group_b
-        .try_with_system((|world: &World| world.try_run(system_b1), system_b1))
-        .unwrap();
+    group_b.try_with_system(system!(system_b1)).unwrap();
 
     Workload::builder("Combined")
         .append(&mut group_a)
@@ -751,7 +736,7 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -771,31 +756,9 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
-        .unwrap()
-        .add_to_world(&world)
-        .unwrap();
-
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
-    assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(
-        scheduler.workloads.get("Systems"),
-        Some(&Batches {
-            parallel: vec![vec![0], vec![1]],
-            sequential: vec![0, 1]
-        })
-    );
-    assert_eq!(scheduler.default, "Systems");
-
-    let world = World::new();
-
-    Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
-        .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -815,9 +778,31 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system2))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 2);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Systems"),
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
+    );
+    assert_eq!(scheduler.default, "Systems");
+
+    let world = World::new();
+
+    Workload::builder("Systems")
+        .try_with_system(system!(system2))
+        .unwrap()
+        .try_with_system(system!(system1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -851,31 +836,9 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .try_with_system(system!(sys1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(sys1), sys1))
-        .unwrap()
-        .add_to_world(&world)
-        .unwrap();
-
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
-    assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(
-        scheduler.workloads.get("Test"),
-        Some(&Batches {
-            parallel: vec![vec![0], vec![1]],
-            sequential: vec![0, 1]
-        })
-    );
-    assert_eq!(scheduler.default, "Test");
-
-    let world = World::new();
-
-    Workload::builder("Test")
-        .try_with_system((|world: &World| world.try_run(sys1), sys1))
-        .unwrap()
-        .try_with_system((|world: &World| world.try_run(sys2), sys2))
+        .try_with_system(system!(sys1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -895,31 +858,9 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system((|world: &World| world.try_run(sys2), sys2))
+        .try_with_system(system!(sys1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(sys1), sys1))
-        .unwrap()
-        .add_to_world(&world)
-        .unwrap();
-
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
-    assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(
-        scheduler.workloads.get("Test"),
-        Some(&Batches {
-            parallel: vec![vec![0], vec![1]],
-            sequential: vec![0, 1]
-        })
-    );
-    assert_eq!(scheduler.default, "Test");
-
-    let world = World::new();
-
-    Workload::builder("Test")
-        .try_with_system((|world: &World| world.try_run(sys1), sys1))
-        .unwrap()
-        .try_with_system((|world: &World| world.try_run(sys3), sys3))
+        .try_with_system(system!(sys2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -939,9 +880,53 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system((|world: &World| world.try_run(sys1), sys1))
+        .try_with_system(system!(sys2))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(sys4), sys4))
+        .try_with_system(system!(sys1))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 2);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
+    );
+    assert_eq!(scheduler.default, "Test");
+
+    let world = World::new();
+
+    Workload::builder("Test")
+        .try_with_system(system!(sys1))
+        .unwrap()
+        .try_with_system(system!(sys3))
+        .unwrap()
+        .add_to_world(&world)
+        .unwrap();
+
+    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    assert_eq!(scheduler.systems.len(), 2);
+    assert_eq!(scheduler.workloads.len(), 1);
+    assert_eq!(
+        scheduler.workloads.get("Test"),
+        Some(&Batches {
+            parallel: vec![vec![0], vec![1]],
+            sequential: vec![0, 1]
+        })
+    );
+    assert_eq!(scheduler.default, "Test");
+
+    let world = World::new();
+
+    Workload::builder("Test")
+        .try_with_system(system!(sys1))
+        .unwrap()
+        .try_with_system(system!(sys4))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -968,14 +953,11 @@ fn fake_borrow() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((
-            |world: &World| world.try_run(|| {}),
-            |_: FakeBorrow<SparseSet<usize>>| {},
-        ))
+        .try_with_system(system!(|_: FakeBorrow<SparseSet<usize>>| {}))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -1003,18 +985,15 @@ fn unique_fake_borrow() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
-        .try_with_system((
-            |world: &World| world.try_run(|| {}),
-            |_: FakeBorrow<Unique<usize>>| {},
-        ))
+        .try_with_system(system!(|_: FakeBorrow<Unique<usize>>| {}))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -1042,9 +1021,9 @@ fn unique_and_non_unique() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system((|world: &World| world.try_run(system1), system1))
+        .try_with_system(system!(system1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(system2), system2))
+        .try_with_system(system!(system2))
         .unwrap()
         .add_to_world(&world)
         .unwrap();
@@ -1096,18 +1075,14 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
 
     let mut group_a = Workload::builder("Group A");
     group_a
-        .try_with_system((|world: &World| world.try_run(sys_a1), sys_a1))
+        .try_with_system(system!(sys_a1))
         .unwrap()
-        .try_with_system((|world: &World| world.try_run(sys_a2), sys_a2))
+        .try_with_system(system!(sys_a2))
         .unwrap();
     let mut group_b = Workload::builder("Group B");
-    group_b
-        .try_with_system((|world: &World| world.try_run(sys_b1), sys_b1))
-        .unwrap();
+    group_b.try_with_system(system!(sys_b1)).unwrap();
     let mut group_c = Workload::builder("Group C");
-    group_c
-        .try_with_system((|world: &World| world.try_run(sys_c1), sys_c1))
-        .unwrap();
+    group_c.try_with_system(system!(sys_c1)).unwrap();
 
     Workload::builder("Combined")
         .append(&mut group_a)
