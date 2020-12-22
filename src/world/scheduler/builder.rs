@@ -36,14 +36,13 @@ impl Workload {
 /// A workload is a collection of systems. They will execute as much in parallel as possible.  
 /// They are evaluated first to last when they can't be parallelized.  
 /// The default workload will automatically be set to the first workload added.
-#[allow(clippy::type_complexity)]
 #[derive(Default)]
 pub struct WorkloadBuilder {
     systems: Vec<WorkloadSystem>,
     name: Cow<'static, str>,
 }
 
-/// Suggestion: Result of system!() to make it easier to read errors from `with_system(system_fn)`
+/// Result of system!() to make it easier to read errors from `with_system(system_fn)`
 pub struct WorkloadSystem {
     system_type_id: TypeId,
     system_type_name: &'static str,
@@ -55,14 +54,15 @@ pub struct WorkloadSystem {
 pub type SystemResult = Result<WorkloadSystem, error::InvalidSystem>;
 
 impl WorkloadSystem {
-    pub fn from_system<
+    pub fn new<
         'a,
         B,
         R,
-        F: System<'a, (), B, R>,
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
+        F: System<'a, (), B, R>,
     >(
-        (system, _): (S, F),
+        system: S,
+        _: F,
     ) -> Result<WorkloadSystem, error::InvalidSystem> {
         let mut borrows = Vec::new();
         F::borrow_info(&mut borrows);
