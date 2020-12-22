@@ -40,7 +40,7 @@ mod reserve;
 mod sparse_set;
 mod storage;
 mod system;
-#[cfg_attr(test, macro_use)] 
+#[cfg_attr(test, macro_use)]
 mod system_macro;
 mod type_id;
 mod unknown_storage;
