@@ -12,7 +12,6 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
-use core::ops::Range;
 
 /// Used to create a [`WorkloadBuilder`].
 ///
@@ -40,14 +39,17 @@ impl Workload {
 #[allow(clippy::type_complexity)]
 #[derive(Default)]
 pub struct WorkloadBuilder {
-    systems: Vec<(
-        TypeId,
-        &'static str,
-        Range<usize>,
-        Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
-    )>,
-    borrow_info: Vec<TypeInfo>,
+    systems: Vec<WorkloadSystem>,
     name: Cow<'static, str>,
+}
+
+/// Suggestion: Result of system!() to make it easier to read errors from `with_system(system_fn)`
+pub struct WorkloadSystem {
+    system_type_id: TypeId,
+    system_type_name: &'static str,
+    system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
+    /// access information
+    borrow_constraints: Vec<TypeInfo>,
 }
 
 impl WorkloadBuilder {
@@ -93,7 +95,6 @@ impl WorkloadBuilder {
     pub fn new<N: Into<Cow<'static, str>>>(name: N) -> Self {
         WorkloadBuilder {
             systems: Vec::new(),
-            borrow_info: Vec::new(),
             name: name.into(),
         }
     }
@@ -154,10 +155,8 @@ impl WorkloadBuilder {
         &mut self,
         (system, _): (S, F),
     ) -> Result<&mut Self, error::InvalidSystem> {
-        let old_len = self.borrow_info.len();
-        F::borrow_info(&mut self.borrow_info);
-
-        let borrows = &self.borrow_info[old_len..];
+        let mut borrows = Vec::new();
+        F::borrow_info(&mut borrows);
 
         if borrows.contains(&TypeInfo {
             name: "",
@@ -189,12 +188,14 @@ impl WorkloadBuilder {
             }
         }
 
-        self.systems.push((
-            TypeId::of::<S>(),
-            type_name::<F>(),
-            old_len..self.borrow_info.len(),
-            Box::new(system),
-        ));
+        let workload_system = WorkloadSystem {
+            borrow_constraints: borrows,
+            system_fn: Box::new(system),
+            system_type_id: TypeId::of::<S>(),
+            system_type_name: type_name::<F>(),
+        };
+
+        self.systems.push(workload_system);
 
         Ok(self)
     }
@@ -262,15 +263,7 @@ impl WorkloadBuilder {
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
     /// This allows us to collect systems in different builders before joining them together.
     pub fn append(&mut self, other: &mut Self) -> &mut Self {
-        let offset_ranges_by = self.borrow_info.len();
-        self.borrow_info.extend(other.borrow_info.drain(..));
-        self.systems.extend(other.systems.drain(..).map(
-            |(type_id, type_name, mut borrow_info_range, system_fn)| {
-                borrow_info_range.start += offset_ranges_by;
-                borrow_info_range.end += offset_ranges_by;
-                (type_id, type_name, borrow_info_range, system_fn)
-            },
-        ));
+        self.systems.extend(other.systems.drain(..));
 
         self
     }
@@ -359,11 +352,16 @@ impl WorkloadBuilder {
                 }
             };
 
-            let (type_id, system_name, _, system) = self.systems.pop().unwrap();
+            let WorkloadSystem {
+                borrow_constraints,
+                system_fn,
+                system_type_id,
+                system_type_name,
+            } = self.systems.pop().unwrap();
 
-            let system_index = *lookup_table.entry(type_id).or_insert_with(|| {
-                systems.push(system);
-                system_names.push(system_name);
+            let system_index = *lookup_table.entry(system_type_id).or_insert_with(|| {
+                systems.push(system_fn);
+                system_names.push(system_type_name);
                 systems.len() - 1
             });
 
@@ -372,9 +370,9 @@ impl WorkloadBuilder {
 
             let batch_info = BatchInfo {
                 systems: vec![SystemInfo {
-                    name: system_name,
-                    type_id,
-                    borrow: core::mem::take(&mut self.borrow_info),
+                    name: system_type_name,
+                    type_id: system_type_id,
+                    borrow: borrow_constraints,
                     conflict: None,
                 }],
             };
@@ -406,27 +404,28 @@ impl WorkloadBuilder {
                 batch_info: vec![],
             };
 
-            for (system_type_id, system_name, info_range, system) in self.systems.drain(..) {
+            for WorkloadSystem {
+                borrow_constraints,
+                system_fn,
+                system_type_id,
+                system_type_name,
+            } in self.systems.drain(..)
+            {
                 let system_index = *lookup_table.entry(system_type_id).or_insert_with(|| {
-                    systems.push(system);
-                    system_names.push(system_name);
+                    systems.push(system_fn);
+                    system_names.push(system_type_name);
                     systems.len() - 1
                 });
 
                 batches.sequential.push(system_index);
 
-                if self.borrow_info[info_range.clone()].iter().fold(
-                    true,
-                    |is_send_sync, type_info| {
+                if borrow_constraints
+                    .iter()
+                    .fold(true, |is_send_sync, type_info| {
                         is_send_sync && type_info.is_send && type_info.is_sync
-                    },
-                ) {
-                    let mut system_info = SystemInfo {
-                        name: system_name,
-                        type_id: system_type_id,
-                        borrow: self.borrow_info[info_range.clone()].to_vec(),
-                        conflict: None,
-                    };
+                    })
+                {
+                    let mut conflict: Option<Conflict> = None;
 
                     let mut valid = batches.parallel.len();
 
@@ -434,7 +433,7 @@ impl WorkloadBuilder {
                     {
                         for system in &batch_info.systems {
                             for system_type_info in system.borrow.iter() {
-                                for type_info in &self.borrow_info[info_range.clone()] {
+                                for type_info in borrow_constraints.iter() {
                                     match type_info.mutability {
                                         Mutability::Exclusive => {
                                             if type_info.storage_id == system_type_info.storage_id
@@ -443,7 +442,7 @@ impl WorkloadBuilder {
                                                 || system_type_info.storage_id
                                                     == TypeId::of::<AllStorages>()
                                             {
-                                                system_info.conflict = Some(Conflict::Borrow {
+                                                conflict = Some(Conflict::Borrow {
                                                     type_info: type_info.clone(),
                                                     system: SystemId {
                                                         name: system.name,
@@ -463,7 +462,7 @@ impl WorkloadBuilder {
                                                 || system_type_info.storage_id
                                                     == TypeId::of::<AllStorages>()
                                             {
-                                                system_info.conflict = Some(Conflict::Borrow {
+                                                conflict = Some(Conflict::Borrow {
                                                     type_info: type_info.clone(),
                                                     system: SystemId {
                                                         name: system.name,
@@ -482,6 +481,13 @@ impl WorkloadBuilder {
                         valid = i;
                     }
 
+                    let system_info = SystemInfo {
+                        name: system_type_name,
+                        type_id: system_type_id,
+                        borrow: borrow_constraints,
+                        conflict,
+                    };
+
                     if valid < batches.parallel.len() {
                         batches.parallel[valid].push(system_index);
                         workload_info.batch_info[valid].systems.push(system_info);
@@ -493,7 +499,7 @@ impl WorkloadBuilder {
                     }
                 } else {
                     let system_info = SystemInfo {
-                        name: system_name,
+                        name: system_type_name,
                         type_id: system_type_id,
                         borrow: vec![TypeInfo {
                             name: type_name::<AllStorages>(),
