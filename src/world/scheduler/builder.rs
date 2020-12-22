@@ -52,6 +52,58 @@ pub struct WorkloadSystem {
     borrow_constraints: Vec<TypeInfo>,
 }
 
+impl WorkloadSystem {
+    pub fn from_system<
+        'a,
+        B,
+        R,
+        F: System<'a, (), B, R>,
+        S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
+    >(
+        (system, _): (S, F),
+    ) -> Result<WorkloadSystem, error::InvalidSystem> {
+        let mut borrows = Vec::new();
+        F::borrow_info(&mut borrows);
+
+        if borrows.contains(&TypeInfo {
+            name: "",
+            storage_id: StorageId::of::<AllStorages>(),
+            mutability: Mutability::Exclusive,
+            is_send: true,
+            is_sync: true,
+        }) && borrows.len() > 1
+        {
+            return Err(error::InvalidSystem::AllStorages);
+        }
+
+        let mid = borrows.len() / 2 + (borrows.len() % 2 != 0) as usize;
+
+        for a_type_info in &borrows[..mid] {
+            for b_type_info in &borrows[mid..] {
+                if a_type_info.storage_id == b_type_info.storage_id {
+                    match (a_type_info.mutability, b_type_info.mutability) {
+                        (Mutability::Exclusive, Mutability::Exclusive) => {
+                            return Err(error::InvalidSystem::MultipleViewsMut)
+                        }
+                        (Mutability::Exclusive, Mutability::Shared)
+                        | (Mutability::Shared, Mutability::Exclusive) => {
+                            return Err(error::InvalidSystem::MultipleViews)
+                        }
+                        (Mutability::Shared, Mutability::Shared) => {}
+                    }
+                }
+            }
+        }
+
+        Ok(WorkloadSystem {
+            borrow_constraints: borrows,
+            system_fn: Box::new(system),
+            system_type_id: TypeId::of::<S>(),
+            system_type_name: type_name::<F>(),
+        })
+    }
+}
+
 impl WorkloadBuilder {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
@@ -153,49 +205,9 @@ impl WorkloadBuilder {
         S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
     >(
         &mut self,
-        (system, _): (S, F),
+        (system, f): (S, F),
     ) -> Result<&mut Self, error::InvalidSystem> {
-        let mut borrows = Vec::new();
-        F::borrow_info(&mut borrows);
-
-        if borrows.contains(&TypeInfo {
-            name: "",
-            storage_id: StorageId::of::<AllStorages>(),
-            mutability: Mutability::Exclusive,
-            is_send: true,
-            is_sync: true,
-        }) && borrows.len() > 1
-        {
-            return Err(error::InvalidSystem::AllStorages);
-        }
-
-        let mid = borrows.len() / 2 + (borrows.len() % 2 != 0) as usize;
-
-        for a_type_info in &borrows[..mid] {
-            for b_type_info in &borrows[mid..] {
-                if a_type_info.storage_id == b_type_info.storage_id {
-                    match (a_type_info.mutability, b_type_info.mutability) {
-                        (Mutability::Exclusive, Mutability::Exclusive) => {
-                            return Err(error::InvalidSystem::MultipleViewsMut)
-                        }
-                        (Mutability::Exclusive, Mutability::Shared)
-                        | (Mutability::Shared, Mutability::Exclusive) => {
-                            return Err(error::InvalidSystem::MultipleViews)
-                        }
-                        (Mutability::Shared, Mutability::Shared) => {}
-                    }
-                }
-            }
-        }
-
-        let workload_system = WorkloadSystem {
-            borrow_constraints: borrows,
-            system_fn: Box::new(system),
-            system_type_id: TypeId::of::<S>(),
-            system_type_name: type_name::<F>(),
-        };
-
-        self.systems.push(workload_system);
+        self.systems.push(WorkloadSystem::from_system((system, f))?);
 
         Ok(self)
     }
