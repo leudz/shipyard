@@ -27,6 +27,7 @@ non_sync = ["std"]
 parallel = ["rayon", "std"]
 serde1 = ["serde"]
 std = []
+wasm = ["parking_lot/wasm-bindgen"]
 
 [dev-dependencies]
 serde_json = "^1"
