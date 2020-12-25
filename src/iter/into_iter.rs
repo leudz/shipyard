@@ -5,8 +5,8 @@ use super::mixed::Mixed;
 #[cfg(feature = "parallel")]
 use super::par_iter::ParIter;
 use super::tight::Tight;
+use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::storage::EntityId;
 use crate::type_id::TypeId;
 use core::ptr;
 

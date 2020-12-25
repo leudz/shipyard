@@ -16,14 +16,18 @@ pub use non_send_sync::NonSendSync;
 #[cfg(feature = "non_sync")]
 pub use non_sync::NonSync;
 
+use crate::all_storages::AllStorages;
 use crate::atomic_refcell::Ref;
+use crate::entities::Entities;
 use crate::error;
+use crate::scheduler::TypeInfo;
 use crate::sparse_set::SparseSet;
-use crate::storage::{AllStorages, Entities, StorageId, Unique};
+use crate::storage::StorageId;
+use crate::unique::Unique;
 use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
-use crate::world::{TypeInfo, World};
+use crate::world::World;
 use alloc::vec::Vec;
 use core::any::type_name;
 

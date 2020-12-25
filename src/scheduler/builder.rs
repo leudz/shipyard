@@ -1,8 +1,9 @@
 use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
 use super::{Batches, Scheduler};
+use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::error;
-use crate::storage::{AllStorages, StorageId};
+use crate::storage::StorageId;
 use crate::system::System;
 use crate::type_id::TypeId;
 use crate::world::World;

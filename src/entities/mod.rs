@@ -1,11 +1,10 @@
-mod entity_id;
 mod iterator;
 
-pub use entity_id::EntityId;
 pub use iterator::EntitiesIter;
 
 use crate::add_component::AddComponent;
 use crate::add_entity::AddEntity;
+use crate::entity_id::EntityId;
 use crate::error;
 use crate::reserve::{BulkEntityIter, BulkReserve};
 use crate::unknown_storage::UnknownStorage;

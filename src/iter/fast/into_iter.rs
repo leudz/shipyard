@@ -4,10 +4,10 @@ use super::mixed::FastMixed;
 #[cfg(feature = "parallel")]
 use super::par_iter::FastParIter;
 use super::tight::FastTight;
+use crate::entity_id::EntityId;
 use crate::iter::abstract_mut::AbstractMut;
 use crate::iter::into_abstract::IntoAbstract;
 use crate::sparse_set::SparseSet;
-use crate::storage::EntityId;
 use crate::type_id::TypeId;
 use core::ptr;
 

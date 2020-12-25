@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 use crate::ViewMut;
 
 /// Defines how components are added to an existing entity.

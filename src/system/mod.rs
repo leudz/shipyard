@@ -4,7 +4,7 @@ pub use all_storages::AllSystem;
 
 use crate::borrow::Borrow;
 use crate::error;
-use crate::world::TypeInfo;
+use crate::scheduler::TypeInfo;
 use crate::world::World;
 use alloc::vec::Vec;
 

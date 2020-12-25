@@ -2,7 +2,7 @@ use super::abstract_mut::AbstractMut;
 use super::mixed::Mixed;
 use super::tight::Tight;
 use super::with_id::LastId;
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 
 pub enum Iter<Storage> {
     Tight(Tight<Storage>),

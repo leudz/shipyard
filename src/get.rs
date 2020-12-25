@@ -1,7 +1,7 @@
+use crate::entity_id::EntityId;
 use crate::error;
 use crate::r#mut::Mut;
 use crate::sparse_set::SparseSet;
-use crate::storage::EntityId;
 use crate::view::{View, ViewMut};
 use core::any::type_name;
 

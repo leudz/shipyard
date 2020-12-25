@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 
 pub struct Mut<'a, T> {
     pub(crate) flag: Option<&'a mut EntityId>,

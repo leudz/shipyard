@@ -1,6 +1,6 @@
 use super::abstract_mut::AbstractMut;
 use super::with_id::LastId;
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 

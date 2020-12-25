@@ -1,5 +1,7 @@
+use crate::all_storages::AllStorages;
+use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::storage::{AllStorages, EntityId, StorageId};
+use crate::storage::StorageId;
 
 pub trait AddComponent {
     fn add_component(self, all_storages: &mut AllStorages, entity: EntityId);

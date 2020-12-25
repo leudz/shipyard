@@ -15,8 +15,8 @@ pub(crate) use remove::Remove;
 pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
 
-use crate::storage::AllStorages;
-use crate::storage::EntityId;
+use crate::all_storages::AllStorages;
+use crate::entity_id::EntityId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
 

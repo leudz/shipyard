@@ -1,7 +1,7 @@
 use super::Nothing;
+use crate::all_storages::AllStorages;
 use crate::borrow::AllStoragesBorrow;
 use crate::error;
-use crate::storage::AllStorages;
 
 pub trait AllSystem<'s, Data, B, R> {
     fn run(self, data: Data, b: B) -> R;

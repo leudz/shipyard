@@ -4,12 +4,15 @@ mod retain;
 pub use delete_any::{CustomDeleteAny, DeleteAny};
 pub use retain::Retain;
 
-use super::{Entities, EntityId, Storage, StorageId, Unique};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::AllStoragesBorrow;
+use crate::entities::Entities;
+use crate::entity_id::EntityId;
 use crate::error;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
+use crate::storage::{Storage, StorageId};
+use crate::unique::Unique;
 use crate::unknown_storage::UnknownStorage;
 use core::any::type_name;
 use core::cell::UnsafeCell;

@@ -1,23 +1,19 @@
-pub mod scheduler;
-
-pub use scheduler::{Workload, WorkloadBuilder};
-
-pub(crate) use scheduler::TypeInfo;
-
+use crate::all_storages::{AllStorages, DeleteAny, Retain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::Borrow;
+use crate::entity_id::EntityId;
 use crate::error;
 use crate::reserve::BulkEntityIter;
+use crate::scheduler::{Batches, Scheduler};
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
-use crate::storage::{AllStorages, DeleteAny, EntityId, Retain, StorageId};
+use crate::storage::StorageId;
 use crate::unknown_storage::UnknownStorage;
 use alloc::borrow::Cow;
-use scheduler::{Batches, Scheduler};
 
 /// `World` contains all data this library will manipulate.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
-    scheduler: AtomicRefCell<Scheduler>,
+    pub(crate) scheduler: AtomicRefCell<Scheduler>,
 }
 
 impl Default for World {

@@ -30,6 +30,7 @@ command = "cargo"
 args = ["fmt"]
 
 [tasks.doc]
+env = { "RUSTFLAGS" = "-D warnings" }
 command = "cargo"
 args = ["doc", "--all-features", "--no-deps"]
 

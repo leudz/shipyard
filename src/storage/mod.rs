@@ -1,12 +1,6 @@
-mod all;
-mod entity;
 mod storage_id;
-mod unique;
 
-pub use all::{AllStorages, CustomDeleteAny, DeleteAny, Retain};
-pub use entity::{Entities, EntitiesIter, EntityId};
 pub use storage_id::StorageId;
-pub use unique::Unique;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
@@ -18,7 +12,7 @@ use std::thread::ThreadId;
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.  
 /// and box the `AtomicRefCell` so it doesn't move when the `HashMap` reallocates
-pub(crate) struct Storage(*mut AtomicRefCell<dyn UnknownStorage>);
+pub(crate) struct Storage(pub(crate) *mut AtomicRefCell<dyn UnknownStorage>);
 
 #[cfg(not(feature = "non_send"))]
 unsafe impl Send for Storage {}
@@ -35,43 +29,49 @@ impl Drop for Storage {
 
 impl Storage {
     #[inline]
-    fn new<T: UnknownStorage + Send + Sync + 'static>(value: T) -> Self {
+    pub(crate) fn new<T: UnknownStorage + Send + Sync + 'static>(value: T) -> Self {
         Storage(Box::into_raw(Box::new(AtomicRefCell::new(value))))
     }
     #[cfg(feature = "non_send")]
     #[inline]
-    fn new_non_send<T: UnknownStorage + Sync + 'static>(value: T, thread_id: ThreadId) -> Self {
+    pub(crate) fn new_non_send<T: UnknownStorage + Sync + 'static>(
+        value: T,
+        thread_id: ThreadId,
+    ) -> Self {
         Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_send(
             value, thread_id,
         ))))
     }
     #[cfg(feature = "non_sync")]
     #[inline]
-    fn new_non_sync<T: UnknownStorage + Send + 'static>(value: T) -> Self {
+    pub(crate) fn new_non_sync<T: UnknownStorage + Send + 'static>(value: T) -> Self {
         Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_sync(value))))
     }
     #[cfg(all(feature = "non_send", feature = "non_sync"))]
     #[inline]
-    fn new_non_send_sync<T: UnknownStorage + 'static>(value: T, thread_id: ThreadId) -> Self {
+    pub(crate) fn new_non_send_sync<T: UnknownStorage + 'static>(
+        value: T,
+        thread_id: ThreadId,
+    ) -> Self {
         Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_send_sync(
             value, thread_id,
         ))))
     }
     #[inline]
-    fn get<T: 'static>(&self) -> Result<Ref<'_, &T>, error::Borrow> {
+    pub(crate) fn get<T: 'static>(&self) -> Result<Ref<'_, &T>, error::Borrow> {
         Ok(Ref::map(unsafe { &*self.0 }.try_borrow()?, |storage| {
             storage.any().downcast_ref::<T>().unwrap()
         }))
     }
     #[inline]
-    fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &mut T>, error::Borrow> {
+    pub(crate) fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &mut T>, error::Borrow> {
         Ok(RefMut::map(
             unsafe { &*self.0 }.try_borrow_mut()?,
             |storage| storage.any_mut().downcast_mut().unwrap(),
         ))
     }
     #[inline]
-    fn get_mut_exclusive<T: 'static>(&mut self) -> &mut T {
+    pub(crate) fn get_mut_exclusive<T: 'static>(&mut self) -> &mut T {
         // SAFE this is not `AllStorages`
         unsafe { (&mut *self.0).get_mut() }
             .any_mut()
@@ -82,6 +82,7 @@ impl Storage {
 
 #[test]
 fn delete() {
+    use crate::entity_id::EntityId;
     use crate::sparse_set::SparseSet;
 
     let storage = Storage(Box::into_raw(Box::new(AtomicRefCell::new(SparseSet::<

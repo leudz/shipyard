@@ -1,5 +1,5 @@
-use crate::storage::AllStorages;
-use crate::storage::EntityId;
+use crate::all_storages::AllStorages;
+use crate::entity_id::EntityId;
 use core::any::Any;
 
 pub trait SizedAny {

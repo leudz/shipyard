@@ -1,5 +1,5 @@
+use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::storage::EntityId;
 use hashbrown::hash_set::HashSet;
 
 /// Trait used as a bound for AllStorages::delete_any.

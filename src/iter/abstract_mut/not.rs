@@ -1,7 +1,7 @@
 use super::AbstractMut;
+use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
-use crate::storage::EntityId;
 
 impl<'w, T> AbstractMut for Not<&'w SparseSet<T>> {
     type Out = ();

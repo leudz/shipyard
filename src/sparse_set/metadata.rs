@@ -1,6 +1,7 @@
 use super::SparseSet;
+use crate::all_storages::AllStorages;
+use crate::entity_id::EntityId;
 use crate::sparse_set::SparseArray;
-use crate::storage::{AllStorages, EntityId};
 use alloc::vec::Vec;
 
 pub struct Metadata<T> {

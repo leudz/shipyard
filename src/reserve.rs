@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 use crate::ViewMut;
 use core::iter::{Copied, DoubleEndedIterator, ExactSizeIterator, FusedIterator, Iterator};
 use core::slice::Iter;

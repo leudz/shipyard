@@ -1,6 +1,6 @@
+use crate::all_storages::AllStorages;
 use crate::error;
 use crate::sparse_set::SparseSet;
-use crate::storage::AllStorages;
 use crate::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 #[cfg(feature = "non_send")]
 use crate::NonSend;
