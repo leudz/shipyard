@@ -22,7 +22,7 @@ fn basic() {
     assert_eq!(i16s.modified().iter().count(), 0);
     assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
-    u32s.clear_inserted();
+    u32s.clear_all_inserted();
 
     assert_eq!(u32s.inserted().iter().count(), 0);
     assert_eq!(u32s.modified().iter().count(), 0);
@@ -67,7 +67,7 @@ fn basic() {
     assert_eq!(u32s.modified().iter().count(), 1);
     assert_eq!(u32s.inserted_or_modified().iter().count(), 2);
 
-    u32s.clear_modified();
+    u32s.clear_all_modified();
 
     if let iter::Iter::Tight(mut iter) = (&i16s).iter() {
         assert_eq!(iter.size_hint(), (4, Some(4)));
@@ -136,7 +136,7 @@ fn basic() {
     assert_eq!(i16s.modified().iter().count(), 0);
     assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
-    u32s.clear_modified();
+    u32s.clear_all_modified();
 
     if let iter::Iter::Mixed(mut iter) = (&i16s, &u32s).iter() {
         assert_eq!(iter.size_hint(), (0, Some(4)));

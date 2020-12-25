@@ -258,6 +258,33 @@ impl<T> SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
+    #[inline]
+    pub fn is_inserted(&self, entity: EntityId) -> bool {
+        if let Some(id) = self.sparse.get(entity) {
+            unsafe { self.dense.get_unchecked(id.uindex()).is_inserted() }
+        } else {
+            false
+        }
+    }
+    #[inline]
+    pub fn is_modified(&self, entity: EntityId) -> bool {
+        if let Some(id) = self.sparse.get(entity) {
+            unsafe { self.dense.get_unchecked(id.uindex()).is_modified() }
+        } else {
+            false
+        }
+    }
+    #[inline]
+    pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
+        if let Some(id) = self.sparse.get(entity) {
+            unsafe {
+                let id = self.dense.get_unchecked(id.uindex());
+                id.is_inserted() || id.is_modified()
+            }
+        } else {
+            false
+        }
+    }
     /// Returns the *deleted* components of an update packed storage.  
     /// Unwraps errors.
     ///
@@ -354,6 +381,21 @@ impl<T> SparseSet<T> {
     pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
         (self.take_removed(), self.take_deleted())
     }
+    #[track_caller]
+    #[inline]
+    pub fn clear_inserted(&mut self, entity: EntityId) {
+        if self.metadata.update.is_some() {
+            if let Some(id) = self.sparse.get(entity) {
+                let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
+
+                if id.is_inserted() {
+                    id.clear_meta();
+                }
+            }
+        } else {
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+        }
+    }
     /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.  
     /// Unwraps errors.
     ///
@@ -361,11 +403,25 @@ impl<T> SparseSet<T> {
     ///
     /// - Storage isn't update packed.
     #[track_caller]
-    #[inline]
-    pub fn clear_inserted(&mut self) {
+    pub fn clear_all_inserted(&mut self) {
         if self.metadata.update.is_some() {
             for id in &mut *self.dense {
                 if id.is_inserted() {
+                    id.clear_meta();
+                }
+            }
+        } else {
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+        }
+    }
+    #[track_caller]
+    #[inline]
+    pub fn clear_modified(&mut self, entity: EntityId) {
+        if self.metadata.update.is_some() {
+            if let Some(id) = self.sparse.get(entity) {
+                let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
+
+                if id.is_modified() {
                     id.clear_meta();
                 }
             }
@@ -380,12 +436,24 @@ impl<T> SparseSet<T> {
     ///
     /// - Storage isn't update packed.
     #[track_caller]
-    #[inline]
-    pub fn clear_modified(&mut self) {
+    pub fn clear_all_modified(&mut self) {
         if self.metadata.update.is_some() {
             for id in &mut *self.dense {
                 if id.is_modified() {
                     id.clear_meta();
+                }
+            }
+        } else {
+            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+        }
+    }
+    #[track_caller]
+    #[inline]
+    pub fn clear_inserted_and_modified(&mut self, entity: EntityId) {
+        if self.metadata.update.is_some() {
+            if let Some(id) = self.sparse.get(entity) {
+                unsafe {
+                    self.dense.get_unchecked_mut(id.uindex()).clear_meta();
                 }
             }
         } else {
@@ -399,8 +467,7 @@ impl<T> SparseSet<T> {
     ///
     /// - Storage isn't update packed.
     #[track_caller]
-    #[inline]
-    pub fn clear_inserted_and_modified(&mut self) {
+    pub fn clear_all_inserted_and_modified(&mut self) {
         if self.metadata.update.is_some() {
             for id in &mut *self.dense {
                 id.clear_meta();

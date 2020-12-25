@@ -38,7 +38,7 @@ fn cleared_update() {
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
-    usizes.clear_inserted_and_modified();
+    usizes.clear_all_inserted_and_modified();
     assert_eq!(usizes.inserted().iter().count(), 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -52,7 +52,7 @@ fn modified_update() {
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
-    usizes.clear_inserted_and_modified();
+    usizes.clear_all_inserted_and_modified();
     usizes[entity1] = 3;
     let entity2 = entities.add_entity(&mut usizes, 2);
     assert_eq!(usizes.inserted().iter().count(), 1);

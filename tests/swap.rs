@@ -27,7 +27,7 @@ fn update() {
 
             let entity0 = entities.add_entity(&mut u32s, 0);
 
-            u32s.clear_inserted();
+            u32s.clear_all_inserted();
 
             let entity1 = entities.add_entity(&mut u32s, 1);
 

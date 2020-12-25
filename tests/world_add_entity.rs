@@ -34,7 +34,7 @@ fn cleared_update() {
 
     world
         .run(|mut usizes: ViewMut<usize>| {
-            usizes.clear_inserted_and_modified();
+            usizes.clear_all_inserted_and_modified();
             assert_eq!(usizes.inserted().iter().count(), 0);
         })
         .unwrap();
@@ -60,7 +60,7 @@ fn modified_update() {
 
     world
         .run(|mut usizes: ViewMut<usize>| {
-            usizes.clear_inserted_and_modified();
+            usizes.clear_all_inserted_and_modified();
             usizes[entity1] = 3;
         })
         .unwrap();

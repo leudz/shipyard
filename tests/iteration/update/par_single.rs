@@ -13,7 +13,7 @@ fn filter() {
     entities.add_entity(&mut u32s, 3);
     entities.add_entity(&mut u32s, 4);
     entities.add_entity(&mut u32s, 5);
-    u32s.clear_inserted();
+    u32s.clear_all_inserted();
 
     let im_vec;
     let m_vec;

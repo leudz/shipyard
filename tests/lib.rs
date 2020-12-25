@@ -293,7 +293,7 @@ fn par_update_pack() {
                 entities.add_entity(&mut usizes, 2);
                 entities.add_entity(&mut usizes, 3);
 
-                usizes.clear_inserted();
+                usizes.clear_all_inserted();
 
                 (&usizes).par_iter().sum::<usize>();
 
@@ -340,7 +340,7 @@ fn par_multiple_update_pack() {
                 entities.add_entity((&mut usizes, &mut u32s), (8usize, 9u32));
                 entities.add_entity((&mut usizes,), (10usize,));
 
-                u32s.clear_inserted();
+                u32s.clear_all_inserted();
             },
         )
         .unwrap();
@@ -403,7 +403,7 @@ fn par_update_filter() {
                 entities.add_entity(&mut usizes, 2);
                 entities.add_entity(&mut usizes, 3);
 
-                usizes.clear_inserted();
+                usizes.clear_all_inserted();
 
                 (&mut usizes)
                     .par_iter()
