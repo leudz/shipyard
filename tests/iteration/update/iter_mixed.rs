@@ -175,3 +175,131 @@ fn basic() {
     assert_eq!(i16s.modified().iter().count(), 0);
     assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 }
+
+#[test]
+fn not_inserted() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut i16s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+
+    u32s.update_pack();
+
+    entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+
+    u32s.clear_all_inserted();
+
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+
+    let mut iter = (!u32s.inserted()).iter();
+
+    assert_eq!(iter.next(), Some(&0));
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (!i16s.inserted()).iter();
+
+    assert_eq!(iter.next(), Some(&10));
+    assert_eq!(iter.next(), Some(&12));
+    assert_eq!(iter.next(), Some(&13));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&u32s, !i16s.inserted()).iter();
+
+    assert_eq!(iter.next(), Some((&0, &10)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (!u32s.inserted(), &i16s).iter();
+
+    assert_eq!(iter.next(), Some((&0, &10)));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn not_modified() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut i16s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+
+    let e0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    let e1 = entities.add_entity(&mut u32s, 1);
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+
+    u32s.update_pack();
+
+    u32s[e0] += 100;
+    u32s[e1] += 100;
+
+    let mut iter = (!u32s.modified()).iter();
+
+    assert_eq!(iter.next(), Some(&2));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (!i16s.modified()).iter();
+
+    assert_eq!(iter.next(), Some(&10));
+    assert_eq!(iter.next(), Some(&12));
+    assert_eq!(iter.next(), Some(&13));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&u32s, !i16s.modified()).iter();
+
+    assert_eq!(iter.next(), Some((&100, &10)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (!u32s.modified(), &i16s).iter();
+
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), None);
+}
+
+#[test]
+fn not_inserted_or_modified() {
+    let world = World::new();
+
+    let (mut entities, mut u32s, mut i16s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .unwrap();
+
+    u32s.update_pack();
+
+    let e0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
+    entities.add_entity(&mut u32s, 1);
+
+    u32s.clear_all_inserted();
+
+    u32s[e0] += 100;
+
+    entities.add_entity((&mut u32s, &mut i16s), (2, 12));
+    entities.add_entity(&mut i16s, 13);
+
+    let mut iter = (!u32s.inserted_or_modified()).iter();
+
+    assert_eq!(iter.next(), Some(&1));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (!i16s.inserted_or_modified()).iter();
+
+    assert_eq!(iter.next(), Some(&10));
+    assert_eq!(iter.next(), Some(&12));
+    assert_eq!(iter.next(), Some(&13));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (&u32s, !i16s.inserted_or_modified()).iter();
+
+    assert_eq!(iter.next(), Some((&100, &10)));
+    assert_eq!(iter.next(), Some((&2, &12)));
+    assert_eq!(iter.next(), None);
+
+    let mut iter = (!u32s.inserted_or_modified(), &i16s).iter();
+
+    assert_eq!(iter.next(), None);
+}

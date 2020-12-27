@@ -1,10 +1,11 @@
 use super::AbstractMut;
 use crate::entity_id::EntityId;
+use crate::not::Not;
 use crate::pack::update::Inserted;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
 
-impl<'tmp, T> AbstractMut for Inserted<&'tmp SparseSet<T>> {
+impl<'tmp, T> AbstractMut for Not<Inserted<&'tmp SparseSet<T>>> {
     type Out = &'tmp T;
     type Index = usize;
 
@@ -18,8 +19,8 @@ impl<'tmp, T> AbstractMut for Inserted<&'tmp SparseSet<T>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0.index_of(entity_id) {
-            if unsafe { (*self.0.dense.get_unchecked(index)).is_inserted() } {
+        if let Some(index) = self.0 .0.index_of(entity_id) {
+            if unsafe { !(*self.0 .0.dense.get_unchecked(index)).is_inserted() } {
                 Some(index)
             } else {
                 None
@@ -43,7 +44,7 @@ impl<'tmp, T> AbstractMut for Inserted<&'tmp SparseSet<T>> {
     }
 }
 
-impl<'tmp, T> AbstractMut for Inserted<FullRawWindowMut<'tmp, T>> {
+impl<'tmp, T> AbstractMut for Not<Inserted<FullRawWindowMut<'tmp, T>>> {
     type Out = Mut<'tmp, T>;
     type Index = usize;
 
@@ -57,8 +58,8 @@ impl<'tmp, T> AbstractMut for Inserted<FullRawWindowMut<'tmp, T>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0.index_of(entity_id) {
-            if unsafe { (*self.0.dense.add(index)).is_inserted() } {
+        if let Some(index) = self.0 .0.index_of(entity_id) {
+            if unsafe { !(*self.0 .0.dense.add(index)).is_inserted() } {
                 Some(index)
             } else {
                 None
