@@ -752,7 +752,8 @@ impl World {
     }
     /// Adds components to an existing entity.  
     /// If the entity already owned a component it will be replaced.  
-    /// `component` must always be a tuple, even for a single component.
+    /// `component` must always be a tuple, even for a single component.  
+    /// Unwraps errors.
     ///
     /// ### Errors
     ///
@@ -768,16 +769,13 @@ impl World {
     /// // make an empty entity
     /// let entity = world.add_entity(());
     ///
-    /// world.add_component(entity, (0u32,)).unwrap();
+    /// world.add_component(entity, (0u32,));
     /// // entity already had a `u32` component so it will be replaced
-    /// world.add_component(entity, (1u32, 11usize)).unwrap();
+    /// world.add_component(entity, (1u32, 11usize));
     /// ```
+    #[track_caller]
     #[inline]
-    pub fn add_component<C: AddComponent>(
-        &mut self,
-        entity: EntityId,
-        component: C,
-    ) -> Result<(), error::AddComponent> {
+    pub fn add_component<C: AddComponent>(&mut self, entity: EntityId, component: C) {
         self.all_storages.get_mut().add_component(entity, component)
     }
     /// Removes components from an entity.  

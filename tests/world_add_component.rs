@@ -10,9 +10,9 @@ fn no_pack() {
     let entity10 = world.add_entity(());
     let entity20 = world.add_entity(());
 
-    world.add_component(entity10, (10usize, 30u32)).unwrap();
-    world.add_component(entity20, (20usize,)).unwrap();
-    world.add_component(entity20, (50u32,)).unwrap();
+    world.add_component(entity10, (10usize, 30u32));
+    world.add_component(entity20, (20usize,));
+    world.add_component(entity20, (50u32,));
 
     let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
 
@@ -35,7 +35,7 @@ fn update() {
 
     let entity = world.add_entity(());
 
-    world.add_component(entity, (1usize,)).unwrap();
+    world.add_component(entity, (1usize,));
 
     world
         .run(|usizes: View<usize>| {
@@ -45,7 +45,7 @@ fn update() {
         })
         .unwrap();
 
-    world.add_component(entity, (2usize,)).unwrap();
+    world.add_component(entity, (2usize,));
 
     world
         .run(|mut usizes: ViewMut<usize>| {
@@ -59,7 +59,7 @@ fn update() {
         })
         .unwrap();
 
-    world.add_component(entity, (4usize,)).unwrap();
+    world.add_component(entity, (4usize,));
 
     world
         .run(|mut usizes: ViewMut<usize>| {
@@ -71,7 +71,7 @@ fn update() {
         })
         .unwrap();
 
-    world.add_component(entity, (5usize,)).unwrap();
+    world.add_component(entity, (5usize,));
 
     world
         .run(|usizes: View<usize>| {
@@ -83,12 +83,13 @@ fn update() {
 }
 
 #[test]
+#[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn dead_entity() {
     let mut world = World::new();
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
-    assert!(world.add_component(entity, (1u32,)).is_err());
+    world.add_component(entity, (1u32,));
 
     let u32s = world.borrow::<View<u32>>().unwrap();
     assert!(u32s.get(entity).is_err());

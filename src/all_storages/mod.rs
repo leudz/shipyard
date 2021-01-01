@@ -450,7 +450,8 @@ impl AllStorages {
     }
     /// Adds components to an existing entity.  
     /// If the entity already owned a component it will be replaced.  
-    /// `component` must always be a tuple, even for a single component.
+    /// `component` must always be a tuple, even for a single component.  
+    /// Unwraps errors.
     ///
     /// ### Errors
     ///
@@ -467,26 +468,21 @@ impl AllStorages {
     /// // make an empty entity
     /// let entity = all_storages.add_entity(());
     ///
-    /// all_storages.add_component(entity, (0u32,)).unwrap();
+    /// all_storages.add_component(entity, (0u32,));
     /// // entity already had a `u32` component so it will be replaced
-    /// all_storages.add_component(entity, (1u32, 11usize)).unwrap();
+    /// all_storages.add_component(entity, (1u32, 11usize));
     /// ```
+    #[track_caller]
     #[inline]
-    pub fn add_component<T: AddComponent>(
-        &mut self,
-        entity: EntityId,
-        component: T,
-    ) -> Result<(), error::AddComponent> {
+    pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
         if self
             .exclusive_storage_mut::<Entities>()
             .unwrap()
             .is_alive(entity)
         {
             component.add_component(self, entity);
-
-            Ok(())
         } else {
-            Err(error::AddComponent::EntityIsNotAlive)
+            panic!("{:?}", error::AddComponent::EntityIsNotAlive);
         }
     }
     /// Removes components from an entity.  
