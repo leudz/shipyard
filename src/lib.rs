@@ -78,4 +78,4 @@ pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 pub use world::scheduler::info;
-pub use world::{Workload, WorkloadBuilder, WorkloadSystem, SystemResult, World};
+pub use world::{SystemResult, Workload, WorkloadBuilder, WorkloadSystem, World};
