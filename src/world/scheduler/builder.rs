@@ -42,7 +42,26 @@ pub struct WorkloadBuilder {
     name: Cow<'static, str>,
 }
 
-/// Result of system!() to make it easier to read errors from `with_system(system_fn)`
+/// Self contained system that may be inserted into a [`WorkloadBuilder`].
+///
+/// ```rust
+///# use shipyard::*;
+///# fn sys1(u32s: View<u32>) {}
+///
+/// let workload_sys1: SystemResult = system!(sys1);
+/// let mut workload = Workload::builder("my_workload");
+/// workload.with_system(workload_sys1);
+/// ```
+///
+/// ```rust
+///# use shipyard::*;
+///# fn sys1(u32s: View<u32>) {}
+///
+/// let mut workload = Workload::builder("my_workload");
+/// workload.with_system(system!(sys1));
+/// ```
+///
+/// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
 pub struct WorkloadSystem {
     system_type_id: TypeId,
     system_type_name: &'static str,
@@ -51,6 +70,7 @@ pub struct WorkloadSystem {
     borrow_constraints: Vec<TypeInfo>,
 }
 
+/// Result of a `system!` macro call.
 pub type SystemResult = Result<WorkloadSystem, error::InvalidSystem>;
 
 impl WorkloadSystem {
