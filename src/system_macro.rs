@@ -1,8 +1,8 @@
-/// Reduce boilerplace to add a system to a workload and make it less error prone.
+/// Reduces boilerplate to add a system to a workload and make it less error prone.
 ///
 /// ### Example
 /// ```
-/// use shipyard::{system, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
+/// use shipyard::{system, IntoIter, View, ViewMut, Workload, WorkloadSystem, World};
 ///
 /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
 ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
@@ -17,44 +17,44 @@
 ///     assert_eq!(iter.next(), Some(&9));
 /// }
 ///
-/// let world = World::new();
+/// let mut world = World::new();
 ///
-/// world.run(
-///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
-///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
-///     },
-/// );
+/// world.add_entity((0usize, 1u32));
+/// world.add_entity((2usize, 3u32));
+/// world.add_entity((4usize, 5u32));
 ///
-/// Workload::builder("Add & Check")
-///     .with_system(system!(add))
-///     .with_system(system!(check))
-///     .add_to_world(&world)
-///     .unwrap();
+/// let mut workload = Workload::builder("Add & Check");
 ///
-/// world.run_default();
+/// // Without macro
+/// workload.with_system(WorkloadSystem::new(|world| world.run(add), add).unwrap());
+///
+/// // With macro
+/// workload.with_system(system!(check));
+///
+/// workload.add_to_world(&world).unwrap();
+///
+/// world.run_default().unwrap();
 /// ```
 #[macro_export]
 macro_rules! system {
     ($function: expr) => {{
         $crate::WorkloadSystem::new(
-            |world: &$crate::World| world.try_run($function).map(drop),
+            |world: &$crate::World| world.run($function).map(drop),
             $function,
         )
         .unwrap()
     }};
 }
 
-/// Reduce boilerplace to add a fallible system to a workload and make it less error prone.  
+/// Reduces boilerplate to add a fallible system to a workload and make it less error prone.  
 ///
 /// This macro only works with systems returning a `Result`.
 ///
 /// ### Example
 /// ```
-/// #[cfg(feature = "std")]
-/// {
-/// use shipyard::{error::RunWorkload, try_system, EntitiesViewMut, Workload, World};
+/// # #[cfg(feature = "std")]
+/// # {
+/// use shipyard::{error::Run, error::RunWorkload, try_system, Workload, WorkloadSystem, World};
 /// use std::error::Error;
 /// use std::fmt::{Debug, Display, Formatter};
 ///
@@ -68,24 +68,33 @@ macro_rules! system {
 /// }
 /// impl Error for TerribleError {}
 ///
-/// fn my_sys(mut entities: EntitiesViewMut) -> Result<(), TerribleError> {
+/// fn ok_sys() -> Result<(), TerribleError> {
+///     Ok(())
+/// }
+///
+/// fn err_sys() -> Result<(), TerribleError> {
 ///     Err(TerribleError)
 /// }
 ///
-/// fn main() {
-///     let world = World::new();
-///     Workload::builder("May fail")
-///         .with_system(try_system!(my_sys))
-///         .add_to_world(&world)
-///         .unwrap();
-///     match world.try_run_default().map_err(RunWorkload::custom_error) {
-///         Err(Some(error)) => {
-///             assert!(error.is::<TerribleError>());
-///         }
-///         _ => {}
-///     }
-/// }
-/// }
+/// let world = World::new();
+///
+/// let mut workload = Workload::builder("May fail");
+///
+/// // Without macro
+/// workload.with_system(WorkloadSystem::new(|world| world.run(ok_sys)?.map_err(Run::from_custom), ok_sys).unwrap());
+///
+/// // With macro
+/// workload.with_system(try_system!(err_sys));
+///
+/// workload.add_to_world(&world).unwrap();
+///
+/// assert!(world
+///     .run_default()
+///     .unwrap_err()
+///     .custom_error()
+///     .unwrap()
+///     .is::<TerribleError>());
+/// # }
 /// ```
 #[macro_export]
 macro_rules! try_system {
@@ -93,7 +102,7 @@ macro_rules! try_system {
         $crate::WorkloadSystem::new(
             |world: &$crate::World| {
                 world
-                    .try_run($function)?
+                    .run($function)?
                     .map_err($crate::error::Run::from_custom)
             },
             $function,

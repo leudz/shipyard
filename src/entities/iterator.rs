@@ -1,4 +1,5 @@
-use super::{Entities, EntityId};
+use super::Entities;
+use crate::entity_id::EntityId;
 
 #[allow(clippy::type_complexity)]
 pub struct EntitiesIter<'a>(

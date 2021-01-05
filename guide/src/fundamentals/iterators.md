@@ -13,7 +13,7 @@ world.run(|u32s: View<u32>| {
     for i in u32s.iter() {
         dbg!(i);
     }
-});
+}).unwrap();
 ```
 
 This iterator is extremely fast, since all `u32` components are stored directly next to each other (which is something computers really like nowadays).
@@ -26,7 +26,7 @@ world.run(|u32s: View<u32>| {
     for (id, i) in u32s.iter().with_id() {
         println!("{} belongs to entity {:?}", i, id);
     }
-});
+}).unwrap();
 ```
 
 ### Multiple component types
@@ -38,7 +38,7 @@ world.run(|u32s: View<u32>, usizes: View<usize>| {
     for (i, j) in (&u32s, &usizes).iter() {
         // -- snip --
     }
-});
+}).unwrap();
 ```
 
 The iterator will only yield components from entities that have both `u32` and `usize` components, while ignoring the rest.

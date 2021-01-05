@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]

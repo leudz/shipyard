@@ -6,7 +6,7 @@ fn key_equality() {
 
     //create 3 entities
     let (e0, e1, e2) = world
-        .try_run(
+        .run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
                 (
                     entities.add_entity(&mut usizes, 0),
@@ -19,16 +19,16 @@ fn key_equality() {
 
     //add a component to e1
     world
-        .try_run(
+        .run(
             |(ref mut entities, ref mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
-                entities.try_add_component(e1, u32s, 42).unwrap();
+                entities.add_component(e1, u32s, 42);
             },
         )
         .unwrap();
 
     //confirm that the entity keys have not changed for usizes storage
     world
-        .try_run(|usizes: View<usize>| {
+        .run(|usizes: View<usize>| {
             //sanity check
             assert_eq!((&usizes).iter().with_id().count(), 3);
 
@@ -47,7 +47,7 @@ fn key_equality() {
     //confirm that the entity id for (usize) is the same as (usize, u32)
     //in other words that the entity itself did not somehow change from adding a component
     world
-        .try_run(|(usizes, u32s): (View<usize>, View<u32>)| {
+        .run(|(usizes, u32s): (View<usize>, View<u32>)| {
             //sanity check
             assert_eq!((&usizes, &u32s).iter().with_id().count(), 1);
 

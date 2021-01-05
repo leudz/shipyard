@@ -21,7 +21,7 @@ use core::marker::PhantomData;
 ///     .unwrap();
 /// ```
 ///
-/// [`Unique<T>`]: struct.Unique.html
+/// [`Unique<T>`]: crate::Unique
 pub struct FakeBorrow<T: ?Sized>(PhantomData<T>);
 
 impl<T: ?Sized> FakeBorrow<T> {

@@ -94,9 +94,10 @@ pub fn start() {
                 let (width, height) = get_window_size(&window).unwrap();
                 world
                     .borrow::<NonSendSync<UniqueViewMut<SceneRenderer>>>()
+                    .unwrap()
                     .renderer
                     .resize(ResizeStrategy::All(width, height));
-                let mut stage_area = world.borrow::<UniqueViewMut<StageArea>>();
+                let mut stage_area = world.borrow::<UniqueViewMut<StageArea>>().unwrap();
                 stage_area.0.width = width;
                 stage_area.0.height = height;
             }
@@ -111,8 +112,8 @@ pub fn start() {
             let world = Rc::clone(&world);
 
             move |timestamp| {
-                world.borrow::<UniqueViewMut<Timestamp>>().0 = timestamp;
-                world.run_workload(TICK);
+                world.borrow::<UniqueViewMut<Timestamp>>().unwrap().0 = timestamp;
+                world.run_workload(TICK).unwrap();
             }
         });
 

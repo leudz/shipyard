@@ -1,6 +1,8 @@
+use crate::all_storages::AllStorages;
+use crate::entities::Entities;
+use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
-use crate::storage::{AllStorages, Entities, EntityId};
 use core::iter::IntoIterator;
 
 pub trait BulkAddEntity {

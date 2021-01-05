@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 use core::iter::Map;
 
 pub struct WithId<I>(pub I);

@@ -5,8 +5,8 @@ use super::mixed::Mixed;
 #[cfg(feature = "parallel")]
 use super::par_iter::ParIter;
 use super::tight::Tight;
+use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::storage::EntityId;
 use crate::type_id::TypeId;
 use core::ptr;
 
@@ -17,7 +17,7 @@ const ACCESS_FACTOR: usize = 3;
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
 ///
-/// [`Mut`]: ../struct.Mut.html
+/// [`Mut`]: crate::Mut
 pub trait IntoIter {
     type IntoIter: Iterator;
     #[cfg(feature = "parallel")]
@@ -46,8 +46,8 @@ pub trait IntoIter {
     ///     },
     /// );
     /// ```
-    /// [`Mut`]: ../struct.Mut.html
-    /// [`fast_iter`]: trait.IntoFastIter.html
+    /// [`Mut`]: crate::Mut
+    /// [`fast_iter`]: crate::IntoFastIter
     fn iter(self) -> Self::IntoIter;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.
     ///
@@ -55,8 +55,8 @@ pub trait IntoIter {
     /// It `deref`s to the component and will flag mutation.  
     /// [`fast_iter_by`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
     ///
-    /// [`Mut`]: ../struct.Mut.html
-    /// [`fast_iter_by`]: trait.IntoFastIter.html
+    /// [`Mut`]: crate::Mut
+    /// [`fast_iter_by`]: crate::IntoFastIter
     fn iter_by<D: 'static>(self) -> Self::IntoIter;
     /// Returns a parallel iterator over `SparseSet`.
     ///
@@ -84,8 +84,8 @@ pub trait IntoIter {
     ///     },
     /// );
     /// ```
-    /// [`Mut`]: ../struct.Mut.html
-    /// [`fast_par_iter`]: trait.IntoFastIter.html
+    /// [`Mut`]: crate::Mut
+    /// [`fast_par_iter`]: crate::IntoFastIter
     #[cfg(feature = "parallel")]
     #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     fn par_iter(self) -> Self::IntoParIter;

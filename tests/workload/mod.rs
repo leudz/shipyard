@@ -16,5 +16,5 @@ fn duplicate_name() {
         Some(error::AddWorkload::AlreadyExists)
     );
 
-    world.try_run_workload("").unwrap();
+    world.run_workload("").unwrap();
 }

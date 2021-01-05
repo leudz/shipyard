@@ -12,13 +12,13 @@ fn delete_ints(mut _u32s: ViewMut<u32>) {
 fn test() {
     let world = World::new();
 
-    world.run(create_ints);
+    world.run(create_ints).unwrap();
 
     Workload::builder("Int cycle")
         .with_system(system!(create_ints))
         .with_system(system!(delete_ints))
         .add_to_world(&world)
         .unwrap();
-    world.run_workload("Int cycle");
-    world.run_default();
+    world.run_workload("Int cycle").unwrap();
+    world.run_default().unwrap();
 }

@@ -29,5 +29,10 @@ args = ["clippy"]
 command = "cargo"
 args = ["fmt"]
 
+[tasks.doc]
+env = { "RUSTFLAGS" = "-D warnings" }
+command = "cargo"
+args = ["doc", "--all-features", "--no-deps"]
+
 [tasks.test]
-run_task = { name = ["format", "miri", "clippy", "test-all", "clean"] }
+run_task = { name = ["format", "miri", "clippy", "test-all", "doc", "clean"] }

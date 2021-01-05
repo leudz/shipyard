@@ -135,6 +135,10 @@ impl Display for NewEntity {
     }
 }
 
+/// Retured by [`AllStorages::add_component`] and [`World::add_component`].
+///
+/// [`AllStorages::add_component`]: crate::all_storages::AllStorages::add_component()
+/// [`World::add_component`]: crate::world::World::add_component()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
     EntityIsNotAlive,
@@ -161,7 +165,7 @@ impl Display for AddComponent {
 
 /// Error type returned by [`WorkloadBuilder::add_to_world`].
 ///
-/// [`WorkloadBuilder::add_to_world`]: ../struct.WorkloadBuilder.html#method.add_to_world
+/// [`WorkloadBuilder::add_to_world`]: crate::WorkloadBuilder::add_to_world()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddWorkload {
     AlreadyExists,
@@ -215,11 +219,11 @@ impl Display for SetDefaultWorkload {
     }
 }
 
-/// Error returned by [`try_run_default`] and [`try_run_workload`].  
+/// Error returned by [`run_default`] and [`run_workload`].  
 /// The error can be a storage error, problem with the scheduler's borrowing, a non existant workload or a custom error.
 ///
-/// [`try_run_default`]: ../struct.World.html#method.try_run_default
-/// [`try_run_workload`]: ../struct.World.html#method.try_run_workload
+/// [`run_default`]: crate::World#method::run_default()
+/// [`run_workload`]: crate::World#method::run_workload()
 pub enum RunWorkload {
     Scheduler,
     Run((&'static str, Run)),
@@ -266,11 +270,11 @@ impl Display for RunWorkload {
     }
 }
 
-/// Error returned by [`World::try_run`] and [`AllStorages::try_run`].  
+/// Error returned by [`World::run`] and [`AllStorages::run`].  
 /// Can refer to an invalid storage borrow or a custom error.
 ///
-/// [`World::try_run`]: ../struct.World.html#method.try_run
-/// [`AllStorages::try_run`]: ../struct.AllStorages.html#method.try_run
+/// [`World::run`]: crate::World::run()
+/// [`AllStorages::run`]: crate::AllStorages::run()
 pub enum Run {
     GetStorage(GetStorage),
     #[cfg(feature = "std")]
@@ -335,7 +339,7 @@ impl Display for NotUpdatePack {
 
 /// Error when using [`get`] with an entity that does not have any component in the requested storage(s).
 ///
-/// [`get`]: ../trait.Get.html
+/// [`get`]: crate::Get
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MissingComponent {
     pub id: EntityId,
@@ -387,10 +391,10 @@ impl Display for InvalidSystem {
     }
 }
 
-/// Error returned by [`World::try_remove_unique`] and [`AllStorages::try_remove_unique`].
+/// Error returned by [`World::remove_unique`] and [`AllStorages::remove_unique`].
 ///
-/// [`World::try_remove_unique`]: ../struct.World.html#method.try_remove_unique
-/// [`AllStorages::try_remove_unique`]: ../struct.AllStorages.html#method.try_remove_unique
+/// [`World::remove_unique`]: crate::World::remove_unique()
+/// [`AllStorages::remove_unique`]: crate::AllStorages::remove_unique()
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UniqueRemove {
     AllStorages,
@@ -423,10 +427,10 @@ impl Display for UniqueRemove {
     }
 }
 
-/// Error returned by [`try_apply`] and [`try_apply_mut`].
+/// Error returned by [`apply`] and [`apply_mut`].
 ///
-/// [`try_apply`]: ../struct.SparseSet.html#method.try_apply
-/// [`try_apply_mut`]: ../struct.SparseSet.html#method.try_apply_mut
+/// [`apply`]: crate::SparseSet::apply()
+/// [`apply_mut`]: crate::SparseSet::apply_mut()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Apply {
     IdenticalIds,

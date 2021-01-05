@@ -11,7 +11,7 @@ fn basic() {
     let world = World::default();
 
     world
-        .try_run(
+        .run(
             |mut entities: EntitiesViewMut,
              mut vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
                 entities.add_entity(&mut *vecs, Rc::new(RefCell::new(Vec::new())));
@@ -23,10 +23,10 @@ fn basic() {
         .with_system(system!(push))
         .add_to_world(&world)
         .unwrap();
-    world.try_run_default().unwrap();
+    world.run_default().unwrap();
 
     world
-        .try_run(|vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
+        .run(|vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
             assert_eq!(&**vecs.iter().next().unwrap().borrow(), &[0][..]);
         })
         .unwrap();

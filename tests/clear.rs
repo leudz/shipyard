@@ -6,20 +6,16 @@ use shipyard::*;
 fn no_pack() {
     let world = World::new();
 
-    let (mut entities, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>)>()
-        .unwrap();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
 
     entities.add_entity(&mut u32s, 0);
     entities.add_entity(&mut u32s, 1);
     entities.add_entity(&mut u32s, 2);
 
     drop((entities, u32s));
-    world.try_borrow::<AllStoragesViewMut>().unwrap().clear();
+    world.borrow::<AllStoragesViewMut>().unwrap().clear();
 
-    let (mut entities, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>)>()
-        .unwrap();
+    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
 
     assert_eq!(u32s.len(), 0);
     let entity0 = entities.add_entity(&mut u32s, 3);
@@ -36,20 +32,18 @@ fn no_pack() {
 #[test]
 fn update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
-        .unwrap();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
 
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
     drop((entities, usizes));
 
-    let mut all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     all_storages.clear();
     drop(all_storages);
 
-    let mut usizes = world.try_borrow::<ViewMut<usize>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<usize>>().unwrap();
     assert_eq!(
         (&usizes).get(entity1),
         Err(error::MissingComponent {
@@ -64,10 +58,7 @@ fn update() {
             name: type_name::<usize>(),
         })
     );
-    assert_eq!(usizes.try_deleted().unwrap().len(), 2);
-    assert_eq!(
-        usizes.try_take_deleted().unwrap(),
-        vec![(entity1, 0), (entity2, 2)]
-    );
+    assert_eq!(usizes.deleted().len(), 2);
+    assert_eq!(usizes.take_deleted(), vec![(entity1, 0), (entity2, 2)]);
     assert_eq!(usizes.len(), 0);
 }

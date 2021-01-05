@@ -2,7 +2,7 @@ use crate::unknown_storage::UnknownStorage;
 
 /// Type used to [`FakeBorrow`] unique storages.
 ///
-/// [`FakeBorrow`]: struct.FakeBorrow.html
+/// [`FakeBorrow`]: crate::FakeBorrow
 pub struct Unique<T> {
     pub(crate) value: T,
     pub(crate) is_modified: bool,

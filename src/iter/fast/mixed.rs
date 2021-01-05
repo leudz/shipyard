@@ -1,6 +1,6 @@
 use super::abstract_mut::FastAbstractMut;
+use crate::entity_id::EntityId;
 use crate::iter::with_id::LastId;
-use crate::storage::EntityId;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::UnindexedProducer;
 

@@ -1,5 +1,5 @@
+use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::storage::EntityId;
 use crate::view::ViewMut;
 
 /// Trait used to delete component(s).

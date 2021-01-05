@@ -2,7 +2,8 @@ mod custom_delete_any;
 
 pub use custom_delete_any::CustomDeleteAny;
 
-use crate::storage::{AllStorages, StorageId};
+use crate::all_storages::AllStorages;
+use crate::storage::StorageId;
 use crate::unknown_storage::UnknownStorage;
 use hashbrown::hash_set::HashSet;
 

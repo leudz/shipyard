@@ -7,7 +7,7 @@ To add entities we'll use [`EntitiesViewMut`](https://docs.rs/shipyard/latest/sh
 ```rust, noplaypen
 world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
     let _entity = entities.add_entity(&mut u32s, 0);
-});
+}).unwrap();
 ```
 
 [`add_entity`](https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.add_entity) creates a new entity with the given component and it'll return an [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html), the id of the newly created entity.
@@ -21,7 +21,7 @@ world.run(
     |mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>, mut usize: ViewMut<usize>| {
         let _entity = entities.add_entity((&mut u32s, &mut usize), (0, 10));
     },
-);
+).unwrap();
 ```
 
 ### Add an entity with no components
@@ -31,5 +31,5 @@ We can use `()` for both argument to create an empty entity and add components l
 ```rust, noplaypen
 world.run(|mut entities: EntitiesViewMut| {
     let _entity = entities.add_entity((), ());
-});
+}).unwrap();
 ```

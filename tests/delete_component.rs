@@ -6,7 +6,7 @@ use shipyard::*;
 fn no_pack() {
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
 
     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
@@ -27,9 +27,7 @@ fn no_pack() {
 #[test]
 fn update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
-        .unwrap();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
 
     usizes.update_pack();
 
@@ -47,15 +45,15 @@ fn update() {
     assert_eq!(usizes.len(), 1);
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes.modified().iter().count(), 0);
-    assert_eq!(usizes.try_deleted().unwrap(), &[(entity1, 0)]);
+    assert_eq!(usizes.deleted(), &[(entity1, 0)]);
 
-    let mut iter = usizes.try_removed_or_deleted().unwrap();
+    let mut iter = usizes.removed_or_deleted();
     assert_eq!(iter.next(), Some(entity1));
     assert_eq!(iter.next(), None);
 
     drop(iter);
 
-    assert_eq!(usizes.try_take_deleted().unwrap(), vec![(entity1, 0)]);
+    assert_eq!(usizes.take_deleted(), vec![(entity1, 0)]);
 }
 
 #[test]
@@ -63,7 +61,7 @@ fn strip() {
     let world = World::new();
 
     let (entity1, entity2) = world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -78,13 +76,13 @@ fn strip() {
         .unwrap();
 
     world
-        .try_run(|mut all_storages: AllStoragesViewMut| {
+        .run(|mut all_storages: AllStoragesViewMut| {
             all_storages.strip(entity1);
         })
         .unwrap();
 
     world
-        .try_run(|(mut usizes, mut u32s): (ViewMut<usize>, ViewMut<u32>)| {
+        .run(|(mut usizes, mut u32s): (ViewMut<usize>, ViewMut<u32>)| {
             assert_eq!(
                 (&mut usizes).get(entity1).err(),
                 Some(error::MissingComponent {
@@ -105,7 +103,7 @@ fn strip() {
         .unwrap();
 
     world
-        .try_run(|mut all_storages: AllStoragesViewMut| {
+        .run(|mut all_storages: AllStoragesViewMut| {
             assert!(all_storages.delete_entity(entity1));
         })
         .unwrap();
@@ -116,7 +114,7 @@ fn retain() {
     let world = World::new();
 
     let (entity1, entity2) = world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -131,13 +129,13 @@ fn retain() {
         .unwrap();
 
     world
-        .try_run(|mut all_storages: AllStoragesViewMut| {
+        .run(|mut all_storages: AllStoragesViewMut| {
             all_storages.retain::<SparseSet<u32>>(entity1);
         })
         .unwrap();
 
     world
-        .try_run(|(mut usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
+        .run(|(mut usizes, u32s): (ViewMut<usize>, ViewMut<u32>)| {
             assert_eq!(
                 (&mut usizes).get(entity1).err(),
                 Some(error::MissingComponent {
@@ -152,7 +150,7 @@ fn retain() {
         .unwrap();
 
     world
-        .try_run(|mut all_storages: AllStoragesViewMut| {
+        .run(|mut all_storages: AllStoragesViewMut| {
             assert!(all_storages.delete_entity(entity1));
         })
         .unwrap();

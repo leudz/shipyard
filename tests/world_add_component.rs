@@ -10,11 +10,11 @@ fn no_pack() {
     let entity10 = world.add_entity(());
     let entity20 = world.add_entity(());
 
-    world.add_component(entity10, (10usize, 30u32)).unwrap();
-    world.add_component(entity20, (20usize,)).unwrap();
-    world.add_component(entity20, (50u32,)).unwrap();
+    world.add_component(entity10, (10usize, 30u32));
+    world.add_component(entity20, (20usize,));
+    world.add_component(entity20, (50u32,));
 
-    let (usizes, u32s) = world.try_borrow::<(View<usize>, View<u32>)>().unwrap();
+    let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
 
     assert_eq!(usizes.get(entity0).unwrap(), &0);
     assert_eq!(u32s.get(entity1).unwrap(), &1);
@@ -31,50 +31,50 @@ fn no_pack() {
 fn update() {
     let mut world = World::new();
 
-    world.try_borrow::<ViewMut<usize>>().unwrap().update_pack();
+    world.borrow::<ViewMut<usize>>().unwrap().update_pack();
 
     let entity = world.add_entity(());
 
-    world.add_component(entity, (1usize,)).unwrap();
+    world.add_component(entity, (1usize,));
 
     world
-        .try_run(|usizes: View<usize>| {
+        .run(|usizes: View<usize>| {
             let mut iter = usizes.inserted().iter();
             assert_eq!(iter.next(), Some(&1));
             assert_eq!(iter.next(), None);
         })
         .unwrap();
 
-    world.add_component(entity, (2usize,)).unwrap();
+    world.add_component(entity, (2usize,));
 
     world
-        .try_run(|mut usizes: ViewMut<usize>| {
+        .run(|mut usizes: ViewMut<usize>| {
             let mut iter = usizes.inserted().iter();
             assert_eq!(iter.next(), Some(&2));
             assert_eq!(iter.next(), None);
 
-            usizes.try_clear_inserted().unwrap();
+            usizes.clear_all_inserted();
 
             usizes[entity] = 3;
         })
         .unwrap();
 
-    world.add_component(entity, (4usize,)).unwrap();
+    world.add_component(entity, (4usize,));
 
     world
-        .try_run(|mut usizes: ViewMut<usize>| {
+        .run(|mut usizes: ViewMut<usize>| {
             let mut iter = usizes.modified().iter();
             assert_eq!(iter.next(), Some(&4));
             assert_eq!(iter.next(), None);
 
-            usizes.try_clear_modified().unwrap();
+            usizes.clear_all_modified();
         })
         .unwrap();
 
-    world.add_component(entity, (5usize,)).unwrap();
+    world.add_component(entity, (5usize,));
 
     world
-        .try_run(|usizes: View<usize>| {
+        .run(|usizes: View<usize>| {
             let mut iter = usizes.modified().iter();
             assert_eq!(iter.next(), Some(&5));
             assert_eq!(iter.next(), None);
@@ -83,13 +83,14 @@ fn update() {
 }
 
 #[test]
+#[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn dead_entity() {
     let mut world = World::new();
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
-    assert!(world.add_component(entity, (1u32,)).is_err());
+    world.add_component(entity, (1u32,));
 
-    let u32s = world.try_borrow::<View<u32>>().unwrap();
+    let u32s = world.borrow::<View<u32>>().unwrap();
     assert!(u32s.get(entity).is_err());
 }

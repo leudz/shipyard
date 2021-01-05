@@ -22,7 +22,7 @@ struct NotSendSync(*const ());
 fn simple_borrow() {
     let world = World::new();
 
-    let u32s = world.try_borrow::<View<u32>>().unwrap();
+    let u32s = world.borrow::<View<u32>>().unwrap();
     assert_eq!(u32s.len(), 0);
 }
 
@@ -30,13 +30,13 @@ fn simple_borrow() {
 fn option_borrow() {
     let world = World::new();
 
-    let u32s = world.try_borrow::<Option<View<u32>>>().unwrap();
+    let u32s = world.borrow::<Option<View<u32>>>().unwrap();
 
     let u32s = u32s.unwrap();
     assert_eq!(u32s.len(), 0);
     drop(u32s);
-    let _i32s = world.try_borrow::<ViewMut<i32>>().unwrap();
-    let other_i32s = world.try_borrow::<Option<View<i32>>>().unwrap();
+    let _i32s = world.borrow::<ViewMut<i32>>().unwrap();
+    let other_i32s = world.borrow::<Option<View<i32>>>().unwrap();
     assert!(other_i32s.is_none());
 }
 
@@ -44,8 +44,8 @@ fn option_borrow() {
 fn all_storages_simple_borrow() {
     let world = World::new();
 
-    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
-    let u32s = all_storages.try_borrow::<View<u32>>().unwrap();
+    let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    let u32s = all_storages.borrow::<View<u32>>().unwrap();
     assert_eq!(u32s.len(), 0);
 }
 
@@ -53,9 +53,9 @@ fn all_storages_simple_borrow() {
 fn invalid_borrow() {
     let world = World::new();
 
-    let _u32s = world.try_borrow::<ViewMut<u32>>().unwrap();
+    let _u32s = world.borrow::<ViewMut<u32>>().unwrap();
     assert_eq!(
-        world.try_borrow::<ViewMut<u32>>().err(),
+        world.borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
             core::any::type_name::<SparseSet<u32>>(),
             error::Borrow::Unique
@@ -67,10 +67,10 @@ fn invalid_borrow() {
 fn all_storages_invalid_borrow() {
     let world = World::new();
 
-    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
-    let _u32s = all_storages.try_borrow::<ViewMut<u32>>().unwrap();
+    let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    let _u32s = all_storages.borrow::<ViewMut<u32>>().unwrap();
     assert_eq!(
-        all_storages.try_borrow::<ViewMut<u32>>().err(),
+        all_storages.borrow::<ViewMut<u32>>().err(),
         Some(error::GetStorage::StorageBorrow((
             core::any::type_name::<SparseSet<u32>>(),
             error::Borrow::Unique
@@ -82,33 +82,33 @@ fn all_storages_invalid_borrow() {
 fn double_borrow() {
     let world = World::new();
 
-    let u32s = world.try_borrow::<ViewMut<u32>>().unwrap();
+    let u32s = world.borrow::<ViewMut<u32>>().unwrap();
     drop(u32s);
-    world.try_borrow::<ViewMut<u32>>().unwrap();
+    world.borrow::<ViewMut<u32>>().unwrap();
 }
 
 #[test]
 fn all_storages_double_borrow() {
     let world = World::new();
 
-    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
-    let u32s = all_storages.try_borrow::<ViewMut<u32>>().unwrap();
+    let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    let u32s = all_storages.borrow::<ViewMut<u32>>().unwrap();
     drop(u32s);
-    all_storages.try_borrow::<ViewMut<u32>>().unwrap();
+    all_storages.borrow::<ViewMut<u32>>().unwrap();
 }
 
 #[test]
 fn all_storages_option_borrow() {
     let world = World::new();
-    let all_storages = world.try_borrow::<AllStoragesViewMut>().unwrap();
+    let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
-    let u32s = all_storages.try_borrow::<Option<View<u32>>>().unwrap();
+    let u32s = all_storages.borrow::<Option<View<u32>>>().unwrap();
 
     let u32s = u32s.unwrap();
     assert_eq!(u32s.len(), 0);
     drop(u32s);
-    let _i32s = all_storages.try_borrow::<ViewMut<i32>>().unwrap();
-    let other_i32s = all_storages.try_borrow::<Option<View<i32>>>().unwrap();
+    let _i32s = all_storages.borrow::<ViewMut<i32>>().unwrap();
+    let other_i32s = all_storages.borrow::<Option<View<i32>>>().unwrap();
     assert!(other_i32s.is_none());
 }
 
@@ -119,7 +119,7 @@ fn non_send_storage_in_other_thread() {
     rayon::join(
         || {
             assert_eq!(
-                world.try_borrow::<NonSend<ViewMut<NotSend>>>().err(),
+                world.borrow::<NonSend<ViewMut<NotSend>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
                     type_name::<SparseSet<NotSend>>(),
                     error::Borrow::WrongThread
@@ -137,7 +137,7 @@ fn non_send_sync_storage_in_other_thread() {
     rayon::join(
         || {
             assert_eq!(
-                world.try_borrow::<NonSendSync<View<NotSendSync>>>().err(),
+                world.borrow::<NonSendSync<View<NotSendSync>>>().err(),
                 Some(error::GetStorage::StorageBorrow((
                     type_name::<SparseSet<NotSendSync>>(),
                     error::Borrow::WrongThread
@@ -151,17 +151,17 @@ fn non_send_sync_storage_in_other_thread() {
 #[test]
 fn add_unique_while_borrowing() {
     let world = World::new();
-    world.try_add_unique(0u32).unwrap();
-    let _s = world.try_borrow::<UniqueView<'_, u32>>().unwrap();
-    world.try_add_unique(0usize).unwrap();
+    world.add_unique(0u32).unwrap();
+    let _s = world.borrow::<UniqueView<'_, u32>>().unwrap();
+    world.add_unique(0usize).unwrap();
 }
 
 #[test]
 fn sparse_set_and_unique() {
     let world = World::new();
-    world.try_add_unique(0u32).unwrap();
+    world.add_unique(0u32).unwrap();
     world
-        .try_borrow::<(UniqueViewMut<u32>, ViewMut<u32>)>()
+        .borrow::<(UniqueViewMut<u32>, ViewMut<u32>)>()
         .unwrap();
 }
 
@@ -170,7 +170,7 @@ fn sparse_set_and_unique() {
 fn exhaustive_list() {
     let world = World::new();
 
-    let _ = world.try_borrow::<(
+    let _ = world.borrow::<(
         NonSend<View<NotSend>>,
         NonSync<View<NotSync>>,
         NonSendSync<View<NotSendSync>>,
@@ -179,16 +179,18 @@ fn exhaustive_list() {
         NonSendSync<ViewMut<NotSendSync>>,
     )>();
 
-    world.run(|all_storages: AllStoragesViewMut| {
-        let _ = all_storages.try_borrow::<(
-            NonSend<View<NotSend>>,
-            NonSync<View<NotSync>>,
-            NonSendSync<View<NotSendSync>>,
-            NonSend<ViewMut<NotSend>>,
-            NonSync<ViewMut<NotSync>>,
-            NonSendSync<ViewMut<NotSendSync>>,
-        )>();
-    });
+    world
+        .run(|all_storages: AllStoragesViewMut| {
+            let _ = all_storages.borrow::<(
+                NonSend<View<NotSend>>,
+                NonSync<View<NotSync>>,
+                NonSendSync<View<NotSendSync>>,
+                NonSend<ViewMut<NotSend>>,
+                NonSync<ViewMut<NotSync>>,
+                NonSendSync<ViewMut<NotSendSync>>,
+            )>();
+        })
+        .unwrap();
 }
 
 #[test]
@@ -196,11 +198,11 @@ fn exhaustive_list() {
 fn unique_exhaustive_list() {
     let world = World::new();
 
-    world.add_unique_non_send(NotSend(&()));
-    world.add_unique_non_sync(NotSync(&()));
-    world.add_unique_non_send_sync(NotSendSync(&()));
+    world.add_unique_non_send(NotSend(&())).unwrap();
+    world.add_unique_non_sync(NotSync(&())).unwrap();
+    world.add_unique_non_send_sync(NotSendSync(&())).unwrap();
 
-    let _ = world.try_borrow::<(
+    let _ = world.borrow::<(
         NonSend<UniqueView<NotSend>>,
         NonSync<UniqueView<NotSync>>,
         NonSendSync<UniqueView<NotSendSync>>,
@@ -209,14 +211,16 @@ fn unique_exhaustive_list() {
         NonSendSync<UniqueViewMut<NotSendSync>>,
     )>();
 
-    world.run(|all_storages: AllStoragesViewMut| {
-        let _ = all_storages.try_borrow::<(
-            NonSend<UniqueView<NotSend>>,
-            NonSync<UniqueView<NotSync>>,
-            NonSendSync<UniqueView<NotSendSync>>,
-            NonSend<UniqueViewMut<NotSend>>,
-            NonSync<UniqueViewMut<NotSync>>,
-            NonSendSync<UniqueViewMut<NotSendSync>>,
-        )>();
-    });
+    world
+        .run(|all_storages: AllStoragesViewMut| {
+            let _ = all_storages.borrow::<(
+                NonSend<UniqueView<NotSend>>,
+                NonSync<UniqueView<NotSync>>,
+                NonSendSync<UniqueView<NotSendSync>>,
+                NonSend<UniqueViewMut<NotSend>>,
+                NonSync<UniqueViewMut<NotSync>>,
+                NonSendSync<UniqueViewMut<NotSendSync>>,
+            )>();
+        })
+        .unwrap();
 }

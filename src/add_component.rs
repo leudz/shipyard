@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 use crate::ViewMut;
 
 /// Defines how components are added to an existing entity.
@@ -14,13 +14,13 @@ pub trait AddComponent {
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>();
+    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
     /// let entity = entities.add_entity((), ());
     ///
     /// u32s.add_component_unchecked(entity, 0);
     /// ```
     ///
-    /// [`Entities::add_component`]: https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.add_component
+    /// [`Entities::add_component`]: crate::Entities::add_component()
     fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component);
 }
 

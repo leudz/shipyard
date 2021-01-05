@@ -4,12 +4,12 @@ use shipyard::*;
 fn no_pack() {
     let world = World::default();
     world
-        .try_run(|mut entities: EntitiesViewMut| {
+        .run(|mut entities: EntitiesViewMut| {
             entities.add_entity((), ());
         })
         .unwrap();
     world
-        .try_run(
+        .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
                 ViewMut<usize>,
@@ -25,9 +25,7 @@ fn no_pack() {
 #[test]
 fn update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
-        .unwrap();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.update_pack();
     let entity = entities.add_entity(&mut usizes, 0);
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -37,12 +35,10 @@ fn update() {
 #[test]
 fn cleared_update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
-        .unwrap();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
-    usizes.try_clear_inserted_and_modified().unwrap();
+    usizes.clear_all_inserted_and_modified();
     assert_eq!(usizes.inserted().iter().count(), 0);
     let entity2 = entities.add_entity(&mut usizes, 2);
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -53,12 +49,10 @@ fn cleared_update() {
 #[test]
 fn modified_update() {
     let world = World::new();
-    let (mut entities, mut usizes) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>)>()
-        .unwrap();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.update_pack();
     let entity1 = entities.add_entity(&mut usizes, 1);
-    usizes.try_clear_inserted_and_modified().unwrap();
+    usizes.clear_all_inserted_and_modified();
     usizes[entity1] = 3;
     let entity2 = entities.add_entity(&mut usizes, 2);
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -71,7 +65,7 @@ fn bulk() {
     let world = World::default();
 
     let (mut entities, mut usizes, mut u32s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
         .unwrap();
 
     entities.bulk_add_entity((), (0..1).map(|_| {}));

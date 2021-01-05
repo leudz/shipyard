@@ -3,8 +3,8 @@ use super::chunk::FastChunk;
 use super::chunk_exact::FastChunkExact;
 use super::mixed::FastMixed;
 use super::tight::FastTight;
+use crate::entity_id::EntityId;
 use crate::iter::with_id::LastId;
-use crate::storage::EntityId;
 
 pub enum FastIter<Storage> {
     Tight(FastTight<Storage>),

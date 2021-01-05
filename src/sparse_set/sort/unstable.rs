@@ -50,7 +50,7 @@ fn unstable_sort() {
     let mut array = crate::sparse_set::SparseSet::new();
 
     for i in (0..100).rev() {
-        let mut entity_id = crate::storage::EntityId::zero();
+        let mut entity_id = crate::entity_id::EntityId::zero();
         entity_id.set_index(100 - i);
         array.insert(entity_id, i);
     }
@@ -61,7 +61,7 @@ fn unstable_sort() {
         assert!(window[0] < window[1]);
     }
     for i in 0..100 {
-        let mut entity_id = crate::storage::EntityId::zero();
+        let mut entity_id = crate::entity_id::EntityId::zero();
         entity_id.set_index(100 - i);
         assert_eq!(array.private_get(entity_id), Some(&i));
     }
@@ -72,12 +72,12 @@ fn partially_sorted_unstable_sort() {
     let mut array = crate::sparse_set::SparseSet::new();
 
     for i in 0..20 {
-        let mut entity_id = crate::storage::EntityId::zero();
+        let mut entity_id = crate::entity_id::EntityId::zero();
         entity_id.set_index(i);
         assert!(array.insert(entity_id, i).is_none());
     }
     for i in (20..100).rev() {
-        let mut entity_id = crate::storage::EntityId::zero();
+        let mut entity_id = crate::entity_id::EntityId::zero();
         entity_id.set_index(100 - i + 20);
         assert!(array.insert(entity_id, i).is_none());
     }
@@ -88,12 +88,12 @@ fn partially_sorted_unstable_sort() {
         assert!(window[0] < window[1]);
     }
     for i in 0..20 {
-        let mut entity_id = crate::storage::EntityId::zero();
+        let mut entity_id = crate::entity_id::EntityId::zero();
         entity_id.set_index(i);
         assert_eq!(array.private_get(entity_id), Some(&i));
     }
     for i in 20..100 {
-        let mut entity_id = crate::storage::EntityId::zero();
+        let mut entity_id = crate::entity_id::EntityId::zero();
         entity_id.set_index(100 - i + 20);
         assert_eq!(array.private_get(entity_id), Some(&i));
     }

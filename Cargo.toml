@@ -21,10 +21,9 @@ rayon = {version = "^1", optional = true}
 serde = {version = "^1", optional = true, default-features = false}
 
 [features]
-default = ["panic", "parallel"]
+default = ["parallel"]
 non_send = ["std"]
 non_sync = ["std"]
-panic = []
 parallel = ["rayon", "std"]
 serde1 = ["serde"]
 std = []

@@ -1,5 +1,6 @@
-use crate::storage::EntityId;
-use crate::storage::{AllStorages, StorageId};
+use crate::all_storages::AllStorages;
+use crate::entity_id::EntityId;
+use crate::storage::StorageId;
 use crate::unknown_storage::UnknownStorage;
 
 pub trait Retain {

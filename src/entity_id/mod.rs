@@ -173,6 +173,10 @@ impl EntityId {
             self.0 = NonZeroU64::new_unchecked(self.0.get() & !Self::META_MASK);
         }
     }
+    #[inline]
+    pub fn inner(self) -> u64 {
+        self.0.get()
+    }
 }
 
 impl PartialEq for EntityId {

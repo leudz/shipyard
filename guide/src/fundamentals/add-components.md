@@ -8,7 +8,7 @@ Adding a second component of the same type to an entity will simply replace the 
 ```rust, noplaypen
 world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
     entities.add_component(entity_id, &mut u32s, 0);
-});
+}).unwrap();
 ```
 
 You'll notice that we use [`EntitiesView`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesView.html) and not [`EntitiesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html).
@@ -26,5 +26,5 @@ world.run(
     |entities: EntitiesView, mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
         entities.add_component(entity_id, (&mut u32s, &mut usizes), (0, 10));
     },
-);
+).unwrap();
 ```

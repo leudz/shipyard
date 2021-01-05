@@ -5,9 +5,9 @@ fn simple() {
     let world = World::new();
 
     world
-        .try_run(|mut all_storages: AllStoragesViewMut| {
+        .run(|mut all_storages: AllStoragesViewMut| {
             let (entity0, entity1, entity2, entity3) = all_storages
-                .try_run(
+                .run(
                     |mut entities: EntitiesViewMut,
                      mut u32s: ViewMut<u32>,
                      mut usizes: ViewMut<usize>| {
@@ -24,7 +24,7 @@ fn simple() {
             all_storages.delete_any::<SparseSet<u32>>();
 
             all_storages
-                .try_run(|entities: EntitiesView| {
+                .run(|entities: EntitiesView| {
                     assert!(!entities.is_alive(entity0));
                     assert!(entities.is_alive(entity1));
                     assert!(entities.is_alive(entity2));

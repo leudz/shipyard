@@ -5,7 +5,7 @@ fn basic() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -104,7 +104,7 @@ fn with_id() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
     let id0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -184,9 +184,7 @@ fn with_id() {
 fn empty() {
     let world = World::new();
 
-    let (usizes, u32s) = world
-        .try_borrow::<(ViewMut<usize>, ViewMut<u32>)>()
-        .unwrap();
+    let (usizes, u32s) = world.borrow::<(ViewMut<usize>, ViewMut<u32>)>().unwrap();
 
     assert!(u32s.iter().next().is_none());
     assert!(u32s.iter().with_id().next().is_none());
@@ -201,7 +199,7 @@ fn not() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -224,7 +222,7 @@ fn iter_by() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -264,7 +262,7 @@ fn fast_iter_by() {
     let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
-        .try_borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
@@ -274,25 +272,25 @@ fn fast_iter_by() {
 
     u32s.sort().unstable(|x, y| x.cmp(y).reverse());
 
-    let mut iter = (&u32s, &i16s).try_fast_iter_by::<u32>().unwrap();
+    let mut iter = (&u32s, &i16s).fast_iter_by::<u32>();
     assert_eq!(iter.next(), Some((&4, &14)));
     assert_eq!(iter.next(), Some((&2, &12)));
     assert_eq!(iter.next(), Some((&0, &10)));
     assert_eq!(iter.next(), None);
 
-    let mut iter = (&i16s, &u32s).try_fast_iter_by::<u32>().unwrap();
+    let mut iter = (&i16s, &u32s).fast_iter_by::<u32>();
     assert_eq!(iter.next(), Some((&14, &4)));
     assert_eq!(iter.next(), Some((&12, &2)));
     assert_eq!(iter.next(), Some((&10, &0)));
     assert_eq!(iter.next(), None);
 
-    let mut iter = (&u32s, &i16s).try_fast_iter_by::<i16>().unwrap();
+    let mut iter = (&u32s, &i16s).fast_iter_by::<i16>();
     assert_eq!(iter.next(), Some((&0, &10)));
     assert_eq!(iter.next(), Some((&2, &12)));
     assert_eq!(iter.next(), Some((&4, &14)));
     assert_eq!(iter.next(), None);
 
-    let mut iter = (&i16s, &u32s).try_fast_iter_by::<i16>().unwrap();
+    let mut iter = (&i16s, &u32s).fast_iter_by::<i16>();
     assert_eq!(iter.next(), Some((&10, &0)));
     assert_eq!(iter.next(), Some((&12, &2)));
     assert_eq!(iter.next(), Some((&14, &4)));

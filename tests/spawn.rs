@@ -7,7 +7,7 @@ fn alive() {
     let entity = world.add_entity((1u32,));
     world.add_entity((2u32,));
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity));
 
@@ -23,7 +23,7 @@ fn single_dead() {
 
     world.delete_entity(entity);
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity));
 
@@ -42,7 +42,7 @@ fn multiple_dead_first() {
     world.delete_entity(entity0);
     world.delete_entity(entity2);
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity1));
 
@@ -76,7 +76,7 @@ fn multiple_dead_middle() {
     world.delete_entity(entity1);
     world.delete_entity(entity2);
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity1));
 
@@ -110,7 +110,7 @@ fn multiple_dead_last() {
     world.delete_entity(entity2);
     world.delete_entity(entity1);
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity1));
 
@@ -138,7 +138,7 @@ fn new_world_empty() {
     let world = World::new();
     let entity = EntityId::from_index_and_gen(3, 0);
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity));
 
@@ -176,7 +176,7 @@ fn new_world() {
     world.delete_entity(entity1);
     world.delete_entity(entity2);
 
-    let mut entities = world.try_borrow::<EntitiesViewMut>().unwrap();
+    let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
     assert!(entities.spawn(entity));
 

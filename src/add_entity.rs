@@ -1,4 +1,4 @@
-use crate::storage::EntityId;
+use crate::entity_id::EntityId;
 use crate::view::ViewMut;
 
 pub trait AddEntity {

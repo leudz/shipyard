@@ -5,7 +5,7 @@
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>| {
     u32s.delete(entity_id);
-});
+}).unwrap();
 ```
 
 ### Delete multiple components
@@ -13,7 +13,7 @@ world.run(|mut u32s: ViewMut<u32>| {
 ```rust, noplaypen
 world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
     (&mut u32s, &mut usizes).delete(entity_id);
-});
+}).unwrap();
 ```
 
 ### Delete all components
@@ -23,5 +23,5 @@ Note that when you delete all components of an entity with [`strip`](https://doc
 ```rust, noplaypen
 world.run(|mut all_storages: AllStoragesViewMut| {
     all_storages.strip(entity_id);
-});
+}).unwrap();
 ```

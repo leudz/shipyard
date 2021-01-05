@@ -3,9 +3,9 @@ mod inserted_or_modified;
 mod modified;
 mod not;
 
+use crate::entity_id::EntityId;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
-use crate::storage::EntityId;
 
 pub trait AbstractMut {
     type Out;

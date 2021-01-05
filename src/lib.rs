@@ -32,16 +32,21 @@ mod pack {
 }
 mod add_component;
 mod add_entity;
+mod all_storages;
 mod contains;
+mod entities;
+mod entity_id;
 pub mod iter;
 mod r#mut;
 mod remove;
 mod reserve;
+mod scheduler;
 mod sparse_set;
 mod storage;
 mod system;
 mod system_macro;
 mod type_id;
+mod unique;
 mod unknown_storage;
 mod view;
 mod world;
@@ -55,10 +60,13 @@ pub use crate::borrow::NonSendSync;
 pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
+pub use all_storages::AllStorages;
 pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 pub use borrow::{AllStoragesBorrow, Borrow, FakeBorrow, Mutability};
 pub use contains::Contains;
 pub use delete::Delete;
+pub use entities::Entities;
+pub use entity_id::EntityId;
 pub use get::Get;
 pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use not::Not;
@@ -66,15 +74,14 @@ pub use pack::update::{Inserted, InsertedOrModified, Modified};
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
+pub use scheduler::{info, Workload, WorkloadBuilder, WorkloadSystem};
 pub use sparse_set::{sort, sort::IntoSortable, SparseSet};
-pub use storage::{
-    AllStorages, CustomDeleteAny, DeleteAny, Entities, EntityId, Retain, StorageId, Unique,
-};
+pub use storage::StorageId;
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
+pub use unique::Unique;
 pub use unknown_storage::UnknownStorage;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
-pub use world::scheduler::info;
-pub use world::{Workload, WorkloadBuilder, WorkloadSystem, World};
+pub use world::World;

@@ -4,20 +4,26 @@ use shipyard::*;
 fn all() {
     let world = World::new();
 
-    world.run(|mut _all_storages: AllStoragesViewMut| {
-        // -- snip --
-    });
+    world
+        .run(|mut _all_storages: AllStoragesViewMut| {
+            // -- snip --
+        })
+        .unwrap();
 }
 
 #[test]
 fn multiple() {
     let world = World::new();
 
-    world.run(|all_storages: AllStoragesViewMut| {
-        // do something with all_storages
+    world
+        .run(|all_storages: AllStoragesViewMut| {
+            // do something with all_storages
 
-        all_storages.run(|_usizes: View<usize>| {
-            // -- snip --
-        });
-    });
+            all_storages
+                .run(|_usizes: View<usize>| {
+                    // -- snip --
+                })
+                .unwrap();
+        })
+        .unwrap();
 }

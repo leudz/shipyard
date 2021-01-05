@@ -1,13 +1,12 @@
 use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
-use super::{Batches, Scheduler};
+use super::{Batches, Scheduler, WorkloadSystem};
+use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::error;
-use crate::storage::{AllStorages, StorageId};
-use crate::system::System;
+use crate::storage::StorageId;
 use crate::type_id::TypeId;
 use crate::world::World;
 use alloc::borrow::Cow;
-use alloc::boxed::Box;
 // this is the macro, not the module
 use alloc::vec;
 use alloc::vec::Vec;
@@ -18,15 +17,15 @@ use core::iter::Extend;
 ///
 /// You can also use [`WorkloadBuilder::new`] or [`WorkloadBuilder::default`].
 ///
-/// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
-/// [`WorkloadBuilder::new`]: struct.WorkloadBuilder.html#method.new
-/// [`WorkloadBuilder::default`]: struct.WorkloadBuilder.html#impl-Default
+/// [`WorkloadBuilder`]: crate::WorkloadBuilder
+/// [`WorkloadBuilder::new`]: crate::WorkloadBuilder::new()
+/// [`WorkloadBuilder::default`]: crate::WorkloadBuilder::default()
 pub struct Workload;
 
 impl Workload {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
-    /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
+    /// [`WorkloadBuilder`]: crate::WorkloadBuilder
     pub fn builder<N: Into<Cow<'static, str>>>(name: N) -> WorkloadBuilder {
         WorkloadBuilder::new(name)
     }
@@ -39,99 +38,14 @@ impl Workload {
 /// The default workload will automatically be set to the first workload added.
 #[derive(Default)]
 pub struct WorkloadBuilder {
-    systems: Vec<WorkloadSystem>,
+    pub(super) systems: Vec<WorkloadSystem>,
     name: Cow<'static, str>,
-}
-
-/// Self contained system that may be inserted into a [`WorkloadBuilder`].
-///
-/// ### Example:
-///
-/// ```rust
-/// use shipyard::{system, View, Workload, WorkloadSystem, World};
-///
-/// fn sys1(u32s: View<u32>) {}
-/// fn sys2(usizes: View<usize>) {}
-///
-/// let workload_sys1: WorkloadSystem =
-///     WorkloadSystem::new(|world| world.try_run(sys1), sys1).unwrap();
-/// // or with the macro
-/// let workload_sys2: WorkloadSystem = system!(sys2);
-///
-/// let mut workload = Workload::builder("my_workload");
-/// workload.with_system(workload_sys1);
-/// workload.with_system(workload_sys2);
-/// ```
-///
-/// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
-pub struct WorkloadSystem {
-    system_type_id: TypeId,
-    system_type_name: &'static str,
-    system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
-    /// access information
-    borrow_constraints: Vec<TypeInfo>,
-}
-
-impl WorkloadSystem {
-    /// Bundles all information needed by [`WorkloadBuilder`].
-    ///
-    /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
-    pub fn new<
-        'a,
-        B,
-        R,
-        S: Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static,
-        F: System<'a, (), B, R>,
-    >(
-        system: S,
-        _: F,
-    ) -> Result<WorkloadSystem, error::InvalidSystem> {
-        let mut borrows = Vec::new();
-        F::borrow_info(&mut borrows);
-
-        if borrows.contains(&TypeInfo {
-            name: "",
-            storage_id: StorageId::of::<AllStorages>(),
-            mutability: Mutability::Exclusive,
-            is_send: true,
-            is_sync: true,
-        }) && borrows.len() > 1
-        {
-            return Err(error::InvalidSystem::AllStorages);
-        }
-
-        let mid = borrows.len() / 2 + (borrows.len() % 2 != 0) as usize;
-
-        for a_type_info in &borrows[..mid] {
-            for b_type_info in &borrows[mid..] {
-                if a_type_info.storage_id == b_type_info.storage_id {
-                    match (a_type_info.mutability, b_type_info.mutability) {
-                        (Mutability::Exclusive, Mutability::Exclusive) => {
-                            return Err(error::InvalidSystem::MultipleViewsMut)
-                        }
-                        (Mutability::Exclusive, Mutability::Shared)
-                        | (Mutability::Shared, Mutability::Exclusive) => {
-                            return Err(error::InvalidSystem::MultipleViews)
-                        }
-                        (Mutability::Shared, Mutability::Shared) => {}
-                    }
-                }
-            }
-        }
-
-        Ok(WorkloadSystem {
-            borrow_constraints: borrows,
-            system_fn: Box::new(system),
-            system_type_id: TypeId::of::<S>(),
-            system_type_name: type_name::<F>(),
-        })
-    }
 }
 
 impl WorkloadBuilder {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
-    /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
+    /// [`WorkloadBuilder`]: crate::WorkloadBuilder
     ///
     /// ### Example
     /// ```
@@ -174,9 +88,6 @@ impl WorkloadBuilder {
             name: name.into(),
         }
     }
-}
-
-impl WorkloadBuilder {
     /// Adds a system to the workload being created.  
     /// It is recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.  
@@ -217,8 +128,8 @@ impl WorkloadBuilder {
     /// world.run_default();
     /// ```
     ///
-    /// [system]: macro.system.html
-    /// [try_system]: macro.try_system.html
+    /// [system]: crate::system!
+    /// [try_system]: crate::try_system!
     #[inline]
     pub fn with_system(&mut self, system: WorkloadSystem) -> &mut Self {
         self.systems.push(system);
@@ -243,7 +154,7 @@ impl WorkloadBuilder {
     /// - Scheduler borrow failed.
     /// - Workload with an identical name already present.
     ///
-    /// [`World`]: struct.World.html
+    /// [`World`]: crate::World
     pub fn add_to_world(&mut self, world: &World) -> Result<(), error::AddWorkload> {
         self.add_to_world_with_info(world).map(drop)
     }
@@ -259,7 +170,7 @@ impl WorkloadBuilder {
     /// - Scheduler borrow failed.
     /// - Workload with an identical name already present.
     ///
-    /// [`World`]: struct.World.html
+    /// [`World`]: crate::World
     #[allow(clippy::blocks_in_if_conditions)]
     pub fn add_to_world_with_info(
         &mut self,
@@ -485,12 +396,6 @@ impl WorkloadBuilder {
         }
 
         Ok(workload_info)
-    }
-}
-
-impl Extend<WorkloadSystem> for WorkloadBuilder {
-    fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
-        self.systems.extend(iter);
     }
 }
 
