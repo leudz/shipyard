@@ -38,10 +38,11 @@
 #[macro_export]
 macro_rules! system {
     ($function: expr) => {{
-        (
+        $crate::WorkloadSystem::new(
             |world: &$crate::World| world.try_run($function).map(drop),
             $function,
         )
+        .unwrap()
     }};
 }
 
@@ -89,7 +90,7 @@ macro_rules! system {
 #[macro_export]
 macro_rules! try_system {
     ($function: expr) => {{
-        (
+        $crate::WorkloadSystem::new(
             |world: &$crate::World| {
                 world
                     .try_run($function)?
@@ -97,5 +98,6 @@ macro_rules! try_system {
             },
             $function,
         )
+        .unwrap()
     }};
 }

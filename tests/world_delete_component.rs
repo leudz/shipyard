@@ -28,7 +28,7 @@ fn no_pack() {
 fn update() {
     let mut world = World::new();
 
-    drop(world.try_borrow::<ViewMut<usize>>().unwrap().update_pack());
+    world.try_borrow::<ViewMut<usize>>().unwrap().update_pack();
 
     let entity1 = world.add_entity((0usize,));
     let entity2 = world.add_entity((2usize,));
