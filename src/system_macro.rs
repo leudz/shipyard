@@ -42,6 +42,7 @@ macro_rules! system {
             |world: &$crate::World| world.try_run($function).map(drop),
             $function,
         )
+        .unwrap()
     }};
 }
 
@@ -97,5 +98,6 @@ macro_rules! try_system {
             },
             $function,
         )
+        .unwrap()
     }};
 }

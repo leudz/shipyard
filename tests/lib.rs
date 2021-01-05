@@ -78,8 +78,7 @@ fn system() {
         .unwrap();
 
     Workload::builder("")
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -124,10 +123,8 @@ fn systems() {
         .unwrap();
 
     Workload::builder("")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 

@@ -8,8 +8,7 @@ fn duplicate_name() {
     let world = World::new();
 
     Workload::builder("")
-        .try_with_system(system!(|| {}))
-        .unwrap()
+        .with_system(system!(|| {}))
         .add_to_world(&world)
         .unwrap();
     assert_eq!(

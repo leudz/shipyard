@@ -12,6 +12,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
+use core::iter::Extend;
 
 /// Used to create a [`WorkloadBuilder`].
 ///
@@ -44,21 +45,22 @@ pub struct WorkloadBuilder {
 
 /// Self contained system that may be inserted into a [`WorkloadBuilder`].
 ///
-/// ```rust
-///# use shipyard::*;
-///# fn sys1(u32s: View<u32>) {}
+/// ### Example:
 ///
-/// let workload_sys1: SystemResult = system!(sys1);
+/// ```rust
+/// use shipyard::{system, View, Workload, WorkloadSystem, World};
+///
+/// fn sys1(u32s: View<u32>) {}
+/// fn sys2(usizes: View<usize>) {}
+///
+/// let workload_sys1: WorkloadSystem =
+///     WorkloadSystem::new(|world| world.try_run(sys1), sys1).unwrap();
+/// // or with the macro
+/// let workload_sys2: WorkloadSystem = system!(sys2);
+///
 /// let mut workload = Workload::builder("my_workload");
 /// workload.with_system(workload_sys1);
-/// ```
-///
-/// ```rust
-///# use shipyard::*;
-///# fn sys1(u32s: View<u32>) {}
-///
-/// let mut workload = Workload::builder("my_workload");
-/// workload.with_system(system!(sys1));
+/// workload.with_system(workload_sys2);
 /// ```
 ///
 /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
@@ -70,10 +72,10 @@ pub struct WorkloadSystem {
     borrow_constraints: Vec<TypeInfo>,
 }
 
-/// Result of a `system!` macro call.
-pub type SystemResult = Result<WorkloadSystem, error::InvalidSystem>;
-
 impl WorkloadSystem {
+    /// Bundles all information needed by [`WorkloadBuilder`].
+    ///
+    /// [`WorkloadBuilder`]: struct.WorkloadBuilder.html
     pub fn new<
         'a,
         B,
@@ -176,61 +178,8 @@ impl WorkloadBuilder {
 
 impl WorkloadBuilder {
     /// Adds a system to the workload being created.  
-    /// It is strongly recommended to use the [system] and [try_system] macros.  
-    /// If the two functions in the tuple don't match, the workload could fail to run every time.
-    ///
-    /// ### Example:
-    /// ```
-    /// use shipyard::{system, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
-    ///
-    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
-    ///         *x += y as usize;
-    ///     }
-    /// }
-    ///
-    /// fn check(usizes: View<usize>) {
-    ///     let mut iter = usizes.iter();
-    ///     assert_eq!(iter.next(), Some(&1));
-    ///     assert_eq!(iter.next(), Some(&5));
-    ///     assert_eq!(iter.next(), Some(&9));
-    /// }
-    ///
-    /// let world = World::new();
-    ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
-    ///     },
-    /// );
-    ///
-    /// Workload::builder("Add & Check")
-    ///     .try_with_system(system!(add))
-    ///     .unwrap()
-    ///     .try_with_system(system!(check))
-    ///     .unwrap()
-    ///     .add_to_world(&world)
-    ///     .unwrap();
-    ///
-    /// world.run_default();
-    /// ```
-    ///
-    /// [system]: macro.system.html
-    /// [try_system]: macro.try_system.html
-    pub fn try_with_system(
-        &mut self,
-        system: SystemResult,
-    ) -> Result<&mut Self, error::InvalidSystem> {
-        self.systems.push(system?);
-
-        Ok(self)
-    }
-    /// Adds a system to the workload being created.  
-    /// It is strongly recommended to use the [system] and [try_system] macros.  
+    /// It is recommended to use the [system] and [try_system] macros.  
     /// If the two functions in the tuple don't match, the workload could fail to run every time.  
-    /// Unwraps errors.
     ///
     /// ### Example:
     /// ```
@@ -270,14 +219,11 @@ impl WorkloadBuilder {
     ///
     /// [system]: macro.system.html
     /// [try_system]: macro.try_system.html
-    #[cfg(feature = "panic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "panic")))]
-    #[track_caller]
-    pub fn with_system(&mut self, system: SystemResult) -> &mut Self {
-        match self.try_with_system(system) {
-            Ok(s) => s,
-            Err(err) => panic!("{:?}", err),
-        }
+    #[inline]
+    pub fn with_system(&mut self, system: WorkloadSystem) -> &mut Self {
+        self.systems.push(system);
+
+        self
     }
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
     /// This allows us to collect systems in different builders before joining them together.
@@ -542,17 +488,22 @@ impl WorkloadBuilder {
     }
 }
 
+impl Extend<WorkloadSystem> for WorkloadBuilder {
+    fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
+        self.systems.extend(iter);
+    }
+}
+
 #[test]
 fn single_immutable() {
-    use crate::{View, World};
+    use crate::{system, View, World};
 
     fn system1(_: View<'_, usize>) {}
 
     let world = World::new();
 
     Workload::builder("System1")
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -571,15 +522,14 @@ fn single_immutable() {
 
 #[test]
 fn single_mutable() {
-    use crate::{ViewMut, World};
+    use crate::{system, ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
 
     let world = World::new();
 
     Workload::builder("System1")
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -598,7 +548,7 @@ fn single_mutable() {
 
 #[test]
 fn multiple_immutable() {
-    use crate::{View, World};
+    use crate::{system, View, World};
 
     fn system1(_: View<'_, usize>) {}
     fn system2(_: View<'_, usize>) {}
@@ -606,10 +556,8 @@ fn multiple_immutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -628,7 +576,7 @@ fn multiple_immutable() {
 
 #[test]
 fn multiple_mutable() {
-    use crate::{ViewMut, World};
+    use crate::{system, ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
     fn system2(_: ViewMut<'_, usize>) {}
@@ -636,10 +584,8 @@ fn multiple_mutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -658,7 +604,7 @@ fn multiple_mutable() {
 
 #[test]
 fn multiple_mixed() {
-    use crate::{View, ViewMut, World};
+    use crate::{system, View, ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
     fn system2(_: View<'_, usize>) {}
@@ -666,10 +612,8 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -688,10 +632,8 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system2))
-        .unwrap()
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system2))
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -710,7 +652,7 @@ fn multiple_mixed() {
 
 #[test]
 fn append_optimizes_batches() {
-    use crate::{View, ViewMut, World};
+    use crate::{system, View, ViewMut, World};
 
     fn system_a1(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
     fn system_a2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
@@ -720,12 +662,11 @@ fn append_optimizes_batches() {
 
     let mut group_a = Workload::builder("Group A");
     group_a
-        .try_with_system(system!(system_a1))
-        .unwrap()
-        .try_with_system(system!(system_a2))
-        .unwrap();
+        .with_system(system!(system_a1))
+        .with_system(system!(system_a2));
+
     let mut group_b = Workload::builder("Group B");
-    group_b.try_with_system(system!(system_b1)).unwrap();
+    group_b.with_system(system!(system_b1));
 
     Workload::builder("Combined")
         .append(&mut group_a)
@@ -748,7 +689,7 @@ fn append_optimizes_batches() {
 
 #[test]
 fn all_storages() {
-    use crate::{AllStoragesViewMut, View, World};
+    use crate::{system, AllStoragesViewMut, View, World};
 
     fn system1(_: View<'_, usize>) {}
     fn system2(_: AllStoragesViewMut<'_>) {}
@@ -756,8 +697,7 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -776,10 +716,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system2))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system2))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -798,10 +736,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -820,10 +756,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system2))
-        .unwrap()
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system2))
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -843,7 +777,7 @@ fn all_storages() {
 #[cfg(feature = "non_send")]
 #[test]
 fn non_send() {
-    use crate::{NonSend, View, ViewMut, World};
+    use crate::{system, NonSend, View, ViewMut, World};
 
     struct NotSend(*const ());
     unsafe impl Sync for NotSend {}
@@ -856,10 +790,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system(system!(sys1))
-        .unwrap()
-        .try_with_system(system!(sys1))
-        .unwrap()
+        .with_system(system!(sys1))
+        .with_system(system!(sys1))
         .add_to_world(&world)
         .unwrap();
 
@@ -878,10 +810,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system(system!(sys1))
-        .unwrap()
-        .try_with_system(system!(sys2))
-        .unwrap()
+        .with_system(system!(sys1))
+        .with_system(system!(sys2))
         .add_to_world(&world)
         .unwrap();
 
@@ -900,10 +830,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system(system!(sys2))
-        .unwrap()
-        .try_with_system(system!(sys1))
-        .unwrap()
+        .with_system(system!(sys2))
+        .with_system(system!(sys1))
         .add_to_world(&world)
         .unwrap();
 
@@ -922,10 +850,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system(system!(sys1))
-        .unwrap()
-        .try_with_system(system!(sys3))
-        .unwrap()
+        .with_system(system!(sys1))
+        .with_system(system!(sys3))
         .add_to_world(&world)
         .unwrap();
 
@@ -944,10 +870,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .try_with_system(system!(sys1))
-        .unwrap()
-        .try_with_system(system!(sys4))
-        .unwrap()
+        .with_system(system!(sys1))
+        .with_system(system!(sys4))
         .add_to_world(&world)
         .unwrap();
 
@@ -966,19 +890,16 @@ fn non_send() {
 
 #[test]
 fn fake_borrow() {
-    use crate::{FakeBorrow, SparseSet, View, World};
+    use crate::{system, FakeBorrow, SparseSet, View, World};
 
     fn system1(_: View<'_, usize>) {}
 
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(|_: FakeBorrow<SparseSet<usize>>| {}))
-        .unwrap()
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(|_: FakeBorrow<SparseSet<usize>>| {}))
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -997,7 +918,7 @@ fn fake_borrow() {
 
 #[test]
 fn unique_fake_borrow() {
-    use crate::{FakeBorrow, Unique, UniqueView, View, World};
+    use crate::{system, FakeBorrow, Unique, UniqueView, View, World};
 
     fn system1(_: UniqueView<'_, usize>, _: View<'_, usize>) {}
     fn system2(_: View<'_, usize>) {}
@@ -1005,16 +926,11 @@ fn unique_fake_borrow() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
-        .try_with_system(system!(|_: FakeBorrow<Unique<usize>>| {}))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
-        .try_with_system(system!(system1))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
+        .with_system(system!(|_: FakeBorrow<Unique<usize>>| {}))
+        .with_system(system!(system2))
+        .with_system(system!(system1))
         .add_to_world(&world)
         .unwrap();
 
@@ -1033,7 +949,7 @@ fn unique_fake_borrow() {
 
 #[test]
 fn unique_and_non_unique() {
-    use crate::{UniqueViewMut, ViewMut, World};
+    use crate::{system, UniqueViewMut, ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
     fn system2(_: UniqueViewMut<'_, usize>) {}
@@ -1041,10 +957,8 @@ fn unique_and_non_unique() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .try_with_system(system!(system1))
-        .unwrap()
-        .try_with_system(system!(system2))
-        .unwrap()
+        .with_system(system!(system1))
+        .with_system(system!(system2))
         .add_to_world(&world)
         .unwrap();
 
@@ -1084,7 +998,7 @@ fn empty_workload() {
 
 #[test]
 fn append_ensures_multiple_batches_can_be_optimized_over() {
-    use crate::{View, ViewMut, World};
+    use crate::{system, View, ViewMut, World};
 
     fn sys_a1(_: ViewMut<'_, usize>, _: ViewMut<'_, u32>) {}
     fn sys_a2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
@@ -1095,14 +1009,12 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
 
     let mut group_a = Workload::builder("Group A");
     group_a
-        .try_with_system(system!(sys_a1))
-        .unwrap()
-        .try_with_system(system!(sys_a2))
-        .unwrap();
+        .with_system(system!(sys_a1))
+        .with_system(system!(sys_a2));
     let mut group_b = Workload::builder("Group B");
-    group_b.try_with_system(system!(sys_b1)).unwrap();
+    group_b.with_system(system!(sys_b1));
     let mut group_c = Workload::builder("Group C");
-    group_c.try_with_system(system!(sys_c1)).unwrap();
+    group_c.with_system(system!(sys_c1));
 
     Workload::builder("Combined")
         .append(&mut group_a)

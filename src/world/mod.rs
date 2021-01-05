@@ -1,6 +1,6 @@
 pub mod scheduler;
 
-pub use scheduler::{Workload, WorkloadBuilder, WorkloadSystem, SystemResult};
+pub use scheduler::{Workload, WorkloadBuilder, WorkloadSystem};
 
 pub(crate) use scheduler::TypeInfo;
 
