@@ -177,6 +177,10 @@ impl EntityId {
     pub fn inner(self) -> u64 {
         self.0.get()
     }
+    #[inline]
+    pub fn from_inner(inner: u64) -> Option<EntityId> {
+        Some(EntityId(NonZeroU64::new(inner)?))
+    }
 }
 
 impl PartialEq for EntityId {
