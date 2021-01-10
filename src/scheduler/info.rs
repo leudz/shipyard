@@ -5,8 +5,6 @@ pub use crate::type_id::TypeId;
 use crate::borrow::Mutability;
 use crate::storage::StorageId;
 use alloc::borrow::Cow;
-use alloc::format;
-use alloc::string::ToString;
 use alloc::vec::Vec;
 
 /// Contains information related to a workload.
@@ -76,18 +74,23 @@ impl PartialEq<(TypeId, Mutability)> for TypeInfo {
 
 impl core::fmt::Debug for TypeInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("TypeInfo")
-            .field(
+        let mut debug_struct = f.debug_struct("TypeInfo");
+
+        match (self.is_send, self.is_sync) {
+            (true, true) => debug_struct.field("name", &self.name),
+            (false, true) => {
+                debug_struct.field("name", &format_args!("shipyard::NonSend<{}>", self.name))
+            }
+            (true, false) => {
+                debug_struct.field("name", &format_args!("shipyard::NonSync<{}>", self.name))
+            }
+            (false, false) => debug_struct.field(
                 "name",
-                &match (self.is_send, self.is_sync) {
-                    (true, true) => self.name.to_string(),
-                    (false, true) => format!("shipyard::NonSend<{}>", self.name),
-                    (true, false) => format!("shipyard::NonSync<{}>", self.name),
-                    (false, false) => format!("shipyard::NonSendSync<{}>", self.name),
-                },
-            )
-            .field("mutability", &self.mutability)
-            .field("storage_id", &self.storage_id)
-            .finish()
+                &format_args!("shipyard::NonSendSync<{}>", self.name),
+            ),
+        }
+        .field("mutability", &self.mutability)
+        .field("storage_id", &self.storage_id)
+        .finish()
     }
 }
