@@ -915,4 +915,8 @@ impl World {
     pub fn clear(&mut self) {
         self.all_storages.get_mut().clear();
     }
+    #[inline]
+    pub fn spawn(&mut self, entity: EntityId) -> bool {
+        self.all_storages.get_mut().spawn(entity)
+    }
 }

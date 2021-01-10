@@ -1287,4 +1287,10 @@ let i = all_storages.run(sys1).unwrap();
             .or_insert_with(|| Storage::new(f()))
             .get_mut_exclusive()
     }
+    #[inline]
+    pub fn spawn(&mut self, entity: EntityId) -> bool {
+        self.exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .spawn(entity)
+    }
 }
