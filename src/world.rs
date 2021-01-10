@@ -3,6 +3,7 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::Borrow;
 use crate::entity_id::EntityId;
 use crate::error;
+use crate::memory_usage::WorldMemoryUsage;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::{Batches, Scheduler};
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
@@ -918,5 +919,19 @@ impl World {
     #[inline]
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().spawn(entity)
+    }
+    /// Displays storages memory information.
+    pub fn memory_usage(&self) -> WorldMemoryUsage<'_> {
+        WorldMemoryUsage(self)
+    }
+}
+
+impl core::fmt::Debug for WorldMemoryUsage<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if let Ok(all_storages) = self.0.all_storages.try_borrow() {
+            all_storages.memory_usage().fmt(f)
+        } else {
+            f.write_str("Could not borrow AllStorages")
+        }
     }
 }

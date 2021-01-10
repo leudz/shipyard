@@ -1,5 +1,6 @@
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
+use crate::memory_usage::StorageMemoryUsage;
 use core::any::Any;
 
 pub trait SizedAny {
@@ -35,4 +36,7 @@ pub trait UnknownStorage: SizedAny {
     }
     #[inline]
     fn run_on_remove_global(&mut self, _all_storages: &AllStorages) {}
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        None
+    }
 }

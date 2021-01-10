@@ -17,6 +17,7 @@ pub(crate) use window::FullRawWindowMut;
 
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
+use crate::memory_usage::StorageMemoryUsage;
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
 
@@ -796,6 +797,22 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     #[inline]
     fn run_on_remove_global(&mut self, all_storages: &AllStorages) {
         self.run_on_remove_global(all_storages);
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(StorageMemoryUsage {
+            storage_name: core::any::type_name::<Self>().into(),
+            allocated_memory_bytes: self.sparse.reserved_memory()
+                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
+                + (self.data.capacity() * core::mem::size_of::<T>())
+                + self.metadata.used_memory()
+                + core::mem::size_of::<Self>(),
+            used_memory_bytes: self.sparse.used_memory()
+                + (self.dense.len() * core::mem::size_of::<EntityId>())
+                + (self.data.len() * core::mem::size_of::<T>())
+                + self.metadata.reserved_memory()
+                + core::mem::size_of::<Self>(),
+            component_count: self.len(),
+        })
     }
 }
 

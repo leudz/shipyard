@@ -6,6 +6,7 @@ use crate::add_component::AddComponent;
 use crate::add_entity::AddEntity;
 use crate::entity_id::EntityId;
 use crate::error;
+use crate::memory_usage::StorageMemoryUsage;
 use crate::reserve::{BulkEntityIter, BulkReserve};
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
@@ -335,6 +336,16 @@ impl UnknownStorage for Entities {
             .position(|id| id.gen() < EntityId::max_gen())
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(StorageMemoryUsage {
+            storage_name: core::any::type_name::<Self>().into(),
+            allocated_memory_bytes: (self.data.capacity() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Entities>(),
+            used_memory_bytes: (self.data.len() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Entities>(),
+            component_count: self.data.len(),
+        })
     }
 }
 

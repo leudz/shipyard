@@ -20,6 +20,26 @@ impl<T> SparseArray<T> {
     pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<T>> {
         self.0.as_mut_ptr()
     }
+    pub(super) fn used_memory(&self) -> usize {
+        self.0.len() * core::mem::size_of::<Option<Box<T>>>()
+            + self.0.iter().fold(0, |count, array| {
+                if array.is_some() {
+                    count + core::mem::size_of::<T>()
+                } else {
+                    count
+                }
+            })
+    }
+    pub(super) fn reserved_memory(&self) -> usize {
+        self.0.capacity() * core::mem::size_of::<Option<Box<T>>>()
+            + self.0.iter().fold(0, |count, array| {
+                if array.is_some() {
+                    count + core::mem::size_of::<T>()
+                } else {
+                    count
+                }
+            })
+    }
 }
 
 impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {

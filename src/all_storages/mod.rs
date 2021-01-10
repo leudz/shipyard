@@ -9,6 +9,7 @@ use crate::borrow::AllStoragesBorrow;
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
+use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::storage::{Storage, StorageId};
@@ -1292,5 +1293,42 @@ let i = all_storages.run(sys1).unwrap();
         self.exclusive_storage_mut::<Entities>()
             .unwrap()
             .spawn(entity)
+    }
+    /// Displays storages memory information.
+    pub fn memory_usage(&self) -> AllStoragesMemoryUsage<'_> {
+        AllStoragesMemoryUsage(self)
+    }
+}
+
+impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
+    // have to skip because of tuplestruct access, remove when 2.0 is available
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut borrowed_storages = 0;
+
+        self.0.lock.lock_shared();
+
+        let storages = unsafe { &*self.0.storages.get() };
+
+        let mut debug_struct = f.debug_list();
+
+        debug_struct.entries(storages.iter().filter_map(|storage| {
+            match unsafe { &*(storage.1.0) }.try_borrow() {
+                Ok(storage) => storage.memory_usage(),
+                Err(_) => {
+                    borrowed_storages += 1;
+                    None
+                }
+            }
+        }));
+
+        if borrowed_storages != 0 {
+            debug_struct.entry(&format_args!(
+                "{} storages could not be borrored",
+                borrowed_storages
+            ));
+        }
+
+        debug_struct.finish()
     }
 }
