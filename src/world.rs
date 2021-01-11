@@ -928,19 +928,21 @@ impl World {
 
 impl core::fmt::Debug for World {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if let Ok(all_storages) = self.all_storages.try_borrow() {
-            all_storages.fmt(f)?;
-        } else {
-            f.write_str("Could not borrow AllStorages")?;
-        }
+        let mut debug_struct = f.debug_tuple("World");
 
-        f.write_str("\n")?;
+        if let Ok(all_storages) = self.all_storages.try_borrow() {
+            debug_struct.field(&*all_storages);
+        } else {
+            debug_struct.field(&"Could not borrow AllStorages");
+        }
 
         if let Ok(scheduler) = self.scheduler.try_borrow() {
-            scheduler.fmt(f)
+            debug_struct.field(&*scheduler);
         } else {
-            f.write_str("Could not borrow Scheduler")
+            debug_struct.field(&"Could not borrow Scheduler");
         }
+
+        debug_struct.finish()
     }
 }
 
