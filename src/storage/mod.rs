@@ -80,6 +80,16 @@ impl Storage {
     }
 }
 
+impl core::fmt::Debug for Storage {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if let Ok(storage) = unsafe { &*self.0 }.try_borrow() {
+            f.write_str(&*storage.name())
+        } else {
+            f.write_str("Could not borrow storage")
+        }
+    }
+}
+
 #[test]
 fn delete() {
     use crate::entity_id::EntityId;

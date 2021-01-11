@@ -926,6 +926,24 @@ impl World {
     }
 }
 
+impl core::fmt::Debug for World {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        if let Ok(all_storages) = self.all_storages.try_borrow() {
+            all_storages.fmt(f)?;
+        } else {
+            f.write_str("Could not borrow AllStorages")?;
+        }
+
+        f.write_str("\n")?;
+
+        if let Ok(scheduler) = self.scheduler.try_borrow() {
+            scheduler.fmt(f)
+        } else {
+            f.write_str("Could not borrow Scheduler")
+        }
+    }
+}
+
 impl core::fmt::Debug for WorldMemoryUsage<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         if let Ok(all_storages) = self.0.all_storages.try_borrow() {

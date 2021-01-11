@@ -76,3 +76,17 @@ impl Scheduler {
         self.workloads.is_empty()
     }
 }
+
+impl core::fmt::Debug for Scheduler {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut debug_struct = f.debug_struct("Scheduler");
+
+        debug_struct.field("default_workload", &self.default);
+        debug_struct.field("workload_count", &self.workloads.len());
+        debug_struct.field("workloads", &self.workloads.keys());
+        debug_struct.field("system_count", &self.system_names.len());
+        debug_struct.field("systems", &self.system_names);
+
+        debug_struct.finish()
+    }
+}

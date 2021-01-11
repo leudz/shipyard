@@ -6,7 +6,7 @@ use core::hash::{Hash, Hasher};
 
 /// Custom `TypeId` to be able to deserialize it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct TypeId(u64);
+pub struct TypeId(pub(crate) u64);
 
 impl TypeId {
     pub(crate) fn of<T: ?Sized + 'static>() -> Self {

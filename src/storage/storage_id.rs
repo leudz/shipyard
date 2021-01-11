@@ -3,7 +3,7 @@ use core::cmp::Ordering;
 use crate::type_id::TypeId;
 
 /// Id of a storage, can be a `TypeId` or `u64`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StorageId {
     TypeId(TypeId),
     Custom(u64),
@@ -56,5 +56,22 @@ impl PartialOrd<TypeId> for StorageId {
 impl Default for StorageId {
     fn default() -> Self {
         StorageId::Custom(core::u64::MAX)
+    }
+}
+
+impl core::fmt::Debug for StorageId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut debug_struct = f.debug_struct("StorageId");
+
+        match self {
+            StorageId::TypeId(type_id) => {
+                debug_struct.field("TypeId", type_id);
+            }
+            StorageId::Custom(custom) => {
+                debug_struct.field("Custom", custom);
+            }
+        }
+
+        debug_struct.finish()
     }
 }

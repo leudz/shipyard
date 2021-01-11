@@ -1300,27 +1300,48 @@ let i = all_storages.run(sys1).unwrap();
     }
 }
 
+impl core::fmt::Debug for AllStorages {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut debug_struct = f.debug_struct("AllStorages");
+
+        self.lock.lock_shared();
+
+        {
+            let storages = unsafe { &*self.storages.get() };
+
+            debug_struct.field("storage_count", &storages.len());
+            debug_struct.field("storages", &storages.values());
+        }
+
+        unsafe { self.lock.unlock_shared() };
+
+        debug_struct.finish()
+    }
+}
+
 impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
-    // have to skip because of tuplestruct access, remove when 2.0 is available
-    #[rustfmt::skip]
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut borrowed_storages = 0;
 
-        self.0.lock.lock_shared();
-
-        let storages = unsafe { &*self.0.storages.get() };
-
         let mut debug_struct = f.debug_list();
 
-        debug_struct.entries(storages.iter().filter_map(|storage| {
-            match unsafe { &*(storage.1.0) }.try_borrow() {
-                Ok(storage) => storage.memory_usage(),
-                Err(_) => {
-                    borrowed_storages += 1;
-                    None
+        self.0.lock.lock_shared();
+
+        {
+            let storages = unsafe { &*self.0.storages.get() };
+
+            debug_struct.entries(storages.values().filter_map(|storage| {
+                match unsafe { &*(storage.0) }.try_borrow() {
+                    Ok(storage) => storage.memory_usage(),
+                    Err(_) => {
+                        borrowed_storages += 1;
+                        None
+                    }
                 }
-            }
-        }));
+            }));
+        }
+
+        unsafe { self.0.lock.unlock_shared() };
 
         if borrowed_storages != 0 {
             debug_struct.entry(&format_args!(
