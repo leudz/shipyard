@@ -1,4 +1,3 @@
-use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use alloc::borrow::Cow;
@@ -31,12 +30,6 @@ pub trait UnknownStorage: SizedAny {
     fn delete(&mut self, _entity: EntityId) {}
     #[inline]
     fn clear(&mut self) {}
-    #[inline]
-    fn has_remove_event_to_dispatch(&self) -> bool {
-        false
-    }
-    #[inline]
-    fn run_on_remove_global(&mut self, _all_storages: &AllStorages) {}
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         None
     }

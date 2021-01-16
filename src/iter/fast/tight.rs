@@ -3,7 +3,7 @@ use super::chunk::FastChunk;
 use super::chunk_exact::FastChunkExact;
 use crate::entity_id::EntityId;
 use crate::iter::with_id::LastId;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 use rayon::iter::plumbing::Producer;
 
 pub struct FastTight<Storage> {
@@ -115,7 +115,7 @@ impl<Storage: FastAbstractMut> LastId for FastTight<Storage> {
     }
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 impl<Storage: FastAbstractMut + Clone + Send> Producer for FastTight<Storage> {
     type Item = <Self as Iterator>::Item;
     type IntoIter = Self;

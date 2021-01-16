@@ -1,4 +1,4 @@
 mod iter_mixed;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 mod par_single;

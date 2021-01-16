@@ -1,11 +1,10 @@
 use super::Nothing;
 use crate::all_storages::AllStorages;
-use crate::borrow::AllStoragesBorrow;
+use crate::borrow::Borrow;
 use crate::error;
 
 pub trait AllSystem<'s, Data, B, R> {
-    fn run(self, data: Data, b: B) -> R;
-    fn try_borrow(all_storages: &'s AllStorages) -> Result<B, error::GetStorage>;
+    fn run(self, data: Data, all_storages: &'s AllStorages) -> Result<R, error::GetStorage>;
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -13,11 +12,8 @@ impl<'s, R, F> AllSystem<'s, (), Nothing, R> for F
 where
     F: FnOnce() -> R,
 {
-    fn run(self, _: (), _: Nothing) -> R {
-        (self)()
-    }
-    fn try_borrow(_: &'s AllStorages) -> Result<Nothing, error::GetStorage> {
-        Ok(Nothing)
+    fn run(self, _: (), _: &'s AllStorages) -> Result<R, error::GetStorage> {
+        Ok((self)())
     }
 }
 
@@ -26,35 +22,30 @@ impl<'s, Data, R, F> AllSystem<'s, (Data,), Nothing, R> for F
 where
     F: FnOnce(Data) -> R,
 {
-    fn run(self, (data,): (Data,), _: Nothing) -> R {
-        (self)(data)
-    }
-    fn try_borrow(_: &'s AllStorages) -> Result<Nothing, error::GetStorage> {
-        Ok(Nothing)
+    fn run(self, (data,): (Data,), _: &'s AllStorages) -> Result<R, error::GetStorage> {
+        Ok((self)(data))
     }
 }
 
 macro_rules! impl_all_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: AllStoragesBorrow<'s>,)+ R, Func> AllSystem<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
-            fn run(self, _: (), b: ($($type,)+)) -> R {
-                (self)($(b.$index,)+)
-            }
-            fn try_borrow(
+        impl<'s, $($type: Borrow<'s>,)+ R, Func> AllSystem<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
+            fn run(
+                self,
+                _: (),
                 all_storages: &'s AllStorages,
-            ) -> Result<($($type,)+), error::GetStorage> {
-                    Ok(($($type::try_borrow(all_storages)?,)+))
+            ) -> Result<R, error::GetStorage> {
+                    Ok(self($($type::borrow(all_storages, None)?,)+))
             }
         }
 
-        impl<'s, Data, $($type: AllStoragesBorrow<'s>,)+ R, Func> AllSystem<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type),+) -> R {
-            fn run(self, (data,): (Data,), b: ($($type,)+)) -> R {
-                (self)(data, $(b.$index,)+)
-            }
-            fn try_borrow(
+        impl<'s, Data, $($type: Borrow<'s>,)+ R, Func> AllSystem<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type),+) -> R {
+            fn run(
+                self,
+                (data,): (Data,),
                 all_storages: &'s AllStorages,
-            ) -> Result<($($type,)+), error::GetStorage> {
-                    Ok(($($type::try_borrow(all_storages)?,)+))
+            ) -> Result<R, error::GetStorage> {
+                    Ok(self(data, $($type::borrow(all_storages, None)?,)+))
             }
         }
     }

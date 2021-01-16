@@ -1,7 +1,7 @@
 use super::abstract_mut::FastAbstractMut;
 use super::iter::FastIter;
 use super::mixed::FastMixed;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 use super::par_iter::FastParIter;
 use super::tight::FastTight;
 use crate::entity_id::EntityId;
@@ -19,7 +19,7 @@ const ACCESS_FACTOR: usize = 3;
 /// This trait serves as substitute.
 pub trait IntoFastIter {
     type IntoIter: Iterator;
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     type IntoParIter;
 
     /// Returns an iterator over `SparseSet`.  
@@ -81,7 +81,7 @@ pub trait IntoFastIter {
     /// );
     /// ```
     /// [`par_iter`]: crate::IntoIter
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     fn fast_par_iter(self) -> Self::IntoParIter;
 }
 
@@ -91,7 +91,7 @@ where
     <T::AbsView as AbstractMut>::Index: Clone,
 {
     type IntoIter = FastIter<T::AbsView>;
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     type IntoParIter = FastParIter<T::AbsView>;
 
     #[inline]
@@ -127,7 +127,7 @@ where
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
         self.fast_iter()
     }
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     #[inline]
     fn fast_par_iter(self) -> Self::IntoParIter {
         self.fast_iter().into()
@@ -140,7 +140,7 @@ where
     <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = FastIter<(T::AbsView,)>;
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     type IntoParIter = FastParIter<(T::AbsView,)>;
 
     #[inline]
@@ -176,7 +176,7 @@ where
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
         self.fast_iter()
     }
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     #[inline]
     fn fast_par_iter(self) -> Self::IntoParIter {
         self.fast_iter().into()
@@ -187,7 +187,7 @@ macro_rules! impl_into_iter {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))+) => {
         impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoFastIter for ($type1, $($type,)+) where $type1::AbsView: FastAbstractMut, $($type::AbsView: FastAbstractMut,)+ <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
             type IntoIter = FastIter<($type1::AbsView, $($type::AbsView,)+)>;
-            #[cfg(feature = "parallel")]
+            #[cfg(feature = "rayon")]
             type IntoParIter = FastParIter<($type1::AbsView, $($type::AbsView,)+)>;
 
             #[allow(clippy::drop_copy)]
@@ -349,7 +349,7 @@ macro_rules! impl_into_iter {
                     self.fast_iter()
                 }
             }
-            #[cfg(feature = "parallel")]
+            #[cfg(feature = "rayon")]
             #[inline]
             fn fast_par_iter(self) -> Self::IntoParIter {
                 self.fast_iter().into()

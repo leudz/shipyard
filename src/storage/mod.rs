@@ -59,16 +59,15 @@ impl Storage {
     }
     #[inline]
     pub(crate) fn get<T: 'static>(&self) -> Result<Ref<'_, &T>, error::Borrow> {
-        Ok(Ref::map(unsafe { &*self.0 }.try_borrow()?, |storage| {
+        Ok(Ref::map(unsafe { &*self.0 }.borrow()?, |storage| {
             storage.any().downcast_ref::<T>().unwrap()
         }))
     }
     #[inline]
     pub(crate) fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &mut T>, error::Borrow> {
-        Ok(RefMut::map(
-            unsafe { &*self.0 }.try_borrow_mut()?,
-            |storage| storage.any_mut().downcast_mut().unwrap(),
-        ))
+        Ok(RefMut::map(unsafe { &*self.0 }.borrow_mut()?, |storage| {
+            storage.any_mut().downcast_mut().unwrap()
+        }))
     }
     #[inline]
     pub(crate) fn get_mut_exclusive<T: 'static>(&mut self) -> &mut T {
@@ -82,7 +81,7 @@ impl Storage {
 
 impl core::fmt::Debug for Storage {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if let Ok(storage) = unsafe { &*self.0 }.try_borrow() {
+        if let Ok(storage) = unsafe { &*self.0 }.borrow() {
             f.write_str(&*storage.name())
         } else {
             f.write_str("Could not borrow storage")
@@ -116,7 +115,7 @@ fn delete() {
         .insert(entity_id, "test1");
     entity_id.set_index(5);
     unsafe { &*storage.0 }
-        .try_borrow_mut()
+        .borrow_mut()
         .unwrap()
         .delete(entity_id);
     assert_eq!(
@@ -144,12 +143,12 @@ fn delete() {
     );
     entity_id.set_index(10);
     unsafe { &*storage.0 }
-        .try_borrow_mut()
+        .borrow_mut()
         .unwrap()
         .delete(entity_id);
     entity_id.set_index(1);
     unsafe { &*storage.0 }
-        .try_borrow_mut()
+        .borrow_mut()
         .unwrap()
         .delete(entity_id);
     entity_id.set_index(5);

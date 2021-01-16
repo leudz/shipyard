@@ -5,7 +5,7 @@ pub use delete_any::{CustomDeleteAny, DeleteAny};
 pub use retain::Retain;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::AllStoragesBorrow;
+use crate::borrow::Borrow;
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -257,41 +257,15 @@ impl AllStorages {
     /// ```
     pub fn strip(&mut self, entity: EntityId) {
         let mut i = 0;
-        let mut has_event = false;
 
-        loop {
-            {
-                let storages = unsafe { &mut *self.storages.get() };
+        let storages = unsafe { &mut *self.storages.get() };
 
-                while i < storages.len() {
-                    let storage =
-                        unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
+        while i < storages.len() {
+            let storage = unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
 
-                    storage.delete(entity);
+            storage.delete(entity);
 
-                    if storage.has_remove_event_to_dispatch() {
-                        has_event = true;
-                        break;
-                    }
-
-                    i += 1;
-                }
-            }
-
-            if has_event {
-                has_event = false;
-                let storages = unsafe { &*self.storages.get() };
-
-                unsafe { *self.inside_callback.get() = true };
-                let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
-                    .try_borrow_mut()
-                    .unwrap();
-                storage.run_on_remove_global(self);
-
-                i += 1;
-            } else {
-                return;
-            }
+            i += 1;
         }
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
@@ -318,44 +292,19 @@ impl AllStorages {
     /// You should only use this method if you use a custom storage with a runtime id.
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         let mut i = 0;
-        let mut has_event = false;
 
-        loop {
-            {
-                let storages = unsafe { &mut *self.storages.get() };
+        let storages = unsafe { &mut *self.storages.get() };
 
-                while i < storages.len() {
-                    let (storage_id, storage) = storages.get_index_mut(i).unwrap();
+        while i < storages.len() {
+            let (storage_id, storage) = storages.get_index_mut(i).unwrap();
 
-                    if !excluded_storage.contains(&*storage_id) {
-                        let storage = unsafe { (&mut *storage.0).get_mut() };
+            if !excluded_storage.contains(&*storage_id) {
+                let storage = unsafe { (&mut *storage.0).get_mut() };
 
-                        storage.delete(entity);
-
-                        if storage.has_remove_event_to_dispatch() {
-                            has_event = true;
-                            break;
-                        }
-                    }
-
-                    i += 1;
-                }
+                storage.delete(entity);
             }
 
-            if has_event {
-                has_event = false;
-                let storages = unsafe { &*self.storages.get() };
-
-                unsafe { *self.inside_callback.get() = true };
-                let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
-                    .try_borrow_mut()
-                    .unwrap();
-                storage.run_on_remove_global(self);
-
-                i += 1;
-            } else {
-                return;
-            }
+            i += 1;
         }
     }
     /// Deletes all entities and components in the `World`.
@@ -372,41 +321,15 @@ impl AllStorages {
     /// ```
     pub fn clear(&mut self) {
         let mut i = 0;
-        let mut has_event = false;
 
-        loop {
-            {
-                let storages = unsafe { &mut *self.storages.get() };
+        let storages = unsafe { &mut *self.storages.get() };
 
-                while i < storages.len() {
-                    let storage =
-                        unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
+        while i < storages.len() {
+            let storage = unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
 
-                    storage.clear();
+            storage.clear();
 
-                    if storage.has_remove_event_to_dispatch() {
-                        has_event = true;
-                        break;
-                    }
-
-                    i += 1;
-                }
-            }
-
-            if has_event {
-                has_event = false;
-                let storages = unsafe { &*self.storages.get() };
-
-                unsafe { *self.inside_callback.get() = true };
-                let mut storage = unsafe { &*(storages.get_index(i).unwrap().1).0 }
-                    .try_borrow_mut()
-                    .unwrap();
-                storage.run_on_remove_global(self);
-
-                i += 1;
-            } else {
-                return;
-            }
+            i += 1;
         }
     }
     /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
@@ -631,8 +554,8 @@ world.run(|all_storages: AllStoragesViewMut| {
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: crate::NonSendSync"
     )]
-    pub fn borrow<'s, V: AllStoragesBorrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
-        V::try_borrow(self)
+    pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
+        V::borrow(self, None)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -733,7 +656,7 @@ You can use:
         s: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        Ok(s.run((data,), S::try_borrow(self)?))
+        s.run((data,), self).map_err(error::Run::GetStorage)
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -851,7 +774,7 @@ let i = all_storages.run(sys1).unwrap();
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
-        Ok(s.run((), S::try_borrow(self)?))
+        s.run((), self).map_err(error::Run::GetStorage)
     }
     /// Deletes any entity with at least one of the given type(s).  
     /// The storage's type has to be used and not the component.  
@@ -913,7 +836,7 @@ let i = all_storages.run(sys1).unwrap();
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
         } else {
             unsafe { self.lock.unlock_shared() };
-            Err(error::GetStorage::MissingStorage(type_name::<T>()))
+            Err(error::GetStorage::MissingStorage(type_name::<T>().into()))
         }
     }
     pub fn custom_storage_mut<T: 'static>(
@@ -934,7 +857,7 @@ let i = all_storages.run(sys1).unwrap();
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
         } else {
             unsafe { self.lock.unlock_shared() };
-            Err(error::GetStorage::MissingStorage(type_name::<T>()))
+            Err(error::GetStorage::MissingStorage(type_name::<T>().into()))
         }
     }
     pub fn custom_storage_or_insert<T, F>(&self, f: F) -> Result<Ref<'_, &'_ T>, error::GetStorage>
@@ -1039,7 +962,6 @@ let i = all_storages.run(sys1).unwrap();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = storage.get::<T>();
-            drop(storages);
             unsafe { self.lock.unlock_shared() };
             storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<T>(), err)))
         } else {
@@ -1269,7 +1191,7 @@ let i = all_storages.run(sys1).unwrap();
             let storage = storage.get_mut_exclusive::<T>();
             Ok(storage)
         } else {
-            Err(error::GetStorage::MissingStorage(type_name::<T>()))
+            Err(error::GetStorage::MissingStorage(type_name::<T>().into()))
         }
     }
     pub(crate) fn exclusive_storage_or_insert_mut<T, F>(
@@ -1331,7 +1253,7 @@ impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
             let storages = unsafe { &*self.0.storages.get() };
 
             debug_struct.entries(storages.values().filter_map(|storage| {
-                match unsafe { &*(storage.0) }.try_borrow() {
+                match unsafe { &*(storage.0) }.borrow() {
                     Ok(storage) => storage.memory_usage(),
                     Err(_) => {
                         borrowed_storages += 1;

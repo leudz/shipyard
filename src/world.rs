@@ -1,6 +1,6 @@
 use crate::all_storages::{AllStorages, DeleteAny, Retain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::Borrow;
+use crate::borrow::WorldBorrow;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::WorldMemoryUsage;
@@ -67,7 +67,7 @@ impl World {
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) -> Result<(), error::Borrow> {
-        self.all_storages.try_borrow()?.add_unique(component);
+        self.all_storages.borrow()?.add_unique(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store a single value.  
@@ -106,9 +106,7 @@ impl World {
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
-        self.all_storages
-            .try_borrow()?
-            .add_unique_non_send(component);
+        self.all_storages.borrow()?.add_unique_non_send(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store a single value.  
@@ -147,9 +145,7 @@ impl World {
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
-        self.all_storages
-            .try_borrow()?
-            .add_unique_non_sync(component);
+        self.all_storages.borrow()?.add_unique_non_sync(component);
         Ok(())
     }
     /// Adds a new unique storage, unique storages store a single value.  
@@ -186,7 +182,7 @@ impl World {
     #[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) -> Result<(), error::Borrow> {
         self.all_storages
-            .try_borrow()?
+            .borrow()?
             .add_unique_non_send_sync(component);
         Ok(())
     }
@@ -219,7 +215,7 @@ impl World {
     /// [`AllStorages`]: crate::AllStorages
     pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
-            .try_borrow()
+            .borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
             .remove_unique::<T>()
     }
@@ -333,8 +329,8 @@ let (entities, mut usizes) = world
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: crate::NonSendSync"
     )]
-    pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
-        V::try_borrow(self)
+    pub fn borrow<'s, V: WorldBorrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
+        V::borrow(self)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -455,7 +451,7 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
         s: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        Ok(s.run((data,), S::try_borrow(self)?))
+        s.run((data,), self).map_err(error::Run::GetStorage)
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -578,7 +574,7 @@ let i = world.run(sys1).unwrap();
         &'s self,
         s: S,
     ) -> Result<R, error::Run> {
-        Ok(s.run((), S::try_borrow(self)?))
+        s.run((), self).map_err(error::Run::GetStorage)
     }
     /// Modifies the current default workload to `name`.
     ///
@@ -595,7 +591,7 @@ let i = world.run(sys1).unwrap();
         name: impl Into<Cow<'static, str>>,
     ) -> Result<(), error::SetDefaultWorkload> {
         self.scheduler
-            .try_borrow_mut()
+            .borrow_mut()
             .map_err(|_| error::SetDefaultWorkload::Borrow)?
             .set_default(name.into())
     }
@@ -615,7 +611,7 @@ let i = world.run(sys1).unwrap();
     pub fn run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
-            .try_borrow()
+            .borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
 
         let batches = scheduler.workload(name.as_ref())?;
@@ -627,7 +623,7 @@ let i = world.run(sys1).unwrap();
         scheduler: &Scheduler,
         batches: &Batches,
     ) -> Result<(), error::RunWorkload> {
-        #[cfg(feature = "parallel")]
+        #[cfg(feature = "rayon")]
         {
             for batch in &batches.parallel {
                 if batch.len() == 1 {
@@ -647,7 +643,7 @@ let i = world.run(sys1).unwrap();
 
             Ok(())
         }
-        #[cfg(not(feature = "parallel"))]
+        #[cfg(not(feature = "rayon"))]
         {
             batches.sequential.iter().try_for_each(|&index| {
                 (scheduler.systems[index])(self)
@@ -670,7 +666,7 @@ let i = world.run(sys1).unwrap();
     pub fn run_default(&self) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
-            .try_borrow()
+            .borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
 
         if !scheduler.is_empty() {
@@ -685,7 +681,7 @@ let i = world.run(sys1).unwrap();
     ///
     /// - `AllStorages` is already borrowed.
     pub fn all_storages(&self) -> Result<Ref<'_, &'_ AllStorages>, error::Borrow> {
-        self.all_storages.try_borrow()
+        self.all_storages.borrow()
     }
     /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.   
     /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
@@ -694,7 +690,7 @@ let i = world.run(sys1).unwrap();
     ///
     /// - `AllStorages` is already borrowed.
     pub fn all_storages_mut(&self) -> Result<RefMut<'_, &'_ mut AllStorages>, error::Borrow> {
-        self.all_storages.try_borrow_mut()
+        self.all_storages.borrow_mut()
     }
     /// Inserts a custom storage to the `World`.
     ///
@@ -708,7 +704,7 @@ let i = world.run(sys1).unwrap();
     ) -> Result<(), error::Borrow> {
         let _ = self
             .all_storages
-            .try_borrow()?
+            .borrow()?
             .custom_storage_or_insert_by_id(storage_id, || storage);
 
         Ok(())
@@ -930,13 +926,13 @@ impl core::fmt::Debug for World {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_tuple("World");
 
-        if let Ok(all_storages) = self.all_storages.try_borrow() {
+        if let Ok(all_storages) = self.all_storages.borrow() {
             debug_struct.field(&*all_storages);
         } else {
             debug_struct.field(&"Could not borrow AllStorages");
         }
 
-        if let Ok(scheduler) = self.scheduler.try_borrow() {
+        if let Ok(scheduler) = self.scheduler.borrow() {
             debug_struct.field(&*scheduler);
         } else {
             debug_struct.field(&"Could not borrow Scheduler");
@@ -948,7 +944,7 @@ impl core::fmt::Debug for World {
 
 impl core::fmt::Debug for WorldMemoryUsage<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if let Ok(all_storages) = self.0.all_storages.try_borrow() {
+        if let Ok(all_storages) = self.0.all_storages.borrow() {
             all_storages.memory_usage().fmt(f)
         } else {
             f.write_str("Could not borrow AllStorages")

@@ -74,7 +74,7 @@ pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use all_storages::AllStorages;
 pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
-pub use borrow::{AllStoragesBorrow, Borrow, FakeBorrow, Mutability};
+pub use borrow::{Borrow, BorrowInfo, FakeBorrow, Mutability, WorldBorrow};
 pub use contains::Contains;
 pub use delete::Delete;
 pub use entities::Entities;

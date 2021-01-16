@@ -4,10 +4,10 @@ pub mod chunk_exact;
 pub mod into_iter;
 pub mod iter;
 pub mod mixed;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 pub mod par_iter;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 pub mod par_mixed;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 pub mod par_tight;
 pub mod tight;

@@ -21,13 +21,11 @@ rayon = {version = "^1", optional = true}
 serde = {version = "^1", optional = true, default-features = false}
 
 [features]
-default = ["parallel"]
+default = ["rayon"]
 non_send = ["std"]
-non_sync = ["std"]
-parallel = ["rayon", "std"]
+non_sync = []
 serde1 = ["serde"]
 std = []
-wasm = ["parking_lot/wasm-bindgen"]
 
 [dev-dependencies]
 serde_json = "^1"

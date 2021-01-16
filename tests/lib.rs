@@ -137,7 +137,7 @@ fn systems() {
         .unwrap();
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn simple_parallel_sum() {
@@ -166,7 +166,7 @@ fn simple_parallel_sum() {
         .unwrap();
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn parallel_iterator() {
@@ -205,7 +205,7 @@ fn parallel_iterator() {
         .unwrap();
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn two_workloads() {
@@ -225,7 +225,7 @@ fn two_workloads() {
     });
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
@@ -273,7 +273,7 @@ fn add_component_with_old_key() {
     entities.add_component(entity, (&mut usizes, &mut u32s), (1, 2));
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_update_pack() {
@@ -314,7 +314,7 @@ fn par_update_pack() {
         .unwrap();
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_multiple_update_pack() {
@@ -383,7 +383,7 @@ fn par_multiple_update_pack() {
         .unwrap();
 }
 
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_update_filter() {

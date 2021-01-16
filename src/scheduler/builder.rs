@@ -178,7 +178,7 @@ impl WorkloadBuilder {
     ) -> Result<WorkloadInfo, error::AddWorkload> {
         let mut scheduler = world
             .scheduler
-            .try_borrow_mut()
+            .borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
         let Scheduler {
@@ -412,7 +412,7 @@ fn single_immutable() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -438,7 +438,7 @@ fn single_mutable() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -466,7 +466,7 @@ fn multiple_immutable() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -494,7 +494,7 @@ fn multiple_mutable() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -522,7 +522,7 @@ fn multiple_mixed() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -542,7 +542,7 @@ fn multiple_mixed() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -579,7 +579,7 @@ fn append_optimizes_batches() {
         .add_to_world_with_info(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 3);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -606,7 +606,7 @@ fn all_storages() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 1);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -626,7 +626,7 @@ fn all_storages() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -646,7 +646,7 @@ fn all_storages() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -666,7 +666,7 @@ fn all_storages() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -700,7 +700,7 @@ fn non_send() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -720,7 +720,7 @@ fn non_send() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -740,7 +740,7 @@ fn non_send() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -760,7 +760,7 @@ fn non_send() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -780,7 +780,7 @@ fn non_send() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -808,7 +808,7 @@ fn fake_borrow() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 3);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -839,7 +839,7 @@ fn unique_fake_borrow() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 5);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -867,7 +867,7 @@ fn unique_and_non_unique() {
         .add_to_world(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 2);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -888,7 +888,7 @@ fn empty_workload() {
 
     Workload::builder("Systems").add_to_world(&world).unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 0);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(
@@ -928,7 +928,7 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
         .add_to_world_with_info(&world)
         .unwrap();
 
-    let scheduler = world.scheduler.try_borrow_mut().unwrap();
+    let scheduler = world.scheduler.borrow_mut().unwrap();
     assert_eq!(scheduler.systems.len(), 4);
     assert_eq!(scheduler.workloads.len(), 1);
     assert_eq!(

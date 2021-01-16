@@ -15,7 +15,6 @@ pub(crate) use remove::Remove;
 pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
 
-use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::unknown_storage::UnknownStorage;
@@ -160,8 +159,6 @@ impl<T> SparseSet<T> {
             self.dense.push(entity);
             self.data.push(value);
 
-            self.run_on_insert(entity);
-
             old_component = None;
         } else if entity.gen() >= sparse_entity.gen() {
             let old_data = unsafe {
@@ -213,8 +210,6 @@ impl<T> SparseSet<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
         if entity.gen() >= sparse_entity.gen() {
-            self.run_on_remove(entity);
-
             let sparse_entity = self.sparse.get(entity)?;
 
             unsafe {
@@ -613,157 +608,6 @@ impl<T> SparseSet<T> {
     }
 }
 
-impl<T> SparseSet<T> {
-    #[inline]
-    fn run_on_insert(&mut self, entity: EntityId) {
-        self.schedule_insert_global(entity);
-        let mut i = 0;
-
-        if i < self.metadata.local_on_insert.len() {
-            let f = unsafe { self.metadata.local_on_insert.get_unchecked(i) };
-            (f)(entity, self);
-            i += 1;
-        }
-
-        let _ = i;
-    }
-    pub(crate) fn run_on_insert_global(&mut self, all_storages: &AllStorages) {
-        let mut i = 0;
-        let mut current = 0;
-        let end = self.metadata.on_insert_ids_dense.len();
-
-        while i < self.metadata.global_on_insert.len() {
-            let f = unsafe { *self.metadata.global_on_insert.get_unchecked(i) };
-
-            while current < end {
-                let entity = unsafe { *self.metadata.on_insert_ids_dense.get_unchecked(current) };
-
-                f(entity, self, all_storages);
-                current += 1;
-            }
-
-            current = 0;
-            i += 1;
-        }
-
-        for entity in self.metadata.on_insert_ids_dense.drain(0..end) {
-            unsafe {
-                *self.metadata.on_insert_ids_sparse.get_mut_unchecked(entity) = EntityId::dead();
-            }
-        }
-    }
-    #[inline]
-    fn run_on_remove(&mut self, entity: EntityId) {
-        self.schedule_remove_global(entity);
-
-        let mut i = 0;
-
-        if i < self.metadata.local_on_remove.len() {
-            let f = unsafe { self.metadata.local_on_remove.get_unchecked(i) };
-            (f)(entity, self);
-            i += 1;
-        }
-
-        let _ = i;
-    }
-    pub(crate) fn run_on_remove_global(&mut self, all_storages: &AllStorages) {
-        let mut i = 0;
-        let mut current = 0;
-        let end = self.metadata.on_remove_ids_dense.len();
-
-        while i < self.metadata.global_on_remove.len() {
-            let f = unsafe { *self.metadata.global_on_remove.get_unchecked(i) };
-
-            while current < end {
-                let entity = unsafe { *self.metadata.on_remove_ids_dense.get_unchecked(current) };
-
-                f(entity, self, all_storages);
-                current += 1;
-            }
-
-            current = 0;
-            i += 1;
-        }
-
-        for entity in self.metadata.on_remove_ids_dense.drain(0..end) {
-            unsafe {
-                *self.metadata.on_remove_ids_sparse.get_mut_unchecked(entity) = EntityId::dead();
-            }
-        }
-    }
-    // /// Registers a callback triggered when a component is inserted and run immediately.
-    // ///
-    // /// Callbacks will run one after the other based on the order they were added.
-    // /// They will run after the component is already in the `SparseSet`.
-    // /// Inserting components to an entity that already owns a component in this storage will not trigger `on_insert` event.
-    // #[inline]
-    // fn on_insert(&mut self, f: fn(EntityId, &mut Self)) {
-    //     self.metadata.local_on_insert.push(f);
-    // }
-    // /// Registers a callback triggered when a component is inserted and run when `ViewMut` is dropped.
-    // ///
-    // /// Callbacks will run one after the other based on the order they were added.
-    // /// `on_insert_global` callbacks run before `on_remove_global`.
-    // /// It is not possible to remove unique storages inside a global callback.
-    // #[inline]
-    // fn on_insert_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
-    //     self.metadata.global_on_insert.push(f);
-    // }
-    // /// Registers a callback triggered when a component is removed or deleted and run immediately.
-    // ///
-    // /// Callbacks will run one after the other based on the order they were added.
-    // /// They will run before the component is removed from the `SparseSet`.
-    // #[inline]
-    // fn on_remove(&mut self, f: fn(EntityId, &mut Self)) {
-    //     self.metadata.local_on_remove.push(f);
-    // }
-    // /// Registers a callback triggered when a component is removed or deleted and run when `ViewMut` is dropped or when deleting components using `AllStorages`.
-    // ///
-    // /// Callbacks will run one after the other based on the order they were added.
-    // /// `on_remove_global` callbacks run after `on_insert_global`.
-    // /// It is not possible to remove unique storages inside a global callback.
-    // #[inline]
-    // fn on_remove_global(&mut self, f: fn(EntityId, &mut Self, &AllStorages)) {
-    //     self.metadata.global_on_remove.push(f);
-    // }
-    /// Schedules a `on_insert_global` event for `entity`.
-    #[inline]
-    fn schedule_insert_global(&mut self, entity: EntityId) {
-        if !self.metadata.global_on_insert.is_empty() {
-            self.metadata.on_insert_ids_sparse.allocate_at(entity);
-
-            let id = unsafe { self.metadata.on_insert_ids_sparse.get_mut_unchecked(entity) };
-
-            if id.is_dead() || entity.gen() > id.gen() {
-                *id = EntityId::new_from_parts(
-                    self.metadata.on_insert_ids_dense.len() as u64,
-                    entity.gen() as u16,
-                    0,
-                );
-                self.metadata.on_insert_ids_dense.push(entity);
-            }
-        }
-    }
-    /// Schedules a `on_remove_global` event for `entity`.
-    #[inline]
-    fn schedule_remove_global(&mut self, entity: EntityId) {
-        if !self.metadata.global_on_remove.is_empty() {
-            self.metadata.on_remove_ids_sparse.allocate_at(entity);
-
-            let id = unsafe { self.metadata.on_remove_ids_sparse.get_mut_unchecked(entity) };
-
-            if id.is_dead() || entity.gen() > id.gen() {
-                *id = EntityId::new_from_parts(
-                    self.metadata.on_remove_ids_dense.len() as u64,
-                    entity.gen() as u16,
-                    0,
-                );
-                self.metadata.on_remove_ids_dense.push(entity);
-            }
-        }
-    }
-}
-
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
     #[track_caller]
@@ -789,14 +633,6 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
     #[inline]
     fn clear(&mut self) {
         <Self>::clear(self);
-    }
-    #[inline]
-    fn has_remove_event_to_dispatch(&self) -> bool {
-        !self.metadata.on_remove_ids_dense.is_empty()
-    }
-    #[inline]
-    fn run_on_remove_global(&mut self, all_storages: &AllStorages) {
-        self.run_on_remove_global(all_storages);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {

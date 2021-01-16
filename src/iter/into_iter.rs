@@ -2,7 +2,7 @@ use super::abstract_mut::AbstractMut;
 use super::into_abstract::IntoAbstract;
 use super::iter::Iter;
 use super::mixed::Mixed;
-#[cfg(feature = "parallel")]
+#[cfg(feature = "rayon")]
 use super::par_iter::ParIter;
 use super::tight::Tight;
 use crate::entity_id::EntityId;
@@ -20,7 +20,7 @@ const ACCESS_FACTOR: usize = 3;
 /// [`Mut`]: crate::Mut
 pub trait IntoIter {
     type IntoIter: Iterator;
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     type IntoParIter;
 
     /// Returns an iterator over `SparseSet`.
@@ -86,8 +86,8 @@ pub trait IntoIter {
     /// ```
     /// [`Mut`]: crate::Mut
     /// [`fast_par_iter`]: crate::IntoFastIter
-    #[cfg(feature = "parallel")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
+    #[cfg(feature = "rayon")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rayon")))]
     fn par_iter(self) -> Self::IntoParIter;
 }
 
@@ -96,7 +96,7 @@ where
     <T::AbsView as AbstractMut>::Index: Clone,
 {
     type IntoIter = Iter<T::AbsView>;
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     type IntoParIter = ParIter<T::AbsView>;
 
     #[inline]
@@ -126,7 +126,7 @@ where
     fn iter_by<D: 'static>(self) -> Self::IntoIter {
         self.iter()
     }
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     #[inline]
     fn par_iter(self) -> Self::IntoParIter {
         self.iter().into()
@@ -138,7 +138,7 @@ where
     <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<(T::AbsView,)>;
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     type IntoParIter = ParIter<(T::AbsView,)>;
 
     #[inline]
@@ -168,7 +168,7 @@ where
     fn iter_by<D: 'static>(self) -> Self::IntoIter {
         self.iter()
     }
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "rayon")]
     #[inline]
     fn par_iter(self) -> Self::IntoParIter {
         self.iter().into()
@@ -179,7 +179,7 @@ macro_rules! impl_into_iter {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))+) => {
         impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+) where <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
             type IntoIter = Iter<($type1::AbsView, $($type::AbsView,)+)>;
-            #[cfg(feature = "parallel")]
+            #[cfg(feature = "rayon")]
             type IntoParIter = ParIter<($type1::AbsView, $($type::AbsView,)+)>;
 
             #[allow(clippy::drop_copy)]
@@ -317,7 +317,7 @@ macro_rules! impl_into_iter {
                     self.iter()
                 }
             }
-            #[cfg(feature = "parallel")]
+            #[cfg(feature = "rayon")]
             #[inline]
             fn par_iter(self) -> Self::IntoParIter {
                 self.iter().into()

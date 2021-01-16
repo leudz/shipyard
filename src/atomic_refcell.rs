@@ -104,7 +104,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `Ref` exits scope. Multiple shared borrows can be
     /// taken out at the same time.
     #[inline]
-    pub(crate) fn try_borrow(&self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
+    pub(crate) fn borrow(&self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
         #[cfg(not(feature = "non_sync"))]
         {
             // if Send - accessible from any thread, shared xor unique
@@ -199,7 +199,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `RefMut` exits scope. The value cannot be borrowed while this borrow is
     /// active.
     #[inline]
-    pub(crate) fn try_borrow_mut(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
+    pub(crate) fn borrow_mut(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
         #[cfg(feature = "non_send")]
         {
             // if Sync - accessible from any thread, shared only if not world thread
@@ -350,42 +350,42 @@ impl<'a, T: DerefMut> DerefMut for RefMut<'a, T> {
 #[test]
 fn shared() {
     let refcell = AtomicRefCell::new(0);
-    let first_borrow = refcell.try_borrow().unwrap();
+    let first_borrow = refcell.borrow().unwrap();
 
-    assert!(refcell.try_borrow().is_ok());
-    assert_eq!(refcell.try_borrow_mut().err(), Some(error::Borrow::Unique));
+    assert!(refcell.borrow().is_ok());
+    assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Unique));
 
     drop(first_borrow);
 
-    assert!(refcell.try_borrow_mut().is_ok());
+    assert!(refcell.borrow_mut().is_ok());
 }
 
 #[test]
 fn exclusive() {
     let refcell = AtomicRefCell::new(0);
-    let first_borrow = refcell.try_borrow_mut().unwrap();
+    let first_borrow = refcell.borrow_mut().unwrap();
 
-    assert_eq!(refcell.try_borrow().err(), Some(error::Borrow::Shared));
-    assert_eq!(refcell.try_borrow_mut().err(), Some(error::Borrow::Unique));
+    assert_eq!(refcell.borrow().err(), Some(error::Borrow::Shared));
+    assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Unique));
 
     drop(first_borrow);
 
-    assert!(refcell.try_borrow_mut().is_ok());
+    assert!(refcell.borrow_mut().is_ok());
 }
 
 #[cfg(all(feature = "std", not(feature = "non_send")))]
 #[test]
 fn shared_thread() {
-    use std::sync::Arc;
+    use alloc::sync::Arc;
 
     let refcell = Arc::new(AtomicRefCell::new(0));
     let refcell_clone = refcell.clone();
-    let first_borrow = refcell.try_borrow().unwrap();
+    let first_borrow = refcell.borrow().unwrap();
 
     std::thread::spawn(move || {
-        refcell_clone.try_borrow().unwrap();
+        refcell_clone.borrow().unwrap();
         assert_eq!(
-            refcell_clone.try_borrow_mut().err(),
+            refcell_clone.borrow_mut().err(),
             Some(error::Borrow::Unique)
         );
     })
@@ -394,7 +394,7 @@ fn shared_thread() {
 
     drop(first_borrow);
 
-    assert!(refcell.try_borrow_mut().is_ok());
+    assert!(refcell.borrow_mut().is_ok());
 }
 
 #[cfg(all(feature = "std", not(feature = "non_send")))]
@@ -406,16 +406,16 @@ fn exclusive_thread() {
     let refcell_clone = refcell.clone();
 
     std::thread::spawn(move || {
-        let _first_borrow = refcell_clone.try_borrow_mut();
+        let _first_borrow = refcell_clone.borrow_mut();
         assert_eq!(
-            refcell_clone.try_borrow_mut().err(),
+            refcell_clone.borrow_mut().err(),
             Some(error::Borrow::Unique)
         );
     })
     .join()
     .unwrap();
 
-    refcell.try_borrow_mut().unwrap();
+    refcell.borrow_mut().unwrap();
 }
 
 #[cfg(feature = "non_send")]
@@ -427,11 +427,11 @@ fn non_send() {
 
     std::thread::spawn(move || unsafe {
         (&*(refcell_ptr as *const AtomicRefCell<u32>))
-            .try_borrow()
+            .borrow()
             .unwrap();
         assert_eq!(
             (&*(refcell_ptr as *const AtomicRefCell<u32>))
-                .try_borrow_mut()
+                .borrow_mut()
                 .err(),
             Some(error::Borrow::WrongThread)
         );
@@ -439,8 +439,8 @@ fn non_send() {
     .join()
     .unwrap();
 
-    refcell.try_borrow().unwrap();
-    refcell.try_borrow_mut().unwrap();
+    refcell.borrow().unwrap();
+    refcell.borrow_mut().unwrap();
 }
 
 #[cfg(feature = "non_sync")]
@@ -453,17 +453,17 @@ fn non_sync() {
 
     std::thread::spawn(move || unsafe {
         (&*(refcell_ptr as *const AtomicRefCell<u32>))
-            .try_borrow()
+            .borrow()
             .unwrap();
         (&*(refcell_ptr as *const AtomicRefCell<u32>))
-            .try_borrow_mut()
+            .borrow_mut()
             .unwrap();
     })
     .join()
     .unwrap();
 
-    refcell.try_borrow().unwrap();
-    refcell.try_borrow_mut().unwrap();
+    refcell.borrow().unwrap();
+    refcell.borrow_mut().unwrap();
 }
 
 #[cfg(all(feature = "non_send", feature = "non_sync"))]
@@ -476,13 +476,13 @@ fn non_send_sync() {
     std::thread::spawn(move || unsafe {
         assert_eq!(
             (&*(refcell_ptr as *const AtomicRefCell<u32>))
-                .try_borrow()
+                .borrow()
                 .err(),
             Some(error::Borrow::WrongThread)
         );
         assert_eq!(
             (&*(refcell_ptr as *const AtomicRefCell<u32>))
-                .try_borrow_mut()
+                .borrow_mut()
                 .err(),
             Some(error::Borrow::WrongThread)
         );
@@ -490,6 +490,6 @@ fn non_send_sync() {
     .join()
     .unwrap();
 
-    refcell.try_borrow().unwrap();
-    refcell.try_borrow_mut().unwrap();
+    refcell.borrow().unwrap();
+    refcell.borrow_mut().unwrap();
 }
