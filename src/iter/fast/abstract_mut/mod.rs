@@ -44,7 +44,7 @@ impl<'tmp, T> FastAbstractMut for FullRawWindowMut<'tmp, T> {
     }
     #[inline]
     unsafe fn get_data_slice(&self, range: Range<usize>) -> Self::Slice {
-        &mut *core::slice::from_raw_parts_mut(self.data.add(range.start), range.end)
+        &mut *core::slice::from_raw_parts_mut(self.data.add(range.start), range.end - range.start)
     }
     #[inline]
     unsafe fn get_datas(&self, index: Self::Index) -> <Self as FastAbstractMut>::Out {

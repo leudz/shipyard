@@ -21,6 +21,14 @@ impl<Storage: FastAbstractMut> Iterator for FastChunk<Storage> {
                     self.current - self.step..self.current,
                 )
             })
+        } else if self.current < self.end {
+            let result = Some(unsafe {
+                FastAbstractMut::get_data_slice(&self.storage, self.current..self.end)
+            });
+
+            self.current = self.end;
+
+            result
         } else {
             None
         }
@@ -46,6 +54,14 @@ impl<Storage: FastAbstractMut> Iterator for FastChunk<Storage> {
                     self.current - self.step..self.current,
                 )
             });
+        }
+
+        if self.current < self.end {
+            init = f(init, unsafe {
+                FastAbstractMut::get_data_slice(&self.storage, self.current..self.end)
+            });
+
+            self.current = self.end;
         }
 
         init

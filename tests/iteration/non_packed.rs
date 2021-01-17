@@ -296,3 +296,46 @@ fn fast_iter_by() {
     assert_eq!(iter.next(), Some((&14, &4)));
     assert_eq!(iter.next(), None);
 }
+
+#[test]
+fn chunk() {
+    let mut world = World::new();
+
+    world.bulk_add_entity((0..100).map(|_| (1u32,)));
+
+    let u32s = world.borrow::<View<u32>>().unwrap();
+
+    assert_eq!(
+        u32s.fast_iter()
+            .into_chunk(8)
+            .ok()
+            .unwrap()
+            .flatten()
+            .count(),
+        100
+    );
+
+    let mut i = 0;
+    for n in u32s.fast_iter().into_chunk(1).ok().unwrap().flatten() {
+        i += n;
+    }
+    assert_eq!(i, 100);
+
+    let mut iter = u32s.fast_iter().into_chunk_exact(8).ok().unwrap();
+
+    assert_eq!(
+        iter.remainder().iter().count() + iter.flatten().count(),
+        100
+    );
+
+    let mut iter = u32s.fast_iter().into_chunk_exact(1).ok().unwrap();
+
+    let mut i = 0;
+    for n in iter.remainder() {
+        i += n;
+    }
+    for n in iter.flatten() {
+        i += n;
+    }
+    assert_eq!(i, 100);
+}
