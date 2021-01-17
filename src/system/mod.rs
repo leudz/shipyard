@@ -35,13 +35,21 @@ where
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: IntoBorrow,)+ R, Func> System<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R + FnOnce($(<$type::Borrow as Borrow<'s>>::View),+) -> R {
+        impl<'s, $($type: IntoBorrow,)+ R, Func> System<'s, (), ($($type,)+), R> for Func
+        where
+            Func: FnOnce($($type),+) -> R
+                + FnOnce($(<$type::Borrow as Borrow<'s>>::View),+) -> R
+        {
             fn run(self, _: (), world: &'s World) -> Result<R, error::GetStorage> {
                 Ok((self)($($type::Borrow::borrow(world)?,)+))
             }
         }
 
-        impl<'s, Data, $($type: IntoBorrow,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type),+) -> R + FnOnce(Data, $(<$type::Borrow as Borrow<'s>>::View),+) -> R {
+        impl<'s, Data, $($type: IntoBorrow,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func
+        where
+            Func: FnOnce(Data, $($type),+) -> R
+                + FnOnce(Data, $(<$type::Borrow as Borrow<'s>>::View),+) -> R
+        {
             fn run(self, (data,): (Data,), world: &'s World) -> Result<R, error::GetStorage> {
                 Ok((self)(data, $($type::Borrow::borrow(world)?,)+))
             }
