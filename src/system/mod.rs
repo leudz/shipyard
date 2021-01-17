@@ -43,7 +43,7 @@ macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
         impl<'s, $($type: WorldBorrow<'s> + BorrowInfo,)+ R, Func> System<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
             fn run(self, _: (), world: &'s World) -> Result<R, error::GetStorage> {
-                Ok((self)($($type::borrow(world)?,)+))
+                Ok((self)($($type::world_borrow(world)?,)+))
             }
 
             fn borrow_info(info: &mut Vec<TypeInfo>) {
@@ -55,7 +55,7 @@ macro_rules! impl_system {
 
         impl<'s, Data, $($type: WorldBorrow<'s> + BorrowInfo,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type,)+) -> R {
             fn run(self, (data,): (Data,), world: &'s World) -> Result<R, error::GetStorage> {
-                Ok((self)(data, $($type::borrow(world)?,)+))
+                Ok((self)(data, $($type::world_borrow(world)?,)+))
             }
 
             fn borrow_info(info: &mut Vec<TypeInfo>) {

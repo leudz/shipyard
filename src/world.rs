@@ -330,7 +330,7 @@ let (entities, mut usizes) = world
         doc = "[NonSendSync]: crate::NonSendSync"
     )]
     pub fn borrow<'s, V: WorldBorrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
-        V::borrow(self)
+        V::world_borrow(self)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
