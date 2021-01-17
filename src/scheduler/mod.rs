@@ -1,8 +1,10 @@
 mod builder;
 pub mod info;
+mod into_workload_system;
 mod system;
 
 pub use builder::{Workload, WorkloadBuilder};
+pub use into_workload_system::IntoWorkloadSystem;
 pub use system::WorkloadSystem;
 
 pub(crate) use info::TypeInfo;

@@ -1,18 +1,16 @@
 mod all_storages;
+// mod as_struct;
 
 pub use all_storages::AllSystem;
 
-use crate::borrow::{BorrowInfo, WorldBorrow};
+use crate::borrow::{IntoWorldBorrow, WorldBorrow};
 use crate::error;
-use crate::scheduler::TypeInfo;
 use crate::world::World;
-use alloc::vec::Vec;
 
 pub struct Nothing;
 
 pub trait System<'s, Data, B, R> {
     fn run(self, data: Data, world: &'s World) -> Result<R, error::GetStorage>;
-    fn borrow_info(info: &mut Vec<TypeInfo>);
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -23,8 +21,6 @@ where
     fn run(self, _: (), _: &'s World) -> Result<R, error::GetStorage> {
         Ok((self)())
     }
-
-    fn borrow_info(_: &mut Vec<TypeInfo>) {}
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
@@ -35,33 +31,19 @@ where
     fn run(self, (data,): (Data,), _: &'s World) -> Result<R, error::GetStorage> {
         Ok((self)(data))
     }
-
-    fn borrow_info(_: &mut Vec<TypeInfo>) {}
 }
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: WorldBorrow<'s> + BorrowInfo,)+ R, Func> System<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R {
+        impl<'s, $($type: IntoWorldBorrow,)+ R, Func> System<'s, (), ($($type,)+), R> for Func where Func: FnOnce($($type),+) -> R + FnOnce($(<$type::Borrow as WorldBorrow<'s>>::View),+) -> R {
             fn run(self, _: (), world: &'s World) -> Result<R, error::GetStorage> {
-                Ok((self)($($type::world_borrow(world)?,)+))
-            }
-
-            fn borrow_info(info: &mut Vec<TypeInfo>) {
-                $(
-                    $type::borrow_info(info);
-                )+
+                Ok((self)($($type::Borrow::world_borrow(world)?,)+))
             }
         }
 
-        impl<'s, Data, $($type: WorldBorrow<'s> + BorrowInfo,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type,)+) -> R {
+        impl<'s, Data, $($type: IntoWorldBorrow,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func where Func: FnOnce(Data, $($type),+) -> R + FnOnce(Data, $(<$type::Borrow as WorldBorrow<'s>>::View),+) -> R {
             fn run(self, (data,): (Data,), world: &'s World) -> Result<R, error::GetStorage> {
-                Ok((self)(data, $($type::world_borrow(world)?,)+))
-            }
-
-            fn borrow_info(info: &mut Vec<TypeInfo>) {
-                $(
-                    $type::borrow_info(info);
-                )+
+                Ok((self)(data, $($type::Borrow::world_borrow(world)?,)+))
             }
         }
     }

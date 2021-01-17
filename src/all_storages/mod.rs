@@ -5,7 +5,7 @@ pub use delete_any::{CustomDeleteAny, DeleteAny};
 pub use retain::Retain;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::Borrow;
+use crate::borrow::{Borrow, IntoBorrow};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -554,8 +554,10 @@ world.run(|all_storages: AllStoragesViewMut| {
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: crate::NonSendSync"
     )]
-    pub fn borrow<'s, V: Borrow<'s>>(&'s self) -> Result<V, error::GetStorage> {
-        V::borrow(self, None)
+    pub fn borrow<V: IntoBorrow>(
+        &self,
+    ) -> Result<<V::Borrow as Borrow<'_>>::View, error::GetStorage> {
+        V::Borrow::borrow(self, None)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.

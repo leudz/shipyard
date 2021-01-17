@@ -20,7 +20,7 @@ fn basic() {
         .unwrap();
 
     Workload::builder("Push")
-        .with_system(system!(push))
+        .with_system((push).into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
     world.run_default().unwrap();

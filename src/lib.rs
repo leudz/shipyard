@@ -56,7 +56,6 @@ mod scheduler;
 mod sparse_set;
 mod storage;
 mod system;
-mod system_macro;
 mod type_id;
 mod unique;
 mod unknown_storage;
@@ -74,7 +73,9 @@ pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use all_storages::AllStorages;
 pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
-pub use borrow::{Borrow, BorrowInfo, FakeBorrow, Mutability, WorldBorrow};
+pub use borrow::{
+    Borrow, BorrowInfo, FakeBorrow, IntoBorrow, IntoWorldBorrow, Mutability, WorldBorrow,
+};
 pub use contains::Contains;
 pub use delete::Delete;
 pub use entities::Entities;
@@ -87,7 +88,7 @@ pub use pack::update::{Inserted, InsertedOrModified, Modified};
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
-pub use scheduler::{info, Workload, WorkloadBuilder, WorkloadSystem};
+pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
 pub use sparse_set::{sort, sort::IntoSortable, SparseSet};
 pub use storage::StorageId;
 #[doc(hidden)]

@@ -76,7 +76,7 @@ fn system() {
         .unwrap();
 
     Workload::builder("")
-        .with_system(system!(system1))
+        .with_system(system1.into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
 
@@ -121,8 +121,8 @@ fn systems() {
         .unwrap();
 
     Workload::builder("")
-        .with_system(system!(system1))
-        .with_system(system!(system2))
+        .with_system(system1.into_workload_system().unwrap())
+        .with_system(system2.into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
 
@@ -214,10 +214,10 @@ fn two_workloads() {
     }
 
     let world = World::new();
-    Workload::builder("")
-        .with_system(system!(system1))
-        .add_to_world(&world)
-        .unwrap();
+    dbg!(Workload::builder("")
+        .with_system(system1.into_workload_system().unwrap())
+        .add_to_world_with_info(&world)
+        .unwrap());
 
     rayon::scope(|s| {
         s.spawn(|_| world.run_default().unwrap());
@@ -229,7 +229,7 @@ fn two_workloads() {
 #[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
-    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<usize> storage while it\'s already borrowed."
+    expected = "called `Result::unwrap()` on an `Err` value: System &lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<usize> storage while it\'s already borrowed."
 )]
 fn two_bad_workloads() {
     fn system1(_: ViewMut<usize>) {
@@ -238,7 +238,7 @@ fn two_bad_workloads() {
 
     let world = World::new();
     Workload::builder("")
-        .with_system(system!(system1))
+        .with_system(system1.into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
 

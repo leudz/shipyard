@@ -7,15 +7,15 @@ fn all_storages(_: AllStoragesViewMut, _: EntitiesView) {}
 #[test]
 fn bad_systems() {
     assert_eq!(
-        WorkloadSystem::new(|world| world.run(two_views), two_views).err(),
+        two_views.into_workload_system().err(),
         Some(error::InvalidSystem::MultipleViews)
     );
     assert_eq!(
-        WorkloadSystem::new(|world| world.run(two_views_mut), two_views_mut).err(),
+        two_views_mut.into_workload_system().err(),
         Some(error::InvalidSystem::MultipleViewsMut)
     );
     assert_eq!(
-        WorkloadSystem::new(|world| world.run(all_storages), all_storages).err(),
+        all_storages.into_workload_system().err(),
         Some(error::InvalidSystem::AllStorages)
     );
 }

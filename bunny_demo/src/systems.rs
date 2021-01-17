@@ -8,12 +8,12 @@ pub const TICK: &str = "TICK";
 
 pub fn register_workloads(world: &World) {
     Workload::builder(TICK)
-        .with_system(system!(start))
-        .with_system(system!(handle_controller))
-        .with_system(system!(update))
-        .with_system(system!(commit))
-        .with_system(system!(render))
-        .with_system(system!(end))
+        .with_system((start).into_workload_system().unwrap())
+        .with_system((handle_controller).into_workload_system().unwrap())
+        .with_system((update).into_workload_system().unwrap())
+        .with_system((commit).into_workload_system().unwrap())
+        .with_system((render).into_workload_system().unwrap())
+        .with_system((end).into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
 }

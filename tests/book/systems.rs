@@ -15,8 +15,8 @@ fn test() {
     world.run(create_ints).unwrap();
 
     Workload::builder("Int cycle")
-        .with_system(system!(create_ints))
-        .with_system(system!(delete_ints))
+        .with_system(create_ints.into_workload_system().unwrap())
+        .with_system(delete_ints.into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
     world.run_workload("Int cycle").unwrap();

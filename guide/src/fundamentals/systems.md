@@ -57,15 +57,11 @@ fn delete_ints(mut u32s: ViewMut<u32>) {
 }
 
 Workload::builder("Int cycle")
-    .with_system((|world: &World| world.run(create_ints), create_ints))
-    .with_system(system!(delete_ints))
+    .with_system((|world: &World| world.run(create_ints)).into_workload_system().unwrap())
+    .with_system(delete_ints.into_workload_system().unwrap())
     .add_to_world(&world)
     .unwrap();
 ```
-
-The repetition in [`with_system`](https://docs.rs/shipyard/latest/shipyard/struct.WorkloadBuilder.html#method.with_system)'s argument is needed for now.
-It's important to have the same function twice, the workload could fail to run if it isn't the case.  
-The [`system!`](https://docs.rs/shipyard/latest/shipyard/macro.system.html) macro will take care of the repetition for us and prevent human error.
 
 As opposed to [`run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run), [`add_workload`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.add_workload) won't execute any system until we ask it to.
 Workloads are stored in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), ready to be run again and again.
