@@ -1,6 +1,6 @@
 use super::{TypeInfo, WorkloadSystem};
 use crate::all_storages::AllStorages;
-use crate::borrow::{BorrowInfo, IntoWorldBorrow, Mutability, WorldBorrow};
+use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
 use crate::error;
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
@@ -32,13 +32,13 @@ where
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: IntoWorldBorrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func
+        impl<$($type: IntoBorrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func
         where
             Func: 'static
                 + Send
                 + Sync
                 + Fn($($type),+) -> R
-                + Fn($(<$type::Borrow as WorldBorrow<'_>>::View),+) -> R {
+                + Fn($(<$type::Borrow as Borrow<'_>>::View),+) -> R {
 
             fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -78,7 +78,7 @@ macro_rules! impl_system {
 
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::world_borrow(&world)?),+))) }),
+                    system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+))) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                 })

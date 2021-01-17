@@ -1,3 +1,4 @@
+mod all_storages;
 mod borrow_info;
 mod fake_borrow;
 #[cfg(feature = "non_send")]
@@ -6,8 +7,8 @@ mod non_send;
 mod non_send_sync;
 #[cfg(feature = "non_sync")]
 mod non_sync;
-mod world;
 
+pub use all_storages::AllStoragesBorrow;
 pub use borrow_info::BorrowInfo;
 pub use fake_borrow::FakeBorrow;
 #[cfg(feature = "non_send")]
@@ -16,13 +17,13 @@ pub use non_send::NonSend;
 pub use non_send_sync::NonSendSync;
 #[cfg(feature = "non_sync")]
 pub use non_sync::NonSync;
-pub use world::{IntoWorldBorrow, WorldBorrow};
 
-use crate::all_storages::AllStorages;
-use crate::atomic_refcell::{Ref, RefMut, SharedBorrow};
+use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::view::AllStoragesViewMut;
 use crate::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
+use crate::world::World;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutability {
@@ -34,14 +35,46 @@ pub trait IntoBorrow {
     type Borrow: for<'a> Borrow<'a>;
 }
 
-/// Allows a type to be borrowed by [`AllStorages::borrow`] and [`AllStorages::run`].
+/// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and worklaods.
 pub trait Borrow<'a> {
     type View;
+
     /// This function is where the actual borrowing happens.
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage>;
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage>;
+}
+
+pub struct AllStoragesMutBorrower;
+
+impl IntoBorrow for AllStoragesViewMut<'_> {
+    type Borrow = AllStoragesMutBorrower;
+}
+
+impl<'a> Borrow<'a> for AllStoragesMutBorrower {
+    type View = AllStoragesViewMut<'a>;
+
+    #[inline]
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        world
+            .all_storages
+            .borrow_mut()
+            .map(AllStoragesViewMut)
+            .map_err(error::GetStorage::AllStoragesBorrow)
+    }
+}
+
+pub struct FakeBorrower<T>(T);
+
+impl<T: 'static> IntoBorrow for FakeBorrow<T> {
+    type Borrow = FakeBorrower<T>;
+}
+
+impl<T: 'static> Borrow<'_> for FakeBorrower<T> {
+    type View = FakeBorrow<T>;
+
+    #[inline]
+    fn borrow(_: &World) -> Result<Self::View, error::GetStorage> {
+        Ok(FakeBorrow::new())
+    }
 }
 
 pub struct UnitBorrower;
@@ -54,10 +87,7 @@ impl<'a> Borrow<'a> for UnitBorrower {
     type View = ();
 
     #[inline]
-    fn borrow(
-        _: &'a AllStorages,
-        _: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage>
+    fn borrow(_: &'a World) -> Result<Self::View, error::GetStorage>
     where
         Self: Sized,
     {
@@ -75,10 +105,16 @@ impl<'a> Borrow<'a> for EntitiesBorrower {
     type View = EntitiesView<'a>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let entities = all_storages.entities()?;
 
         let (entities, borrow) = unsafe { Ref::destructure(entities) };
@@ -86,7 +122,7 @@ impl<'a> Borrow<'a> for EntitiesBorrower {
         Ok(EntitiesView {
             entities,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         })
     }
 }
@@ -101,10 +137,16 @@ impl<'a> Borrow<'a> for EntitiesMutBorrower {
     type View = EntitiesViewMut<'a>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let entities = all_storages.entities_mut()?;
 
         let (entities, borrow) = unsafe { RefMut::destructure(entities) };
@@ -112,7 +154,7 @@ impl<'a> Borrow<'a> for EntitiesMutBorrower {
         Ok(EntitiesViewMut {
             entities,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
 }
@@ -127,10 +169,16 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewBorrower<T> {
     type View = View<'a, T>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
@@ -138,7 +186,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewBorrower<T> {
         Ok(View {
             sparse_set,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         })
     }
 }
@@ -153,10 +201,16 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewBorrower<T>> {
     type View = NonSend<View<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_non_send(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
@@ -164,7 +218,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewBorrower<T>> {
         Ok(NonSend(View {
             sparse_set,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -179,10 +233,16 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewBorrower<T>> {
     type View = NonSync<View<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_non_sync(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
@@ -190,7 +250,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewBorrower<T>> {
         Ok(NonSync(View {
             sparse_set,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -205,10 +265,16 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
     type View = NonSendSync<View<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_non_send_sync(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
@@ -216,7 +282,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
         Ok(NonSendSync(View {
             sparse_set,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -231,10 +297,16 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMutBorrower<T> {
     type View = ViewMut<'a, T>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
@@ -242,7 +314,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMutBorrower<T> {
         Ok(ViewMut {
             sparse_set,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
 }
@@ -257,10 +329,16 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMutBorrower<T>> {
     type View = NonSend<ViewMut<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_non_send_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
@@ -268,7 +346,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMutBorrower<T>> {
         Ok(NonSend(ViewMut {
             sparse_set,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -283,10 +361,16 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMutBorrower<T>> {
     type View = NonSync<ViewMut<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_non_sync_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
@@ -294,7 +378,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMutBorrower<T>> {
         Ok(NonSync(ViewMut {
             sparse_set,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -309,10 +393,16 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
     type View = NonSendSync<ViewMut<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_or_insert_non_send_sync_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
@@ -320,7 +410,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
         Ok(NonSendSync(ViewMut {
             sparse_set,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -335,10 +425,16 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewBorrower<T> {
     type View = UniqueView<'a, T>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -346,7 +442,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewBorrower<T> {
         Ok(UniqueView {
             unique,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         })
     }
 }
@@ -361,10 +457,16 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
     type View = NonSend<UniqueView<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -372,7 +474,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
         Ok(NonSend(UniqueView {
             unique,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -387,10 +489,16 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
     type View = NonSync<UniqueView<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -398,7 +506,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
         Ok(NonSync(UniqueView {
             unique,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -413,10 +521,16 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     type View = NonSendSync<UniqueView<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -424,7 +538,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
         Ok(NonSendSync(UniqueView {
             unique,
             borrow: Some(borrow),
-            all_borrow,
+            all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -439,10 +553,16 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMutBorrower<T> {
     type View = UniqueViewMut<'a, T>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -450,7 +570,7 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMutBorrower<T> {
         Ok(UniqueViewMut {
             unique,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         })
     }
 }
@@ -465,10 +585,16 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     type View = NonSend<UniqueViewMut<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -476,7 +602,7 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
         Ok(NonSend(UniqueViewMut {
             unique,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -491,10 +617,16 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     type View = NonSync<UniqueViewMut<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -502,7 +634,7 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
         Ok(NonSync(UniqueViewMut {
             unique,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -517,10 +649,16 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
     type View = NonSendSync<UniqueViewMut<'a, T>>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            Ref::destructure(
+                world
+                    .all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -528,7 +666,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
         Ok(NonSendSync(UniqueViewMut {
             unique,
             _borrow: Some(borrow),
-            _all_borrow: all_borrow,
+            _all_borrow: Some(all_borrow),
         }))
     }
 }
@@ -541,15 +679,12 @@ impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
     type View = Option<T::View>;
 
     #[inline]
-    fn borrow(
-        all_storages: &'a AllStorages,
-        all_borrow: Option<SharedBorrow<'a>>,
-    ) -> Result<Self::View, error::GetStorage> {
-        Ok(T::borrow(all_storages, all_borrow).ok())
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        Ok(T::borrow(world).ok())
     }
 }
 
-macro_rules! impl_all_storages_borrow {
+macro_rules! impl_world_borrow {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: IntoBorrow),+> IntoBorrow for ($($type,)+) {
             type Borrow = ($($type::Borrow,)+);
@@ -559,25 +694,21 @@ macro_rules! impl_all_storages_borrow {
             type View = ($($type::View,)+);
 
             #[inline]
-            fn borrow(
-                all_storages: &'a AllStorages, all_borrow: Option<SharedBorrow<'a>>
-            ) -> Result<Self::View, error::GetStorage> {
-                    Ok(($(
-                        <$type as Borrow>::borrow(all_storages, all_borrow.clone())?,
-                    )+))
+            fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+                Ok(($($type::borrow(world)?,)+))
             }
         }
     }
 }
 
-macro_rules! all_storages_borrow {
+macro_rules! world_borrow {
     ($(($type: ident, $index: tt))*;($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_all_storages_borrow![$(($type, $index))*];
-        all_storages_borrow![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
+        impl_world_borrow![$(($type, $index))*];
+        world_borrow![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))*;) => {
-        impl_all_storages_borrow![$(($type, $index))*];
+        impl_world_borrow![$(($type, $index))*];
     }
 }
 
-all_storages_borrow![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+world_borrow![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

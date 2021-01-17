@@ -1,6 +1,6 @@
 use crate::all_storages::{AllStorages, DeleteAny, Retain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::{IntoWorldBorrow, WorldBorrow};
+use crate::borrow::{Borrow, IntoBorrow};
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::WorldMemoryUsage;
@@ -329,10 +329,11 @@ let (entities, mut usizes) = world
         all(feature = "non_send", feature = "non_sync"),
         doc = "[NonSendSync]: crate::NonSendSync"
     )]
-    pub fn borrow<V: IntoWorldBorrow>(
-        &self,
-    ) -> Result<<V::Borrow as WorldBorrow<'_>>::View, error::GetStorage> {
-        V::Borrow::world_borrow(self)
+    pub fn borrow<'s, V: IntoBorrow>(&'s self) -> Result<V, error::GetStorage>
+    where
+        V::Borrow: Borrow<'s, View = V>,
+    {
+        V::Borrow::borrow(self)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
