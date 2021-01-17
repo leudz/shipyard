@@ -30,6 +30,12 @@ where
     }
 }
 
+impl IntoWorkloadSystem<(), ()> for WorkloadSystem {
+    fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
+        Ok(self)
+    }
+}
+
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: IntoBorrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func

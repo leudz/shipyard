@@ -1,5 +1,5 @@
 use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
-use super::{Batches, Scheduler, WorkloadSystem};
+use super::{Batches, IntoWorkloadSystem, Scheduler, WorkloadSystem};
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::error;
@@ -49,7 +49,7 @@ impl WorkloadBuilder {
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, IntoIter, IntoWorkloadSystem, View, ViewMut, Workload, World};
+    /// use shipyard::{EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
     ///
     /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
     ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
@@ -75,8 +75,8 @@ impl WorkloadBuilder {
     /// );
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system(add.into_workload_system().unwrap())
-    ///     .with_system(check.into_workload_system().unwrap())
+    ///     .with_system(&add)
+    ///     .with_system(&check)
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
@@ -92,7 +92,7 @@ impl WorkloadBuilder {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{EntitiesViewMut, IntoIter, IntoWorkloadSystem, View, ViewMut, Workload, World};
+    /// use shipyard::{EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
     ///
     /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
     ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
@@ -118,16 +118,17 @@ impl WorkloadBuilder {
     /// );
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system(add.into_workload_system().unwrap())
-    ///     .with_system(check.into_workload_system().unwrap())
+    ///     .with_system(&add)
+    ///     .with_system(&check)
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
     /// world.run_default();
     /// ```
+    #[track_caller]
     #[inline]
-    pub fn with_system(&mut self, system: WorkloadSystem) -> &mut Self {
-        self.systems.push(system);
+    pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(&mut self, system: S) -> &mut Self {
+        self.systems.push(system.into_workload_system().unwrap());
 
         self
     }
@@ -396,14 +397,14 @@ impl WorkloadBuilder {
 
 #[test]
 fn single_immutable() {
-    use crate::{IntoWorkloadSystem, View, World};
+    use crate::{View, World};
 
     fn system1(_: View<'_, usize>) {}
 
     let world = World::new();
 
     Workload::builder("System1")
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -422,14 +423,14 @@ fn single_immutable() {
 
 #[test]
 fn single_mutable() {
-    use crate::{IntoWorkloadSystem, ViewMut, World};
+    use crate::{ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
 
     let world = World::new();
 
     Workload::builder("System1")
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -456,7 +457,7 @@ fn multiple_immutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
         .with_system(system2.into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
@@ -476,7 +477,7 @@ fn multiple_immutable() {
 
 #[test]
 fn multiple_mutable() {
-    use crate::{IntoWorkloadSystem, ViewMut, World};
+    use crate::{ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
     fn system2(_: ViewMut<'_, usize>) {}
@@ -484,8 +485,8 @@ fn multiple_mutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -504,7 +505,7 @@ fn multiple_mutable() {
 
 #[test]
 fn multiple_mixed() {
-    use crate::{IntoWorkloadSystem, View, ViewMut, World};
+    use crate::{View, ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
     fn system2(_: View<'_, usize>) {}
@@ -512,8 +513,8 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -532,8 +533,8 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system2.into_workload_system().unwrap())
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system2)
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -552,7 +553,7 @@ fn multiple_mixed() {
 
 #[test]
 fn append_optimizes_batches() {
-    use crate::{IntoWorkloadSystem, View, ViewMut, World};
+    use crate::{View, ViewMut, World};
 
     fn system_a1(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
     fn system_a2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
@@ -561,12 +562,10 @@ fn append_optimizes_batches() {
     let world = World::new();
 
     let mut group_a = Workload::builder("Group A");
-    group_a
-        .with_system(system_a1.into_workload_system().unwrap())
-        .with_system(system_a2.into_workload_system().unwrap());
+    group_a.with_system(&system_a1).with_system(&system_a2);
 
     let mut group_b = Workload::builder("Group B");
-    group_b.with_system(system_b1.into_workload_system().unwrap());
+    group_b.with_system(&system_b1);
 
     Workload::builder("Combined")
         .append(&mut group_a)
@@ -589,7 +588,7 @@ fn append_optimizes_batches() {
 
 #[test]
 fn all_storages() {
-    use crate::{AllStoragesViewMut, IntoWorkloadSystem, View, World};
+    use crate::{AllStoragesViewMut, View, World};
 
     fn system1(_: View<'_, usize>) {}
     fn system2(_: AllStoragesViewMut<'_>) {}
@@ -597,7 +596,7 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -616,8 +615,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system2.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system2)
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -636,8 +635,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -656,8 +655,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system2.into_workload_system().unwrap())
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system2)
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -677,7 +676,7 @@ fn all_storages() {
 #[cfg(feature = "non_send")]
 #[test]
 fn non_send() {
-    use crate::{IntoWorkloadSystem, NonSend, View, ViewMut, World};
+    use crate::{NonSend, View, ViewMut, World};
 
     struct NotSend(*const ());
     unsafe impl Sync for NotSend {}
@@ -690,8 +689,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(sys1.into_workload_system().unwrap())
-        .with_system(sys1.into_workload_system().unwrap())
+        .with_system(&sys1)
+        .with_system(&sys1)
         .add_to_world(&world)
         .unwrap();
 
@@ -710,8 +709,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(sys1.into_workload_system().unwrap())
-        .with_system(sys2.into_workload_system().unwrap())
+        .with_system(&sys1)
+        .with_system(&sys2)
         .add_to_world(&world)
         .unwrap();
 
@@ -730,8 +729,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(sys2.into_workload_system().unwrap())
-        .with_system(sys1.into_workload_system().unwrap())
+        .with_system(&sys2)
+        .with_system(&sys1)
         .add_to_world(&world)
         .unwrap();
 
@@ -750,8 +749,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(sys1.into_workload_system().unwrap())
-        .with_system(sys3.into_workload_system().unwrap())
+        .with_system(&sys1)
+        .with_system(&sys3)
         .add_to_world(&world)
         .unwrap();
 
@@ -770,8 +769,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(sys1.into_workload_system().unwrap())
-        .with_system(sys4.into_workload_system().unwrap())
+        .with_system(&sys1)
+        .with_system(&sys4)
         .add_to_world(&world)
         .unwrap();
 
@@ -790,20 +789,16 @@ fn non_send() {
 
 #[test]
 fn fake_borrow() {
-    use crate::{FakeBorrow, IntoWorkloadSystem, SparseSet, View, World};
+    use crate::{FakeBorrow, SparseSet, View, World};
 
     fn system1(_: View<'_, usize>) {}
 
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(
-            (|_: FakeBorrow<SparseSet<usize>>| {})
-                .into_workload_system()
-                .unwrap(),
-        )
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&|_: FakeBorrow<SparseSet<usize>>| {})
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -822,7 +817,7 @@ fn fake_borrow() {
 
 #[test]
 fn unique_fake_borrow() {
-    use crate::{FakeBorrow, IntoWorkloadSystem, Unique, UniqueView, View, World};
+    use crate::{FakeBorrow, Unique, UniqueView, View, World};
 
     fn system1(_: UniqueView<'_, usize>, _: View<'_, usize>) {}
     fn system2(_: View<'_, usize>) {}
@@ -830,15 +825,11 @@ fn unique_fake_borrow() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
-        .with_system(
-            (|_: FakeBorrow<Unique<usize>>| {})
-                .into_workload_system()
-                .unwrap(),
-        )
-        .with_system(system2.into_workload_system().unwrap())
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&system2)
+        .with_system(&|_: FakeBorrow<Unique<usize>>| {})
+        .with_system(&system2)
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -857,7 +848,7 @@ fn unique_fake_borrow() {
 
 #[test]
 fn unique_and_non_unique() {
-    use crate::{IntoWorkloadSystem, UniqueViewMut, ViewMut, World};
+    use crate::{UniqueViewMut, ViewMut, World};
 
     fn system1(_: ViewMut<'_, usize>) {}
     fn system2(_: UniqueViewMut<'_, usize>) {}
@@ -865,8 +856,8 @@ fn unique_and_non_unique() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -906,7 +897,7 @@ fn empty_workload() {
 
 #[test]
 fn append_ensures_multiple_batches_can_be_optimized_over() {
-    use crate::{IntoWorkloadSystem, View, ViewMut, World};
+    use crate::{View, ViewMut, World};
 
     fn sys_a1(_: ViewMut<'_, usize>, _: ViewMut<'_, u32>) {}
     fn sys_a2(_: View<'_, usize>, _: ViewMut<'_, u32>) {}
@@ -916,13 +907,11 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
     let world = World::new();
 
     let mut group_a = Workload::builder("Group A");
-    group_a
-        .with_system(sys_a1.into_workload_system().unwrap())
-        .with_system(sys_a2.into_workload_system().unwrap());
+    group_a.with_system(&sys_a1).with_system(&sys_a2);
     let mut group_b = Workload::builder("Group B");
-    group_b.with_system(sys_b1.into_workload_system().unwrap());
+    group_b.with_system(&sys_b1);
     let mut group_c = Workload::builder("Group C");
-    group_c.with_system(sys_c1.into_workload_system().unwrap());
+    group_c.with_system(&sys_c1);
 
     Workload::builder("Combined")
         .append(&mut group_a)

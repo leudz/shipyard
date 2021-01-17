@@ -76,7 +76,7 @@ fn system() {
         .unwrap();
 
     Workload::builder("")
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -121,8 +121,8 @@ fn systems() {
         .unwrap();
 
     Workload::builder("")
-        .with_system(system1.into_workload_system().unwrap())
-        .with_system(system2.into_workload_system().unwrap())
+        .with_system(&system1)
+        .with_system(&system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -215,7 +215,7 @@ fn two_workloads() {
 
     let world = World::new();
     dbg!(Workload::builder("")
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
         .add_to_world_with_info(&world)
         .unwrap());
 
@@ -238,7 +238,7 @@ fn two_bad_workloads() {
 
     let world = World::new();
     Workload::builder("")
-        .with_system(system1.into_workload_system().unwrap())
+        .with_system(&system1)
         .add_to_world(&world)
         .unwrap();
 

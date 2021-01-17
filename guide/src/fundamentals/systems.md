@@ -57,8 +57,8 @@ fn delete_ints(mut u32s: ViewMut<u32>) {
 }
 
 Workload::builder("Int cycle")
-    .with_system((|world: &World| world.run(create_ints)).into_workload_system().unwrap())
-    .with_system(delete_ints.into_workload_system().unwrap())
+    .with_system(&create_ints)
+    .with_system(&delete_ints)
     .add_to_world(&world)
     .unwrap();
 ```
