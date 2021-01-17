@@ -21,7 +21,7 @@ rayon = {version = "^1", optional = true}
 serde = {version = "^1", optional = true, default-features = false}
 
 [features]
-default = ["rayon"]
+default = ["rayon", "std"]
 non_send = ["std"]
 non_sync = []
 serde1 = ["serde"]
