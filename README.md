@@ -2,21 +2,20 @@
 
 Shipyard is an Entity Component System focused on usability and speed.
 
-[![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 [![Crates.io](https://img.shields.io/crates/v/shipyard)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
-[![Chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://shipyard.zulipchat.com)
+[![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 
-If you have any question or want to follow the development more closely join the [Zulip](https://shipyard.zulipchat.com).
+If you have any question or want to follow the development more closely <sub>[![Chat](https://img.shields.io/badge/join-Zulip-brightgreen.svg)](https://shipyard.zulipchat.com)</sub>.
 
 Learning resources:
 - [Guide](https://leudz.github.io/shipyard/guide)
 
-## Simple Example <!-- omit in toc -->
+## Basic Example <!-- omit in toc -->
 ```rust
-use shipyard::*;
+use shipyard::{IntoIter, View, ViewMut, World};
 
-struct Health(f32);
+struct Health(u32);
 struct Position {
     _x: f32,
     _y: f32,
@@ -27,7 +26,7 @@ fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
         .iter()
         .filter(|(pos, _)| is_in_acid(pos))
     {
-        health.0 -= 1.0;
+        health.0 -= 1;
     }
 }
 
@@ -37,182 +36,43 @@ fn is_in_acid(_: &Position) -> bool {
 }
 
 fn main() {
-    let world = World::new();
+    let mut world = World::new();
 
-    world.run(
-        |mut entities: EntitiesViewMut,
-         mut positions: ViewMut<Position>,
-         mut healths: ViewMut<Health>| {
-            entities.add_entity(
-                (&mut positions, &mut healths),
-                (Position { _x: 0.0, _y: 0.0 }, Health(1000.0)),
-            );
-        },
-    );
+    world.add_entity((Position { _x: 0.0, _y: 0.0 }, Health(1000)));
 
-    world.run(in_acid);
+    world.run(in_acid).unwrap();
 }
+
 ```
 
 ## Table of Contents <!-- omit in toc -->
-- [Let there be SparseSets](#let-there-be-sparsesets)
-- [Systems](#systems)
-    - [Not just storage](#not-just-storage)
-    - [Return](#return)
-    - [Generics](#generics)
-    - [All at once](#all-at-once)
-- [Unique Storage (Resource)](#unique-storage-resource)
-- [!Send and !Sync Components](#send-and-sync-components)
-- [Workload](#workload)
+- [Origin of the name](#origin-of-the-name)
+- [Motivation](#motivation)
 - [Cargo Features](#cargo-features)
-- [Unsafe](#unsafe)
 - [License](#license)
 - [Contributing](#contributing)
 
-## Let there be SparseSets
+## Origin of the name
 
-I initially started to make an ECS to learn how it works. After a failed attempt and some research, I started to work on Shipyard.
+Assembly lines take input, process it at each step, and output a result. You can have multiple lines working in parallel as long as they don't bother each other.
 
-[Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt) core data-structure: `SparseSet`.
+Shipyards such as the [Venetian Arsenal](https://en.wikipedia.org/wiki/Venetian_Arsenal) are some of the oldest examples of successful, large-scale, industrial assembly lines.  So successful that it could output a fully-finished ship _every day_.
 
-It's extremely flexible and is the core data structure behind Shipyard.  
+*Shipyard* is a project you can use to build your own highly-parallel software processes.
+
+## Motivation
+
+I initially wanted to make an ECS to learn how it works. After a failed attempt and some research, I started working on Shipyard.
+
+[Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt)'s core data-structure (`SparseSet`) and grouping model. A very flexible combo.
+
 I wouldn't say Shipyard is better or worse than Specs, it's just different.
-
-## Systems
-
-Systems make it very easy to split your logic in manageable chunks. Shipyard takes the concept quite far.
-
-You always start with a function or closure and almost always take a few views (reference to storage) as arguments.  
-The basic example shown above does just that:
-```rust
-fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
-    // -- snip --
-}
-```
-A function with two views as argument.
-
-### Not just storage
-
-The first argument doesn't have to be a view, you can pass any data to a system. You don't even have to own it.
-
-```rust
-fn in_acid(season: &Season, positions: View<Position>, mut healths: ViewMut<Health>) {
-    // -- snip --
-}
-
-world.run_with_data(in_acid, &season);
-```
-You have to provide the data when running the system of course.
-
-### Return
-
-Systems can also have a return type, if run directly with `World::run` or `AllStorages::run` you'll get the returned value right away.  
-For workloads you can only get back errors.
-
-```rust
-fn lowest_hp(healths: View<Health>) -> EntityId {
-    // -- snip --
-}
-
-let entity = world.run(lowest_hp);
-```
-
-### Generics
-
-Just like any function you can add some generics. You'll have to specify them when running the system.
-
-```rust
-fn in_acid<F: Float>(positions: View<Position<F>>, mut healths: ViewMut<Health>) {
-    // -- snip --
-}
-
-world.run(in_acid::<f32>);
-```
-
-### All at once
-
-You can of course use all of them at the same time.
-
-```rust
-fn debug<T: Debug + 'static>(fmt: &mut Formatter, view: View<T>) -> Result<(), fmt::Error> {
-    // -- snip --
-}
-
-world.run_with_data(debug::<u32>, fmt)?;
-```
-
-## Unique Storage (Resource)
-
-Unique storages are used to store data you only have once in the `World` and aren't related to any entity.
-
-```rust
-fn render(renderer: UniqueView<Renderer>) {
-    // -- snip --
-}
-
-world.add_unique(Renderer::new());
-```
-
-## !Send and !Sync Components
-
-`!Send` and `!Sync` components can be stored directly in the `World` and accessed almost just like any other component.  
-Make sure to add the cargo feature to have access to this functionality.
-
-```rust
-fn run(rcs: NonSendSync<View<Rc<u32>>>) {
-    // -- snip --
-}
-```
-
-## Workload
-
-Workloads make it easy to run multiple systems again and again. They also automatically schedule systems so you don't have borrow error when trying to use multiple threads.
-
-```rust
-fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
-    // -- snip --
-}
-
-fn tag_dead(entities: EntitiesView, healths: View<Health>, mut deads: ViewMut<Dead>) {
-    for (id, health) in healths.iter().with_id() {
-        if health.0 == 0.0 {
-            entities.add_component(&mut deads, Dead, id);
-        }
-    }
-}
-
-fn remove_dead(mut all_storages: AllStoragesViewMut) {
-    all_storages.remove_any::<(Dead,)>();
-}
-
-world
-    .add_workload("Rain")
-    .with_system(system!(in_acid))
-    .with_system(system!(tag_dead))
-    .with_system(system!(remove_dead))
-    .build();
-
-world.run_workload("Rain");
-world.run_workload("Rain");
-```
-
-The system macro acts as duck tape while waiting for some features in the language, it will disappear as soon as possible.  
-You can make workloads without it but I strongly recommended to use it.
 
 ## Cargo Features
 
-- **panic** *(default)* adds panicking functions
-- **parallel** *(default)* &mdash; adds parallel iterators and dispatch
 - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
-- **non_send** &mdash; adds methods and types required to work with `!Send` components
-- **non_sync** &mdash; adds methods and types required to work with `!Sync` components
-- **std** *(default)* &mdash; lets shipyard use the standard library
-
-## Unsafe
-
-This crate uses `unsafe` both because sometimes there's no way around it, and for performance gain.  
-Releases should have all invocation of `unsafe` explained.  
-If you find places where a safe alternative is possible without repercussion (small ones are sometimes acceptable) please open an issue or a PR.
+- **std** *(default)* &mdash; lets Shipyard use the standard library
+- **thread_local** &mdash; adds methods and types required to work with `!Send` and `!Sync` components
 
 ## License
 
@@ -224,8 +84,6 @@ Licensed under either of
    ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your option.  
-The `erased_serde` module is a fork of [`erased_serde`](https://github.com/dtolnay/erased-serde). The original code is licensed under [MIT](src/erased_serde/ORIGINAL-MIT-LICENSE) or [APACHE-2.0](src/erased_serde/ORIGINAL-APACHE-LICENSE).  
-The modifications are licensed the same way as the rest of Shipyard's code.
 
 ## Contributing
 
