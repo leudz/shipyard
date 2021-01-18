@@ -1,4 +1,4 @@
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 mod non_send_sync;
 
 use shipyard::*;

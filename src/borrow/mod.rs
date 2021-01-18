@@ -1,21 +1,21 @@
 mod all_storages;
 mod borrow_info;
 mod fake_borrow;
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 mod non_send;
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 mod non_send_sync;
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 mod non_sync;
 
 pub use all_storages::AllStoragesBorrow;
 pub use borrow_info::BorrowInfo;
 pub use fake_borrow::FakeBorrow;
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 pub use non_send::NonSend;
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 pub use non_send_sync::NonSendSync;
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 pub use non_sync::NonSync;
 
 use crate::atomic_refcell::{Ref, RefMut};
@@ -191,12 +191,12 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewBorrower<T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Sync> IntoBorrow for NonSend<View<'_, T>> {
     type Borrow = NonSend<ViewBorrower<T>>;
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewBorrower<T>> {
     type View = NonSend<View<'a, T>>;
 
@@ -223,12 +223,12 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewBorrower<T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Send> IntoBorrow for NonSync<View<'_, T>> {
     type Borrow = NonSync<ViewBorrower<T>>;
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewBorrower<T>> {
     type View = NonSync<View<'a, T>>;
 
@@ -255,12 +255,12 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewBorrower<T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<T: 'static> IntoBorrow for NonSendSync<View<'_, T>> {
     type Borrow = NonSendSync<ViewBorrower<T>>;
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
     type View = NonSendSync<View<'a, T>>;
 
@@ -319,12 +319,12 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for ViewMutBorrower<T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Sync> IntoBorrow for NonSend<ViewMut<'_, T>> {
     type Borrow = NonSend<ViewMutBorrower<T>>;
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMutBorrower<T>> {
     type View = NonSend<ViewMut<'a, T>>;
 
@@ -351,12 +351,12 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<ViewMutBorrower<T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Send> IntoBorrow for NonSync<ViewMut<'_, T>> {
     type Borrow = NonSync<ViewMutBorrower<T>>;
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMutBorrower<T>> {
     type View = NonSync<ViewMut<'a, T>>;
 
@@ -383,12 +383,12 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<ViewMutBorrower<T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<T: 'static> IntoBorrow for NonSendSync<ViewMut<'_, T>> {
     type Borrow = NonSendSync<ViewMutBorrower<T>>;
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
     type View = NonSendSync<ViewMut<'a, T>>;
 
@@ -447,12 +447,12 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewBorrower<T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Sync> IntoBorrow for NonSend<UniqueView<'_, T>> {
     type Borrow = NonSend<UniqueViewBorrower<T>>;
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
     type View = NonSend<UniqueView<'a, T>>;
 
@@ -479,12 +479,12 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Send> IntoBorrow for NonSync<UniqueView<'_, T>> {
     type Borrow = NonSync<UniqueViewBorrower<T>>;
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
     type View = NonSync<UniqueView<'a, T>>;
 
@@ -511,12 +511,12 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<T: 'static> IntoBorrow for NonSendSync<UniqueView<'_, T>> {
     type Borrow = NonSendSync<UniqueViewBorrower<T>>;
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     type View = NonSendSync<UniqueView<'a, T>>;
 
@@ -575,12 +575,12 @@ impl<'a, T: 'static + Send + Sync> Borrow<'a> for UniqueViewMutBorrower<T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Sync> IntoBorrow for NonSend<UniqueViewMut<'_, T>> {
     type Borrow = NonSend<UniqueViewMutBorrower<T>>;
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     type View = NonSend<UniqueViewMut<'a, T>>;
 
@@ -607,12 +607,12 @@ impl<'a, T: 'static + Sync> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<T: 'static + Send> IntoBorrow for NonSync<UniqueViewMut<'_, T>> {
     type Borrow = NonSync<UniqueViewMutBorrower<T>>;
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     type View = NonSync<UniqueViewMut<'a, T>>;
 
@@ -639,12 +639,12 @@ impl<'a, T: 'static + Send> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<T: 'static> IntoBorrow for NonSendSync<UniqueViewMut<'_, T>> {
     type Borrow = NonSendSync<UniqueViewMutBorrower<T>>;
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
     type View = NonSendSync<UniqueViewMut<'a, T>>;
 

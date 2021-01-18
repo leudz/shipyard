@@ -1,21 +1,21 @@
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 struct NotSend(*const ());
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 unsafe impl Sync for NotSend {}
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 struct NotSync(*const ());
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 unsafe impl Send for NotSync {}
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 struct NotSendSync(*const ());
 
 #[test]
@@ -113,7 +113,7 @@ fn all_storages_option_borrow() {
 }
 
 #[test]
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 fn non_send_storage_in_other_thread() {
     let world = World::new();
     rayon::join(
@@ -131,7 +131,7 @@ fn non_send_storage_in_other_thread() {
 }
 
 #[test]
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 fn non_send_sync_storage_in_other_thread() {
     let world = World::new();
     rayon::join(
@@ -166,7 +166,7 @@ fn sparse_set_and_unique() {
 }
 
 #[test]
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 fn exhaustive_list() {
     let world = World::new();
 
@@ -194,7 +194,7 @@ fn exhaustive_list() {
 }
 
 #[test]
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 fn unique_exhaustive_list() {
     let world = World::new();
 

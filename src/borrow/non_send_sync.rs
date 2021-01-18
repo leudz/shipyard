@@ -2,7 +2,7 @@ use core::convert::{AsMut, AsRef};
 use core::ops::{Deref, DerefMut};
 
 /// Type used to access `!Send + !Sync` storages.
-#[cfg_attr(docsrs, doc(cfg(all(feature = "non_send", feature = "non_sync"))))]
+#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub struct NonSendSync<T: ?Sized>(pub(crate) T);
 
 impl<T: ?Sized> AsRef<T> for NonSendSync<T> {

@@ -2,7 +2,7 @@ use core::convert::{AsMut, AsRef};
 use core::ops::{Deref, DerefMut};
 
 /// Type used to access `!Send` storages.
-#[cfg_attr(docsrs, doc(cfg(feature = "non_send")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub struct NonSend<T: ?Sized>(pub(crate) T);
 
 impl<T: ?Sized> AsRef<T> for NonSend<T> {

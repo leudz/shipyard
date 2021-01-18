@@ -3,26 +3,26 @@ use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 use parking_lot::lock_api::RawRwLock as _;
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 use parking_lot::lock_api::RawRwLockDowngrade as _;
 use parking_lot::RawRwLock;
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 use std::thread::ThreadId;
 
 /// Threadsafe `RefCell`-like container.
 #[doc(hidden)]
 pub struct AtomicRefCell<T: ?Sized> {
     borrow_state: RawRwLock,
-    #[cfg(feature = "non_send")]
+    #[cfg(feature = "thread_local")]
     send: Option<ThreadId>,
-    #[cfg(feature = "non_sync")]
+    #[cfg(feature = "thread_local")]
     is_sync: bool,
     _non_send_sync: PhantomData<*const ()>,
     inner: UnsafeCell<T>,
 }
 
 // AtomicRefCell can't be Send if it contains !Send components
-#[cfg(not(feature = "non_send"))]
+#[cfg(not(feature = "thread_local"))]
 unsafe impl<T: ?Sized> Send for AtomicRefCell<T> {}
 
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
@@ -33,9 +33,9 @@ impl<T: Send + Sync> AtomicRefCell<T> {
     pub(crate) fn new(value: T) -> Self {
         AtomicRefCell {
             borrow_state: RawRwLock::INIT,
-            #[cfg(feature = "non_send")]
+            #[cfg(feature = "thread_local")]
             send: None,
-            #[cfg(feature = "non_sync")]
+            #[cfg(feature = "thread_local")]
             is_sync: true,
             _non_send_sync: PhantomData,
             inner: UnsafeCell::new(value),
@@ -43,7 +43,7 @@ impl<T: Send + Sync> AtomicRefCell<T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<T: Sync> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
     #[inline]
@@ -51,7 +51,7 @@ impl<T: Sync> AtomicRefCell<T> {
         AtomicRefCell {
             borrow_state: RawRwLock::INIT,
             send: Some(world_thread_id),
-            #[cfg(feature = "non_sync")]
+            #[cfg(feature = "thread_local")]
             is_sync: true,
             _non_send_sync: PhantomData,
             inner: UnsafeCell::new(value),
@@ -59,14 +59,14 @@ impl<T: Sync> AtomicRefCell<T> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<T: Send> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
     #[inline]
     pub(crate) fn new_non_sync(value: T) -> Self {
         AtomicRefCell {
             borrow_state: RawRwLock::INIT,
-            #[cfg(feature = "non_send")]
+            #[cfg(feature = "thread_local")]
             send: None,
             is_sync: false,
             _non_send_sync: PhantomData,
@@ -75,7 +75,7 @@ impl<T: Send> AtomicRefCell<T> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<T> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
     #[inline]
@@ -105,7 +105,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// taken out at the same time.
     #[inline]
     pub(crate) fn borrow(&self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
-        #[cfg(not(feature = "non_sync"))]
+        #[cfg(not(feature = "thread_local"))]
         {
             // if Send - accessible from any thread, shared xor unique
             // if !Send - accessible from any thread, shared only if not world's thread
@@ -118,35 +118,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
                 Err(error::Borrow::Shared)
             }
         }
-        #[cfg(all(not(feature = "non_send"), feature = "non_sync"))]
-        {
-            if self.is_sync {
-                // accessible from any thread, shared xor unique
-                if self.borrow_state.try_lock_shared() {
-                    Ok(Ref {
-                        inner: unsafe { &*self.inner.get() },
-                        borrow: SharedBorrow(&self.borrow_state),
-                    })
-                } else {
-                    Err(error::Borrow::Shared)
-                }
-            } else {
-                // accessible from one thread at a time
-                if self.borrow_state.try_lock_exclusive() {
-                    unsafe {
-                        self.borrow_state.downgrade();
-                    }
-
-                    Ok(Ref {
-                        inner: unsafe { &*self.inner.get() },
-                        borrow: SharedBorrow(&self.borrow_state),
-                    })
-                } else {
-                    Err(error::Borrow::Shared)
-                }
-            }
-        }
-        #[cfg(all(feature = "non_send", feature = "non_sync"))]
+        #[cfg(feature = "thread_local")]
         {
             match (self.send, self.is_sync) {
                 (_, true) => {
@@ -200,7 +172,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// active.
     #[inline]
     pub(crate) fn borrow_mut(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
-        #[cfg(feature = "non_send")]
+        #[cfg(feature = "thread_local")]
         {
             // if Sync - accessible from any thread, shared only if not world thread
             // if !Sync - accessible from world thread only
@@ -373,7 +345,7 @@ fn exclusive() {
     assert!(refcell.borrow_mut().is_ok());
 }
 
-#[cfg(all(feature = "std", not(feature = "non_send")))]
+#[cfg(all(feature = "std", not(feature = "thread_local")))]
 #[test]
 fn shared_thread() {
     use alloc::sync::Arc;
@@ -397,7 +369,7 @@ fn shared_thread() {
     assert!(refcell.borrow_mut().is_ok());
 }
 
-#[cfg(all(feature = "std", not(feature = "non_send")))]
+#[cfg(all(feature = "std", not(feature = "thread_local")))]
 #[test]
 fn exclusive_thread() {
     use std::sync::Arc;
@@ -418,7 +390,7 @@ fn exclusive_thread() {
     refcell.borrow_mut().unwrap();
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_send() {
     let refcell = AtomicRefCell::new_non_send(0u32, std::thread::current().id());
@@ -443,7 +415,7 @@ fn non_send() {
     refcell.borrow_mut().unwrap();
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_sync() {
     let refcell = AtomicRefCell::new_non_sync(0);
@@ -466,7 +438,7 @@ fn non_sync() {
     refcell.borrow_mut().unwrap();
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_send_sync() {
     let refcell = AtomicRefCell::new_non_send_sync(0u32, std::thread::current().id());

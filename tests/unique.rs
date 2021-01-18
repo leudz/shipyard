@@ -65,7 +65,7 @@ fn not_unique_storage() {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_send() {
     struct NonSendStruct {
@@ -94,7 +94,7 @@ fn non_send() {
         .unwrap();
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_sync() {
     struct NonSyncStruct {
@@ -123,7 +123,7 @@ fn non_sync() {
         .unwrap();
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_send_sync() {
     struct NonSendSyncStruct {
@@ -152,7 +152,7 @@ fn non_send_sync() {
 }
 
 #[test]
-#[cfg(all(feature = "std", feature = "non_send"))]
+#[cfg(feature = "thread_local")]
 fn non_send_remove() {
     let world: &'static World = Box::leak(Box::new(World::new()));
 

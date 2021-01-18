@@ -1,8 +1,8 @@
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 use super::non_send::NonSend;
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 use super::non_send_sync::NonSendSync;
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 use super::non_sync::NonSync;
 use super::{FakeBorrow, Mutability};
 use crate::all_storages::AllStorages;
@@ -76,7 +76,7 @@ unsafe impl<'a, T: 'static + Send + Sync> BorrowInfo for View<'a, T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<View<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -89,7 +89,7 @@ unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<View<'a, T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<View<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -102,7 +102,7 @@ unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<View<'a, T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static> BorrowInfo for NonSendSync<View<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -127,7 +127,7 @@ unsafe impl<'a, T: 'static + Send + Sync> BorrowInfo for ViewMut<'a, T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<ViewMut<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -140,7 +140,7 @@ unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<ViewMut<'a, T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<ViewMut<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -153,7 +153,7 @@ unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<ViewMut<'a, T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static> BorrowInfo for NonSendSync<ViewMut<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -178,7 +178,7 @@ unsafe impl<'a, T: 'static + Send + Sync> BorrowInfo for UniqueView<'a, T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<UniqueView<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -191,7 +191,7 @@ unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<UniqueView<'a, T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<UniqueView<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -204,7 +204,7 @@ unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<UniqueView<'a, T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static> BorrowInfo for NonSendSync<UniqueView<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -229,7 +229,7 @@ unsafe impl<'a, T: 'static + Send + Sync> BorrowInfo for UniqueViewMut<'a, T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<UniqueViewMut<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -242,7 +242,7 @@ unsafe impl<'a, T: 'static + Sync> BorrowInfo for NonSend<UniqueViewMut<'a, T>> 
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<UniqueViewMut<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {
@@ -255,7 +255,7 @@ unsafe impl<'a, T: 'static + Send> BorrowInfo for NonSync<UniqueViewMut<'a, T>> 
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 unsafe impl<'a, T: 'static> BorrowInfo for NonSendSync<UniqueViewMut<'a, T>> {
     fn borrow_info(infos: &mut Vec<TypeInfo>) {
         infos.push(TypeInfo {

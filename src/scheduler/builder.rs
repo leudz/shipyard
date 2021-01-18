@@ -673,7 +673,7 @@ fn all_storages() {
     assert_eq!(scheduler.default, "Systems");
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 #[test]
 fn non_send() {
     use crate::{NonSend, View, ViewMut, World};

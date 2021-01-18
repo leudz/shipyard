@@ -17,15 +17,14 @@ members = ["bunny_demo"]
 hashbrown = "^0.9"
 indexmap = "^1"
 parking_lot = "^0.11"
-rayon = {version = "^1", optional = true}
-serde = {version = "^1", optional = true, default-features = false}
+rayon = { version = "^1", optional = true }
+serde = { version = "^1", optional = true, default-features = false }
 
 [features]
 default = ["rayon", "std"]
-non_send = ["std"]
-non_sync = []
 serde1 = ["serde"]
 std = []
+thread_local = ["std"]
 
 [dev-dependencies]
 serde_json = "^1"

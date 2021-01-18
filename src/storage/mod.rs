@@ -6,7 +6,7 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::error;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 use std::thread::ThreadId;
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
@@ -14,7 +14,7 @@ use std::thread::ThreadId;
 /// and box the `AtomicRefCell` so it doesn't move when the `HashMap` reallocates
 pub(crate) struct Storage(pub(crate) *mut AtomicRefCell<dyn UnknownStorage>);
 
-#[cfg(not(feature = "non_send"))]
+#[cfg(not(feature = "thread_local"))]
 unsafe impl Send for Storage {}
 
 unsafe impl Sync for Storage {}
@@ -32,7 +32,7 @@ impl Storage {
     pub(crate) fn new<T: UnknownStorage + Send + Sync + 'static>(value: T) -> Self {
         Storage(Box::into_raw(Box::new(AtomicRefCell::new(value))))
     }
-    #[cfg(feature = "non_send")]
+    #[cfg(feature = "thread_local")]
     #[inline]
     pub(crate) fn new_non_send<T: UnknownStorage + Sync + 'static>(
         value: T,
@@ -42,12 +42,12 @@ impl Storage {
             value, thread_id,
         ))))
     }
-    #[cfg(feature = "non_sync")]
+    #[cfg(feature = "thread_local")]
     #[inline]
     pub(crate) fn new_non_sync<T: UnknownStorage + Send + 'static>(value: T) -> Self {
         Storage(Box::into_raw(Box::new(AtomicRefCell::new_non_sync(value))))
     }
-    #[cfg(all(feature = "non_send", feature = "non_sync"))]
+    #[cfg(feature = "thread_local")]
     #[inline]
     pub(crate) fn new_non_send_sync<T: UnknownStorage + 'static>(
         value: T,

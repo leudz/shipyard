@@ -4,11 +4,8 @@
 //!
 //! ## Features
 //!
-//! - **panic** *(default)* adds panicking functions
-//! - **parallel** *(default)* &mdash; adds parallel iterators and dispatch
 //! - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
-//! - **non_send** &mdash; add methods and types required to work with `!Send` components
-//! - **non_sync** &mdash; add methods and types required to work with `!Sync` components
+//! - **thread_local** &mdash; add methods and types required to work with `!Send` and `!Sync` components
 //! - **std** *(default)* &mdash; let shipyard use the standard library
 
 #![deny(bare_trait_objects)]
@@ -62,12 +59,14 @@ mod unknown_storage;
 mod view;
 mod world;
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
+#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub use crate::borrow::NonSend;
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
+#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub use crate::borrow::NonSendSync;
-#[cfg(feature = "non_sync")]
-#[cfg_attr(docsrs, doc(cfg(feature = "non_sync")))]
+#[cfg(feature = "thread_local")]
+#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;

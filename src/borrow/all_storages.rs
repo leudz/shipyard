@@ -1,8 +1,8 @@
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 use super::NonSend;
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 use super::NonSendSync;
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 use super::NonSync;
 use super::{
     Borrow, EntitiesBorrower, EntitiesMutBorrower, UniqueViewBorrower, UniqueViewMutBorrower,
@@ -75,7 +75,7 @@ impl<'a, T: 'static + Send + Sync> AllStoragesBorrow<'a> for ViewBorrower<T> {
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<ViewBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -91,7 +91,7 @@ impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<ViewBorrower<T>> {
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<ViewBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -107,7 +107,7 @@ impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<ViewBorrower<T>> {
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> AllStoragesBorrow<'a> for NonSendSync<ViewBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -138,7 +138,7 @@ impl<'a, T: 'static + Send + Sync> AllStoragesBorrow<'a> for ViewMutBorrower<T> 
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<ViewMutBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -154,7 +154,7 @@ impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<ViewMutBorrower<T>
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<ViewMutBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -170,7 +170,7 @@ impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<ViewMutBorrower<T>
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> AllStoragesBorrow<'a> for NonSendSync<ViewMutBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -201,7 +201,7 @@ impl<'a, T: 'static + Send + Sync> AllStoragesBorrow<'a> for UniqueViewBorrower<
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueViewBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -217,7 +217,7 @@ impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueViewBorrower
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueViewBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -233,7 +233,7 @@ impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueViewBorrower
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> AllStoragesBorrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -264,7 +264,7 @@ impl<'a, T: 'static + Send + Sync> AllStoragesBorrow<'a> for UniqueViewMutBorrow
     }
 }
 
-#[cfg(feature = "non_send")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -280,7 +280,7 @@ impl<'a, T: 'static + Sync> AllStoragesBorrow<'a> for NonSend<UniqueViewMutBorro
     }
 }
 
-#[cfg(feature = "non_sync")]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
@@ -296,7 +296,7 @@ impl<'a, T: 'static + Send> AllStoragesBorrow<'a> for NonSync<UniqueViewMutBorro
     }
 }
 
-#[cfg(all(feature = "non_send", feature = "non_sync"))]
+#[cfg(feature = "thread_local")]
 impl<'a, T: 'static> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
     #[inline]
     fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
