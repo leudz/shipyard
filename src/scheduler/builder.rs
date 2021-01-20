@@ -11,7 +11,11 @@ use alloc::borrow::Cow;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
+#[cfg(not(feature = "std"))]
+use core::any::Any;
 use core::iter::Extend;
+#[cfg(feature = "std")]
+use std::error::Error;
 
 /// Used to create a [`WorkloadBuilder`].
 ///
@@ -126,9 +130,42 @@ impl WorkloadBuilder {
     /// world.run_default();
     /// ```
     #[track_caller]
-    #[inline]
     pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(&mut self, system: S) -> &mut Self {
         self.systems.push(system.into_workload_system().unwrap());
+
+        self
+    }
+    #[track_caller]
+    #[cfg(feature = "std")]
+    pub fn with_try_system<
+        B,
+        Ok,
+        Err: 'static + Send + Error,
+        R: Into<Result<Ok, Err>>,
+        S: IntoWorkloadSystem<B, R>,
+    >(
+        &mut self,
+        system: S,
+    ) -> &mut Self {
+        self.systems
+            .push(system.into_workload_try_system::<Ok, Err>().unwrap());
+
+        self
+    }
+    #[track_caller]
+    #[cfg(not(feature = "std"))]
+    pub fn with_try_system<
+        B,
+        Ok,
+        Err: 'static + Send + Any,
+        R: Into<Result<Ok, Err>>,
+        S: IntoWorkloadSystem<B, R>,
+    >(
+        &mut self,
+        system: S,
+    ) -> &mut Self {
+        self.systems
+            .push(system.into_workload_try_system::<Ok, Err>().unwrap());
 
         self
     }
