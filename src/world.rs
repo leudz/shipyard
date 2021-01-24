@@ -714,7 +714,7 @@ impl World {
     /// let new_entities = world.bulk_add_entity((10..20).map(|i| (i as u32, i)));
     /// ```
     #[inline]
-    pub fn bulk_add_entity<T: BulkAddEntity + 'static>(&mut self, source: T) -> BulkEntityIter<'_> {
+    pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
         self.all_storages.get_mut().bulk_add_entity(source)
     }
     /// Adds components to an existing entity.  
