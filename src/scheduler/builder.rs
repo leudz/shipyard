@@ -825,65 +825,6 @@ fn non_send() {
 }
 
 #[test]
-fn fake_borrow() {
-    use crate::{FakeBorrow, SparseSet, View, World};
-
-    fn system1(_: View<'_, usize>) {}
-
-    let world = World::new();
-
-    Workload::builder("Systems")
-        .with_system(&system1)
-        .with_system(&|_: FakeBorrow<SparseSet<usize>>| {})
-        .with_system(&system1)
-        .add_to_world(&world)
-        .unwrap();
-
-    let scheduler = world.scheduler.borrow_mut().unwrap();
-    assert_eq!(scheduler.systems.len(), 2);
-    assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(
-        scheduler.workloads.get("Systems"),
-        Some(&Batches {
-            parallel: vec![vec![0], vec![1], vec![0]],
-            sequential: vec![0, 1, 0]
-        })
-    );
-    assert_eq!(scheduler.default, "Systems");
-}
-
-#[test]
-fn unique_fake_borrow() {
-    use crate::{FakeBorrow, Unique, UniqueView, View, World};
-
-    fn system1(_: UniqueView<'_, usize>, _: View<'_, usize>) {}
-    fn system2(_: View<'_, usize>) {}
-
-    let world = World::new();
-
-    Workload::builder("Systems")
-        .with_system(&system1)
-        .with_system(&system2)
-        .with_system(&|_: FakeBorrow<Unique<usize>>| {})
-        .with_system(&system2)
-        .with_system(&system1)
-        .add_to_world(&world)
-        .unwrap();
-
-    let scheduler = world.scheduler.borrow_mut().unwrap();
-    assert_eq!(scheduler.systems.len(), 3);
-    assert_eq!(scheduler.workloads.len(), 1);
-    assert_eq!(
-        scheduler.workloads.get("Systems"),
-        Some(&Batches {
-            parallel: vec![vec![0, 1, 1], vec![2], vec![0]],
-            sequential: vec![0, 1, 2, 1, 0]
-        })
-    );
-    assert_eq!(scheduler.default, "Systems");
-}
-
-#[test]
 fn unique_and_non_unique() {
     use crate::{UniqueViewMut, ViewMut, World};
 

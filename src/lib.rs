@@ -73,7 +73,7 @@ pub use add_entity::AddEntity;
 pub use all_storages::AllStorages;
 pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 #[doc(inline)]
-pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, FakeBorrow, IntoBorrow, Mutability};
+pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, IntoBorrow, Mutability};
 pub use contains::Contains;
 pub use delete::Delete;
 pub use entities::Entities;

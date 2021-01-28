@@ -4,7 +4,7 @@ use super::non_send::NonSend;
 use super::non_send_sync::NonSendSync;
 #[cfg(feature = "thread_local")]
 use super::non_sync::NonSync;
-use super::{FakeBorrow, Mutability};
+use super::Mutability;
 use crate::all_storages::AllStorages;
 use crate::entities::Entities;
 use crate::scheduler::TypeInfo;
@@ -264,18 +264,6 @@ unsafe impl<'a, T: 'static> BorrowInfo for NonSendSync<UniqueViewMut<'a, T>> {
             storage_id: StorageId::of::<Unique<T>>(),
             is_send: false,
             is_sync: false,
-        });
-    }
-}
-
-unsafe impl<T: 'static> BorrowInfo for FakeBorrow<T> {
-    fn borrow_info(infos: &mut Vec<TypeInfo>) {
-        infos.push(TypeInfo {
-            name: type_name::<T>(),
-            mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<T>(),
-            is_send: true,
-            is_sync: true,
         });
     }
 }

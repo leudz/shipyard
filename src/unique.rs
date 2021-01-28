@@ -1,8 +1,5 @@
 use crate::{memory_usage::StorageMemoryUsage, unknown_storage::UnknownStorage};
 
-/// Type used to [`FakeBorrow`] unique storages.
-///
-/// [`FakeBorrow`]: crate::FakeBorrow
 pub struct Unique<T> {
     pub(crate) value: T,
     pub(crate) is_modified: bool,

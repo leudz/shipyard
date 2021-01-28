@@ -1,6 +1,5 @@
 mod all_storages;
 mod borrow_info;
-mod fake_borrow;
 #[cfg(feature = "thread_local")]
 mod non_send;
 #[cfg(feature = "thread_local")]
@@ -10,7 +9,6 @@ mod non_sync;
 
 pub use all_storages::AllStoragesBorrow;
 pub use borrow_info::BorrowInfo;
-pub use fake_borrow::FakeBorrow;
 #[cfg(feature = "thread_local")]
 pub use non_send::NonSend;
 #[cfg(feature = "thread_local")]
@@ -59,21 +57,6 @@ impl<'a> Borrow<'a> for AllStoragesMutBorrower {
             .borrow_mut()
             .map(AllStoragesViewMut)
             .map_err(error::GetStorage::AllStoragesBorrow)
-    }
-}
-
-pub struct FakeBorrower<T>(T);
-
-impl<T: 'static> IntoBorrow for FakeBorrow<T> {
-    type Borrow = FakeBorrower<T>;
-}
-
-impl<T: 'static> Borrow<'_> for FakeBorrower<T> {
-    type View = FakeBorrow<T>;
-
-    #[inline]
-    fn borrow(_: &World) -> Result<Self::View, error::GetStorage> {
-        Ok(FakeBorrow::new())
     }
 }
 
