@@ -99,7 +99,7 @@ jobs:
         with:
           name: bunny_demo
           path: bunny_demo/bunny_demo
-  square_eater_demo:
+  square_eater:
     runs-on: ubuntu-latest
     needs: [fmt, miri, clippy, all-features]
     if: github.event_name == 'push'
