@@ -18,7 +18,6 @@ jobs:
           toolchain: stable
           profile: minimal
           components: clippy, rustfmt
-          target: wasm32-unknown-unknown
   fmt:
     runs-on: ubuntu-latest
     needs: install-stable
@@ -82,6 +81,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - run: rustup +stable target add wasm32-unknown-unknown
+
       - name: install node
         uses: actions/setup-node@v1
 
@@ -105,6 +106,7 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
+      - run: rustup +stable target add wasm32-unknown-unknown
       - run: cargo +stable build --release --package square_eater --target wasm32-unknown-unknown
       - run: mv ./target/wasm32-unknown-unknown/release/square_eater.wasm ./square_eater/public
       - name: save square_eater
