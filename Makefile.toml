@@ -34,5 +34,9 @@ env = { "RUSTFLAGS" = "-D warnings" }
 command = "cargo"
 args = ["doc", "--all-features", "--no-deps"]
 
+[tasks.build_square_eater]
+command = "cargo"
+args = ["build", "--release", "--package", "square_eater", "--target", "wasm32-unknown-unknown"]
+
 [tasks.test]
 run_task = { name = ["format", "miri", "clippy", "test-all", "doc", "clean"] }

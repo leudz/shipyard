@@ -11,7 +11,7 @@ repository = "https://github.com/leudz/shipyard"
 version = "0.4.1"
 
 [workspace]
-members = ["bunny_demo"]
+members = ["bunny_demo", "square_eater"]
 
 [dependencies]
 hashbrown = "^0.9"
