@@ -86,3 +86,17 @@ fn bulk() {
 
     assert_eq!(usizes.len(), 4);
 }
+
+#[test]
+fn bulk_unequal_length() {
+    let mut world = World::new();
+
+    world.add_entity((0u32,));
+
+    let entity = world
+        .bulk_add_entity((0..1).map(|_| (1u32, 2usize)))
+        .next()
+        .unwrap();
+
+    world.delete_entity(entity);
+}

@@ -124,20 +124,20 @@ macro_rules! impl_bulk_insert {
             #[allow(non_snake_case)]
             fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();
-                let len = iter.size_hint().0;
+                let size_hint = iter.size_hint().0;
 
                 let mut entities = all_storages.entities_mut().unwrap();
                 let entities_len = entities.data.len();
-                let new_entities = entities.bulk_generate(len);
+                let new_entities = entities.bulk_generate(size_hint);
 
                 let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1>::new).unwrap();
                 $(
                     let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type>::new).unwrap();
                 )*
 
-                $sparse_set1.reserve(len);
+                $sparse_set1.reserve(size_hint);
                 $(
-                    $sparse_set.reserve(len);
+                    $sparse_set.reserve(size_hint);
                 )*
 
                 for ($type1, $($type,)*) in iter {
@@ -147,22 +147,21 @@ macro_rules! impl_bulk_insert {
                     )*
                 }
 
-                let old_len = $sparse_set1.dense.len();
+                let len = $sparse_set1.data.len() - $sparse_set1.dense.len();
+
+                let old_len1 = $sparse_set1.dense.len();
                 $sparse_set1.dense.extend_from_slice(new_entities);
+
                 let dense_len = $sparse_set1.dense.len();
                 let data_len = $sparse_set1.data.len();
                 $sparse_set1.dense.extend((0..data_len - dense_len).map(|_| entities.generate()));
 
                 $(
-                    if $sparse_set.metadata.update.is_some() {
-                        $sparse_set.dense.extend($sparse_set1.dense[old_len..].iter().copied().map(|mut id| {id.set_inserted(); id}));
-                    } else {
-                        $sparse_set.dense.extend_from_slice(&$sparse_set1.dense[old_len..]);
-                    }
+                    $sparse_set.dense.extend_from_slice(&$sparse_set1.dense[old_len1..]);
                 )*
 
-                let start_entity = $sparse_set1.dense[old_len];
-                let end_entity = $sparse_set1.dense[data_len - 1];
+                let start_entity = $sparse_set1.dense[old_len1];
+                let end_entity = *$sparse_set1.dense.last().unwrap();
 
                 $sparse_set1.sparse.bulk_allocate(start_entity, end_entity);
                 $(
@@ -170,31 +169,44 @@ macro_rules! impl_bulk_insert {
                 )*
 
                 let SparseSet {
-                    sparse,
-                    dense,
-                    metadata,
+                    sparse: sparse1,
+                    dense: dense1,
+                    metadata: metadata1,
                     ..
                 } = &mut *$sparse_set1;
 
-                if metadata.update.is_some() {
-                    for (i, entity) in dense[old_len..].iter_mut().enumerate() {
+                if metadata1.update.is_some() {
+                    for (i, &entity) in dense1[old_len1..].iter().enumerate() {
                         unsafe {
-                            *sparse.get_mut_unchecked(*entity) = EntityId::new_from_parts((old_len + i) as u64, 0, 0);
-                            entity.set_inserted();
+                            let mut e = EntityId::new((old_len1 + i) as u64);
+                            e.set_inserted();
+                            *sparse1.get_mut_unchecked(entity) = e;
                         }
                     }
                 } else {
-                    for (i, &entity) in dense[old_len..].iter().enumerate() {
+                    for (i, &entity) in dense1[old_len1..].iter().enumerate() {
                         unsafe {
-                            *sparse.get_mut_unchecked(entity) = EntityId::new_from_parts((old_len + i) as u64, 0, 0);
+                            *sparse1.get_mut_unchecked(entity) = EntityId::new((old_len1 + i) as u64);
                         }
                     }
                 }
 
                 $(
-                    for (i, &entity) in dense[old_len..].iter().enumerate() {
-                        unsafe {
-                            *$sparse_set.sparse.get_mut_unchecked(entity) = EntityId::new_from_parts((old_len + i) as u64, 0, 0);
+                    let old_len = $sparse_set.dense.len() - len;
+
+                    if $sparse_set.metadata.update.is_some() {
+                        for (i, &entity) in dense1[old_len1..].iter().enumerate() {
+                            unsafe {
+                                let mut e = EntityId::new((old_len + i) as u64);
+                                e.set_inserted();
+                                *$sparse_set.sparse.get_mut_unchecked(entity) = e;
+                            }
+                        }
+                    } else {
+                        for (i, &entity) in dense1[old_len1..].iter().enumerate() {
+                            unsafe {
+                                *$sparse_set.sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                            }
                         }
                     }
                 )*
