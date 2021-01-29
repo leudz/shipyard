@@ -167,10 +167,13 @@ fn counters(mut player: UniqueViewMut<Player>) {
 }
 
 fn move_player(player: UniqueView<Player>, mut rects: ViewMut<Rect>) {
-    (&mut rects)
-        .get(player.id)
-        .unwrap()
-        .move_to(mouse_position().into());
+    let mut player_rect = (&mut rects).get(player.id).unwrap();
+    player_rect.move_to(mouse_position().into());
+
+    player_rect.x = player_rect.x.max(player_rect.w / 2.);
+    player_rect.x = player_rect.x.min(WIDTH as f32 - player_rect.w / 2.);
+    player_rect.y = player_rect.y.max(player_rect.h / 2.);
+    player_rect.y = player_rect.y.min(HEIGHT as f32 - player_rect.h / 2.);
 }
 
 fn move_square(
