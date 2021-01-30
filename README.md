@@ -45,6 +45,13 @@ fn main() {
 
 ```
 
+## Small Game Example <!-- omit in toc -->
+
+Inspired by Erik Hazzard's [Rectangle Eater](http://erikhazzard.github.io/RectangleEater/).
+
+[![Play](https://img.shields.io/badge/Play-Online-green)](https://leudz.github.io/shipyard/square_eater)
+[![Source](https://img.shields.io/badge/View-Source-blue)](square_eater/src/main.rs)
+
 ## Table of Contents <!-- omit in toc -->
 - [Origin of the name](#origin-of-the-name)
 - [Motivation](#motivation)
