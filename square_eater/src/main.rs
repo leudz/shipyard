@@ -4,12 +4,15 @@ use shipyard::{
     SparseSet, UniqueView, UniqueViewMut, View, ViewMut, Workload, World,
 };
 
-const HEIGHT: i32 = 360;
 const WIDTH: i32 = 640;
+const HEIGHT: i32 = 360;
 const INIT_SIZE: f32 = 5.;
 const MAX_SIZE: f32 = 25.;
 const GROWTH_RATE: f32 = 0.15;
 const SPEED: f32 = 1.5;
+const ACCELERATION_RATE: f32 = 0.01;
+const SQUARE_SPAWN_RATE: u32 = 25;
+const SQUAGUM_SPAWN_RATE: u32 = 150;
 
 struct Player {
     id: EntityId,
@@ -21,7 +24,7 @@ struct Player {
 
 struct Squagum(Vec2);
 
-struct Resistance(f32);
+struct Acceleration(f32);
 
 struct ToDelete;
 
@@ -39,12 +42,16 @@ impl std::fmt::Display for GameOver {
     }
 }
 
-fn new_square() -> Rect {
-    Rect::new(
-        rand::gen_range(MAX_SIZE / 2.0, WIDTH as f32 - MAX_SIZE / 2.),
-        rand::gen_range(MAX_SIZE / 2.0, HEIGHT as f32 - MAX_SIZE / 2.),
-        INIT_SIZE,
-        INIT_SIZE,
+/// generates a new random square.
+fn new_square() -> (Rect, Acceleration) {
+    (
+        Rect {
+            x: rand::gen_range(MAX_SIZE / 2.0, WIDTH as f32 - MAX_SIZE / 2.),
+            y: rand::gen_range(MAX_SIZE / 2.0, HEIGHT as f32 - MAX_SIZE / 2.),
+            w: INIT_SIZE,
+            h: INIT_SIZE,
+        },
+        Acceleration(0.),
     )
 }
 
@@ -60,6 +67,7 @@ fn window_conf() -> Conf {
 fn init_world(world: &mut World) {
     let player = world.add_entity((Rect::new(0., 0., INIT_SIZE * 3., INIT_SIZE * 3.),));
 
+    // since this function is called on restart we need to remove `Player` just in case
     let _ = world.remove_unique::<Player>();
 
     world
@@ -71,20 +79,21 @@ fn init_world(world: &mut World) {
             squagum_counter: 0,
         })
         .unwrap();
-    world.add_unique(Resistance(0.0)).unwrap();
 
-    world.bulk_add_entity((0..7).map(|_| (new_square(), Resistance(0.0))));
+    world.bulk_add_entity((0..7).map(|_| new_square()));
 }
 
+// Entry point of the program
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut world = World::new();
 
     init_world(&mut world);
 
+    // seed the random number generator with a random value
     rand::srand(macroquad::miniquad::date::now() as u64);
 
-    Workload::builder("")
+    Workload::builder("Game loop")
         .with_system(&counters)
         .with_system(&move_player)
         .with_system(&move_square)
@@ -98,38 +107,32 @@ async fn main() {
         .unwrap();
 
     let mut is_started = false;
-
     loop {
-        if is_mouse_button_pressed(MouseButton::Left) {
-            is_started = true;
-
-            unsafe {
-                get_internal_gl().quad_context.show_mouse(false);
-            }
-        }
-
         if is_started {
             clear_background(WHITE);
 
-            match world
+            if let Err(Some(err)) = world
                 .run_default()
                 .map_err(shipyard::error::RunWorkload::custom_error)
             {
-                Err(Some(err)) => {
-                    match err.downcast_ref::<GameOver>().unwrap() {
-                        GameOver::Loose => debug!("GameOver"),
-                        GameOver::Victory => debug!("Victory"),
-                    }
-
-                    is_started = false;
-                    world.clear();
-                    init_world(&mut world);
-
-                    continue;
+                match err.downcast_ref::<GameOver>().unwrap() {
+                    GameOver::Loose => debug!("GameOver"),
+                    GameOver::Victory => debug!("Victory"),
                 }
-                _ => {}
+
+                is_started = false;
+                world.clear();
+                init_world(&mut world);
             }
         } else {
+            if is_mouse_button_pressed(MouseButton::Left) {
+                is_started = true;
+
+                unsafe {
+                    get_internal_gl().quad_context.show_mouse(false);
+                }
+            }
+
             clear_background(BLACK);
 
             let text_dimensions = measure_text("Click to start", None, 40, 1.);
@@ -168,23 +171,23 @@ fn counters(mut player: UniqueViewMut<Player>) {
 
 fn move_player(player: UniqueView<Player>, mut rects: ViewMut<Rect>) {
     let mut player_rect = (&mut rects).get(player.id).unwrap();
-    player_rect.move_to(mouse_position().into());
 
-    player_rect.x = player_rect.x.max(player_rect.w / 2.);
-    player_rect.x = player_rect.x.min(WIDTH as f32 - player_rect.w / 2.);
-    player_rect.y = player_rect.y.max(player_rect.h / 2.);
-    player_rect.y = player_rect.y.min(HEIGHT as f32 - player_rect.h / 2.);
+    let (x, y) = mouse_position();
+    player_rect.x = x.max(player_rect.w / 2.);
+    player_rect.x = x.min(WIDTH as f32 - player_rect.w / 2.);
+    player_rect.y = y.max(player_rect.h / 2.);
+    player_rect.y = y.min(HEIGHT as f32 - player_rect.h / 2.);
 }
 
 fn move_square(
     player: UniqueView<Player>,
     mut rects: ViewMut<Rect>,
-    mut resistances: ViewMut<Resistance>,
+    mut accelerations: ViewMut<Acceleration>,
 ) {
     let player_rect = rects.get(player.id).unwrap().clone();
 
-    for mut resistance in (&mut resistances).iter() {
-        resistance.0 += 0.01;
+    for mut acceleration in (&mut accelerations).iter() {
+        acceleration.0 += ACCELERATION_RATE;
     }
 
     let mut dirs = vec![Vec2::zero(); rects.len()];
@@ -213,25 +216,18 @@ fn move_square(
             }
 
             if rect.w == MAX_SIZE && rect.h == MAX_SIZE {
-                *dir *= SPEED + resistances.get(id).unwrap().0;
+                *dir *= SPEED + accelerations.get(id).unwrap().0;
             } else {
                 *dir *= SPEED;
             }
 
             *dir += neighbourg_dir * 0.05;
-
             *dir += rect.point();
 
-            if dir.x < INIT_SIZE / 2. {
-                dir.x = INIT_SIZE / 2.;
-            } else if dir.x > WIDTH as f32 - INIT_SIZE / 2. {
-                dir.x = WIDTH as f32 - INIT_SIZE / 2.;
-            }
-            if dir.y < INIT_SIZE / 2. {
-                dir.y = INIT_SIZE / 2.;
-            } else if dir.y > HEIGHT as f32 - INIT_SIZE / 2. {
-                dir.y = HEIGHT as f32 - INIT_SIZE / 2.;
-            }
+            dir.x = dir.x.max(INIT_SIZE / 2.);
+            dir.x = dir.x.min(WIDTH as f32 - INIT_SIZE / 2.);
+            dir.y = dir.y.max(INIT_SIZE / 2.);
+            dir.y = dir.y.min(HEIGHT as f32 - INIT_SIZE / 2.);
         }
     }
 
@@ -245,15 +241,8 @@ fn move_square(
 fn grow_square(player: UniqueView<Player>, mut rects: ViewMut<Rect>) {
     for (id, mut rect) in (&mut rects).iter().with_id() {
         if id != player.id {
-            rect.h += GROWTH_RATE;
-            rect.w += GROWTH_RATE;
-
-            if rect.h > MAX_SIZE {
-                rect.h = MAX_SIZE;
-            }
-            if rect.w > MAX_SIZE {
-                rect.w = MAX_SIZE;
-            }
+            rect.w = (rect.w + GROWTH_RATE).min(MAX_SIZE);
+            rect.h = (rect.h + GROWTH_RATE).min(MAX_SIZE);
         }
     }
 }
@@ -261,16 +250,14 @@ fn grow_square(player: UniqueView<Player>, mut rects: ViewMut<Rect>) {
 fn new_squares(
     mut entities: EntitiesViewMut,
     mut rects: ViewMut<Rect>,
-    mut resistances: ViewMut<Resistance>,
+    mut accelerations: ViewMut<Acceleration>,
     mut squagums: ViewMut<Squagum>,
 ) {
-    if rand::gen_range(0, 25) == 0 {
-        entities.add_entity(
-            (&mut rects, &mut resistances),
-            (new_square(), Resistance(0.0)),
-        );
+    if rand::gen_range(0, SQUARE_SPAWN_RATE) == 0 {
+        entities.add_entity((&mut rects, &mut accelerations), new_square());
     }
-    if rand::gen_range(0, 150) == 0 {
+
+    if rand::gen_range(0, SQUAGUM_SPAWN_RATE) == 0 {
         entities.add_entity(
             &mut squagums,
             Squagum(Vec2::new(
@@ -290,10 +277,8 @@ fn collision(
     let mut player_rect = rects.get(player.id).unwrap().clone();
 
     for (id, squagum) in squagums.iter().with_id() {
-        if player_rect.x - player_rect.w / 2. <= squagum.0.x
-            && player_rect.x + player_rect.w / 2. >= squagum.0.x + INIT_SIZE
-            && player_rect.y - player_rect.h / 2. <= squagum.0.y
-            && player_rect.y + player_rect.h / 2. >= squagum.0.y + INIT_SIZE
+        if player_rect.contains(squagum.0)
+            || player_rect.contains(squagum.0 + Vec2::new(INIT_SIZE, INIT_SIZE))
         {
             player.squagum = true;
             to_delete.add_component_unchecked(id, ToDelete);
@@ -302,23 +287,23 @@ fn collision(
 
     let player_id = player.id;
     for (id, rect) in rects.iter().with_id().filter(|(id, _)| *id != player_id) {
-        if rect.w == MAX_SIZE && rect.h == MAX_SIZE {
-            if rect.x - rect.w / 2. <= player_rect.x + player_rect.w / 2.
-                && rect.x + rect.w / 2. >= player_rect.x - player_rect.w / 2.
-                && rect.y - rect.h / 2. <= player_rect.y + player_rect.h / 2.
-                && rect.y + rect.h / 2. >= player_rect.y - player_rect.h / 2.
-            {
-                if player.squagum {
-                    player_rect.w += INIT_SIZE / 4.;
-                    player_rect.h += INIT_SIZE / 4.;
-                    to_delete.add_component_unchecked(id, ToDelete);
-                }
+        if rect.w == MAX_SIZE
+            && rect.h == MAX_SIZE
+            && rect.x - rect.w / 2. <= player_rect.x + player_rect.w / 2.
+            && rect.x + rect.w / 2. >= player_rect.x - player_rect.w / 2.
+            && rect.y - rect.h / 2. <= player_rect.y + player_rect.h / 2.
+            && rect.y + rect.h / 2. >= player_rect.y - player_rect.h / 2.
+        {
+            if player.squagum {
+                player_rect.w = (player_rect.w + INIT_SIZE / 4.).min(MAX_SIZE - 0.01);
+                player_rect.h = (player_rect.h + INIT_SIZE / 4.).min(MAX_SIZE - 0.01);
+                to_delete.add_component_unchecked(id, ToDelete);
+            }
 
-                if !player.is_invincible {
-                    player.is_invincible = true;
-                    player_rect.w -= INIT_SIZE / 2.;
-                    player_rect.h -= INIT_SIZE / 2.;
-                }
+            if !player.is_invincible {
+                player.is_invincible = true;
+                player_rect.w -= INIT_SIZE / 2.;
+                player_rect.h -= INIT_SIZE / 2.;
             }
         } else if player_rect.x >= rect.w
             && player_rect.h >= rect.h
@@ -327,8 +312,8 @@ fn collision(
             && player_rect.y - player_rect.h / 2. <= rect.y + rect.h / 2.
             && player_rect.y + player_rect.h / 2. >= rect.y - rect.h / 2.
         {
-            player_rect.w += INIT_SIZE / 2.;
-            player_rect.h += INIT_SIZE / 2.;
+            player_rect.w = (player_rect.w + INIT_SIZE / 2.).min(MAX_SIZE - 0.01);
+            player_rect.h = (player_rect.h + INIT_SIZE / 2.).min(MAX_SIZE - 0.01);
             to_delete.add_component_unchecked(id, ToDelete)
         }
     }
@@ -336,13 +321,6 @@ fn collision(
     if player_rect.w < INIT_SIZE || player_rect.h < INIT_SIZE {
         to_delete.add_component_unchecked(player.id, ToDelete);
     } else {
-        if player_rect.w >= MAX_SIZE {
-            player_rect.w = MAX_SIZE - 0.01;
-        }
-        if player_rect.h >= MAX_SIZE {
-            player_rect.h = MAX_SIZE - 0.01;
-        }
-
         *(&mut rects).get(player.id).unwrap() = player_rect;
     }
 }
@@ -371,31 +349,19 @@ fn render(player: UniqueView<Player>, rects: View<Rect>, squagums: View<Squagum>
     let player_rect = rects.get(player.id).unwrap().clone();
 
     for (_, rect) in rects.iter().with_id().filter(|(id, _)| *id != player.id) {
-        if rect.h == MAX_SIZE && rect.w == MAX_SIZE {
-            draw_rectangle(
-                rect.x - rect.w / 2.,
-                rect.y - rect.h / 2.,
-                rect.w,
-                rect.h,
-                RED,
-            );
-        } else if rect.w <= player_rect.w && rect.h <= player_rect.h {
-            draw_rectangle(
-                rect.x - rect.w / 2.,
-                rect.y - rect.h / 2.,
-                rect.w,
-                rect.h,
-                GREEN,
-            );
-        } else {
-            draw_rectangle(
-                rect.x - rect.w / 2.,
-                rect.y - rect.h / 2.,
-                rect.w,
-                rect.h,
-                GRAY,
-            );
-        }
+        draw_rectangle(
+            rect.x - rect.w / 2.,
+            rect.y - rect.h / 2.,
+            rect.w,
+            rect.h,
+            if rect.h == MAX_SIZE && rect.w == MAX_SIZE {
+                RED
+            } else if rect.w > player_rect.w && rect.h > player_rect.h {
+                GRAY
+            } else {
+                GREEN
+            },
+        );
     }
 
     for squagum in squagums.iter() {
