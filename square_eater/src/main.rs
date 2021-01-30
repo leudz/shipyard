@@ -136,7 +136,7 @@ async fn main() {
             draw_text(
                 "Click to start",
                 WIDTH as f32 / 2. - text_dimensions.0 / 2.,
-                HEIGHT as f32 / 2.,
+                HEIGHT as f32 / 2. - text_dimensions.1 / 2.,
                 40.,
                 WHITE,
             );
