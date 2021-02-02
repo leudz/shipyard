@@ -23,7 +23,7 @@ fn update() {
 
     world
         .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
-            u32s.update_pack();
+            u32s.track_all();
 
             let entity0 = entities.add_entity(&mut u32s, 0);
 

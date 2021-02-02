@@ -5,7 +5,7 @@ mod not;
 
 use super::abstract_mut::AbstractMut;
 use crate::entity_id::EntityId;
-use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
+use crate::sparse_set::{FullRawWindowMut, SparseSet};
 use crate::sparse_set::{SparseArray, BUCKET_SIZE};
 use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
@@ -20,7 +20,8 @@ pub trait IntoAbstract {
 
     fn into_abstract(self) -> Self::AbsView;
     fn len(&self) -> Option<(usize, bool)>;
-    fn metadata(&self) -> &Metadata<Self::Pack>;
+    fn is_tracking_insertion(&self) -> bool;
+    fn is_tracking_modification(&self) -> bool;
     fn type_id(&self) -> TypeId;
     fn dense(&self) -> *const EntityId;
     #[inline]
@@ -41,9 +42,11 @@ impl<'a, T: 'static> IntoAbstract for &'a View<'_, T> {
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self).len(), true))
     }
-    #[inline]
-    fn metadata(&self) -> &Metadata<Self::Pack> {
-        &self.metadata
+    fn is_tracking_insertion(&self) -> bool {
+        SparseSet::is_tracking_insertion(&self)
+    }
+    fn is_tracking_modification(&self) -> bool {
+        SparseSet::is_tracking_modification(&self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -67,9 +70,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b ViewMut<'a, T> {
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self).len(), true))
     }
-    #[inline]
-    fn metadata(&self) -> &Metadata<Self::Pack> {
-        &self.metadata
+    fn is_tracking_insertion(&self) -> bool {
+        SparseSet::is_tracking_insertion(&self)
+    }
+    fn is_tracking_modification(&self) -> bool {
+        SparseSet::is_tracking_modification(&self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -93,9 +98,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for &'b mut ViewMut<'a, T> {
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self).len(), true))
     }
-    #[inline]
-    fn metadata(&self) -> &Metadata<Self::Pack> {
-        &self.metadata
+    fn is_tracking_insertion(&self) -> bool {
+        SparseSet::is_tracking_insertion(&self)
+    }
+    fn is_tracking_modification(&self) -> bool {
+        SparseSet::is_tracking_modification(&self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {

@@ -2,7 +2,7 @@ use super::IntoAbstract;
 use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::pack::update::Modified;
-use crate::sparse_set::{FullRawWindowMut, Metadata, SparseSet};
+use crate::sparse_set::{FullRawWindowMut, SparseSet};
 use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
 
@@ -16,8 +16,11 @@ impl<'tmp, 'v, T: 'static> IntoAbstract for Not<Modified<&'tmp View<'v, T>>> {
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self.0 .0).len(), false))
     }
-    fn metadata(&self) -> &Metadata<Self::Pack> {
-        &self.0 .0.metadata
+    fn is_tracking_insertion(&self) -> bool {
+        self.0.is_tracking_insertion()
+    }
+    fn is_tracking_modification(&self) -> bool {
+        self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T>>()
@@ -37,8 +40,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<Modified<&'b ViewMut<'a, T>>> 
     fn len(&self) -> Option<(usize, bool)> {
         Some(((*self.0 .0).len(), false))
     }
-    fn metadata(&self) -> &Metadata<Self::Pack> {
-        &self.0 .0.metadata
+    fn is_tracking_insertion(&self) -> bool {
+        self.0.is_tracking_insertion()
+    }
+    fn is_tracking_modification(&self) -> bool {
+        self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T>>()
@@ -58,8 +64,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<Modified<&'b mut ViewMut<'a, T
     fn len(&self) -> Option<(usize, bool)> {
         Some(((*self.0 .0).len(), false))
     }
-    fn metadata(&self) -> &Metadata<Self::Pack> {
-        &self.0 .0.metadata
+    fn is_tracking_insertion(&self) -> bool {
+        self.0.is_tracking_insertion()
+    }
+    fn is_tracking_modification(&self) -> bool {
+        self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T>>()

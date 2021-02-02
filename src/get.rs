@@ -91,7 +91,7 @@ impl<'a: 'b, 'b, T: 'static> Get for &'b mut ViewMut<'a, T> {
                 name: type_name::<T>(),
             })?;
 
-        if self.metadata.update.is_some() {
+        if self.is_tracking_modification() {
             let SparseSet {
                 sparse: _,
                 dense,

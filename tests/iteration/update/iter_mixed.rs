@@ -8,7 +8,7 @@ fn basic() {
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
-    u32s.update_pack();
+    u32s.track_all();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);
@@ -184,7 +184,7 @@ fn not_inserted() {
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
-    u32s.update_pack();
+    u32s.track_all();
 
     entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);
@@ -232,7 +232,7 @@ fn not_modified() {
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
     entities.add_entity(&mut i16s, 13);
 
-    u32s.update_pack();
+    u32s.track_all();
 
     u32s[e0] += 100;
     u32s[e1] += 100;
@@ -269,7 +269,7 @@ fn not_inserted_or_modified() {
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
 
-    u32s.update_pack();
+    u32s.track_all();
 
     let e0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     entities.add_entity(&mut u32s, 1);

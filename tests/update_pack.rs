@@ -5,7 +5,7 @@ fn clear_inserted() {
     let world = World::new();
 
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.update_pack();
+    usizes.track_all();
 
     let e0 = entities.add_entity(&mut usizes, 0);
 
@@ -32,7 +32,7 @@ fn clear_modified() {
     let world = World::new();
 
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.update_pack();
+    usizes.track_all();
 
     let e0 = entities.add_entity(&mut usizes, 0);
     let e1 = entities.add_entity(&mut usizes, 1);
@@ -60,7 +60,7 @@ fn clear_inserted_and_modified() {
     let world = World::new();
 
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.update_pack();
+    usizes.track_all();
 
     let e0 = entities.add_entity(&mut usizes, 0);
 

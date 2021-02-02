@@ -47,7 +47,7 @@ impl<T> SparseSet<T> {
             sparse: SparseArray::new(),
             dense: Vec::new(),
             data: Vec::new(),
-            metadata: Default::default(),
+            metadata: Metadata::new(),
         }
     }
     #[inline]
@@ -117,7 +117,7 @@ impl<T> SparseSet<T> {
     pub(crate) fn private_get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
         let index = self.index_of(entity)?;
 
-        if self.metadata.update.is_some() {
+        if self.metadata.track_modification {
             unsafe {
                 let dense_entity = self.dense.get_unchecked_mut(index);
 
@@ -150,7 +150,7 @@ impl<T> SparseSet<T> {
             *sparse_entity =
                 EntityId::new_from_parts(self.dense.len() as u64, entity.gen() as u16, 0);
 
-            if self.metadata.update.is_some() {
+            if self.metadata.track_insertion {
                 entity.set_inserted();
             } else {
                 entity.clear_meta();
@@ -175,7 +175,7 @@ impl<T> SparseSet<T> {
 
             let dense_entity = unsafe { self.dense.get_unchecked_mut(sparse_entity.uindex()) };
 
-            if self.metadata.update.is_some() && !dense_entity.is_inserted() {
+            if self.metadata.track_modification && !dense_entity.is_inserted() {
                 dense_entity.set_modified();
             }
 
@@ -197,9 +197,9 @@ impl<T> SparseSet<T> {
     {
         let component = self.actual_remove(entity);
 
-        if let Some(update) = &mut self.metadata.update {
-            if component.is_some() {
-                update.removed.push(entity);
+        if component.is_some() {
+            if let Some(removed) = &mut self.metadata.track_removal {
+                removed.push(entity);
             }
         }
 
@@ -242,8 +242,8 @@ impl<T> SparseSet<T> {
         T: 'static,
     {
         if let Some(component) = self.actual_remove(entity) {
-            if let Some(update) = &mut self.metadata.update {
-                update.deleted.push((entity, component));
+            if let Some(deleted) = &mut self.metadata.track_deletion {
+                deleted.push((entity, component));
             }
 
             true
@@ -290,11 +290,10 @@ impl<T> SparseSet<T> {
     #[track_caller]
     #[inline]
     pub fn deleted(&self) -> &[(EntityId, T)] {
-        if let Some(update) = &self.metadata.update {
-            &update.deleted
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
-        }
+        self.metadata
+            .track_deletion
+            .as_deref()
+            .expect("The storage does not track component deletion. Use `view_mut.track_deletion()` or `view_mut.track_all()` to start tracking.")
     }
     /// Returns the ids of *removed* components of an update packed storage.  
     /// Unwraps errors.
@@ -305,11 +304,10 @@ impl<T> SparseSet<T> {
     #[track_caller]
     #[inline]
     pub fn removed(&self) -> &[EntityId] {
-        if let Some(update) = &self.metadata.update {
-            &update.removed
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
-        }
+        self.metadata
+            .track_removal
+            .as_deref()
+            .expect("The storage does not track component removal. Use `view_mut.track_removal()` or `view_mut.track_all()` to start tracking.")
     }
     /// Returns the ids of *removed* or *deleted* components of an update packed storage.  
     /// Unwraps errors.
@@ -320,15 +318,10 @@ impl<T> SparseSet<T> {
     #[track_caller]
     #[inline]
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        if let Some(update) = &self.metadata.update {
-            update
-                .removed
-                .iter()
-                .copied()
-                .chain(update.deleted.iter().map(|(id, _)| id).copied())
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
-        }
+        self.removed()
+            .iter()
+            .copied()
+            .chain(self.deleted().iter().map(|(id, _)| id).copied())
     }
     /// Takes ownership of the *deleted* components of an update packed storage.  
     /// Unwraps errors.
@@ -339,15 +332,11 @@ impl<T> SparseSet<T> {
     #[track_caller]
     #[inline]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
-        if let Some(update) = &mut self.metadata.update {
-            let mut vec = Vec::with_capacity(update.deleted.capacity());
-
-            core::mem::swap(&mut vec, &mut update.deleted);
-
-            vec
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
-        }
+        self.metadata
+            .track_deletion
+            .as_mut()
+            .expect("The storage does not track component deletion. Use `view_mut.track_deletion()` or `view_mut.track_all()` to start tracking.")
+            .drain(..).collect()
     }
     /// Takes ownership of the ids of *removed* components of an update packed storage.  
     /// Unwraps errors.
@@ -358,15 +347,13 @@ impl<T> SparseSet<T> {
     #[track_caller]
     #[inline]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
-        if let Some(update) = &mut self.metadata.update {
-            let mut vec = Vec::with_capacity(update.removed.capacity());
-
-            core::mem::swap(&mut vec, &mut update.removed);
-
-            vec
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
-        }
+        self.metadata
+            .track_deletion
+            .as_mut()
+            .expect("The storage does not track component removal. Use `view_mut.track_removal()` or `view_mut.track_all()` to start tracking.")
+            .drain(..)
+            .map(|(id, _)| id)
+            .collect()
     }
     /// Takes ownership of the *removed* and *deleted* components of an update packed storage.  
     /// Unmraps errors.
@@ -380,7 +367,7 @@ impl<T> SparseSet<T> {
     #[track_caller]
     #[inline]
     pub fn clear_inserted(&mut self, entity: EntityId) {
-        if self.metadata.update.is_some() {
+        if self.metadata.track_insertion {
             if let Some(id) = self.sparse.get(entity) {
                 let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
 
@@ -389,7 +376,7 @@ impl<T> SparseSet<T> {
                 }
             }
         } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+            panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
         }
     }
     /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.  
@@ -400,20 +387,20 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[track_caller]
     pub fn clear_all_inserted(&mut self) {
-        if self.metadata.update.is_some() {
+        if self.metadata.track_insertion {
             for id in &mut *self.dense {
                 if id.is_inserted() {
                     id.clear_meta();
                 }
             }
         } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+            panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
         }
     }
     #[track_caller]
     #[inline]
     pub fn clear_modified(&mut self, entity: EntityId) {
-        if self.metadata.update.is_some() {
+        if self.metadata.track_modification {
             if let Some(id) = self.sparse.get(entity) {
                 let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
 
@@ -422,7 +409,7 @@ impl<T> SparseSet<T> {
                 }
             }
         } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+            panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
         }
     }
     /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.  
@@ -433,27 +420,30 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[track_caller]
     pub fn clear_all_modified(&mut self) {
-        if self.metadata.update.is_some() {
+        if self.metadata.track_modification {
             for id in &mut *self.dense {
                 if id.is_modified() {
                     id.clear_meta();
                 }
             }
         } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+            panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
         }
     }
     #[track_caller]
     #[inline]
     pub fn clear_inserted_and_modified(&mut self, entity: EntityId) {
-        if self.metadata.update.is_some() {
-            if let Some(id) = self.sparse.get(entity) {
-                unsafe {
-                    self.dense.get_unchecked_mut(id.uindex()).clear_meta();
-                }
+        if !self.is_tracking_insertion() {
+            panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
+        }
+        if !self.is_tracking_modification() {
+            panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
+        }
+
+        if let Some(id) = self.sparse.get(entity) {
+            unsafe {
+                self.dense.get_unchecked_mut(id.uindex()).clear_meta();
             }
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
         }
     }
     /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.  
@@ -464,25 +454,71 @@ impl<T> SparseSet<T> {
     /// - Storage isn't update packed.
     #[track_caller]
     pub fn clear_all_inserted_and_modified(&mut self) {
-        if self.metadata.update.is_some() {
-            for id in &mut *self.dense {
-                id.clear_meta();
-            }
-        } else {
-            panic!("The storage isn't update packed. Use `view.update_pack()` to pack it.");
+        if !self.is_tracking_insertion() {
+            panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
         }
+        if !self.is_tracking_modification() {
+            panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
+        }
+
+        for id in &mut self.dense {
+            id.clear_meta();
+        }
+    }
+    pub fn track_insertion(&mut self) {
+        self.metadata.track_insertion = true;
+    }
+    pub fn track_modification(&mut self) {
+        self.metadata.track_modification = true;
+    }
+    pub fn track_deletion(&mut self) {
+        if self.metadata.track_deletion.is_none() {
+            self.metadata.track_deletion = Some(Vec::new());
+        }
+    }
+    pub fn track_removal(&mut self) {
+        if self.metadata.track_removal.is_none() {
+            self.metadata.track_removal = Some(Vec::new());
+        }
+    }
+    pub fn track_all(&mut self) {
+        self.track_insertion();
+        self.track_modification();
+        self.track_deletion();
+        self.track_removal();
+    }
+    pub fn is_tracking_insertion(&self) -> bool {
+        self.metadata.track_insertion
+    }
+    pub fn is_tracking_modification(&self) -> bool {
+        self.metadata.track_modification
+    }
+    pub fn is_tracking_deletion(&self) -> bool {
+        self.metadata.track_deletion.is_some()
+    }
+    pub fn is_tracking_removal(&self) -> bool {
+        self.metadata.track_removal.is_some()
+    }
+    pub fn is_tracking_any(&self) -> bool {
+        self.is_tracking_insertion()
+            || self.is_tracking_modification()
+            || self.is_tracking_deletion()
+            || self.is_tracking_removal()
     }
     /// Update packs this storage making it track *inserted*, *modified*, *removed* and *deleted* components.  
     /// Does nothing if the storage is already update packed.
-    #[inline]
+    #[deprecated(since = "0.5.0", note = "Please use the track_all method instead")]
     pub fn update_pack(&mut self) {
-        self.metadata.update.get_or_insert_with(Default::default);
+        self.track_all();
     }
 
     /// Returns `true` if the `SparseSet` is update packed.
-    #[inline]
+    #[deprecated(
+        since = "0.5.0",
+        note = "Please use the is_tracking_any method instead"
+    )]
     pub fn is_update_packed(&self) -> bool {
-        self.metadata.update.is_some()
+        self.is_tracking_any()
     }
 }
 
@@ -501,14 +537,12 @@ impl<T> SparseSet<T> {
             }
         }
 
-        if let Some(update) = &mut self.metadata.update {
-            update
-                .deleted
-                .extend(self.dense.drain(..).zip(self.data.drain(..)));
+        if let Some(deleted) = &mut self.metadata.track_deletion {
+            deleted.extend(self.dense.drain(..).zip(self.data.drain(..)));
+        } else {
+            self.dense.clear();
+            self.data.clear();
         }
-
-        self.dense.clear();
-        self.data.clear();
     }
     /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.  
@@ -535,7 +569,7 @@ impl<T> SparseSet<T> {
         });
 
         if a_index != b_index {
-            if self.metadata.update.is_some() {
+            if self.metadata.track_modification {
                 unsafe {
                     let a_dense = self.dense.get_unchecked_mut(a_index);
 
@@ -583,7 +617,7 @@ impl<T> SparseSet<T> {
         });
 
         if a_index != b_index {
-            if self.metadata.update.is_some() {
+            if self.metadata.track_modification {
                 unsafe {
                     let a_dense = self.dense.get_unchecked_mut(a_index);
 

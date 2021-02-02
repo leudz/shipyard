@@ -69,7 +69,7 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
         sparse_set.data.extend(iter.map(|(component,)| component));
 
         let old_len = sparse_set.dense.len();
-        if sparse_set.metadata.update.is_some() {
+        if sparse_set.metadata.track_insertion {
             sparse_set
                 .dense
                 .extend(new_entities.iter().copied().map(|mut id| {
@@ -83,7 +83,7 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
         let dense_len = sparse_set.dense.len();
         let data_len = sparse_set.data.len();
 
-        if sparse_set.metadata.update.is_some() {
+        if sparse_set.metadata.track_insertion {
             sparse_set.dense.extend((0..data_len - dense_len).map(|_| {
                 let mut id = entities.generate();
                 id.set_inserted();
@@ -175,7 +175,7 @@ macro_rules! impl_bulk_insert {
                     ..
                 } = &mut *$sparse_set1;
 
-                if metadata1.update.is_some() {
+                if metadata1.track_insertion {
                     for (i, &entity) in dense1[old_len1..].iter().enumerate() {
                         unsafe {
                             let mut e = EntityId::new((old_len1 + i) as u64);
@@ -194,7 +194,7 @@ macro_rules! impl_bulk_insert {
                 $(
                     let old_len = $sparse_set.dense.len() - len;
 
-                    if $sparse_set.metadata.update.is_some() {
+                    if $sparse_set.metadata.track_insertion {
                         for (i, &entity) in dense1[old_len1..].iter().enumerate() {
                             unsafe {
                                 let mut e = EntityId::new((old_len + i) as u64);

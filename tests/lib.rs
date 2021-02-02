@@ -284,7 +284,7 @@ fn par_update_pack() {
     world
         .run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
-                usizes.update_pack();
+                usizes.track_all();
                 entities.add_entity(&mut usizes, 0);
                 entities.add_entity(&mut usizes, 1);
                 entities.add_entity(&mut usizes, 2);
@@ -329,7 +329,7 @@ fn par_multiple_update_pack() {
                 ViewMut<usize>,
                 ViewMut<u32>,
             )| {
-                u32s.update_pack();
+                u32s.track_all();
                 entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
                 entities.add_entity(&mut usizes, 2usize);
                 entities.add_entity((&mut usizes, &mut u32s), (4usize, 5u32));
@@ -394,7 +394,7 @@ fn par_update_filter() {
     world
         .run(
             |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
-                usizes.update_pack();
+                usizes.track_all();
                 entities.add_entity(&mut usizes, 0);
                 entities.add_entity(&mut usizes, 1);
                 entities.add_entity(&mut usizes, 2);

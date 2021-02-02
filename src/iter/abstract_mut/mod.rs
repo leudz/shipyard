@@ -55,7 +55,7 @@ impl<'tmp, T> AbstractMut for FullRawWindowMut<'tmp, T> {
 
     #[inline]
     unsafe fn get_data(&self, index: usize) -> Self::Out {
-        if (*self.metadata).update.is_some() && !(*self.dense.add(index)).is_inserted() {
+        if self.is_tracking_modification && !(*self.dense.add(index)).is_inserted() {
             Mut {
                 flag: Some(&mut *self.dense.add(index)),
                 data: &mut *self.data.add(index),
@@ -69,7 +69,7 @@ impl<'tmp, T> AbstractMut for FullRawWindowMut<'tmp, T> {
     }
     #[inline]
     unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
-        if (*self.metadata).update.is_some() && !(*self.dense.add(index)).is_inserted() {
+        if self.is_tracking_modification && !(*self.dense.add(index)).is_inserted() {
             Mut {
                 flag: Some(&mut *self.dense.add(index)),
                 data: &mut *self.data.add(index),

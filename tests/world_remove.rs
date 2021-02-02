@@ -29,7 +29,7 @@ fn no_pack() {
 fn update() {
     let mut world = World::new();
 
-    world.borrow::<ViewMut<usize>>().unwrap().update_pack();
+    world.borrow::<ViewMut<usize>>().unwrap().track_all();
 
     let entity1 = world.add_entity((0usize,));
     let entity2 = world.add_entity((2usize,));

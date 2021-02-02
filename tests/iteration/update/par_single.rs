@@ -6,7 +6,7 @@ fn filter() {
     let world = World::new();
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
 
-    u32s.update_pack();
+    u32s.track_all();
     entities.add_entity(&mut u32s, 0);
     entities.add_entity(&mut u32s, 1);
     entities.add_entity(&mut u32s, 2);

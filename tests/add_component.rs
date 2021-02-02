@@ -30,7 +30,7 @@ fn update() {
     let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
 
-    usizes.update_pack();
+    usizes.track_all();
     let entity = entities.add_entity((), ());
 
     entities.add_component(entity, &mut usizes, 1);

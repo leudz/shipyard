@@ -26,7 +26,7 @@ fn no_pack() {
 fn update() {
     let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.update_pack();
+    usizes.track_all();
     let entity = entities.add_entity(&mut usizes, 0);
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes[entity], 0);
@@ -36,7 +36,7 @@ fn update() {
 fn cleared_update() {
     let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.update_pack();
+    usizes.track_all();
     let entity1 = entities.add_entity(&mut usizes, 1);
     usizes.clear_all_inserted_and_modified();
     assert_eq!(usizes.inserted().iter().count(), 0);
@@ -50,7 +50,7 @@ fn cleared_update() {
 fn modified_update() {
     let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.update_pack();
+    usizes.track_all();
     let entity1 = entities.add_entity(&mut usizes, 1);
     usizes.clear_all_inserted_and_modified();
     usizes[entity1] = 3;

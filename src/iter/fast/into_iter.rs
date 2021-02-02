@@ -96,7 +96,7 @@ where
 
     #[inline]
     fn fast_iter(self) -> Self::IntoIter {
-        if self.metadata().update.is_none()
+        if !self.is_tracking_insertion() && !self.is_tracking_modification()
             || self.len().map(|(_, is_exact)| !is_exact).unwrap_or(true)
         {
             match self.len() {
@@ -145,7 +145,7 @@ where
 
     #[inline]
     fn fast_iter(self) -> Self::IntoIter {
-        if self.0.metadata().update.is_none()
+        if !self.0.is_tracking_insertion() && !self.0.is_tracking_modification()
             || self.0.len().map(|(_, is_exact)| !is_exact).unwrap_or(true)
         {
             match self.0.len() {
@@ -192,7 +192,7 @@ macro_rules! impl_into_iter {
 
             #[allow(clippy::drop_copy)]
             fn fast_iter(self) -> Self::IntoIter {
-                if self.$index1.metadata().update.is_some()
+                if self.$index1.is_tracking_insertion() || self.$index1.is_tracking_modification()
                     && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                 {
                     panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
@@ -217,7 +217,7 @@ macro_rules! impl_into_iter {
                 }
 
                 $(
-                    if self.$index.metadata().update.is_some()
+                    if self.$index.is_tracking_insertion() || self.$index.is_tracking_modification()
                         && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                     {
                         panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
@@ -269,7 +269,7 @@ macro_rules! impl_into_iter {
                 }
             }
             fn fast_iter_by<Driver: 'static>(self) -> Self::IntoIter {
-                if self.$index1.metadata().update.is_some()
+                if self.$index1.is_tracking_insertion() || self.$index1.is_tracking_modification()
                     && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                 {
                     panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified.");
@@ -300,7 +300,7 @@ macro_rules! impl_into_iter {
                 }
 
                 $(
-                    if self.$index.metadata().update.is_some()
+                    if self.$index.is_tracking_insertion() || self.$index.is_tracking_modification()
                         && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                     {
                         panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified.");

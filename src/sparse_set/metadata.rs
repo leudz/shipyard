@@ -2,55 +2,45 @@ use crate::entity_id::EntityId;
 use alloc::vec::Vec;
 
 pub struct Metadata<T> {
-    pub(crate) update: Option<UpdatePack<T>>,
+    pub(super) track_insertion: bool,
+    pub(super) track_modification: bool,
+    pub(super) track_removal: Option<Vec<EntityId>>,
+    pub(super) track_deletion: Option<Vec<(EntityId, T)>>,
 }
 
 impl<T> Metadata<T> {
+    pub(crate) fn new() -> Self {
+        Metadata {
+            track_insertion: false,
+            track_modification: false,
+            track_removal: None,
+            track_deletion: None,
+        }
+    }
     pub(crate) fn used_memory(&self) -> usize {
         core::mem::size_of::<Self>()
             + self
-                .update
+                .track_removal
                 .as_ref()
-                .map(|update| update.used_memory())
+                .map(|removed| removed.len() * core::mem::size_of::<EntityId>())
+                .unwrap_or(0)
+            + self
+                .track_deletion
+                .as_ref()
+                .map(|deletion| deletion.len() * core::mem::size_of::<(EntityId, T)>())
                 .unwrap_or(0)
     }
     pub(crate) fn reserved_memory(&self) -> usize {
         core::mem::size_of::<Self>()
             + self
-                .update
+                .track_removal
                 .as_ref()
-                .map(|update| update.reserved_memory())
+                .map(|removed| removed.capacity() * core::mem::size_of::<EntityId>())
                 .unwrap_or(0)
-    }
-}
-
-impl<T> Default for Metadata<T> {
-    fn default() -> Self {
-        Metadata { update: None }
-    }
-}
-
-pub(crate) struct UpdatePack<T> {
-    pub(crate) removed: Vec<EntityId>,
-    pub(crate) deleted: Vec<(EntityId, T)>,
-}
-
-impl<T> Default for UpdatePack<T> {
-    fn default() -> Self {
-        UpdatePack {
-            removed: Vec::new(),
-            deleted: Vec::new(),
-        }
-    }
-}
-
-impl<T> UpdatePack<T> {
-    fn used_memory(&self) -> usize {
-        self.removed.len() * core::mem::size_of::<EntityId>()
-            + self.deleted.len() * core::mem::size_of::<EntityId>()
-    }
-    fn reserved_memory(&self) -> usize {
-        self.removed.capacity() * core::mem::size_of::<EntityId>()
-            + self.deleted.capacity() * core::mem::size_of::<EntityId>()
+            + self
+                .track_deletion
+                .as_ref()
+                .map(|deletion| deletion.capacity() * core::mem::size_of::<(EntityId, T)>())
+                .unwrap_or(0)
     }
 }

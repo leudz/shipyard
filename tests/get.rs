@@ -39,8 +39,8 @@ fn update() {
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
         .unwrap();
-    u32s.update_pack();
-    i16s.update_pack();
+    u32s.track_all();
+    i16s.track_all();
     let entity0 = entities.add_entity((&mut u32s, &mut i16s), (0, 10));
     let entity1 = entities.add_entity(&mut u32s, 1);
     let entity2 = entities.add_entity((&mut u32s, &mut i16s), (2, 12));

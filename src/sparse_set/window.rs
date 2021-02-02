@@ -1,4 +1,3 @@
-use super::Metadata;
 use super::SparseSet;
 use crate::EntityId;
 use alloc::boxed::Box;
@@ -11,7 +10,7 @@ pub struct FullRawWindowMut<'a, T> {
     pub(crate) dense: *mut EntityId,
     dense_len: usize,
     pub(crate) data: *mut T,
-    pub(crate) metadata: *mut Metadata<T>,
+    pub(crate) is_tracking_modification: bool,
     _phantom: PhantomData<&'a mut T>,
 }
 
@@ -24,6 +23,7 @@ impl<'w, T> FullRawWindowMut<'w, T> {
         let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
             sparse_set.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
+        let is_tracking_modification = sparse_set.is_tracking_modification();
 
         FullRawWindowMut {
             sparse,
@@ -31,7 +31,7 @@ impl<'w, T> FullRawWindowMut<'w, T> {
             dense: sparse_set.dense.as_mut_ptr(),
             dense_len: sparse_set.dense.len(),
             data: sparse_set.data.as_mut_ptr(),
-            metadata: &mut sparse_set.metadata,
+            is_tracking_modification,
             _phantom: PhantomData,
         }
     }
@@ -84,7 +84,7 @@ impl<T> Clone for FullRawWindowMut<'_, T> {
             dense: self.dense,
             dense_len: self.dense_len,
             data: self.data,
-            metadata: self.metadata,
+            is_tracking_modification: self.is_tracking_modification,
             _phantom: PhantomData,
         }
     }
