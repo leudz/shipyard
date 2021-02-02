@@ -53,7 +53,7 @@ impl Default for Scheduler {
 }
 
 impl Scheduler {
-    pub(super) fn set_default(
+    pub(crate) fn set_default(
         &mut self,
         name: Cow<'static, str>,
     ) -> Result<(), error::SetDefaultWorkload> {
@@ -64,18 +64,27 @@ impl Scheduler {
             Err(error::SetDefaultWorkload::MissingWorkload)
         }
     }
-    pub(super) fn workload(&self, name: &str) -> Result<&Batches, error::RunWorkload> {
+    pub(crate) fn workload(&self, name: &str) -> Result<&Batches, error::RunWorkload> {
         if let Some(batches) = self.workloads.get(name) {
             Ok(batches)
         } else {
             Err(error::RunWorkload::MissingWorkload)
         }
     }
-    pub(super) fn default_workload(&self) -> &Batches {
+    pub(crate) fn default_workload(&self) -> &Batches {
         &self.workloads[&self.default]
     }
-    pub(super) fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.workloads.is_empty()
+    }
+    pub(crate) fn rename(&mut self, old: Cow<'static, str>, new: Cow<'static, str>) {
+        if let Some(batches) = self.workloads.remove(&old) {
+            self.workloads.insert(new.clone(), batches);
+
+            if self.default == old {
+                self.default = new;
+            }
+        }
     }
 }
 

@@ -565,6 +565,26 @@ let i = world.run(sys1).unwrap();
             .map_err(|_| error::SetDefaultWorkload::Borrow)?
             .set_default(name.into())
     }
+    /// Changes the name of a workload if it exists.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (exclusive)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    pub fn rename_workload(
+        &self,
+        old_name: impl Into<Cow<'static, str>>,
+        new_name: impl Into<Cow<'static, str>>,
+    ) -> Result<(), error::Borrow> {
+        self.scheduler
+            .borrow_mut()?
+            .rename(old_name.into(), new_name.into());
+
+        Ok(())
+    }
     /// Runs the `name` workload.
     ///
     /// ### Borrows
