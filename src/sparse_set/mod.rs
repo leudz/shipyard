@@ -465,21 +465,29 @@ impl<T> SparseSet<T> {
             id.clear_meta();
         }
     }
-    pub fn track_insertion(&mut self) {
+    pub fn track_insertion(&mut self) -> &mut Self {
         self.metadata.track_insertion = true;
+
+        self
     }
-    pub fn track_modification(&mut self) {
+    pub fn track_modification(&mut self) -> &mut Self {
         self.metadata.track_modification = true;
+
+        self
     }
-    pub fn track_deletion(&mut self) {
+    pub fn track_deletion(&mut self) -> &mut Self {
         if self.metadata.track_deletion.is_none() {
             self.metadata.track_deletion = Some(Vec::new());
         }
+
+        self
     }
-    pub fn track_removal(&mut self) {
+    pub fn track_removal(&mut self) -> &mut Self {
         if self.metadata.track_removal.is_none() {
             self.metadata.track_removal = Some(Vec::new());
         }
+
+        self
     }
     pub fn track_all(&mut self) {
         self.track_insertion();
