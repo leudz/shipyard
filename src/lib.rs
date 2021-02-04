@@ -87,7 +87,7 @@ pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
-pub use sparse_set::{sort, sort::IntoSortable, SparseSet};
+pub use sparse_set::{sort, sort::IntoSortable, SparseSet, SparseSetDrain};
 pub use storage::StorageId;
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};

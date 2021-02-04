@@ -1,11 +1,14 @@
 mod add_component;
 mod bulk_add_entity;
 mod delete_component;
+mod drain;
 mod metadata;
 mod remove;
 pub mod sort;
 mod sparse_array;
 mod window;
+
+pub use drain::SparseSetDrain;
 
 pub(crate) use add_component::AddComponent;
 pub(crate) use bulk_add_entity::BulkAddEntity;
@@ -648,6 +651,30 @@ impl<T> SparseSet<T> {
             panic!("Cannot use apply with identical components.");
         }
     }
+    /// Creates a draining iterator that empties the storage and yields the removed items.
+    pub fn drain(&mut self) -> SparseSetDrain<'_, T> {
+        if let Some(removed) = &mut self.metadata.track_removal {
+            removed.extend_from_slice(&self.dense);
+        }
+
+        for id in &self.dense {
+            // SAFE ids from self.dense are always valid
+            unsafe {
+                *self.sparse.get_mut_unchecked(*id) = EntityId::dead();
+            }
+        }
+
+        let dense_ptr = self.dense.as_ptr();
+        let dense_len = self.dense.len();
+
+        self.dense.clear();
+
+        SparseSetDrain {
+            dense_ptr,
+            dense_len,
+            data: self.data.drain(..),
+        }
+    }
 }
 
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
@@ -852,4 +879,52 @@ fn remove() {
         Some(&"10")
     );
     assert_eq!(array.private_get(EntityId::new_from_parts(100, 0, 0)), None);
+}
+
+#[test]
+fn drain() {
+    let mut sparse_set = SparseSet::new();
+
+    sparse_set.insert(EntityId::new(0), 0);
+    sparse_set.insert(EntityId::new(1), 1);
+
+    let mut drain = sparse_set.drain();
+
+    assert_eq!(drain.next(), Some(0));
+    assert_eq!(drain.next(), Some(1));
+    assert_eq!(drain.next(), None);
+
+    drop(drain);
+
+    assert_eq!(sparse_set.len(), 0);
+    assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
+}
+
+#[test]
+fn drain_with_id() {
+    let mut sparse_set = SparseSet::new();
+
+    sparse_set.insert(EntityId::new(0), 0);
+    sparse_set.insert(EntityId::new(1), 1);
+
+    let mut drain = sparse_set.drain().with_id();
+
+    assert_eq!(drain.next(), Some((EntityId::new(0), 0)));
+    assert_eq!(drain.next(), Some((EntityId::new(1), 1)));
+    assert_eq!(drain.next(), None);
+
+    drop(drain);
+
+    assert_eq!(sparse_set.len(), 0);
+    assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
+}
+
+#[test]
+fn drain_empty() {
+    let mut sparse_set = SparseSet::<u32>::new();
+
+    assert_eq!(sparse_set.drain().next(), None);
+    assert_eq!(sparse_set.drain().with_id().next(), None);
+
+    assert_eq!(sparse_set.len(), 0);
 }
