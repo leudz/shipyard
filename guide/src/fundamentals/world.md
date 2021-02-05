@@ -10,7 +10,7 @@ You can use [`new`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#m
 {{#include ../../../tests/book/world.rs:world_new}}
 ```
 
-There is no need to register components, storage are created on first access.
+There is no need to register components, storages are created on first access.
 
 ## Views
 
