@@ -1,12 +1,10 @@
 # Summary
 
 [Welcome](./welcome.md)
-- [Getting Started](./getting-started.md)
 - [Fundamentals](./fundamentals.md)
-    - [Create a World](./fundamentals/world.md)
-    - [Run the World](./fundamentals/run.md)
-    - [Add Entities](./fundamentals/add-entities.md)
-    - [Delete Entities](./fundamentals/delete-entities.md)
+    - [World](./fundamentals/world.md)
+    - [Add Entity](./fundamentals/add-entity.md)
+    - [Delete Entity](./fundamentals/delete-entity.md)
     - [Add Components](./fundamentals/add-components.md)
     - [Remove Components](./fundamentals/remove-components.md)
     - [Delete Components](./fundamentals/delete-components.md)
@@ -26,5 +24,6 @@
     - [0.4 migration](./recipes/0.4-migration.md)
 - [Pilgrimage](./pilgrimage.md)
     - [Different Types of ECS](./pilgrimage/different-types-of-ecs.md)
+    - [Shipyard Related Crates](./pilgrimage/related-crates.md)
     - [More Resources](./pilgrimage/more-resources.md)
 - [Contributors](./contributors.md)

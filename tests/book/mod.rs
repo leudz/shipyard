@@ -1,7 +1,7 @@
 mod add_components;
-mod add_entities;
+mod add_entity;
 mod delete_components;
-mod delete_entities;
+mod delete_entity;
 mod get;
 mod hierarchy;
 mod iterators;

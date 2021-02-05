@@ -1,27 +1,47 @@
 # Delete Components
 
-### Delete a single component
+Deleting a component will erase it from the storage but will not return it.
+
+## World
+
+### Single Component
 
 ```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>| {
-    u32s.delete(entity_id);
-}).unwrap();
+{{#include ../../../tests/book/delete_components.rs:world_one}}
 ```
 
-### Delete multiple components
+⚠️ We have to use a single element tuple.
+
+### Multiple Components
 
 ```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-    (&mut u32s, &mut usizes).delete(entity_id);
-}).unwrap();
+{{#include ../../../tests/book/delete_components.rs:world_multiple}}
 ```
 
-### Delete all components
-
-Note that when you delete all components of an entity with [`strip`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html#method.strip), the entity itself won't be deleted. You can attach components to it again afterwards.
+### All Components
 
 ```rust, noplaypen
-world.run(|mut all_storages: AllStoragesViewMut| {
-    all_storages.strip(entity_id);
-}).unwrap();
+{{#include ../../../tests/book/delete_components.rs:world_all}}
+```
+
+## View
+
+### Single Component
+
+```rust, noplaypen
+{{#include ../../../tests/book/delete_components.rs:view_one}}
+```
+
+### Multiple Components
+
+We have to import the [`Delete`](https://docs.rs/shipyard/latest/shipyard/trait.Delete.html) trait for this one.
+
+```rust, noplaypen
+{{#include ../../../tests/book/delete_components.rs:view_multiple}}
+```
+
+### All Components
+
+```rust, noplaypen
+{{#include ../../../tests/book/delete_components.rs:view_all}}
 ```

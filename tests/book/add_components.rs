@@ -1,35 +1,61 @@
-use shipyard::*;
+use shipyard::{EntitiesView, EntitiesViewMut, ViewMut, World};
 
 #[test]
-fn single() {
-    let world = World::new();
+#[rustfmt::skip]
+fn world_one() {
+// ANCHOR: world_one
+let mut world = World::new();
 
-    let entity_id = world
-        .borrow::<EntitiesViewMut>()
-        .unwrap()
-        .add_entity((), ());
+let id = world.add_entity(());
 
-    world
-        .run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
-            entities.add_component(entity_id, &mut u32s, 0);
-        })
-        .unwrap();
+world.add_component(id, (0u32,));
+// ANCHOR_END: world_one
 }
 
 #[test]
-fn multiple() {
-    let world = World::new();
+#[rustfmt::skip]
+fn world_multiple() {
+// ANCHOR: world_multiple
+let mut world = World::new();
 
-    let entity_id = world
-        .borrow::<EntitiesViewMut>()
-        .unwrap()
-        .add_entity((), ());
+let id = world.add_entity(());
 
-    world
-        .run(
-            |entities: EntitiesView, mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-                entities.add_component(entity_id, (&mut u32s, &mut usizes), (0, 10));
-            },
-        )
-        .unwrap();
+world.add_component(id, (0u32, 1usize));
+// ANCHOR_END: world_multiple
+}
+
+#[test]
+#[rustfmt::skip]
+fn view_one() {
+// ANCHOR: view_one
+let world = World::new();
+
+let id = world
+    .borrow::<EntitiesViewMut>()
+    .unwrap()
+    .add_entity((), ());
+
+let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<u32>)>().unwrap();
+
+entities.add_component(id, &mut u32s, 0);
+// ANCHOR_END: view_one
+}
+
+#[test]
+#[rustfmt::skip]
+fn view_multiple() {
+// ANCHOR: view_multiple
+let world = World::new();
+
+let id = world
+    .borrow::<EntitiesViewMut>()
+    .unwrap()
+    .add_entity((), ());
+
+let (entities, mut u32s, mut usizes) = world
+    .borrow::<(EntitiesView, ViewMut<u32>, ViewMut<usize>)>()
+    .unwrap();
+
+entities.add_component(id, (&mut u32s, &mut usizes), (0, 1));
+// ANCHOR_END: view_multiple
 }

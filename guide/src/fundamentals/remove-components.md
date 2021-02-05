@@ -1,23 +1,35 @@
 # Remove Components
 
-For components, "remove" and "delete" have different meanings. A remove returns the component(s) being removed.  A delete doesn't return anything.
+Removing a component will take it out of the storage and return it.
 
-### Remove a single component
+## World
 
-```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>| {
-    let i = u32s.remove(entity_id);
-}).unwrap();
-```
-
-There is no need for `Entities` here. You can call the `remove` method directly on the component storage view.
-
-### Remove multiple components
+### Single Component
 
 ```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>, mut usizes: ViewMut<usize>| {
-    let (_i, _j) = (&mut u32s, &mut usizes).remove(entity_id);
-}).unwrap();
+{{#include ../../../tests/book/remove_components.rs:world_one}}
 ```
 
-We have to use the explicit syntax in this case because we could be trying to remove just `u32`. We'll see later why we'd want that.
+⚠️ We have to use a single element tuple.
+
+### Multiple Components
+
+```rust, noplaypen
+{{#include ../../../tests/book/remove_components.rs:world_multiple}}
+```
+
+## View
+
+### Single Component
+
+```rust, noplaypen
+{{#include ../../../tests/book/remove_components.rs:view_one}}
+```
+
+### Multiple Components
+
+We have to import the [`Remove`](https://docs.rs/shipyard/latest/shipyard/trait.Remove.html) trait for this one.
+
+```rust, noplaypen
+{{#include ../../../tests/book/remove_components.rs:view_multiple}}
+```

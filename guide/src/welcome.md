@@ -1,6 +1,6 @@
 # Welcome to Shipyard!
 
-[Shipyard](https://github.com/leudz/shipyard) is an Entity Component System focused on usability and speed. An ECS is a great way to organize logic and data.
+[Shipyard](https://github.com/leudz/shipyard) is an Entity Component System focused on usability and speed. ECS is a great way to organize logic and data.
 
 There are two main benefits to using an ECS:
 
@@ -16,7 +16,7 @@ However, programming with an ECS requires thinking about data and logic in a dif
 
 # How does it work?
 
-Components hold data. Entities are simply ids used to refer to a group of components.
+Components hold data. Entities are simple ids used to refer to a group of components.
 
 Systems do the heavy lifting: updating components, running side-effects, and integrating with other parts of the code.
 

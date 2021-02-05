@@ -1,21 +1,26 @@
-# Create a World
+# World
 
 [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) is Shipyard's core data structure: It holds all data and knows how to process systems. All operations originate from one (or more) [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html).
 
-You can create a [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) by using [`default`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.default) or [`new`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.new):
+## Creation
+
+You can use [`new`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.new) or [`default`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.default):
 
 ```rust, noplaypen
-let world = World::default();
-let world = World::new();
+{{#include ../../../tests/book/world.rs:world_new}}
 ```
 
-There is no need to register components.
-A component's storage will be created when we access it. 
+There is no need to register components, storage are created on first access.
 
-Note that we didn't make `world` mutable.
-That is because all of [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html)'s methods take a shared reference. This makes [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) easier to use across threads.
+## Views
 
----
+While some actions are available directly on [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), you'll often interact with it through views. They allow access to one or multiple storage.  
+Storage access follows the same rules as Rust's borrowing: You can have as many shared accesses to a storage as you like or a single exclusive access.
 
-Now that we have a [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), it would be nice to be able to do something with it.
-That's what we'll see in the next chapter!
+You can request a view using [`World::borrow`](https://docs.rs/shipyard/0.4.1/shipyard/struct.World.html#method.borrow), [`World::run`](https://docs.rs/shipyard/0.4.1/shipyard/struct.World.html#method.run) or in workloads (more on this in a later chapter).
+
+For example if you want a shared access to the entities storage you can use [`borrow`](https://docs.rs/shipyard/0.4.1/shipyard/struct.World.html#method.borrow):
+
+```rust, noplaypen
+{{#include ../../../tests/book/world.rs:view}}
+```
