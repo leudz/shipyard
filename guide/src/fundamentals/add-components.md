@@ -1,7 +1,7 @@
 # Add Components
 
 An entity can have any number of components but only one in each storage.  
-Adding a two components of the same type to an entity will replace the existing one.
+Adding another component of the same type will replace the existing one.
 
 ## World
 
