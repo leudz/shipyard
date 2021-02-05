@@ -24,6 +24,5 @@
     - [0.4 migration](./recipes/0.4-migration.md)
 - [Pilgrimage](./pilgrimage.md)
     - [Different Types of ECS](./pilgrimage/different-types-of-ecs.md)
-    - [Shipyard Related Crates](./pilgrimage/related-crates.md)
     - [More Resources](./pilgrimage/more-resources.md)
 - [Contributors](./contributors.md)
