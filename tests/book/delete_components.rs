@@ -2,26 +2,15 @@ use shipyard::{AllStoragesViewMut, Delete, EntitiesViewMut, ViewMut, World};
 
 #[test]
 #[rustfmt::skip]
-fn world_one() {
-// ANCHOR: world_one
-let mut world = World::new();
-
-let id = world.add_entity((0u32,));
-
-world.delete_component::<(u32,)>(id);
-// ANCHOR_END: world_one
-}
-
-#[test]
-#[rustfmt::skip]
-fn world_multiple() {
-// ANCHOR: world_multiple
+fn world() {
+// ANCHOR: world
 let mut world = World::new();
 
 let id = world.add_entity((0u32, 1usize));
 
+world.delete_component::<(u32,)>(id);
 world.delete_component::<(u32, usize)>(id);
-// ANCHOR_END: world_multiple
+// ANCHOR_END: world
 }
 
 #[test]
@@ -38,22 +27,8 @@ world.strip(id);
 
 #[test]
 #[rustfmt::skip]
-fn view_one() {
-// ANCHOR: view_one
-let world = World::new();
-
-let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
-
-let id = entities.add_entity(&mut u32s, 0);
-
-u32s.delete(id);
-// ANCHOR_END: view_one
-}
-
-#[test]
-#[rustfmt::skip]
-fn view_multiple() {
-// ANCHOR: view_multiple
+fn view() {
+// ANCHOR: view
 let world = World::new();
 
 let (mut entities, mut u32s, mut usizes) = world
@@ -62,8 +37,9 @@ let (mut entities, mut u32s, mut usizes) = world
 
 let id = entities.add_entity((&mut u32s, &mut usizes), (0, 1));
 
+u32s.delete(id);
 (&mut u32s, &mut usizes).delete(id);
-// ANCHOR_END: view_multiple
+// ANCHOR_END: view
 }
 
 #[test]

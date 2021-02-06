@@ -4,42 +4,14 @@ When an entity is created you will receive a unique handle to it: an [`EntityId`
 
 ## World
 
-### Empty Entity
-
 ```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:world_empty}}
+{{#include ../../../tests/book/add_entity.rs:world}}
 ```
 
-### Single Component Entity
-
-```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:world_one}}
-```
-
-⚠️ We have to use a single element tuple.
-
-### Multiple Components Entity
-
-```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:world_multiple}}
-```
+⚠️ We have to use a single element tuple `(T,)` to add a single component entity.
 
 ## Views
 
-### Empty Entity
-
 ```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:view_empty}}
-```
-
-### Single Component Entity
-
-```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:view_one}}
-```
-
-### Multiple Components Entity
-
-```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:view_multiple}}
+{{#include ../../../tests/book/add_entity.rs:view}}
 ```
