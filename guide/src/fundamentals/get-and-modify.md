@@ -1,34 +1,14 @@
 # Get and Modify Components
 
-To access or update component(s) of a single entity you can use [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get). It'll work with both shared and unique views.
-
-### Update a single component
+To access or update components you can use [`Get::get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get). It'll work with both shared and exclusive views.
 
 ```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>| {
-    *(&mut u32s).get(entity_id).unwrap() = 1;
-}).unwrap();
+{{#include ../../../tests/book/get.rs:get}}
 ```
 
-[`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get) will return a `&T` when used with a [`&View<T>`](https://docs.rs/shipyard/latest/shipyard/struct.View.html) and a `&mut T` with a [`&mut ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html).
-You can also get a `&T` from a [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html), which is why we have to explicitly get a mutable borrow on `u32s`.
+When using a single view, if you're certain an entity has the desired component, you can access it via index.
 
-When using a single view, if you're certain that an entity has the desired component, you can access it directly via index:
+### Fast Get
 
-```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>| {
-    u32s[entity_id] = 1;
-}).unwrap();
-```
-
-### Update multiple components
-
-We can mix and match shared and unique component access with [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get):
-
-```rust, noplaypen
-world.run(|mut u32s: ViewMut<u32>, usizes: View<usize>| {
-    let (i, &j) = (&mut u32s, &usizes).get(entity_id).unwrap();
-    *i += j as u32;
-    *i += j as u32;
-}).unwrap();
-```
+Using [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get) with [`&mut ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will return a [`Mut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.Mut.html). This struct help fine track component modification.  
+[`FastGet::fast_get`](https://docs.rs/shipyard/latest/shipyard/trait.FastGet.html#tymethod.fast_get) can be used to opt out of this fine tracking and get back `&mut T`.
