@@ -1,40 +1,47 @@
-use shipyard::*;
+use shipyard::{IntoIter, IntoWithId, View, ViewMut, World};
 
 #[test]
-fn single() {
-    let world = World::new();
+#[rustfmt::skip]
+fn iter() {
+// ANCHOR: iter
+let world = World::new();
 
-    world
-        .run(|u32s: View<u32>| {
-            for i in u32s.iter() {
-                dbg!(i);
-            }
-        })
-        .unwrap();
+let (mut u32s, usizes) = world.borrow::<(ViewMut<u32>, View<usize>)>().unwrap();
+
+for i in u32s.iter() {
+    dbg!(i);
+}
+
+for (mut i, j) in (&mut u32s, &usizes).iter() {
+    *i += *j as u32;
+}
+// ANCHOR_END: iter
 }
 
 #[test]
+#[rustfmt::skip]
 fn with_id() {
-    let world = World::new();
+// ANCHOR: with_id
+let world = World::new();
 
-    world
-        .run(|u32s: View<u32>| {
-            for (id, i) in u32s.iter().with_id() {
-                println!("{} belongs to entity {:?}", i, id);
-            }
-        })
-        .unwrap();
+let u32s = world.borrow::<View<u32>>().unwrap();
+
+for (id, i) in u32s.iter().with_id() {
+    println!("{} belongs to entity {:?}", i, id);
+}
+// ANCHOR_END: with_id
 }
 
 #[test]
-fn multiple() {
-    let world = World::new();
+#[rustfmt::skip]
+fn not() {
+// ANCHOR: not
+let world = World::new();
 
-    world
-        .run(|u32s: View<u32>, usizes: View<usize>| {
-            for (_i, _j) in (&u32s, &usizes).iter() {
-                // -- snip --
-            }
-        })
-        .unwrap();
+let (u32s, usizes) = world.borrow::<(View<u32>, View<usize>)>().unwrap();
+
+for (i, _) in (&u32s, !&usizes).iter() {
+    dbg!(i);
+}
+// ANCHOR_END: not
 }
