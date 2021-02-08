@@ -29,10 +29,11 @@ pub struct WorkloadSystem {
     pub(super) system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
     /// access information
     pub(super) borrow_constraints: Vec<TypeInfo>,
+    pub(super) generator: fn(&mut Vec<TypeInfo>) -> TypeId,
 }
 
 impl Extend<WorkloadSystem> for WorkloadBuilder {
     fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
-        self.systems.extend(iter);
+        self.systems.extend(iter.into_iter().map(Into::into));
     }
 }

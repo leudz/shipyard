@@ -42,6 +42,7 @@ where
             system_fn: Box::new(move |_: &World| Ok(drop((self)()))),
             system_type_id: TypeId::of::<F>(),
             system_type_name: type_name::<F>(),
+            generator: |_| TypeId::of::<F>(),
         })
     }
     #[allow(clippy::unit_arg)]
@@ -59,6 +60,7 @@ where
             }),
             system_type_id: TypeId::of::<F>(),
             system_type_name: type_name::<F>(),
+            generator: |_| TypeId::of::<F>(),
         })
     }
     #[allow(clippy::unit_arg)]
@@ -76,6 +78,7 @@ where
             }),
             system_type_id: TypeId::of::<F>(),
             system_type_name: type_name::<F>(),
+            generator: |_| TypeId::of::<F>(),
         })
     }
 }
@@ -145,6 +148,13 @@ macro_rules! impl_system {
                     system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+))) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
+                    generator: |constraints| {
+                        $(
+                            $type::borrow_info(constraints);
+                        )+
+
+                        TypeId::of::<Func>()
+                    },
                 })
             }
             #[cfg(feature = "std")]
@@ -189,6 +199,13 @@ macro_rules! impl_system {
                     system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
+                    generator: |constraints| {
+                        $(
+                            $type::borrow_info(constraints);
+                        )+
+
+                        TypeId::of::<Func>()
+                    },
                 })
             }
             #[cfg(not(feature = "std"))]
@@ -233,6 +250,13 @@ macro_rules! impl_system {
                     system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
+                    generator: |constraints| {
+                        $(
+                            $type::borrow_info(constraints);
+                        )+
+
+                        TypeId::of::<Func>()
+                    },
                 })
             }
         }

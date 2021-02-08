@@ -1,6 +1,7 @@
 //! All error types.
 
 use crate::EntityId;
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
@@ -186,10 +187,11 @@ impl Display for AddComponent {
 /// Error type returned by [`WorkloadBuilder::add_to_world`].
 ///
 /// [`WorkloadBuilder::add_to_world`]: crate::WorkloadBuilder::add_to_world()
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum AddWorkload {
     AlreadyExists,
     Borrow,
+    UnknownWorkload(Cow<'static, str>, Cow<'static, str>),
 }
 
 #[cfg(feature = "std")]
@@ -202,6 +204,10 @@ impl Debug for AddWorkload {
             Self::Borrow => {
                 f.write_str("Cannot mutably borrow the scheduler while it's already borrowed.")
             }
+            Self::UnknownWorkload(workload, unknown_workload) => f.write_fmt(format_args!(
+                "Could not find {} workload while building {}'s batches.",
+                unknown_workload, workload
+            )),
         }
     }
 }
