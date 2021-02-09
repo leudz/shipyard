@@ -13,7 +13,7 @@ You shouldn't expect specific ordering from Shipyard's iterators in general.
 
 #### With Id
 
-You can ask an iterator to tell you which entity owns each component by using [`WithId::with_id`](https://docs.rs/shipyard/latest/shipyard/trait.Shiperator.html#method.with_id):
+You can ask an iterator to tell you which entity owns each component by using [`WithId::with_id`](https://docs.rs/shipyard/latest/shipyard/trait.IntoWithId.html#method.with_id):
 
 ```rust, noplaypen
 {{#include ../../../tests/book/iterators.rs:with_id}}
@@ -21,7 +21,7 @@ You can ask an iterator to tell you which entity owns each component by using [`
 
 #### Not
 
-It's also possible to filter entities that don't have a certain component using [`Not`](https://docs.rs/shipyard/latest/shipyard/struct.World.html).
+It's also possible to filter entities that don't have a certain component using [`Not`](https://docs.rs/shipyard/latest/shipyard/struct.Not.html).
 
 ```rust, noplaypen
 {{#include ../../../tests/book/iterators.rs:not}}

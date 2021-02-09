@@ -18,8 +18,7 @@ It also works with closures.
 
 ### Passing Data to Systems
 
-The first argument doesn't have to be a view, you can pass any data to a system.  
-This is especially useful for data you don't own.
+The first argument doesn't have to be a view, you can pass any data, even references.
 
 ```rust, noplaypen
 {{#include ../../../tests/book/systems.rs:in_acid}}
@@ -35,17 +34,16 @@ If you want to pass multiple variables, you can use a tuple.
 
 ### Workloads
 
-A workload is a named group of one or more systems.
+A workload is a named group of systems.
 
 ```rust, noplaypen
 {{#include ../../../tests/book/systems.rs:workload}}
 ```
 
-Workloads are stored in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), ready to be run again and again.
+Workloads are stored in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), ready to be run again and again.  
+They don't take up much memory so even if you make a few with similar systems it's not a problem.
 
-There's a few points to keep in mind about workloads:
-1. Workloads will run their systems first to last or at the same time when possible. We call this _outer-parallelism_, you can learn more about it in [this chapter](../going-further/parallelism.md).
-2. A workload cannot be modified once it's defined. Think of it more as a one-time setup than something you do dynamically at runtime. Workloads don't take up much memory so even if you make a few with similar systems it's not a problem.
+Workloads will run their systems first to last or at the same time when possible. We call this _outer-parallelism_, you can learn more about it in [this chapter](../going-further/parallelism.md).
 
 #### Workload Nesting
 
