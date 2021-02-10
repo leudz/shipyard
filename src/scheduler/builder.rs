@@ -260,7 +260,7 @@ impl WorkloadBuilder {
             }
 
             let mut collected_systems: Vec<(TypeId, &'static str, usize, Vec<TypeInfo>)> =
-                Vec::new();
+                Vec::with_capacity(self.systems.len());
 
             for work_unit in self.systems.drain(..) {
                 match work_unit {
