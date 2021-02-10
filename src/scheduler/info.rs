@@ -25,7 +25,7 @@ pub struct BatchInfo {
 }
 
 /// Contains information related to a system.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct SystemInfo {
     pub name: &'static str,
     pub type_id: TypeId,
@@ -33,21 +33,48 @@ pub struct SystemInfo {
     pub conflict: Option<Conflict>,
 }
 
+impl core::fmt::Debug for SystemInfo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("StorageInfo")
+            .field("name", &self.name)
+            .field("borrow", &self.borrow)
+            .field("conflict", &self.conflict)
+            .finish()
+    }
+}
+
 /// Pinpoints the type and system that made a system unable to get into a batch.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Conflict {
     Borrow {
+        type_info: TypeInfo,
+        other_system: SystemId,
+        other_type_info: TypeInfo,
+    },
+    NotSendSync(TypeInfo),
+    OtherNotSendSync {
         system: SystemId,
         type_info: TypeInfo,
     },
-    NotSendSync,
 }
 
 /// Identify a system.
-#[derive(Debug, Clone)]
+#[derive(Clone, Eq)]
 pub struct SystemId {
     pub name: &'static str,
     pub type_id: TypeId,
+}
+
+impl PartialEq for SystemId {
+    fn eq(&self, other: &Self) -> bool {
+        self.type_id == other.type_id
+    }
+}
+
+impl core::fmt::Debug for SystemId {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.name)
+    }
 }
 
 /// Identify a type.
@@ -90,7 +117,6 @@ impl core::fmt::Debug for TypeInfo {
             ),
         }
         .field("mutability", &self.mutability)
-        .field("storage_id", &self.storage_id)
         .finish()
     }
 }
