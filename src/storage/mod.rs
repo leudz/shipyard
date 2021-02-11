@@ -71,11 +71,12 @@ impl Storage {
     }
     #[inline]
     pub(crate) fn get_mut_exclusive<T: 'static>(&mut self) -> &mut T {
-        // SAFE this is not `AllStorages`
+        self.inner_mut().any_mut().downcast_mut().unwrap()
+    }
+    #[inline]
+    pub(crate) fn inner_mut(&mut self) -> &mut dyn UnknownStorage {
+        // SAFE Self owns the pointed value
         unsafe { (&mut *self.0).get_mut() }
-            .any_mut()
-            .downcast_mut()
-            .unwrap()
     }
 }
 

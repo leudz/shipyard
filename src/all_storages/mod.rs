@@ -17,7 +17,7 @@ use crate::unique::Unique;
 use crate::unknown_storage::UnknownStorage;
 use core::any::type_name;
 use core::cell::UnsafeCell;
-use indexmap::{map::Entry, IndexMap};
+use hashbrown::hash_map::{Entry, HashMap};
 use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
 /// Contains all storages present in the `World`.
@@ -30,7 +30,7 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
     lock: RawRwLock,
-    storages: UnsafeCell<IndexMap<StorageId, Storage>>,
+    storages: UnsafeCell<HashMap<StorageId, Storage>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
     inside_callback: UnsafeCell<bool>,
@@ -43,7 +43,7 @@ unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     pub(crate) fn new() -> Self {
-        let mut storages = IndexMap::new();
+        let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), Storage::new(Entities::new()));
 
@@ -256,16 +256,8 @@ impl AllStorages {
     /// all_storages.strip(entity);
     /// ```
     pub fn strip(&mut self, entity: EntityId) {
-        let mut i = 0;
-
-        let storages = unsafe { &mut *self.storages.get() };
-
-        while i < storages.len() {
-            let storage = unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
-
-            storage.delete(entity);
-
-            i += 1;
+        for storage in self.storages.get_mut().values_mut() {
+            storage.inner_mut().delete(entity);
         }
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
@@ -291,20 +283,10 @@ impl AllStorages {
     /// This is identical to `retain` but uses `StorageId` and not generics.  
     /// You should only use this method if you use a custom storage with a runtime id.
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
-        let mut i = 0;
-
-        let storages = unsafe { &mut *self.storages.get() };
-
-        while i < storages.len() {
-            let (storage_id, storage) = storages.get_index_mut(i).unwrap();
-
+        for (storage_id, storage) in self.storages.get_mut().iter_mut() {
             if !excluded_storage.contains(&*storage_id) {
-                let storage = unsafe { (&mut *storage.0).get_mut() };
-
-                storage.delete(entity);
+                storage.inner_mut().delete(entity);
             }
-
-            i += 1;
         }
     }
     /// Deletes all entities and components in the `World`.
@@ -320,16 +302,8 @@ impl AllStorages {
     /// all_storages.clear();
     /// ```
     pub fn clear(&mut self) {
-        let mut i = 0;
-
-        let storages = unsafe { &mut *self.storages.get() };
-
-        while i < storages.len() {
-            let storage = unsafe { (&mut *(storages.get_index_mut(i).unwrap().1).0).get_mut() };
-
-            storage.clear();
-
-            i += 1;
+        for storage in self.storages.get_mut().values_mut() {
+            storage.inner_mut().clear();
         }
     }
     /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
@@ -1180,6 +1154,9 @@ let i = all_storages.run(sys1).unwrap();
             .or_insert_with(|| Storage::new(f()))
             .get_mut_exclusive()
     }
+    /// Make the given entity alive.  
+    /// Does nothing if an entity with a greater generation is already at this index.  
+    /// Returns `true` if the entity is successfully spawned.
     #[inline]
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         self.exclusive_storage_mut::<Entities>()

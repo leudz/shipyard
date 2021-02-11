@@ -15,7 +15,6 @@ members = ["bunny_demo", "square_eater"]
 
 [dependencies]
 hashbrown = "^0.9"
-indexmap = "^1"
 parking_lot = "^0.11"
 rayon = { version = "^1", optional = true }
 serde = { version = "^1", optional = true, default-features = false }
