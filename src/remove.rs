@@ -4,6 +4,7 @@ use crate::view::ViewMut;
 
 /// Removes component from entities.
 pub trait Remove {
+    /// Type of the removed component.
     type Out;
     /// Removes component in `entity`, if the entity had a component, they will be returned.
     ///

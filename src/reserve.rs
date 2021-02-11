@@ -66,6 +66,7 @@ impl<'a> ExactSizeIterator for BulkEntityIter<'a> {
 impl<'a> FusedIterator for BulkEntityIter<'a> {}
 
 pub trait BulkReserve {
+    /// Reserves memory for all entities in `new_entities`.
     fn bulk_reserve(&mut self, _new_entities: &[EntityId]) {}
 }
 

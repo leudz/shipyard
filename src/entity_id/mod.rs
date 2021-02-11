@@ -173,10 +173,12 @@ impl EntityId {
             self.0 = NonZeroU64::new_unchecked(self.0.get() & !Self::META_MASK);
         }
     }
+    /// Returns `EntityId`'s inner representation.
     #[inline]
     pub fn inner(self) -> u64 {
         self.0.get()
     }
+    /// Build an `EntityId` from its inner representation.
     #[inline]
     pub fn from_inner(inner: u64) -> Option<EntityId> {
         Some(EntityId(NonZeroU64::new(inner)?))

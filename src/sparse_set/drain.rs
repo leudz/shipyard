@@ -12,6 +12,7 @@ pub struct SparseSetDrain<'a, T> {
 }
 
 impl<T> SparseSetDrain<'_, T> {
+    /// Makes the iterator return which entity owns each component as well.
     pub fn with_id(self) -> WithId<Self> {
         WithId(self)
     }

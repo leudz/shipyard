@@ -7,6 +7,7 @@ pub use unstable::*;
 
 /// Trait used to sort storage(s).
 pub trait IntoSortable {
+    /// Type of the sort helper struct.
     type IntoSortable;
 
     /// Doesn't sort the view(s) until an algorithm is chosen, `unstable` for example.  

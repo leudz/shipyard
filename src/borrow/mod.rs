@@ -41,6 +41,7 @@ pub trait Borrow<'a> {
     fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage>;
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct AllStoragesMutBorrower;
 
 impl IntoBorrow for AllStoragesViewMut<'_> {
@@ -60,6 +61,7 @@ impl<'a> Borrow<'a> for AllStoragesMutBorrower {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct UnitBorrower;
 
 impl IntoBorrow for () {
@@ -78,6 +80,7 @@ impl<'a> Borrow<'a> for UnitBorrower {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct EntitiesBorrower;
 
 impl IntoBorrow for EntitiesView<'_> {
@@ -110,6 +113,7 @@ impl<'a> Borrow<'a> for EntitiesBorrower {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct EntitiesMutBorrower;
 
 impl IntoBorrow for EntitiesViewMut<'_> {
@@ -142,6 +146,7 @@ impl<'a> Borrow<'a> for EntitiesMutBorrower {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct ViewBorrower<T>(T);
 
 impl<T: 'static + Send + Sync> IntoBorrow for View<'_, T> {
@@ -270,6 +275,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct ViewMutBorrower<T>(T);
 
 impl<T: 'static + Send + Sync> IntoBorrow for ViewMut<'_, T> {
@@ -398,6 +404,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct UniqueViewBorrower<T>(T);
 
 impl<T: 'static + Send + Sync> IntoBorrow for UniqueView<'_, T> {
@@ -526,6 +533,7 @@ impl<'a, T: 'static> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     }
 }
 
+/// Helper struct allowing GAT-like behavior in stable.
 pub struct UniqueViewMutBorrower<T>(T);
 
 impl<T: 'static + Send + Sync> IntoBorrow for UniqueViewMut<'_, T> {

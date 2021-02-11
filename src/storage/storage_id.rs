@@ -10,6 +10,7 @@ pub enum StorageId {
 }
 
 impl StorageId {
+    /// Returns `T`'s `StorageId`.
     pub fn of<T: 'static>() -> Self {
         TypeId::of::<T>().into()
     }

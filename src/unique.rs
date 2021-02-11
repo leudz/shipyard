@@ -1,5 +1,6 @@
 use crate::{memory_usage::StorageMemoryUsage, unknown_storage::UnknownStorage};
 
+/// Unique storage.
 pub struct Unique<T> {
     pub(crate) value: T,
     pub(crate) is_modified: bool,

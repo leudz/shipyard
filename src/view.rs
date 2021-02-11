@@ -97,12 +97,15 @@ pub struct View<'a, T> {
 }
 
 impl<T> View<'_, T> {
+    /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
+    /// Wraps this view to be able to iterate *modified* components.
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
@@ -143,21 +146,27 @@ pub struct ViewMut<'a, T> {
 }
 
 impl<T> ViewMut<'_, T> {
+    /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
+    /// Wraps this view to be able to iterate *modified* components.
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
+    /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
         Inserted(self)
     }
+    /// Wraps this view to be able to iterate *modified* components.
     pub fn modified_mut(&mut self) -> Modified<&mut Self> {
         Modified(self)
     }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
     }
@@ -208,6 +217,9 @@ pub struct UniqueView<'a, T> {
 }
 
 impl<T> UniqueView<'_, T> {
+    /// Returns `true` is the component was modified since the last [`clear_modified`] call.
+    ///
+    /// [`clear_modified`]: UniqueViewMut::clear_modified
     pub fn is_modified(unique: &Self) -> bool {
         unique.unique.is_modified
     }
@@ -248,9 +260,13 @@ pub struct UniqueViewMut<'a, T> {
 }
 
 impl<T> UniqueViewMut<'_, T> {
+    /// Returns `true` is the component was modified since the last [`clear_modified`] call.
+    ///
+    /// [`clear_modified`]: Self::clear_modified
     pub fn is_modified(unique: &Self) -> bool {
         unique.unique.is_modified
     }
+    /// Removes the *modified* flag on this component.
     pub fn clear_modified(unique: &mut Self) {
         unique.unique.is_modified = false;
     }

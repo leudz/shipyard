@@ -228,7 +228,7 @@ impl Entities {
         self.into_iter()
     }
     /// Make the given entity alive.  
-    /// Does nothing if an entity with a greater generation is already at the index.  
+    /// Does nothing if an entity with a greater generation is already at this index.  
     /// Returns `true` if the entity is successfully spawned.
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         if let Some(&old_entity) = self.data.get(entity.index() as usize) {

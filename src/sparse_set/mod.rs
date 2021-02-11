@@ -111,6 +111,13 @@ impl<T> SparseSet<T> {
     pub fn id_at(&self, index: usize) -> Option<EntityId> {
         self.dense.get(index).copied()
     }
+    fn id_of(&self, entity: EntityId) -> Option<EntityId> {
+        if let Some(index) = self.index_of(entity) {
+            Some(unsafe { *self.dense.get_unchecked(index) })
+        } else {
+            None
+        }
+    }
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
         self.index_of(entity)
@@ -257,39 +264,50 @@ impl<T> SparseSet<T> {
 }
 
 impl<T> SparseSet<T> {
+    /// Returns `true` if `entity`'s component was inserted since the last [`clear_inserted`] or [`clear_all_inserted`] call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    ///
+    /// [`clear_inserted`]: Self::clear_inserted
+    /// [`clear_all_inserted`]: Self::clear_all_inserted
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
-        if let Some(id) = self.sparse.get(entity) {
-            unsafe { self.dense.get_unchecked(id.uindex()).is_inserted() }
+        if let Some(id) = self.id_of(entity) {
+            id.is_inserted()
         } else {
             false
         }
     }
+    /// Returns `true` if `entity`'s component was modified since the last [`clear_modified`] or [`clear_all_modified`] call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    ///
+    /// [`clear_modified`]: Self::clear_modified
+    /// [`clear_all_modified`]: Self::clear_all_modified
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
-        if let Some(id) = self.sparse.get(entity) {
-            unsafe { self.dense.get_unchecked(id.uindex()).is_modified() }
+        if let Some(id) = self.id_of(entity) {
+            id.is_modified()
         } else {
             false
         }
     }
+    /// Returns `true` if `entity`'s component was inserted or modified since the last clear call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
-        if let Some(id) = self.sparse.get(entity) {
-            unsafe {
-                let id = self.dense.get_unchecked(id.uindex());
-                id.is_inserted() || id.is_modified()
-            }
+        if let Some(id) = self.id_of(entity) {
+            id.is_inserted() || id.is_modified()
         } else {
             false
         }
     }
-    /// Returns the *deleted* components of an update packed storage.  
-    /// Unwraps errors.
+    /// Returns the *deleted* components of a storage tracking deletion.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track deletion. Start tracking by calling [`track_deletion`] or [`track_all`].
+    ///
+    /// [`track_deletion`]: Self::track_deletion
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn deleted(&self) -> &[(EntityId, T)] {
@@ -298,12 +316,14 @@ impl<T> SparseSet<T> {
             .as_deref()
             .expect("The storage does not track component deletion. Use `view_mut.track_deletion()` or `view_mut.track_all()` to start tracking.")
     }
-    /// Returns the ids of *removed* components of an update packed storage.  
-    /// Unwraps errors.
+    /// Returns the ids of *removed* components of a storage tracking removal.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track removal. Start tracking by calling [`track_removal`] or [`track_all`].
+    ///
+    /// [`track_removal`]: Self::track_removal
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn removed(&self) -> &[EntityId] {
@@ -312,26 +332,44 @@ impl<T> SparseSet<T> {
             .as_deref()
             .expect("The storage does not track component removal. Use `view_mut.track_removal()` or `view_mut.track_all()` to start tracking.")
     }
-    /// Returns the ids of *removed* or *deleted* components of an update packed storage.  
-    /// Unwraps errors.
+    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track removal nor deletion. Start tracking by calling [`track_removal`], [`track_deletion`] or [`track_all`].
+    ///
+    /// [`track_removal`]: Self::track_removal
+    /// [`track_deletion`]: Self::track_deletion
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.removed()
-            .iter()
-            .copied()
-            .chain(self.deleted().iter().map(|(id, _)| id).copied())
+        fn map_id<T>((id, _): &(EntityId, T)) -> EntityId {
+            *id
+        }
+
+        match (
+            self.metadata.track_removal.as_ref(),
+            self.metadata.track_deletion.as_ref(),
+        ) {
+            (Some(removed), Some(deleted)) => {
+                removed.iter().cloned().chain(deleted.iter().map(map_id))
+            }
+            (Some(removed), None) => removed.iter().cloned().chain([].iter().map(map_id)),
+            (None, Some(deleted)) => [].iter().cloned().chain(deleted.iter().map(map_id)),
+            (None, None) => {
+                panic!("The storage does not track component removal nor deletion. Use `view_mut.track_removal()`, `view_mut.track_deletion()` or `view_mut.track_all()` to start tracking.")
+            }
+        }
     }
-    /// Takes ownership of the *deleted* components of an update packed storage.  
-    /// Unwraps errors.
+    /// Takes ownership of the *deleted* components of a storage tracking deletion.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track deletion. Start tracking by calling [`track_deletion`] or [`track_all`].
+    ///
+    /// [`track_deletion`]: Self::track_deletion
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
@@ -341,12 +379,14 @@ impl<T> SparseSet<T> {
             .expect("The storage does not track component deletion. Use `view_mut.track_deletion()` or `view_mut.track_all()` to start tracking.")
             .drain(..).collect()
     }
-    /// Takes ownership of the ids of *removed* components of an update packed storage.  
-    /// Unwraps errors.
+    /// Takes ownership of the ids of *removed* components of a storage tracking removal.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track removal. Start tracking by calling [`track_removal`] or [`track_all`].
+    ///
+    /// [`track_removal`]: Self::track_removal
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn take_removed(&mut self) -> Vec<EntityId> {
@@ -358,15 +398,38 @@ impl<T> SparseSet<T> {
             .map(|(id, _)| id)
             .collect()
     }
-    /// Takes ownership of the *removed* and *deleted* components of an update packed storage.  
-    /// Unmraps errors.
+    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track removal nor deletion. Start tracking by calling [`track_removal`], [`track_deletion`] or [`track_all`].
+    ///
+    /// [`track_removal`]: Self::track_removal
+    /// [`track_deletion`]: Self::track_deletion
+    /// [`track_all`]: Self::track_all
     pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
-        (self.take_removed(), self.take_deleted())
+        match (
+            self.metadata.track_removal.as_mut(),
+            self.metadata.track_deletion.as_mut(),
+        ) {
+            (Some(removed), Some(deleted)) => {
+                (removed.drain(..).collect(), deleted.drain(..).collect())
+            }
+            (Some(removed), None) => (removed.drain(..).collect(), Vec::new()),
+            (None, Some(deleted)) => (Vec::new(), deleted.drain(..).collect()),
+            (None, None) => {
+                panic!("The storage does not track component removal nor deletion. Use `view_mut.track_removal()`, `view_mut.track_deletion()` or `view_mut.track_all()` to start tracking.")
+            }
+        }
     }
+    /// Removes the *inserted* flag on `entity`'s component.
+    ///
+    /// ### Panics
+    ///
+    /// - Storage does not track insertion. Start tracking by calling [`track_insertion`] or [`track_all`].
+    ///
+    /// [`track_insertion`]: Self::track_insertion
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn clear_inserted(&mut self, entity: EntityId) {
@@ -382,12 +445,14 @@ impl<T> SparseSet<T> {
             panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
         }
     }
-    /// Moves all component in the *inserted* section of an update packed storage to the *neutral* section.  
-    /// Unwraps errors.
+    /// Removes the *inserted* flag on all components of this storage.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track insertion. Start tracking by calling [`track_insertion`] or [`track_all`].
+    ///
+    /// [`track_insertion`]: Self::track_insertion
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     pub fn clear_all_inserted(&mut self) {
         if self.metadata.track_insertion {
@@ -400,6 +465,14 @@ impl<T> SparseSet<T> {
             panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
         }
     }
+    /// Removes the *modified* flag on `entity`'s component.
+    ///
+    /// ### Panics
+    ///
+    /// - Storage does not track modification. Start tracking by calling [`track_modification`] or [`track_all`].
+    ///
+    /// [`track_modification`]: Self::track_modification
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn clear_modified(&mut self, entity: EntityId) {
@@ -415,12 +488,14 @@ impl<T> SparseSet<T> {
             panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
         }
     }
-    /// Moves all component in the *modified* section of an update packed storage to the *neutral* section.  
-    /// Unwraps errors.
+    /// Removes the *modified* flag on all components of this storage.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track modification. Start tracking by calling [`track_modification`] or [`track_all`].
+    ///
+    /// [`track_modification`]: Self::track_modification
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     pub fn clear_all_modified(&mut self) {
         if self.metadata.track_modification {
@@ -433,14 +508,20 @@ impl<T> SparseSet<T> {
             panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
         }
     }
+    /// Removes the *inserted* and *modified* flags on `entity`'s component.
+    ///
+    /// ### Panics
+    ///
+    /// - Storage does not track insertion not modification. Start tracking by calling [`track_insertion`], [`track_modification`] or [`track_all`].
+    ///
+    /// [`track_insertion`]: Self::track_insertion
+    /// [`track_modification`]: Self::track_modification
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     #[inline]
     pub fn clear_inserted_and_modified(&mut self, entity: EntityId) {
-        if !self.is_tracking_insertion() {
-            panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
-        }
-        if !self.is_tracking_modification() {
-            panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
+        if !self.is_tracking_insertion() && !self.is_tracking_modification() {
+            panic!("The storage does not track component insertion not modification. Use `view_mut.track_insertion()`, `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
         }
 
         if let Some(id) = self.sparse.get(entity) {
@@ -449,19 +530,19 @@ impl<T> SparseSet<T> {
             }
         }
     }
-    /// Moves all component in the *inserted* and *modified* section of an update packed storage to the *neutral* section.  
-    /// Unwraps errors.
+    /// Removes the *inserted* and *modified* flags on all components of this storage.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
-    /// - Storage isn't update packed.
+    /// - Storage does not track insertion not modification. Start tracking by calling [`track_insertion`], [`track_modification`] or [`track_all`].
+    ///
+    /// [`track_insertion`]: Self::track_insertion
+    /// [`track_modification`]: Self::track_modification
+    /// [`track_all`]: Self::track_all
     #[track_caller]
     pub fn clear_all_inserted_and_modified(&mut self) {
-        if !self.is_tracking_insertion() {
-            panic!("The storage does not track component insertion. Use `view_mut.track_insertion()` or `view_mut.track_all()` to start tracking.");
-        }
-        if !self.is_tracking_modification() {
-            panic!("The storage does not track component modification. Use `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
+        if !self.is_tracking_insertion() && !self.is_tracking_modification() {
+            panic!("The storage does not track component insertion not modification. Use `view_mut.track_insertion()`, `view_mut.track_modification()` or `view_mut.track_all()` to start tracking.");
         }
 
         for id in &mut self.dense {
@@ -498,18 +579,23 @@ impl<T> SparseSet<T> {
         self.track_deletion();
         self.track_removal();
     }
+    /// Returns `true` if the storage tracks insertion.
     pub fn is_tracking_insertion(&self) -> bool {
         self.metadata.track_insertion
     }
+    /// Returns `true` if the storage tracks modification.
     pub fn is_tracking_modification(&self) -> bool {
         self.metadata.track_modification
     }
+    /// Returns `true` if the storage tracks deletion.
     pub fn is_tracking_deletion(&self) -> bool {
         self.metadata.track_deletion.is_some()
     }
+    /// Returns `true` if the storage tracks removal.
     pub fn is_tracking_removal(&self) -> bool {
         self.metadata.track_removal.is_some()
     }
+    /// Returns `true` if the storage tracks insertion, modification, deletion or removal.
     pub fn is_tracking_any(&self) -> bool {
         self.is_tracking_insertion()
             || self.is_tracking_modification()
@@ -559,7 +645,7 @@ impl<T> SparseSet<T> {
     /// The two entities shouldn't point to the same component.  
     /// Unwraps errors.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.
@@ -602,7 +688,7 @@ impl<T> SparseSet<T> {
     /// The two entities shouldn't point to the same component.  
     /// Unwraps errors.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - MissingComponent - if one of the entity doesn't have any component in the storage.
     /// - IdenticalIds - if the two entities point to the same component.

@@ -902,6 +902,9 @@ impl World {
     pub fn clear(&mut self) {
         self.all_storages.get_mut().clear();
     }
+    /// Make the given entity alive.  
+    /// Does nothing if an entity with a greater generation is already at this index.  
+    /// Returns `true` if the entity is successfully spawned.
     #[inline]
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().spawn(entity)
