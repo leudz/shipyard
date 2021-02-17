@@ -12,7 +12,9 @@ use alloc::vec::Vec;
 /// A workload is a collection of systems with parallelism calculated based on the types borrow by the systems.
 #[derive(Debug, Clone)]
 pub struct WorkloadInfo {
+    #[allow(missing_docs)]
     pub name: Cow<'static, str>,
+    #[allow(missing_docs)]
     pub batch_info: Vec<BatchInfo>,
 }
 
@@ -21,15 +23,20 @@ pub struct WorkloadInfo {
 /// A batch is a collection of system that can safely run in parallel.
 #[derive(Debug, Clone)]
 pub struct BatchInfo {
+    #[allow(missing_docs)]
     pub systems: Vec<SystemInfo>,
 }
 
 /// Contains information related to a system.
 #[derive(Clone)]
 pub struct SystemInfo {
+    #[allow(missing_docs)]
     pub name: &'static str,
+    #[allow(missing_docs)]
     pub type_id: TypeId,
+    #[allow(missing_docs)]
     pub borrow: Vec<TypeInfo>,
+    /// Information explaining why this system could not be part of the previous batch.
     pub conflict: Option<Conflict>,
 }
 
@@ -46,14 +53,22 @@ impl core::fmt::Debug for SystemInfo {
 /// Pinpoints the type and system that made a system unable to get into a batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Conflict {
+    /// Rust rules do not allow the type described by 'type_info' to be borrowed at the same time as 'other_type_info'.
     Borrow {
+        #[allow(missing_docs)]
         type_info: TypeInfo,
+        #[allow(missing_docs)]
         other_system: SystemId,
+        #[allow(missing_docs)]
         other_type_info: TypeInfo,
     },
+    /// A '!Send' and/or '!Sync' type currently prevents any parrallelism.
     NotSendSync(TypeInfo),
+    /// A '!Send' and/or '!Sync' type currently prevents any parrallelism.
     OtherNotSendSync {
+        #[allow(missing_docs)]
         system: SystemId,
+        #[allow(missing_docs)]
         type_info: TypeInfo,
     },
 }
@@ -61,7 +76,9 @@ pub enum Conflict {
 /// Identify a system.
 #[derive(Clone, Eq)]
 pub struct SystemId {
+    #[allow(missing_docs)]
     pub name: &'static str,
+    #[allow(missing_docs)]
     pub type_id: TypeId,
 }
 
@@ -80,10 +97,15 @@ impl core::fmt::Debug for SystemId {
 /// Identify a type.
 #[derive(Clone, Eq)]
 pub struct TypeInfo {
+    #[allow(missing_docs)]
     pub name: &'static str,
+    #[allow(missing_docs)]
     pub mutability: Mutability,
+    #[allow(missing_docs)]
     pub storage_id: StorageId,
+    #[allow(missing_docs)]
     pub is_send: bool,
+    #[allow(missing_docs)]
     pub is_sync: bool,
 }
 

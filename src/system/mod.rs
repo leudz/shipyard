@@ -6,13 +6,14 @@ use crate::borrow::{Borrow, IntoBorrow};
 use crate::error;
 use crate::world::World;
 
+/// Used instead of '()' to not conflict where 'A = ()'
 pub struct Nothing;
 
 pub trait System<'s, Data, B, R> {
     fn run(self, data: Data, world: &'s World) -> Result<R, error::GetStorage>;
 }
 
-// Nothing has to be used and not () to not conflict where A = ()
+// 'Nothing' has to be used and not '()' to not conflict where 'A = ()'
 impl<'s, R, F> System<'s, (), Nothing, R> for F
 where
     F: FnOnce() -> R,
@@ -22,7 +23,7 @@ where
     }
 }
 
-// Nothing has to be used and not () to not conflict where A = ()
+// 'Nothing' has to be used and not '()' to not conflict where 'A = ()'
 impl<'s, Data, R, F> System<'s, (Data,), Nothing, R> for F
 where
     F: FnOnce(Data) -> R,

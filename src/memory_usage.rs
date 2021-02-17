@@ -7,9 +7,11 @@ pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
 pub struct StorageMemoryUsage {
+    #[allow(missing_docs)]
     pub storage_name: Cow<'static, str>,
     pub allocated_memory_bytes: usize,
     pub used_memory_bytes: usize,
+    #[allow(missing_docs)]
     pub component_count: usize,
 }
 

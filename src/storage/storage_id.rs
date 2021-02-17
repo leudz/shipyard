@@ -5,7 +5,9 @@ use crate::type_id::TypeId;
 /// Id of a storage, can be a `TypeId` or `u64`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StorageId {
+    /// Identify a Rust type known at compile time
     TypeId(TypeId),
+    /// Identify a type only known at runtime
     Custom(u64),
 }
 
