@@ -16,11 +16,13 @@ pub use non_send_sync::NonSendSync;
 #[cfg(feature = "thread_local")]
 pub use non_sync::NonSync;
 
+use crate::all_storages::CustomStorageAccess;
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
 use crate::sparse_set::SparseSet;
-use crate::view::AllStoragesViewMut;
-use crate::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
+use crate::view::{
+    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+};
 use crate::world::World;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

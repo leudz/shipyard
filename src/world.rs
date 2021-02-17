@@ -1,4 +1,4 @@
-use crate::all_storages::{AllStorages, DeleteAny, Retain};
+use crate::all_storages::{AllStorages, CustomStorageAccess, DeleteAny, Retain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{Borrow, IntoBorrow};
 use crate::entity_id::EntityId;

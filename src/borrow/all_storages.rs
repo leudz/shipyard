@@ -8,7 +8,7 @@ use super::{
     Borrow, EntitiesBorrower, EntitiesMutBorrower, UniqueViewBorrower, UniqueViewMutBorrower,
     UnitBorrower, ViewBorrower, ViewMutBorrower,
 };
-use crate::all_storages::AllStorages;
+use crate::all_storages::{AllStorages, CustomStorageAccess};
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
 use crate::sparse_set::SparseSet;

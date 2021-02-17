@@ -1,4 +1,4 @@
-use crate::all_storages::AllStorages;
+use crate::all_storages::{AllStorages, CustomStorageAccess};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
