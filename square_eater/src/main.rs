@@ -132,8 +132,8 @@ async fn main() {
             let text_dimensions = measure_text("Click to start", None, 40, 1.);
             draw_text(
                 "Click to start",
-                WIDTH as f32 / 2. - text_dimensions.0 / 2.,
-                HEIGHT as f32 / 2. - text_dimensions.1 / 2.,
+                WIDTH as f32 / 2. - text_dimensions.width / 2.,
+                HEIGHT as f32 / 2. - text_dimensions.height / 2.,
                 40.,
                 WHITE,
             );
