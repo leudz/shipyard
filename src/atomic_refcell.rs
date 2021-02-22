@@ -136,11 +136,13 @@ impl<T: ?Sized> AtomicRefCell<T> {
                 (None, false) => {
                     // accessible from one thread at a time
                     if self.borrow_state.try_lock_exclusive() {
+                        // SAFE we hold an exclusive lock
                         unsafe {
                             self.borrow_state.downgrade();
                         }
 
                         Ok(Ref {
+                            // SAFE we locked
                             inner: unsafe { &*self.inner.get() },
                             borrow: SharedBorrow(&self.borrow_state),
                         })
@@ -156,6 +158,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
 
                     if self.borrow_state.try_lock_shared() {
                         Ok(Ref {
+                            // SAFE we locked
                             inner: unsafe { &*self.inner.get() },
                             borrow: SharedBorrow(&self.borrow_state),
                         })
@@ -185,6 +188,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
 
         if self.borrow_state.try_lock_exclusive() {
             Ok(RefMut {
+                // SAFE we locked
                 inner: unsafe { &mut *self.inner.get() },
                 borrow: ExclusiveBorrow(&self.borrow_state),
             })
@@ -194,8 +198,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     }
     #[inline]
     pub(crate) fn get_mut(&mut self) -> &'_ mut T {
-        // SAFE we have exclusive access
-        unsafe { &mut *self.inner.get() }
+        self.inner.get_mut()
     }
 }
 
@@ -240,7 +243,7 @@ impl<'a, T> Ref<'a, T> {
     ///
     /// # Safety
     ///
-    /// The inner value and everything borrowing it must be dropped before `ExclusiveBorrow`.
+    /// The inner value and everything borrowing it must be dropped before `SharedBorrow`.
     #[inline]
     pub unsafe fn destructure(this: Self) -> (T, SharedBorrow<'a>) {
         (this.inner, this.borrow)
