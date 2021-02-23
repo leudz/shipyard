@@ -70,7 +70,7 @@ pub use crate::borrow::NonSendSync;
 pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
-pub use all_storages::AllStorages;
+pub use all_storages::{AllStorages, CustomStorageAccess};
 pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 #[doc(inline)]
 pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, IntoBorrow, Mutability};
