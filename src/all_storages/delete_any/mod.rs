@@ -17,13 +17,10 @@ impl<T: 'static + UnknownStorage + CustomDeleteAny> DeleteAny for T {
     fn delete_any(all_storages: &mut AllStorages) {
         let mut ids = HashSet::new();
 
-        {
-            // we have an exclusive reference so it's ok to not lock and still get a reference
-            let storages = unsafe { &mut *all_storages.storages.get() };
+        let storages = all_storages.storages.get_mut();
 
-            if let Some(storage) = storages.get_mut(&StorageId::of::<T>()) {
-                storage.get_mut_exclusive::<T>().delete_any(&mut ids);
-            }
+        if let Some(storage) = storages.get_mut(&StorageId::of::<T>()) {
+            storage.get_mut_exclusive::<T>().delete_any(&mut ids);
         }
 
         for id in ids {
@@ -38,16 +35,13 @@ macro_rules! impl_delete_any {
             fn delete_any(all_storages: &mut AllStorages) {
                 let mut ids = HashSet::default();
 
-                {
-                    // we have an exclusive reference so it's ok to not lock and still get a reference
-                    let storages = unsafe { &mut *all_storages.storages.get() };
+                let storages = all_storages.storages.get_mut();
 
-                    $(
-                        if let Some(storage) = storages.get_mut(&StorageId::of::<$storage>()) {
-                            storage.get_mut_exclusive::<$storage>().delete_any(&mut ids);
-                        }
-                    )+
-                }
+                $(
+                    if let Some(storage) = storages.get_mut(&StorageId::of::<$storage>()) {
+                        storage.get_mut_exclusive::<$storage>().delete_any(&mut ids);
+                    }
+                )+
 
                 for id in ids {
                     all_storages.delete_entity(id);
