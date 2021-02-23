@@ -35,7 +35,6 @@ pub struct AllStorages {
     storages: UnsafeCell<HashMap<StorageId, Storage>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
-    inside_callback: UnsafeCell<bool>,
 }
 
 #[cfg(not(feature = "thread_local"))]
@@ -54,7 +53,6 @@ impl AllStorages {
             lock: RawRwLock::INIT,
             #[cfg(feature = "thread_local")]
             thread_id: std::thread::current().id(),
-            inside_callback: UnsafeCell::new(false),
         }
     }
     /// Removes a unique storage.
@@ -85,11 +83,6 @@ impl AllStorages {
         self.lock.lock_exclusive();
 
         {
-            if unsafe { *self.inside_callback.get() } {
-                unsafe { self.lock.unlock_exclusive() };
-                return Err(error::UniqueRemove::InsideCallback(type_name::<T>()));
-            }
-
             // SAFE we locked
             let storages = unsafe { &mut *self.storages.get() };
 
