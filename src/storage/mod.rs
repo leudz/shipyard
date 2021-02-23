@@ -10,7 +10,7 @@ use alloc::boxed::Box;
 use std::thread::ThreadId;
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
-/// different types in a `HashMap<TypeId, Storage>`.  
+/// different types in a `HashMap<TypeId, Storage>`.
 /// and box the `AtomicRefCell` so it doesn't move when the `HashMap` reallocates
 pub(crate) struct Storage(pub(crate) *mut AtomicRefCell<dyn UnknownStorage>);
 
@@ -21,6 +21,7 @@ unsafe impl Sync for Storage {}
 
 impl Drop for Storage {
     fn drop(&mut self) {
+        // SAFE the pointer came from a `Box` of the same type
         unsafe {
             Box::from_raw(self.0);
         }
@@ -95,7 +96,7 @@ fn delete() {
     use crate::entity_id::EntityId;
     use crate::sparse_set::SparseSet;
 
-    let storage = Storage(Box::into_raw(Box::new(AtomicRefCell::new(SparseSet::<
+    let mut storage = Storage(Box::into_raw(Box::new(AtomicRefCell::new(SparseSet::<
         &'static str,
     >::new()))));
     let mut entity_id = EntityId::zero();
@@ -115,10 +116,7 @@ fn delete() {
         .unwrap()
         .insert(entity_id, "test1");
     entity_id.set_index(5);
-    unsafe { &*storage.0 }
-        .borrow_mut()
-        .unwrap()
-        .delete(entity_id);
+    storage.inner_mut().delete(entity_id);
     assert_eq!(
         storage
             .get_mut::<SparseSet::<&'static str>>()
@@ -143,15 +141,9 @@ fn delete() {
         Some(&"test1")
     );
     entity_id.set_index(10);
-    unsafe { &*storage.0 }
-        .borrow_mut()
-        .unwrap()
-        .delete(entity_id);
+    storage.inner_mut().delete(entity_id);
     entity_id.set_index(1);
-    unsafe { &*storage.0 }
-        .borrow_mut()
-        .unwrap()
-        .delete(entity_id);
+    storage.inner_mut().delete(entity_id);
     entity_id.set_index(5);
     assert_eq!(
         storage
