@@ -25,18 +25,24 @@ use crate::view::{
 };
 use crate::world::World;
 
+/// Describe if a storage is borrowed exlusively or not.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutability {
+    #[allow(missing_docs)]
     Shared,
+    #[allow(missing_docs)]
     Exclusive,
 }
 
+/// Transforms a view into a helper type. This allows workloads to have this syntax by faking GAT on stable.
 pub trait IntoBorrow {
+    /// Helper type almost allowing GAT on stable.
     type Borrow: for<'a> Borrow<'a>;
 }
 
 /// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and worklaods.
 pub trait Borrow<'a> {
+    #[allow(missing_docs)]
     type View;
 
     /// This function is where the actual borrowing happens.

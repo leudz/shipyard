@@ -6,11 +6,14 @@ pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
+/// A trait to querry the amount of memory a storage uses.
 pub struct StorageMemoryUsage {
     #[allow(missing_docs)]
     pub storage_name: Cow<'static, str>,
-    pub allocated_memory_bytes: usize,
+    /// Amount of memory used by the storage in bytes.
     pub used_memory_bytes: usize,
+    /// Amount of memory allocated by the storage in bytes (including reserved memory).
+    pub allocated_memory_bytes: usize,
     #[allow(missing_docs)]
     pub component_count: usize,
 }

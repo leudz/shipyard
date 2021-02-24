@@ -30,6 +30,7 @@
 extern crate alloc;
 
 mod atomic_refcell;
+/// Allows access to helper types needed to implement `Borrow`.
 pub mod borrow;
 mod delete;
 pub mod error;

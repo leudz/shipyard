@@ -18,8 +18,10 @@ const ACCESS_FACTOR: usize = 3;
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
 pub trait IntoFastIter {
+    #[allow(missing_docs)]
     type IntoIter: Iterator;
     #[cfg(feature = "rayon")]
+    #[allow(missing_docs)]
     type IntoParIter;
 
     /// Returns an iterator over `SparseSet`.  

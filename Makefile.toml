@@ -39,4 +39,4 @@ command = "cargo"
 args = ["build", "--release", "--package", "square_eater", "--target", "wasm32-unknown-unknown"]
 
 [tasks.test]
-run_task = { name = ["format", "miri", "clippy", "test-all", "doc", "clean"] }
+run_task = { name = ["format", "test-all", "doc", "miri", "clippy", "clean"] }

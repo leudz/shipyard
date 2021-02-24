@@ -6,7 +6,9 @@ use rayon::iter::plumbing::UnindexedConsumer;
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
 pub enum FastParIter<Storage> {
+    #[allow(missing_docs)]
     Tight(FastParTight<Storage>),
+    #[allow(missing_docs)]
     Mixed(FastParMixed<Storage>),
 }
 

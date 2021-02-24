@@ -3,6 +3,7 @@ use crate::ViewMut;
 
 /// Defines how components are added to an existing entity.
 pub trait AddComponent {
+    #[allow(missing_docs)]
     type Component;
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// This function does not check `entity` is alive. It's possible to add components to removed entities.  

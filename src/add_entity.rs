@@ -1,9 +1,12 @@
 use crate::entity_id::EntityId;
 use crate::view::ViewMut;
 
+/// Trait describing how to add a new entity to a storage.
 pub trait AddEntity {
+    #[allow(missing_docs)]
     type Component;
 
+    /// Adds a new entity with `component`.
     fn add_entity(&mut self, entity: EntityId, component: Self::Component);
 }
 

@@ -774,7 +774,7 @@ let i = all_storages.run(sys1).unwrap();
             let storage = storage.get_mut_exclusive::<T>();
             Ok(storage)
         } else {
-            Err(error::GetStorage::MissingStorage(type_name::<T>().into()))
+            Err(error::GetStorage::MissingStorage(type_name::<T>()))
         }
     }
     pub(crate) fn exclusive_storage_or_insert_mut<T, F>(

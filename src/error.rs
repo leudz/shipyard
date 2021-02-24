@@ -8,19 +8,15 @@ use core::fmt::{Debug, Display, Formatter};
 use std::error::Error;
 
 /// AtomicRefCell's borrow error.
-///
-/// Unique means the BorrowState was mutably borrowed when an illegal borrow occured.
-///
-/// Shared means the BorrowState was immutably borrowed when an illegal borrow occured.
-///
-/// WrongThread is linked to !Send, when trying to access them from an other thread.
-///
-/// MultipleThreads is when !Send types are accessed from multiple threads.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Borrow {
+    /// The Storage was borrowed when an exclusive borrow occured.
     Unique,
+    /// The Storage was borrowed exclusively when a shared borrow occured.
     Shared,
+    /// The Storage of a `!Send` component was accessed from an other thread.
     WrongThread,
+    /// The Storage of a `!Sync` component was accessed from multiple threads at the same time.
     MultipleThreads,
 }
 
@@ -48,37 +44,17 @@ impl Display for Borrow {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct MissingStorage(&'static str);
-
-impl From<&'static str> for MissingStorage {
-    fn from(name: &'static str) -> Self {
-        MissingStorage(name)
-    }
-}
-
-#[cfg(feature = "std")]
-impl Error for MissingStorage {}
-
-impl Debug for MissingStorage {
-    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", self.0))
-    }
-}
-
-impl Display for MissingStorage {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
-    }
-}
-
 /// Error related to acquiring a storage.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GetStorage {
+    #[allow(missing_docs)]
     AllStoragesBorrow(Borrow),
+    #[allow(missing_docs)]
     StorageBorrow((&'static str, Borrow)),
+    #[allow(missing_docs)]
     Entities(Borrow),
-    MissingStorage(MissingStorage),
+    #[allow(missing_docs)]
+    MissingStorage(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -109,7 +85,7 @@ impl Debug for GetStorage {
                 },
                 _ => unreachable!(),
             },
-            Self::MissingStorage(missing_storage) => Debug::fmt(missing_storage, f),
+            Self::MissingStorage(missing_storage) => f.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", missing_storage))
         }
     }
 }
@@ -121,13 +97,11 @@ impl Display for GetStorage {
 }
 
 /// Error related to adding an entity.
-///
-/// AllStoragesBorrow means an add_storage operation is in progress.
-///
-/// Entities means entities is already borrowed.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NewEntity {
+    /// Another add_storage operation is in progress.
     AllStoragesBorrow(Borrow),
+    /// Entities is already borrowed.
     Entities(Borrow),
 }
 
@@ -164,6 +138,7 @@ impl Display for NewEntity {
 /// [`World::add_component`]: crate::world::World::add_component()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum AddComponent {
+    #[allow(missing_docs)]
     EntityIsNotAlive,
 }
 
@@ -189,8 +164,11 @@ impl Display for AddComponent {
 /// [`WorkloadBuilder::add_to_world`]: crate::WorkloadBuilder::add_to_world()
 #[derive(Clone, PartialEq, Eq)]
 pub enum AddWorkload {
+    /// A workload with the same name already exists.
     AlreadyExists,
+    /// The `Scheduler` is already borrowed.
     Borrow,
+    /// Unknown nested workload.
     UnknownWorkload(Cow<'static, str>, Cow<'static, str>),
 }
 
@@ -221,7 +199,9 @@ impl Display for AddWorkload {
 /// Trying to set the default workload to a non existant one will result in this error.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SetDefaultWorkload {
+    /// The `Scheduler` is already borrowed.
     Borrow,
+    /// The workload does not exists.
     MissingWorkload,
 }
 
@@ -251,12 +231,16 @@ impl Display for SetDefaultWorkload {
 /// [`run_default`]: crate::World#method::run_default()
 /// [`run_workload`]: crate::World#method::run_workload()
 pub enum RunWorkload {
+    /// The `Scheduler` is exclusively borrowed.
     Scheduler,
+    /// Error while running a system.
     Run((&'static str, Run)),
+    /// Workload is not present in the world.
     MissingWorkload,
 }
 
 impl RunWorkload {
+    /// Helper function to get back a custom error.
     #[cfg(feature = "std")]
     pub fn custom_error(self) -> Option<Box<dyn Error + Send>> {
         match self {
@@ -264,6 +248,7 @@ impl RunWorkload {
             _ => None,
         }
     }
+    /// Helper function to get back a custom error.
     #[cfg(not(feature = "std"))]
     pub fn custom_error(self) -> Option<Box<dyn core::any::Any + Send>> {
         match self {
@@ -302,9 +287,12 @@ impl Display for RunWorkload {
 /// [`World::run`]: crate::World::run()
 /// [`AllStorages::run`]: crate::AllStorages::run()
 pub enum Run {
+    /// Failed to borrow one of the storage.
     GetStorage(GetStorage),
+    /// Error returned by the system.
     #[cfg(feature = "std")]
     Custom(Box<dyn Error + Send>),
+    /// Error returned by the system.
     #[cfg(not(feature = "std"))]
     Custom(Box<dyn core::any::Any + Send>),
 }
@@ -317,11 +305,11 @@ impl From<GetStorage> for Run {
 
 impl Run {
     #[cfg(feature = "std")]
-    pub fn from_custom<E: Error + Send + 'static>(error: E) -> Self {
+    pub(crate) fn from_custom<E: Error + Send + 'static>(error: E) -> Self {
         Run::Custom(Box::new(error))
     }
     #[cfg(not(feature = "std"))]
-    pub fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
+    pub(crate) fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
         Run::Custom(Box::new(error))
     }
 }
@@ -368,7 +356,9 @@ impl Display for NotUpdatePack {
 /// [`get`]: crate::Get
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct MissingComponent {
+    /// `EntityId` of the component.
     pub id: EntityId,
+    /// Name of the component.
     pub name: &'static str,
 }
 
@@ -393,8 +383,11 @@ impl Display for MissingComponent {
 /// Trying to add an invalid system to a workload will return this error.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InvalidSystem {
+    /// `AllStorages` borrowed alongside another storage.
     AllStorages,
+    /// Multiple views of the same storage including an exclusive one.
     MultipleViews,
+    /// Multiple exclusive views fo the same storage.
     MultipleViewsMut,
 }
 
@@ -423,10 +416,12 @@ impl Display for InvalidSystem {
 /// [`AllStorages::remove_unique`]: crate::AllStorages::remove_unique()
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UniqueRemove {
+    /// `AllStorages` was already borrowed.
     AllStorages,
+    /// No unique storage of this type exist.
     MissingUnique(&'static str),
+    /// The uniuqe storage is already borrowed.
     StorageBorrow((&'static str, Borrow)),
-    InsideCallback(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -442,7 +437,6 @@ impl Debug for UniqueRemove {
                 Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
                 _ => unreachable!()
             }
-            Self::InsideCallback(name) => f.write_fmt(format_args!("Cannot remove {} unique storage inside global callback.", name)),
         }
     }
 }
@@ -459,7 +453,9 @@ impl Display for UniqueRemove {
 /// [`apply_mut`]: crate::SparseSet::apply_mut()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Apply {
+    #[allow(missing_docs)]
     IdenticalIds,
+    /// Entity that doesn't have the required component.
     MissingComponent(EntityId),
 }
 

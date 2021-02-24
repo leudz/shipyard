@@ -202,6 +202,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     }
 }
 
+/// Unlocks a shared borrow on drop.
 pub struct SharedBorrow<'a>(&'a RawRwLock);
 
 impl Drop for SharedBorrow<'_> {
@@ -222,6 +223,7 @@ impl Clone for SharedBorrow<'_> {
     }
 }
 
+/// Unlocks an exclusive borrow on drop.
 pub struct ExclusiveBorrow<'a>(&'a RawRwLock);
 
 impl Drop for ExclusiveBorrow<'_> {
@@ -233,6 +235,7 @@ impl Drop for ExclusiveBorrow<'_> {
     }
 }
 
+/// Wraps an `AtomicRefcell`'s shared borrow.
 pub struct Ref<'a, T> {
     inner: T,
     borrow: SharedBorrow<'a>,
@@ -252,7 +255,7 @@ impl<'a, T> Ref<'a, T> {
 
 impl<'a, T: ?Sized> Ref<'a, &'a T> {
     #[inline]
-    pub fn map<U, F: FnOnce(&T) -> &U>(this: Self, f: F) -> Ref<'a, &'a U> {
+    pub(crate) fn map<U, F: FnOnce(&T) -> &U>(this: Self, f: F) -> Ref<'a, &'a U> {
         Ref {
             inner: f(this.inner),
             borrow: this.borrow,
@@ -279,6 +282,7 @@ impl<T: Clone> Clone for Ref<'_, T> {
     }
 }
 
+/// Wraps an `AtomicRefcell`'s exclusive borrow.
 pub struct RefMut<'a, T> {
     inner: T,
     borrow: ExclusiveBorrow<'a>,

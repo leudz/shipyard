@@ -7,7 +7,9 @@ use crate::entity_id::EntityId;
 use crate::iter::with_id::LastId;
 
 pub enum FastIter<Storage> {
+    #[allow(missing_docs)]
     Tight(FastTight<Storage>),
+    #[allow(missing_docs)]
     Mixed(FastMixed<Storage>),
 }
 

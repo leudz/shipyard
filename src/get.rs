@@ -7,7 +7,9 @@ use core::any::type_name;
 
 /// Retrives components based on their type and entity id.
 pub trait Get {
+    #[allow(missing_docs)]
     type Out;
+    #[allow(missing_docs)]
     type FastOut;
     /// Retrieve components of `entity`.
     ///
@@ -15,18 +17,31 @@ pub trait Get {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{EntitiesViewMut, Get, ViewMut, World};
+    /// use shipyard::{Get, View, World};
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         assert_eq!((&usizes, &u32s).get(entity), Ok((&0, &1)));
-    ///     },
-    /// );
+    /// let entity = world.add_entity((0usize, 1u32));
+    ///
+    /// let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
+    /// assert_eq!((&usizes, &u32s).get(entity), Ok((&0, &1)));
     /// ```
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
+    /// Retrieve components of `entity` without fine modification tracking.
+    ///
+    /// Multiple components can be queried at the same time using a tuple.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{Get, View, World};
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((0usize, 1u32));
+    ///
+    /// let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
+    /// assert_eq!((&usizes, &u32s).fast_get(entity), Ok((&0, &1)));
+    /// ```
     fn fast_get(self, entity: EntityId) -> Result<Self::FastOut, error::MissingComponent>;
 }
 

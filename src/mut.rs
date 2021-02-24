@@ -1,5 +1,6 @@
 use crate::entity_id::EntityId;
 
+/// Tracks component modification.
 pub struct Mut<'a, T> {
     pub(crate) flag: Option<&'a mut EntityId>,
     pub(crate) data: &'a mut T,
