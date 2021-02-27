@@ -7,7 +7,7 @@ pub trait AddComponent {
     type Component;
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// This function does not check `entity` is alive. It's possible to add components to removed entities.  
-    /// Use [`Entities::add_component`] if you're unsure.  
+    /// Use [`Entities::add_component`] if you're unsure.
     ///
     /// ### Example
     /// ```

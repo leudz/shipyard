@@ -480,7 +480,7 @@ fn test_sorting() {
         (EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>),
         ViewMut<usize>,
     )>().unwrap();
-    
+
     let root = hierarchy.0.add_entity((), ());
 
     let e0 = hierarchy.attach_new(root);

@@ -36,7 +36,8 @@ Note that `!Send`/`!Sync` components can be stored in unique storages.
 
 ### Tag Components
 
-Components don't always need data, they're sometimes just there to flag entities. We can use empty structs to take care of this job.  
+Components don't always need data, they're sometimes just there to flag entities. We can use empty structs to take care of this job.
+
 Example:
 ```rust, noplaypen
 struct Dirty;
