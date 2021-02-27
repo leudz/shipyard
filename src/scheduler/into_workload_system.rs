@@ -13,14 +13,22 @@ use core::any::Any;
 #[cfg(feature = "std")]
 use std::error::Error;
 
+/// Trait used to add systems to a workload.
+///
+/// Usually you don't have to use it directly.
 pub trait IntoWorkloadSystem<B, R> {
+    /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;
+    /// Wraps a failible function in a struct containing all information required by a workload.  
+    /// The workload will stop if an error is returned.
     #[cfg(feature = "std")]
     fn into_workload_try_system<Ok, Err: 'static + Send + Error>(
         self,
     ) -> Result<WorkloadSystem, error::InvalidSystem>
     where
         R: Into<Result<Ok, Err>>;
+    /// Wraps a failible function in a struct containing all information required by a workload.  
+    /// The workload will stop if an error is returned.
     #[cfg(not(feature = "std"))]
     fn into_workload_try_system<Ok, Err: 'static + Send + Any>(
         self,

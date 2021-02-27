@@ -1,6 +1,6 @@
 //! Shipyard is an Entity Component System focused on usability and speed.
 //!
-//! The [user guide](https://leudz.github.io/shipyard/guide) is a great place to learn all about Shipyard!  
+//! The [user guide](https://leudz.github.io/shipyard/guide) is a great place to learn all about Shipyard!
 //!
 //! ## Features
 //!
@@ -26,6 +26,7 @@
 #![deny(clippy::maybe_infinite_iter)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(missing_docs)]
 
 extern crate alloc;
 

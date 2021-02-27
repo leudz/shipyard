@@ -25,7 +25,7 @@ use alloc::vec::Vec;
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
 
-/// `SparseSet` component storage.
+/// Default component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
 // Only usize can be added. On insertion, the number is pushed into the dense vector
 // and sparse[number] is set to dense.len() - 1.
@@ -549,16 +549,43 @@ impl<T> SparseSet<T> {
             id.clear_meta();
         }
     }
+    /// Flags components when they are inserted.  
+    /// To check the flag use [`is_inserted`], [`is_inserted_or_modified`] or iterate over the storage after calling [`inserted`].  
+    /// To clear the flag use [`clear_inserted`] or [`clear_all_inserted`].
+    ///
+    /// [`is_inserted`]: Self::is_inserted()
+    /// [`is_inserted_or_modified`]: Self::is_inserted_or_modified()
+    /// [`inserted`]: crate::view::View::inserted()
+    /// [`clear_inserted`]: Self::clear_inserted()
+    /// [`clear_all_inserted`]: Self::clear_all_inserted()
     pub fn track_insertion(&mut self) -> &mut Self {
         self.metadata.track_insertion = true;
 
         self
     }
+    /// Flags components when they are modified. Will not flag components already flagged inserted.  
+    /// To check the flag use [`is_modified`], [`is_inserted_or_modified`] or iterate over the storage after calling [`modified`].  
+    /// To clear the flag use [`clear_modified`] or [`clear_all_modified`].
+    ///
+    /// [`is_modified`]: Self::is_modified()
+    /// [`is_inserted_or_modified`]: Self::is_inserted_or_modified()
+    /// [`modified`]: crate::view::View::modified()
+    /// [`clear_modified`]: Self::clear_modified()
+    /// [`clear_all_modified`]: Self::clear_all_modified()
     pub fn track_modification(&mut self) -> &mut Self {
         self.metadata.track_modification = true;
 
         self
     }
+    /// Stores components and their [`EntityId`] when they are deleted.  
+    /// You can access them with [`deleted`] or [`removed_or_deleted`].  
+    /// You can clear them and get back a `Vec` with [`take_deleted`] or [`take_removed_and_deleted`].
+    ///
+    /// [`EntityId`]: crate::entity_id::EntityId
+    /// [`deleted`]: Self::deleted()
+    /// [`removed_or_deleted`]: Self::removed_or_deleted()
+    /// [`take_deleted`]: Self::take_deleted()
+    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted()
     pub fn track_deletion(&mut self) -> &mut Self {
         if self.metadata.track_deletion.is_none() {
             self.metadata.track_deletion = Some(Vec::new());
@@ -566,6 +593,15 @@ impl<T> SparseSet<T> {
 
         self
     }
+    /// Stores [`EntityId`] of deleted components.  
+    /// You can access them with [`removed`] or [`removed_or_deleted`].  
+    /// You can clear them and get back a `Vec` with [`take_removed`] or [`take_removed_and_deleted`].
+    ///
+    /// [`EntityId`]: crate::entity_id::EntityId
+    /// [`removed`]: Self::removed()
+    /// [`removed_or_deleted`]: Self::removed_or_deleted()
+    /// [`take_removed`]: Self::take_removed()
+    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted()
     pub fn track_removal(&mut self) -> &mut Self {
         if self.metadata.track_removal.is_none() {
             self.metadata.track_removal = Some(Vec::new());
@@ -573,6 +609,13 @@ impl<T> SparseSet<T> {
 
         self
     }
+    /// Flags component insertion, modification, deletion and removal.  
+    /// Same as calling [`track_insertion`], [`track_modification`], [`track_deletion`] and [`track_removal`].
+    ///
+    /// [`track_insertion`]: Self::track_insertion
+    /// [`track_modification`]: Self::track_modification
+    /// [`track_deletion`]: Self::track_deletion
+    /// [`track_removal`]: Self::track_removal
     pub fn track_all(&mut self) {
         self.track_insertion();
         self.track_modification();

@@ -196,6 +196,42 @@ impl WorkloadBuilder {
 
         self
     }
+    /// Adds a failible system to the workload being created.  
+    /// The workload's execution will stop if any error is encountered.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{EntitiesViewMut, Get, IntoIter, IntoWithId, View, ViewMut, Workload, World};
+    /// use shipyard::error::MissingComponent;
+    ///
+    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
+    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    ///         *x += y as usize;
+    ///     }
+    /// }
+    ///
+    /// fn check(usizes: View<usize>) -> Result<(), MissingComponent> {
+    ///     for (id, i) in usizes.iter().with_id() {
+    ///         assert!(usizes.get(id)? == i);
+    ///     }
+    ///
+    ///     Ok(())
+    /// }
+    ///
+    /// let mut world = World::new();
+    ///
+    /// world.add_entity((0usize, 1u32));
+    /// world.add_entity((2usize, 3u32));
+    /// world.add_entity((4usize, 5u32));
+    ///
+    /// Workload::builder("Add & Check")
+    ///     .with_system(&add)
+    ///     .with_try_system(&check)
+    ///     .add_to_world(&world)
+    ///     .unwrap();
+    ///
+    /// world.run_default();
+    /// ```
     #[track_caller]
     #[cfg(not(feature = "std"))]
     pub fn with_try_system<
