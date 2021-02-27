@@ -68,7 +68,7 @@ impl WorkloadBuilder {
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
+    /// use shipyard::{IntoIter, View, ViewMut, Workload, World};
     ///
     /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
     ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
@@ -83,15 +83,11 @@ impl WorkloadBuilder {
     ///     assert_eq!(iter.next(), Some(&9));
     /// }
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
-    ///     },
-    /// );
+    /// world.add_entity((0usize, 1u32));
+    /// world.add_entity((2usize, 3u32));
+    /// world.add_entity((4usize, 5u32));
     ///
     /// Workload::builder("Add & Check")
     ///     .with_system(&add)
@@ -107,7 +103,7 @@ impl WorkloadBuilder {
             name: name.into(),
         }
     }
-    /// Adds a system to the workload being created.  
+    /// Adds a system to the workload being created.
     ///
     /// ### Example:
     /// ```
@@ -126,15 +122,11 @@ impl WorkloadBuilder {
     ///     assert_eq!(iter.next(), Some(&9));
     /// }
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2, 3));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (4, 5));
-    ///     },
-    /// );
+    /// world.add_entity((0usize, 1u32));
+    /// world.add_entity((2usize, 3u32));
+    /// world.add_entity((4usize, 5u32));
     ///
     /// Workload::builder("Add & Check")
     ///     .with_system(&add)
@@ -151,6 +143,42 @@ impl WorkloadBuilder {
 
         self
     }
+    /// Adds a failible system to the workload being created.  
+    /// The workload's execution will stop if any error is encountered.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{EntitiesViewMut, Get, IntoIter, IntoWithId, View, ViewMut, Workload, World};
+    /// use shipyard::error::MissingComponent;
+    ///
+    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
+    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    ///         *x += y as usize;
+    ///     }
+    /// }
+    ///
+    /// fn check(usizes: View<usize>) -> Result<(), MissingComponent> {
+    ///     for (id, i) in usizes.iter().with_id() {
+    ///         assert!(usizes.get(id)? == i);
+    ///     }
+    ///
+    ///     Ok(())
+    /// }
+    ///
+    /// let mut world = World::new();
+    ///
+    /// world.add_entity((0usize, 1u32));
+    /// world.add_entity((2usize, 3u32));
+    /// world.add_entity((4usize, 5u32));
+    ///
+    /// Workload::builder("Add & Check")
+    ///     .with_system(&add)
+    ///     .with_try_system(&check)
+    ///     .add_to_world(&world)
+    ///     .unwrap();
+    ///
+    /// world.run_default();
+    /// ```
     #[track_caller]
     #[cfg(feature = "std")]
     pub fn with_try_system<

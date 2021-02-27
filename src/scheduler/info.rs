@@ -53,7 +53,7 @@ impl core::fmt::Debug for SystemInfo {
 /// Pinpoints the type and system that made a system unable to get into a batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Conflict {
-    /// Rust rules do not allow the type described by 'type_info' to be borrowed at the same time as 'other_type_info'.
+    /// Rust rules do not allow the type described by `type_info` to be borrowed at the same time as `other_type_info`.
     Borrow {
         #[allow(missing_docs)]
         type_info: TypeInfo,
@@ -62,9 +62,9 @@ pub enum Conflict {
         #[allow(missing_docs)]
         other_type_info: TypeInfo,
     },
-    /// A '!Send' and/or '!Sync' type currently prevents any parrallelism.
+    /// A `!Send` and/or `!Sync` type currently prevents any parrallelism.
     NotSendSync(TypeInfo),
-    /// A '!Send' and/or '!Sync' type currently prevents any parrallelism.
+    /// A `!Send` and/or `!Sync` type currently prevents any parrallelism.
     OtherNotSendSync {
         #[allow(missing_docs)]
         system: SystemId,

@@ -1,6 +1,7 @@
 use crate::entity_id::EntityId;
 use core::iter::Map;
 
+#[allow(missing_docs)]
 pub struct WithId<I>(pub I);
 
 pub trait IntoWithId {

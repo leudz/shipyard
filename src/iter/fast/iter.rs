@@ -6,20 +6,24 @@ use super::tight::FastTight;
 use crate::entity_id::EntityId;
 use crate::iter::with_id::LastId;
 
+#[allow(missing_docs)]
 pub enum FastIter<Storage> {
-    #[allow(missing_docs)]
     Tight(FastTight<Storage>),
-    #[allow(missing_docs)]
     Mixed(FastMixed<Storage>),
 }
 
 impl<Storage: FastAbstractMut> FastIter<Storage> {
+    /// Transforms this iterator into a chunked iterator, yielding arrays of elements.  
+    /// If the number of elements can't be perfectly divided by `step` the last array will be smaller.
     pub fn into_chunk(self, step: usize) -> Result<FastChunk<Storage>, Self> {
         match self {
             FastIter::Tight(tight) => Ok(tight.into_chunk(step)),
             FastIter::Mixed(_) => Err(self),
         }
     }
+    /// Transforms this iterator into a chunked iterator, yielding arrays of elements.  
+    /// If the number of elements can't be perfectly divided by `step` the last elements will be ignored.
+    /// Use `remainder` to retreive them.
     pub fn into_chunk_exact(self, step: usize) -> Result<FastChunkExact<Storage>, Self> {
         match self {
             FastIter::Tight(tight) => Ok(tight.into_chunk_exact(step)),

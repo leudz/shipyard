@@ -19,8 +19,10 @@ const ACCESS_FACTOR: usize = 3;
 ///
 /// [`Mut`]: crate::Mut
 pub trait IntoIter {
+    #[allow(missing_docs)]
     type IntoIter: Iterator;
     #[cfg(feature = "rayon")]
+    #[allow(missing_docs)]
     type IntoParIter;
 
     /// Returns an iterator over `SparseSet`.

@@ -3,6 +3,7 @@ use super::mixed::FastMixed;
 use rayon::iter::plumbing::{bridge_unindexed, UnindexedConsumer};
 use rayon::iter::ParallelIterator;
 
+#[allow(missing_docs)]
 pub struct FastParMixed<Storage>(FastMixed<Storage>);
 
 impl<Storage: FastAbstractMut> From<FastMixed<Storage>> for FastParMixed<Storage> {

@@ -6,6 +6,7 @@ use crate::iter::with_id::LastId;
 #[cfg(feature = "rayon")]
 use rayon::iter::plumbing::Producer;
 
+#[allow(missing_docs)]
 pub struct FastTight<Storage> {
     pub(super) storage: Storage,
     pub(super) current: usize,
@@ -13,6 +14,8 @@ pub struct FastTight<Storage> {
 }
 
 impl<Storage: FastAbstractMut> FastTight<Storage> {
+    /// Transforms this iterator into a chunked iterator, yielding arrays of elements.  
+    /// If the number of elements can't be perfectly divided by `step` the last array will be smaller.
     pub fn into_chunk(self, step: usize) -> FastChunk<Storage> {
         FastChunk {
             storage: self.storage,
@@ -21,6 +24,9 @@ impl<Storage: FastAbstractMut> FastTight<Storage> {
             step,
         }
     }
+    /// Transforms this iterator into a chunked iterator, yielding arrays of elements.  
+    /// If the number of elements can't be perfectly divided by `step` the last elements will be ignored.
+    /// Use `remainder` to retreive them.
     pub fn into_chunk_exact(self, step: usize) -> FastChunkExact<Storage> {
         FastChunkExact {
             storage: self.storage,

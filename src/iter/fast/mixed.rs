@@ -4,6 +4,7 @@ use crate::iter::with_id::LastId;
 #[cfg(feature = "rayon")]
 use rayon::iter::plumbing::UnindexedProducer;
 
+#[allow(missing_docs)]
 pub struct FastMixed<Storage> {
     pub(super) storage: Storage,
     pub(super) indices: *const EntityId,

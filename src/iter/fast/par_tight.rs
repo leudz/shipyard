@@ -3,6 +3,7 @@ use super::tight::FastTight;
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+#[allow(missing_docs)]
 pub struct FastParTight<Storage>(FastTight<Storage>);
 
 impl<Storage: FastAbstractMut> From<FastTight<Storage>> for FastParTight<Storage> {

@@ -6,21 +6,21 @@ use crate::view::ViewMut;
 pub trait Remove {
     /// Type of the removed component.
     type Out;
-    /// Removes component in `entity`, if the entity had a component, they will be returned.
-    ///
+    /// Removes component in `entity`, if the entity had a component, they will be returned.  
     /// Multiple components can be removed at the same time using a tuple.
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, Remove, ViewMut, World};
+    /// use shipyard::{Remove, ViewMut, World};
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
     ///
-    /// world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///     let entity1 = entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///     let old = (&mut usizes, &mut u32s).remove(entity1);
-    ///     assert_eq!(old, (Some(0), Some(1)));
-    /// });
+    /// let entity = world.add_entity((0usize, 1u32));
+    ///
+    /// let (mut usizes, mut u32s) = world.borrow::<(ViewMut<usize>, ViewMut<u32>)>().unwrap();
+    ///
+    /// let old = (&mut usizes, &mut u32s).remove(entity);
+    /// assert_eq!(old, (Some(0), Some(1)));
     /// ```
     fn remove(&mut self, entity: EntityId) -> Self::Out;
 }

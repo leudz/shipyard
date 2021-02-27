@@ -4,6 +4,7 @@ use crate::entity_id::EntityId;
 #[cfg(feature = "rayon")]
 use rayon::iter::plumbing::UnindexedProducer;
 
+#[allow(missing_docs)]
 pub struct Mixed<Storage> {
     pub(super) storage: Storage,
     pub(super) indices: *const EntityId,

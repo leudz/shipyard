@@ -2,28 +2,26 @@ use crate::view::{View, ViewMut};
 use core::ops::Not as NotOps;
 
 /// Used to filter out components.
+///
 /// Get and iterators will skip entities that have this component.
+///
 /// ### Example
 /// ```
-/// use shipyard::{EntitiesViewMut, IntoIter, View, ViewMut, World};
+/// use shipyard::{IntoIter, View, World};
 ///
-/// let world = World::new();
+/// let mut world = World::new();
 ///
-/// world.run(
-///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-///         entities.add_entity((&mut usizes,), (2usize,));
-///     },
-/// );
+/// world.add_entity((0usize, 1u32));
+/// world.add_entity((2usize,));
 ///
-/// world.run(|usizes: View<usize>, u32s: View<u32>| {
-///     let mut iter = (&usizes, !&u32s).iter();
-///     assert_eq!(iter.next(), Some((&2, ())));
-///     assert_eq!(iter.next(), None);
-///     let mut iter = (&usizes, &u32s).iter();
-///     assert_eq!(iter.next(), Some((&0, &1)));
-///     assert_eq!(iter.next(), None);
-/// });
+/// let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
+///
+/// let mut iter = (&usizes, !&u32s).iter();
+/// assert_eq!(iter.next(), Some((&2, ())));
+/// assert_eq!(iter.next(), None);
+/// let mut iter = (&usizes, &u32s).iter();
+/// assert_eq!(iter.next(), Some((&0, &1)));
+/// assert_eq!(iter.next(), None);
 /// ```
 #[derive(Copy, Clone)]
 pub struct Not<T>(pub(crate) T);

@@ -1,5 +1,6 @@
 use super::abstract_mut::FastAbstractMut;
 
+#[allow(missing_docs)]
 pub struct FastChunkExact<Storage> {
     pub(super) storage: Storage,
     pub(super) current: usize,
@@ -8,6 +9,7 @@ pub struct FastChunkExact<Storage> {
 }
 
 impl<Storage: FastAbstractMut> FastChunkExact<Storage> {
+    /// Retreives the lasts elements of the storage that won't be yielded by the iterator.
     pub fn remainder(&mut self) -> Storage::Slice {
         let remainder = core::cmp::min(self.end - self.current, self.end % self.step);
         let old_end = self.end;

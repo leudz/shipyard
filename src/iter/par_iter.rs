@@ -5,10 +5,9 @@ use super::par_tight::ParTight;
 use rayon::iter::plumbing::UnindexedConsumer;
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+#[allow(missing_docs)]
 pub enum ParIter<Storage> {
-    #[allow(missing_docs)]
     Tight(ParTight<Storage>),
-    #[allow(missing_docs)]
     Mixed(ParMixed<Storage>),
 }
 

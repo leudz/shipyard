@@ -1,5 +1,6 @@
 use super::abstract_mut::FastAbstractMut;
 
+#[allow(missing_docs)]
 pub struct FastChunk<Storage> {
     pub(super) storage: Storage,
     pub(super) current: usize,

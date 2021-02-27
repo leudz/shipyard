@@ -9,17 +9,14 @@ pub trait Delete {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{Delete, EntitiesViewMut, ViewMut, World};
+    /// use shipyard::{Delete, ViewMut, World};
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    /// let entity = world.add_entity((0usize, 1u32));
     ///
-    ///         (&mut usizes, &mut u32s).delete(entity);
-    ///     },
-    /// );
+    /// let (mut usizes, mut u32s) = world.borrow::<(ViewMut<usize>, ViewMut<u32>)>().unwrap();
+    /// (&mut usizes, &mut u32s).delete(entity);
     /// ```
     fn delete(&mut self, entity: EntityId) -> bool;
 }

@@ -4,6 +4,7 @@ use crate::entity_id::EntityId;
 #[cfg(feature = "rayon")]
 use rayon::iter::plumbing::Producer;
 
+#[allow(missing_docs)]
 pub struct Tight<Storage> {
     pub(super) storage: Storage,
     pub(super) current: usize,

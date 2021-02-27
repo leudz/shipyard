@@ -3,6 +3,7 @@ use super::tight::Tight;
 use rayon::iter::plumbing::{bridge, Consumer, ProducerCallback, UnindexedConsumer};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 
+#[allow(missing_docs)]
 pub struct ParTight<Storage>(Tight<Storage>);
 
 impl<Storage: AbstractMut> From<Tight<Storage>> for ParTight<Storage> {

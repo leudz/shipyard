@@ -6,51 +6,57 @@ use crate::borrow::{Borrow, IntoBorrow};
 use crate::error;
 use crate::world::World;
 
-/// Used instead of '()' to not conflict where 'A = ()'
+/// Used instead of `()` to not conflict where `A = ()`
 pub struct Nothing;
 
-pub trait System<'s, Data, B, R> {
-    fn run(self, data: Data, world: &'s World) -> Result<R, error::GetStorage>;
+/// Trait bound encompassing all functions that can be used as system.
+///
+/// `Data` is the external data passed to the system through `run_with_data`.
+/// `Borrow` are the storages borrowed.
+/// `Return` is the type returned by the system.
+pub trait System<'s, Data, Borrow, Return> {
+    #[allow(missing_docs)]
+    fn run(self, data: Data, world: &'s World) -> Result<Return, error::GetStorage>;
 }
 
-// 'Nothing' has to be used and not '()' to not conflict where 'A = ()'
-impl<'s, R, F> System<'s, (), Nothing, R> for F
+// `Nothing` has to be used and not `()` to not conflict where `A = ()`
+impl<'s, Return, F> System<'s, (), Nothing, Return> for F
 where
-    F: FnOnce() -> R,
+    F: FnOnce() -> Return,
 {
-    fn run(self, _: (), _: &'s World) -> Result<R, error::GetStorage> {
+    fn run(self, _: (), _: &'s World) -> Result<Return, error::GetStorage> {
         Ok((self)())
     }
 }
 
-// 'Nothing' has to be used and not '()' to not conflict where 'A = ()'
-impl<'s, Data, R, F> System<'s, (Data,), Nothing, R> for F
+// `Nothing` has to be used and not `()` to not conflict where `A = ()`
+impl<'s, Data, Return, F> System<'s, (Data,), Nothing, Return> for F
 where
-    F: FnOnce(Data) -> R,
+    F: FnOnce(Data) -> Return,
 {
-    fn run(self, (data,): (Data,), _: &'s World) -> Result<R, error::GetStorage> {
+    fn run(self, (data,): (Data,), _: &'s World) -> Result<Return, error::GetStorage> {
         Ok((self)(data))
     }
 }
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: IntoBorrow,)+ R, Func> System<'s, (), ($($type,)+), R> for Func
+        impl<'s, $($type: IntoBorrow,)+ Return, Func> System<'s, (), ($($type,)+), Return> for Func
         where
-            Func: FnOnce($($type),+) -> R
-                + FnOnce($(<$type::Borrow as Borrow<'s>>::View),+) -> R
+            Func: FnOnce($($type),+) -> Return
+                + FnOnce($(<$type::Borrow as Borrow<'s>>::View),+) -> Return
         {
-            fn run(self, _: (), world: &'s World) -> Result<R, error::GetStorage> {
+            fn run(self, _: (), world: &'s World) -> Result<Return, error::GetStorage> {
                 Ok((self)($($type::Borrow::borrow(world)?,)+))
             }
         }
 
-        impl<'s, Data, $($type: IntoBorrow,)+ R, Func> System<'s, (Data,), ($($type,)+), R> for Func
+        impl<'s, Data, $($type: IntoBorrow,)+ Return, Func> System<'s, (Data,), ($($type,)+), Return> for Func
         where
-            Func: FnOnce(Data, $($type),+) -> R
-                + FnOnce(Data, $(<$type::Borrow as Borrow<'s>>::View),+) -> R
+            Func: FnOnce(Data, $($type),+) -> Return
+                + FnOnce(Data, $(<$type::Borrow as Borrow<'s>>::View),+) -> Return
         {
-            fn run(self, (data,): (Data,), world: &'s World) -> Result<R, error::GetStorage> {
+            fn run(self, (data,): (Data,), world: &'s World) -> Result<Return, error::GetStorage> {
                 Ok((self)(data, $($type::Borrow::borrow(world)?,)+))
             }
         }

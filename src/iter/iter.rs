@@ -4,6 +4,7 @@ use super::tight::Tight;
 use super::with_id::LastId;
 use crate::entity_id::EntityId;
 
+#[allow(missing_docs)]
 pub enum Iter<Storage> {
     Tight(Tight<Storage>),
     Mixed(Mixed<Storage>),
