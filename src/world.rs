@@ -689,12 +689,13 @@ let i = world.run(sys1).unwrap();
     /// - `AllStorages` is already borrowed exclusively.
     pub fn add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
         &self,
+        storage_id: StorageId,
         storage: S,
     ) -> Result<(), error::Borrow> {
         let _ = self
             .all_storages
             .borrow()?
-            .custom_storage_or_insert(|| storage);
+            .custom_storage_or_insert_by_id(storage_id, || storage);
 
         Ok(())
     }
