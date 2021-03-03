@@ -4,7 +4,6 @@ mod delete_component;
 mod drain;
 mod metadata;
 mod remove;
-pub mod sort;
 mod sparse_array;
 mod window;
 
@@ -22,6 +21,7 @@ use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
+use core::cmp::{Ord, Ordering};
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
 
@@ -804,6 +804,42 @@ impl<T> SparseSet<T> {
             data: self.data.drain(..),
         }
     }
+    /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
+    pub fn sort_unstable_by<F: FnMut(&T, &T) -> Ordering>(&mut self, mut compare: F) {
+        let mut transform: Vec<usize> = (0..self.dense.len()).collect();
+
+        transform.sort_unstable_by(|&i, &j| {
+            // SAFE dense and data have the same length
+            compare(unsafe { self.data.get_unchecked(i) }, unsafe {
+                self.data.get_unchecked(j)
+            })
+        });
+
+        let mut pos;
+        for i in 0..transform.len() {
+            // SAFE we're in bound
+            pos = unsafe { *transform.get_unchecked(i) };
+            while pos < i {
+                // SAFE we're in bound
+                pos = unsafe { *transform.get_unchecked(pos) };
+            }
+            self.dense.swap(i, pos);
+            self.data.swap(i, pos);
+        }
+
+        for (i, id) in self.dense.iter().enumerate() {
+            unsafe {
+                self.sparse.get_mut_unchecked(*id).set_index(i as u64);
+            }
+        }
+    }
+}
+
+impl<T: Ord> SparseSet<T> {
+    /// Sorts the `SparseSet`, but may not preserve the order of equal elements.
+    pub fn sort_unstable(&mut self) {
+        self.sort_unstable_by(Ord::cmp)
+    }
 }
 
 impl<T> core::ops::Index<EntityId> for SparseSet<T> {
@@ -1059,4 +1095,58 @@ fn drain_empty() {
     assert_eq!(sparse_set.drain().with_id().next(), None);
 
     assert_eq!(sparse_set.len(), 0);
+}
+
+#[test]
+fn unstable_sort() {
+    let mut array = crate::sparse_set::SparseSet::new();
+
+    for i in (0..100).rev() {
+        let mut entity_id = crate::entity_id::EntityId::zero();
+        entity_id.set_index(100 - i);
+        array.insert(entity_id, i);
+    }
+
+    array.sort_unstable();
+
+    for window in array.data.windows(2) {
+        assert!(window[0] < window[1]);
+    }
+    for i in 0..100 {
+        let mut entity_id = crate::entity_id::EntityId::zero();
+        entity_id.set_index(100 - i);
+        assert_eq!(array.private_get(entity_id), Some(&i));
+    }
+}
+
+#[test]
+fn partially_sorted_unstable_sort() {
+    let mut array = crate::sparse_set::SparseSet::new();
+
+    for i in 0..20 {
+        let mut entity_id = crate::entity_id::EntityId::zero();
+        entity_id.set_index(i);
+        assert!(array.insert(entity_id, i).is_none());
+    }
+    for i in (20..100).rev() {
+        let mut entity_id = crate::entity_id::EntityId::zero();
+        entity_id.set_index(100 - i + 20);
+        assert!(array.insert(entity_id, i).is_none());
+    }
+
+    array.sort_unstable();
+
+    for window in array.data.windows(2) {
+        assert!(window[0] < window[1]);
+    }
+    for i in 0..20 {
+        let mut entity_id = crate::entity_id::EntityId::zero();
+        entity_id.set_index(i);
+        assert_eq!(array.private_get(entity_id), Some(&i));
+    }
+    for i in 20..100 {
+        let mut entity_id = crate::entity_id::EntityId::zero();
+        entity_id.set_index(100 - i + 20);
+        assert_eq!(array.private_get(entity_id), Some(&i));
+    }
 }

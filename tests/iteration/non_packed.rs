@@ -230,7 +230,7 @@ fn iter_by() {
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
     entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    u32s.sort().unstable(|x, y| x.cmp(y).reverse());
+    u32s.sort_unstable_by(|x, y| x.cmp(y).reverse());
 
     let mut iter = (&u32s, &i16s).iter_by::<u32>();
     assert_eq!(iter.next(), Some((&4, &14)));
@@ -270,7 +270,7 @@ fn fast_iter_by() {
     entities.add_entity((&mut u32s, &mut i16s), (2, 12));
     entities.add_entity((&mut u32s, &mut i16s), (4, 14));
 
-    u32s.sort().unstable(|x, y| x.cmp(y).reverse());
+    u32s.sort_unstable_by(|x, y| x.cmp(y).reverse());
 
     let mut iter = (&u32s, &i16s).fast_iter_by::<u32>();
     assert_eq!(iter.next(), Some((&4, &14)));
