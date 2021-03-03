@@ -21,7 +21,7 @@ You can ask an iterator to tell you which entity owns each component by using [`
 
 #### Not
 
-It's also possible to filter entities that don't have a certain component using [`Not`](https://docs.rs/shipyard/latest/shipyard/struct.Not.html).
+It's possible to filter entities that don't have a certain component using [`Not`](https://docs.rs/shipyard/latest/shipyard/struct.Not.html) by adding `!` in front of the view reference.
 
 ```rust, noplaypen
 {{#include ../../../tests/book/iterators.rs:not}}

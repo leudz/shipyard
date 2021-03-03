@@ -3,7 +3,8 @@ use core::ops::Not as NotOps;
 
 /// Used to filter out components.
 ///
-/// Get and iterators will skip entities that have this component.
+/// Get and iterators will skip entities that have this component.  
+/// Simply add `!` in front of the view reference at iterator creation.
 ///
 /// ### Example
 /// ```
