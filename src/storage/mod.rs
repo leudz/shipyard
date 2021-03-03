@@ -2,8 +2,7 @@ mod storage_id;
 
 pub use storage_id::StorageId;
 
-use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::error;
+use crate::atomic_refcell::AtomicRefCell;
 use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 #[cfg(feature = "thread_local")]
@@ -58,27 +57,6 @@ impl Storage {
             value, thread_id,
         ))))
     }
-    #[inline]
-    pub(crate) fn get<T: 'static>(&self) -> Result<Ref<'_, &T>, error::Borrow> {
-        Ok(Ref::map(unsafe { &*self.0 }.borrow()?, |storage| {
-            storage.any().downcast_ref::<T>().unwrap()
-        }))
-    }
-    #[inline]
-    pub(crate) fn get_mut<T: 'static>(&self) -> Result<RefMut<'_, &mut T>, error::Borrow> {
-        Ok(RefMut::map(unsafe { &*self.0 }.borrow_mut()?, |storage| {
-            storage.any_mut().downcast_mut().unwrap()
-        }))
-    }
-    #[inline]
-    pub(crate) fn get_mut_exclusive<T: 'static>(&mut self) -> &mut T {
-        self.inner_mut().any_mut().downcast_mut().unwrap()
-    }
-    #[inline]
-    pub(crate) fn inner_mut(&mut self) -> &mut dyn UnknownStorage {
-        // SAFE Self owns the pointed value
-        unsafe { (&mut *self.0).get_mut() }
-    }
 }
 
 impl core::fmt::Debug for Storage {
@@ -96,74 +74,107 @@ fn delete() {
     use crate::entity_id::EntityId;
     use crate::sparse_set::SparseSet;
 
-    let mut storage = Storage(Box::into_raw(Box::new(AtomicRefCell::new(SparseSet::<
+    let storage = Storage(Box::into_raw(Box::new(AtomicRefCell::new(SparseSet::<
         &'static str,
     >::new()))));
     let mut entity_id = EntityId::zero();
     entity_id.set_index(5);
-    storage
-        .get_mut::<SparseSet<&'static str>>()
+    unsafe { &mut *storage.0 }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut::<SparseSet<&'static str>>()
         .unwrap()
         .insert(entity_id, "test5");
     entity_id.set_index(10);
-    storage
-        .get_mut::<SparseSet<&'static str>>()
+    unsafe { &mut *storage.0 }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut::<SparseSet<&'static str>>()
         .unwrap()
         .insert(entity_id, "test10");
     entity_id.set_index(1);
-    storage
-        .get_mut::<SparseSet<&'static str>>()
+    unsafe { &mut *storage.0 }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut::<SparseSet<&'static str>>()
         .unwrap()
         .insert(entity_id, "test1");
     entity_id.set_index(5);
-    storage.inner_mut().delete(entity_id);
+    unsafe { &mut *storage.0 }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut::<SparseSet<&'static str>>()
+        .unwrap()
+        .delete(entity_id);
     assert_eq!(
-        storage
-            .get_mut::<SparseSet::<&'static str>>()
+        unsafe { &mut *storage.0 }
+            .get_mut()
+            .as_any_mut()
+            .downcast_mut::<SparseSet<&'static str>>()
             .unwrap()
             .private_get(entity_id),
         None
     );
     entity_id.set_index(10);
     assert_eq!(
-        storage
-            .get_mut::<SparseSet::<&'static str>>()
+        unsafe { &mut *storage.0 }
+            .get_mut()
+            .as_any_mut()
+            .downcast_mut::<SparseSet<&'static str>>()
             .unwrap()
             .private_get(entity_id),
         Some(&"test10")
     );
     entity_id.set_index(1);
     assert_eq!(
-        storage
-            .get_mut::<SparseSet::<&'static str>>()
+        unsafe { &mut *storage.0 }
+            .get_mut()
+            .as_any_mut()
+            .downcast_mut::<SparseSet<&'static str>>()
             .unwrap()
             .private_get(entity_id),
         Some(&"test1")
     );
     entity_id.set_index(10);
-    storage.inner_mut().delete(entity_id);
+    unsafe { &mut *storage.0 }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut::<SparseSet<&'static str>>()
+        .unwrap()
+        .delete(entity_id);
     entity_id.set_index(1);
-    storage.inner_mut().delete(entity_id);
+    unsafe { &mut *storage.0 }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut::<SparseSet<&'static str>>()
+        .unwrap()
+        .delete(entity_id);
     entity_id.set_index(5);
     assert_eq!(
-        storage
-            .get_mut::<SparseSet::<&'static str>>()
+        unsafe { &mut *storage.0 }
+            .get_mut()
+            .as_any_mut()
+            .downcast_mut::<SparseSet<&'static str>>()
             .unwrap()
             .private_get(entity_id),
         None
     );
     entity_id.set_index(10);
     assert_eq!(
-        storage
-            .get_mut::<SparseSet::<&'static str>>()
+        unsafe { &mut *storage.0 }
+            .get_mut()
+            .as_any_mut()
+            .downcast_mut::<SparseSet<&'static str>>()
             .unwrap()
             .private_get(entity_id),
         None
     );
     entity_id.set_index(1);
     assert_eq!(
-        storage
-            .get_mut::<SparseSet::<&'static str>>()
+        unsafe { &mut *storage.0 }
+            .get_mut()
+            .as_any_mut()
+            .downcast_mut::<SparseSet<&'static str>>()
             .unwrap()
             .private_get(entity_id),
         None

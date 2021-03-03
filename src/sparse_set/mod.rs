@@ -9,13 +9,13 @@ mod sparse_array;
 mod window;
 
 pub use drain::SparseSetDrain;
+pub use sparse_array::SparseArray;
 
 pub(crate) use add_component::AddComponent;
 pub(crate) use bulk_add_entity::BulkAddEntity;
 pub(crate) use delete_component::DeleteComponent;
 pub(crate) use metadata::Metadata;
 pub(crate) use remove::Remove;
-pub(crate) use sparse_array::SparseArray;
 pub(crate) use window::FullRawWindowMut;
 
 use crate::entity_id::EntityId;
@@ -847,6 +847,9 @@ impl<T: 'static> UnknownStorage for SparseSet<T> {
                 + core::mem::size_of::<Self>(),
             component_count: self.len(),
         })
+    }
+    fn sparse_array(&self) -> Option<&SparseArray<[EntityId; 32]>> {
+        Some(&self.sparse)
     }
 }
 

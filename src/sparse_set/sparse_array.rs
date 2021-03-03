@@ -5,6 +5,9 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
 
+/// Internal part of a [`SparseSet`].
+///
+/// [`SparseSet`]: crate::sparse_set::SparseSet
 pub struct SparseArray<T>(Vec<Option<Box<T>>>);
 
 impl<T> SparseArray<T> {
@@ -70,7 +73,7 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
         }
     }
     #[inline]
-    pub(super) fn get(&self, entity: EntityId) -> Option<EntityId> {
+    pub(crate) fn get(&self, entity: EntityId) -> Option<EntityId> {
         self.0
             .get(entity.bucket())?
             .as_ref()
@@ -88,6 +91,15 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
         match self.0.get_unchecked_mut(entity.bucket()) {
             Some(bucket) => bucket.get_unchecked_mut(entity.bucket_index()),
             None => unreachable_unchecked(),
+        }
+    }
+    #[inline]
+    #[allow(missing_docs)]
+    pub fn contains(&self, entity: EntityId) -> bool {
+        if let Some(sparse_entity) = self.get(entity) {
+            sparse_entity.gen() == entity.gen()
+        } else {
+            false
         }
     }
 }

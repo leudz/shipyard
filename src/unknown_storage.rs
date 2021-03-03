@@ -1,5 +1,6 @@
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
+use crate::sparse_set::SparseArray;
 use alloc::borrow::Cow;
 use core::any::Any;
 
@@ -42,5 +43,12 @@ pub trait UnknownStorage: SizedAny {
     /// Returns the storage's name.
     fn name(&self) -> Cow<'static, str> {
         core::any::type_name::<Self>().into()
+    }
+    /// Returns a [`SparseSet`]'s internal [`SparseArray`].
+    ///
+    /// [`SparseSet`]: crate::sparse_set::SparseSet
+    /// [`SparseArray`]: crate::sparse_set::SparseArray
+    fn sparse_array(&self) -> Option<&SparseArray<[EntityId; 32]>> {
+        None
     }
 }

@@ -1,5 +1,6 @@
 //! All error types.
 
+use crate::storage::StorageId;
 use crate::EntityId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
@@ -50,11 +51,18 @@ pub enum GetStorage {
     #[allow(missing_docs)]
     AllStoragesBorrow(Borrow),
     #[allow(missing_docs)]
-    StorageBorrow((&'static str, Borrow)),
+    StorageBorrow {
+        name: Option<&'static str>,
+        id: StorageId,
+        borrow: Borrow,
+    },
     #[allow(missing_docs)]
     Entities(Borrow),
     #[allow(missing_docs)]
-    MissingStorage(&'static str),
+    MissingStorage {
+        name: Option<&'static str>,
+        id: StorageId,
+    },
 }
 
 #[cfg(feature = "std")]
@@ -70,14 +78,25 @@ impl Debug for GetStorage {
                 },
                 _ => unreachable!(),
             },
-            Self::StorageBorrow((name, borrow)) => match borrow {
-                Borrow::Unique => f.write_fmt(format_args!("Cannot mutably borrow {} storage while it's already borrowed.", name)),
-                Borrow::Shared => {
-                    f.write_fmt(format_args!("Cannot immutably borrow {} storage while it's already mutably borrowed.", name))
-                },
-                Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
-                Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
-            },
+            Self::StorageBorrow {name, id, borrow} => if let Some(name) = name {
+                match borrow {
+                    Borrow::Unique => f.write_fmt(format_args!("Cannot mutably borrow {} storage while it's already borrowed.", name)),
+                    Borrow::Shared => {
+                        f.write_fmt(format_args!("Cannot immutably borrow {} storage while it's already mutably borrowed.", name))
+                    },
+                    Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
+                    Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
+                }
+            } else {
+                match borrow {
+                    Borrow::Unique => f.write_fmt(format_args!("Cannot mutably borrow {:?} storage while it's already borrowed.", id)),
+                    Borrow::Shared => {
+                        f.write_fmt(format_args!("Cannot immutably borrow {:?} storage while it's already mutably borrowed.", id))
+                    },
+                    Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {:?} storage from multiple thread at the same time because it's !Sync.", id)),
+                    Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {:?} storage from other thread than the one it was created in because it's !Send and !Sync.", id)),
+                }
+            }
             Self::Entities(borrow) => match borrow {
                 Borrow::Unique => f.write_str("Cannot mutably borrow Entities storage while it's already borrowed."),
                 Borrow::Shared => {
@@ -85,7 +104,11 @@ impl Debug for GetStorage {
                 },
                 _ => unreachable!(),
             },
-            Self::MissingStorage(missing_storage) => f.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", missing_storage))
+            Self::MissingStorage { name, id } => if let Some(name) = name {
+                    f.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", name))
+                } else {
+                    f.write_fmt(format_args!("{:?} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", id))
+                }
         }
     }
 }

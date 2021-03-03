@@ -28,9 +28,10 @@ fn unique_storage() {
     {
         assert_eq!(
             get_error,
-            shipyard::error::GetStorage::MissingStorage(
-                core::any::type_name::<Unique<usize>>().into()
-            )
+            shipyard::error::GetStorage::MissingStorage {
+                name: Some(type_name::<Unique<usize>>().into()),
+                id: StorageId::of::<Unique<usize>>(),
+            }
         );
     } else {
         panic!()
@@ -46,7 +47,10 @@ fn not_unique_storage() {
     match world.run(|_: UniqueView<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
-            error::GetStorage::MissingStorage(type_name::<Unique<usize>>().into())
+            shipyard::error::GetStorage::MissingStorage {
+                name: Some(type_name::<Unique<usize>>().into()),
+                id: StorageId::of::<Unique<usize>>(),
+            }
         ),
         _ => panic!(),
     }
@@ -54,7 +58,10 @@ fn not_unique_storage() {
     match world.run(|_: UniqueViewMut<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
-            error::GetStorage::MissingStorage(type_name::<Unique<usize>>().into())
+            shipyard::error::GetStorage::MissingStorage {
+                name: Some(type_name::<Unique<usize>>().into()),
+                id: StorageId::of::<Unique<usize>>(),
+            }
         ),
         _ => panic!(),
     }

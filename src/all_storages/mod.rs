@@ -17,6 +17,7 @@ use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::storage::{Storage, StorageId};
 use crate::unique::Unique;
 use crate::unknown_storage::UnknownStorage;
+use alloc::boxed::Box;
 use core::any::type_name;
 use core::cell::UnsafeCell;
 use hashbrown::hash_map::{Entry, HashMap};
@@ -88,7 +89,7 @@ impl AllStorages {
 
             let storage = if let Entry::Occupied(entry) = storages.entry(storage_id) {
                 // `.err()` to avoid borrowing `entry` in the `Ok` case
-                if let Some(err) = entry.get().get_mut::<Unique<T>>().err() {
+                if let Some(err) = unsafe { &*entry.get().0 }.borrow_mut().err() {
                     unsafe { self.lock.unlock_exclusive() };
                     return Err(error::UniqueRemove::StorageBorrow((type_name::<T>(), err)));
                 } else {
@@ -103,19 +104,12 @@ impl AllStorages {
                 return Err(error::UniqueRemove::MissingUnique(type_name::<T>()));
             };
 
-            let unique_ptr: *mut AtomicRefCell<Unique<T>> = storage.0 as _;
+            let unique: Box<AtomicRefCell<Unique<T>>> =
+                unsafe { Box::from_raw(storage.0 as *mut AtomicRefCell<Unique<T>>) };
 
             core::mem::forget(storage);
 
-            unsafe {
-                let unique = core::ptr::read(unique_ptr);
-                alloc::alloc::dealloc(
-                    unique_ptr as *mut u8,
-                    alloc::alloc::Layout::new::<AtomicRefCell<Unique<T>>>(),
-                );
-
-                Ok(unique.into_inner().value)
-            }
+            Ok(unique.into_inner().value)
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -154,14 +148,16 @@ impl AllStorages {
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
     pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        let storage_id = StorageId::of::<Unique<T>>();
+        if std::thread::current().id() == self.thread_id {
+            let storage_id = StorageId::of::<Unique<T>>();
 
-        self.lock.lock_exclusive();
-        let storages = unsafe { &mut *self.storages.get() };
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage::new_non_send(Unique::new(component), self.thread_id));
-        unsafe { self.lock.unlock_exclusive() };
+            self.lock.lock_exclusive();
+            let storages = unsafe { &mut *self.storages.get() };
+            storages
+                .entry(storage_id)
+                .or_insert_with(|| Storage::new_non_send(Unique::new(component), self.thread_id));
+            unsafe { self.lock.unlock_exclusive() };
+        }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -190,14 +186,16 @@ impl AllStorages {
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
     pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
-        let storage_id = StorageId::of::<Unique<T>>();
+        if std::thread::current().id() == self.thread_id {
+            let storage_id = StorageId::of::<Unique<T>>();
 
-        self.lock.lock_exclusive();
-        let storages = unsafe { &mut *self.storages.get() };
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage::new_non_send_sync(Unique::new(component), self.thread_id));
-        unsafe { self.lock.unlock_exclusive() };
+            self.lock.lock_exclusive();
+            let storages = unsafe { &mut *self.storages.get() };
+            storages.entry(storage_id).or_insert_with(|| {
+                Storage::new_non_send_sync(Unique::new(component), self.thread_id)
+            });
+            unsafe { self.lock.unlock_exclusive() };
+        }
     }
     /// Delete an entity and all its components.
     /// Returns `true` if `entity` was alive.
@@ -252,7 +250,7 @@ impl AllStorages {
     /// ```
     pub fn strip(&mut self, entity: EntityId) {
         for storage in self.storages.get_mut().values_mut() {
-            storage.inner_mut().delete(entity);
+            unsafe { &mut *storage.0 }.get_mut().delete(entity);
         }
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
@@ -280,7 +278,7 @@ impl AllStorages {
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         for (storage_id, storage) in self.storages.get_mut().iter_mut() {
             if !excluded_storage.contains(&*storage_id) {
-                storage.inner_mut().delete(entity);
+                unsafe { &mut *storage.0 }.get_mut().delete(entity);
             }
         }
     }
@@ -298,7 +296,7 @@ impl AllStorages {
     /// ```
     pub fn clear(&mut self) {
         for storage in self.storages.get_mut().values_mut() {
-            storage.inner_mut().clear();
+            unsafe { &mut *storage.0 }.get_mut().clear();
         }
     }
     /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
@@ -745,9 +743,14 @@ let i = all_storages.run(sys1).unwrap();
         self.lock.lock_shared();
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id).unwrap();
-        let storage = storage.get::<Entities>();
+        let storage = unsafe { &*storage.0 }.borrow();
         unsafe { self.lock.unlock_shared() };
-        storage.map_err(error::GetStorage::Entities)
+        match storage {
+            Ok(storage) => Ok(Ref::map(storage, |storage| {
+                storage.as_any().downcast_ref().unwrap()
+            })),
+            Err(err) => Err(error::GetStorage::Entities(err)),
+        }
     }
     pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, &'_ mut Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();
@@ -755,9 +758,14 @@ let i = all_storages.run(sys1).unwrap();
         self.lock.lock_shared();
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id).unwrap();
-        let storage = storage.get_mut::<Entities>();
+        let storage = unsafe { &*storage.0 }.borrow_mut();
         unsafe { self.lock.unlock_shared() };
-        storage.map_err(error::GetStorage::Entities)
+        match storage {
+            Ok(storage) => Ok(RefMut::map(storage, |storage| {
+                storage.as_any_mut().downcast_mut().unwrap()
+            })),
+            Err(err) => Err(error::GetStorage::Entities(err)),
+        }
     }
     pub(crate) fn exclusive_storage_mut<T: 'static>(
         &mut self,
@@ -769,12 +777,18 @@ let i = all_storages.run(sys1).unwrap();
         storage_id: StorageId,
     ) -> Result<&mut T, error::GetStorage> {
         let storages = unsafe { &mut *self.storages.get() };
-        let storage = storages.get_mut(&storage_id);
-        if let Some(storage) = storage {
-            let storage = storage.get_mut_exclusive::<T>();
+        if let Some(storage) = storages.get_mut(&storage_id) {
+            let storage = unsafe { &mut *storage.0 }
+                .get_mut()
+                .as_any_mut()
+                .downcast_mut()
+                .unwrap();
             Ok(storage)
         } else {
-            Err(error::GetStorage::MissingStorage(type_name::<T>()))
+            Err(error::GetStorage::MissingStorage {
+                name: Some(type_name::<T>()),
+                id: StorageId::of::<T>(),
+            })
         }
     }
     pub(crate) fn exclusive_storage_or_insert_mut<T, F>(
@@ -788,10 +802,16 @@ let i = all_storages.run(sys1).unwrap();
     {
         let storages = unsafe { &mut *self.storages.get() };
 
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage::new(f()))
-            .get_mut_exclusive()
+        unsafe {
+            &mut *storages
+                .entry(storage_id)
+                .or_insert_with(|| Storage::new(f()))
+                .0
+        }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut()
+        .unwrap()
     }
     /// Make the given entity alive.  
     /// Does nothing if an entity with a greater generation is already at this index.  

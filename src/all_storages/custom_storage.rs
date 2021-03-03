@@ -18,20 +18,20 @@ pub trait CustomStorageAccess {
     ///
     /// [`Ref`]: crate::atomic_refcell::Ref
     /// [`StorageId`]: crate::storage::StorageId
-    fn custom_storage_by_id<S: 'static>(
+    fn custom_storage_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<Ref<'_, &'_ S>, error::GetStorage>;
+    ) -> Result<Ref<'_, &'_ dyn UnknownStorage>, error::GetStorage>;
     /// Returns a [`RefMut`] to the requested `S` storage.
     fn custom_storage_mut<S: 'static>(&self) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>;
     /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`].
     ///
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     /// [`StorageId`]: crate::storage::StorageId
-    fn custom_storage_mut_by_id<S: 'static>(
+    fn custom_storage_mut_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>;
+    ) -> Result<RefMut<'_, &'_ mut (dyn UnknownStorage + 'static)>, error::GetStorage>;
     /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
     ///
     /// [`Ref`]: crate::atomic_refcell::Ref
@@ -222,42 +222,100 @@ pub trait CustomStorageAccess {
 impl CustomStorageAccess for AllStorages {
     #[inline]
     fn custom_storage<S: 'static>(&self) -> Result<Ref<'_, &'_ S>, error::GetStorage> {
-        self.custom_storage_by_id(StorageId::of::<S>())
+        self.lock.lock_shared();
+        let storages = unsafe { &*self.storages.get() };
+        let storage = storages.get(&StorageId::of::<S>());
+        if let Some(storage) = storage {
+            let storage = unsafe { &*storage.0 }.borrow();
+            unsafe { self.lock.unlock_shared() };
+            match storage {
+                Ok(storage) => Ok(Ref::map(storage, |storage| {
+                    storage.as_any().downcast_ref().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
+        } else {
+            unsafe { self.lock.unlock_shared() };
+            Err(error::GetStorage::MissingStorage {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+            })
+        }
     }
-    fn custom_storage_by_id<S: 'static>(
+    fn custom_storage_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<Ref<'_, &'_ S>, error::GetStorage> {
+    ) -> Result<Ref<'_, &'_ dyn UnknownStorage>, error::GetStorage> {
         self.lock.lock_shared();
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get::<S>();
+            let storage = unsafe { &*storage.0 }.borrow();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            storage.map_err(|err| error::GetStorage::StorageBorrow {
+                name: None,
+                id: storage_id,
+                borrow: err,
+            })
         } else {
             unsafe { self.lock.unlock_shared() };
-            Err(error::GetStorage::MissingStorage(type_name::<S>()))
+            Err(error::GetStorage::MissingStorage {
+                name: None,
+                id: storage_id,
+            })
         }
     }
     #[inline]
     fn custom_storage_mut<S: 'static>(&self) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage> {
-        self.custom_storage_mut_by_id(StorageId::of::<S>())
+        self.lock.lock_shared();
+        let storages = unsafe { &*self.storages.get() };
+        let storage = storages.get(&StorageId::of::<S>());
+        if let Some(storage) = storage {
+            let storage = unsafe { &*storage.0 }.borrow_mut();
+            unsafe { self.lock.unlock_shared() };
+            match storage {
+                Ok(storage) => Ok(RefMut::map(storage, |storage| {
+                    storage.as_any_mut().downcast_mut().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
+        } else {
+            unsafe { self.lock.unlock_shared() };
+            Err(error::GetStorage::MissingStorage {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+            })
+        }
     }
-    fn custom_storage_mut_by_id<S: 'static>(
+    fn custom_storage_mut_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage> {
+    ) -> Result<RefMut<'_, &'_ mut (dyn UnknownStorage + 'static)>, error::GetStorage> {
         self.lock.lock_shared();
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get_mut::<S>();
+            let storage = unsafe { &*storage.0 }.borrow_mut();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            storage.map_err(|err| error::GetStorage::StorageBorrow {
+                name: None,
+                id: storage_id,
+                borrow: err,
+            })
         } else {
             unsafe { self.lock.unlock_shared() };
-            Err(error::GetStorage::MissingStorage(type_name::<S>()))
+            Err(error::GetStorage::MissingStorage {
+                name: None,
+                id: storage_id,
+            })
         }
     }
     #[inline]
@@ -281,19 +339,37 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get::<S>();
+            let storage = unsafe { &*storage.0 }.borrow();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(Ref::map(storage, |storage| {
+                    storage.as_any().downcast_ref().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new(f()))
-                .get();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new(f()))
+                    .0
+            }
+            .borrow()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(Ref::map(storage, |storage| {
+                storage.as_any().downcast_ref::<S>().unwrap()
+            }))
         }
     }
     #[cfg(feature = "thread_local")]
@@ -322,20 +398,45 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get::<S>();
+            let storage = unsafe { &*storage.0 }.borrow();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(Ref::map(storage, |storage| {
+                    storage.as_any().downcast_ref().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
-            drop(storages);
+            if std::thread::current().id() != self.thread_id {
+                return Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: error::Borrow::WrongThread,
+                });
+            }
+
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
-                .get();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
+                    .0
+            }
+            .borrow()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(Ref::map(storage, |storage| {
+                storage.as_any().downcast_ref::<S>().unwrap()
+            }))
         }
     }
     #[cfg(feature = "thread_local")]
@@ -364,20 +465,37 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get::<S>();
+            let storage = unsafe { &*storage.0 }.borrow();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(Ref::map(storage, |storage| {
+                    storage.as_any().downcast_ref().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
-            drop(storages);
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_sync(f()))
-                .get();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new_non_sync(f()))
+                    .0
+            }
+            .borrow()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(Ref::map(storage, |storage| {
+                storage.as_any().downcast_ref::<S>().unwrap()
+            }))
         }
     }
     #[cfg(feature = "thread_local")]
@@ -406,19 +524,45 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get::<S>();
+            let storage = unsafe { &*storage.0 }.borrow();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(Ref::map(storage, |storage| {
+                    storage.as_any().downcast_ref().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
+            if std::thread::current().id() != self.thread_id {
+                return Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: error::Borrow::WrongThread,
+                });
+            }
+
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
-                .get();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
+                    .0
+            }
+            .borrow()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(Ref::map(storage, |storage| {
+                storage.as_any().downcast_ref::<S>().unwrap()
+            }))
         }
     }
     #[inline]
@@ -445,19 +589,37 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get_mut::<S>();
+            let storage = unsafe { &*storage.0 }.borrow_mut();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(RefMut::map(storage, |storage| {
+                    storage.as_any_mut().downcast_mut().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new(f()))
-                .get_mut();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new(f()))
+                    .0
+            }
+            .borrow_mut()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(RefMut::map(storage, |storage| {
+                storage.as_any_mut().downcast_mut::<S>().unwrap()
+            }))
         }
     }
     #[cfg(feature = "thread_local")]
@@ -486,19 +648,45 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get_mut::<S>();
+            let storage = unsafe { &*storage.0 }.borrow_mut();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(RefMut::map(storage, |storage| {
+                    storage.as_any_mut().downcast_mut().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
+            if std::thread::current().id() != self.thread_id {
+                return Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: error::Borrow::WrongThread,
+                });
+            }
+
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
-                .get_mut();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
+                    .0
+            }
+            .borrow_mut()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(RefMut::map(storage, |storage| {
+                storage.as_any_mut().downcast_mut::<S>().unwrap()
+            }))
         }
     }
     #[cfg(feature = "thread_local")]
@@ -527,19 +715,37 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get_mut::<S>();
+            let storage = unsafe { &*storage.0 }.borrow_mut();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(RefMut::map(storage, |storage| {
+                    storage.as_any_mut().downcast_mut().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_sync(f()))
-                .get_mut();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new_non_sync(f()))
+                    .0
+            }
+            .borrow_mut()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(RefMut::map(storage, |storage| {
+                storage.as_any_mut().downcast_mut::<S>().unwrap()
+            }))
         }
     }
     #[cfg(feature = "thread_local")]
@@ -568,20 +774,45 @@ impl CustomStorageAccess for AllStorages {
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
-            let storage = storage.get_mut::<S>();
-            drop(storages);
+            let storage = unsafe { &*storage.0 }.borrow_mut();
             unsafe { self.lock.unlock_shared() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+            match storage {
+                Ok(storage) => Ok(RefMut::map(storage, |storage| {
+                    storage.as_any_mut().downcast_mut().unwrap()
+                })),
+                Err(err) => Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: err,
+                }),
+            }
         } else {
+            if std::thread::current().id() != self.thread_id {
+                return Err(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<S>()),
+                    id: StorageId::of::<S>(),
+                    borrow: error::Borrow::WrongThread,
+                });
+            }
+
             unsafe { self.lock.unlock_shared() };
             self.lock.lock_exclusive();
             let storages = unsafe { &mut *self.storages.get() };
-            let storage = storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
-                .get_mut();
+
+            let storage = unsafe {
+                &*storages
+                    .entry(storage_id)
+                    .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
+                    .0
+            }
+            .borrow_mut()
+            .unwrap();
+
             unsafe { self.lock.unlock_exclusive() };
-            storage.map_err(|err| error::GetStorage::StorageBorrow((type_name::<S>(), err)))
+
+            Ok(RefMut::map(storage, |storage| {
+                storage.as_any_mut().downcast_mut::<S>().unwrap()
+            }))
         }
     }
 }

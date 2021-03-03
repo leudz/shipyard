@@ -1,4 +1,3 @@
-#[cfg(feature = "thread_local")]
 use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
@@ -56,10 +55,11 @@ fn invalid_borrow() {
     let _u32s = world.borrow::<ViewMut<u32>>().unwrap();
     assert_eq!(
         world.borrow::<ViewMut<u32>>().err(),
-        Some(error::GetStorage::StorageBorrow((
-            core::any::type_name::<SparseSet<u32>>(),
-            error::Borrow::Unique
-        )))
+        Some(error::GetStorage::StorageBorrow {
+            name: Some(type_name::<SparseSet<u32>>()),
+            id: StorageId::of::<SparseSet<u32>>(),
+            borrow: error::Borrow::Unique
+        })
     );
 }
 
@@ -71,10 +71,11 @@ fn all_storages_invalid_borrow() {
     let _u32s = all_storages.borrow::<ViewMut<u32>>().unwrap();
     assert_eq!(
         all_storages.borrow::<ViewMut<u32>>().err(),
-        Some(error::GetStorage::StorageBorrow((
-            core::any::type_name::<SparseSet<u32>>(),
-            error::Borrow::Unique
-        )))
+        Some(error::GetStorage::StorageBorrow {
+            name: Some(type_name::<SparseSet<u32>>()),
+            id: StorageId::of::<SparseSet<u32>>(),
+            borrow: error::Borrow::Unique
+        })
     );
 }
 
@@ -120,10 +121,11 @@ fn non_send_storage_in_other_thread() {
         || {
             assert_eq!(
                 world.borrow::<NonSend<ViewMut<NotSend>>>().err(),
-                Some(error::GetStorage::StorageBorrow((
-                    type_name::<SparseSet<NotSend>>(),
-                    error::Borrow::WrongThread
-                )))
+                Some(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<SparseSet<NotSend>>()),
+                    id: StorageId::of::<SparseSet<NotSend>>(),
+                    borrow: error::Borrow::WrongThread
+                })
             )
         },
         || {},
@@ -138,10 +140,11 @@ fn non_send_sync_storage_in_other_thread() {
         || {
             assert_eq!(
                 world.borrow::<NonSendSync<View<NotSendSync>>>().err(),
-                Some(error::GetStorage::StorageBorrow((
-                    type_name::<SparseSet<NotSendSync>>(),
-                    error::Borrow::WrongThread
-                )))
+                Some(error::GetStorage::StorageBorrow {
+                    name: Some(type_name::<SparseSet<NotSendSync>>()),
+                    id: StorageId::of::<SparseSet<NotSendSync>>(),
+                    borrow: error::Borrow::WrongThread
+                })
             )
         },
         || {},

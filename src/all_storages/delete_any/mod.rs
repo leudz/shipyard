@@ -20,7 +20,12 @@ impl<T: 'static + UnknownStorage + CustomDeleteAny> DeleteAny for T {
         let storages = all_storages.storages.get_mut();
 
         if let Some(storage) = storages.get_mut(&StorageId::of::<T>()) {
-            storage.get_mut_exclusive::<T>().delete_any(&mut ids);
+            unsafe { &mut *storage.0 }
+                .get_mut()
+                .as_any_mut()
+                .downcast_mut::<T>()
+                .unwrap()
+                .delete_any(&mut ids);
         }
 
         for id in ids {
@@ -39,7 +44,7 @@ macro_rules! impl_delete_any {
 
                 $(
                     if let Some(storage) = storages.get_mut(&StorageId::of::<$storage>()) {
-                        storage.get_mut_exclusive::<$storage>().delete_any(&mut ids);
+                        unsafe { &mut *storage.0 }.get_mut().as_any_mut().downcast_mut::<$storage>().unwrap().delete_any(&mut ids);
                     }
                 )+
 
