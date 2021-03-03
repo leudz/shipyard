@@ -23,7 +23,7 @@ use crate::memory_usage::StorageMemoryUsage;
 use crate::unknown_storage::UnknownStorage;
 use alloc::vec::Vec;
 
-pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<usize>();
+pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
 
 /// Default component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
