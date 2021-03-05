@@ -19,7 +19,7 @@ pub(crate) use window::FullRawWindowMut;
 
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::unknown_storage::UnknownStorage;
+use crate::storage::Storage;
 use alloc::vec::Vec;
 use core::cmp::{Ord, Ordering};
 
@@ -859,7 +859,7 @@ impl<T> core::ops::IndexMut<EntityId> for SparseSet<T> {
     }
 }
 
-impl<T: 'static> UnknownStorage for SparseSet<T> {
+impl<T: 'static> Storage for SparseSet<T> {
     #[inline]
     fn delete(&mut self, entity: EntityId) {
         SparseSet::delete(self, entity);

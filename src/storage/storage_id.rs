@@ -1,6 +1,5 @@
-use core::cmp::Ordering;
-
 use crate::type_id::TypeId;
+use core::cmp::Ordering;
 
 /// Id of a storage, can be a `TypeId` or `u64`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -1,8 +1,7 @@
 use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
-use crate::storage::{Storage, StorageId};
-use crate::unknown_storage::UnknownStorage;
+use crate::storage::{SBox, Storage, StorageId};
 use core::any::type_name;
 use parking_lot::lock_api::RawRwLock;
 
@@ -21,7 +20,7 @@ pub trait CustomStorageAccess {
     fn custom_storage_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<Ref<'_, &'_ dyn UnknownStorage>, error::GetStorage>;
+    ) -> Result<Ref<'_, &'_ dyn Storage>, error::GetStorage>;
     /// Returns a [`RefMut`] to the requested `S` storage.
     fn custom_storage_mut<S: 'static>(&self) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>;
     /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`].
@@ -31,13 +30,13 @@ pub trait CustomStorageAccess {
     fn custom_storage_mut_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<RefMut<'_, &'_ mut (dyn UnknownStorage + 'static)>, error::GetStorage>;
+    ) -> Result<RefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage>;
     /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
     ///
     /// [`Ref`]: crate::atomic_refcell::Ref
     fn custom_storage_or_insert<S, F>(&self, f: F) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -49,7 +48,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -60,7 +59,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -73,7 +72,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -84,7 +83,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -97,7 +96,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -108,7 +107,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S;
     /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -121,7 +120,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -131,7 +130,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -143,7 +142,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -154,7 +153,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -167,7 +166,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -178,7 +177,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -191,7 +190,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
     ///
@@ -202,7 +201,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S;
     /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     ///
@@ -215,7 +214,7 @@ pub trait CustomStorageAccess {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S;
 }
 
@@ -249,7 +248,7 @@ impl CustomStorageAccess for AllStorages {
     fn custom_storage_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<Ref<'_, &'_ dyn UnknownStorage>, error::GetStorage> {
+    ) -> Result<Ref<'_, &'_ dyn Storage>, error::GetStorage> {
         self.lock.lock_shared();
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
@@ -298,7 +297,7 @@ impl CustomStorageAccess for AllStorages {
     fn custom_storage_mut_by_id(
         &self,
         storage_id: StorageId,
-    ) -> Result<RefMut<'_, &'_ mut (dyn UnknownStorage + 'static)>, error::GetStorage> {
+    ) -> Result<RefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage> {
         self.lock.lock_shared();
         let storages = unsafe { &*self.storages.get() };
         let storage = storages.get(&storage_id);
@@ -321,7 +320,7 @@ impl CustomStorageAccess for AllStorages {
     #[inline]
     fn custom_storage_or_insert<S, F>(&self, f: F) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_by_id(StorageId::of::<S>(), f)
@@ -332,7 +331,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -359,7 +358,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new(f()))
+                    .or_insert_with(|| SBox::new(f()))
                     .0
             }
             .borrow()
@@ -379,7 +378,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_non_send_by_id(StorageId::of::<S>(), f)
@@ -391,7 +390,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -426,7 +425,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
+                    .or_insert_with(|| SBox::new_non_send(f(), self.thread_id))
                     .0
             }
             .borrow()
@@ -446,7 +445,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_non_sync_by_id(StorageId::of::<S>(), f)
@@ -458,7 +457,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -485,7 +484,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new_non_sync(f()))
+                    .or_insert_with(|| SBox::new_non_sync(f()))
                     .0
             }
             .borrow()
@@ -505,7 +504,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_non_send_sync_by_id(StorageId::of::<S>(), f)
@@ -517,7 +516,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<Ref<'_, &'_ S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -552,7 +551,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
+                    .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id))
                     .0
             }
             .borrow()
@@ -571,7 +570,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_mut_by_id(StorageId::of::<S>(), f)
@@ -582,7 +581,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send + Sync,
+        S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -609,7 +608,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new(f()))
+                    .or_insert_with(|| SBox::new(f()))
                     .0
             }
             .borrow_mut()
@@ -629,7 +628,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_non_send_mut_by_id(StorageId::of::<S>(), f)
@@ -641,7 +640,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Sync,
+        S: 'static + Storage + Sync,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -676,7 +675,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new_non_send(f(), self.thread_id))
+                    .or_insert_with(|| SBox::new_non_send(f(), self.thread_id))
                     .0
             }
             .borrow_mut()
@@ -696,7 +695,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_non_sync_mut_by_id(StorageId::of::<S>(), f)
@@ -708,7 +707,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage + Send,
+        S: 'static + Storage + Send,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -735,7 +734,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new_non_sync(f()))
+                    .or_insert_with(|| SBox::new_non_sync(f()))
                     .0
             }
             .borrow_mut()
@@ -755,7 +754,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S,
     {
         self.custom_storage_or_insert_non_send_sync_mut_by_id(StorageId::of::<S>(), f)
@@ -767,7 +766,7 @@ impl CustomStorageAccess for AllStorages {
         f: F,
     ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
     where
-        S: 'static + UnknownStorage,
+        S: 'static + Storage,
         F: FnOnce() -> S,
     {
         self.lock.lock_shared();
@@ -802,7 +801,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| Storage::new_non_send_sync(f(), self.thread_id))
+                    .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id))
                     .0
             }
             .borrow_mut()

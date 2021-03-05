@@ -7,8 +7,7 @@ use crate::memory_usage::WorldMemoryUsage;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::{Batches, Scheduler};
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
-use crate::storage::StorageId;
-use crate::unknown_storage::UnknownStorage;
+use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
 
 /// `World` contains all data this library will manipulate.
@@ -687,7 +686,7 @@ let i = world.run(sys1).unwrap();
     /// ### Errors
     ///
     /// - `AllStorages` is already borrowed exclusively.
-    pub fn add_custom_storage<S: 'static + UnknownStorage + Send + Sync>(
+    pub fn add_custom_storage<S: 'static + Storage + Send + Sync>(
         &self,
         storage_id: StorageId,
         storage: S,

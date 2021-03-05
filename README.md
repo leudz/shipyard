@@ -73,8 +73,6 @@ I initially wanted to make an ECS to learn how it works. After a failed attempt 
 
 [Specs](https://github.com/amethyst/specs) was already well established as the go-to Rust ECS but I thought I could do better and went with [EnTT](https://github.com/skypjack/entt)'s core data-structure (`SparseSet`) and grouping model. A very flexible combo.
 
-I wouldn't say Shipyard is better or worse than Specs, it's just different.
-
 ## Cargo Features
 
 - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)

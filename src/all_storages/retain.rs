@@ -1,7 +1,6 @@
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
-use crate::storage::StorageId;
-use crate::unknown_storage::UnknownStorage;
+use crate::storage::{Storage, StorageId};
 
 pub trait Retain {
     fn retain(all_storage: &mut AllStorages, entity: EntityId);
@@ -12,16 +11,16 @@ impl Retain for () {
     fn retain(_: &mut AllStorages, _: EntityId) {}
 }
 
-impl<Storage: 'static + UnknownStorage> Retain for Storage {
+impl<S: 'static + Storage> Retain for S {
     #[inline]
     fn retain(all_storages: &mut AllStorages, entity: EntityId) {
-        all_storages.retain_storage(entity, &[StorageId::of::<Storage>()]);
+        all_storages.retain_storage(entity, &[StorageId::of::<S>()]);
     }
 }
 
 macro_rules! impl_retain {
     ($(($storage: ident, $index: tt))+) => {
-        impl<$($storage: 'static + UnknownStorage),+> Retain for ($($storage,)+) {
+        impl<$($storage: 'static + Storage),+> Retain for ($($storage,)+) {
             #[inline]
             fn retain(all_storages: &mut AllStorages, entity: EntityId) {
                 all_storages.retain_storage(entity, &[$(StorageId::of::<$storage>()),+]);

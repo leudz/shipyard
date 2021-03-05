@@ -1,4 +1,4 @@
-use crate::{memory_usage::StorageMemoryUsage, unknown_storage::UnknownStorage};
+use crate::{memory_usage::StorageMemoryUsage, storage::Storage};
 
 /// Unique storage.
 pub struct Unique<T> {
@@ -6,7 +6,7 @@ pub struct Unique<T> {
     pub(crate) is_modified: bool,
 }
 
-impl<T: 'static> UnknownStorage for Unique<T> {
+impl<T: 'static> Storage for Unique<T> {
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
             storage_name: core::any::type_name::<Self>().into(),

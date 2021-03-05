@@ -214,10 +214,10 @@ fn two_workloads() {
     }
 
     let world = World::new();
-    dbg!(Workload::builder("")
+    Workload::builder("")
         .with_system(&system1)
         .add_to_world(&world)
-        .unwrap());
+        .unwrap();
 
     rayon::scope(|s| {
         s.spawn(|_| world.run_default().unwrap());

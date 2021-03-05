@@ -3,8 +3,7 @@ mod custom_delete_any;
 pub use custom_delete_any::CustomDeleteAny;
 
 use crate::all_storages::AllStorages;
-use crate::storage::StorageId;
-use crate::unknown_storage::UnknownStorage;
+use crate::storage::{Storage, StorageId};
 use hashbrown::hash_set::HashSet;
 
 /// Trait used as a bound for AllStorages::delete_any.
@@ -12,7 +11,7 @@ pub trait DeleteAny {
     fn delete_any(all_storages: &mut AllStorages);
 }
 
-impl<T: 'static + UnknownStorage + CustomDeleteAny> DeleteAny for T {
+impl<T: 'static + Storage + CustomDeleteAny> DeleteAny for T {
     #[inline]
     fn delete_any(all_storages: &mut AllStorages) {
         let mut ids = HashSet::new();
@@ -36,7 +35,7 @@ impl<T: 'static + UnknownStorage + CustomDeleteAny> DeleteAny for T {
 
 macro_rules! impl_delete_any {
     ($(($storage: ident, $index: tt))+) => {
-        impl<$($storage: 'static + UnknownStorage + CustomDeleteAny),+> DeleteAny for ($($storage,)+) {
+        impl<$($storage: 'static + Storage + CustomDeleteAny),+> DeleteAny for ($($storage,)+) {
             fn delete_any(all_storages: &mut AllStorages) {
                 let mut ids = HashSet::default();
 

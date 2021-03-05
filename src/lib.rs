@@ -57,7 +57,6 @@ mod storage;
 mod system;
 mod type_id;
 mod unique;
-mod unknown_storage;
 mod view;
 mod world;
 
@@ -73,7 +72,9 @@ pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
 pub use all_storages::{AllStorages, CustomStorageAccess};
-pub use atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
+#[doc(hidden)]
+pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
+pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
 pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, IntoBorrow, Mutability};
 pub use contains::Contains;
@@ -90,11 +91,10 @@ pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
 pub use sparse_set::{SparseArray, SparseSet, SparseSetDrain};
-pub use storage::StorageId;
+pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 pub use unique::Unique;
-pub use unknown_storage::UnknownStorage;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };

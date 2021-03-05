@@ -14,9 +14,8 @@ use crate::error;
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
-use crate::storage::{Storage, StorageId};
+use crate::storage::{SBox, Storage, StorageId};
 use crate::unique::Unique;
-use crate::unknown_storage::UnknownStorage;
 use alloc::boxed::Box;
 use core::any::type_name;
 use core::cell::UnsafeCell;
@@ -33,7 +32,7 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
     lock: RawRwLock,
-    storages: UnsafeCell<HashMap<StorageId, Storage>>,
+    storages: UnsafeCell<HashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
 }
@@ -47,13 +46,98 @@ impl AllStorages {
     pub(crate) fn new() -> Self {
         let mut storages = HashMap::new();
 
-        storages.insert(StorageId::of::<Entities>(), Storage::new(Entities::new()));
+        storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
 
         AllStorages {
             storages: UnsafeCell::new(storages),
             lock: RawRwLock::INIT,
             #[cfg(feature = "thread_local")]
             thread_id: std::thread::current().id(),
+        }
+    }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
+    /// Does nothing if the storage already exists.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, World};
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// all_storages.add_unique(0usize);
+    /// ```
+    ///
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
+    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
+        let storage_id = StorageId::of::<Unique<T>>();
+
+        self.lock.lock_exclusive();
+        let storages = unsafe { &mut *self.storages.get() };
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| SBox::new(Unique::new(component)));
+        unsafe { self.lock.unlock_exclusive() };
+    }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.
+    ///
+    /// [NonSend]: crate::NonSend
+    /// [UniqueView]: crate::UniqueView
+    /// [UniqueViewMut]: crate::UniqueViewMut
+    #[cfg(feature = "thread_local")]
+    pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
+        if std::thread::current().id() == self.thread_id {
+            let storage_id = StorageId::of::<Unique<T>>();
+
+            self.lock.lock_exclusive();
+            let storages = unsafe { &mut *self.storages.get() };
+            storages
+                .entry(storage_id)
+                .or_insert_with(|| SBox::new_non_send(Unique::new(component), self.thread_id));
+            unsafe { self.lock.unlock_exclusive() };
+        }
+    }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.
+    ///
+    /// [NonSync]: crate::NonSync
+    /// [UniqueView]: crate::UniqueView
+    /// [UniqueViewMut]: crate::UniqueViewMut
+    #[cfg(feature = "thread_local")]
+    pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
+        let storage_id = StorageId::of::<Unique<T>>();
+
+        self.lock.lock_exclusive();
+        let storages = unsafe { &mut *self.storages.get() };
+        storages
+            .entry(storage_id)
+            .or_insert_with(|| SBox::new_non_sync(Unique::new(component)));
+        unsafe { self.lock.unlock_exclusive() };
+    }
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
+    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
+    /// Does nothing if the storage already exists.  
+    ///
+    /// [NonSync]: crate::NonSync
+    /// [UniqueView]: crate::UniqueView
+    /// [UniqueViewMut]: crate::UniqueViewMut
+    #[cfg(feature = "thread_local")]
+    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
+        if std::thread::current().id() == self.thread_id {
+            let storage_id = StorageId::of::<Unique<T>>();
+
+            self.lock.lock_exclusive();
+            let storages = unsafe { &mut *self.storages.get() };
+            storages
+                .entry(storage_id)
+                .or_insert_with(|| SBox::new_non_send_sync(Unique::new(component), self.thread_id));
+            unsafe { self.lock.unlock_exclusive() };
         }
     }
     /// Removes a unique storage.
@@ -110,91 +194,6 @@ impl AllStorages {
             core::mem::forget(storage);
 
             Ok(unique.into_inner().value)
-        }
-    }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
-    ///
-    /// let world = World::new();
-    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
-    ///
-    /// all_storages.add_unique(0usize);
-    /// ```
-    ///
-    /// [`UniqueView`]: crate::UniqueView
-    /// [`UniqueViewMut`]: crate::UniqueViewMut
-    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
-        let storage_id = StorageId::of::<Unique<T>>();
-
-        self.lock.lock_exclusive();
-        let storages = unsafe { &mut *self.storages.get() };
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage::new(Unique::new(component)));
-        unsafe { self.lock.unlock_exclusive() };
-    }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.
-    ///
-    /// [NonSend]: crate::NonSend
-    /// [UniqueView]: crate::UniqueView
-    /// [UniqueViewMut]: crate::UniqueViewMut
-    #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
-        if std::thread::current().id() == self.thread_id {
-            let storage_id = StorageId::of::<Unique<T>>();
-
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
-            storages
-                .entry(storage_id)
-                .or_insert_with(|| Storage::new_non_send(Unique::new(component), self.thread_id));
-            unsafe { self.lock.unlock_exclusive() };
-        }
-    }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.
-    ///
-    /// [NonSync]: crate::NonSync
-    /// [UniqueView]: crate::UniqueView
-    /// [UniqueViewMut]: crate::UniqueViewMut
-    #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
-        let storage_id = StorageId::of::<Unique<T>>();
-
-        self.lock.lock_exclusive();
-        let storages = unsafe { &mut *self.storages.get() };
-        storages
-            .entry(storage_id)
-            .or_insert_with(|| Storage::new_non_sync(Unique::new(component)));
-        unsafe { self.lock.unlock_exclusive() };
-    }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.  
-    ///
-    /// [NonSync]: crate::NonSync
-    /// [UniqueView]: crate::UniqueView
-    /// [UniqueViewMut]: crate::UniqueViewMut
-    #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
-        if std::thread::current().id() == self.thread_id {
-            let storage_id = StorageId::of::<Unique<T>>();
-
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
-            storages.entry(storage_id).or_insert_with(|| {
-                Storage::new_non_send_sync(Unique::new(component), self.thread_id)
-            });
-            unsafe { self.lock.unlock_exclusive() };
         }
     }
     /// Delete an entity and all its components.
@@ -494,12 +493,12 @@ use shipyard::{AllStoragesViewMut, EntitiesView, View, ViewMut, World};
 
 let world = World::new();
 
-world.run(|all_storages: AllStoragesViewMut| {
-    let u32s = all_storages.borrow::<View<u32>>().unwrap();
-    let (entities, mut usizes) = all_storages
-        .borrow::<(EntitiesView, ViewMut<usize>)>()
-        .unwrap();
-});
+let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+
+let u32s = all_storages.borrow::<View<u32>>().unwrap();
+let (entities, mut usizes) = all_storages
+    .borrow::<(EntitiesView, ViewMut<usize>)>()
+    .unwrap();
 ```
 [EntitiesView]: crate::Entities
 [EntitiesViewMut]: crate::Entities
@@ -797,7 +796,7 @@ let i = all_storages.run(sys1).unwrap();
         f: F,
     ) -> &mut T
     where
-        T: 'static + UnknownStorage + Send + Sync,
+        T: 'static + Storage + Send + Sync,
         F: FnOnce() -> T,
     {
         let storages = unsafe { &mut *self.storages.get() };
@@ -805,7 +804,7 @@ let i = all_storages.run(sys1).unwrap();
         unsafe {
             &mut *storages
                 .entry(storage_id)
-                .or_insert_with(|| Storage::new(f()))
+                .or_insert_with(|| SBox::new(f()))
                 .0
         }
         .get_mut()

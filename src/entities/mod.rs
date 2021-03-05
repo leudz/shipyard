@@ -8,7 +8,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::reserve::{BulkEntityIter, BulkReserve};
-use crate::unknown_storage::UnknownStorage;
+use crate::storage::Storage;
 use alloc::vec::Vec;
 use core::iter::repeat_with;
 
@@ -307,7 +307,7 @@ impl Entities {
     }
 }
 
-impl UnknownStorage for Entities {
+impl Storage for Entities {
     fn clear(&mut self) {
         if self.data.is_empty() {
             return;
