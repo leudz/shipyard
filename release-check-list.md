@@ -1,0 +1,7 @@
+- make sure there is no debugging left
+- duplicate the guide
+    - make links point to the right version
+- bump version
+- create new branch
+- release the version
+- check the doc publishing went ok
