@@ -1,6 +1,6 @@
 use super::FastAbstractMut;
-use crate::pack::update::Inserted;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::tracking::Inserted;
 use core::ops::Range;
 
 impl<'tmp, T> FastAbstractMut for Inserted<&'tmp SparseSet<T>> {

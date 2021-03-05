@@ -1,8 +1,8 @@
 use super::IntoAbstract;
 use crate::entity_id::EntityId;
 use crate::not::Not;
-use crate::pack::update::InsertedOrModified;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::tracking::InsertedOrModified;
 use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
 

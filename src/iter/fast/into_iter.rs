@@ -14,7 +14,7 @@ use core::ptr;
 const ACCESS_FACTOR: usize = 3;
 
 /// Trait used to create iterators.  
-/// Yields `&mut T` for mutable components. Doesn't work with update packed storage.
+/// Yields `&mut T` for mutable components. Doesn't work with storage tracking modification.
 ///
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
@@ -26,10 +26,10 @@ pub trait IntoFastIter {
     type IntoParIter;
 
     /// Returns an iterator over `SparseSet`.  
-    /// Panics if one of the storage is update packed.  
-    /// You can check if a `SparseSet` is update packed with [`SparseSet::is_update_packed`].
+    /// Panics if one of the storage is tracking modification.  
+    /// You can check if a `SparseSet` is tracking modification with [`SparseSet::is_tracking_modification`].
     ///
-    /// [`iter`] can be used for update packed storage.
+    /// [`iter`] can be used for storage tracking modification.
     ///
     /// ### Example
     /// ```
@@ -50,16 +50,18 @@ pub trait IntoFastIter {
     /// [`SparseSet::is_update_packed`]: crate::SparseSet::is_update_packed()
     fn fast_iter(self) -> Self::IntoIter;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.  
-    /// Panics if one of the storage is update packed.
+    /// Panics if one of the storage is tracking modification.  
+    /// You can check if a `SparseSet` is tracking modification with [`SparseSet::is_tracking_modification`].
     ///
-    /// [`iter_by`] can be used for update packed storage.
+    /// [`iter_by`] can be used for storage tracking modification.
     ///
     /// [`iter_by`]: crate::IntoIter
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter;
     /// Returns a parallel iterator over `SparseSet`.  
-    /// Panics if one of the storage is update packed.
+    /// Panics if one of the storage is tracking modification.  
+    /// You can check if a `SparseSet` is tracking modification with [`SparseSet::is_tracking_modification`].
     ///
-    /// [`par_iter`] can be used for update packed storage.
+    /// [`par_iter`] can be used for storage tracking modification.
     ///
     /// ### Example
     /// ```

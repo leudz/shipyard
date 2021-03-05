@@ -30,31 +30,29 @@
 
 extern crate alloc;
 
-mod atomic_refcell;
-/// Allows access to helper types needed to implement `Borrow`.
-pub mod borrow;
-mod delete;
-pub mod error;
-mod get;
-mod not;
-mod pack {
-    pub(crate) mod update;
-}
 mod add_component;
 mod add_entity;
 mod all_storages;
+mod atomic_refcell;
+/// Allows access to helper types needed to implement `Borrow`.
+pub mod borrow;
 mod contains;
+mod delete;
 mod entities;
 mod entity_id;
+pub mod error;
+mod get;
 pub mod iter;
 mod memory_usage;
 mod r#mut;
+mod not;
 mod remove;
 mod reserve;
 mod scheduler;
 mod sparse_set;
 mod storage;
 mod system;
+mod tracking;
 mod type_id;
 mod unique;
 mod view;
@@ -85,7 +83,6 @@ pub use get::Get;
 pub use iter::{IntoFastIter, IntoIter, IntoWithId};
 pub use memory_usage::StorageMemoryUsage;
 pub use not::Not;
-pub use pack::update::{Inserted, InsertedOrModified, Modified};
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
@@ -94,6 +91,7 @@ pub use sparse_set::{SparseArray, SparseSet, SparseSetDrain};
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
+pub use tracking::{Inserted, InsertedOrModified, Modified};
 pub use unique::Unique;
 pub use view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,

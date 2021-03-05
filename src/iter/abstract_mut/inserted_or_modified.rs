@@ -1,8 +1,8 @@
 use super::AbstractMut;
 use super::Mut;
 use crate::entity_id::EntityId;
-use crate::pack::update::InsertedOrModified;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::tracking::InsertedOrModified;
 
 impl<'tmp, T> AbstractMut for InsertedOrModified<&'tmp SparseSet<T>> {
     type Out = &'tmp T;
