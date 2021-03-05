@@ -13,7 +13,8 @@ use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
 
-/// Trait used to create iterators. Yields `&mut T` for mutable components. Doesn't work with update packed storage.
+/// Trait used to create iterators.  
+/// Yields `&mut T` for mutable components. Doesn't work with update packed storage.
 ///
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
@@ -36,16 +37,14 @@ pub trait IntoFastIter {
     ///
     /// let world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
     ///
-    ///         for (x, &y) in (&mut usizes, &u32s).fast_iter() {
-    ///             *x += y as usize;
-    ///         }
-    ///     },
-    /// );
+    /// entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    /// entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    /// (&mut usizes, &u32s).fast_iter().for_each(|(x, &y)| {
+    ///     *x += y as usize;
+    /// });
     /// ```
     /// [`iter`]: crate::IntoIter
     /// [`SparseSet::is_update_packed`]: crate::SparseSet::is_update_packed()
@@ -69,18 +68,14 @@ pub trait IntoFastIter {
     ///
     /// let world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut,
-    ///      mut usizes: ViewMut<usize>,
-    ///      mut u32s: ViewMut<u32>,| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
     ///
-    ///         (&mut usizes, &u32s).fast_par_iter().for_each(|(x, &y)| {
-    ///             *x += y as usize;
-    ///         });
-    ///     },
-    /// );
+    /// entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    /// entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    /// (&mut usizes, &u32s).fast_par_iter().for_each(|(x, &y)| {
+    ///     *x += y as usize;
+    /// });
     /// ```
     /// [`par_iter`]: crate::IntoIter
     #[cfg(feature = "rayon")]

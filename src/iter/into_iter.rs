@@ -12,7 +12,8 @@ use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
 
-/// Trait used to create iterators. Yields [`Mut`] for mutable components.
+/// Trait used to create iterators.  
+/// Yields [`Mut`] for mutable components.
 ///
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
@@ -37,16 +38,14 @@ pub trait IntoIter {
     ///
     /// let world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
     ///
-    ///         for (mut x, &y) in (&mut usizes, &u32s).iter() {
-    ///             *x += y as usize;
-    ///         }
-    ///     },
-    /// );
+    /// entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    /// entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    /// (&mut usizes, &u32s).iter().for_each(|(mut x, &y)| {
+    ///     *x += y as usize;
+    /// });
     /// ```
     /// [`Mut`]: crate::Mut
     /// [`fast_iter`]: crate::IntoFastIter
@@ -73,18 +72,14 @@ pub trait IntoIter {
     ///
     /// let world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut,
-    ///      mut usizes: ViewMut<usize>,
-    ///      mut u32s: ViewMut<u32>,| {
-    ///         entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    ///         entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
     ///
-    ///         (&mut usizes, &u32s).par_iter().for_each(|(mut x, &y)| {
-    ///             *x += y as usize;
-    ///         });
-    ///     },
-    /// );
+    /// entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
+    /// entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    ///
+    /// (&mut usizes, &u32s).par_iter().for_each(|(mut x, &y)| {
+    ///     *x += y as usize;
+    /// });
     /// ```
     /// [`Mut`]: crate::Mut
     /// [`fast_par_iter`]: crate::IntoFastIter
