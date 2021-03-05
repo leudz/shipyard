@@ -355,25 +355,6 @@ impl Display for Run {
     }
 }
 
-/// Error when trying to use update pack related function on non update packed storage.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct NotUpdatePack;
-
-#[cfg(feature = "std")]
-impl Error for NotUpdatePack {}
-
-impl Debug for NotUpdatePack {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        f.write_str("The storage isn't update packed. Use `view.update_pack()` to pack it.")
-    }
-}
-
-impl Display for NotUpdatePack {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        Debug::fmt(self, f)
-    }
-}
-
 /// Error when using [`get`] with an entity that does not have any component in the requested storage(s).
 ///
 /// [`get`]: crate::Get
