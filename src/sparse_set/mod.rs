@@ -144,7 +144,7 @@ impl<T> SparseSet<T> {
 impl<T> SparseSet<T> {
     /// Inserts `value` in the `SparseSet`.
     ///
-    /// # Update pack
+    /// # Tracking
     ///
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
@@ -644,21 +644,6 @@ impl<T> SparseSet<T> {
             || self.is_tracking_modification()
             || self.is_tracking_deletion()
             || self.is_tracking_removal()
-    }
-    /// Update packs this storage making it track *inserted*, *modified*, *removed* and *deleted* components.  
-    /// Does nothing if the storage is already update packed.
-    #[deprecated(since = "0.5.0", note = "Please use the track_all method instead")]
-    pub fn update_pack(&mut self) {
-        self.track_all();
-    }
-
-    /// Returns `true` if the `SparseSet` is update packed.
-    #[deprecated(
-        since = "0.5.0",
-        note = "Please use the is_tracking_any method instead"
-    )]
-    pub fn is_update_packed(&self) -> bool {
-        self.is_tracking_any()
     }
 }
 
