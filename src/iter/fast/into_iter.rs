@@ -46,8 +46,8 @@ pub trait IntoFastIter {
     ///     *x += y as usize;
     /// });
     /// ```
+    /// [`SparseSet::is_tracking_modification`]: crate::SparseSet::is_tracking_modification()
     /// [`iter`]: crate::IntoIter
-    /// [`SparseSet::is_update_packed`]: crate::SparseSet::is_update_packed()
     fn fast_iter(self) -> Self::IntoIter;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.  
     /// Panics if one of the storage is tracking modification.  
@@ -55,6 +55,7 @@ pub trait IntoFastIter {
     ///
     /// [`iter_by`] can be used for storage tracking modification.
     ///
+    /// [`SparseSet::is_tracking_modification`]: crate::SparseSet::is_tracking_modification()
     /// [`iter_by`]: crate::IntoIter
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter;
     /// Returns a parallel iterator over `SparseSet`.  
@@ -79,6 +80,7 @@ pub trait IntoFastIter {
     ///     *x += y as usize;
     /// });
     /// ```
+    /// [`SparseSet::is_tracking_modification`]: crate::SparseSet::is_tracking_modification()
     /// [`par_iter`]: crate::IntoIter
     #[cfg(feature = "rayon")]
     fn fast_par_iter(self) -> Self::IntoParIter;
@@ -119,7 +121,7 @@ where
                 }),
             }
         } else {
-            panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
+            panic!("fast_iter can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
         }
     }
     #[inline]
@@ -168,7 +170,7 @@ where
                 }),
             }
         } else {
-            panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
+            panic!("fast_iter can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
         }
     }
     #[inline]
@@ -194,7 +196,7 @@ macro_rules! impl_into_iter {
                 if self.$index1.is_tracking_insertion() || self.$index1.is_tracking_modification()
                     && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                 {
-                    panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
+                    panic!("fast_iter can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
                 }
 
                 let type_ids = [self.$index1.type_id(), $(self.$index.type_id()),+];
@@ -219,7 +221,7 @@ macro_rules! impl_into_iter {
                     if self.$index.is_tracking_insertion() || self.$index.is_tracking_modification()
                         && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                     {
-                        panic!("fast_iter can't be used with update packed storage except if you iterate on Inserted or Modified.");
+                        panic!("fast_iter can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
                     }
 
                     if let Some((len, is_exact)) = self.$index.len() {
@@ -271,7 +273,7 @@ macro_rules! impl_into_iter {
                 if self.$index1.is_tracking_insertion() || self.$index1.is_tracking_modification()
                     && self.$index1.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                 {
-                    panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified.");
+                    panic!("fast_iter_by can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
                 }
 
                 let type_id = TypeId::of::<SparseSet<Driver>>();
@@ -302,7 +304,7 @@ macro_rules! impl_into_iter {
                     if self.$index.is_tracking_insertion() || self.$index.is_tracking_modification()
                         && self.$index.len().map(|(_, is_exact)| is_exact).unwrap_or(false)
                     {
-                        panic!("fast_iter_by can't be used with update packed storage except if you iterate on Inserted or Modified.");
+                        panic!("fast_iter_by can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
                     }
 
                     if !found && self.$index.type_id() == type_id {
