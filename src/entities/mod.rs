@@ -54,23 +54,22 @@ impl Entities {
     }
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// `Entities` is only borrowed immutably.  
-    /// Unwraps errors.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - `entity` is not alive.
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{World, EntitiesViewMut, EntitiesView, ViewMut};
+    /// use shipyard::{EntitiesView, ViewMut, World};
     ///
-    /// let world = World::new();
+    /// let mut world = World::new();
     ///
-    /// let entity = world.borrow::<EntitiesViewMut>().unwrap().add_entity((), ());
+    /// let entity = world.add_entity(());
     ///
-    /// world.run(|entities: EntitiesView, mut u32s: ViewMut<u32>| {
-    ///     entities.add_component(entity, &mut u32s, 0);
-    /// });
+    /// let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<u32>)>().unwrap();
+    ///
+    /// entities.add_component(entity, &mut u32s, 0);
     /// ```
     #[track_caller]
     #[inline]
@@ -115,7 +114,7 @@ impl Entities {
 
         &self.data[self.data.len() - count..self.data.len()]
     }
-    /// Delete an entity, returns true if the entity was alive.  
+    /// Deletes an entity, returns true if the entity was alive.  
     /// If the entity has components, they will not be deleted and still be accessible using this id.
     pub fn delete_unchecked(&mut self, entity_id: EntityId) -> bool {
         if self.is_alive(entity_id) {
@@ -154,23 +153,25 @@ impl Entities {
             false
         }
     }
-    /// Stores `component` in a new entity and returns its `EntityId`.  
+    /// Stores `component` in a new entity and returns its [`EntityId`].  
     /// Multiple components can be added at the same time using a tuple.
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{EntitiesViewMut, Get, ViewMut, World};
+    /// use shipyard::{EntitiesViewMut, ViewMut, World};
     ///
     /// let world = World::new();
     ///
-    /// world.run(
-    ///     |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
-    ///         let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    ///         assert_eq!(usizes.get(entity), Ok(&0));
-    ///         assert_eq!(u32s.get(entity), Ok(&1));
-    ///     },
-    /// );
+    /// let (mut entities, mut usizes, mut u32s) = world
+    ///     .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+    ///     .unwrap();
+    ///
+    /// let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
+    /// assert_eq!(usizes[entity], 0);
+    /// assert_eq!(u32s[entity], 1);
     /// ```
+    ///
+    /// [`EntityId`]: crate::entity_id::EntityId
     #[inline]
     pub fn add_entity<T: AddEntity>(
         &mut self,
@@ -181,7 +182,7 @@ impl Entities {
         storages.add_entity(entity_id, component);
         entity_id
     }
-    /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.  
+    /// Creates multiple new entities and returns an iterator yielding the new [`EntityId`]s.  
     /// Multiple components can be added at the same time using a tuple.
     ///
     /// ### Example
@@ -191,14 +192,17 @@ impl Entities {
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) =
-    ///     world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
+    /// let (mut entities, mut usizes, mut u32s) = world
+    ///     .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+    ///     .unwrap();
     ///
     /// let entity0 = entities.bulk_add_entity((), (0..1).map(|_| {})).next();
     /// let entity1 = entities.bulk_add_entity(&mut u32s, 1..2).next();
     /// let new_entities =
     ///     entities.bulk_add_entity((&mut u32s, &mut usizes), (10..20).map(|i| (i as u32, i)));
     /// ```
+    ///
+    /// [`EntityId`]: crate::entity_id::EntityId
     pub fn bulk_add_entity<T: AddEntity + BulkReserve, I: IntoIterator<Item = T::Component>>(
         &mut self,
         mut storages: T,

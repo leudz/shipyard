@@ -1,6 +1,9 @@
 use super::Entities;
 use crate::entity_id::EntityId;
 
+/// Iterator over [`Entities`].
+///
+/// [`Entities`]: crate::entities::Entities
 #[allow(clippy::type_complexity)]
 pub struct EntitiesIter<'a>(
     core::iter::FilterMap<
