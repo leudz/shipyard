@@ -1,15 +1,18 @@
-# Shipyard <!-- omit in toc -->
+<div align="center">
+
+# Shipyard <sub><img src="./logo.png" width=32> </sub> <!-- omit in toc -->
 
 Shipyard is an Entity Component System focused on usability and speed.
+
+If you have any question or want to follow the development more closely <sub>[![Chat](https://img.shields.io/badge/join-Zulip-brightgreen.svg)](https://shipyard.zulipchat.com)</sub>.
 
 [![Crates.io](https://img.shields.io/crates/v/shipyard)](https://crates.io/crates/shipyard)
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 
-If you have any question or want to follow the development more closely <sub>[![Chat](https://img.shields.io/badge/join-Zulip-brightgreen.svg)](https://shipyard.zulipchat.com)</sub>.
+### [Guide](https://leudz.github.io/shipyard/guide) | [Demo](https://leudz.github.io/shipyard/bunny_demo)
 
-Learning resources:
-- [Guide](https://leudz.github.io/shipyard/guide)
+</div>
 
 ## Basic Example <!-- omit in toc -->
 ```rust
@@ -17,8 +20,8 @@ use shipyard::{IntoIter, View, ViewMut, World};
 
 struct Health(u32);
 struct Position {
-    _x: f32,
-    _y: f32,
+    x: f32,
+    y: f32,
 }
 
 fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
@@ -38,11 +41,10 @@ fn is_in_acid(_: &Position) -> bool {
 fn main() {
     let mut world = World::new();
 
-    world.add_entity((Position { _x: 0.0, _y: 0.0 }, Health(1000)));
+    world.add_entity((Position { x: 0.0, y: 0.0 }, Health(1000)));
 
     world.run(in_acid).unwrap();
 }
-
 ```
 
 ## Small Game Example <!-- omit in toc -->
