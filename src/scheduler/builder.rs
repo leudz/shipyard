@@ -103,6 +103,25 @@ impl WorkloadBuilder {
             name: name.into(),
         }
     }
+    /// Moves all systems of `other` into `Self`, leaving `other` empty.  
+    /// This allows us to collect systems in different builders before joining them together.
+    pub fn append(&mut self, other: &mut Self) -> &mut Self {
+        self.systems.extend(other.systems.drain(..));
+
+        self
+    }
+    /// Nests a workload by adding all its systems.  
+    /// This other workload must be present in the `World` by the time `add_to_world` is called.
+    pub fn with_workload<W: Into<Cow<'static, str>> + 'static>(
+        &mut self,
+        workload: W,
+    ) -> &mut Self {
+        let workload = workload.into();
+
+        self.systems.push(workload.into());
+
+        self
+    }
     /// Adds a system to the workload being created.
     ///
     /// ### Example:
@@ -246,25 +265,6 @@ impl WorkloadBuilder {
     ) -> &mut Self {
         self.systems
             .push(system.into_workload_try_system::<Ok, Err>().unwrap().into());
-
-        self
-    }
-    /// Nests a workload by adding all its systems.  
-    /// This other workload must be present in the `World` by the time `add_to_world` is called.
-    pub fn with_workload<W: Into<Cow<'static, str>> + 'static>(
-        &mut self,
-        workload: W,
-    ) -> &mut Self {
-        let workload = workload.into();
-
-        self.systems.push(workload.into());
-
-        self
-    }
-    /// Moves all systems of `other` into `Self`, leaving `other` empty.  
-    /// This allows us to collect systems in different builders before joining them together.
-    pub fn append(&mut self, other: &mut Self) -> &mut Self {
-        self.systems.extend(other.systems.drain(..));
 
         self
     }
