@@ -1,7 +1,7 @@
 # Shipyard Related Crates
 
-List of crate built on top of shipyard.  
-Don't hesitate to contact me if your crate uses shipyard (it doesn't have to be prefixed with "shipyard").
+List of crate built on top of Shipyard.  
+Don't hesitate to contact me if your crate uses Shipyard (it doesn't have to be prefixed with "shipyard").
 
 - [shipyard_hierarchy](https://crates.io/crates/shipyard_hierarchy) - by [David Komer](https://github.com/dakom) - Hierarchy crate.
 - [shipyard_scenegraph](https://crates.io/crates/shipyard_scenegraph) - by [David Komer](https://github.com/dakom) - Scenegraph crate.

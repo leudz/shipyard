@@ -8,51 +8,25 @@ In ECS there's two big ways to split work across cores: running systems on separ
 
 ### Outer-parallelism
 
-We'll start by the most simple one to use. So simple that there's nothing to do, workloads handle all the work for you. We even almost used multiple threads in the [Systems chapter](../fundamentals/systems.md).
+We'll start by the simplest one to use. So simple that there's nothing to do, workloads handle all the work for you. We even almost used multiple threads in the [Systems chapter](../fundamentals/systems.md).
 
-As long as the "parallel" feature is set (it's enabled by default), workloads will try to execute systems as much in parallel as possible. There is a set of rules that defines the "possible":
-- Systems accessing [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html) stop all multithreading (this is a limit of the current implementation and will be relaxed a little in the future)
-- There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will block `T` threading
+As long as the "parallel" feature is set (enabled by default) workloads will try to execute systems as much in parallel as possible. There is a set of rules that defines the "possible":
+- Systems accessing [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html) stop all threading.
+- There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will block `T` threading.
 
-When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.
-
-There's just one problem with this approach. What happens when I want to force two non-conflicting systems to run one after the other? The [`FakeBorrow`](https://docs.rs/shipyard/latest/shipyard/struct.FakeBorrow.html) system is here just for that, it'll mimic a system accessing the storage exclusively without actually doing it. To use it, place it in-between your other systems in a workload like this:
-
-```rust, noplaypen
-fn display_first(u32s: View<u32>) {
-    // -- snip --
-}
-
-fn display_next(u32s: View<u32>) {
-    // -- snip --
-}
-
-world
-    .add_workload("Display")
-    .with_system(system!(display_first))
-    .with_system(system!(|_: FakeBorrow<usize>| {}))
-    .with_system(system!(display_next))
-    .build();
-```
+When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.  
+[`add_to_world`](https://docs.rs/shipyard/latest/shipyard/struct.WorkloadBuilder.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.
 
 ### Inner-parallelism
 
-While parallel iterators does require us to modify our code, it's just a matter or adding `par_` to `iter`.
-Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.par_iter) will return a [`ParallelIterator`](https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html).
+While parallel iterators does require us to modify our code, it's just a matter of using `par_iter` instead of `iter`.  
+Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.par_iter) returns a [`ParallelIterator`](https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html).
 
 Example:
 ```rust, noplaypen
-use rayon::prelude::*;
+{{#include ../../../tests/book/parallelism.rs:import}}
 
-fn many_u32s(mut u32s: ViewMut<u32>) {
-    u32s.par_iter().for_each(|i| {
-        // -- snip --
-    });
-}
+{{#include ../../../tests/book/parallelism.rs:parallelism}}
 ```
 
 Don't replace all your [`iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on storages large enough to make up for the overhead cost in improved processing efficiency.
-
----
-
-In the next chapter we'll see how packs leverage [`SparseSet`](https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html) to add functionality and/or gain performance.
