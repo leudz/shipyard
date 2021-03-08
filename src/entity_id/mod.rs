@@ -7,7 +7,6 @@ use core::num::NonZeroU64;
 // the id is 64 bits long
 // <- 46 index -> <- 16 gen -> <- 2 meta ->
 // a generation of !0 is used as a dead entity
-// dead entities don't have any component
 //
 // inserted and modified component are flagged using metadata
 #[derive(Clone, Copy, Eq)]

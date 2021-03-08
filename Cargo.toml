@@ -20,7 +20,8 @@ rayon = { version = "^1", optional = true }
 serde = { version = "^1", optional = true, default-features = false }
 
 [features]
-default = ["rayon", "std"]
+default = ["parallel", "std"]
+parallel = ["rayon"]
 serde1 = ["serde"]
 std = []
 thread_local = ["std"]

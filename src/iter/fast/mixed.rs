@@ -1,7 +1,7 @@
 use super::abstract_mut::FastAbstractMut;
 use crate::entity_id::EntityId;
 use crate::iter::with_id::LastId;
-#[cfg(feature = "rayon")]
+#[cfg(feature = "parallel")]
 use rayon::iter::plumbing::UnindexedProducer;
 
 #[allow(missing_docs)]
@@ -117,7 +117,7 @@ impl<Storage: FastAbstractMut> LastId for FastMixed<Storage> {
     }
 }
 
-#[cfg(feature = "rayon")]
+#[cfg(feature = "parallel")]
 impl<Storage: FastAbstractMut + Clone + Send> UnindexedProducer for FastMixed<Storage> {
     type Item = <Storage as FastAbstractMut>::Out;
 

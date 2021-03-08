@@ -1,7 +1,7 @@
 use super::abstract_mut::AbstractMut;
 use super::with_id::LastId;
 use crate::entity_id::EntityId;
-#[cfg(feature = "rayon")]
+#[cfg(feature = "parallel")]
 use rayon::iter::plumbing::Producer;
 
 #[allow(missing_docs)]
@@ -91,7 +91,7 @@ impl<Storage: AbstractMut> LastId for Tight<Storage> {
     }
 }
 
-#[cfg(feature = "rayon")]
+#[cfg(feature = "parallel")]
 impl<Storage: AbstractMut + Clone + Send> Producer for Tight<Storage> {
     type Item = <Self as Iterator>::Item;
     type IntoIter = Self;

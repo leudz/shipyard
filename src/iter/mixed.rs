@@ -1,7 +1,7 @@
 use super::abstract_mut::AbstractMut;
 use super::with_id::LastId;
 use crate::entity_id::EntityId;
-#[cfg(feature = "rayon")]
+#[cfg(feature = "parallel")]
 use rayon::iter::plumbing::UnindexedProducer;
 
 #[allow(missing_docs)]
@@ -114,7 +114,7 @@ impl<Storage: AbstractMut> LastId for Mixed<Storage> {
     }
 }
 
-#[cfg(feature = "rayon")]
+#[cfg(feature = "parallel")]
 impl<Storage: AbstractMut + Clone + Send> UnindexedProducer for Mixed<Storage> {
     type Item = <Storage as AbstractMut>::Out;
 

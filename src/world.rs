@@ -612,7 +612,7 @@ let i = world.run(sys1).unwrap();
         scheduler: &Scheduler,
         batches: &Batches,
     ) -> Result<(), error::RunWorkload> {
-        #[cfg(feature = "rayon")]
+        #[cfg(feature = "parallel")]
         {
             for batch in &batches.parallel {
                 if batch.len() == 1 {
@@ -632,7 +632,7 @@ let i = world.run(sys1).unwrap();
 
             Ok(())
         }
-        #[cfg(not(feature = "rayon"))]
+        #[cfg(not(feature = "parallel"))]
         {
             batches.sequential.iter().try_for_each(|&index| {
                 (scheduler.systems[index])(self)

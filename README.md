@@ -77,6 +77,7 @@ I initially wanted to make an ECS to learn how it works. After a failed attempt 
 
 ## Cargo Features
 
+- **parallel** *(default)* &mdash; enables workload threading and add parallel iterators
 - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 - **std** *(default)* &mdash; lets Shipyard use the standard library
 - **thread_local** &mdash; adds methods and types required to work with `!Send` and `!Sync` components
