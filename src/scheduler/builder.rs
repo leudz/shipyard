@@ -203,7 +203,7 @@ impl WorkloadBuilder {
     pub fn with_try_system<
         B,
         Ok,
-        Err: 'static + Send + Error,
+        Err: 'static + Into<Box<dyn Error + Send + Sync>>,
         R: Into<Result<Ok, Err>>,
         S: IntoWorkloadSystem<B, R>,
     >(

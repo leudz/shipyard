@@ -265,7 +265,7 @@ pub enum RunWorkload {
 impl RunWorkload {
     /// Helper function to get back a custom error.
     #[cfg(feature = "std")]
-    pub fn custom_error(self) -> Option<Box<dyn Error + Send>> {
+    pub fn custom_error(self) -> Option<Box<dyn Error + Send + Sync>> {
         match self {
             Self::Run((_, Run::Custom(error))) => Some(error),
             _ => None,
@@ -314,7 +314,7 @@ pub enum Run {
     GetStorage(GetStorage),
     /// Error returned by the system.
     #[cfg(feature = "std")]
-    Custom(Box<dyn Error + Send>),
+    Custom(Box<dyn Error + Send + Sync>),
     /// Error returned by the system.
     #[cfg(not(feature = "std"))]
     Custom(Box<dyn core::any::Any + Send>),
@@ -328,8 +328,8 @@ impl From<GetStorage> for Run {
 
 impl Run {
     #[cfg(feature = "std")]
-    pub(crate) fn from_custom<E: Error + Send + 'static>(error: E) -> Self {
-        Run::Custom(Box::new(error))
+    pub(crate) fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> Self {
+        Run::Custom(error.into())
     }
     #[cfg(not(feature = "std"))]
     pub(crate) fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
@@ -344,7 +344,9 @@ impl Debug for Run {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
             Self::GetStorage(get_storage) => Debug::fmt(&get_storage, f),
-            Self::Custom(_) => f.write_fmt(format_args!("run failed with a custom error.")),
+            Self::Custom(err) => {
+                f.write_fmt(format_args!("run failed with a custom error, {:?}.", err))
+            }
         }
     }
 }

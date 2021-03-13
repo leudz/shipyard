@@ -22,7 +22,7 @@ pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a failible function in a struct containing all information required by a workload.  
     /// The workload will stop if an error is returned.
     #[cfg(feature = "std")]
-    fn into_workload_try_system<Ok, Err: 'static + Send + Error>(
+    fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
         self,
     ) -> Result<WorkloadSystem, error::InvalidSystem>
     where
@@ -55,7 +55,7 @@ where
     }
     #[allow(clippy::unit_arg)]
     #[cfg(feature = "std")]
-    fn into_workload_try_system<Ok, Err: 'static + Send + Error>(
+    fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
         self,
     ) -> Result<WorkloadSystem, error::InvalidSystem>
     where
@@ -166,7 +166,7 @@ macro_rules! impl_system {
                 })
             }
             #[cfg(feature = "std")]
-            fn into_workload_try_system<Ok, Err: 'static + Send + Error>(self) -> Result<WorkloadSystem, error::InvalidSystem> where R: Into<Result<Ok, Err>> {
+            fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(self) -> Result<WorkloadSystem, error::InvalidSystem> where R: Into<Result<Ok, Err>> {
                 let mut borrows = Vec::new();
                 $(
                     $type::borrow_info(&mut borrows);
