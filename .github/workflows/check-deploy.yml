@@ -155,9 +155,6 @@ jobs:
           name: guide_0_5_0
           path: dist/guide/0.5.0
 
-      - name: duplicate guide_master
-        run: cp -r dist/guide/master dist/book
-
       - name: load bunny_demo
         uses: actions/download-artifact@v2
         with:
@@ -169,9 +166,6 @@ jobs:
         with:
           name: square_eater
           path: dist/square_eater
-
-      - name: duplicate demo
-        run: cp -r dist/bunny_demo dist/demo
 
       - name: deploy to gh pages
         uses: maxheld83/ghpages@master
