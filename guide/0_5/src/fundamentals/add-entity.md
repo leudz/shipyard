@@ -5,7 +5,7 @@ When an entity is created you will receive a unique handle to it: an [`EntityId`
 ## World
 
 ```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:world}}
+{{#include ../../../../tests/book/add_entity.rs:world}}
 ```
 
 ⚠️ We have to use a single element tuple `(T,)` to add a single component entity.
@@ -13,5 +13,5 @@ When an entity is created you will receive a unique handle to it: an [`EntityId`
 ## Views
 
 ```rust, noplaypen
-{{#include ../../../tests/book/add_entity.rs:view}}
+{{#include ../../../../tests/book/add_entity.rs:view}}
 ```

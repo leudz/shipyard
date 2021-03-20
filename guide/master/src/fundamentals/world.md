@@ -7,7 +7,7 @@
 You can use [`new`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.new) or [`default`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.default):
 
 ```rust, noplaypen
-{{#include ../../../tests/book/world.rs:world_new}}
+{{#include ../../../../tests/book/world.rs:world_new}}
 ```
 
 There is no need to register components, storages are created on first access.
@@ -22,5 +22,5 @@ You can request a view using [`World::borrow`](https://docs.rs/shipyard/0.4.1/sh
 For example if you want a shared access to the entities storage you can use [`borrow`](https://docs.rs/shipyard/0.4.1/shipyard/struct.World.html#method.borrow):
 
 ```rust, noplaypen
-{{#include ../../../tests/book/world.rs:view}}
+{{#include ../../../../tests/book/world.rs:view}}
 ```

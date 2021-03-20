@@ -1,6 +1,6 @@
 //! Shipyard is an Entity Component System focused on usability and speed.
 //!
-//! The [user guide](https://leudz.github.io/shipyard/guide) is a great place to learn all about Shipyard!
+//! The [user guide](https://leudz.github.io/shipyard/guide_master) is a great place to learn all about Shipyard!
 //!
 //! ## Features
 //!

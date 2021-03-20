@@ -6,7 +6,7 @@ Adding another component of the same type will replace the existing one.
 ## World
 
 ```rust, noplaypen
-{{#include ../../../tests/book/add_components.rs:world}}
+{{#include ../../../../tests/book/add_components.rs:world}}
 ```
 
 ⚠️ We have to use a single element tuple `(T,)` to add a single component.
@@ -20,5 +20,5 @@ We could of course use [`EntitiesViewMut`](https://docs.rs/shipyard/0.5/shipyard
 If you don't need or want to check if the entity is alive, you can use the [`AddComponent::add_component_unchecked`](https://docs.rs/shipyard/0.5/shipyard/trait.AddComponent.html).
 
 ```rust, noplaypen
-{{#include ../../../tests/book/add_components.rs:view}}
+{{#include ../../../../tests/book/add_components.rs:view}}
 ```

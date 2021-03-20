@@ -24,9 +24,9 @@ Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/0.5/shipyard
 
 Example:
 ```rust, noplaypen
-{{#include ../../../tests/book/parallelism.rs:import}}
+{{#include ../../../../tests/book/parallelism.rs:import}}
 
-{{#include ../../../tests/book/parallelism.rs:parallelism}}
+{{#include ../../../../tests/book/parallelism.rs:parallelism}}
 ```
 
 Don't replace all your [`iter`](https://docs.rs/shipyard/0.5/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on storages large enough to make up for the overhead cost in improved processing efficiency.

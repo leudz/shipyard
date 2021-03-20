@@ -5,13 +5,13 @@ A function with views as arguments is all you need.
 
 Here's an example:
 ```rust, noplaypen
-{{#include ../../../tests/book/systems.rs:create_ints}}
+{{#include ../../../../tests/book/systems.rs:create_ints}}
 ```
 
 We have a system, let's run it!
 
 ```rust, noplaypen
-{{#include ../../../tests/book/systems.rs:run}}
+{{#include ../../../../tests/book/systems.rs:run}}
 ```
 
 It also works with closures.
@@ -21,7 +21,7 @@ It also works with closures.
 The first argument doesn't have to be a view, you can pass any data, even references.
 
 ```rust, noplaypen
-{{#include ../../../tests/book/systems.rs:in_acid}}
+{{#include ../../../../tests/book/systems.rs:in_acid}}
 ```
 
 We call [`run_with_data`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run_with_data) instead of [`run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run) when we want to pass data to a system.
@@ -29,7 +29,7 @@ We call [`run_with_data`](https://docs.rs/shipyard/latest/shipyard/struct.World.
 If you want to pass multiple variables, you can use a tuple.
 
 ```rust, noplaypen
-{{#include ../../../tests/book/systems.rs:in_acid_multiple}}
+{{#include ../../../../tests/book/systems.rs:in_acid_multiple}}
 ```
 
 ### Workloads
@@ -37,7 +37,7 @@ If you want to pass multiple variables, you can use a tuple.
 A workload is a named group of systems.
 
 ```rust, noplaypen
-{{#include ../../../tests/book/systems.rs:workload}}
+{{#include ../../../../tests/book/systems.rs:workload}}
 ```
 
 Workloads are stored in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), ready to be run again and again.  
@@ -50,7 +50,7 @@ Workloads will run their systems first to last or at the same time when possible
 You can also add a workload to another and build your execution logic brick by brick.
 
 ```rust, noplaypen
-{{#include ../../../tests/book/systems.rs:nested_workload}}
+{{#include ../../../../tests/book/systems.rs:nested_workload}}
 ```
 
 ---

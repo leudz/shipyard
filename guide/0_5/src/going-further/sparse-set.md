@@ -14,7 +14,7 @@
 
 Let's look at an example:
 ```rust, noplaypen
-{{#include ../../../tests/book/sparse_set.rs:insertion}}
+{{#include ../../../../tests/book/sparse_set.rs:insertion}}
 ```
 
 The [`World`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html) starts out empty, when we add `0u32` a [`SparseSet<u32>`](https://docs.rs/shipyard/0.5/shipyard/struct.SparseSet.html) will be generated.
@@ -43,7 +43,7 @@ Removing is done by swap removing from both `dense` and `data` and updating `spa
 Continuing the previous example if we call:
 
 ```rust, noplaypen
-{{#include ../../../tests/book/sparse_set.rs:removal}}
+{{#include ../../../../tests/book/sparse_set.rs:removal}}
 ```
 
 The internal representation now looks like this:
