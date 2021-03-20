@@ -66,13 +66,7 @@ jobs:
         with:
           mdbook-version: "latest"
 
-      - run: >
-          curl -s https://api.github.com/repos/Michael-F-Bryan/mdbook-linkcheck/releases/latest
-          | grep browser_download_url
-          | grep $(rustc -Vv | grep host | cut -d' ' -f2)
-          | cut -d : -f 2,3
-          | tr -d \"
-          | wget -qi -
+      - run: cargo install mdbook-linkcheck
 
       - run: mdbook build -d guide_master
         working-directory: ./guide/master
@@ -94,13 +88,7 @@ jobs:
         with:
           mdbook-version: "latest"
 
-      - run: >
-          curl -s https://api.github.com/repos/Michael-F-Bryan/mdbook-linkcheck/releases/latest
-          | grep browser_download_url
-          | grep $(rustc -Vv | grep host | cut -d' ' -f2)
-          | cut -d : -f 2,3
-          | tr -d \"
-          | wget -qi -
+      - run: cargo install mdbook-linkcheck
 
       - run: mdbook build -d guide_0_5_0
         working-directory: ./guide/0.5.0
