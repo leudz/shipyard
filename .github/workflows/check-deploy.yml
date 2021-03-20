@@ -66,14 +66,14 @@ jobs:
         with:
           mdbook-version: "latest"
 
-      - run: mdbook build -d guide
+      - run: mdbook build -d guide_master
         working-directory: ./guide/master
 
-      - name: save guide_master
+      - name: save guide master
         uses: actions/upload-artifact@v2
         with:
           name: guide_master
-          path: guide/guide
+          path: guide/master/guide_master
   guide_0_5:
     runs-on: ubuntu-latest
     needs: [fmt, miri, clippy, all-features]
@@ -86,14 +86,14 @@ jobs:
         with:
           mdbook-version: "latest"
 
-      - run: mdbook build -d guide
+      - run: mdbook build -d guide_0_5
         working-directory: ./guide/0_5
 
-      - name: save guide_0_5
+      - name: save guide 0.5
         uses: actions/upload-artifact@v2
         with:
           name: guide_0_5
-          path: guide/guide_0_5
+          path: guide/0_5/guide_0_5
   bunny_demo:
     runs-on: ubuntu-latest
     needs: [fmt, miri, clippy, all-features]
@@ -136,7 +136,7 @@ jobs:
           path: square_eater/public
   deploy:
     runs-on: ubuntu-latest
-    needs: [guide, bunny_demo, square_eater]
+    needs: [guide_master, guide_0_5, bunny_demo, square_eater]
     if: github.event_name == 'push'
     steps:
       - name: load guide
@@ -145,8 +145,11 @@ jobs:
           name: guide
           path: dist/guide
 
-      - name: duplicate guide
-        run: cp -r dist/guide dist/book
+      - name: duplicate guide_master
+        run: cp -r dist/guide/book
+
+      - name: duplicate guide_0_5
+        run: cp -r dist/guide/book
 
       - name: load bunny_demo
         uses: actions/download-artifact@v2
