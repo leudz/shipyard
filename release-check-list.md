@@ -1,4 +1,5 @@
 - make sure there is no debugging left
+- make sure the bunny demo and square eater are working
 - duplicate the guide
     - make links point to the right version
 - bump version
