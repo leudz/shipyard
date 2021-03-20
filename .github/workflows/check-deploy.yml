@@ -139,17 +139,20 @@ jobs:
     needs: [guide_master, guide_0_5, bunny_demo, square_eater]
     if: github.event_name == 'push'
     steps:
-      - name: load guide
+      - name: load guide master
         uses: actions/download-artifact@v2
         with:
-          name: guide
-          path: dist/guide
+          name: guide_master
+          path: dist/guide_master
+          
+      - name: load guide 0.5
+        uses: actions/download-artifact@v2
+        with:
+          name: guide_0_5
+          path: dist/guide_0_5
 
       - name: duplicate guide_master
-        run: cp -r dist/guide/book
-
-      - name: duplicate guide_0_5
-        run: cp -r dist/guide/book
+        run: cp -r dist/guide_master dist/book
 
       - name: load bunny_demo
         uses: actions/download-artifact@v2
