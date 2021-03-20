@@ -14,7 +14,7 @@ use core::ptr;
 const ACCESS_FACTOR: usize = 3;
 
 /// Trait used to create iterators.  
-/// Yields `&mut T` for mutable components. Doesn't work with storage tracking modification.
+/// Yields `&mut T` for mutable components. Does not work with storage tracking modification.
 ///
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
@@ -96,6 +96,7 @@ where
     type IntoParIter = FastParIter<T::AbsView>;
 
     #[inline]
+    #[track_caller]
     fn fast_iter(self) -> Self::IntoIter {
         if !self.is_tracking_insertion() && !self.is_tracking_modification()
             || self.len().map(|(_, is_exact)| !is_exact).unwrap_or(true)
@@ -124,11 +125,13 @@ where
             panic!("fast_iter can't be used with storage is tracking modification except if you iterate on Inserted or Modified.");
         }
     }
+    #[track_caller]
     #[inline]
     fn fast_iter_by<D: 'static>(self) -> Self::IntoIter {
         self.fast_iter()
     }
     #[cfg(feature = "parallel")]
+    #[track_caller]
     #[inline]
     fn fast_par_iter(self) -> Self::IntoParIter {
         self.fast_iter().into()

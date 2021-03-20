@@ -341,9 +341,8 @@ impl AllStorages {
     /// Adds components to an existing entity.  
     /// If the entity already owned a component it will be replaced.  
     /// `component` must always be a tuple, even for a single component.  
-    /// Unwraps errors.
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - `entity` is not alive.
     ///

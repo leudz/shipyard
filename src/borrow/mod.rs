@@ -25,7 +25,8 @@ use crate::view::{
 };
 use crate::world::World;
 
-/// Describe if a storage is borrowed exlusively or not.
+/// Describes if a storage is borrowed exlusively or not.  
+/// It is used to display workloads' borrowing information.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutability {
     #[allow(missing_docs)]
@@ -34,7 +35,7 @@ pub enum Mutability {
     Exclusive,
 }
 
-/// Transforms a view into a helper type. This allows workloads to have this syntax by faking GAT on stable.
+/// Transforms a view into a helper type. This allows workloads to have the current syntax.
 pub trait IntoBorrow {
     /// Helper type almost allowing GAT on stable.
     type Borrow: for<'a> Borrow<'a>;

@@ -155,7 +155,7 @@ impl Display for NewEntity {
     }
 }
 
-/// Retured by [`AllStorages::add_component`] and [`World::add_component`].
+/// Retured by [`AllStorages::add_component`] and [`World::add_component`] when trying to add components to an entity that is not alive.
 ///
 /// [`AllStorages::add_component`]: crate::all_storages::AllStorages::add_component()
 /// [`World::add_component`]: crate::world::World::add_component()
@@ -357,7 +357,7 @@ impl Display for Run {
     }
 }
 
-/// Error when using [`get`] with an entity that does not have any component in the requested storage(s).
+/// Returned by [`get`] when an entity does not have a component in the requested storage(s).
 ///
 /// [`get`]: crate::Get
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -386,7 +386,7 @@ impl Display for MissingComponent {
     }
 }
 
-/// Trying to add an invalid system to a workload will return this error.
+/// Returned when trying to add an invalid system to a workload.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum InvalidSystem {
     /// `AllStorages` borrowed alongside another storage.

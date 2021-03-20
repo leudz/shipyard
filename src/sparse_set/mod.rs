@@ -407,6 +407,7 @@ impl<T> SparseSet<T> {
     /// [`track_removal`]: Self::track_removal
     /// [`track_deletion`]: Self::track_deletion
     /// [`track_all`]: Self::track_all
+    #[track_caller]
     pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
         match (
             self.metadata.track_removal.as_mut(),
@@ -671,7 +672,6 @@ impl<T> SparseSet<T> {
     }
     /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.  
-    /// Unwraps errors.
     ///
     /// ### Panics
     ///
@@ -714,7 +714,6 @@ impl<T> SparseSet<T> {
     }
     /// Applies the given function `f` to the entities `a` and `b`.  
     /// The two entities shouldn't point to the same component.  
-    /// Unwraps errors.
     ///
     /// ### Panics
     ///
