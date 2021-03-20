@@ -7,7 +7,7 @@ Shipyard is an Entity Component System focused on usability and speed.
 If you have any question or want to follow the development more closely <sub>[![Chat](https://img.shields.io/badge/join-Zulip-brightgreen.svg)](https://shipyard.zulipchat.com)</sub>.
 
 [![Crates.io](https://img.shields.io/crates/v/shipyard)](https://crates.io/crates/shipyard)
-[![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
+[![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard/0.5.0)
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 
 ### [Guide](https://leudz.github.io/shipyard/guide/0.5.0) | [Demo](https://leudz.github.io/shipyard/bunny_demo)
