@@ -362,11 +362,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(Ref::map(storage, |storage| {
+            Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
             }))
         }
@@ -429,11 +433,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(Ref::map(storage, |storage| {
+            Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
             }))
         }
@@ -488,11 +496,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(Ref::map(storage, |storage| {
+            Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
             }))
         }
@@ -555,11 +567,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(Ref::map(storage, |storage| {
+            Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
             }))
         }
@@ -612,11 +628,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow_mut()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(RefMut::map(storage, |storage| {
+            Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -679,11 +699,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow_mut()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(RefMut::map(storage, |storage| {
+            Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -738,11 +762,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow_mut()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(RefMut::map(storage, |storage| {
+            Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -805,11 +833,15 @@ impl CustomStorageAccess for AllStorages {
                     .0
             }
             .borrow_mut()
-            .unwrap();
+            .map_err(|err| error::GetStorage::StorageBorrow {
+                name: Some(type_name::<S>()),
+                id: StorageId::of::<S>(),
+                borrow: err,
+            });
 
             unsafe { self.lock.unlock_exclusive() };
 
-            Ok(RefMut::map(storage, |storage| {
+            Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
