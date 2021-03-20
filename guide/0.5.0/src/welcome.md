@@ -19,5 +19,3 @@ However, programming with an ECS requires thinking about data and logic in a dif
 Components hold data. Entities are simple ids used to refer to a group of components.
 
 Systems do the heavy lifting: updating components, running side-effects, and integrating with other parts of the code.
-
-To see how Shipyard differs from other ECS implementations, see [Different Types of ECS](./pilgrimage/different-types-of-ecs.md).
