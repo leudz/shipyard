@@ -1,0 +1,10 @@
+[book]
+authors = ["Dylan Ancel", "David Komer"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Shipyard User's Guide"
+
+[build]
+build-dir = "output"
+create-missing = false
