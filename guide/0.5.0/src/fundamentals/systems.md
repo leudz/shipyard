@@ -24,7 +24,7 @@ The first argument doesn't have to be a view, you can pass any data, even refere
 {{#include ../../../../tests/book/systems.rs:in_acid}}
 ```
 
-We call [`run_with_data`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html#method.run_with_data) instead of [`run`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html#method.run) when we want to pass data to a system.
+We call [`run_with_data`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html#method.run_with_data) instead of [`run`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html#method.run) when we want to pass data to a system.
 
 If you want to pass multiple variables, you can use a tuple.
 
@@ -40,7 +40,7 @@ A workload is a named group of systems.
 {{#include ../../../../tests/book/systems.rs:workload}}
 ```
 
-Workloads are stored in the [`World`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html), ready to be run again and again.  
+Workloads are stored in the [`World`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html), ready to be run again and again.  
 They don't take up much memory so even if you make a few with similar systems it's not a problem.
 
 Workloads will run their systems first to last or at the same time when possible. We call this _outer-parallelism_, you can learn more about it in [this chapter](../going-further/parallelism.md).

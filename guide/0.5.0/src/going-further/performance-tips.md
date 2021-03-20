@@ -10,8 +10,8 @@ If you don't want to take any chance prefer calling [`for_each`](https://doc.rus
 ### `borrow` / `run` in a loop
 
 While borrowing storages is quite cheap, doing so in a loop is generally a bad idea.  
-Prefer moving the loop inside [`run`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html#method.run) and move [`borrow`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html#method.borrow)'s call outside the loop.
+Prefer moving the loop inside [`run`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html#method.run) and move [`borrow`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html#method.borrow)'s call outside the loop.
 
 ### `bulk_add_entity`
 
-When creating many entities at the same time remember to call [`bulk_add_entity`](https://docs.rs/shipyard/0.5/shipyard/struct.World.html#method.bulk_add_entity) if possible.
+When creating many entities at the same time remember to call [`bulk_add_entity`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html#method.bulk_add_entity) if possible.

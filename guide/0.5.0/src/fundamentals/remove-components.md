@@ -12,7 +12,7 @@ Removing a component will take it out of the storage and return it.
 
 ## View
 
-We have to import the [`Remove`](https://docs.rs/shipyard/0.5/shipyard/trait.Remove.html) trait for multiple components.
+We have to import the [`Remove`](https://docs.rs/shipyard/0.5.0/shipyard/trait.Remove.html) trait for multiple components.
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/remove_components.rs:view}}

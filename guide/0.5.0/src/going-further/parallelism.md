@@ -11,16 +11,16 @@ In ECS there's two big ways to split work across cores: running systems on separ
 We'll start by the simplest one to use. So simple that there's nothing to do, workloads handle all the work for you. We even almost used multiple threads in the [Systems chapter](../fundamentals/systems.md).
 
 As long as the "parallel" feature is set (enabled by default) workloads will try to execute systems as much in parallel as possible. There is a set of rules that defines the "possible":
-- Systems accessing [`AllStorages`](https://docs.rs/shipyard/0.5/shipyard/struct.AllStorages.html) stop all threading.
-- There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/0.5/shipyard/struct.ViewMut.html) will block `T` threading.
+- Systems accessing [`AllStorages`](https://docs.rs/shipyard/0.5.0/shipyard/struct.AllStorages.html) stop all threading.
+- There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/0.5.0/shipyard/struct.ViewMut.html) will block `T` threading.
 
 When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.  
-[`add_to_world`](https://docs.rs/shipyard/0.5/shipyard/struct.WorkloadBuilder.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.
+[`add_to_world`](https://docs.rs/shipyard/0.5.0/shipyard/struct.WorkloadBuilder.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.
 
 ### Inner-parallelism
 
 While parallel iterators does require us to modify our code, it's just a matter of using `par_iter` instead of `iter`.  
-Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/0.5/shipyard/trait.IntoIter.html#tymethod.par_iter) returns a [`ParallelIterator`](https://docs.rs/rayon/0.5/rayon/iter/trait.ParallelIterator.html).
+Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/0.5.0/shipyard/trait.IntoIter.html#tymethod.par_iter) returns a [`ParallelIterator`](https://docs.rs/rayon/0.5.0/rayon/iter/trait.ParallelIterator.html).
 
 Example:
 ```rust, noplaypen
@@ -29,4 +29,4 @@ Example:
 {{#include ../../../../tests/book/parallelism.rs:parallelism}}
 ```
 
-Don't replace all your [`iter`](https://docs.rs/shipyard/0.5/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on storages large enough to make up for the overhead cost in improved processing efficiency.
+Don't replace all your [`iter`](https://docs.rs/shipyard/0.5.0/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on storages large enough to make up for the overhead cost in improved processing efficiency.

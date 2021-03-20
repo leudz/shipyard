@@ -2,7 +2,7 @@
 
 Iteration is one of the most important features of an ECS.
 
-In Shipyard this is achieved using [`IntoIter::iter`](https://docs.rs/shipyard/0.5/shipyard/trait.IntoIter.html#tymethod.iter) on views.
+In Shipyard this is achieved using [`IntoIter::iter`](https://docs.rs/shipyard/0.5.0/shipyard/trait.IntoIter.html#tymethod.iter) on views.
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/iterators.rs:iter}}
@@ -13,7 +13,7 @@ You shouldn't expect specific ordering from Shipyard's iterators in general.
 
 #### With Id
 
-You can ask an iterator to tell you which entity owns each component by using [`WithId::with_id`](https://docs.rs/shipyard/0.5/shipyard/trait.IntoWithId.html#method.with_id):
+You can ask an iterator to tell you which entity owns each component by using [`WithId::with_id`](https://docs.rs/shipyard/0.5.0/shipyard/trait.IntoWithId.html#method.with_id):
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/iterators.rs:with_id}}
@@ -21,7 +21,7 @@ You can ask an iterator to tell you which entity owns each component by using [`
 
 #### Not
 
-It's possible to filter entities that don't have a certain component using [`Not`](https://docs.rs/shipyard/0.5/shipyard/struct.Not.html) by adding `!` in front of the view reference.
+It's possible to filter entities that don't have a certain component using [`Not`](https://docs.rs/shipyard/0.5.0/shipyard/struct.Not.html) by adding `!` in front of the view reference.
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/iterators.rs:not}}

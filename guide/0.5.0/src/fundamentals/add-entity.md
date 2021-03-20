@@ -1,6 +1,6 @@
 # Add Entity
 
-When an entity is created you will receive a unique handle to it: an [`EntityId`](https://docs.rs/shipyard/0.5/shipyard/struct.EntityId.html).
+When an entity is created you will receive a unique handle to it: an [`EntityId`](https://docs.rs/shipyard/0.5.0/shipyard/struct.EntityId.html).
 
 ## World
 

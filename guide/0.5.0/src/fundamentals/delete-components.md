@@ -18,7 +18,7 @@ Deleting a component will erase it from the storage but will not return it.
 
 ## View
 
-We have to import the [`Delete`](https://docs.rs/shipyard/0.5/shipyard/trait.Delete.html) trait for multiple components.
+We have to import the [`Delete`](https://docs.rs/shipyard/0.5.0/shipyard/trait.Delete.html) trait for multiple components.
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/delete_components.rs:view}}
