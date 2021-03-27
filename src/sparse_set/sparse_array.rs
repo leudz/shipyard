@@ -8,9 +8,9 @@ use core::hint::unreachable_unchecked;
 /// Internal part of a [`SparseSet`].
 ///
 /// [`SparseSet`]: crate::sparse_set::SparseSet
-pub struct SparseArray<T>(Vec<Option<Box<T>>>);
+pub struct SparseArray<T, const N: usize>(Vec<Option<Box<[T; N]>>>);
 
-impl<T> SparseArray<T> {
+impl<T, const N: usize> SparseArray<T, N> {
     #[inline]
     pub(super) fn new() -> Self {
         SparseArray(Vec::new())
@@ -20,7 +20,7 @@ impl<T> SparseArray<T> {
         self.0.len()
     }
     #[inline]
-    pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<T>> {
+    pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<[T; N]>> {
         self.0.as_mut_ptr()
     }
     pub(super) fn used_memory(&self) -> usize {
@@ -45,7 +45,7 @@ impl<T> SparseArray<T> {
     }
 }
 
-impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
+impl<const N: usize> SparseArray<EntityId, N> {
     #[inline]
     pub(super) fn allocate_at(&mut self, entity: EntityId) {
         if entity.bucket() >= self.0.len() {
@@ -56,7 +56,7 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
             let bucket = self.0.get_unchecked_mut(entity.bucket());
 
             if bucket.is_none() {
-                *bucket = Some(Box::new([EntityId::dead(); crate::sparse_set::BUCKET_SIZE]));
+                *bucket = Some(Box::new([EntityId::dead(); N]));
             }
         }
     }
@@ -68,7 +68,7 @@ impl SparseArray<[EntityId; crate::sparse_set::BUCKET_SIZE]> {
             let bucket = unsafe { self.0.get_unchecked_mut(bucket_index) };
 
             if bucket.is_none() {
-                *bucket = Some(Box::new([EntityId::dead(); crate::sparse_set::BUCKET_SIZE]));
+                *bucket = Some(Box::new([EntityId::dead(); N]));
             }
         }
     }

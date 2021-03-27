@@ -55,7 +55,7 @@ pub trait Storage: SizedAny {
     ///
     /// [`SparseSet`]: crate::sparse_set::SparseSet
     /// [`SparseArray`]: crate::sparse_set::SparseArray
-    fn sparse_array(&self) -> Option<&SparseArray<[EntityId; 32]>> {
+    fn sparse_array(&self) -> Option<&SparseArray<EntityId, 32>> {
         None
     }
 }

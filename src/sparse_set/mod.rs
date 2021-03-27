@@ -37,7 +37,7 @@ pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
 
 // Inserted and modified info is only present in dense
 pub struct SparseSet<T> {
-    pub(crate) sparse: SparseArray<[EntityId; BUCKET_SIZE]>,
+    pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
     pub(crate) metadata: Metadata<T>,
@@ -868,7 +868,7 @@ impl<T: 'static> Storage for SparseSet<T> {
             component_count: self.len(),
         })
     }
-    fn sparse_array(&self) -> Option<&SparseArray<[EntityId; 32]>> {
+    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
         Some(&self.sparse)
     }
 }

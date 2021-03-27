@@ -25,7 +25,7 @@ pub trait IntoAbstract {
     fn type_id(&self) -> TypeId;
     fn dense(&self) -> *const EntityId;
     #[inline]
-    fn sparse(&self) -> *const SparseArray<[EntityId; BUCKET_SIZE]> {
+    fn sparse(&self) -> *const SparseArray<EntityId, BUCKET_SIZE> {
         core::ptr::null()
     }
 }
