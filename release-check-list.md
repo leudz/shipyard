@@ -5,4 +5,5 @@
 - bump version
 - create new branch
 - release the version
+- make a git tag and release
 - check the doc publishing went ok
