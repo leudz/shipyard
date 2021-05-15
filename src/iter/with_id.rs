@@ -60,4 +60,7 @@ impl<I: Iterator + LastId> Iterator for WithId<I> {
 
         Some((unsafe { self.0.last_id() }, item))
     }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
 }
