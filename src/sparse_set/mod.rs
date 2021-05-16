@@ -112,11 +112,8 @@ impl<T> SparseSet<T> {
         self.dense.get(index).copied()
     }
     fn id_of(&self, entity: EntityId) -> Option<EntityId> {
-        if let Some(index) = self.index_of(entity) {
-            Some(unsafe { *self.dense.get_unchecked(index) })
-        } else {
-            None
-        }
+        self.index_of(entity)
+            .map(|index| unsafe { *self.dense.get_unchecked(index) })
     }
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
