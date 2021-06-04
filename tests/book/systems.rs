@@ -81,8 +81,8 @@ fn delete_ints(mut u32s: ViewMut<u32>) {
 let world = World::new();
 
 Workload::builder("Int cycle")
-    .with_system(&create_ints)
-    .with_system(&delete_ints)
+    .with_system(create_ints)
+    .with_system(delete_ints)
     .add_to_world(&world)
     .unwrap();
 
@@ -117,13 +117,13 @@ fn clear_deleted_u32s(mut all_storages: AllStoragesViewMut) {
 let world = World::new();
 
 Workload::builder("Filter u32")
-    .with_system(&flag_deleted_u32s)
-    .with_system(&clear_deleted_u32s)
+    .with_system(flag_deleted_u32s)
+    .with_system(clear_deleted_u32s)
     .add_to_world(&world)
     .unwrap();
 
 Workload::builder("Loop")
-    .with_system(&increment)
+    .with_system(increment)
     .with_workload("Filter u32")
     .add_to_world(&world)
     .unwrap();

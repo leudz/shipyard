@@ -30,7 +30,7 @@ fn rename() {
     world.add_unique(0u32).unwrap();
 
     Workload::builder("Empty")
-        .with_system(&increment)
+        .with_system(increment)
         .add_to_world(&world)
         .unwrap();
 

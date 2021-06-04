@@ -90,8 +90,8 @@ impl WorkloadBuilder {
     /// world.add_entity((4usize, 5u32));
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system(&add)
-    ///     .with_system(&check)
+    ///     .with_system(add)
+    ///     .with_system(check)
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
@@ -148,8 +148,8 @@ impl WorkloadBuilder {
     /// world.add_entity((4usize, 5u32));
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system(&add)
-    ///     .with_system(&check)
+    ///     .with_system(add)
+    ///     .with_system(check)
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
@@ -191,8 +191,8 @@ impl WorkloadBuilder {
     /// world.add_entity((4usize, 5u32));
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system(&add)
-    ///     .with_try_system(&check)
+    ///     .with_system(add)
+    ///     .with_try_system(check)
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
@@ -244,8 +244,8 @@ impl WorkloadBuilder {
     /// world.add_entity((4usize, 5u32));
     ///
     /// Workload::builder("Add & Check")
-    ///     .with_system(&add)
-    ///     .with_try_system(&check)
+    ///     .with_system(add)
+    ///     .with_try_system(check)
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
@@ -553,7 +553,7 @@ fn single_immutable() {
     let world = World::new();
 
     Workload::builder("System1")
-        .with_system(&system1)
+        .with_system(system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -579,7 +579,7 @@ fn single_mutable() {
     let world = World::new();
 
     Workload::builder("System1")
-        .with_system(&system1)
+        .with_system(system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -606,7 +606,7 @@ fn multiple_immutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system1)
+        .with_system(system1)
         .with_system(system2.into_workload_system().unwrap())
         .add_to_world(&world)
         .unwrap();
@@ -634,8 +634,8 @@ fn multiple_mutable() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system1)
-        .with_system(&system2)
+        .with_system(system1)
+        .with_system(system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -662,8 +662,8 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system1)
-        .with_system(&system2)
+        .with_system(system1)
+        .with_system(system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -682,8 +682,8 @@ fn multiple_mixed() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system2)
-        .with_system(&system1)
+        .with_system(system2)
+        .with_system(system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -711,10 +711,10 @@ fn append_optimizes_batches() {
     let world = World::new();
 
     let mut group_a = Workload::builder("Group A");
-    group_a.with_system(&system_a1).with_system(&system_a2);
+    group_a.with_system(system_a1).with_system(system_a2);
 
     let mut group_b = Workload::builder("Group B");
-    group_b.with_system(&system_b1);
+    group_b.with_system(system_b1);
 
     Workload::builder("Combined")
         .append(&mut group_a)
@@ -745,7 +745,7 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system2)
+        .with_system(system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -764,8 +764,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system2)
-        .with_system(&system2)
+        .with_system(system2)
+        .with_system(system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -784,8 +784,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system1)
-        .with_system(&system2)
+        .with_system(system1)
+        .with_system(system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -804,8 +804,8 @@ fn all_storages() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system2)
-        .with_system(&system1)
+        .with_system(system2)
+        .with_system(system1)
         .add_to_world(&world)
         .unwrap();
 
@@ -838,8 +838,8 @@ fn non_send() {
     let world = World::new();
 
     let info = Workload::builder("Test")
-        .with_system(&sys1)
-        .with_system(&sys1)
+        .with_system(sys1)
+        .with_system(sys1)
         .add_to_world(&world)
         .unwrap();
 
@@ -859,8 +859,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(&sys1)
-        .with_system(&sys2)
+        .with_system(sys1)
+        .with_system(sys2)
         .add_to_world(&world)
         .unwrap();
 
@@ -879,8 +879,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(&sys2)
-        .with_system(&sys1)
+        .with_system(sys2)
+        .with_system(sys1)
         .add_to_world(&world)
         .unwrap();
 
@@ -899,8 +899,8 @@ fn non_send() {
     let world = World::new();
 
     let info = Workload::builder("Test")
-        .with_system(&sys1)
-        .with_system(&sys3)
+        .with_system(sys1)
+        .with_system(sys3)
         .add_to_world(&world)
         .unwrap();
 
@@ -920,8 +920,8 @@ fn non_send() {
     let world = World::new();
 
     Workload::builder("Test")
-        .with_system(&sys1)
-        .with_system(&sys4)
+        .with_system(sys1)
+        .with_system(sys4)
         .add_to_world(&world)
         .unwrap();
 
@@ -948,8 +948,8 @@ fn unique_and_non_unique() {
     let world = World::new();
 
     Workload::builder("Systems")
-        .with_system(&system1)
-        .with_system(&system2)
+        .with_system(system1)
+        .with_system(system2)
         .add_to_world(&world)
         .unwrap();
 
@@ -999,11 +999,11 @@ fn append_ensures_multiple_batches_can_be_optimized_over() {
     let world = World::new();
 
     let mut group_a = Workload::builder("Group A");
-    group_a.with_system(&sys_a1).with_system(&sys_a2);
+    group_a.with_system(sys_a1).with_system(sys_a2);
     let mut group_b = Workload::builder("Group B");
-    group_b.with_system(&sys_b1);
+    group_b.with_system(sys_b1);
     let mut group_c = Workload::builder("Group C");
-    group_c.with_system(&sys_c1);
+    group_c.with_system(sys_c1);
 
     Workload::builder("Combined")
         .append(&mut group_a)
@@ -1035,15 +1035,15 @@ fn workload_flattening() {
     let world = World::new();
 
     Workload::builder("1")
-        .with_system(&sys1)
-        .with_system(&sys2)
-        .with_system(&sys1)
+        .with_system(sys1)
+        .with_system(sys2)
+        .with_system(sys1)
         .add_to_world(&world)
         .unwrap();
 
     let debug_info = Workload::builder("2")
         .with_workload("1")
-        .with_system(&sys1)
+        .with_system(sys1)
         .with_workload("1")
         .add_to_world(&world)
         .unwrap();

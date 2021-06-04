@@ -89,14 +89,14 @@ async fn main() {
     rand::srand(macroquad::miniquad::date::now() as u64);
 
     Workload::builder("Game loop")
-        .with_system(&counters)
-        .with_system(&move_player)
-        .with_system(&move_square)
-        .with_system(&grow_square)
-        .with_system(&new_squares)
-        .with_system(&collision)
-        .with_try_system(&clean_up)
-        .with_system(&render)
+        .with_system(counters)
+        .with_system(move_player)
+        .with_system(move_square)
+        .with_system(grow_square)
+        .with_system(new_squares)
+        .with_system(collision)
+        .with_try_system(clean_up)
+        .with_system(render)
         .add_to_world(&world)
         .unwrap();
 

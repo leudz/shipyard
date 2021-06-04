@@ -111,9 +111,10 @@ macro_rules! impl_system {
         where
             Func: 'static
                 + Send
-                + Sync
-                + Fn($($type),+) -> R
-                + Fn($(<$type::Borrow as Borrow<'_>>::View),+) -> R {
+                + Sync,
+            for<'a, 'b> &'b Func:
+                Fn($($type),+) -> R
+                + Fn($(<$type::Borrow as Borrow<'a>>::View),+) -> R {
 
             fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -153,7 +154,7 @@ macro_rules! impl_system {
 
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+))) }),
+                    system_fn: Box::new(move |world: &World| { Ok(drop((&&self)($($type::Borrow::borrow(&world)?),+))) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                     generator: |constraints| {
@@ -204,7 +205,7 @@ macro_rules! impl_system {
 
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
+                    system_fn: Box::new(move |world: &World| { Ok(drop((&&self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                     generator: |constraints| {
@@ -255,7 +256,7 @@ macro_rules! impl_system {
 
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
+                    system_fn: Box::new(move |world: &World| { Ok(drop((&&self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                     generator: |constraints| {
