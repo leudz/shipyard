@@ -43,17 +43,18 @@ impl<R, F> IntoWorkloadSystem<Nothing, R> for F
 where
     F: 'static + Send + Sync + Fn() -> R,
 {
-    #[allow(clippy::unit_arg)]
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
-            system_fn: Box::new(move |_: &World| Ok(drop((self)()))),
+            system_fn: Box::new(move |_: &World| {
+                (self)();
+                Ok(())
+            }),
             system_type_id: TypeId::of::<F>(),
             system_type_name: type_name::<F>(),
             generator: |_| TypeId::of::<F>(),
         })
     }
-    #[allow(clippy::unit_arg)]
     #[cfg(feature = "std")]
     fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
         self,
@@ -64,14 +65,14 @@ where
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
-                Ok(drop((self)().into().map_err(error::Run::from_custom)?))
+                (self)().into().map_err(error::Run::from_custom)?;
+                Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
             system_type_name: type_name::<F>(),
             generator: |_| TypeId::of::<F>(),
         })
     }
-    #[allow(clippy::unit_arg)]
     #[cfg(not(feature = "std"))]
     fn into_workload_try_system<Ok, Err: 'static + Send + Any>(
         self,
@@ -82,7 +83,8 @@ where
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
-                Ok(drop((self)().into().map_err(error::Run::from_custom)?))
+                (self)().into().map_err(error::Run::from_custom)?;
+                Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
             system_type_name: type_name::<F>(),
