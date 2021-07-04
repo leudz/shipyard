@@ -16,7 +16,7 @@
 #![deny(unused_qualifications)]
 #![deny(clippy::used_underscore_binding)]
 #![deny(clippy::similar_names)]
-#![deny(clippy::filter_map)]
+#![deny(clippy::manual_filter_map)]
 #![deny(clippy::invalid_upcast_comparisons)]
 #![deny(clippy::cast_precision_loss)]
 #![deny(clippy::cast_possible_wrap)]
