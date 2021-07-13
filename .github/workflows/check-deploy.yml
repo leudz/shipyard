@@ -37,7 +37,7 @@ jobs:
           profile: minimal
           components: miri
 
-      - run: cargo +nightly miri test --no-default-features
+      - run: cargo +nightly miri test --tests --lib --no-default-features
   clippy:
     runs-on: ubuntu-latest
     needs: install-stable
