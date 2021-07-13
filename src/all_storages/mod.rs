@@ -12,15 +12,15 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::AllStoragesMemoryUsage;
+use crate::public_transport::RwLock;
+use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
 use crate::storage::{SBox, Storage, StorageId};
 use crate::unique::Unique;
 use alloc::boxed::Box;
 use core::any::type_name;
-use core::cell::UnsafeCell;
 use hashbrown::hash_map::{Entry, HashMap};
-use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 
 /// Contains all storages present in the `World`.
 // The lock is held very briefly:
@@ -31,8 +31,7 @@ use parking_lot::{lock_api::RawRwLock as _, RawRwLock};
 // so any access to storages are valid as long as the World exists
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
-    lock: RawRwLock,
-    storages: UnsafeCell<HashMap<StorageId, SBox>>,
+    storages: RwLock<HashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
 }
@@ -43,14 +42,25 @@ unsafe impl Send for AllStorages {}
 unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
+    #[cfg(feature = "std")]
     pub(crate) fn new() -> Self {
         let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
 
         AllStorages {
-            storages: UnsafeCell::new(storages),
-            lock: RawRwLock::INIT,
+            storages: RwLock::new_std(storages),
+            #[cfg(feature = "thread_local")]
+            thread_id: std::thread::current().id(),
+        }
+    }
+    pub(crate) fn new_with_lock<L: ShipyardRwLock>() -> Self {
+        let mut storages = HashMap::new();
+
+        storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
+
+        AllStorages {
+            storages: RwLock::new_custom::<L>(storages),
             #[cfg(feature = "thread_local")]
             thread_id: std::thread::current().id(),
         }
@@ -75,12 +85,10 @@ impl AllStorages {
     pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
         let storage_id = StorageId::of::<Unique<T>>();
 
-        self.lock.lock_exclusive();
-        let storages = unsafe { &mut *self.storages.get() };
-        storages
+        self.storages
+            .write()
             .entry(storage_id)
             .or_insert_with(|| SBox::new(Unique::new(component)));
-        unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
@@ -94,12 +102,10 @@ impl AllStorages {
         if std::thread::current().id() == self.thread_id {
             let storage_id = StorageId::of::<Unique<T>>();
 
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
-            storages
+            self.storages
+                .write()
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new_non_send(Unique::new(component), self.thread_id));
-            unsafe { self.lock.unlock_exclusive() };
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -113,12 +119,10 @@ impl AllStorages {
     pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
         let storage_id = StorageId::of::<Unique<T>>();
 
-        self.lock.lock_exclusive();
-        let storages = unsafe { &mut *self.storages.get() };
-        storages
+        self.storages
+            .write()
             .entry(storage_id)
             .or_insert_with(|| SBox::new_non_sync(Unique::new(component)));
-        unsafe { self.lock.unlock_exclusive() };
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -132,12 +136,10 @@ impl AllStorages {
         if std::thread::current().id() == self.thread_id {
             let storage_id = StorageId::of::<Unique<T>>();
 
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
-            storages
+            self.storages
+                .write()
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new_non_send_sync(Unique::new(component), self.thread_id));
-            unsafe { self.lock.unlock_exclusive() };
         }
     }
     /// Removes a unique storage.
@@ -165,26 +167,19 @@ impl AllStorages {
     pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
         let storage_id = StorageId::of::<Unique<T>>();
 
-        self.lock.lock_exclusive();
-
         {
-            // SAFE we locked
-            let storages = unsafe { &mut *self.storages.get() };
+            let mut storages = self.storages.write();
 
             let storage = if let Entry::Occupied(entry) = storages.entry(storage_id) {
                 // `.err()` to avoid borrowing `entry` in the `Ok` case
                 if let Some(err) = unsafe { &*entry.get().0 }.borrow_mut().err() {
-                    unsafe { self.lock.unlock_exclusive() };
                     return Err(error::UniqueRemove::StorageBorrow((type_name::<T>(), err)));
                 } else {
                     // We were able to lock the storage, we've still got exclusive access even though
                     // we released that lock as we're still holding the `AllStorages` lock.
-                    let storage = entry.remove();
-                    unsafe { self.lock.unlock_exclusive() };
-                    storage
+                    entry.remove()
                 }
             } else {
-                unsafe { self.lock.unlock_exclusive() };
                 return Err(error::UniqueRemove::MissingUnique(type_name::<T>()));
             };
 
@@ -738,11 +733,10 @@ let i = all_storages.run(sys1).unwrap();
     pub(crate) fn entities(&self) -> Result<Ref<'_, &'_ Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();
 
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id).unwrap();
         let storage = unsafe { &*storage.0 }.borrow();
-        unsafe { self.lock.unlock_shared() };
+        drop(storages);
         match storage {
             Ok(storage) => Ok(Ref::map(storage, |storage| {
                 storage.as_any().downcast_ref().unwrap()
@@ -753,11 +747,10 @@ let i = all_storages.run(sys1).unwrap();
     pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, &'_ mut Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();
 
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id).unwrap();
         let storage = unsafe { &*storage.0 }.borrow_mut();
-        unsafe { self.lock.unlock_shared() };
+        drop(storages);
         match storage {
             Ok(storage) => Ok(RefMut::map(storage, |storage| {
                 storage.as_any_mut().downcast_mut().unwrap()
@@ -774,8 +767,7 @@ let i = all_storages.run(sys1).unwrap();
         &mut self,
         storage_id: StorageId,
     ) -> Result<&mut T, error::GetStorage> {
-        let storages = unsafe { &mut *self.storages.get() };
-        if let Some(storage) = storages.get_mut(&storage_id) {
+        if let Some(storage) = self.storages.get_mut().get_mut(&storage_id) {
             let storage = unsafe { &mut *storage.0 }
                 .get_mut()
                 .as_any_mut()
@@ -798,7 +790,7 @@ let i = all_storages.run(sys1).unwrap();
         T: 'static + Storage + Send + Sync,
         F: FnOnce() -> T,
     {
-        let storages = unsafe { &mut *self.storages.get() };
+        let storages = self.storages.get_mut();
 
         unsafe {
             &mut *storages
@@ -830,16 +822,10 @@ impl core::fmt::Debug for AllStorages {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_struct("AllStorages");
 
-        self.lock.lock_shared();
+        let storages = self.storages.read();
 
-        {
-            let storages = unsafe { &*self.storages.get() };
-
-            debug_struct.field("storage_count", &storages.len());
-            debug_struct.field("storages", &storages.values());
-        }
-
-        unsafe { self.lock.unlock_shared() };
+        debug_struct.field("storage_count", &storages.len());
+        debug_struct.field("storages", &storages.values());
 
         debug_struct.finish()
     }
@@ -851,23 +837,17 @@ impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
 
         let mut debug_struct = f.debug_list();
 
-        self.0.lock.lock_shared();
+        let storages = self.0.storages.read();
 
-        {
-            let storages = unsafe { &*self.0.storages.get() };
-
-            debug_struct.entries(storages.values().filter_map(|storage| {
-                match unsafe { &*(storage.0) }.borrow() {
-                    Ok(storage) => storage.memory_usage(),
-                    Err(_) => {
-                        borrowed_storages += 1;
-                        None
-                    }
+        debug_struct.entries(storages.values().filter_map(|storage| {
+            match unsafe { &*(storage.0) }.borrow() {
+                Ok(storage) => storage.memory_usage(),
+                Err(_) => {
+                    borrowed_storages += 1;
+                    None
                 }
-            }));
-        }
-
-        unsafe { self.0.lock.unlock_shared() };
+            }
+        }));
 
         if borrowed_storages != 0 {
             debug_struct.entry(&format_args!(

@@ -5,7 +5,7 @@ use shipyard::*;
 
 #[test]
 fn duplicate_name() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     Workload::builder("")
         .with_system(|| {})
@@ -25,7 +25,7 @@ fn rename() {
         *i += 1;
     }
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.add_unique(0u32).unwrap();
 

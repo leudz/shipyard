@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn alive() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.add_entity((0u32,));
     let entity = world.add_entity((1u32,));
     world.add_entity((2u32,));
@@ -16,7 +16,7 @@ fn alive() {
 
 #[test]
 fn single_dead() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.add_entity((0u32,));
     let entity = world.add_entity((1u32,));
     world.add_entity((2u32,));
@@ -33,7 +33,7 @@ fn single_dead() {
 #[cfg(feature = "serde1")]
 #[test]
 fn multiple_dead_first() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let entity0 = world.add_entity((0u32,));
     let entity1 = world.add_entity((1u32,));
     let entity2 = world.add_entity((2u32,));
@@ -67,7 +67,7 @@ fn multiple_dead_first() {
 #[cfg(feature = "serde1")]
 #[test]
 fn multiple_dead_middle() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let entity0 = world.add_entity((0u32,));
     let entity1 = world.add_entity((1u32,));
     let entity2 = world.add_entity((2u32,));
@@ -101,7 +101,7 @@ fn multiple_dead_middle() {
 #[cfg(feature = "serde1")]
 #[test]
 fn multiple_dead_last() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let entity0 = world.add_entity((0u32,));
     let entity1 = world.add_entity((1u32,));
     let entity2 = world.add_entity((2u32,));
@@ -135,7 +135,7 @@ fn multiple_dead_last() {
 #[cfg(feature = "serde1")]
 #[test]
 fn new_world_empty() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let entity = EntityId::from_index_and_gen(3, 0);
 
     let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
@@ -165,7 +165,7 @@ fn new_world_empty() {
 #[cfg(feature = "serde1")]
 #[test]
 fn new_world() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let entity = EntityId::from_index_and_gen(5, 0);
 
     let entity0 = world.add_entity((0u32,));

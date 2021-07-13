@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn simple() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(|mut all_storages: AllStoragesViewMut| {

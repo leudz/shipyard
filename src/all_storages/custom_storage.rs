@@ -3,7 +3,6 @@ use crate::atomic_refcell::{Ref, RefMut};
 use crate::error;
 use crate::storage::{SBox, Storage, StorageId};
 use core::any::type_name;
-use parking_lot::lock_api::RawRwLock;
 
 /// Low level access to storage.
 ///
@@ -221,12 +220,11 @@ pub trait CustomStorageAccess {
 impl CustomStorageAccess for AllStorages {
     #[inline]
     fn custom_storage<S: 'static>(&self) -> Result<Ref<'_, &'_ S>, error::GetStorage> {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&StorageId::of::<S>());
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow();
-            unsafe { self.lock.unlock_shared() };
+            drop(storages);
             match storage {
                 Ok(storage) => Ok(Ref::map(storage, |storage| {
                     storage.as_any().downcast_ref().unwrap()
@@ -238,7 +236,6 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            unsafe { self.lock.unlock_shared() };
             Err(error::GetStorage::MissingStorage {
                 name: Some(type_name::<S>()),
                 id: StorageId::of::<S>(),
@@ -249,19 +246,17 @@ impl CustomStorageAccess for AllStorages {
         &self,
         storage_id: StorageId,
     ) -> Result<Ref<'_, &'_ dyn Storage>, error::GetStorage> {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow();
-            unsafe { self.lock.unlock_shared() };
+            drop(storages);
             storage.map_err(|err| error::GetStorage::StorageBorrow {
                 name: None,
                 id: storage_id,
                 borrow: err,
             })
         } else {
-            unsafe { self.lock.unlock_shared() };
             Err(error::GetStorage::MissingStorage {
                 name: None,
                 id: storage_id,
@@ -270,12 +265,11 @@ impl CustomStorageAccess for AllStorages {
     }
     #[inline]
     fn custom_storage_mut<S: 'static>(&self) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage> {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&StorageId::of::<S>());
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
-            unsafe { self.lock.unlock_shared() };
+            drop(storages);
             match storage {
                 Ok(storage) => Ok(RefMut::map(storage, |storage| {
                     storage.as_any_mut().downcast_mut().unwrap()
@@ -287,7 +281,6 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            unsafe { self.lock.unlock_shared() };
             Err(error::GetStorage::MissingStorage {
                 name: Some(type_name::<S>()),
                 id: StorageId::of::<S>(),
@@ -298,19 +291,17 @@ impl CustomStorageAccess for AllStorages {
         &self,
         storage_id: StorageId,
     ) -> Result<RefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage> {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
-            unsafe { self.lock.unlock_shared() };
+            drop(storages);
             storage.map_err(|err| error::GetStorage::StorageBorrow {
                 name: None,
                 id: storage_id,
                 borrow: err,
             })
         } else {
-            unsafe { self.lock.unlock_shared() };
             Err(error::GetStorage::MissingStorage {
                 name: None,
                 id: storage_id,
@@ -334,12 +325,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow();
-            unsafe { self.lock.unlock_shared() };
+            drop(storages);
             match storage {
                 Ok(storage) => Ok(Ref::map(storage, |storage| {
                     storage.as_any().downcast_ref().unwrap()
@@ -351,9 +341,8 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -367,8 +356,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
@@ -397,12 +384,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage + Sync,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow();
-            unsafe { self.lock.unlock_shared() };
+
             match storage {
                 Ok(storage) => Ok(Ref::map(storage, |storage| {
                     storage.as_any().downcast_ref().unwrap()
@@ -422,9 +408,8 @@ impl CustomStorageAccess for AllStorages {
                 });
             }
 
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -438,8 +423,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
@@ -468,12 +451,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage + Send,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow();
-            unsafe { self.lock.unlock_shared() };
+
             match storage {
                 Ok(storage) => Ok(Ref::map(storage, |storage| {
                     storage.as_any().downcast_ref().unwrap()
@@ -485,9 +467,8 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -501,8 +482,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
@@ -531,12 +510,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow();
-            unsafe { self.lock.unlock_shared() };
+
             match storage {
                 Ok(storage) => Ok(Ref::map(storage, |storage| {
                     storage.as_any().downcast_ref().unwrap()
@@ -556,9 +534,8 @@ impl CustomStorageAccess for AllStorages {
                 });
             }
 
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -572,8 +549,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(Ref::map(storage?, |storage| {
                 storage.as_any().downcast_ref::<S>().unwrap()
@@ -600,12 +575,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
-            unsafe { self.lock.unlock_shared() };
+            drop(storages);
             match storage {
                 Ok(storage) => Ok(RefMut::map(storage, |storage| {
                     storage.as_any_mut().downcast_mut().unwrap()
@@ -617,9 +591,8 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -633,8 +606,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
@@ -663,12 +634,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage + Sync,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
-            unsafe { self.lock.unlock_shared() };
+
             match storage {
                 Ok(storage) => Ok(RefMut::map(storage, |storage| {
                     storage.as_any_mut().downcast_mut().unwrap()
@@ -688,9 +658,8 @@ impl CustomStorageAccess for AllStorages {
                 });
             }
 
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -704,8 +673,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
@@ -734,12 +701,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage + Send,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
-            unsafe { self.lock.unlock_shared() };
+
             match storage {
                 Ok(storage) => Ok(RefMut::map(storage, |storage| {
                     storage.as_any_mut().downcast_mut().unwrap()
@@ -751,9 +717,8 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -767,8 +732,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
@@ -797,12 +760,11 @@ impl CustomStorageAccess for AllStorages {
         S: 'static + Storage,
         F: FnOnce() -> S,
     {
-        self.lock.lock_shared();
-        let storages = unsafe { &*self.storages.get() };
+        let storages = self.storages.read();
         let storage = storages.get(&storage_id);
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
-            unsafe { self.lock.unlock_shared() };
+
             match storage {
                 Ok(storage) => Ok(RefMut::map(storage, |storage| {
                     storage.as_any_mut().downcast_mut().unwrap()
@@ -822,9 +784,8 @@ impl CustomStorageAccess for AllStorages {
                 });
             }
 
-            unsafe { self.lock.unlock_shared() };
-            self.lock.lock_exclusive();
-            let storages = unsafe { &mut *self.storages.get() };
+            drop(storages);
+            let mut storages = self.storages.write();
 
             let storage = unsafe {
                 &*storages
@@ -838,8 +799,6 @@ impl CustomStorageAccess for AllStorages {
                 id: StorageId::of::<S>(),
                 borrow: err,
             });
-
-            unsafe { self.lock.unlock_exclusive() };
 
             Ok(RefMut::map(storage?, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()

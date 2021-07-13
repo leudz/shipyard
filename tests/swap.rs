@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn no_pack() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {
@@ -19,7 +19,7 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {

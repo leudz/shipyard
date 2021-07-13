@@ -8,12 +8,12 @@ args = ["test", "--all-features"]
 
 [tasks.test-no-default]
 command = "cargo"
-args = ["test", "--no-default-features"]
+args = ["test", "--tests", "--lib", "--no-default-features"]
 
 [tasks.miri]
 install_crate = "miri"
 command = "cargo"
-args = ["+nightly", "miri", "test", "--no-default-features"]
+args = ["+nightly", "miri", "test", "--tests", "--lib", "--no-default-features"]
 dependencies = ["clean"]
 
 [tasks.clean]

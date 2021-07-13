@@ -3,7 +3,7 @@ use shipyard::*;
 
 #[test]
 fn filter() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
 
     u32s.track_all();

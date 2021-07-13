@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn basic() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
@@ -178,7 +178,7 @@ fn basic() {
 
 #[test]
 fn not_inserted() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
@@ -221,7 +221,7 @@ fn not_inserted() {
 
 #[test]
 fn not_modified() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
@@ -263,7 +263,7 @@ fn not_modified() {
 
 #[test]
 fn not_inserted_or_modified() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()

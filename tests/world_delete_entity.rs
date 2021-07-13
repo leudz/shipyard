@@ -4,7 +4,7 @@ use shipyard::*;
 
 #[test]
 fn no_pack() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity1 = world.add_entity((0usize, 1u32));
     let entity2 = world.add_entity((2usize, 3u32));
@@ -33,7 +33,7 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.borrow::<ViewMut<usize>>().unwrap().track_all();
 

@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn no_pack() {
-    let world = World::default();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world
         .run(|mut entities: EntitiesViewMut| {
             entities.add_entity((), ());
@@ -24,7 +24,7 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.track_all();
     let entity = entities.add_entity(&mut usizes, 0);
@@ -34,7 +34,7 @@ fn update() {
 
 #[test]
 fn cleared_update() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.track_all();
     let entity1 = entities.add_entity(&mut usizes, 1);
@@ -48,7 +48,7 @@ fn cleared_update() {
 
 #[test]
 fn modified_update() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
     usizes.track_all();
     let entity1 = entities.add_entity(&mut usizes, 1);
@@ -62,7 +62,7 @@ fn modified_update() {
 
 #[test]
 fn bulk() {
-    let world = World::default();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
@@ -89,7 +89,7 @@ fn bulk() {
 
 #[test]
 fn bulk_unequal_length() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.add_entity((0u32,));
 

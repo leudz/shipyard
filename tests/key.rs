@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn key_equality() {
-    let world = World::default();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     //create 3 entities
     let (e0, e1, e2) = world

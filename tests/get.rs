@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn non_packed() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
@@ -34,7 +34,7 @@ fn non_packed() {
 
 #[test]
 fn update() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<i16>)>()
@@ -68,7 +68,7 @@ fn update() {
 
 #[test]
 fn old_id() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>| {

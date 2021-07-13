@@ -1,3 +1,4 @@
+#[cfg(feature = "std")]
 mod book;
 mod borrow;
 mod iteration;
@@ -9,7 +10,7 @@ use shipyard::*;
 
 #[test]
 fn run() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world
         .run(
             |(mut entities, mut usizes, mut u32s): (
@@ -60,7 +61,7 @@ fn system() {
         });
     }
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -105,7 +106,7 @@ fn systems() {
         });
     }
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -143,7 +144,7 @@ fn systems() {
 fn simple_parallel_sum() {
     use rayon::prelude::*;
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -172,7 +173,7 @@ fn simple_parallel_sum() {
 fn parallel_iterator() {
     use rayon::prelude::*;
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -213,7 +214,7 @@ fn two_workloads() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     Workload::builder("")
         .with_system(system1)
         .add_to_world(&world)
@@ -236,7 +237,7 @@ fn two_bad_workloads() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     Workload::builder("")
         .with_system(system1)
         .add_to_world(&world)
@@ -251,7 +252,7 @@ fn two_bad_workloads() {
 #[test]
 #[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn add_component_with_old_key() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity = {
         let (mut entities, mut usizes, mut u32s) = world
@@ -279,7 +280,7 @@ fn add_component_with_old_key() {
 fn par_update_pack() {
     use rayon::prelude::*;
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -320,7 +321,7 @@ fn par_update_pack() {
 fn par_multiple_update_pack() {
     use rayon::prelude::*;
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -389,7 +390,7 @@ fn par_multiple_update_pack() {
 fn par_update_filter() {
     use rayon::prelude::*;
 
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
@@ -426,7 +427,7 @@ fn par_update_filter() {
 
 #[test]
 fn contains() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(

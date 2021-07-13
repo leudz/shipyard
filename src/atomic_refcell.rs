@@ -1,18 +1,19 @@
+mod borrow_state;
+
+pub use borrow_state::{ExclusiveBorrow, SharedBorrow};
+
 use crate::error;
+use borrow_state::BorrowState;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use parking_lot::lock_api::RawRwLock as _;
-#[cfg(feature = "thread_local")]
-use parking_lot::lock_api::RawRwLockDowngrade as _;
-use parking_lot::RawRwLock;
 #[cfg(feature = "thread_local")]
 use std::thread::ThreadId;
 
 /// Threadsafe `RefCell`-like container.
 #[doc(hidden)]
 pub struct AtomicRefCell<T: ?Sized> {
-    borrow_state: RawRwLock,
+    borrow_state: BorrowState,
     #[cfg(feature = "thread_local")]
     send: Option<ThreadId>,
     #[cfg(feature = "thread_local")]
@@ -32,7 +33,7 @@ impl<T: Send + Sync> AtomicRefCell<T> {
     #[inline]
     pub(crate) fn new(value: T) -> Self {
         AtomicRefCell {
-            borrow_state: RawRwLock::INIT,
+            borrow_state: BorrowState::new(),
             #[cfg(feature = "thread_local")]
             send: None,
             #[cfg(feature = "thread_local")]
@@ -49,7 +50,7 @@ impl<T: Sync> AtomicRefCell<T> {
     #[inline]
     pub(crate) fn new_non_send(value: T, world_thread_id: ThreadId) -> Self {
         AtomicRefCell {
-            borrow_state: RawRwLock::INIT,
+            borrow_state: BorrowState::new(),
             send: Some(world_thread_id),
             #[cfg(feature = "thread_local")]
             is_sync: true,
@@ -65,7 +66,7 @@ impl<T: Send> AtomicRefCell<T> {
     #[inline]
     pub(crate) fn new_non_sync(value: T) -> Self {
         AtomicRefCell {
-            borrow_state: RawRwLock::INIT,
+            borrow_state: BorrowState::new(),
             #[cfg(feature = "thread_local")]
             send: None,
             is_sync: false,
@@ -81,7 +82,7 @@ impl<T> AtomicRefCell<T> {
     #[inline]
     pub(crate) fn new_non_send_sync(value: T, world_thread_id: ThreadId) -> Self {
         AtomicRefCell {
-            borrow_state: RawRwLock::INIT,
+            borrow_state: BorrowState::new(),
             send: Some(world_thread_id),
             is_sync: false,
             _non_send_sync: PhantomData,
@@ -109,13 +110,12 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             // if Send - accessible from any thread, shared xor unique
             // if !Send - accessible from any thread, shared only if not world's thread
-            if self.borrow_state.try_lock_shared() {
-                Ok(Ref {
+            match self.borrow_state.read() {
+                Ok(borrow) => Ok(Ref {
                     inner: unsafe { &*self.inner.get() },
-                    borrow: SharedBorrow(&self.borrow_state),
-                })
-            } else {
-                Err(error::Borrow::Shared)
+                    borrow,
+                }),
+                Err(err) => Err(err),
             }
         }
         #[cfg(feature = "thread_local")]
@@ -124,30 +124,25 @@ impl<T: ?Sized> AtomicRefCell<T> {
                 (_, true) => {
                     // if Send - accessible from any thread, shared xor unique
                     // if !Send - accessible from any thread, shared only if not world's thread
-                    if self.borrow_state.try_lock_shared() {
-                        Ok(Ref {
+                    match self.borrow_state.read() {
+                        Ok(borrow) => Ok(Ref {
                             inner: unsafe { &*self.inner.get() },
-                            borrow: SharedBorrow(&self.borrow_state),
-                        })
-                    } else {
-                        Err(error::Borrow::Shared)
+                            borrow,
+                        }),
+                        Err(err) => Err(err),
                     }
                 }
                 (None, false) => {
                     // accessible from one thread at a time
-                    if self.borrow_state.try_lock_exclusive() {
-                        // SAFE we hold an exclusive lock
-                        unsafe {
-                            self.borrow_state.downgrade();
+                    match self.borrow_state.exclusive_read() {
+                        Ok(borrow) => {
+                            Ok(Ref {
+                                // SAFE we locked
+                                inner: unsafe { &*self.inner.get() },
+                                borrow,
+                            })
                         }
-
-                        Ok(Ref {
-                            // SAFE we locked
-                            inner: unsafe { &*self.inner.get() },
-                            borrow: SharedBorrow(&self.borrow_state),
-                        })
-                    } else {
-                        Err(error::Borrow::Shared)
+                        Err(err) => Err(err),
                     }
                 }
                 (Some(thread_id), false) => {
@@ -156,14 +151,15 @@ impl<T: ?Sized> AtomicRefCell<T> {
                         return Err(error::Borrow::WrongThread);
                     }
 
-                    if self.borrow_state.try_lock_shared() {
-                        Ok(Ref {
-                            // SAFE we locked
-                            inner: unsafe { &*self.inner.get() },
-                            borrow: SharedBorrow(&self.borrow_state),
-                        })
-                    } else {
-                        Err(error::Borrow::Shared)
+                    match self.borrow_state.read() {
+                        Ok(borrow) => {
+                            Ok(Ref {
+                                // SAFE we locked
+                                inner: unsafe { &*self.inner.get() },
+                                borrow,
+                            })
+                        }
+                        Err(err) => Err(err),
                     }
                 }
             }
@@ -186,52 +182,20 @@ impl<T: ?Sized> AtomicRefCell<T> {
             }
         }
 
-        if self.borrow_state.try_lock_exclusive() {
-            Ok(RefMut {
-                // SAFE we locked
-                inner: unsafe { &mut *self.inner.get() },
-                borrow: ExclusiveBorrow(&self.borrow_state),
-            })
-        } else {
-            Err(error::Borrow::Unique)
+        match self.borrow_state.write() {
+            Ok(borrow) => {
+                Ok(RefMut {
+                    // SAFE we locked
+                    inner: unsafe { &mut *self.inner.get() },
+                    borrow,
+                })
+            }
+            Err(err) => Err(err),
         }
     }
     #[inline]
     pub(crate) fn get_mut(&mut self) -> &'_ mut T {
         self.inner.get_mut()
-    }
-}
-
-/// Unlocks a shared borrow on drop.
-pub struct SharedBorrow<'a>(&'a RawRwLock);
-
-impl Drop for SharedBorrow<'_> {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe {
-            self.0.unlock_shared();
-        }
-    }
-}
-
-impl Clone for SharedBorrow<'_> {
-    #[inline]
-    fn clone(&self) -> Self {
-        debug_assert!(self.0.try_lock_shared());
-
-        SharedBorrow(self.0)
-    }
-}
-
-/// Unlocks an exclusive borrow on drop.
-pub struct ExclusiveBorrow<'a>(&'a RawRwLock);
-
-impl Drop for ExclusiveBorrow<'_> {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe {
-            self.0.unlock_exclusive();
-        }
     }
 }
 
@@ -332,7 +296,7 @@ fn shared() {
     let first_borrow = refcell.borrow().unwrap();
 
     assert!(refcell.borrow().is_ok());
-    assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Unique));
+    assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Shared));
 
     drop(first_borrow);
 
@@ -344,7 +308,7 @@ fn exclusive() {
     let refcell = AtomicRefCell::new(0);
     let first_borrow = refcell.borrow_mut().unwrap();
 
-    assert_eq!(refcell.borrow().err(), Some(error::Borrow::Shared));
+    assert_eq!(refcell.borrow().err(), Some(error::Borrow::Unique));
     assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Unique));
 
     drop(first_borrow);
@@ -365,7 +329,7 @@ fn shared_thread() {
         refcell_clone.borrow().unwrap();
         assert_eq!(
             refcell_clone.borrow_mut().err(),
-            Some(error::Borrow::Unique)
+            Some(error::Borrow::Shared)
         );
     })
     .join()

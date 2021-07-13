@@ -4,6 +4,7 @@ use crate::borrow::{Borrow, IntoBorrow};
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::WorldMemoryUsage;
+use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::{Batches, Scheduler};
 use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
@@ -16,6 +17,7 @@ pub struct World {
     pub(crate) scheduler: AtomicRefCell<Scheduler>,
 }
 
+#[cfg(feature = "std")]
 impl Default for World {
     /// Creates an empty `World`.
     fn default() -> Self {
@@ -34,8 +36,26 @@ impl Default for World {
 
 impl World {
     /// Creates an empty `World`.
+    #[cfg(feature = "std")]
     pub fn new() -> Self {
         Default::default()
+    }
+    #[cfg(all(test, not(feature = "std")))]
+    pub fn new() -> Self {
+        Self::new_with_custom_lock::<parking_lot::RawRwLock>()
+    }
+    /// Creates an empty `World` with a custom RwLock for `AllStorages`.
+    pub fn new_with_custom_lock<L: ShipyardRwLock>() -> Self {
+        World {
+            #[cfg(not(feature = "thread_local"))]
+            all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>()),
+            #[cfg(feature = "thread_local")]
+            all_storages: AtomicRefCell::new_non_send(
+                AllStorages::new_with_lock::<L>(),
+                std::thread::current().id(),
+            ),
+            scheduler: AtomicRefCell::new(Default::default()),
+        }
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  

@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn no_pack() {
-    let mut world = World::default();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.add_entity(());
     let entity1 = world.add_entity((0usize, 1u32));
@@ -13,7 +13,7 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.borrow::<ViewMut<usize>>().unwrap().track_all();
 
@@ -26,7 +26,7 @@ fn update() {
 
 #[test]
 fn cleared_update() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.borrow::<ViewMut<usize>>().unwrap().track_all();
 
@@ -52,7 +52,7 @@ fn cleared_update() {
 
 #[test]
 fn modified_update() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.borrow::<ViewMut<usize>>().unwrap().track_all();
 
@@ -78,7 +78,7 @@ fn modified_update() {
 
 #[test]
 fn bulk_single() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entities = world
         .bulk_add_entity((0..5).map(|i| (i as u32,)))
@@ -104,7 +104,7 @@ fn bulk_single() {
 
 #[test]
 fn bulk() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entities = world
         .bulk_add_entity((0..5).map(|i| (i as u32, i as usize)))

@@ -4,7 +4,7 @@ use shipyard::*;
 
 #[test]
 fn unique_storage() {
-    let world = World::default();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.add_unique(0usize).unwrap();
 
     world
@@ -42,7 +42,7 @@ fn unique_storage() {
 
 #[test]
 fn not_unique_storage() {
-    let world = World::new();
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     match world.run(|_: UniqueView<usize>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
@@ -161,7 +161,9 @@ fn non_send_sync() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn non_send_remove() {
-    let world: &'static World = Box::leak(Box::new(World::new()));
+    let world: &'static World = Box::leak(Box::new(World::new_with_custom_lock::<
+        parking_lot::RawRwLock,
+    >()));
 
     world.add_unique_non_send(0usize).unwrap();
 

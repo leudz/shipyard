@@ -2,7 +2,7 @@ use shipyard::*;
 
 #[test]
 fn no_pack() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity0 = world.add_entity((0usize,));
     let entity1 = world.add_entity((1u32,));
@@ -29,7 +29,7 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.borrow::<ViewMut<usize>>().unwrap().track_all();
 
@@ -85,7 +85,7 @@ fn update() {
 #[test]
 #[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn dead_entity() {
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
