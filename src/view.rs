@@ -4,6 +4,7 @@ use crate::entities::Entities;
 use crate::sparse_set::SparseSet;
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
 use crate::unique::Unique;
+use core::fmt;
 use core::ops::{Deref, DerefMut};
 
 /// Exclusive view over `AllStorages`.
@@ -138,6 +139,12 @@ impl<'a, T> Clone for View<'a, T> {
     }
 }
 
+impl<T: fmt::Debug> fmt::Debug for View<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.sparse_set.fmt(f)
+    }
+}
+
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
@@ -209,6 +216,12 @@ impl<'a, T> AsMut<Self> for ViewMut<'a, T> {
     }
 }
 
+impl<T: fmt::Debug> fmt::Debug for ViewMut<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.sparse_set.fmt(f)
+    }
+}
+
 /// Shared view over a unique component storage.
 pub struct UniqueView<'a, T> {
     pub(crate) unique: &'a Unique<T>,
@@ -249,6 +262,12 @@ impl<T> Clone for UniqueView<'_, T> {
             borrow: self.borrow.clone(),
             all_borrow: self.all_borrow.clone(),
         }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for UniqueView<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.unique.value.fmt(f)
     }
 }
 
@@ -301,5 +320,11 @@ impl<T> AsMut<T> for UniqueViewMut<'_, T> {
     fn as_mut(&mut self) -> &mut T {
         self.unique.is_modified = true;
         &mut self.unique.value
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for UniqueViewMut<'_, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.unique.value.fmt(f)
     }
 }

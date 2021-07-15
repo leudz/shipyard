@@ -446,3 +446,21 @@ fn contains() {
         )
         .unwrap();
 }
+
+#[test]
+fn debug() {
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_entity((0usize,));
+    world.add_entity((1usize,));
+    world.add_entity((2usize,));
+
+    world
+        .run(|usizes: View<usize>| {
+            assert_eq!(
+                format!("{:?}", usizes),
+                "[(EId(0.0), 0), (EId(1.0), 1), (EId(2.0), 2)]"
+            );
+        })
+        .unwrap();
+}

@@ -21,7 +21,10 @@ use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::storage::Storage;
 use alloc::vec::Vec;
-use core::cmp::{Ord, Ordering};
+use core::{
+    cmp::{Ord, Ordering},
+    fmt,
+};
 
 pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
 
@@ -41,6 +44,14 @@ pub struct SparseSet<T> {
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
     pub(crate) metadata: Metadata<T>,
+}
+
+impl<T: fmt::Debug> fmt::Debug for SparseSet<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list()
+            .entries(self.dense.iter().zip(&self.data))
+            .finish()
+    }
 }
 
 impl<T> SparseSet<T> {
@@ -155,7 +166,7 @@ impl<T> SparseSet<T> {
 
         if sparse_entity.is_dead() {
             *sparse_entity =
-                EntityId::new_from_parts(self.dense.len() as u64, entity.gen() as u16, 0);
+                EntityId::new_from_index_and_gen(self.dense.len() as u64, entity.gen());
 
             if self.metadata.track_insertion {
                 entity.set_inserted();
@@ -1130,4 +1141,15 @@ fn partially_sorted_unstable_sort() {
         entity_id.set_index(100 - i + 20);
         assert_eq!(array.private_get(entity_id), Some(&i));
     }
+}
+
+#[test]
+fn debug() {
+    let mut sparse_set = SparseSet::new();
+
+    sparse_set.insert(EntityId::new(0), "0");
+    sparse_set.insert(EntityId::new(5), "5");
+    sparse_set.insert(EntityId::new(10), "10");
+
+    println!("{:#?}", sparse_set);
 }
