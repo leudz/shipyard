@@ -382,7 +382,7 @@ fn entities() {
     assert_eq!(key02.index(), 0);
     assert_eq!(key02.gen(), 2);
 
-    let last_key = EntityId::new_from_parts(0, EntityId::max_gen() as u16 - 1, 0);
+    let last_key = EntityId::new_from_index_and_gen(0, EntityId::max_gen());
     entities.data[0] = last_key;
     assert!(entities.delete_unchecked(last_key));
     assert_eq!(entities.list, None);

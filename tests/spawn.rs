@@ -52,15 +52,15 @@ fn multiple_dead_first() {
 
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(entity0.index(), 1)
+        EntityId::new_from_index_and_gen(entity0.index(), 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(entity2.index(), 1)
+        EntityId::new_from_index_and_gen(entity2.index(), 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(3, 0)
+        EntityId::new_from_index_and_gen(3, 0)
     );
 }
 
@@ -86,15 +86,15 @@ fn multiple_dead_middle() {
 
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(entity0.index(), 1)
+        EntityId::new_from_index_and_gen(entity0.index(), 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(entity2.index(), 1)
+        EntityId::new_from_index_and_gen(entity2.index(), 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(3, 0)
+        EntityId::new_from_index_and_gen(3, 0)
     );
 }
 
@@ -120,15 +120,15 @@ fn multiple_dead_last() {
 
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(entity0.index(), 1)
+        EntityId::new_from_index_and_gen(entity0.index(), 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(entity2.index(), 1)
+        EntityId::new_from_index_and_gen(entity2.index(), 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(3, 0)
+        EntityId::new_from_index_and_gen(3, 0)
     );
 }
 
@@ -136,7 +136,7 @@ fn multiple_dead_last() {
 #[test]
 fn new_world_empty() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let entity = EntityId::from_index_and_gen(3, 0);
+    let entity = EntityId::new_from_index_and_gen(3, 0);
 
     let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
@@ -146,19 +146,19 @@ fn new_world_empty() {
 
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(0, 0)
+        EntityId::new_from_index_and_gen(0, 0)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(1, 0)
+        EntityId::new_from_index_and_gen(1, 0)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(2, 0)
+        EntityId::new_from_index_and_gen(2, 0)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(4, 0)
+        EntityId::new_from_index_and_gen(4, 0)
     );
 }
 
@@ -166,7 +166,7 @@ fn new_world_empty() {
 #[test]
 fn new_world() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let entity = EntityId::from_index_and_gen(5, 0);
+    let entity = EntityId::new_from_index_and_gen(5, 0);
 
     let entity0 = world.add_entity((0u32,));
     let entity1 = world.add_entity((1u32,));
@@ -184,26 +184,26 @@ fn new_world() {
 
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(0, 1)
+        EntityId::new_from_index_and_gen(0, 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(1, 1)
+        EntityId::new_from_index_and_gen(1, 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(2, 1)
+        EntityId::new_from_index_and_gen(2, 1)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(3, 0)
+        EntityId::new_from_index_and_gen(3, 0)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(4, 0)
+        EntityId::new_from_index_and_gen(4, 0)
     );
     assert_eq!(
         entities.add_entity((), ()),
-        EntityId::from_index_and_gen(6, 0)
+        EntityId::new_from_index_and_gen(6, 0)
     );
 }

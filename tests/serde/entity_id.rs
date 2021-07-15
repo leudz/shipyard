@@ -9,10 +9,10 @@ fn entity_id_serde() {
         .run(
             |(mut entities, mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
                 let entity_id0 = entities.add_entity(&mut u32s, 0);
-                check_roundtrip(entity_id0, "[0,0]");
+                check_roundtrip(entity_id0, "{\"index\":0,\"gen\":0}");
 
                 let entity_id1 = entities.add_entity(&mut u32s, 1);
-                check_roundtrip(entity_id1, "[1,0]");
+                check_roundtrip(entity_id1, "{\"index\":1,\"gen\":0}");
 
                 (entity_id0, entity_id1)
             },
@@ -32,10 +32,10 @@ fn entity_id_serde() {
             |(mut entities, mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
                 let entity_id2 = entities.add_entity(&mut u32s, 2);
                 // generation was bumped
-                check_roundtrip(entity_id2, "[0,1]");
+                check_roundtrip(entity_id2, "{\"index\":0,\"gen\":1}");
 
                 let entity_id3 = entities.add_entity(&mut u32s, 1);
-                check_roundtrip(entity_id3, "[2,0]");
+                check_roundtrip(entity_id3, "{\"index\":2,\"gen\":0}");
             },
         )
         .unwrap();
