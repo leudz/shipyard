@@ -1,3 +1,6 @@
+use shipyard::Component;
+
+#[derive(Component)]
 pub struct FpsCounter {
     begin_time: f64,
     prev_time: f64,

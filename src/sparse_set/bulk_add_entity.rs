@@ -1,8 +1,10 @@
 use crate::all_storages::{AllStorages, CustomStorageAccess};
+use crate::component::Component;
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
+use crate::track::Tracking;
 use core::iter::IntoIterator;
 
 pub trait BulkAddEntity {
@@ -49,7 +51,7 @@ impl BulkInsert for () {
     }
 }
 
-impl<T: 'static + Send + Sync> BulkInsert for (T,) {
+impl<T: Send + Sync + Component> BulkInsert for (T,) {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
@@ -62,14 +64,14 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
         let new_entities = entities.bulk_generate(len);
 
         let mut sparse_set = all_storages
-            .custom_storage_or_insert_mut(SparseSet::<T>::new)
+            .custom_storage_or_insert_mut(SparseSet::<T, T::Tracking>::new)
             .unwrap();
 
         sparse_set.reserve(len);
         sparse_set.data.extend(iter.map(|(component,)| component));
 
         let old_len = sparse_set.dense.len();
-        if sparse_set.metadata.track_insertion {
+        if T::Tracking::track_insertion() {
             sparse_set
                 .dense
                 .extend(new_entities.iter().copied().map(|mut id| {
@@ -83,7 +85,7 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
         let dense_len = sparse_set.dense.len();
         let data_len = sparse_set.data.len();
 
-        if sparse_set.metadata.track_insertion {
+        if T::Tracking::track_insertion() {
             sparse_set.dense.extend((0..data_len - dense_len).map(|_| {
                 let mut id = entities.generate();
                 id.set_inserted();
@@ -120,7 +122,7 @@ impl<T: 'static + Send + Sync> BulkInsert for (T,) {
 
 macro_rules! impl_bulk_insert {
     (($type1: ident, $sparse_set1: ident, $index1: tt) $(($type: ident, $sparse_set: ident, $index: tt))*) => {
-        impl<$type1: 'static + Send + Sync, $($type: 'static + Send + Sync,)*> BulkInsert for ($type1, $($type,)*) {
+        impl<$type1: Send + Sync + Component, $($type: Send + Sync + Component,)*> BulkInsert for ($type1, $($type,)*) {
             #[allow(non_snake_case)]
             fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();
@@ -130,9 +132,9 @@ macro_rules! impl_bulk_insert {
                 let entities_len = entities.data.len();
                 let new_entities = entities.bulk_generate(size_hint);
 
-                let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1>::new).unwrap();
+                let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1, $type1::Tracking>::new).unwrap();
                 $(
-                    let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type>::new).unwrap();
+                    let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type, $type::Tracking>::new).unwrap();
                 )*
 
                 $sparse_set1.reserve(size_hint);
@@ -171,11 +173,10 @@ macro_rules! impl_bulk_insert {
                 let SparseSet {
                     sparse: sparse1,
                     dense: dense1,
-                    metadata: metadata1,
                     ..
                 } = &mut *$sparse_set1;
 
-                if metadata1.track_insertion {
+                if $type1::Tracking::track_insertion() {
                     for (i, &entity) in dense1[old_len1..].iter().enumerate() {
                         unsafe {
                             let mut e = EntityId::new((old_len1 + i) as u64);
@@ -194,7 +195,7 @@ macro_rules! impl_bulk_insert {
                 $(
                     let old_len = $sparse_set.dense.len() - len;
 
-                    if $sparse_set.metadata.track_insertion {
+                    if $type::Tracking::track_insertion() {
                         for (i, &entity) in dense1[old_len1..].iter().enumerate() {
                             unsafe {
                                 let mut e = EntityId::new((old_len + i) as u64);

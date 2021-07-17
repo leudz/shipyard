@@ -1,4 +1,5 @@
 use super::SparseSet;
+use crate::component::Component;
 use crate::EntityId;
 use alloc::boxed::Box;
 use core::marker::PhantomData;
@@ -16,9 +17,9 @@ pub struct FullRawWindowMut<'a, T> {
 
 unsafe impl<T: Send> Send for FullRawWindowMut<'_, T> {}
 
-impl<'w, T> FullRawWindowMut<'w, T> {
+impl<'w, T: Component> FullRawWindowMut<'w, T> {
     #[inline]
-    pub(crate) fn new(sparse_set: &mut SparseSet<T>) -> Self {
+    pub(crate) fn new(sparse_set: &mut SparseSet<T, T::Tracking>) -> Self {
         let sparse_len = sparse_set.sparse.len();
         let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
             sparse_set.sparse.as_mut_ptr();

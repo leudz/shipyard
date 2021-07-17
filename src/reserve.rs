@@ -1,3 +1,4 @@
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::ViewMut;
 use core::iter::{Copied, DoubleEndedIterator, ExactSizeIterator, FusedIterator, Iterator};
@@ -74,14 +75,14 @@ pub trait BulkReserve {
 
 impl BulkReserve for () {}
 
-impl<T> BulkReserve for ViewMut<'_, T> {
+impl<T: Component> BulkReserve for ViewMut<'_, T> {
     #[inline]
     fn bulk_reserve(&mut self, new_entities: &[EntityId]) {
         <&mut Self>::bulk_reserve(&mut &mut *self, new_entities);
     }
 }
 
-impl<T> BulkReserve for &mut ViewMut<'_, T> {
+impl<T: Component> BulkReserve for &mut ViewMut<'_, T> {
     #[inline]
     fn bulk_reserve(&mut self, new_entities: &[EntityId]) {
         if !new_entities.is_empty() {

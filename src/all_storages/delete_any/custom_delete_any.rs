@@ -1,3 +1,4 @@
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use hashbrown::hash_set::HashSet;
@@ -12,7 +13,7 @@ impl CustomDeleteAny for () {
     fn delete_any(&mut self, _: &mut HashSet<EntityId>) {}
 }
 
-impl<T: 'static> CustomDeleteAny for SparseSet<T> {
+impl<T: Component> CustomDeleteAny for SparseSet<T, T::Tracking> {
     #[inline]
     fn delete_any(&mut self, ids: &mut HashSet<EntityId>) {
         ids.extend(&self.dense);

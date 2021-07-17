@@ -35,8 +35,8 @@ mod all_storages;
 mod atomic_refcell;
 /// Allows access to helper types needed to implement `Borrow`.
 pub mod borrow;
+mod component;
 mod contains;
-mod delete;
 mod entities;
 mod entity_id;
 pub mod error;
@@ -49,9 +49,12 @@ mod public_transport;
 mod remove;
 mod reserve;
 mod scheduler;
+mod seal;
 mod sparse_set;
 mod storage;
 mod system;
+/// module related to storage tracking, like insertion or modification.
+pub mod track;
 mod tracking;
 mod type_id;
 mod unique;
@@ -75,18 +78,20 @@ pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
 pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, IntoBorrow, Mutability};
+pub use component::Component;
 pub use contains::Contains;
-pub use delete::Delete;
 pub use entities::Entities;
 pub use entity_id::EntityId;
 pub use get::Get;
-pub use iter::{IntoFastIter, IntoIter, IntoWithId};
+pub use iter::{IntoIter, IntoWithId};
 pub use memory_usage::StorageMemoryUsage;
 pub use not::Not;
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
+#[cfg(feature = "proc")]
+pub use shipyard_proc::Component;
 pub use sparse_set::{SparseArray, SparseSet, SparseSetDrain};
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]

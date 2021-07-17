@@ -3,11 +3,12 @@ mod inserted_or_modified;
 mod modified;
 
 use super::AbstractMut;
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
 
-impl<'w, T> AbstractMut for Not<&'w SparseSet<T>> {
+impl<'w, T: Component> AbstractMut for Not<&'w SparseSet<T, T::Tracking>> {
     type Out = ();
     type Index = usize;
 
@@ -33,7 +34,7 @@ impl<'w, T> AbstractMut for Not<&'w SparseSet<T>> {
     }
 }
 
-impl<'w, T> AbstractMut for Not<FullRawWindowMut<'w, T>> {
+impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T>> {
     type Out = ();
     type Index = usize;
 

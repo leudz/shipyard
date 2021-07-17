@@ -1,5 +1,6 @@
 use shipyard::*;
 
+#[derive(Component)]
 struct Camera;
 
 impl Camera {

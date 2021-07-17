@@ -2,13 +2,13 @@ use crate::all_storages::{AllStorages, CustomStorageAccess, DeleteAny, Retain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{Borrow, IntoBorrow};
 use crate::entity_id::EntityId;
-use crate::error;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::{Batches, Scheduler};
-use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
+use crate::sparse_set::{AddComponent, BulkAddEntity, Remove};
 use crate::storage::{Storage, StorageId};
+use crate::{error, Component};
 use alloc::borrow::Cow;
 
 /// `World` contains all data this library will manipulate.
@@ -72,20 +72,26 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{UniqueView, World};
+    /// use shipyard::{Component, UniqueView, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
     ///
     /// let world = World::new();
     ///
-    /// world.add_unique(0u32).unwrap();
+    /// world.add_unique(U32(0)).unwrap();
     ///
-    /// let i = world.borrow::<UniqueView<u32>>().unwrap();
-    /// assert_eq!(*i, 0);
+    /// let i = world.borrow::<UniqueView<U32>>().unwrap();
+    /// assert_eq!(i.0, 0);
     /// ```
     ///
     /// [`AllStorages`]: crate::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) -> Result<(), error::Borrow> {
+    pub fn add_unique<T: Send + Sync + Component>(
+        &self,
+        component: T,
+    ) -> Result<(), error::Borrow> {
         self.all_storages.borrow()?.add_unique(component);
         Ok(())
     }
@@ -104,15 +110,18 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{NonSend, UniqueView, World};
+    /// use shipyard::{Component, NonSend, UniqueView, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
     ///
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Send` type
-    /// world.add_unique_non_send(0u32).unwrap();
+    /// world.add_unique_non_send(U32(0)).unwrap();
     ///
-    /// let i = world.borrow::<NonSend<UniqueView<u32>>>().unwrap();
-    /// assert_eq!(**i, 0);
+    /// let i = world.borrow::<NonSend<UniqueView<U32>>>().unwrap();
+    /// assert_eq!(i.0, 0);
     /// ```
     ///
     /// [`AllStorages`]: crate::AllStorages
@@ -121,7 +130,7 @@ impl World {
     /// [`NonSend`]: crate::NonSend
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-    pub fn add_unique_non_send<T: 'static + Sync>(
+    pub fn add_unique_non_send<T: Sync + Component>(
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
@@ -143,15 +152,18 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{NonSync, UniqueView, World};
+    /// use shipyard::{Component, NonSync, UniqueView, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
     ///
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Sync` type
-    /// world.add_unique_non_sync(0u32).unwrap();
+    /// world.add_unique_non_sync(U32(0)).unwrap();
     ///
-    /// let i = world.borrow::<NonSync<UniqueView<u32>>>().unwrap();
-    /// assert_eq!(**i, 0);
+    /// let i = world.borrow::<NonSync<UniqueView<U32>>>().unwrap();
+    /// assert_eq!(i.0, 0);
     /// ```
     ///
     /// [`AllStorages`]: crate::AllStorages
@@ -160,7 +172,7 @@ impl World {
     /// [`NonSync`]: crate::NonSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-    pub fn add_unique_non_sync<T: 'static + Send>(
+    pub fn add_unique_non_sync<T: Send + Component>(
         &self,
         component: T,
     ) -> Result<(), error::Borrow> {
@@ -182,15 +194,18 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{NonSendSync, UniqueView, World};
+    /// use shipyard::{Component, NonSendSync, UniqueView, World};
     ///
     /// let world = World::new();
     ///
-    /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
-    /// world.add_unique_non_send_sync(0u32).unwrap();
+    /// #[derive(Component)]
+    /// struct U32(u32);
     ///
-    /// let i = world.borrow::<NonSendSync<UniqueView<u32>>>().unwrap();
-    /// assert_eq!(**i, 0);
+    /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
+    /// world.add_unique_non_send_sync(U32(0)).unwrap();
+    ///
+    /// let i = world.borrow::<NonSendSync<UniqueView<U32>>>().unwrap();
+    /// assert_eq!(i.0, 0);
     /// ```
     ///
     /// [`AllStorages`]: crate::AllStorages
@@ -199,7 +214,10 @@ impl World {
     /// [`NonSendSync`]: crate::NonSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) -> Result<(), error::Borrow> {
+    pub fn add_unique_non_send_sync<T: Component>(
+        &self,
+        component: T,
+    ) -> Result<(), error::Borrow> {
         self.all_storages
             .borrow()?
             .add_unique_non_send_sync(component);
@@ -221,18 +239,21 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{UniqueView, World};
+    /// use shipyard::{Component, UniqueView, World};
+    ///
+    /// #[derive(Component, Debug)]
+    /// struct U32(u32);
     ///
     /// let world = World::new();
     ///
-    /// world.add_unique(0u32).unwrap();
+    /// world.add_unique(U32(0)).unwrap();
     ///
-    /// let i = world.remove_unique::<u32>().unwrap();
-    /// assert_eq!(i, 0);
+    /// let i = world.remove_unique::<U32>().unwrap();
+    /// assert_eq!(i.0, 0);
     /// ```
     ///
     /// [`AllStorages`]: crate::AllStorages
-    pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+    pub fn remove_unique<T: Component>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?
@@ -316,13 +337,19 @@ You can use:
 
 ### Example
 ```
-use shipyard::{EntitiesView, View, ViewMut, World};
+use shipyard::{Component, EntitiesView, View, ViewMut, World};
+
+#[derive(Component)]
+struct U32(u32);
+
+#[derive(Component)]
+struct USIZE(usize);
 
 let world = World::new();
 
-let u32s = world.borrow::<View<u32>>().unwrap();
+let u32s = world.borrow::<View<U32>>().unwrap();
 let (entities, mut usizes) = world
-    .borrow::<(EntitiesView, ViewMut<usize>)>()
+    .borrow::<(EntitiesView, ViewMut<USIZE>)>()
     .unwrap();
 ```
 [AllStorages]: crate::AllStorages
@@ -422,11 +449,14 @@ You can use:
 
 ### Example
 ```
-use shipyard::{EntityId, Get, ViewMut, World};
+use shipyard::{Component, EntityId, Get, ViewMut, World};
 
-fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<[f32; 2]>) {
+#[derive(Component)]
+struct Position([f32; 2]);
+
+fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<Position>) {
     if let Ok(mut pos) = (&mut positions).get(entity) {
-        *pos = [x, y];
+        pos.0 = [x, y];
     }
 }
 
@@ -531,16 +561,25 @@ You can use:
 
 ### Example
 ```
-use shipyard::{View, ViewMut, World};
+use shipyard::{Component, View, ViewMut, World};
 
-fn sys1(i32s: View<i32>) -> i32 {
+#[derive(Component)]
+struct I32(i32);
+
+#[derive(Component)]
+struct USIZE(usize);
+
+#[derive(Component)]
+struct U32(u32);
+
+fn sys1(i32s: View<I32>) -> i32 {
     0
 }
 
 let world = World::new();
 
 world
-    .run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
+    .run(|usizes: View<USIZE>, mut u32s: ViewMut<U32>| {
         // -- snip --
     })
     .unwrap();
@@ -727,12 +766,18 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::World;
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity0 = world.add_entity((0u32,));
-    /// let entity1 = world.add_entity((1u32, 11usize));
+    /// let entity0 = world.add_entity((U32(0),));
+    /// let entity1 = world.add_entity((U32(1), USIZE(11)));
     /// ```
     #[inline]
     pub fn add_entity<C: AddComponent>(&mut self, component: C) -> EntityId {
@@ -744,13 +789,17 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::World;
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity0 = world.bulk_add_entity((0..1).map(|_| {})).next();
-    /// let entity1 = world.bulk_add_entity((1..2).map(|i| (i as u32,))).next();
-    /// let new_entities = world.bulk_add_entity((10..20).map(|i| (i as u32, i)));
+    /// let new_entities = world.bulk_add_entity((10..20).map(|i| (U32(i as u32), USIZE(i))));
     /// ```
     #[inline]
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
@@ -767,16 +816,22 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::World;
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
     /// // make an empty entity
     /// let entity = world.add_entity(());
     ///
-    /// world.add_component(entity, (0u32,));
-    /// // entity already had a `u32` component so it will be replaced
-    /// world.add_component(entity, (1u32, 11usize));
+    /// world.add_component(entity, (U32(0),));
+    /// // entity already had a `U32` component so it will be replaced
+    /// world.add_component(entity, (U32(1), USIZE(11)));
     /// ```
     #[track_caller]
     #[inline]
@@ -789,47 +844,41 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::World;
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((0u32, 1usize));
+    /// let entity = world.add_entity((U32(0), USIZE(1)));
     ///
-    /// let (i,) = world.remove::<(u32,)>(entity);
-    /// assert_eq!(i, Some(0));
+    /// let (i,) = world.remove::<(U32,)>(entity);
+    /// assert_eq!(i, Some(U32(0)));
     /// ```
     #[inline]
     pub fn remove<C: Remove>(&mut self, entity: EntityId) -> C::Out {
         self.all_storages.get_mut().remove::<C>(entity)
-    }
-    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
-    /// `C` must always be a tuple, even for a single component.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::World;
-    ///
-    /// let mut world = World::new();
-    ///
-    /// let entity = world.add_entity((0u32, 1usize));
-    ///
-    /// world.delete_component::<(u32,)>(entity);
-    /// ```
-    #[inline]
-    pub fn delete_component<C: DeleteComponent>(&mut self, entity: EntityId) {
-        self.all_storages.get_mut().delete_component::<C>(entity)
     }
     /// Deletes an entity with all its components. Returns true if the entity were alive.
     ///
     /// ### Example
     ///
     /// ```
-    /// use shipyard::World;
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((0u32, 1usize));
+    /// let entity = world.add_entity((U32(0), USIZE(1)));
     ///
     /// assert!(world.delete_entity(entity));
     /// ```
@@ -842,11 +891,17 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::World;
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((0u32, 1usize));
+    /// let entity = world.add_entity((U32(0), USIZE(1)));
     ///
     /// world.strip(entity);
     /// ```
@@ -861,18 +916,27 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{SparseSet, World};
+    /// use shipyard::{Component, SparseSet, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
+    ///
+    /// #[derive(Component)]
+    /// struct STR(&'static str);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity0 = world.add_entity((0u32,));
-    /// let entity1 = world.add_entity((1usize,));
-    /// let entity2 = world.add_entity(("2",));
+    /// let entity0 = world.add_entity((U32(0),));
+    /// let entity1 = world.add_entity((USIZE(1),));
+    /// let entity2 = world.add_entity((STR("2"),));
     ///
     /// // deletes `entity2`
-    /// world.delete_any::<SparseSet<&str>>();
+    /// world.delete_any::<SparseSet<STR>>();
     /// // deletes `entity0` and `entity1`
-    /// world.delete_any::<(SparseSet<u32>, SparseSet<usize>)>();
+    /// world.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
     /// ```
     #[inline]
     pub fn delete_any<S: DeleteAny>(&mut self) {
@@ -885,13 +949,19 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{SparseSet, World};
+    /// use shipyard::{Component, SparseSet, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((0u32, 1usize));
+    /// let entity = world.add_entity((U32(0), USIZE(1)));
     ///
-    /// world.retain::<SparseSet<u32>>(entity);
+    /// world.retain::<SparseSet<U32>>(entity);
     /// ```
     #[inline]
     pub fn retain<S: Retain>(&mut self, entity: EntityId) {

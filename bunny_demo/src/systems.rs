@@ -75,8 +75,8 @@ pub fn update(
     let img_size = &img_area.0;
 
     (&mut positions, &mut speeds, &mut gravities)
-        .fast_iter()
-        .for_each(|(pos, speed, gravity)| {
+        .iter()
+        .for_each(|(mut pos, mut speed, gravity)| {
             let mut pos = &mut pos.0;
             let mut speed = &mut speed.0;
             let gravity = &gravity.0;

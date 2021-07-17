@@ -1,10 +1,11 @@
 use super::AbstractMut;
 use super::Mut;
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
 use crate::tracking::InsertedOrModified;
 
-impl<'tmp, T> AbstractMut for InsertedOrModified<&'tmp SparseSet<T>> {
+impl<'tmp, T: Component> AbstractMut for InsertedOrModified<&'tmp SparseSet<T, T::Tracking>> {
     type Out = &'tmp T;
     type Index = usize;
 
@@ -45,7 +46,7 @@ impl<'tmp, T> AbstractMut for InsertedOrModified<&'tmp SparseSet<T>> {
     }
 }
 
-impl<'tmp, T> AbstractMut for InsertedOrModified<FullRawWindowMut<'tmp, T>> {
+impl<'tmp, T: Component> AbstractMut for InsertedOrModified<FullRawWindowMut<'tmp, T>> {
     type Out = Mut<'tmp, T>;
     type Index = usize;
 

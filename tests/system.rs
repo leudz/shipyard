@@ -1,7 +1,12 @@
 use shipyard::*;
 
-fn two_views(_: View<u32>, _: ViewMut<u32>) {}
-fn two_views_mut(_: ViewMut<u32>, _: ViewMut<u32>) {}
+struct U32(u32);
+impl Component for U32 {
+    type Tracking = track::Nothing;
+}
+
+fn two_views(_: View<U32>, _: ViewMut<U32>) {}
+fn two_views_mut(_: ViewMut<U32>, _: ViewMut<U32>) {}
 fn all_storages(_: AllStoragesViewMut, _: EntitiesView) {}
 
 #[test]

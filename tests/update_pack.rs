@@ -1,20 +1,24 @@
 use shipyard::*;
 
+struct USIZE(usize);
+impl Component for USIZE {
+    type Tracking = track::All;
+}
+
 #[test]
 fn clear_inserted() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.track_all();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
 
-    let e0 = entities.add_entity(&mut usizes, 0);
+    let e0 = entities.add_entity(&mut usizes, USIZE(0));
 
     usizes.clear_all_inserted();
 
-    usizes[e0] += 1;
+    usizes[e0].0 += 1;
 
-    let e1 = entities.add_entity(&mut usizes, 1);
-    let e2 = entities.add_entity(&mut usizes, 2);
+    let e1 = entities.add_entity(&mut usizes, USIZE(1));
+    let e2 = entities.add_entity(&mut usizes, USIZE(2));
 
     usizes.clear_inserted(e0);
     usizes.clear_inserted(e1);
@@ -31,18 +35,17 @@ fn clear_inserted() {
 fn clear_modified() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.track_all();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
 
-    let e0 = entities.add_entity(&mut usizes, 0);
-    let e1 = entities.add_entity(&mut usizes, 1);
+    let e0 = entities.add_entity(&mut usizes, USIZE(0));
+    let e1 = entities.add_entity(&mut usizes, USIZE(1));
 
     usizes.clear_all_inserted();
 
-    usizes[e0] += 1;
-    usizes[e1] += 1;
+    usizes[e0].0 += 1;
+    usizes[e1].0 += 1;
 
-    let e2 = entities.add_entity(&mut usizes, 2);
+    let e2 = entities.add_entity(&mut usizes, USIZE(2));
 
     usizes.clear_modified(e0);
     usizes.clear_modified(e2);
@@ -59,16 +62,15 @@ fn clear_modified() {
 fn clear_inserted_and_modified() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<usize>)>().unwrap();
-    usizes.track_all();
+    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
 
-    let e0 = entities.add_entity(&mut usizes, 0);
+    let e0 = entities.add_entity(&mut usizes, USIZE(0));
 
     usizes.clear_all_inserted();
 
-    usizes[e0] += 1;
+    usizes[e0].0 += 1;
 
-    let e1 = entities.add_entity(&mut usizes, 1);
+    let e1 = entities.add_entity(&mut usizes, USIZE(1));
 
     usizes.clear_inserted_and_modified(e0);
     usizes.clear_inserted_and_modified(e1);

@@ -2,72 +2,77 @@ use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
+struct USIZE(usize);
+impl Component for USIZE {
+    type Tracking = track::Nothing;
+}
+
 #[test]
 fn unique_storage() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_unique(0usize).unwrap();
+    world.add_unique(USIZE(0)).unwrap();
 
     world
-        .run(|mut x: UniqueViewMut<usize>| {
-            *x += 1;
+        .run(|mut x: UniqueViewMut<USIZE>| {
+            x.0 += 1;
         })
         .unwrap();
     world
-        .run(|x: UniqueView<usize>| {
-            assert_eq!(*x, 1);
+        .run(|x: UniqueView<USIZE>| {
+            assert_eq!(x.0, 1);
         })
         .unwrap();
 
-    world.remove_unique::<usize>().unwrap();
+    world.remove_unique::<USIZE>().unwrap();
 
     if let Some(shipyard::error::Run::GetStorage(get_error)) = world
-        .run(|mut x: UniqueViewMut<usize>| {
-            *x += 1;
+        .run(|mut x: UniqueViewMut<USIZE>| {
+            x.0 += 1;
         })
         .err()
     {
         assert_eq!(
             get_error,
             shipyard::error::GetStorage::MissingStorage {
-                name: Some(type_name::<Unique<usize>>().into()),
-                id: StorageId::of::<Unique<usize>>(),
+                name: Some(type_name::<Unique<USIZE>>().into()),
+                id: StorageId::of::<Unique<USIZE>>(),
             }
         );
     } else {
         panic!()
     }
 
-    world.add_unique(0usize).unwrap();
+    world.add_unique(USIZE(0)).unwrap();
 }
 
 #[test]
 fn not_unique_storage() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    match world.run(|_: UniqueView<usize>| {}).err() {
+    match world.run(|_: UniqueView<USIZE>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
             shipyard::error::GetStorage::MissingStorage {
-                name: Some(type_name::<Unique<usize>>().into()),
-                id: StorageId::of::<Unique<usize>>(),
+                name: Some(type_name::<Unique<USIZE>>().into()),
+                id: StorageId::of::<Unique<USIZE>>(),
             }
         ),
         _ => panic!(),
     }
 
-    match world.run(|_: UniqueViewMut<usize>| {}).err() {
+    match world.run(|_: UniqueViewMut<USIZE>| {}).err() {
         Some(error::Run::GetStorage(get_storage)) => assert_eq!(
             get_storage,
             shipyard::error::GetStorage::MissingStorage {
-                name: Some(type_name::<Unique<usize>>().into()),
-                id: StorageId::of::<Unique<usize>>(),
+                name: Some(type_name::<Unique<USIZE>>().into()),
+                id: StorageId::of::<Unique<USIZE>>(),
             }
         ),
         _ => panic!(),
     }
 
-    match world.remove_unique::<usize>().err() {
-        Some(error::UniqueRemove::MissingUnique(name)) => assert_eq!(name, type_name::<usize>()),
+    match world.remove_unique::<USIZE>().err() {
+        Some(error::UniqueRemove::MissingUnique(name)) => assert_eq!(name, type_name::<USIZE>()),
         _ => panic!(),
     }
 }
@@ -80,6 +85,9 @@ fn non_send() {
         _phantom: core::marker::PhantomData<*const ()>,
     }
     unsafe impl Sync for NonSendStruct {}
+    impl Component for NonSendStruct {
+        type Tracking = track::Nothing;
+    }
 
     let world = World::default();
     world
@@ -109,6 +117,9 @@ fn non_sync() {
         _phantom: core::marker::PhantomData<*const ()>,
     }
     unsafe impl Send for NonSyncStruct {}
+    impl Component for NonSyncStruct {
+        type Tracking = track::Nothing;
+    }
 
     let world = World::default();
     world
@@ -136,6 +147,9 @@ fn non_send_sync() {
     struct NonSendSyncStruct {
         value: usize,
         _phantom: core::marker::PhantomData<*const ()>,
+    }
+    impl Component for NonSendSyncStruct {
+        type Tracking = track::Nothing;
     }
 
     let world = World::default();
@@ -165,15 +179,15 @@ fn non_send_remove() {
         parking_lot::RawRwLock,
     >()));
 
-    world.add_unique_non_send(0usize).unwrap();
+    world.add_unique_non_send(USIZE(0)).unwrap();
 
     std::thread::spawn(move || {
         if let Some(shipyard::error::UniqueRemove::StorageBorrow(infos)) =
-            world.remove_unique::<usize>().err()
+            world.remove_unique::<USIZE>().err()
         {
             assert_eq!(
                 infos,
-                (type_name::<usize>(), shipyard::error::Borrow::WrongThread)
+                (type_name::<USIZE>(), shipyard::error::Borrow::WrongThread)
             );
         } else {
             panic!()

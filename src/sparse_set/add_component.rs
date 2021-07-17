@@ -1,4 +1,5 @@
 use crate::all_storages::AllStorages;
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
@@ -12,22 +13,25 @@ impl AddComponent for () {
     fn add_component(self, _: &mut AllStorages, _: EntityId) {}
 }
 
-impl<T: 'static + Send + Sync> AddComponent for (T,) {
+impl<T: Send + Sync + Component> AddComponent for (T,) {
     #[inline]
     fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
         all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
+            .exclusive_storage_or_insert_mut(
+                StorageId::of::<SparseSet<T, T::Tracking>>(),
+                SparseSet::new,
+            )
             .insert(entity, self.0);
     }
 }
 
 macro_rules! impl_add_component {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: 'static + Send + Sync,)+> AddComponent for ($($type,)+) {
+        impl<$($type: Send + Sync + Component,)+> AddComponent for ($($type,)+) {
             fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
                 $(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::new)
+                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type, $type::Tracking>>(), SparseSet::new)
                         .insert(entity, self.$index);
                 )+
             }

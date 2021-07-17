@@ -1,12 +1,12 @@
-use crate::{memory_usage::StorageMemoryUsage, storage::Storage};
+use crate::{memory_usage::StorageMemoryUsage, storage::Storage, Component};
 
 /// Unique storage.
-pub struct Unique<T> {
+pub struct Unique<T: Component> {
     pub(crate) value: T,
     pub(crate) is_modified: bool,
 }
 
-impl<T: 'static> Storage for Unique<T> {
+impl<T: Component> Storage for Unique<T> {
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
             storage_name: core::any::type_name::<Self>().into(),
@@ -17,7 +17,7 @@ impl<T: 'static> Storage for Unique<T> {
     }
 }
 
-impl<T> Unique<T> {
+impl<T: Component> Unique<T> {
     pub(crate) fn new(value: T) -> Self {
         Unique {
             value,

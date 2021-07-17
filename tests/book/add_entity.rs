@@ -1,3 +1,4 @@
+use super::{U32, USIZE};
 use shipyard::{EntitiesViewMut, ViewMut, World};
 
 #[test]
@@ -8,8 +9,8 @@ fn world() {
 let mut world = World::new();
 
 let empty_entity = world.add_entity(());
-let single_component = world.add_entity((0u32,));
-let multiple_components = world.add_entity((0u32, 1usize));
+let single_component = world.add_entity((U32(0),));
+let multiple_components = world.add_entity((U32(0), USIZE(1)));
 // ANCHOR_END: world
 }
 
@@ -21,11 +22,11 @@ fn view() {
 let world = World::new();
 
 let (mut entities, mut u32s, mut usizes) = world
-    .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+    .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<USIZE>)>()
     .unwrap();
 
 let empty_entity = entities.add_entity((), ());
-let single_component = entities.add_entity(&mut u32s, 0);
-let multiple_components = entities.add_entity((&mut u32s, &mut usizes), (0, 1));
+let single_component = entities.add_entity(&mut u32s, U32(0));
+let multiple_components = entities.add_entity((&mut u32s, &mut usizes), (U32(0), USIZE(1)));
 // ANCHOR_END: view
 }

@@ -6,7 +6,27 @@ mod iteration;
 mod serde;
 mod workload;
 
+use std::iter::Sum;
+
 use shipyard::*;
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct USIZE(usize);
+impl Component for USIZE {
+    type Tracking = track::Nothing;
+}
+
+impl Sum for USIZE {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        USIZE(iter.map(|i| i.0).sum())
+    }
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct U32(u32);
+impl Component for U32 {
+    type Tracking = track::Nothing;
+}
 
 #[test]
 fn run() {
@@ -15,38 +35,38 @@ fn run() {
         .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
+                ViewMut<USIZE>,
+                ViewMut<U32>,
             )| {
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
 
                 // possible to borrow twice as immutable
                 let mut iter1 = (&usizes).iter();
                 let _iter2 = (&usizes).iter();
-                assert_eq!(iter1.next(), Some(&0));
+                assert_eq!(iter1.next(), Some(&USIZE(0)));
 
                 // impossible to borrow twice as mutable
                 // if switched, the next two lines should trigger an shipyard::error
                 let _iter = (&mut usizes).iter();
                 let mut iter = (&mut usizes).iter();
-                assert_eq!(iter.next().map(|x| *x), Some(0));
-                assert_eq!(iter.next().map(|x| *x), Some(2));
+                assert_eq!(iter.next().map(|x| *x), Some(USIZE(0)));
+                assert_eq!(iter.next().map(|x| *x), Some(USIZE(2)));
                 assert!(iter.next().is_none());
 
                 // possible to borrow twice as immutable
                 let mut iter = (&usizes, &u32s).iter();
                 let _iter = (&usizes, &u32s).iter();
-                assert_eq!(iter.next(), Some((&0, &1)));
-                assert_eq!(iter.next(), Some((&2, &3)));
+                assert_eq!(iter.next(), Some((&USIZE(0), &U32(1))));
+                assert_eq!(iter.next(), Some((&USIZE(2), &U32(3))));
                 assert_eq!(iter.next(), None);
 
                 // impossible to borrow twice as mutable
                 // if switched, the next two lines should trigger an shipyard::error
                 let _iter = (&mut usizes, &u32s).iter();
                 let mut iter = (&mut usizes, &u32s).iter();
-                assert_eq!(iter.next().map(|(x, y)| (*x, *y)), Some((0, 1)));
-                assert_eq!(iter.next().map(|(x, y)| (*x, *y)), Some((2, 3)));
+                assert_eq!(iter.next().map(|(x, y)| (*x, *y)), Some((USIZE(0), U32(1))));
+                assert_eq!(iter.next().map(|(x, y)| (*x, *y)), Some((USIZE(2), U32(3))));
                 assert!(iter.next().is_none());
             },
         )
@@ -55,9 +75,9 @@ fn run() {
 
 #[test]
 fn system() {
-    fn system1((mut usizes, u32s): (ViewMut<usize>, View<u32>)) {
+    fn system1((mut usizes, u32s): (ViewMut<USIZE>, View<U32>)) {
         (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
-            *x += *y as usize;
+            x.0 += y.0 as usize;
         });
     }
 
@@ -67,11 +87,11 @@ fn system() {
         .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
+                ViewMut<USIZE>,
+                ViewMut<U32>,
             )| {
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
             },
         )
         .unwrap();
@@ -83,10 +103,10 @@ fn system() {
 
     world.run_default().unwrap();
     world
-        .run(|usizes: View<usize>| {
+        .run(|usizes: View<USIZE>| {
             let mut iter = usizes.iter();
-            assert_eq!(iter.next(), Some(&1));
-            assert_eq!(iter.next(), Some(&5));
+            assert_eq!(iter.next(), Some(&USIZE(1)));
+            assert_eq!(iter.next(), Some(&USIZE(5)));
             assert_eq!(iter.next(), None);
         })
         .unwrap();
@@ -94,15 +114,15 @@ fn system() {
 
 #[test]
 fn systems() {
-    fn system1((mut usizes, u32s): (ViewMut<usize>, View<u32>)) {
+    fn system1((mut usizes, u32s): (ViewMut<USIZE>, View<U32>)) {
         (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
-            *x += *y as usize;
+            x.0 += y.0 as usize;
         });
     }
 
-    fn system2(mut usizes: ViewMut<usize>) {
+    fn system2(mut usizes: ViewMut<USIZE>) {
         (&mut usizes,).iter().for_each(|(mut x,)| {
-            *x += 1;
+            x.0 += 1;
         });
     }
 
@@ -112,11 +132,11 @@ fn systems() {
         .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
+                ViewMut<USIZE>,
+                ViewMut<U32>,
             )| {
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
             },
         )
         .unwrap();
@@ -129,10 +149,10 @@ fn systems() {
 
     world.run_default().unwrap();
     world
-        .run(|usizes: View<usize>| {
+        .run(|usizes: View<USIZE>| {
             let mut iter = usizes.iter();
-            assert_eq!(iter.next(), Some(&2));
-            assert_eq!(iter.next(), Some(&6));
+            assert_eq!(iter.next(), Some(&USIZE(2)));
+            assert_eq!(iter.next(), Some(&USIZE(6)));
             assert_eq!(iter.next(), None);
         })
         .unwrap();
@@ -150,19 +170,19 @@ fn simple_parallel_sum() {
         .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
+                ViewMut<USIZE>,
+                ViewMut<U32>,
             )| {
-                entities.add_entity((&mut usizes, &mut u32s), (1usize, 2u32));
-                entities.add_entity((&mut usizes, &mut u32s), (3usize, 4u32));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(1), U32(2)));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(3), U32(4)));
             },
         )
         .unwrap();
 
     world
-        .run(|usizes: ViewMut<usize>| {
-            let sum: usize = usizes.par_iter().cloned().sum();
-            assert_eq!(sum, 4);
+        .run(|usizes: ViewMut<USIZE>| {
+            let sum: USIZE = usizes.par_iter().cloned().sum();
+            assert_eq!(sum, USIZE(4));
         })
         .unwrap();
 }
@@ -179,28 +199,28 @@ fn parallel_iterator() {
         .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
+                ViewMut<USIZE>,
+                ViewMut<U32>,
             )| {
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
             },
         )
         .unwrap();
 
     world
-        .run(|(mut usizes, u32s): (ViewMut<usize>, View<u32>)| {
+        .run(|(mut usizes, u32s): (ViewMut<USIZE>, View<U32>)| {
             let counter = std::sync::atomic::AtomicUsize::new(0);
 
             (&mut usizes, &u32s).par_iter().for_each(|(mut x, y)| {
                 counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                *x += *y as usize;
+                x.0 += y.0 as usize;
             });
 
             assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 2);
             let mut iter = (&mut usizes).iter();
-            assert_eq!(iter.next().map(|x| *x), Some(1));
-            assert_eq!(iter.next().map(|x| *x), Some(5));
+            assert_eq!(iter.next().map(|x| *x), Some(USIZE(1)));
+            assert_eq!(iter.next().map(|x| *x), Some(USIZE(5)));
             assert!(iter.next().is_none());
         })
         .unwrap();
@@ -210,7 +230,7 @@ fn parallel_iterator() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn two_workloads() {
-    fn system1(_: View<usize>) {
+    fn system1(_: View<USIZE>) {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
@@ -230,10 +250,10 @@ fn two_workloads() {
 #[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
-    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<usize> storage while it\'s already borrowed."
+    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<lib::USIZE> storage while it\'s already borrowed."
 )]
 fn two_bad_workloads() {
-    fn system1(_: ViewMut<usize>) {
+    fn system1(_: ViewMut<USIZE>) {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
@@ -256,9 +276,9 @@ fn add_component_with_old_key() {
 
     let entity = {
         let (mut entities, mut usizes, mut u32s) = world
-            .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+            .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
             .unwrap();
-        entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32))
+        entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)))
     };
 
     world
@@ -268,47 +288,63 @@ fn add_component_with_old_key() {
         .unwrap();
 
     let (entities, mut usizes, mut u32s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
         .unwrap();
 
-    entities.add_component(entity, (&mut usizes, &mut u32s), (1, 2));
+    entities.add_component(entity, (&mut usizes, &mut u32s), (USIZE(1), U32(2)));
 }
 
 #[cfg(feature = "parallel")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_update_pack() {
+    #[derive(PartialEq, Eq, Debug, Clone, Copy)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
+
+    impl Sum for USIZE {
+        fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+            USIZE(iter.map(|i| i.0).sum())
+        }
+    }
+    impl<'a> Sum<&'a USIZE> for USIZE {
+        fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+            USIZE(iter.map(|i| i.0).sum())
+        }
+    }
+
     use rayon::prelude::*;
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
-            |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
-                usizes.track_all();
-                entities.add_entity(&mut usizes, 0);
-                entities.add_entity(&mut usizes, 1);
-                entities.add_entity(&mut usizes, 2);
-                entities.add_entity(&mut usizes, 3);
+            |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE>)| {
+                entities.add_entity(&mut usizes, USIZE(0));
+                entities.add_entity(&mut usizes, USIZE(1));
+                entities.add_entity(&mut usizes, USIZE(2));
+                entities.add_entity(&mut usizes, USIZE(3));
 
                 usizes.clear_all_inserted();
 
-                (&usizes).par_iter().sum::<usize>();
+                (&usizes).par_iter().sum::<USIZE>();
 
                 assert_eq!(usizes.modified().iter().count(), 0);
 
                 (&mut usizes).par_iter().for_each(|mut i| {
-                    *i += 1;
+                    i.0 += 1;
                 });
 
                 let mut iter = usizes.inserted().iter();
                 assert_eq!(iter.next(), None);
 
                 let mut iter = usizes.modified_mut().iter();
-                assert_eq!(iter.next().map(|x| *x), Some(1));
-                assert_eq!(iter.next().map(|x| *x), Some(2));
-                assert_eq!(iter.next().map(|x| *x), Some(3));
-                assert_eq!(iter.next().map(|x| *x), Some(4));
+                assert_eq!(iter.next().map(|x| *x), Some(USIZE(1)));
+                assert_eq!(iter.next().map(|x| *x), Some(USIZE(2)));
+                assert_eq!(iter.next().map(|x| *x), Some(USIZE(3)));
+                assert_eq!(iter.next().map(|x| *x), Some(USIZE(4)));
                 assert!(iter.next().is_none());
             },
         )
@@ -319,6 +355,12 @@ fn par_update_pack() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_multiple_update_pack() {
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+    struct U32(u32);
+    impl Component for U32 {
+        type Tracking = track::All;
+    }
+
     use rayon::prelude::*;
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
@@ -327,16 +369,15 @@ fn par_multiple_update_pack() {
         .run(
             |(mut entities, mut usizes, mut u32s): (
                 EntitiesViewMut,
-                ViewMut<usize>,
-                ViewMut<u32>,
+                ViewMut<USIZE>,
+                ViewMut<U32>,
             )| {
-                u32s.track_all();
-                entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-                entities.add_entity(&mut usizes, 2usize);
-                entities.add_entity((&mut usizes, &mut u32s), (4usize, 5u32));
-                entities.add_entity(&mut u32s, 7u32);
-                entities.add_entity((&mut usizes, &mut u32s), (8usize, 9u32));
-                entities.add_entity((&mut usizes,), (10usize,));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+                entities.add_entity(&mut usizes, USIZE(2));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(4), U32(5)));
+                entities.add_entity(&mut u32s, U32(7));
+                entities.add_entity((&mut usizes, &mut u32s), (USIZE(8), U32(9)));
+                entities.add_entity((&mut usizes,), (USIZE(10),));
 
                 u32s.clear_all_inserted();
             },
@@ -344,7 +385,7 @@ fn par_multiple_update_pack() {
         .unwrap();
 
     world
-        .run(|(mut usizes, mut u32s): (ViewMut<usize>, ViewMut<u32>)| {
+        .run(|(mut usizes, mut u32s): (ViewMut<USIZE>, ViewMut<U32>)| {
             if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
                 iter.for_each(|_| {});
             } else {
@@ -355,8 +396,8 @@ fn par_multiple_update_pack() {
 
             if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
                 iter.for_each(|(mut x, y)| {
-                    *x += *y as usize;
-                    *x -= *y as usize;
+                    x.0 += y.0 as usize;
+                    x.0 -= y.0 as usize;
                 });
             } else {
                 panic!("not packed");
@@ -366,8 +407,8 @@ fn par_multiple_update_pack() {
 
             if let iter::ParIter::Mixed(iter) = (&usizes, &mut u32s).par_iter() {
                 iter.for_each(|(x, mut y)| {
-                    *y += *x as u32;
-                    *y -= *x as u32;
+                    y.0 += x.0 as u32;
+                    y.0 -= x.0 as u32;
                 });
             } else {
                 panic!("not packed");
@@ -375,11 +416,11 @@ fn par_multiple_update_pack() {
 
             let mut modified: Vec<_> = u32s.modified().iter().collect();
             modified.sort_unstable();
-            assert_eq!(modified, vec![&1, &5, &9]);
+            assert_eq!(modified, vec![&U32(1), &U32(5), &U32(9)]);
 
             let mut iter: Vec<_> = (&u32s).iter().collect();
             iter.sort_unstable();
-            assert_eq!(iter, vec![&1, &5, &7, &9]);
+            assert_eq!(iter, vec![&U32(1), &U32(5), &U32(7), &U32(9)]);
         })
         .unwrap();
 }
@@ -388,26 +429,31 @@ fn par_multiple_update_pack() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn par_update_filter() {
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
+
     use rayon::prelude::*;
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world
         .run(
-            |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
-                usizes.track_all();
-                entities.add_entity(&mut usizes, 0);
-                entities.add_entity(&mut usizes, 1);
-                entities.add_entity(&mut usizes, 2);
-                entities.add_entity(&mut usizes, 3);
+            |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE>)| {
+                entities.add_entity(&mut usizes, USIZE(0));
+                entities.add_entity(&mut usizes, USIZE(1));
+                entities.add_entity(&mut usizes, USIZE(2));
+                entities.add_entity(&mut usizes, USIZE(3));
 
                 usizes.clear_all_inserted();
 
                 (&mut usizes)
                     .par_iter()
-                    .filter(|x| **x % 2 == 0)
+                    .filter(|x| x.0 % 2 == 0)
                     .for_each(|mut i| {
-                        *i += 1;
+                        i.0 += 1;
                     });
 
                 let mut iter = usizes.inserted().iter();
@@ -415,11 +461,11 @@ fn par_update_filter() {
 
                 let mut modified: Vec<_> = usizes.modified().iter().collect();
                 modified.sort_unstable();
-                assert_eq!(modified, vec![&1, &3]);
+                assert_eq!(modified, vec![&USIZE(1), &USIZE(3)]);
 
                 let mut iter: Vec<_> = (&usizes).iter().collect();
                 iter.sort_unstable();
-                assert_eq!(iter, vec![&1, &1, &3, &3]);
+                assert_eq!(iter, vec![&USIZE(1), &USIZE(1), &USIZE(3), &USIZE(3)]);
             },
         )
         .unwrap();
@@ -431,15 +477,15 @@ fn contains() {
 
     world
         .run(
-            |mut entities: EntitiesViewMut, mut usizes: ViewMut<usize>, mut u32s: ViewMut<u32>| {
+            |mut entities: EntitiesViewMut, mut usizes: ViewMut<USIZE>, mut u32s: ViewMut<U32>| {
                 let entity = entities.add_entity((), ());
 
-                entities.add_component(entity, &mut usizes, 0);
+                entities.add_component(entity, &mut usizes, USIZE(0));
 
                 assert!(usizes.contains(entity));
                 assert!(!(&usizes, &u32s).contains(entity));
 
-                entities.add_component(entity, &mut u32s, 1);
+                entities.add_component(entity, &mut u32s, U32(1));
 
                 assert!((&usizes, &u32s).contains(entity));
             },
@@ -451,15 +497,15 @@ fn contains() {
 fn debug() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_entity((0usize,));
-    world.add_entity((1usize,));
-    world.add_entity((2usize,));
+    world.add_entity((USIZE(0),));
+    world.add_entity((USIZE(1),));
+    world.add_entity((USIZE(2),));
 
     world
-        .run(|usizes: View<usize>| {
+        .run(|usizes: View<USIZE>| {
             assert_eq!(
                 format!("{:?}", usizes),
-                "[(EId(0.0), 0), (EId(1.0), 1), (EId(2.0), 2)]"
+                "[(EId(0.0), USIZE(0)), (EId(1.0), USIZE(1)), (EId(2.0), USIZE(2))]"
             );
         })
         .unwrap();

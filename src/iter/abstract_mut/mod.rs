@@ -3,6 +3,7 @@ mod inserted_or_modified;
 mod modified;
 mod not;
 
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
@@ -23,7 +24,7 @@ pub trait AbstractMut {
     unsafe fn get_id(&self, index: usize) -> EntityId;
 }
 
-impl<'tmp, T> AbstractMut for &'tmp SparseSet<T> {
+impl<'tmp, T: Component> AbstractMut for &'tmp SparseSet<T, T::Tracking> {
     type Out = &'tmp T;
     type Index = usize;
 
@@ -49,7 +50,7 @@ impl<'tmp, T> AbstractMut for &'tmp SparseSet<T> {
     }
 }
 
-impl<'tmp, T> AbstractMut for FullRawWindowMut<'tmp, T> {
+impl<'tmp, T: Component> AbstractMut for FullRawWindowMut<'tmp, T> {
     type Out = Mut<'tmp, T>;
     type Index = usize;
 

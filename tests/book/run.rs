@@ -1,3 +1,4 @@
+use super::USIZE;
 use shipyard::*;
 
 #[test]
@@ -20,7 +21,7 @@ fn multiple() {
             // do something with all_storages
 
             all_storages
-                .run(|_usizes: View<usize>| {
+                .run(|_usizes: View<USIZE>| {
                     // -- snip --
                 })
                 .unwrap();

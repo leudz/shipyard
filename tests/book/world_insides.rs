@@ -1,3 +1,4 @@
+use super::{F32, U32};
 use shipyard::*;
 
 #[test]
@@ -6,10 +7,10 @@ fn test1() {
 
     world
         .run(
-            |mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>, mut f32s: ViewMut<f32>| {
-                let _entity0 = entities.add_entity(&mut u32s, 10);
-                let _entity1 = entities.add_entity(&mut f32s, 20.0);
-                let _entity2 = entities.add_entity(&mut u32s, 30);
+            |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut f32s: ViewMut<F32>| {
+                let _entity0 = entities.add_entity(&mut u32s, U32(10));
+                let _entity1 = entities.add_entity(&mut f32s, F32(20.0));
+                let _entity2 = entities.add_entity(&mut u32s, U32(30));
             },
         )
         .unwrap();
@@ -21,12 +22,12 @@ fn test2() {
 
     let [entity0, entity1] = world
         .run(
-            |mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>, mut f32s: ViewMut<f32>| {
+            |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut f32s: ViewMut<F32>| {
                 let result = [
-                    entities.add_entity(&mut u32s, 10),
-                    entities.add_entity(&mut f32s, 20.0),
+                    entities.add_entity(&mut u32s, U32(10)),
+                    entities.add_entity(&mut f32s, F32(20.0)),
                 ];
-                let _entity2 = entities.add_entity(&mut u32s, 30);
+                let _entity2 = entities.add_entity(&mut u32s, U32(30));
 
                 result
             },

@@ -1,5 +1,15 @@
 use shipyard::*;
 
+struct USIZE(usize);
+impl Component for USIZE {
+    type Tracking = track::Nothing;
+}
+
+struct U32(u32);
+impl Component for U32 {
+    type Tracking = track::Nothing;
+}
+
 #[test]
 fn key_equality() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
@@ -7,11 +17,11 @@ fn key_equality() {
     //create 3 entities
     let (e0, e1, e2) = world
         .run(
-            |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<usize>)| {
+            |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE>)| {
                 (
-                    entities.add_entity(&mut usizes, 0),
-                    entities.add_entity(&mut usizes, 1),
-                    entities.add_entity(&mut usizes, 2),
+                    entities.add_entity(&mut usizes, USIZE(0)),
+                    entities.add_entity(&mut usizes, USIZE(1)),
+                    entities.add_entity(&mut usizes, USIZE(2)),
                 )
             },
         )
@@ -20,15 +30,15 @@ fn key_equality() {
     //add a component to e1
     world
         .run(
-            |(ref mut entities, ref mut u32s): (EntitiesViewMut, ViewMut<u32>)| {
-                entities.add_component(e1, u32s, 42);
+            |(ref mut entities, ref mut u32s): (EntitiesViewMut, ViewMut<U32>)| {
+                entities.add_component(e1, u32s, U32(42));
             },
         )
         .unwrap();
 
     //confirm that the entity keys have not changed for usizes storage
     world
-        .run(|usizes: View<usize>| {
+        .run(|usizes: View<USIZE>| {
             //sanity check
             assert_eq!((&usizes).iter().with_id().count(), 3);
 
@@ -44,10 +54,10 @@ fn key_equality() {
         })
         .unwrap();
 
-    //confirm that the entity id for (usize) is the same as (usize, u32)
+    //confirm that the entity id for (USIZE) is the same as (USIZE, U32)
     //in other words that the entity itself did not somehow change from adding a component
     world
-        .run(|(usizes, u32s): (View<usize>, View<u32>)| {
+        .run(|(usizes, u32s): (View<USIZE>, View<U32>)| {
             //sanity check
             assert_eq!((&usizes, &u32s).iter().with_id().count(), 1);
 

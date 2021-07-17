@@ -1,10 +1,13 @@
+use super::USIZE;
 use shipyard::*;
 
+#[derive(Component)]
 struct Parent {
     num_children: usize,
     first_child: EntityId,
 }
 
+#[derive(Component)]
 struct Child {
     parent: EntityId,
     prev: EntityId,
@@ -337,7 +340,7 @@ fn test_sorting() {
     let (mut hierarchy, mut usizes) = world
         .borrow::<(
             (EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>),
-            ViewMut<usize>,
+            ViewMut<USIZE>,
         )>()
         .unwrap();
 
@@ -349,17 +352,17 @@ fn test_sorting() {
     let e3 = hierarchy.attach_new(root);
     let e4 = hierarchy.attach_new(root);
 
-    hierarchy.0.add_component(e0, &mut usizes, 7);
-    hierarchy.0.add_component(e1, &mut usizes, 5);
-    hierarchy.0.add_component(e2, &mut usizes, 6);
-    hierarchy.0.add_component(e3, &mut usizes, 1);
-    hierarchy.0.add_component(e4, &mut usizes, 3);
+    hierarchy.0.add_component(e0, &mut usizes, USIZE(7));
+    hierarchy.0.add_component(e1, &mut usizes, USIZE(5));
+    hierarchy.0.add_component(e2, &mut usizes, USIZE(6));
+    hierarchy.0.add_component(e3, &mut usizes, USIZE(1));
+    hierarchy.0.add_component(e4, &mut usizes, USIZE(3));
 
     assert!((&hierarchy.1, &hierarchy.2)
         .children(root)
         .eq([e0, e1, e2, e3, e4].iter().cloned()));
 
-    hierarchy.sort_children_by(root, |a, b| usizes[*a].cmp(&usizes[*b]));
+    hierarchy.sort_children_by(root, |a, b| usizes[*a].0.cmp(&usizes[*b].0));
 
     assert!((&hierarchy.1, &hierarchy.2)
         .children(root)

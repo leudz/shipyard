@@ -10,10 +10,16 @@ use alloc::vec::Vec;
 /// ### Example:
 ///
 /// ```rust
-/// use shipyard::{IntoWorkloadSystem, View, Workload, WorkloadSystem, World};
+/// use shipyard::{Component, IntoWorkloadSystem, View, Workload, WorkloadSystem, World};
 ///
-/// fn sys1(u32s: View<u32>) {}
-/// fn sys2(usizes: View<usize>) {}
+/// #[derive(Component)]
+/// struct U32(u32);
+///
+/// #[derive(Component)]
+/// struct USIZE(usize);
+///
+/// fn sys1(u32s: View<U32>) {}
+/// fn sys2(usizes: View<USIZE>) {}
 ///
 /// let workload_sys1: WorkloadSystem = sys1.into_workload_system().unwrap();
 ///

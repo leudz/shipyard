@@ -10,14 +10,14 @@ use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{AllStoragesBorrow, Borrow, IntoBorrow};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
-use crate::error;
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-use crate::sparse_set::{AddComponent, BulkAddEntity, DeleteComponent, Remove};
+use crate::sparse_set::{AddComponent, BulkAddEntity, Remove};
 use crate::storage::{SBox, Storage, StorageId};
 use crate::unique::Unique;
+use crate::{error, Component};
 use alloc::boxed::Box;
 use core::any::type_name;
 use hashbrown::hash_map::{Entry, HashMap};
@@ -72,17 +72,20 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// all_storages.add_unique(0usize);
+    /// all_storages.add_unique(USIZE(0));
     /// ```
     ///
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    pub fn add_unique<T: 'static + Send + Sync>(&self, component: T) {
+    pub fn add_unique<T: Send + Sync + Component>(&self, component: T) {
         let storage_id = StorageId::of::<Unique<T>>();
 
         self.storages
@@ -98,7 +101,7 @@ impl AllStorages {
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send<T: 'static + Sync>(&self, component: T) {
+    pub fn add_unique_non_send<T: Sync + Component>(&self, component: T) {
         if std::thread::current().id() == self.thread_id {
             let storage_id = StorageId::of::<Unique<T>>();
 
@@ -116,7 +119,7 @@ impl AllStorages {
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_sync<T: 'static + Send>(&self, component: T) {
+    pub fn add_unique_non_sync<T: Send + Component>(&self, component: T) {
         let storage_id = StorageId::of::<Unique<T>>();
 
         self.storages
@@ -132,7 +135,7 @@ impl AllStorages {
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send_sync<T: 'static>(&self, component: T) {
+    pub fn add_unique_non_send_sync<T: Component>(&self, component: T) {
         if std::thread::current().id() == self.thread_id {
             let storage_id = StorageId::of::<Unique<T>>();
 
@@ -156,15 +159,18 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// all_storages.add_unique(0usize);
-    /// let i = all_storages.remove_unique::<usize>().unwrap();
+    /// all_storages.add_unique(USIZE(0));
+    /// let i = all_storages.remove_unique::<USIZE>().unwrap();
     /// ```
-    pub fn remove_unique<T: 'static>(&self) -> Result<T, error::UniqueRemove> {
+    pub fn remove_unique<T: Component>(&self) -> Result<T, error::UniqueRemove> {
         let storage_id = StorageId::of::<Unique<T>>();
 
         {
@@ -197,21 +203,27 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, Get, View, World};
+    /// use shipyard::{AllStoragesViewMut, Component, Get, View, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity1 = all_storages.add_entity((0usize, 1u32));
-    /// let entity2 = all_storages.add_entity((2usize, 3u32));
+    /// let entity1 = all_storages.add_entity((USIZE(0), U32(1)));
+    /// let entity2 = all_storages.add_entity((USIZE(2), U32(3)));
     ///
     /// all_storages.delete_entity(entity1);
     ///
-    /// all_storages.run(|usizes: View<usize>, u32s: View<u32>| {
+    /// all_storages.run(|usizes: View<USIZE>, u32s: View<U32>| {
     ///     assert!((&usizes).get(entity1).is_err());
     ///     assert!((&u32s).get(entity1).is_err());
-    ///     assert_eq!(usizes.get(entity2), Ok(&2));
-    ///     assert_eq!(u32s.get(entity2), Ok(&3));
+    ///     assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
+    ///     assert_eq!(u32s.get(entity2), Ok(&U32(3)));
     /// }).unwrap();
     /// ```
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
@@ -233,12 +245,18 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((0u32, 1usize));
+    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
     ///
     /// all_storages.strip(entity);
     /// ```
@@ -254,14 +272,20 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, SparseSet, World};
+    /// use shipyard::{AllStoragesViewMut, Component, SparseSet, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((0u32, 1usize));
+    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
     ///
-    /// all_storages.retain::<SparseSet<u32>>(entity);
+    /// all_storages.retain::<SparseSet<U32>>(entity);
     /// ```
     pub fn retain<S: Retain>(&mut self, entity: EntityId) {
         S::retain(self, entity);
@@ -299,13 +323,19 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity0 = all_storages.add_entity((0u32,));
-    /// let entity1 = all_storages.add_entity((1u32, 11usize));
+    /// let entity0 = all_storages.add_entity((U32(0),));
+    /// let entity1 = all_storages.add_entity((U32(1), USIZE(11)));
     /// ```
     #[inline]
     pub fn add_entity<T: AddComponent>(&mut self, component: T) -> EntityId {
@@ -320,14 +350,18 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity0 = all_storages.bulk_add_entity((0..1).map(|_| {})).next();
-    /// let entity1 = all_storages.bulk_add_entity((1..2).map(|i| (i as u32,))).next();
-    /// let new_entities = all_storages.bulk_add_entity((10..20).map(|i| (i as u32, i)));
+    /// let new_entities = all_storages.bulk_add_entity((10..20).map(|i| (U32(i as u32), USIZE(i))));
     /// ```
     #[inline]
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
@@ -344,7 +378,13 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
@@ -352,9 +392,9 @@ impl AllStorages {
     /// // make an empty entity
     /// let entity = all_storages.add_entity(());
     ///
-    /// all_storages.add_component(entity, (0u32,));
+    /// all_storages.add_component(entity, (U32(0),));
     /// // entity already had a `u32` component so it will be replaced
-    /// all_storages.add_component(entity, (1u32, 11usize));
+    /// all_storages.add_component(entity, (U32(1), USIZE(11)));
     /// ```
     #[track_caller]
     #[inline]
@@ -375,38 +415,25 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((0u32, 1usize));
+    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
     ///
-    /// let (i,) = all_storages.remove::<(u32,)>(entity);
-    /// assert_eq!(i, Some(0));
+    /// let (i,) = all_storages.remove::<(U32,)>(entity);
+    /// assert_eq!(i, Some(U32(0)));
     /// ```
     #[inline]
     pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
         T::remove(self, entity)
-    }
-    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
-    /// `C` must always be a tuple, even for a single component.
-    ///
-    /// ### Example
-    ///
-    /// ```
-    /// use shipyard::{AllStoragesViewMut, World};
-    ///
-    /// let mut world = World::new();
-    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
-    ///
-    /// let entity = all_storages.add_entity((0u32, 1usize));
-    ///
-    /// all_storages.delete_component::<(u32,)>(entity);
-    /// ```
-    #[inline]
-    pub fn delete_component<C: DeleteComponent>(&mut self, entity: EntityId) {
-        C::delete_component(self, entity);
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.
@@ -483,15 +510,21 @@ You can use:
 
 ### Example
 ```
-use shipyard::{AllStoragesViewMut, EntitiesView, View, ViewMut, World};
+use shipyard::{AllStoragesViewMut, Component, EntitiesView, View, ViewMut, World};
+
+#[derive(Component)]
+struct U32(u32);
+
+#[derive(Component)]
+struct USIZE(usize);
 
 let world = World::new();
 
 let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
-let u32s = all_storages.borrow::<View<u32>>().unwrap();
+let u32s = all_storages.borrow::<View<U32>>().unwrap();
 let (entities, mut usizes) = all_storages
-    .borrow::<(EntitiesView, ViewMut<usize>)>()
+    .borrow::<(EntitiesView, ViewMut<USIZE>)>()
     .unwrap();
 ```
 [EntitiesView]: crate::Entities
@@ -673,9 +706,18 @@ You can use:
 
 ### Example
 ```
-use shipyard::{AllStoragesViewMut, View, ViewMut, World};
+use shipyard::{AllStoragesViewMut, Component, View, ViewMut, World};
 
-fn sys1(i32s: View<i32>) -> i32 {
+#[derive(Component)]
+struct I32(i32);
+
+#[derive(Component)]
+struct U32(u32);
+
+#[derive(Component)]
+struct USIZE(usize);
+
+fn sys1(i32s: View<I32>) -> i32 {
     0
 }
 
@@ -684,7 +726,7 @@ let world = World::new();
 let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
 all_storages
-    .run(|usizes: View<usize>, mut u32s: ViewMut<u32>| {
+    .run(|usizes: View<USIZE>, mut u32s: ViewMut<U32>| {
         // -- snip --
     })
     .unwrap();
@@ -713,19 +755,28 @@ let i = all_storages.run(sys1).unwrap();
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, SparseSet, World};
+    /// use shipyard::{AllStoragesViewMut, Component, SparseSet, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
+    ///
+    /// #[derive(Component)]
+    /// struct STR(&'static str);
     ///
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity0 = all_storages.add_entity((0u32,));
-    /// let entity1 = all_storages.add_entity((1usize,));
-    /// let entity2 = all_storages.add_entity(("2",));
+    /// let entity0 = all_storages.add_entity((U32(0),));
+    /// let entity1 = all_storages.add_entity((USIZE(1),));
+    /// let entity2 = all_storages.add_entity((STR("2"),));
     ///
     /// // deletes `entity2`
-    /// all_storages.delete_any::<SparseSet<&str>>();
+    /// all_storages.delete_any::<SparseSet<STR>>();
     /// // deletes `entity0` and `entity1`
-    /// all_storages.delete_any::<(SparseSet<u32>, SparseSet<usize>)>();
+    /// all_storages.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
     /// ```
     pub fn delete_any<T: DeleteAny>(&mut self) {
         T::delete_any(self);

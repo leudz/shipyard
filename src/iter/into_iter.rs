@@ -6,7 +6,6 @@ use super::mixed::Mixed;
 use super::par_iter::ParIter;
 use super::tight::Tight;
 use crate::entity_id::EntityId;
-use crate::sparse_set::SparseSet;
 use crate::type_id::TypeId;
 use core::ptr;
 
@@ -28,61 +27,67 @@ pub trait IntoIter {
 
     /// Returns an iterator over `SparseSet`.
     ///
-    /// Yields [`Mut`] for mutable components.  
+    /// Yields [`Mut`] for tracked mutable components.  
     /// It `deref`s to the component and will flag mutation.  
-    /// [`fast_iter`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesViewMut, IntoIter, ViewMut, World};
+    /// use shipyard::{Component, EntitiesViewMut, IntoIter, ViewMut, World};
+    ///
+    /// #[derive(Component, Clone, Copy)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
     ///
-    /// entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    /// entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
     ///
     /// (&mut usizes, &u32s).iter().for_each(|(mut x, &y)| {
-    ///     *x += y as usize;
+    ///     x.0 += y.0 as usize;
     /// });
     /// ```
     /// [`Mut`]: crate::Mut
-    /// [`fast_iter`]: crate::IntoFastIter
     fn iter(self) -> Self::IntoIter;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.
     ///
-    /// Returns [`Mut`] when yielding mutable components.  
+    /// Returns [`Mut`] when yielding tracked mutable components.  
     /// It `deref`s to the component and will flag mutation.  
-    /// [`fast_iter_by`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
     ///
     /// [`Mut`]: crate::Mut
-    /// [`fast_iter_by`]: crate::IntoFastIter
     fn iter_by<D: 'static>(self) -> Self::IntoIter;
     /// Returns a parallel iterator over `SparseSet`.
     ///
-    /// Yields [`Mut`] for mutable components.  
+    /// Yields [`Mut`] for tracked mutable components.  
     /// It `deref`s to the component and will flag mutation.  
-    /// [`fast_par_iter`] can be used if you want an iterator yielding `&mut T`, it has limitations however.
     ///
     /// ### Example
     /// ```
     /// use rayon::prelude::ParallelIterator;
-    /// use shipyard::{EntitiesViewMut, IntoIter, ViewMut, World};
+    /// use shipyard::{Component, EntitiesViewMut, IntoIter, ViewMut, World};
+    ///
+    /// #[derive(Component, Clone, Copy)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>().unwrap();
+    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
     ///
-    /// entities.add_entity((&mut usizes, &mut u32s), (0usize, 1u32));
-    /// entities.add_entity((&mut usizes, &mut u32s), (2usize, 3u32));
+    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
     ///
     /// (&mut usizes, &u32s).par_iter().for_each(|(mut x, &y)| {
-    ///     *x += y as usize;
+    ///     x.0 += y.0 as usize;
     /// });
     /// ```
     /// [`Mut`]: crate::Mut
-    /// [`fast_par_iter`]: crate::IntoFastIter
     #[cfg(feature = "parallel")]
     #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     fn par_iter(self) -> Self::IntoParIter;
@@ -246,13 +251,13 @@ macro_rules! impl_into_iter {
                 }
             }
             fn iter_by<Driver: 'static>(self) -> Self::IntoIter {
-                let type_id = TypeId::of::<SparseSet<Driver>>();
+                let type_id = TypeId::of::<Driver>();
                 let mut found = false;
                 let mut smallest = core::usize::MAX;
                 let mut smallest_dense = ptr::null();
                 let mut mask: u16 = 0;
 
-                if self.$index1.type_id() == type_id {
+                if self.$index1.inner_type_id() == type_id {
                     found = true;
 
                     match self.$index1.len() {
@@ -271,7 +276,7 @@ macro_rules! impl_into_iter {
                 }
 
                 $(
-                    if !found && self.$index.type_id() == type_id {
+                    if !found && self.$index.inner_type_id() == type_id {
                         found = true;
 
                         match self.$index.len() {

@@ -3,14 +3,15 @@ mod inserted_or_modified;
 mod modified;
 
 use super::IntoAbstract;
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
 use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
 
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
-    type AbsView = Not<&'b SparseSet<T>>;
+impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b View<'a, T>> {
+    type AbsView = Not<&'b SparseSet<T, T::Tracking>>;
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
@@ -26,15 +27,19 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b View<'a, T>> {
         self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<Not<SparseSet<T>>>()
+        TypeId::of::<Not<SparseSet<T, T::Tracking>>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
     fn dense(&self) -> *const EntityId {
         unreachable!()
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
-    type AbsView = Not<&'b SparseSet<T>>;
+impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b ViewMut<'a, T>> {
+    type AbsView = Not<&'b SparseSet<T, T::Tracking>>;
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
@@ -50,14 +55,18 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b ViewMut<'a, T>> {
         self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<Not<SparseSet<T>>>()
+        TypeId::of::<Not<SparseSet<T, T::Tracking>>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
     fn dense(&self) -> *const EntityId {
         unreachable!()
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
+impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
     type AbsView = Not<FullRawWindowMut<'b, T>>;
     type Pack = T;
 
@@ -74,7 +83,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
         self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<Not<SparseSet<T>>>()
+        TypeId::of::<Not<SparseSet<T, T::Tracking>>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
     fn dense(&self) -> *const EntityId {
         unreachable!()

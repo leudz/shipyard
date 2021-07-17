@@ -1,3 +1,4 @@
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::view::ViewMut;
 
@@ -17,7 +18,7 @@ impl AddEntity for () {
     fn add_entity(&mut self, _: EntityId, _: Self::Component) {}
 }
 
-impl<T: 'static> AddEntity for ViewMut<'_, T> {
+impl<T: Component> AddEntity for ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
@@ -26,7 +27,7 @@ impl<T: 'static> AddEntity for ViewMut<'_, T> {
     }
 }
 
-impl<T: 'static> AddEntity for &mut ViewMut<'_, T> {
+impl<T: Component> AddEntity for &mut ViewMut<'_, T> {
     type Component = T;
 
     #[inline]

@@ -1,11 +1,21 @@
 use shipyard::*;
 
+struct USIZE(usize);
+impl Component for USIZE {
+    type Tracking = track::Nothing;
+}
+
+struct U32(u32);
+impl Component for U32 {
+    type Tracking = track::Nothing;
+}
+
 #[test]
 fn alive() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_entity((0u32,));
-    let entity = world.add_entity((1u32,));
-    world.add_entity((2u32,));
+    world.add_entity((U32(0),));
+    let entity = world.add_entity((U32(1),));
+    world.add_entity((U32(2),));
 
     let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
 
@@ -17,9 +27,9 @@ fn alive() {
 #[test]
 fn single_dead() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_entity((0u32,));
-    let entity = world.add_entity((1u32,));
-    world.add_entity((2u32,));
+    world.add_entity((U32(0),));
+    let entity = world.add_entity((U32(1),));
+    world.add_entity((U32(2),));
 
     world.delete_entity(entity);
 
@@ -34,9 +44,9 @@ fn single_dead() {
 #[test]
 fn multiple_dead_first() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let entity0 = world.add_entity((0u32,));
-    let entity1 = world.add_entity((1u32,));
-    let entity2 = world.add_entity((2u32,));
+    let entity0 = world.add_entity((U32(0),));
+    let entity1 = world.add_entity((U32(1),));
+    let entity2 = world.add_entity((U32(2),));
 
     world.delete_entity(entity1);
     world.delete_entity(entity0);
@@ -68,9 +78,9 @@ fn multiple_dead_first() {
 #[test]
 fn multiple_dead_middle() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let entity0 = world.add_entity((0u32,));
-    let entity1 = world.add_entity((1u32,));
-    let entity2 = world.add_entity((2u32,));
+    let entity0 = world.add_entity((U32(0),));
+    let entity1 = world.add_entity((U32(1),));
+    let entity2 = world.add_entity((U32(2),));
 
     world.delete_entity(entity0);
     world.delete_entity(entity1);
@@ -102,9 +112,9 @@ fn multiple_dead_middle() {
 #[test]
 fn multiple_dead_last() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let entity0 = world.add_entity((0u32,));
-    let entity1 = world.add_entity((1u32,));
-    let entity2 = world.add_entity((2u32,));
+    let entity0 = world.add_entity((U32(0),));
+    let entity1 = world.add_entity((U32(1),));
+    let entity2 = world.add_entity((U32(2),));
 
     world.delete_entity(entity0);
     world.delete_entity(entity2);
@@ -168,9 +178,9 @@ fn new_world() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let entity = EntityId::new_from_index_and_gen(5, 0);
 
-    let entity0 = world.add_entity((0u32,));
-    let entity1 = world.add_entity((1u32,));
-    let entity2 = world.add_entity((2u32,));
+    let entity0 = world.add_entity((U32(0),));
+    let entity1 = world.add_entity((U32(1),));
+    let entity2 = world.add_entity((U32(2),));
 
     world.delete_entity(entity0);
     world.delete_entity(entity1);

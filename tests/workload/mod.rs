@@ -1,6 +1,11 @@
 #[cfg(feature = "thread_local")]
 mod non_send_sync;
 
+struct U32(u32);
+impl Component for U32 {
+    type Tracking = track::Nothing;
+}
+
 use shipyard::*;
 
 #[test]
@@ -21,13 +26,13 @@ fn duplicate_name() {
 
 #[test]
 fn rename() {
-    fn increment(mut i: UniqueViewMut<u32>) {
-        *i += 1;
+    fn increment(mut i: UniqueViewMut<U32>) {
+        i.0 += 1;
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_unique(0u32).unwrap();
+    world.add_unique(U32(0)).unwrap();
 
     Workload::builder("Empty")
         .with_system(increment)
@@ -47,5 +52,5 @@ fn rename() {
 
     world.run_workload("New Empty").unwrap();
 
-    assert_eq!(*world.borrow::<UniqueView<u32>>().unwrap(), 1);
+    assert_eq!(world.borrow::<UniqueView<U32>>().unwrap().0, 1);
 }

@@ -1,5 +1,6 @@
 use crate::geometry::*;
 use nalgebra::{Matrix4, Vector3};
+use shipyard::Component;
 use web_sys::HtmlImageElement;
 
 use awsm_web::webgl::{
@@ -8,6 +9,7 @@ use awsm_web::webgl::{
     WebGlTextureSource,
 };
 
+#[derive(Component)]
 pub struct SceneRenderer {
     pub renderer: WebGl1Renderer,
     ids: SceneIds,

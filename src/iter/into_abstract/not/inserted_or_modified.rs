@@ -1,4 +1,5 @@
 use super::IntoAbstract;
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindowMut, SparseSet};
@@ -6,8 +7,8 @@ use crate::tracking::InsertedOrModified;
 use crate::type_id::TypeId;
 use crate::view::{View, ViewMut};
 
-impl<'tmp, 'v, T: 'static> IntoAbstract for Not<InsertedOrModified<&'tmp View<'v, T>>> {
-    type AbsView = Not<InsertedOrModified<&'tmp SparseSet<T>>>;
+impl<'tmp, 'v, T: Component> IntoAbstract for Not<InsertedOrModified<&'tmp View<'v, T>>> {
+    type AbsView = Not<InsertedOrModified<&'tmp SparseSet<T, T::Tracking>>>;
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
@@ -23,15 +24,19 @@ impl<'tmp, 'v, T: 'static> IntoAbstract for Not<InsertedOrModified<&'tmp View<'v
         self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<SparseSet<T>>()
+        TypeId::of::<SparseSet<T, T::Tracking>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
     fn dense(&self) -> *const EntityId {
         self.0 .0.dense.as_ptr()
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<InsertedOrModified<&'b ViewMut<'a, T>>> {
-    type AbsView = Not<InsertedOrModified<&'b SparseSet<T>>>;
+impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<InsertedOrModified<&'b ViewMut<'a, T>>> {
+    type AbsView = Not<InsertedOrModified<&'b SparseSet<T, T::Tracking>>>;
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
@@ -47,14 +52,18 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<InsertedOrModified<&'b ViewMut
         self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<SparseSet<T>>()
+        TypeId::of::<SparseSet<T, T::Tracking>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
     fn dense(&self) -> *const EntityId {
         self.0 .0.dense.as_ptr()
     }
 }
 
-impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<InsertedOrModified<&'b mut ViewMut<'a, T>>> {
+impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<InsertedOrModified<&'b mut ViewMut<'a, T>>> {
     type AbsView = Not<InsertedOrModified<FullRawWindowMut<'b, T>>>;
     type Pack = T;
 
@@ -71,7 +80,11 @@ impl<'a: 'b, 'b, T: 'static> IntoAbstract for Not<InsertedOrModified<&'b mut Vie
         self.0.is_tracking_modification()
     }
     fn type_id(&self) -> TypeId {
-        TypeId::of::<SparseSet<T>>()
+        TypeId::of::<SparseSet<T, T::Tracking>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
     }
     fn dense(&self) -> *const EntityId {
         self.0 .0.dense.as_ptr()

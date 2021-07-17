@@ -1,4 +1,5 @@
 use crate::all_storages::AllStorages;
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
@@ -8,26 +9,29 @@ pub trait Remove {
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out;
 }
 
-impl<T: 'static + Send + Sync> Remove for (T,) {
+impl<T: Send + Sync + Component> Remove for (T,) {
     type Out = (Option<T>,);
 
     #[inline]
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {
         (all_storages
-            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
+            .exclusive_storage_or_insert_mut(
+                StorageId::of::<SparseSet<T, T::Tracking>>(),
+                SparseSet::new,
+            )
             .remove(entity),)
     }
 }
 
 macro_rules! impl_remove_component {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: 'static + Send + Sync,)+> Remove for ($($type,)+) {
+        impl<$($type: Send + Sync + Component,)+> Remove for ($($type,)+) {
             type Out = ($(Option<$type>,)+);
 
             fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {
                 ($(
                     all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type>>(), SparseSet::new)
+                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type, $type::Tracking>>(), SparseSet::new)
                         .remove(entity),
                 )+)
             }

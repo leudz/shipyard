@@ -2,19 +2,23 @@ use shipyard::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+struct MyRc(Rc<RefCell<Vec<u32>>>);
+impl Component for MyRc {
+    type Tracking = track::Nothing;
+}
+
 #[test]
 fn basic() {
-    fn push(vecs: NonSendSync<View<Rc<RefCell<Vec<u32>>>>>) {
-        vecs.iter().next().unwrap().borrow_mut().push(0);
+    fn push(vecs: NonSendSync<View<MyRc>>) {
+        vecs.iter().next().unwrap().0.borrow_mut().push(0);
     }
 
     let world = World::default();
 
     world
         .run(
-            |mut entities: EntitiesViewMut,
-             mut vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
-                entities.add_entity(&mut *vecs, Rc::new(RefCell::new(Vec::new())));
+            |mut entities: EntitiesViewMut, mut vecs: NonSendSync<ViewMut<MyRc>>| {
+                entities.add_entity(&mut *vecs, MyRc(Rc::new(RefCell::new(Vec::new()))));
             },
         )
         .unwrap();
@@ -26,8 +30,8 @@ fn basic() {
     world.run_default().unwrap();
 
     world
-        .run(|vecs: NonSendSync<ViewMut<Rc<RefCell<Vec<u32>>>>>| {
-            assert_eq!(&**vecs.iter().next().unwrap().borrow(), &[0][..]);
+        .run(|vecs: NonSendSync<ViewMut<MyRc>>| {
+            assert_eq!(&**vecs.iter().next().unwrap().0.borrow(), &[0][..]);
         })
         .unwrap();
 }

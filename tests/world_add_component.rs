@@ -1,82 +1,104 @@
 use shipyard::*;
 
+#[derive(PartialEq, Eq, Debug)]
+struct U32(u32);
+impl Component for U32 {
+    type Tracking = track::Nothing;
+}
+
 #[test]
 fn no_pack() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::Nothing;
+    }
+
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let entity0 = world.add_entity((0usize,));
-    let entity1 = world.add_entity((1u32,));
+    let entity0 = world.add_entity((USIZE(0usize),));
+    let entity1 = world.add_entity((U32(1),));
 
     let entity10 = world.add_entity(());
     let entity20 = world.add_entity(());
 
-    world.add_component(entity10, (10usize, 30u32));
-    world.add_component(entity20, (20usize,));
-    world.add_component(entity20, (50u32,));
+    world.add_component(entity10, (USIZE(10), U32(30)));
+    world.add_component(entity20, (USIZE(20),));
+    world.add_component(entity20, (U32(50),));
 
-    let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
+    let (usizes, u32s) = world.borrow::<(View<USIZE>, View<U32>)>().unwrap();
 
-    assert_eq!(usizes.get(entity0).unwrap(), &0);
-    assert_eq!(u32s.get(entity1).unwrap(), &1);
-    assert_eq!((&usizes, &u32s).get(entity10).unwrap(), (&10, &30));
-    assert_eq!((&usizes, &u32s).get(entity20).unwrap(), (&20, &50));
+    assert_eq!(usizes.get(entity0).unwrap(), &USIZE(0));
+    assert_eq!(u32s.get(entity1).unwrap(), &U32(1));
+    assert_eq!(
+        (&usizes, &u32s).get(entity10).unwrap(),
+        (&USIZE(10), &U32(30))
+    );
+    assert_eq!(
+        (&usizes, &u32s).get(entity20).unwrap(),
+        (&USIZE(20), &U32(50))
+    );
 
     let mut iter = (&usizes, &u32s).iter();
-    assert_eq!(iter.next(), Some((&10, &30)));
-    assert_eq!(iter.next(), Some((&20, &50)));
+    assert_eq!(iter.next(), Some((&USIZE(10), &U32(30))));
+    assert_eq!(iter.next(), Some((&USIZE(20), &U32(50))));
     assert_eq!(iter.next(), None);
 }
 
 #[test]
 fn update() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
 
-    world.borrow::<ViewMut<usize>>().unwrap().track_all();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity = world.add_entity(());
 
-    world.add_component(entity, (1usize,));
+    world.add_component(entity, (USIZE(1usize),));
 
     world
-        .run(|usizes: View<usize>| {
+        .run(|usizes: View<USIZE>| {
             let mut iter = usizes.inserted().iter();
-            assert_eq!(iter.next(), Some(&1));
+            assert_eq!(iter.next(), Some(&USIZE(1)));
             assert_eq!(iter.next(), None);
         })
         .unwrap();
 
-    world.add_component(entity, (2usize,));
+    world.add_component(entity, (USIZE(2usize),));
 
     world
-        .run(|mut usizes: ViewMut<usize>| {
+        .run(|mut usizes: ViewMut<USIZE>| {
             let mut iter = usizes.inserted().iter();
-            assert_eq!(iter.next(), Some(&2));
+            assert_eq!(iter.next(), Some(&USIZE(2)));
             assert_eq!(iter.next(), None);
 
             usizes.clear_all_inserted();
 
-            usizes[entity] = 3;
+            usizes[entity] = USIZE(3);
         })
         .unwrap();
 
-    world.add_component(entity, (4usize,));
+    world.add_component(entity, (USIZE(4usize),));
 
     world
-        .run(|mut usizes: ViewMut<usize>| {
+        .run(|mut usizes: ViewMut<USIZE>| {
             let mut iter = usizes.modified().iter();
-            assert_eq!(iter.next(), Some(&4));
+            assert_eq!(iter.next(), Some(&USIZE(4)));
             assert_eq!(iter.next(), None);
 
             usizes.clear_all_modified();
         })
         .unwrap();
 
-    world.add_component(entity, (5usize,));
+    world.add_component(entity, (USIZE(5usize),));
 
     world
-        .run(|usizes: View<usize>| {
+        .run(|usizes: View<USIZE>| {
             let mut iter = usizes.modified().iter();
-            assert_eq!(iter.next(), Some(&5));
+            assert_eq!(iter.next(), Some(&USIZE(5)));
             assert_eq!(iter.next(), None);
         })
         .unwrap();
@@ -85,12 +107,18 @@ fn update() {
 #[test]
 #[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn dead_entity() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::Nothing;
+    }
+
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
-    world.add_component(entity, (1u32,));
+    world.add_component(entity, (U32(1u32),));
 
-    let u32s = world.borrow::<View<u32>>().unwrap();
+    let u32s = world.borrow::<View<U32>>().unwrap();
     assert!(u32s.get(entity).is_err());
 }

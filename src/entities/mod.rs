@@ -61,15 +61,18 @@ impl Entities {
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{EntitiesView, ViewMut, World};
+    /// use shipyard::{Component, EntitiesView, ViewMut, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
     ///
     /// let mut world = World::new();
     ///
     /// let entity = world.add_entity(());
     ///
-    /// let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<u32>)>().unwrap();
+    /// let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<U32>)>().unwrap();
     ///
-    /// entities.add_component(entity, &mut u32s, 0);
+    /// entities.add_component(entity, &mut u32s, U32(0));
     /// ```
     #[track_caller]
     #[inline]
@@ -158,17 +161,23 @@ impl Entities {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{EntitiesViewMut, ViewMut, World};
+    /// use shipyard::{Component, EntitiesViewMut, ViewMut, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
     /// let (mut entities, mut usizes, mut u32s) = world
-    ///     .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+    ///     .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
     ///     .unwrap();
     ///
-    /// let entity = entities.add_entity((&mut usizes, &mut u32s), (0, 1));
-    /// assert_eq!(usizes[entity], 0);
-    /// assert_eq!(u32s[entity], 1);
+    /// let entity = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+    /// assert_eq!(usizes[entity], USIZE(0));
+    /// assert_eq!(u32s[entity], U32(1));
     /// ```
     ///
     /// [`EntityId`]: crate::entity_id::EntityId
@@ -188,18 +197,22 @@ impl Entities {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{EntitiesViewMut, ViewMut, World};
+    /// use shipyard::{Component, EntitiesViewMut, ViewMut, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
     /// let (mut entities, mut usizes, mut u32s) = world
-    ///     .borrow::<(EntitiesViewMut, ViewMut<usize>, ViewMut<u32>)>()
+    ///     .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
     ///     .unwrap();
     ///
-    /// let entity0 = entities.bulk_add_entity((), (0..1).map(|_| {})).next();
-    /// let entity1 = entities.bulk_add_entity(&mut u32s, 1..2).next();
     /// let new_entities =
-    ///     entities.bulk_add_entity((&mut u32s, &mut usizes), (10..20).map(|i| (i as u32, i)));
+    ///     entities.bulk_add_entity((&mut u32s, &mut usizes), (10..20).map(|i| (U32(i as u32), USIZE(i))));
     /// ```
     ///
     /// [`EntityId`]: crate::entity_id::EntityId

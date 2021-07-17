@@ -1,20 +1,25 @@
+use super::U32;
 use shipyard::{
-    AddComponent, AllStoragesViewMut, EntitiesViewMut, IntoIter, IntoWithId, SparseSet, View,
-    ViewMut, Workload, World,
+    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId, SparseSet,
+    View, ViewMut, Workload, World,
 };
 
+#[derive(Component)]
 struct Position;
+#[derive(Component)]
 struct Health;
 
+#[derive(Component)]
 enum Season {
     Spring,
 }
 
+#[derive(Component)]
 struct Precipitation(f32);
 
 #[allow(unused)]
 // ANCHOR: create_ints
-fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>) {
+fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>) {
     // -- snip --
 }
 // ANCHOR_END: create_ints
@@ -70,11 +75,11 @@ world
 #[rustfmt::skip]
 fn workload() {
 // ANCHOR: workload
-fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>) {
+fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>) {
     // -- snip --
 }
 
-fn delete_ints(mut u32s: ViewMut<u32>) {
+fn delete_ints(mut u32s: ViewMut<U32>) {
     // -- snip --
 }
 
@@ -94,17 +99,18 @@ world.run_workload("Int cycle").unwrap();
 #[rustfmt::skip]
 fn workload_nesting() {
 // ANCHOR: nested_workload
-struct Dead<T>(core::marker::PhantomData<T>);
+#[derive(Component)]
+struct Dead<T: 'static>(core::marker::PhantomData<T>);
 
-fn increment(mut u32s: ViewMut<u32>) {
+fn increment(mut u32s: ViewMut<U32>) {
     for mut i in (&mut u32s).iter() {
-        *i += 1;
+        i.0 += 1;
     }
 }
 
-fn flag_deleted_u32s(u32s: View<u32>, mut deads: ViewMut<Dead<u32>>) {
+fn flag_deleted_u32s(u32s: View<U32>, mut deads: ViewMut<Dead<u32>>) {
     for (id, i) in u32s.iter().with_id() {
-        if *i > 100 {
+        if i.0 > 100 {
             deads.add_component_unchecked(id, Dead(core::marker::PhantomData));
         }
     }

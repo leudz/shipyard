@@ -1,3 +1,4 @@
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::ViewMut;
 
@@ -11,14 +12,17 @@ pub trait AddComponent {
     ///
     /// ### Example
     /// ```
-    /// use shipyard::{World, EntitiesViewMut, ViewMut, AddComponent};
+    /// use shipyard::{AddComponent, Component, EntitiesViewMut, ViewMut, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<u32>)>().unwrap();
+    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
     /// let entity = entities.add_entity((), ());
     ///
-    /// u32s.add_component_unchecked(entity, 0);
+    /// u32s.add_component_unchecked(entity, U32(0));
     /// ```
     ///
     /// [`Entities::add_component`]: crate::Entities::add_component()
@@ -32,7 +36,7 @@ impl AddComponent for () {
     fn add_component_unchecked(&mut self, _: EntityId, _: Self::Component) {}
 }
 
-impl<T: 'static> AddComponent for ViewMut<'_, T> {
+impl<T: Component> AddComponent for ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
@@ -41,7 +45,7 @@ impl<T: 'static> AddComponent for ViewMut<'_, T> {
     }
 }
 
-impl<T: 'static> AddComponent for &mut ViewMut<'_, T> {
+impl<T: Component> AddComponent for &mut ViewMut<'_, T> {
     type Component = T;
 
     #[inline]

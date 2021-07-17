@@ -6,9 +6,9 @@ use alloc::vec::Drain;
 ///
 /// [`SparseSet<T>`]: crate::sparse_set::SparseSet
 pub struct SparseSetDrain<'a, T> {
-    pub(super) dense_ptr: *const EntityId,
-    pub(super) dense_len: usize,
-    pub(super) data: Drain<'a, T>,
+    pub(crate) dense_ptr: *const EntityId,
+    pub(crate) dense_len: usize,
+    pub(crate) data: Drain<'a, T>,
 }
 
 impl<T> SparseSetDrain<'_, T> {

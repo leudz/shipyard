@@ -1,4 +1,7 @@
-use crate::view::{View, ViewMut};
+use crate::{
+    component::Component,
+    view::{View, ViewMut},
+};
 use core::ops::Not as NotOps;
 
 /// Used to filter out components.
@@ -8,40 +11,46 @@ use core::ops::Not as NotOps;
 ///
 /// ### Example
 /// ```
-/// use shipyard::{IntoIter, View, World};
+/// use shipyard::{Component, IntoIter, View, World};
+///
+/// #[derive(Component, Debug, PartialEq, Eq)]
+/// struct U32(u32);
+///
+/// #[derive(Component, Debug, PartialEq, Eq)]
+/// struct USIZE(usize);
 ///
 /// let mut world = World::new();
 ///
-/// world.add_entity((0usize, 1u32));
-/// world.add_entity((2usize,));
+/// world.add_entity((USIZE(0), U32(1)));
+/// world.add_entity((USIZE(2),));
 ///
-/// let (usizes, u32s) = world.borrow::<(View<usize>, View<u32>)>().unwrap();
+/// let (usizes, u32s) = world.borrow::<(View<USIZE>, View<U32>)>().unwrap();
 ///
 /// let mut iter = (&usizes, !&u32s).iter();
-/// assert_eq!(iter.next(), Some((&2, ())));
+/// assert_eq!(iter.next(), Some((&USIZE(2), ())));
 /// assert_eq!(iter.next(), None);
 /// let mut iter = (&usizes, &u32s).iter();
-/// assert_eq!(iter.next(), Some((&0, &1)));
+/// assert_eq!(iter.next(), Some((&USIZE(0), &U32(1))));
 /// assert_eq!(iter.next(), None);
 /// ```
 #[derive(Copy, Clone)]
 pub struct Not<T>(pub(crate) T);
 
-impl<T> NotOps for &View<'_, T> {
+impl<T: Component> NotOps for &View<'_, T> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T> NotOps for &ViewMut<'_, T> {
+impl<T: Component> NotOps for &ViewMut<'_, T> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T> NotOps for &mut ViewMut<'_, T> {
+impl<T: Component> NotOps for &mut ViewMut<'_, T> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
