@@ -99,7 +99,29 @@ pub struct View<'a, T: Component, Tracking: track::Tracking = <T as Component>::
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<T: Component> View<'_, T> {
+impl<T: Component> View<'_, T, track::Insertion> {
+    /// Wraps this view to be able to iterate *inserted* components.
+    pub fn inserted(&self) -> Inserted<&Self> {
+        Inserted(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
+        InsertedOrModified(self)
+    }
+}
+
+impl<T: Component> View<'_, T, track::Modification> {
+    /// Wraps this view to be able to iterate *modified* components.
+    pub fn modified(&self) -> Modified<&Self> {
+        Modified(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
+        InsertedOrModified(self)
+    }
+}
+
+impl<T: Component> View<'_, T, track::All> {
     /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
@@ -154,7 +176,45 @@ pub struct ViewMut<'a, T: Component, Tracking: track::Tracking = <T as Component
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<T: Component> ViewMut<'_, T, T::Tracking> {
+impl<T: Component> ViewMut<'_, T, track::Insertion> {
+    /// Wraps this view to be able to iterate *inserted* components.
+    pub fn inserted(&self) -> Inserted<&Self> {
+        Inserted(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
+        InsertedOrModified(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* components.
+    pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
+        Inserted(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
+        InsertedOrModified(self)
+    }
+}
+
+impl<T: Component> ViewMut<'_, T, track::Modification> {
+    /// Wraps this view to be able to iterate *modified* components.
+    pub fn modified(&self) -> Modified<&Self> {
+        Modified(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
+        InsertedOrModified(self)
+    }
+    /// Wraps this view to be able to iterate *modified* components.
+    pub fn modified_mut(&mut self) -> Modified<&mut Self> {
+        Modified(self)
+    }
+    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
+        InsertedOrModified(self)
+    }
+}
+
+impl<T: Component> ViewMut<'_, T, track::All> {
     /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
