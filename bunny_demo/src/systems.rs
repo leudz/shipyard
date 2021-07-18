@@ -76,7 +76,7 @@ pub fn update(
 
     (&mut positions, &mut speeds, &mut gravities)
         .iter()
-        .for_each(|(mut pos, mut speed, gravity)| {
+        .for_each(|(pos, speed, gravity)| {
             let mut pos = &mut pos.0;
             let mut speed = &mut speed.0;
             let gravity = &gravity.0;

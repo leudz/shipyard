@@ -34,7 +34,7 @@ impl<'w, T: Component> AbstractMut for Not<&'w SparseSet<T, T::Tracking>> {
     }
 }
 
-impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T>> {
+impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T, T::Tracking>> {
     type Out = ();
     type Index = usize;
 

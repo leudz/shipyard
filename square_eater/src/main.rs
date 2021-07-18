@@ -220,7 +220,7 @@ fn move_square(
         }
     }
 
-    for (mut rect, dir) in (&mut rects).iter().zip(dirs) {
+    for (rect, dir) in (&mut rects).iter().zip(dirs) {
         if dir != Vec2::zero() {
             rect.0.move_to(dir);
         }

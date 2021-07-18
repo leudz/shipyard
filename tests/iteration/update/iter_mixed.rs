@@ -34,9 +34,6 @@ fn basic() {
     assert_eq!(u32s.inserted().iter().count(), 3);
     assert_eq!(u32s.modified().iter().count(), 0);
     assert_eq!(u32s.inserted_or_modified().iter().count(), 3);
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
     u32s.clear_all_inserted();
 
@@ -96,10 +93,6 @@ fn basic() {
         panic!()
     }
 
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
-
     if let iter::Iter::Tight(mut iter) = (&mut i16s).iter() {
         assert_eq!(iter.size_hint(), (4, Some(4)));
         assert!(*iter.next().unwrap() == I16(10));
@@ -110,10 +103,6 @@ fn basic() {
     } else {
         panic!()
     }
-
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
     if let iter::Iter::Mixed(mut iter) = (&u32s, &i16s).iter() {
         assert_eq!(iter.size_hint(), (0, Some(4)));
@@ -128,9 +117,6 @@ fn basic() {
     assert_eq!(u32s.inserted().iter().count(), 1);
     assert_eq!(u32s.modified().iter().count(), 0);
     assert_eq!(u32s.inserted_or_modified().iter().count(), 1);
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
     if let iter::Iter::Mixed(mut iter) = (&mut u32s, &mut i16s).iter() {
         assert_eq!(iter.size_hint(), (0, Some(4)));
@@ -154,9 +140,6 @@ fn basic() {
     assert_eq!(u32s.inserted().iter().count(), 1);
     assert_eq!(u32s.modified().iter().count(), 1);
     assert_eq!(u32s.inserted_or_modified().iter().count(), 2);
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
     u32s.clear_all_modified();
 
@@ -173,9 +156,6 @@ fn basic() {
     assert_eq!(u32s.inserted().iter().count(), 1);
     assert_eq!(u32s.modified().iter().count(), 0);
     assert_eq!(u32s.inserted_or_modified().iter().count(), 1);
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 
     if let iter::Iter::Mixed(mut iter) = (&mut i16s, &mut u32s).iter() {
         assert_eq!(iter.size_hint(), (0, Some(4)));
@@ -199,9 +179,6 @@ fn basic() {
     assert_eq!(u32s.inserted().iter().count(), 1);
     assert_eq!(u32s.modified().iter().count(), 1);
     assert_eq!(u32s.inserted_or_modified().iter().count(), 2);
-    assert_eq!(i16s.inserted().iter().count(), 0);
-    assert_eq!(i16s.modified().iter().count(), 0);
-    assert_eq!(i16s.inserted_or_modified().iter().count(), 0);
 }
 
 #[test]
@@ -224,19 +201,6 @@ fn not_inserted() {
 
     assert_eq!(iter.next(), Some(&U32(0)));
     assert_eq!(iter.next(), Some(&U32(1)));
-    assert_eq!(iter.next(), None);
-
-    let mut iter = (!i16s.inserted()).iter();
-
-    assert_eq!(iter.next(), Some(&I16(10)));
-    assert_eq!(iter.next(), Some(&I16(12)));
-    assert_eq!(iter.next(), Some(&I16(13)));
-    assert_eq!(iter.next(), None);
-
-    let mut iter = (&u32s, !i16s.inserted()).iter();
-
-    assert_eq!(iter.next(), Some((&U32(0), &I16(10))));
-    assert_eq!(iter.next(), Some((&U32(2), &I16(12))));
     assert_eq!(iter.next(), None);
 
     let mut iter = (!u32s.inserted(), &i16s).iter();
@@ -268,19 +232,6 @@ fn not_modified() {
     assert_eq!(iter.next(), Some(&U32(2)));
     assert_eq!(iter.next(), None);
 
-    let mut iter = (!i16s.modified()).iter();
-
-    assert_eq!(iter.next(), Some(&I16(10)));
-    assert_eq!(iter.next(), Some(&I16(12)));
-    assert_eq!(iter.next(), Some(&I16(13)));
-    assert_eq!(iter.next(), None);
-
-    let mut iter = (&u32s, !i16s.modified()).iter();
-
-    assert_eq!(iter.next(), Some((&U32(100), &I16(10))));
-    assert_eq!(iter.next(), Some((&U32(2), &I16(12))));
-    assert_eq!(iter.next(), None);
-
     let mut iter = (!u32s.modified(), &i16s).iter();
 
     assert_eq!(iter.next(), Some((&U32(2), &I16(12))));
@@ -308,19 +259,6 @@ fn not_inserted_or_modified() {
     let mut iter = (!u32s.inserted_or_modified()).iter();
 
     assert_eq!(iter.next(), Some(&U32(1)));
-    assert_eq!(iter.next(), None);
-
-    let mut iter = (!i16s.inserted_or_modified()).iter();
-
-    assert_eq!(iter.next(), Some(&I16(10)));
-    assert_eq!(iter.next(), Some(&I16(12)));
-    assert_eq!(iter.next(), Some(&I16(13)));
-    assert_eq!(iter.next(), None);
-
-    let mut iter = (&u32s, !i16s.inserted_or_modified()).iter();
-
-    assert_eq!(iter.next(), Some((&U32(100), &I16(10))));
-    assert_eq!(iter.next(), Some((&U32(2), &I16(12))));
     assert_eq!(iter.next(), None);
 
     let mut iter = (!u32s.inserted_or_modified(), &i16s).iter();

@@ -67,7 +67,7 @@ impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b ViewMut<'a, T>> {
 }
 
 impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b mut ViewMut<'a, T>> {
-    type AbsView = Not<FullRawWindowMut<'b, T>>;
+    type AbsView = Not<FullRawWindowMut<'b, T, T::Tracking>>;
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {

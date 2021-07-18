@@ -93,8 +93,8 @@ impl DerefMut for EntitiesViewMut<'_> {
 }
 
 /// Shared view over a component storage.
-pub struct View<'a, T: Component> {
-    pub(crate) sparse_set: &'a SparseSet<T, T::Tracking>,
+pub struct View<'a, T: Component, Tracking: track::Tracking = <T as Component>::Tracking> {
+    pub(crate) sparse_set: &'a SparseSet<T, Tracking>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }

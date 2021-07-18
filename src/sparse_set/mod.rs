@@ -63,7 +63,7 @@ impl<T: Component> SparseSet<T, T::Tracking> {
         }
     }
     #[inline]
-    pub(crate) fn full_raw_window_mut(&mut self) -> FullRawWindowMut<'_, T> {
+    pub(crate) fn full_raw_window_mut(&mut self) -> FullRawWindowMut<'_, T, T::Tracking> {
         FullRawWindowMut::new(self)
     }
     /// Returns a slice of all the components in this storage.

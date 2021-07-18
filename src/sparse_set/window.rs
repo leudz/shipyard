@@ -5,19 +5,19 @@ use alloc::boxed::Box;
 use core::marker::PhantomData;
 use core::ptr;
 
-pub struct FullRawWindowMut<'a, T> {
+pub struct FullRawWindowMut<'a, T, Tracking> {
     sparse: *mut *mut EntityId,
     sparse_len: usize,
     pub(crate) dense: *mut EntityId,
     dense_len: usize,
     pub(crate) data: *mut T,
     pub(crate) is_tracking_modification: bool,
-    _phantom: PhantomData<&'a mut T>,
+    _phantom: PhantomData<(&'a mut T, Tracking)>,
 }
 
-unsafe impl<T: Send> Send for FullRawWindowMut<'_, T> {}
+unsafe impl<T: Send + Component> Send for FullRawWindowMut<'_, T, T::Tracking> {}
 
-impl<'w, T: Component> FullRawWindowMut<'w, T> {
+impl<'w, T: Component> FullRawWindowMut<'w, T, T::Tracking> {
     #[inline]
     pub(crate) fn new(sparse_set: &mut SparseSet<T, T::Tracking>) -> Self {
         let sparse_len = sparse_set.sparse.len();
@@ -76,7 +76,7 @@ impl<'w, T: Component> FullRawWindowMut<'w, T> {
     }
 }
 
-impl<T> Clone for FullRawWindowMut<'_, T> {
+impl<T: Component> Clone for FullRawWindowMut<'_, T, T::Tracking> {
     #[inline]
     fn clone(&self) -> Self {
         FullRawWindowMut {
