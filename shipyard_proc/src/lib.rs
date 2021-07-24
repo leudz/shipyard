@@ -1,5 +1,7 @@
 extern crate proc_macro;
-use proc_macro2::TokenStream;
+
+use proc_macro2::{Span, TokenStream};
+use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{Error, Result};
 
@@ -31,7 +33,7 @@ fn expand_component(
 ) -> Result<TokenStream> {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    if let Some(tracking_attr) = attribute_input {
+    let tracking = if let Some(tracking_attr) = attribute_input {
         let tracking: syn::Ident = tracking_attr.parse_args().map_err(|_| {
             Error::new_spanned(
                 &tracking_attr.tokens,
@@ -39,16 +41,27 @@ fn expand_component(
             )
         })?;
 
-        Ok(quote!(
+        quote!(#tracking)
+    } else {
+        quote!(Nothing)
+    };
+    let shipyard_name = crate_name("shipyard")
+        .map_err(|_| Error::new(Span::call_site(), "shipyard to be present in `Cargo.toml`"))?;
+
+    match shipyard_name {
+        FoundCrate::Itself => Ok(quote!(
             impl #impl_generics ::shipyard::Component for #name #ty_generics #where_clause {
                 type Tracking = ::shipyard::track::#tracking;
             }
-        ))
-    } else {
-        Ok(quote!(
-            impl #impl_generics ::shipyard::Component for #name #ty_generics #where_clause {
-                type Tracking = ::shipyard::track::Nothing;
-            }
-        ))
+        )),
+        FoundCrate::Name(shipyard_name) => {
+            let shipyard_name = syn::Ident::new(&shipyard_name, Span::call_site());
+
+            Ok(quote!(
+                impl #impl_generics #shipyard_name::Component for #name #ty_generics #where_clause {
+                    type Tracking = #shipyard_name::track::#tracking;
+                }
+            ))
+        }
     }
 }
