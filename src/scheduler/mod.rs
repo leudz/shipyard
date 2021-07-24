@@ -31,13 +31,13 @@ pub(super) struct Batches {
 // a batch lists systems that can run in parallel
 #[allow(clippy::type_complexity)]
 pub(crate) struct Scheduler {
-    pub(super) systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
-    pub(super) system_names: Vec<&'static str>,
-    pub(super) system_generators: Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
+    pub(crate) systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
+    pub(crate) system_names: Vec<&'static str>,
+    pub(crate) system_generators: Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
     // system's `TypeId` to an index into both systems and system_names
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
-    workloads: HashMap<Cow<'static, str>, Batches>,
+    pub(crate) workloads: HashMap<Cow<'static, str>, Batches>,
     default: Cow<'static, str>,
 }
 

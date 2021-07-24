@@ -2,6 +2,7 @@ use crate::all_storages::{AllStorages, CustomStorageAccess, DeleteAny, Retain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{Borrow, IntoBorrow};
 use crate::entity_id::EntityId;
+use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
@@ -10,6 +11,7 @@ use crate::sparse_set::{AddComponent, BulkAddEntity, Remove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
 use alloc::borrow::Cow;
+use alloc::vec::Vec;
 
 /// `World` contains all data this library will manipulate.
 pub struct World {
@@ -1000,6 +1002,32 @@ impl World {
     /// Displays storages memory information.
     pub fn memory_usage(&self) -> WorldMemoryUsage<'_> {
         WorldMemoryUsage(self)
+    }
+    /// Returns a list of workloads, their systems and which storages these systems borrow.
+    pub fn workloads_type_usage(&mut self) -> WorkloadsTypeUsage {
+        let mut workload_type_info = hashbrown::HashMap::new();
+
+        let scheduler = self.scheduler.get_mut();
+
+        for (workload_name, batches) in &scheduler.workloads {
+            workload_type_info.insert(
+                workload_name.clone(),
+                batches
+                    .sequential
+                    .iter()
+                    .map(|system_index| {
+                        let system_name = scheduler.system_names[*system_index];
+                        let mut system_storage_borrowed = Vec::new();
+
+                        scheduler.system_generators[*system_index](&mut system_storage_borrowed);
+
+                        (system_name, system_storage_borrowed)
+                    })
+                    .collect(),
+            );
+        }
+
+        WorkloadsTypeUsage(workload_type_info)
     }
 }
 

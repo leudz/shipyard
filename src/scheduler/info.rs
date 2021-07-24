@@ -142,3 +142,8 @@ impl core::fmt::Debug for TypeInfo {
         .finish()
     }
 }
+
+/// Contains a list of workloads, their systems and which storages these systems borrow.
+pub struct WorkloadsTypeUsage(
+    pub hashbrown::HashMap<Cow<'static, str>, Vec<(&'static str, Vec<TypeInfo>)>>,
+);
