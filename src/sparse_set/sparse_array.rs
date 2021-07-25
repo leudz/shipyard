@@ -27,7 +27,7 @@ impl<T, const N: usize> SparseArray<T, N> {
         self.0.len() * core::mem::size_of::<Option<Box<T>>>()
             + self.0.iter().fold(0, |count, array| {
                 if array.is_some() {
-                    count + core::mem::size_of::<T>()
+                    count + core::mem::size_of::<[T; N]>()
                 } else {
                     count
                 }
@@ -37,7 +37,7 @@ impl<T, const N: usize> SparseArray<T, N> {
         self.0.capacity() * core::mem::size_of::<Option<Box<T>>>()
             + self.0.iter().fold(0, |count, array| {
                 if array.is_some() {
-                    count + core::mem::size_of::<T>()
+                    count + core::mem::size_of::<[T; N]>()
                 } else {
                     count
                 }
