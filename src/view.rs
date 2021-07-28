@@ -94,13 +94,13 @@ impl DerefMut for EntitiesViewMut<'_> {
 }
 
 /// Shared view over a component storage.
-pub struct View<'a, T: Component, Tracking: track::Tracking = <T as Component>::Tracking> {
+pub struct View<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a SparseSet<T, Tracking>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<T: Component> View<'_, T, track::Insertion> {
+impl<T: Component<Tracking = track::Insertion>> View<'_, T, track::Insertion> {
     /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
@@ -111,7 +111,7 @@ impl<T: Component> View<'_, T, track::Insertion> {
     }
 }
 
-impl<T: Component> View<'_, T, track::Modification> {
+impl<T: Component<Tracking = track::Modification>> View<'_, T, track::Modification> {
     /// Wraps this view to be able to iterate *modified* components.
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
@@ -122,7 +122,7 @@ impl<T: Component> View<'_, T, track::Modification> {
     }
 }
 
-impl<T: Component> View<'_, T, track::All> {
+impl<T: Component<Tracking = track::All>> View<'_, T, track::All> {
     /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
@@ -171,13 +171,13 @@ impl<T: fmt::Debug + Component> fmt::Debug for View<'_, T> {
 }
 
 /// Exclusive view over a component storage.
-pub struct ViewMut<'a, T: Component, Tracking: track::Tracking = <T as Component>::Tracking> {
+pub struct ViewMut<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a mut SparseSet<T, Tracking>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
 }
 
-impl<T: Component> ViewMut<'_, T, track::Insertion> {
+impl<T: Component<Tracking = track::Insertion>> ViewMut<'_, T, track::Insertion> {
     /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
@@ -196,7 +196,7 @@ impl<T: Component> ViewMut<'_, T, track::Insertion> {
     }
 }
 
-impl<T: Component> ViewMut<'_, T, track::Modification> {
+impl<T: Component<Tracking = track::Modification>> ViewMut<'_, T, track::Modification> {
     /// Wraps this view to be able to iterate *modified* components.
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
@@ -215,7 +215,7 @@ impl<T: Component> ViewMut<'_, T, track::Modification> {
     }
 }
 
-impl<T: Component> ViewMut<'_, T, track::All> {
+impl<T: Component<Tracking = track::All>> ViewMut<'_, T, track::All> {
     /// Wraps this view to be able to iterate *inserted* components.
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
@@ -286,7 +286,7 @@ impl<T: fmt::Debug + Component> fmt::Debug for ViewMut<'_, T> {
 }
 
 /// Shared view over a unique component storage.
-pub struct UniqueView<'a, T: Component, Track: Tracking = <T as Component>::Tracking> {
+pub struct UniqueView<'a, T: Component, Track: Tracking<T> = <T as Component>::Tracking> {
     pub(crate) unique: &'a Unique<T>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
@@ -380,7 +380,7 @@ impl<T: fmt::Debug + Component> fmt::Debug for UniqueView<'_, T> {
 }
 
 /// Exclusive view over a unique component storage.
-pub struct UniqueViewMut<'a, T: Component, Track: Tracking = <T as Component>::Tracking> {
+pub struct UniqueViewMut<'a, T: Component, Track: Tracking<T> = <T as Component>::Tracking> {
     pub(crate) unique: &'a mut Unique<T>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,

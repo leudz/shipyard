@@ -3,13 +3,17 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
+use crate::track;
 
 pub trait Remove {
     type Out;
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out;
 }
 
-impl<T: Send + Sync + Component> Remove for (T,) {
+impl<T: Send + Sync + Component> Remove for (T,)
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+{
     type Out = (Option<T>,);
 
     #[inline]
@@ -25,7 +29,10 @@ impl<T: Send + Sync + Component> Remove for (T,) {
 
 macro_rules! impl_remove_component {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Send + Sync + Component,)+> Remove for ($($type,)+) {
+        impl<$($type: Send + Sync + Component,)+> Remove for ($($type,)+)
+        where
+            $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
+        {
             type Out = ($(Option<$type>,)+);
 
             fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {

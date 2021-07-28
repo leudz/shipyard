@@ -68,5 +68,6 @@ fn update() {
         })
     );
     assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
-    assert_eq!(usizes.removed(), vec![entity1]);
+    assert_eq!(usizes.deleted(), &[(entity1, USIZE(0))]);
+    assert_eq!(usizes.removed(), &[]);
 }

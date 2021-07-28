@@ -14,7 +14,7 @@ use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-use crate::sparse_set::{AddComponent, BulkAddEntity, Remove};
+use crate::sparse_set::{AddComponent, BulkAddEntity, Delete, Remove};
 use crate::storage::{SBox, Storage, StorageId};
 use crate::unique::Unique;
 use crate::{error, Component};
@@ -409,6 +409,31 @@ impl AllStorages {
             panic!("{:?}", error::AddComponent::EntityIsNotAlive);
         }
     }
+    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
+    /// `C` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
+    ///
+    /// all_storages.delete_component::<(U32,)>(entity);
+    /// ```
+    #[inline]
+    pub fn delete_component<C: Delete>(&mut self, entity: EntityId) {
+        C::delete(self, entity);
+    }
     /// Removes components from an entity.  
     /// `C` must always be a tuple, even for a single component.
     ///
@@ -432,8 +457,8 @@ impl AllStorages {
     /// assert_eq!(i, Some(U32(0)));
     /// ```
     #[inline]
-    pub fn remove<T: Remove>(&mut self, entity: EntityId) -> T::Out {
-        T::remove(self, entity)
+    pub fn remove<C: Remove>(&mut self, entity: EntityId) -> C::Out {
+        C::remove(self, entity)
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
 You can use a tuple to get multiple storages at once.

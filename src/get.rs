@@ -127,12 +127,7 @@ impl<'a, 'b, T: Component<Tracking = track::Modification>> Get
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet {
-            sparse: _,
-            dense,
-            data,
-            removal_data: _,
-        } = &mut **self;
+        let SparseSet { dense, data, .. } = &mut **self;
 
         let entity = unsafe { dense.get_unchecked_mut(index) };
 
@@ -155,12 +150,7 @@ impl<'a, 'b, T: Component<Tracking = track::All>> Get for &'b mut ViewMut<'a, T,
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet {
-            sparse: _,
-            dense,
-            data,
-            removal_data: _,
-        } = &mut **self;
+        let SparseSet { dense, data, .. } = &mut **self;
 
         let entity = unsafe { dense.get_unchecked_mut(index) };
 

@@ -7,7 +7,7 @@ use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::{Batches, Scheduler};
-use crate::sparse_set::{AddComponent, BulkAddEntity, Remove};
+use crate::sparse_set::{AddComponent, BulkAddEntity, Delete, Remove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
 use alloc::borrow::Cow;
@@ -839,6 +839,30 @@ impl World {
     #[inline]
     pub fn add_component<C: AddComponent>(&mut self, entity: EntityId, component: C) {
         self.all_storages.get_mut().add_component(entity, component)
+    }
+    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
+    /// `C` must always be a tuple, even for a single component.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity((U32(0), USIZE(1)));
+    ///
+    /// world.delete_component::<(U32,)>(entity);
+    /// ```
+    #[inline]
+    pub fn delete_component<C: Delete>(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().delete_component::<C>(entity)
     }
     /// Removes components from an entity.  
     /// `C` must always be a tuple, even for a single component.

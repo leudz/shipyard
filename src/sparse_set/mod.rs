@@ -1,5 +1,6 @@
 mod add_component;
 mod bulk_add_entity;
+mod delete;
 mod drain;
 mod remove;
 mod sparse_array;
@@ -10,13 +11,14 @@ pub use sparse_array::SparseArray;
 
 pub(crate) use add_component::AddComponent;
 pub(crate) use bulk_add_entity::BulkAddEntity;
+pub(crate) use delete::Delete;
 pub(crate) use remove::Remove;
 pub(crate) use window::FullRawWindowMut;
 
 use crate::component::Component;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::storage::Storage;
-use crate::track::{self, All, Insertion, Modification, Removal};
+use crate::track;
 use crate::{entity_id::EntityId, track::Tracking};
 use alloc::vec::Vec;
 use core::{
@@ -37,14 +39,15 @@ pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
 // It mimics the dense vector in regard to insertion/deletion.
 
 // Inserted and modified info is only present in dense
-pub struct SparseSet<T, Track: Tracking = track::Nothing> {
+pub struct SparseSet<T: Component, Track: Tracking<T> = <T as Component>::Tracking> {
     pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
+    pub(crate) deletion_data: Track::DeletionData,
     pub(crate) removal_data: Track::RemovalData,
 }
 
-impl<T: fmt::Debug, Track: Tracking> fmt::Debug for SparseSet<T, Track> {
+impl<T: fmt::Debug + Component> fmt::Debug for SparseSet<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list()
             .entries(self.dense.iter().zip(&self.data))
@@ -52,14 +55,15 @@ impl<T: fmt::Debug, Track: Tracking> fmt::Debug for SparseSet<T, Track> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     #[inline]
     pub(crate) fn new() -> Self {
         SparseSet {
             sparse: SparseArray::new(),
             dense: Vec::new(),
             data: Vec::new(),
-            removal_data: <T::Tracking as Tracking>::RemovalData::default(),
+            deletion_data: <T::Tracking as Tracking<T>>::DeletionData::default(),
+            removal_data: <T::Tracking as Tracking<T>>::RemovalData::default(),
         }
     }
     #[inline]
@@ -73,7 +77,7 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     /// Returns `true` if `entity` owns a component in this storage.
     #[inline]
     pub fn contains(&self, entity: EntityId) -> bool {
@@ -91,7 +95,7 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this storage and until a modification happens.
     #[inline]
@@ -147,7 +151,7 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     /// Inserts `value` in the `SparseSet`.
     ///
     /// # Tracking
@@ -204,11 +208,16 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
     #[inline]
     pub fn remove(&mut self, entity: EntityId) -> Option<T> {
         T::Tracking::remove(self, entity)
+    }
+    /// Deletes `entity`'s component from this storage.
+    #[inline]
+    pub fn delete(&mut self, entity: EntityId) -> bool {
+        T::Tracking::delete(self, entity)
     }
     #[inline]
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
@@ -242,7 +251,7 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component<Tracking = Insertion>> SparseSet<T, Insertion> {
+impl<T: Component<Tracking = track::Insertion>> SparseSet<T, track::Insertion> {
     /// Removes the *inserted* flag on `entity`'s component.
     pub fn clear_inserted(&mut self, entity: EntityId) {
         if let Some(id) = self.sparse.get(entity) {
@@ -278,7 +287,7 @@ impl<T: Component<Tracking = Insertion>> SparseSet<T, Insertion> {
     }
 }
 
-impl<T: Component<Tracking = Modification>> SparseSet<T, Modification> {
+impl<T: Component<Tracking = track::Modification>> SparseSet<T, track::Modification> {
     /// Removes the *modified* flag on `entity`'s component.
     #[inline]
     pub fn clear_modified(&mut self, entity: EntityId) {
@@ -315,25 +324,74 @@ impl<T: Component<Tracking = Modification>> SparseSet<T, Modification> {
     }
 }
 
-impl<T: Component<Tracking = Removal>> SparseSet<T, Removal> {
-    /// Returns the ids of *removed* components of a storage tracking removal.
-    pub fn removed(&self) -> &[EntityId] {
-        &self.removal_data
+impl<T: Component<Tracking = track::Deletion>> SparseSet<T, track::Deletion> {
+    /// Returns the *deleted* components of a storage tracking deletion.
+    pub fn deleted(&self) -> &[(EntityId, T)] {
+        &self.deletion_data
     }
-    /// Takes ownership of the ids of *removed* components of a storage tracking removal.
-    pub fn take_removed(&mut self) -> Vec<EntityId> {
-        self.removal_data.drain(..).collect()
+    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
+    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.deletion_data.iter().map(|(id, _)| *id)
+    }
+    /// Takes ownership of the *deleted* components of a storage tracking deletion.
+    pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
+        self.deletion_data.drain(..).collect()
+    }
+    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
+    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
+        (Vec::new(), self.deletion_data.drain(..).collect())
     }
 }
 
-impl<T: Component<Tracking = All>> SparseSet<T, All> {
+impl<T: Component<Tracking = track::Removal>> SparseSet<T, track::Removal> {
     /// Returns the ids of *removed* components of a storage tracking removal.
     pub fn removed(&self) -> &[EntityId] {
         &self.removal_data
     }
+    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
+    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.removal_data.iter().copied()
+    }
     /// Takes ownership of the ids of *removed* components of a storage tracking removal.
     pub fn take_removed(&mut self) -> Vec<EntityId> {
         self.removal_data.drain(..).collect()
+    }
+    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
+    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
+        (self.removal_data.drain(..).collect(), Vec::new())
+    }
+}
+
+impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
+    /// Returns the *deleted* components of a storage tracking deletion.
+    pub fn deleted(&self) -> &[(EntityId, T)] {
+        &self.deletion_data
+    }
+    /// Returns the ids of *removed* components of a storage tracking removal.
+    pub fn removed(&self) -> &[EntityId] {
+        &self.removal_data
+    }
+    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
+    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
+        self.deletion_data
+            .iter()
+            .map(|(id, _)| *id)
+            .chain(self.removal_data.iter().copied())
+    }
+    /// Takes ownership of the *deleted* components of a storage tracking deletion.
+    pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
+        self.deletion_data.drain(..).collect()
+    }
+    /// Takes ownership of the ids of *removed* components of a storage tracking removal.
+    pub fn take_removed(&mut self) -> Vec<EntityId> {
+        self.removal_data.drain(..).collect()
+    }
+    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
+    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
+        (
+            self.removal_data.drain(..).collect(),
+            self.deletion_data.drain(..).collect(),
+        )
     }
     /// Removes the *inserted* flag on `entity`'s component.
     pub fn clear_inserted(&mut self, entity: EntityId) {
@@ -389,7 +447,7 @@ impl<T: Component<Tracking = All>> SparseSet<T, All> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     /// Returns `true` if `entity`'s component was inserted since the last [`clear_inserted`] or [`clear_all_inserted`] call.  
     /// Returns `false` if `entity` does not have a component in this storage.
     ///
@@ -446,7 +504,7 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component> SparseSet<T, T::Tracking> {
+impl<T: Component> SparseSet<T> {
     /// Reserves memory for at least `additional` components. Adding components can still allocate though.
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
@@ -521,14 +579,14 @@ impl<T: Component> SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Ord + Component> SparseSet<T, T::Tracking> {
+impl<T: Ord + Component> SparseSet<T> {
     /// Sorts the `SparseSet`, but may not preserve the order of equal elements.
     pub fn sort_unstable(&mut self) {
         self.sort_unstable_by(Ord::cmp)
     }
 }
 
-impl<T: Component> core::ops::Index<EntityId> for SparseSet<T, T::Tracking> {
+impl<T: Component> core::ops::Index<EntityId> for SparseSet<T> {
     type Output = T;
     #[track_caller]
     #[inline]
@@ -537,7 +595,7 @@ impl<T: Component> core::ops::Index<EntityId> for SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: Component> core::ops::IndexMut<EntityId> for SparseSet<T, T::Tracking> {
+impl<T: Component> core::ops::IndexMut<EntityId> for SparseSet<T> {
     #[track_caller]
     #[inline]
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
@@ -545,10 +603,10 @@ impl<T: Component> core::ops::IndexMut<EntityId> for SparseSet<T, T::Tracking> {
     }
 }
 
-impl<T: 'static + Component> Storage for SparseSet<T, T::Tracking> {
+impl<T: 'static + Component> Storage for SparseSet<T> {
     #[inline]
     fn delete(&mut self, entity: EntityId) {
-        SparseSet::remove(self, entity);
+        SparseSet::delete(self, entity);
     }
     #[inline]
     fn clear(&mut self) {

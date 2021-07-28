@@ -4,7 +4,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
-use crate::track::Tracking;
+use crate::track::{self, Tracking};
 use core::iter::IntoIterator;
 
 pub trait BulkAddEntity {
@@ -51,7 +51,10 @@ impl BulkInsert for () {
     }
 }
 
-impl<T: Send + Sync + Component> BulkInsert for (T,) {
+impl<T: Send + Sync + Component> BulkInsert for (T,)
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+{
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
@@ -122,7 +125,11 @@ impl<T: Send + Sync + Component> BulkInsert for (T,) {
 
 macro_rules! impl_bulk_insert {
     (($type1: ident, $sparse_set1: ident, $index1: tt) $(($type: ident, $sparse_set: ident, $index: tt))*) => {
-        impl<$type1: Send + Sync + Component, $($type: Send + Sync + Component,)*> BulkInsert for ($type1, $($type,)*) {
+        impl<$type1: Send + Sync + Component, $($type: Send + Sync + Component,)*> BulkInsert for ($type1, $($type,)*)
+        where
+            <$type1::Tracking as track::Tracking<$type1>>::DeletionData: Send + Sync,
+            $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
+        {
             #[allow(non_snake_case)]
             fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();

@@ -19,12 +19,12 @@ pub use non_sync::NonSync;
 use crate::all_storages::CustomStorageAccess;
 use crate::atomic_refcell::{Ref, RefMut};
 use crate::component::Component;
-use crate::error;
 use crate::sparse_set::SparseSet;
 use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 use crate::world::World;
+use crate::{error, track};
 use core::marker::PhantomData;
 
 /// Describes if a storage is borrowed exlusively or not.  
@@ -160,11 +160,17 @@ impl<'a> Borrow<'a> for EntitiesMutBorrower {
 /// Helper struct allowing GAT-like behavior in stable.
 pub struct ViewBorrower<T>(T);
 
-impl<T: Send + Sync + Component> IntoBorrow for View<'_, T> {
+impl<T: Send + Sync + Component> IntoBorrow for View<'_, T>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+{
     type Borrow = ViewBorrower<T>;
 }
 
-impl<'a, T: Send + Sync + Component> Borrow<'a> for ViewBorrower<T> {
+impl<'a, T: Send + Sync + Component> Borrow<'a> for ViewBorrower<T>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+{
     type View = View<'a, T>;
 
     #[inline]
@@ -191,12 +197,18 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for ViewBorrower<T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Sync + Component> IntoBorrow for NonSend<View<'_, T>> {
+impl<T: Sync + Component> IntoBorrow for NonSend<View<'_, T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Sync,
+{
     type Borrow = NonSend<ViewBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Component> Borrow<'a> for NonSend<ViewBorrower<T>> {
+impl<'a, T: Sync + Component> Borrow<'a> for NonSend<ViewBorrower<T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Sync,
+{
     type View = NonSend<View<'a, T>>;
 
     #[inline]
@@ -223,12 +235,18 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<ViewBorrower<T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Send + Component> IntoBorrow for NonSync<View<'_, T>> {
+impl<T: Send + Component> IntoBorrow for NonSync<View<'_, T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send,
+{
     type Borrow = NonSync<ViewBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Component> Borrow<'a> for NonSync<ViewBorrower<T>> {
+impl<'a, T: Send + Component> Borrow<'a> for NonSync<ViewBorrower<T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send,
+{
     type View = NonSync<View<'a, T>>;
 
     #[inline]
@@ -289,11 +307,17 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
 /// Helper struct allowing GAT-like behavior in stable.
 pub struct ViewMutBorrower<T>(T);
 
-impl<T: Send + Sync + Component> IntoBorrow for ViewMut<'_, T> {
+impl<T: Send + Sync + Component> IntoBorrow for ViewMut<'_, T>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+{
     type Borrow = ViewMutBorrower<T>;
 }
 
-impl<'a, T: Send + Sync + Component> Borrow<'a> for ViewMutBorrower<T> {
+impl<'a, T: Send + Sync + Component> Borrow<'a> for ViewMutBorrower<T>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+{
     type View = ViewMut<'a, T>;
 
     #[inline]
@@ -320,12 +344,18 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for ViewMutBorrower<T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Sync + Component> IntoBorrow for NonSend<ViewMut<'_, T>> {
+impl<T: Sync + Component> IntoBorrow for NonSend<ViewMut<'_, T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Sync,
+{
     type Borrow = NonSend<ViewMutBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Component> Borrow<'a> for NonSend<ViewMutBorrower<T>> {
+impl<'a, T: Sync + Component> Borrow<'a> for NonSend<ViewMutBorrower<T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Sync,
+{
     type View = NonSend<ViewMut<'a, T>>;
 
     #[inline]
@@ -352,12 +382,18 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<ViewMutBorrower<T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Send + Component> IntoBorrow for NonSync<ViewMut<'_, T>> {
+impl<T: Send + Component> IntoBorrow for NonSync<ViewMut<'_, T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send,
+{
     type Borrow = NonSync<ViewMutBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Component> Borrow<'a> for NonSync<ViewMutBorrower<T>> {
+impl<'a, T: Send + Component> Borrow<'a> for NonSync<ViewMutBorrower<T>>
+where
+    <T::Tracking as track::Tracking<T>>::DeletionData: Send,
+{
     type View = NonSync<ViewMut<'a, T>>;
 
     #[inline]

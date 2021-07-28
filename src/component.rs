@@ -4,5 +4,5 @@ use crate::track;
 pub trait Component: Sized + 'static {
     /// Specify what this storage should track.
     /// Can be one of: [`track::Nothing`], [`track::Insertion`], [`track::Modification`], [`track::Removal`], [`track::All`].
-    type Tracking: track::Tracking + 'static;
+    type Tracking: track::Tracking<Self> + 'static;
 }
