@@ -34,7 +34,7 @@ pub trait Get {
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
 }
 
-impl<'a: 'b, 'b, T: Component> Get for &'b View<'a, T> {
+impl<'a, 'b, T: Component> Get for &'b View<'a, T> {
     type Out = &'b T;
 
     #[inline]
@@ -48,7 +48,7 @@ impl<'a: 'b, 'b, T: Component> Get for &'b View<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: Component> Get for &'b ViewMut<'a, T> {
+impl<'a, 'b, T: Component> Get for &'b ViewMut<'a, T> {
     type Out = &'b T;
 
     #[inline]
@@ -62,7 +62,7 @@ impl<'a: 'b, 'b, T: Component> Get for &'b ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: Component<Tracking = track::Nothing>> Get
+impl<'a, 'b, T: Component<Tracking = track::Nothing>> Get
     for &'b mut ViewMut<'a, T, track::Nothing>
 {
     type Out = &'b mut T;
@@ -79,7 +79,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Nothing>> Get
     }
 }
 
-impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> Get
+impl<'a, 'b, T: Component<Tracking = track::Insertion>> Get
     for &'b mut ViewMut<'a, T, track::Insertion>
 {
     type Out = &'b mut T;
@@ -96,7 +96,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> Get
     }
 }
 
-impl<'a: 'b, 'b, T: Component<Tracking = track::Removal>> Get
+impl<'a, 'b, T: Component<Tracking = track::Removal>> Get
     for &'b mut ViewMut<'a, T, track::Removal>
 {
     type Out = &'b mut T;
@@ -113,7 +113,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Removal>> Get
     }
 }
 
-impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> Get
+impl<'a, 'b, T: Component<Tracking = track::Modification>> Get
     for &'b mut ViewMut<'a, T, track::Modification>
 {
     type Out = Mut<'b, T>;
@@ -143,7 +143,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> Get
     }
 }
 
-impl<'a: 'b, 'b, T: Component<Tracking = track::All>> Get for &'b mut ViewMut<'a, T, track::All> {
+impl<'a, 'b, T: Component<Tracking = track::All>> Get for &'b mut ViewMut<'a, T, track::All> {
     type Out = Mut<'b, T>;
 
     #[inline]
