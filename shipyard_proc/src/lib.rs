@@ -45,8 +45,12 @@ fn expand_component(
     } else {
         quote!(Nothing)
     };
-    let shipyard_name = crate_name("shipyard")
-        .map_err(|_| Error::new(Span::call_site(), "shipyard to be present in `Cargo.toml`"))?;
+    let shipyard_name = crate_name("shipyard").map_err(|_| {
+        Error::new(
+            Span::call_site(),
+            "shipyard needs to be present in `Cargo.toml`",
+        )
+    })?;
 
     match shipyard_name {
         FoundCrate::Itself => Ok(quote!(
