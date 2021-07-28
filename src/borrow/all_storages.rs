@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 #[cfg(feature = "thread_local")]
 use super::NonSend;
 #[cfg(feature = "thread_local")]
@@ -198,6 +200,7 @@ impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for UniqueViewBorrowe
             unique,
             borrow: Some(borrow),
             all_borrow: None,
+            _phantom: PhantomData,
         })
     }
 }
@@ -214,6 +217,7 @@ impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<UniqueViewBorrow
             unique,
             borrow: Some(borrow),
             all_borrow: None,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -230,6 +234,7 @@ impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<UniqueViewBorrow
             unique,
             borrow: Some(borrow),
             all_borrow: None,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -246,6 +251,7 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<UniqueViewBorrower<
             unique,
             borrow: Some(borrow),
             all_borrow: None,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -261,6 +267,7 @@ impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for UniqueViewMutBorr
             unique,
             _borrow: Some(borrow),
             _all_borrow: None,
+            _phantom: PhantomData,
         })
     }
 }
@@ -277,6 +284,7 @@ impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<UniqueViewMutBor
             unique,
             _borrow: Some(borrow),
             _all_borrow: None,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -293,6 +301,7 @@ impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<UniqueViewMutBor
             unique,
             _borrow: Some(borrow),
             _all_borrow: None,
+            _phantom: PhantomData,
         }))
     }
 }
@@ -309,6 +318,7 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMutBorrow
             unique,
             _borrow: Some(borrow),
             _all_borrow: None,
+            _phantom: PhantomData,
         }))
     }
 }

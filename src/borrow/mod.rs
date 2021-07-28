@@ -25,6 +25,7 @@ use crate::view::{
     AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
 };
 use crate::world::World;
+use core::marker::PhantomData;
 
 /// Describes if a storage is borrowed exlusively or not.  
 /// It is used to display workloads' borrowing information.
@@ -443,6 +444,7 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewBorrower<T> {
             unique,
             borrow: Some(borrow),
             all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         })
     }
 }
@@ -475,6 +477,7 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
             unique,
             borrow: Some(borrow),
             all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         }))
     }
 }
@@ -507,6 +510,7 @@ impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
             unique,
             borrow: Some(borrow),
             all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         }))
     }
 }
@@ -539,6 +543,7 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
             unique,
             borrow: Some(borrow),
             all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         }))
     }
 }
@@ -572,6 +577,7 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewMutBorrower<T> {
             unique,
             _borrow: Some(borrow),
             _all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         })
     }
 }
@@ -604,6 +610,7 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
             unique,
             _borrow: Some(borrow),
             _all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         }))
     }
 }
@@ -636,6 +643,7 @@ impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
             unique,
             _borrow: Some(borrow),
             _all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         }))
     }
 }
@@ -668,6 +676,7 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
             unique,
             _borrow: Some(borrow),
             _all_borrow: Some(all_borrow),
+            _phantom: PhantomData,
         }))
     }
 }

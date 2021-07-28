@@ -3,10 +3,11 @@ use crate::atomic_refcell::{ExclusiveBorrow, RefMut, SharedBorrow};
 use crate::component::Component;
 use crate::entities::Entities;
 use crate::sparse_set::SparseSet;
-use crate::track;
+use crate::track::{self, Tracking};
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
-use crate::unique::Unique;
+use crate::unique::{TrackingState, Unique};
 use core::fmt;
+use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
 /// Exclusive view over `AllStorages`.
@@ -285,18 +286,62 @@ impl<T: fmt::Debug + Component> fmt::Debug for ViewMut<'_, T> {
 }
 
 /// Shared view over a unique component storage.
-pub struct UniqueView<'a, T: Component> {
+pub struct UniqueView<'a, T: Component, Track: Tracking = <T as Component>::Tracking> {
     pub(crate) unique: &'a Unique<T>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) _phantom: PhantomData<Track>,
 }
 
-impl<T: Component> UniqueView<'_, T> {
+impl<T: Component<Tracking = track::Insertion>> UniqueView<'_, T, track::Insertion> {
+    /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
+    ///
+    /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    pub fn is_inserted(&self) -> bool {
+        self.unique.tracking == TrackingState::Inserted
+    }
+    /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
+    ///
+    /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    pub fn is_inserted_or_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Inserted
+    }
+}
+
+impl<T: Component<Tracking = track::Modification>> UniqueView<'_, T, track::Modification> {
     /// Returns `true` is the component was modified since the last [`clear_modified`] call.
     ///
     /// [`clear_modified`]: UniqueViewMut::clear_modified
-    pub fn is_modified(unique: &Self) -> bool {
-        unique.unique.is_modified
+    pub fn is_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Modified
+    }
+    /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
+    ///
+    /// [`clear_modified`]: UniqueViewMut::clear_modified
+    pub fn is_inserted_or_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Modified
+    }
+}
+
+impl<T: Component<Tracking = track::All>> UniqueView<'_, T, track::All> {
+    /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
+    ///
+    /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    pub fn is_inserted(&self) -> bool {
+        self.unique.tracking == TrackingState::Inserted
+    }
+    /// Returns `true` is the component was modified since the last [`clear_modified`] call.
+    ///
+    /// [`clear_modified`]: UniqueViewMut::clear_modified
+    pub fn is_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Modified
+    }
+    /// Returns `true` if the component was inserted or modified since the last [`clear_inserted`] or [`clear_modified`] call.  
+    ///
+    /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    /// [`clear_modified`]: UniqueViewMut::clear_modified
+    pub fn is_inserted_or_modified(&self) -> bool {
+        self.unique.tracking != TrackingState::Nothing
     }
 }
 
@@ -323,6 +368,7 @@ impl<T: Component> Clone for UniqueView<'_, T> {
             unique: self.unique,
             borrow: self.borrow.clone(),
             all_borrow: self.all_borrow.clone(),
+            _phantom: PhantomData,
         }
     }
 }
@@ -334,22 +380,86 @@ impl<T: fmt::Debug + Component> fmt::Debug for UniqueView<'_, T> {
 }
 
 /// Exclusive view over a unique component storage.
-pub struct UniqueViewMut<'a, T: Component> {
+pub struct UniqueViewMut<'a, T: Component, Track: Tracking = <T as Component>::Tracking> {
     pub(crate) unique: &'a mut Unique<T>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) _phantom: PhantomData<Track>,
 }
 
-impl<T: Component> UniqueViewMut<'_, T> {
-    /// Returns `true` is the component was modified since the last [`clear_modified`] call.
+impl<T: Component<Tracking = track::Insertion>> UniqueViewMut<'_, T, track::Insertion> {
+    /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
+    ///
+    /// [`clear_inserted`]: Self::clear_inserted
+    pub fn is_inserted(&self) -> bool {
+        self.unique.tracking == TrackingState::Inserted
+    }
+    /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
+    ///
+    /// [`clear_inserted`]: Self::clear_inserted
+    pub fn is_inserted_or_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Inserted
+    }
+    /// Removes the *inserted* flag on the component of this storage.
+    pub fn clear_inserted(&mut self) {
+        self.unique.tracking = TrackingState::Nothing;
+    }
+}
+
+impl<T: Component<Tracking = track::Modification>> UniqueViewMut<'_, T, track::Modification> {
+    /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///
     /// [`clear_modified`]: Self::clear_modified
-    pub fn is_modified(unique: &Self) -> bool {
-        unique.unique.is_modified
+    pub fn is_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Modified
     }
-    /// Removes the *modified* flag on this component.
-    pub fn clear_modified(unique: &mut Self) {
-        unique.unique.is_modified = false;
+    /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
+    ///
+    /// [`clear_modified`]: Self::clear_modified
+    pub fn is_inserted_or_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Modified
+    }
+    /// Removes the *medified* flag on the component of this storage.
+    pub fn clear_modified(&mut self) {
+        self.unique.tracking = TrackingState::Nothing;
+    }
+}
+
+impl<T: Component<Tracking = track::All>> UniqueViewMut<'_, T, track::All> {
+    /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
+    ///
+    /// [`clear_inserted`]: Self::clear_inserted
+    pub fn is_inserted(&self) -> bool {
+        self.unique.tracking == TrackingState::Inserted
+    }
+    /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
+    ///
+    /// [`clear_modified`]: Self::clear_modified
+    pub fn is_modified(&self) -> bool {
+        self.unique.tracking == TrackingState::Modified
+    }
+    /// Returns `true` if the component was inserted or modified since the last [`clear_inserted`] or [`clear_modified`] call.  
+    ///
+    /// [`clear_inserted`]: Self::clear_inserted
+    /// [`clear_modified`]: Self::clear_modified
+    pub fn is_inserted_or_modified(&self) -> bool {
+        self.unique.tracking != TrackingState::Nothing
+    }
+    /// Removes the *inserted* flag on the component of this storage.
+    pub fn clear_inserted(&mut self) {
+        if self.unique.tracking == TrackingState::Inserted {
+            self.unique.tracking = TrackingState::Nothing;
+        }
+    }
+    /// Removes the *medified* flag on the component of this storage.
+    pub fn clear_modified(&mut self) {
+        if self.unique.tracking == TrackingState::Modified {
+            self.unique.tracking = TrackingState::Nothing;
+        }
+    }
+    /// Removes the *inserted* and *modified* flags on the component of this storage.
+    pub fn clear_inserted_and_modified(&mut self) {
+        self.unique.tracking = TrackingState::Nothing;
     }
 }
 
@@ -362,10 +472,47 @@ impl<T: Component> Deref for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component> DerefMut for UniqueViewMut<'_, T> {
+impl<T: Component<Tracking = track::Nothing>> DerefMut for UniqueViewMut<'_, T, track::Nothing> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.unique.is_modified = true;
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::Insertion>> DerefMut
+    for UniqueViewMut<'_, T, track::Insertion>
+{
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::Removal>> DerefMut for UniqueViewMut<'_, T, track::Removal> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::Modification>> DerefMut
+    for UniqueViewMut<'_, T, track::Modification>
+{
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.unique.tracking = TrackingState::Modified;
+
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::All>> DerefMut for UniqueViewMut<'_, T, track::All> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        if self.unique.tracking == TrackingState::Nothing {
+            self.unique.tracking = TrackingState::Modified;
+        }
+
         &mut self.unique.value
     }
 }
@@ -377,10 +524,47 @@ impl<T: Component> AsRef<T> for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component> AsMut<T> for UniqueViewMut<'_, T> {
+impl<T: Component<Tracking = track::Nothing>> AsMut<T> for UniqueViewMut<'_, T, track::Nothing> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
-        self.unique.is_modified = true;
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::Insertion>> AsMut<T>
+    for UniqueViewMut<'_, T, track::Insertion>
+{
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::Removal>> AsMut<T> for UniqueViewMut<'_, T, track::Removal> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::Modification>> AsMut<T>
+    for UniqueViewMut<'_, T, track::Modification>
+{
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        self.unique.tracking = TrackingState::Modified;
+
+        &mut self.unique.value
+    }
+}
+
+impl<T: Component<Tracking = track::All>> AsMut<T> for UniqueViewMut<'_, T, track::All> {
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        if self.unique.tracking == TrackingState::Nothing {
+            self.unique.tracking = TrackingState::Modified;
+        }
+
         &mut self.unique.value
     }
 }
