@@ -31,7 +31,7 @@ use hashbrown::hash_map::{Entry, HashMap};
 // so any access to storages are valid as long as the World exists
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
-    storages: RwLock<HashMap<StorageId, SBox>>,
+    pub(crate) storages: RwLock<HashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
 }

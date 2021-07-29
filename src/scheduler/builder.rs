@@ -2,9 +2,9 @@ use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadI
 use super::{Batches, IntoWorkloadSystem, Scheduler, WorkloadSystem};
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
-use crate::error;
 use crate::type_id::TypeId;
 use crate::world::World;
+use crate::{error, track, Component, Unique};
 use alloc::borrow::Cow;
 // this is the macro, not the module
 use alloc::vec;
@@ -559,6 +559,67 @@ impl WorkloadBuilder {
                 Ok(workload_info)
             }
         }
+    }
+    /// Returns the first [`Unique`] storage borrowed by this workload that is not present in `world`.\
+    /// If the workload contains nested workloads they have to be present in the `World`.
+    ///
+    /// ### Borrows
+    ///
+    /// - AllStorages (shared)
+    /// - Scheduler (shared)
+    #[track_caller]
+    pub fn are_all_uniques_present_in_world(
+        &self,
+        world: &World,
+    ) -> Result<(), error::UniquePresence> {
+        struct ComponentType;
+
+        impl Component for ComponentType {
+            type Tracking = track::Nothing;
+        }
+
+        let all_storages = world.all_storages.borrow().unwrap();
+        let storages = all_storages.storages.read();
+        let scheduler = world.scheduler.borrow().unwrap();
+
+        let unique_name = core::any::type_name::<Unique<ComponentType>>()
+            .split_once('<')
+            .unwrap()
+            .0;
+        let mut type_infos = Vec::new();
+
+        for work_unit in &self.systems {
+            match work_unit {
+                WorkUnit::System(system) => {
+                    for type_info in &system.borrow_constraints {
+                        if type_info.name.starts_with(unique_name)
+                            && !storages.contains_key(&type_info.storage_id)
+                        {
+                            return Err(error::UniquePresence::Unique(type_info.clone()));
+                        }
+                    }
+                }
+                WorkUnit::Workload(workload) => {
+                    if let Some(workload) = scheduler.workloads.get(workload) {
+                        for system_index in &workload.sequential {
+                            scheduler.system_generators[*system_index](&mut type_infos);
+                        }
+                    } else {
+                        return Err(error::UniquePresence::Workload(workload.clone()));
+                    }
+                }
+            }
+        }
+
+        for type_info in type_infos {
+            if type_info.name.starts_with(unique_name)
+                && !storages.contains_key(&type_info.storage_id)
+            {
+                return Err(error::UniquePresence::Unique(type_info));
+            }
+        }
+
+        Ok(())
     }
 }
 

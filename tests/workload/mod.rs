@@ -6,6 +6,11 @@ impl Component for U32 {
     type Tracking = track::Nothing;
 }
 
+struct USIZE(usize);
+impl Component for USIZE {
+    type Tracking = track::Nothing;
+}
+
 use shipyard::*;
 
 #[test]
@@ -53,4 +58,51 @@ fn rename() {
     world.run_workload("New Empty").unwrap();
 
     assert_eq!(world.borrow::<UniqueView<U32>>().unwrap().0, 1);
+}
+
+#[test]
+fn are_all_uniques_present_in_world() {
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_unique(U32(0)).unwrap();
+
+    Workload::builder("")
+        .are_all_uniques_present_in_world(&world)
+        .unwrap();
+
+    Workload::builder("")
+        .with_system(|_: UniqueView<U32>| {})
+        .are_all_uniques_present_in_world(&world)
+        .unwrap();
+
+    assert_eq!(
+        Workload::builder("")
+            .with_workload("other_workload")
+            .are_all_uniques_present_in_world(&world),
+        Err(error::UniquePresence::Workload("other_workload".into()))
+    );
+
+    let type_info = {
+        let mut borrow_info = Vec::new();
+        UniqueView::<USIZE>::borrow_info(&mut borrow_info);
+        borrow_info.remove(0)
+    };
+    assert_eq!(
+        Workload::builder("")
+            .with_system(|_: UniqueView<USIZE>| {})
+            .are_all_uniques_present_in_world(&world),
+        Err(error::UniquePresence::Unique(type_info).into())
+    );
+
+    let type_info = {
+        let mut borrow_info = Vec::new();
+        UniqueViewMut::<USIZE>::borrow_info(&mut borrow_info);
+        borrow_info.remove(0)
+    };
+    assert_eq!(
+        Workload::builder("")
+            .with_system(|_: UniqueViewMut<USIZE>| {})
+            .are_all_uniques_present_in_world(&world),
+        Err(error::UniquePresence::Unique(type_info).into())
+    );
 }

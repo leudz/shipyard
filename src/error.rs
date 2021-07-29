@@ -1,5 +1,6 @@
 //! All error types.
 
+use crate::info::TypeInfo;
 use crate::storage::StorageId;
 use crate::EntityId;
 use alloc::borrow::Cow;
@@ -481,6 +482,41 @@ impl Debug for Apply {
 }
 
 impl Display for Apply {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+/// Error returned by [`are_all_uniques_present_in_world`].
+///
+/// [`are_all_uniques_present_in_world`]: crate::WorkloadBuilder::are_all_uniques_present_in_world()
+#[derive(Clone, PartialEq, Eq)]
+pub enum UniquePresence {
+    #[allow(missing_docs)]
+    Workload(Cow<'static, str>),
+    #[allow(missing_docs)]
+    Unique(TypeInfo),
+}
+
+#[cfg(feature = "std")]
+impl Error for UniquePresence {}
+
+impl Debug for UniquePresence {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            UniquePresence::Workload(workload) => f.write_fmt(format_args!(
+                "{} workload is not present in the World.",
+                workload
+            )),
+            UniquePresence::Unique(type_info) => f.write_fmt(format_args!(
+                "{} unique storage is not present in the World",
+                type_info.name
+            )),
+        }
+    }
+}
+
+impl Display for UniquePresence {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, f)
     }

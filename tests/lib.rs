@@ -1,4 +1,4 @@
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", feature = "proc"))]
 mod book;
 mod borrow;
 mod iteration;
