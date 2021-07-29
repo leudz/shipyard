@@ -11,6 +11,7 @@ use crate::sparse_set::{AddComponent, BulkAddEntity, Delete, Remove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
 use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 /// `World` contains all data this library will manipulate.
@@ -666,27 +667,27 @@ let i = world.run(sys1).unwrap();
 
         let batches = scheduler.workload(name.as_ref())?;
 
-        self.run_workload_index(&scheduler, batches)
+        self.run_batches(&scheduler.systems, &scheduler.system_names, batches)
     }
-    fn run_workload_index(
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_batches(
         &self,
-        scheduler: &Scheduler,
+        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
+        system_names: &[&'static str],
         batches: &Batches,
     ) -> Result<(), error::RunWorkload> {
         #[cfg(feature = "parallel")]
         {
             for batch in &batches.parallel {
                 if batch.len() == 1 {
-                    scheduler.systems[batch[0]](self).map_err(|err| {
-                        error::RunWorkload::Run((scheduler.system_names[batch[0]], err))
-                    })?;
+                    systems[batch[0]](self)
+                        .map_err(|err| error::RunWorkload::Run((system_names[batch[0]], err)))?;
                 } else {
                     use rayon::prelude::*;
 
                     batch.into_par_iter().try_for_each(|&index| {
-                        (scheduler.systems[index])(self).map_err(|err| {
-                            error::RunWorkload::Run((scheduler.system_names[index], err))
-                        })
+                        (systems[index])(self)
+                            .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
                     })?;
                 }
             }
@@ -696,8 +697,8 @@ let i = world.run(sys1).unwrap();
         #[cfg(not(feature = "parallel"))]
         {
             batches.sequential.iter().try_for_each(|&index| {
-                (scheduler.systems[index])(self)
-                    .map_err(|err| error::RunWorkload::Run((scheduler.system_names[index], err)))
+                (systems[index])(self)
+                    .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
             })
         }
     }
@@ -720,7 +721,11 @@ let i = world.run(sys1).unwrap();
             .map_err(|_| error::RunWorkload::Scheduler)?;
 
         if !scheduler.is_empty() {
-            self.run_workload_index(&scheduler, scheduler.default_workload())?
+            self.run_batches(
+                &scheduler.systems,
+                &scheduler.system_names,
+                scheduler.default_workload(),
+            )?
         }
         Ok(())
     }

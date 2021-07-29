@@ -496,6 +496,10 @@ pub enum UniquePresence {
     Workload(Cow<'static, str>),
     #[allow(missing_docs)]
     Unique(TypeInfo),
+    #[allow(missing_docs)]
+    AllStorages,
+    #[allow(missing_docs)]
+    Scheduler,
 }
 
 #[cfg(feature = "std")]
@@ -512,6 +516,12 @@ impl Debug for UniquePresence {
                 "{} unique storage is not present in the World",
                 type_info.name
             )),
+            UniquePresence::AllStorages => f.write_str(
+                "Cannot immutably borrow AllStorages while it is already mutably borrowed.",
+            ),
+            UniquePresence::Scheduler => f.write_str(
+                "Cannot immutably borrow the Scheduler while it is already mutably borrowed.",
+            ),
         }
     }
 }

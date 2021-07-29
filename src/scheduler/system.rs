@@ -23,9 +23,9 @@ use alloc::vec::Vec;
 ///
 /// let workload_sys1: WorkloadSystem = sys1.into_workload_system().unwrap();
 ///
-/// let mut workload = Workload::builder("my_workload");
-/// workload.with_system(workload_sys1);
-/// workload.with_system(sys2);
+/// let mut workload = Workload::builder("my_workload")
+///     .with_system(workload_sys1)
+///     .with_system(sys2);
 /// ```
 ///
 /// [`WorkloadBuilder`]: crate::WorkloadBuilder
