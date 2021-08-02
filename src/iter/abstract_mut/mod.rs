@@ -51,8 +51,8 @@ impl<'tmp, T: Component> AbstractMut for &'tmp SparseSet<T, T::Tracking> {
     }
 }
 
-impl<'tmp, T: Component<Tracking = track::Nothing>> AbstractMut
-    for FullRawWindowMut<'tmp, T, track::Nothing>
+impl<'tmp, T: Component<Tracking = track::Untracked>> AbstractMut
+    for FullRawWindowMut<'tmp, T, track::Untracked>
 {
     type Out = &'tmp mut T;
     type Index = usize;

@@ -4,26 +4,18 @@ use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
 use crate::SparseSetDrain;
 
-/// Determines what a storage should track.
-pub struct Track<
-    const INSERTION: bool,
-    const MODIFIED: bool,
-    const DELETION: bool,
-    const REMOVAL: bool,
->(());
-
 #[allow(missing_docs)]
-pub type Nothing = Track<false, false, false, false>;
+pub struct Untracked(());
 #[allow(missing_docs)]
-pub type Insertion = Track<true, false, false, false>;
+pub struct Insertion(());
 #[allow(missing_docs)]
-pub type Modification = Track<false, true, false, false>;
+pub struct Modification(());
 #[allow(missing_docs)]
-pub type Deletion = Track<false, false, true, false>;
+pub struct Deletion(());
 #[allow(missing_docs)]
-pub type Removal = Track<false, false, false, true>;
+pub struct Removal(());
 #[allow(missing_docs)]
-pub type All = Track<true, true, true, true>;
+pub struct All(());
 
 /// Trait implemented by all trackings.
 pub trait Tracking<T: Component>: Sized + Sealed {
@@ -79,12 +71,12 @@ pub trait Tracking<T: Component>: Sized + Sealed {
 }
 
 mod nothing {
-    use super::{Nothing, Tracking};
+    use super::{Tracking, Untracked};
     use crate::{seal::Sealed, Component, EntityId, SparseSet, SparseSetDrain};
 
-    impl Sealed for Nothing {}
+    impl Sealed for Untracked {}
 
-    impl<T: Component<Tracking = Nothing>> Tracking<T> for Nothing {
+    impl<T: Component<Tracking = Untracked>> Tracking<T> for Untracked {
         type DeletionData = ();
         type RemovalData = ();
 
@@ -700,7 +692,7 @@ mod removal {
                 }
             }
 
-            sparse_set.removal_data.extend(sparse_set.dense.drain(..));
+            sparse_set.removal_data.append(&mut sparse_set.dense);
             sparse_set.data.clear();
         }
 
@@ -861,7 +853,7 @@ mod all {
                 }
             }
 
-            sparse_set.removal_data.extend(sparse_set.dense.drain(..));
+            sparse_set.removal_data.append(&mut sparse_set.dense);
             sparse_set.data.clear();
         }
 

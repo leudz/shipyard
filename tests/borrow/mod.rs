@@ -4,19 +4,19 @@ use shipyard::*;
 
 struct USIZE(usize);
 impl Component for USIZE {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
 impl Component for U32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[derive(PartialEq, Eq, Debug)]
 struct I32(i32);
 impl Component for I32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[cfg(feature = "thread_local")]
@@ -27,7 +27,7 @@ unsafe impl Sync for NotSend {}
 
 #[cfg(feature = "thread_local")]
 impl Component for NotSend {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[cfg(feature = "thread_local")]
@@ -38,7 +38,7 @@ unsafe impl Send for NotSync {}
 
 #[cfg(feature = "thread_local")]
 impl Component for NotSync {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[cfg(feature = "thread_local")]
@@ -46,7 +46,7 @@ struct NotSendSync(*const ());
 
 #[cfg(feature = "thread_local")]
 impl Component for NotSendSync {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[test]

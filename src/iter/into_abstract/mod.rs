@@ -39,17 +39,17 @@ impl<'a, T: Component> IntoAbstract for &'a View<'_, T> {
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        &self
+        self
     }
     #[inline]
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -71,17 +71,17 @@ impl<'a: 'b, 'b, T: Component> IntoAbstract for &'b ViewMut<'a, T> {
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        &self
+        self
     }
     #[inline]
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -97,10 +97,10 @@ impl<'a: 'b, 'b, T: Component> IntoAbstract for &'b ViewMut<'a, T> {
     }
 }
 
-impl<'a: 'b, 'b, T: Component<Tracking = track::Nothing>> IntoAbstract
-    for &'b mut ViewMut<'a, T, track::Nothing>
+impl<'a: 'b, 'b, T: Component<Tracking = track::Untracked>> IntoAbstract
+    for &'b mut ViewMut<'a, T, track::Untracked>
 {
-    type AbsView = FullRawWindowMut<'b, T, track::Nothing>;
+    type AbsView = FullRawWindowMut<'b, T, track::Untracked>;
     type Pack = T;
 
     #[inline]
@@ -112,10 +112,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Nothing>> IntoAbstract
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -146,10 +146,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> IntoAbstract
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -180,10 +180,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -214,10 +214,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Removal>> IntoAbstract
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {
@@ -248,10 +248,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
         Some(((**self).len(), true))
     }
     fn is_tracking_insertion(&self) -> bool {
-        SparseSet::is_tracking_insertion(&self)
+        SparseSet::is_tracking_insertion(self)
     }
     fn is_tracking_modification(&self) -> bool {
-        SparseSet::is_tracking_modification(&self)
+        SparseSet::is_tracking_modification(self)
     }
     #[inline]
     fn type_id(&self) -> TypeId {

@@ -11,7 +11,7 @@ pub trait Contains {
 
 impl<'a: 'b, 'b, T: Component> Contains for &'b View<'a, T> {
     fn contains(&self, entity: EntityId) -> bool {
-        SparseSet::contains(&*self, entity)
+        SparseSet::contains(self, entity)
     }
 }
 

@@ -2,7 +2,7 @@ use shipyard::*;
 
 struct U32(u32);
 impl Component for U32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 fn two_views(_: View<U32>, _: ViewMut<U32>) {}

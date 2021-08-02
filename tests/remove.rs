@@ -5,7 +5,7 @@ use shipyard::*;
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
 impl Component for U32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[test]
@@ -13,7 +13,7 @@ fn no_pack() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
     impl Component for USIZE {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
@@ -78,7 +78,7 @@ fn old_key() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
     impl Component for USIZE {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
@@ -119,7 +119,7 @@ fn newer_key() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
     impl Component for USIZE {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();

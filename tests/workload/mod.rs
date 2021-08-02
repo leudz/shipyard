@@ -3,12 +3,12 @@ mod non_send_sync;
 
 struct U32(u32);
 impl Component for U32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 struct USIZE(usize);
 impl Component for USIZE {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 use shipyard::*;

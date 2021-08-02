@@ -37,9 +37,9 @@ pub trait IntoWorkloadSystem<B, R> {
         R: Into<Result<Ok, Err>>;
 }
 
-pub struct Nothing;
+pub struct Untracked;
 
-impl<R, F> IntoWorkloadSystem<Nothing, R> for F
+impl<R, F> IntoWorkloadSystem<Untracked, R> for F
 where
     F: 'static + Send + Sync + Fn() -> R,
 {

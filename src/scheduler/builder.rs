@@ -12,7 +12,6 @@ use alloc::vec;
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
-use core::iter::Extend;
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::error::Error;
@@ -144,7 +143,7 @@ impl WorkloadBuilder {
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
     /// This allows us to collect systems in different builders before joining them together.
     pub fn append(mut self, other: &mut Self) -> Self {
-        self.systems.extend(other.systems.drain(..));
+        self.systems.append(&mut other.systems);
 
         self
     }
@@ -603,7 +602,7 @@ impl WorkloadBuilder {
         struct ComponentType;
 
         impl Component for ComponentType {
-            type Tracking = track::Nothing;
+            type Tracking = track::Untracked;
         }
 
         let all_storages = world
@@ -944,13 +943,13 @@ mod tests {
     struct U16(u16);
 
     impl Component for Usize {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
     impl Component for U32 {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
     impl Component for U16 {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     #[test]
@@ -1239,7 +1238,7 @@ mod tests {
         struct NotSend(*const ());
         unsafe impl Sync for NotSend {}
         impl Component for NotSend {
-            type Tracking = track::Nothing;
+            type Tracking = track::Untracked;
         }
 
         fn sys1(_: NonSend<View<'_, NotSend>>) {}

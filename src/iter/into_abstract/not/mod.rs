@@ -15,7 +15,7 @@ impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b View<'a, T>> {
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        Not(&self.0)
+        Not(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         None
@@ -43,7 +43,7 @@ impl<'a: 'b, 'b, T: Component> IntoAbstract for Not<&'b ViewMut<'a, T>> {
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        Not(&self.0)
+        Not(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         None

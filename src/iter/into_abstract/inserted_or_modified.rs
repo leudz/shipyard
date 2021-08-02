@@ -14,7 +14,7 @@ impl<'tmp, 'v, T: Component<Tracking = track::Insertion>> IntoAbstract
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(&self.0)
+        InsertedOrModified(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self.0).len(), false))
@@ -44,7 +44,7 @@ impl<'tmp, 'v, T: Component<Tracking = track::Modification>> IntoAbstract
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(&self.0)
+        InsertedOrModified(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self.0).len(), false))
@@ -74,7 +74,7 @@ impl<'tmp, 'v, T: Component<Tracking = track::All>> IntoAbstract
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(&self.0)
+        InsertedOrModified(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         Some(((**self.0).len(), false))
@@ -104,7 +104,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> IntoAbstract
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(&self.0)
+        InsertedOrModified(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         Some(((*self.0).len(), false))
@@ -134,7 +134,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(&self.0)
+        InsertedOrModified(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         Some(((*self.0).len(), false))
@@ -164,7 +164,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
     type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(&self.0)
+        InsertedOrModified(self.0)
     }
     fn len(&self) -> Option<(usize, bool)> {
         Some(((*self.0).len(), false))

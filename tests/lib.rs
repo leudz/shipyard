@@ -13,7 +13,7 @@ use shipyard::*;
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);
 impl Component for USIZE {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 impl Sum for USIZE {
@@ -25,7 +25,7 @@ impl Sum for USIZE {
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct U32(u32);
 impl Component for U32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn two_workloads() {
 #[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
-    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<lib::USIZE, shipyard::track::Track<false, false, false, false>> storage while it\'s already borrowed."
+    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<lib::USIZE, shipyard::track::Untracked> storage while it\'s already borrowed."
 )]
 fn two_bad_workloads() {
     fn system1(_: ViewMut<USIZE>) {

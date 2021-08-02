@@ -55,7 +55,7 @@ impl Deref for EntitiesView<'_> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.entities
+        self.entities
     }
 }
 
@@ -82,7 +82,7 @@ impl Deref for EntitiesViewMut<'_> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.entities
+        self.entities
     }
 }
 
@@ -142,14 +142,14 @@ impl<'a, T: Component> Deref for View<'a, T> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.sparse_set
+        self.sparse_set
     }
 }
 
 impl<'a, T: Component> AsRef<SparseSet<T, T::Tracking>> for View<'a, T> {
     #[inline]
     fn as_ref(&self) -> &SparseSet<T, T::Tracking> {
-        &self.sparse_set
+        self.sparse_set
     }
 }
 
@@ -247,7 +247,7 @@ impl<T: Component> Deref for ViewMut<'_, T> {
 
     #[inline]
     fn deref(&self) -> &Self::Target {
-        &self.sparse_set
+        self.sparse_set
     }
 }
 
@@ -261,7 +261,7 @@ impl<T: Component> DerefMut for ViewMut<'_, T> {
 impl<'a, T: Component> AsRef<SparseSet<T, T::Tracking>> for ViewMut<'a, T> {
     #[inline]
     fn as_ref(&self) -> &SparseSet<T, T::Tracking> {
-        &self.sparse_set
+        self.sparse_set
     }
 }
 
@@ -341,7 +341,7 @@ impl<T: Component<Tracking = track::All>> UniqueView<'_, T, track::All> {
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
     /// [`clear_modified`]: UniqueViewMut::clear_modified
     pub fn is_inserted_or_modified(&self) -> bool {
-        self.unique.tracking != TrackingState::Nothing
+        self.unique.tracking != TrackingState::Untracked
     }
 }
 
@@ -402,7 +402,7 @@ impl<T: Component<Tracking = track::Insertion>> UniqueViewMut<'_, T, track::Inse
     }
     /// Removes the *inserted* flag on the component of this storage.
     pub fn clear_inserted(&mut self) {
-        self.unique.tracking = TrackingState::Nothing;
+        self.unique.tracking = TrackingState::Untracked;
     }
 }
 
@@ -421,7 +421,7 @@ impl<T: Component<Tracking = track::Modification>> UniqueViewMut<'_, T, track::M
     }
     /// Removes the *medified* flag on the component of this storage.
     pub fn clear_modified(&mut self) {
-        self.unique.tracking = TrackingState::Nothing;
+        self.unique.tracking = TrackingState::Untracked;
     }
 }
 
@@ -443,23 +443,23 @@ impl<T: Component<Tracking = track::All>> UniqueViewMut<'_, T, track::All> {
     /// [`clear_inserted`]: Self::clear_inserted
     /// [`clear_modified`]: Self::clear_modified
     pub fn is_inserted_or_modified(&self) -> bool {
-        self.unique.tracking != TrackingState::Nothing
+        self.unique.tracking != TrackingState::Untracked
     }
     /// Removes the *inserted* flag on the component of this storage.
     pub fn clear_inserted(&mut self) {
         if self.unique.tracking == TrackingState::Inserted {
-            self.unique.tracking = TrackingState::Nothing;
+            self.unique.tracking = TrackingState::Untracked;
         }
     }
     /// Removes the *medified* flag on the component of this storage.
     pub fn clear_modified(&mut self) {
         if self.unique.tracking == TrackingState::Modified {
-            self.unique.tracking = TrackingState::Nothing;
+            self.unique.tracking = TrackingState::Untracked;
         }
     }
     /// Removes the *inserted* and *modified* flags on the component of this storage.
     pub fn clear_inserted_and_modified(&mut self) {
-        self.unique.tracking = TrackingState::Nothing;
+        self.unique.tracking = TrackingState::Untracked;
     }
 }
 
@@ -472,7 +472,9 @@ impl<T: Component> Deref for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component<Tracking = track::Nothing>> DerefMut for UniqueViewMut<'_, T, track::Nothing> {
+impl<T: Component<Tracking = track::Untracked>> DerefMut
+    for UniqueViewMut<'_, T, track::Untracked>
+{
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.unique.value
@@ -509,7 +511,7 @@ impl<T: Component<Tracking = track::Modification>> DerefMut
 impl<T: Component<Tracking = track::All>> DerefMut for UniqueViewMut<'_, T, track::All> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        if self.unique.tracking == TrackingState::Nothing {
+        if self.unique.tracking == TrackingState::Untracked {
             self.unique.tracking = TrackingState::Modified;
         }
 
@@ -524,7 +526,9 @@ impl<T: Component> AsRef<T> for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component<Tracking = track::Nothing>> AsMut<T> for UniqueViewMut<'_, T, track::Nothing> {
+impl<T: Component<Tracking = track::Untracked>> AsMut<T>
+    for UniqueViewMut<'_, T, track::Untracked>
+{
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         &mut self.unique.value
@@ -561,7 +565,7 @@ impl<T: Component<Tracking = track::Modification>> AsMut<T>
 impl<T: Component<Tracking = track::All>> AsMut<T> for UniqueViewMut<'_, T, track::All> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
-        if self.unique.tracking == TrackingState::Nothing {
+        if self.unique.tracking == TrackingState::Untracked {
             self.unique.tracking = TrackingState::Modified;
         }
 

@@ -642,14 +642,14 @@ mod tests {
     struct STR(&'static str);
 
     impl Component for STR {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct I32(i32);
 
     impl Component for I32 {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     #[test]

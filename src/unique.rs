@@ -4,7 +4,7 @@ use crate::{memory_usage::StorageMemoryUsage, storage::Storage, Component};
 pub(crate) enum TrackingState {
     Inserted,
     Modified,
-    Nothing,
+    Untracked,
 }
 
 /// Unique storage.

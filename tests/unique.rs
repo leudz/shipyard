@@ -4,7 +4,7 @@ use shipyard::*;
 
 struct USIZE(usize);
 impl Component for USIZE {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[test]
@@ -86,7 +86,7 @@ fn non_send() {
     }
     unsafe impl Sync for NonSendStruct {}
     impl Component for NonSendStruct {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     let world = World::default();
@@ -118,7 +118,7 @@ fn non_sync() {
     }
     unsafe impl Send for NonSyncStruct {}
     impl Component for NonSyncStruct {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     let world = World::default();
@@ -149,7 +149,7 @@ fn non_send_sync() {
         _phantom: core::marker::PhantomData<*const ()>,
     }
     impl Component for NonSendSyncStruct {
-        type Tracking = track::Nothing;
+        type Tracking = track::Untracked;
     }
 
     let world = World::default();

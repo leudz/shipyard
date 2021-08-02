@@ -62,8 +62,8 @@ impl<'a, 'b, T: Component> Get for &'b ViewMut<'a, T> {
     }
 }
 
-impl<'a, 'b, T: Component<Tracking = track::Nothing>> Get
-    for &'b mut ViewMut<'a, T, track::Nothing>
+impl<'a, 'b, T: Component<Tracking = track::Untracked>> Get
+    for &'b mut ViewMut<'a, T, track::Untracked>
 {
     type Out = &'b mut T;
 

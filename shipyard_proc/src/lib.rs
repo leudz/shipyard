@@ -37,23 +37,23 @@ fn expand_component(
         let tracking: syn::Ident = tracking_attr.parse_args().map_err(|_| {
             Error::new_spanned(
                 &tracking_attr.tokens,
-                "Track should be one of: Nothing, Insertion, Modification, Deletion, Removal or All.",
+                "Track should be one of: Untracked, Insertion, Modification, Deletion, Removal or All.",
             )
         })?;
 
         let tracking_name = tracking.to_string();
 
         match tracking_name.as_str() {
-            "Nothing" | "Insertion" | "Modification" | "Deletion" | "Removal" | "All" => {}
+            "Untracked" | "Insertion" | "Modification" | "Deletion" | "Removal" | "All" => {}
             _ => return Err(Error::new_spanned(
                 &tracking,
-                "Track should be one of: Nothing, Insertion, Modification, Deletion, Removal or All.",
+                "Track should be one of: Untracked, Insertion, Modification, Deletion, Removal or All.",
             )),
         }
 
         quote!(#tracking)
     } else {
-        quote!(Nothing)
+        quote!(Untracked)
     };
 
     let shipyard_name = crate_name("shipyard").map_err(|_| {

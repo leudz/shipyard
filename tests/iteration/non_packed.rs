@@ -3,19 +3,19 @@ use shipyard::*;
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);
 impl Component for USIZE {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct U32(u32);
 impl Component for U32 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct I16(i16);
 impl Component for I16 {
-    type Tracking = track::Nothing;
+    type Tracking = track::Untracked;
 }
 
 #[test]
