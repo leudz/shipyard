@@ -293,6 +293,19 @@ pub struct UniqueView<'a, T: Component, Track: Tracking<T> = <T as Component>::T
     pub(crate) _phantom: PhantomData<Track>,
 }
 
+impl<T: Component> UniqueView<'_, T> {
+    /// Duplicates the [`UniqueView`].
+    #[allow(clippy::should_implement_trait)]
+    pub fn clone(unique: &Self) -> Self {
+        UniqueView {
+            unique: unique.unique,
+            borrow: unique.borrow.clone(),
+            all_borrow: unique.all_borrow.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
 impl<T: Component<Tracking = track::Insertion>> UniqueView<'_, T, track::Insertion> {
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
@@ -358,18 +371,6 @@ impl<T: Component> AsRef<T> for UniqueView<'_, T> {
     #[inline]
     fn as_ref(&self) -> &T {
         &self.unique.value
-    }
-}
-
-impl<T: Component> Clone for UniqueView<'_, T> {
-    #[inline]
-    fn clone(&self) -> Self {
-        UniqueView {
-            unique: self.unique,
-            borrow: self.borrow.clone(),
-            all_borrow: self.all_borrow.clone(),
-            _phantom: PhantomData,
-        }
     }
 }
 
