@@ -56,7 +56,7 @@ pub enum Conflict {
     /// Rust rules do not allow the type described by `type_info` to be borrowed at the same time as `other_type_info`.
     Borrow {
         #[allow(missing_docs)]
-        type_info: TypeInfo,
+        type_info: Option<TypeInfo>,
         #[allow(missing_docs)]
         other_system: SystemId,
         #[allow(missing_docs)]

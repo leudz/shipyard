@@ -485,76 +485,108 @@ impl WorkloadBuilder {
                         {
                             for other_system in &batch_info.systems {
                                 for other_type_info in &other_system.borrow {
-                                    for type_info in &borrow_constraints {
-                                        match type_info.mutability {
-                                            Mutability::Exclusive => {
-                                                if !other_type_info.is_send
-                                                    || !other_type_info.is_sync
-                                                {
-                                                    conflict = Some(Conflict::OtherNotSendSync {
-                                                        system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        type_info: other_type_info.clone(),
-                                                    });
+                                    if borrow_constraints.is_empty() {
+                                        if !other_type_info.is_send || !other_type_info.is_sync {
+                                            conflict = Some(Conflict::OtherNotSendSync {
+                                                system: SystemId {
+                                                    name: other_system.name,
+                                                    type_id: other_system.type_id,
+                                                },
+                                                type_info: other_type_info.clone(),
+                                            });
 
-                                                    break 'batch;
+                                            break 'batch;
+                                        }
+
+                                        if other_type_info.storage_id == TypeId::of::<AllStorages>()
+                                        {
+                                            conflict = Some(Conflict::Borrow {
+                                                type_info: None,
+                                                other_system: SystemId {
+                                                    name: other_system.name,
+                                                    type_id: other_system.type_id,
+                                                },
+                                                other_type_info: other_type_info.clone(),
+                                            });
+
+                                            break 'batch;
+                                        }
+                                    } else {
+                                        for type_info in &borrow_constraints {
+                                            match type_info.mutability {
+                                                Mutability::Exclusive => {
+                                                    if !other_type_info.is_send
+                                                        || !other_type_info.is_sync
+                                                    {
+                                                        conflict =
+                                                            Some(Conflict::OtherNotSendSync {
+                                                                system: SystemId {
+                                                                    name: other_system.name,
+                                                                    type_id: other_system.type_id,
+                                                                },
+                                                                type_info: other_type_info.clone(),
+                                                            });
+
+                                                        break 'batch;
+                                                    }
+
+                                                    if type_info.storage_id
+                                                        == other_type_info.storage_id
+                                                        || type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                        || other_type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                    {
+                                                        conflict = Some(Conflict::Borrow {
+                                                            type_info: Some(type_info.clone()),
+                                                            other_system: SystemId {
+                                                                name: other_system.name,
+                                                                type_id: other_system.type_id,
+                                                            },
+                                                            other_type_info: other_type_info
+                                                                .clone(),
+                                                        });
+
+                                                        break 'batch;
+                                                    }
                                                 }
+                                                Mutability::Shared => {
+                                                    if !other_type_info.is_send
+                                                        || !other_type_info.is_sync
+                                                    {
+                                                        conflict =
+                                                            Some(Conflict::OtherNotSendSync {
+                                                                system: SystemId {
+                                                                    name: other_system.name,
+                                                                    type_id: other_system.type_id,
+                                                                },
+                                                                type_info: other_type_info.clone(),
+                                                            });
 
-                                                if type_info.storage_id
-                                                    == other_type_info.storage_id
-                                                    || type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                    || other_type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                {
-                                                    conflict = Some(Conflict::Borrow {
-                                                        type_info: type_info.clone(),
-                                                        other_system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        other_type_info: other_type_info.clone(),
-                                                    });
+                                                        break 'batch;
+                                                    }
 
-                                                    break 'batch;
-                                                }
-                                            }
-                                            Mutability::Shared => {
-                                                if !other_type_info.is_send
-                                                    || !other_type_info.is_sync
-                                                {
-                                                    conflict = Some(Conflict::OtherNotSendSync {
-                                                        system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        type_info: other_type_info.clone(),
-                                                    });
+                                                    if (type_info.storage_id
+                                                        == other_type_info.storage_id
+                                                        && other_type_info.mutability
+                                                            == Mutability::Exclusive)
+                                                        || type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                        || other_type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                    {
+                                                        conflict = Some(Conflict::Borrow {
+                                                            type_info: Some(type_info.clone()),
+                                                            other_system: SystemId {
+                                                                name: other_system.name,
+                                                                type_id: other_system.type_id,
+                                                            },
+                                                            other_type_info: other_type_info
+                                                                .clone(),
+                                                        });
 
-                                                    break 'batch;
-                                                }
-
-                                                if (type_info.storage_id
-                                                    == other_type_info.storage_id
-                                                    && other_type_info.mutability
-                                                        == Mutability::Exclusive)
-                                                    || type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                    || other_type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                {
-                                                    conflict = Some(Conflict::Borrow {
-                                                        type_info: type_info.clone(),
-                                                        other_system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        other_type_info: other_type_info.clone(),
-                                                    });
-
-                                                    break 'batch;
+                                                        break 'batch;
+                                                    }
                                                 }
                                             }
                                         }
@@ -842,7 +874,7 @@ impl WorkloadBuilder {
                                                         == TypeId::of::<AllStorages>()
                                                 {
                                                     conflict = Some(Conflict::Borrow {
-                                                        type_info: type_info.clone(),
+                                                        type_info: Some(type_info.clone()),
                                                         other_system: SystemId {
                                                             name: other_system.name,
                                                             type_id: other_system.type_id,
@@ -878,7 +910,7 @@ impl WorkloadBuilder {
                                                         == TypeId::of::<AllStorages>()
                                                 {
                                                     conflict = Some(Conflict::Borrow {
-                                                        type_info: type_info.clone(),
+                                                        type_info: Some(type_info.clone()),
                                                         other_system: SystemId {
                                                             name: other_system.name,
                                                             type_id: other_system.type_id,
