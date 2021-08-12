@@ -420,16 +420,37 @@ impl WorkloadBuilder {
                 let (system_type_id, system_type_name, system_index, borrow_constraints) =
                     collected_systems.pop().unwrap();
 
-                batches.parallel.push(vec![system_index]);
+                let mut all_storages = None;
+                let mut non_send_sync = None;
+
+                for type_info in &borrow_constraints {
+                    if type_info.storage_id == TypeId::of::<AllStorages>() {
+                        all_storages = Some(type_info);
+                        break;
+                    } else if !type_info.is_send || !type_info.is_sync {
+                        non_send_sync = Some(type_info);
+                        break;
+                    }
+                }
+
+                if all_storages.is_some() || non_send_sync.is_some() {
+                    batches.parallel.push((Some(system_index), Vec::new()));
+                } else {
+                    batches.parallel.push((None, vec![system_index]));
+                }
+
                 batches.sequential.push(system_index);
 
                 let batch_info = BatchInfo {
-                    systems: vec![SystemInfo {
-                        name: system_type_name,
-                        type_id: system_type_id,
-                        borrow: borrow_constraints,
-                        conflict: None,
-                    }],
+                    systems: (
+                        Some(SystemInfo {
+                            name: system_type_name,
+                            type_id: system_type_id,
+                            borrow: borrow_constraints,
+                            conflict: None,
+                        }),
+                        Vec::new(),
+                    ),
                 };
 
                 Ok(WorkloadInfo {
@@ -442,81 +463,147 @@ impl WorkloadBuilder {
                     batch_info: vec![],
                 };
 
-                for (system_type_id, system_type_name, system_index, borrow_constraints) in
-                    collected_systems
+                'systems: for (
+                    system_type_id,
+                    system_type_name,
+                    system_index,
+                    borrow_constraints,
+                ) in collected_systems
                 {
                     batches.sequential.push(system_index);
 
+                    let mut valid = batches.parallel.len();
+
+                    let mut all_storages = None;
                     let mut non_send_sync = None;
 
                     for type_info in &borrow_constraints {
-                        if !type_info.is_send || !type_info.is_sync {
+                        if type_info.storage_id == TypeId::of::<AllStorages>() {
+                            all_storages = Some(type_info.clone());
+                            break;
+                        } else if !type_info.is_send || !type_info.is_sync {
                             non_send_sync = Some(type_info.clone());
                             break;
                         }
                     }
 
-                    if let Some(type_info) = non_send_sync {
-                        let conflict = if batches.parallel.is_empty() {
-                            None
-                        } else {
-                            Some(Conflict::NotSendSync(type_info.clone()))
-                        };
+                    if let Some(all_storages_type_info) = all_storages {
+                        for (i, batch_info) in workload_info.batch_info.iter().enumerate().rev() {
+                            match (
+                                &batch_info.systems.0,
+                                batch_info
+                                    .systems
+                                    .1
+                                    .iter()
+                                    .rev()
+                                    .find(|other_system_info| !other_system_info.borrow.is_empty()),
+                            ) {
+                                (None, None) => valid = i,
+                                (Some(other_system_info), None)
+                                | (None, Some(other_system_info))
+                                | (Some(other_system_info), Some(_)) => {
+                                    let system_info = SystemInfo {
+                                        name: system_type_name,
+                                        type_id: system_type_id,
+                                        borrow: borrow_constraints,
+                                        conflict: Some(Conflict::Borrow {
+                                            type_info: Some(all_storages_type_info.clone()),
+                                            other_system: SystemId {
+                                                name: other_system_info.name,
+                                                type_id: other_system_info.type_id,
+                                            },
+                                            other_type_info: other_system_info
+                                                .borrow
+                                                .last()
+                                                .unwrap()
+                                                .clone(),
+                                        }),
+                                    };
+
+                                    if valid < batches.parallel.len() {
+                                        batches.parallel[valid].0 = Some(system_index);
+                                        workload_info.batch_info[valid].systems.0 =
+                                            Some(system_info);
+                                    } else {
+                                        batches.parallel.push((Some(system_index), Vec::new()));
+                                        workload_info.batch_info.push(BatchInfo {
+                                            systems: (Some(system_info), Vec::new()),
+                                        });
+                                    }
+
+                                    continue 'systems;
+                                }
+                            }
+                        }
 
                         let system_info = SystemInfo {
                             name: system_type_name,
                             type_id: system_type_id,
-                            borrow: vec![type_info.clone()],
-                            conflict,
+                            borrow: borrow_constraints,
+                            conflict: None,
                         };
 
-                        batches.parallel.push(vec![system_index]);
-
-                        workload_info.batch_info.push(BatchInfo {
-                            systems: vec![system_info],
-                        });
+                        if valid < batches.parallel.len() {
+                            batches.parallel[valid].0 = Some(system_index);
+                            workload_info.batch_info[valid].systems.0 = Some(system_info);
+                        } else {
+                            batches.parallel.push((Some(system_index), Vec::new()));
+                            workload_info.batch_info.push(BatchInfo {
+                                systems: (Some(system_info), Vec::new()),
+                            });
+                        }
                     } else {
-                        let mut conflict: Option<Conflict> = None;
-
-                        let mut valid = batches.parallel.len();
+                        let mut conflict = None;
 
                         'batch: for (i, batch_info) in
                             workload_info.batch_info.iter().enumerate().rev()
                         {
-                            for other_system in &batch_info.systems {
-                                for other_type_info in &other_system.borrow {
-                                    if borrow_constraints.is_empty() {
-                                        if !other_type_info.is_send || !other_type_info.is_sync {
-                                            conflict = Some(Conflict::OtherNotSendSync {
-                                                system: SystemId {
-                                                    name: other_system.name,
-                                                    type_id: other_system.type_id,
-                                                },
-                                                type_info: other_type_info.clone(),
-                                            });
+                            if let (Some(non_send_sync_type_info), Some(other_system_info)) =
+                                (&non_send_sync, &batch_info.systems.0)
+                            {
+                                let system_info = SystemInfo {
+                                    name: system_type_name,
+                                    type_id: system_type_id,
+                                    borrow: borrow_constraints,
+                                    conflict: Some(Conflict::Borrow {
+                                        type_info: Some(non_send_sync_type_info.clone()),
+                                        other_system: SystemId {
+                                            name: other_system_info.name,
+                                            type_id: other_system_info.type_id,
+                                        },
+                                        other_type_info: other_system_info
+                                            .borrow
+                                            .last()
+                                            .unwrap()
+                                            .clone(),
+                                    }),
+                                };
 
-                                            break 'batch;
-                                        }
+                                if valid < batches.parallel.len() {
+                                    batches.parallel[valid].0 = Some(system_index);
+                                    workload_info.batch_info[valid].systems.0 = Some(system_info);
+                                } else {
+                                    batches.parallel.push((Some(system_index), Vec::new()));
+                                    workload_info.batch_info.push(BatchInfo {
+                                        systems: (Some(system_info), Vec::new()),
+                                    });
+                                }
 
-                                        if other_type_info.storage_id == TypeId::of::<AllStorages>()
-                                        {
-                                            conflict = Some(Conflict::Borrow {
-                                                type_info: None,
-                                                other_system: SystemId {
-                                                    name: other_system.name,
-                                                    type_id: other_system.type_id,
-                                                },
-                                                other_type_info: other_type_info.clone(),
-                                            });
-
-                                            break 'batch;
-                                        }
-                                    } else {
+                                continue 'systems;
+                            } else {
+                                for other_system in batch_info
+                                    .systems
+                                    .0
+                                    .iter()
+                                    .chain(batch_info.systems.1.iter())
+                                {
+                                    for other_type_info in &other_system.borrow {
                                         for type_info in &borrow_constraints {
                                             match type_info.mutability {
                                                 Mutability::Exclusive => {
-                                                    if !other_type_info.is_send
-                                                        || !other_type_info.is_sync
+                                                    if (!type_info.is_send || !type_info.is_sync)
+                                                        && (!other_type_info.is_send
+                                                            || !other_type_info.is_sync)
                                                     {
                                                         conflict =
                                                             Some(Conflict::OtherNotSendSync {
@@ -551,8 +638,9 @@ impl WorkloadBuilder {
                                                     }
                                                 }
                                                 Mutability::Shared => {
-                                                    if !other_type_info.is_send
-                                                        || !other_type_info.is_sync
+                                                    if (!type_info.is_send || !type_info.is_sync)
+                                                        && (!other_type_info.is_send
+                                                            || !other_type_info.is_sync)
                                                     {
                                                         conflict =
                                                             Some(Conflict::OtherNotSendSync {
@@ -592,9 +680,9 @@ impl WorkloadBuilder {
                                         }
                                     }
                                 }
-                            }
 
-                            valid = i;
+                                valid = i;
+                            }
                         }
 
                         let system_info = SystemInfo {
@@ -605,12 +693,22 @@ impl WorkloadBuilder {
                         };
 
                         if valid < batches.parallel.len() {
-                            batches.parallel[valid].push(system_index);
-                            workload_info.batch_info[valid].systems.push(system_info);
-                        } else {
-                            batches.parallel.push(vec![system_index]);
+                            if non_send_sync.is_some() {
+                                batches.parallel[valid].0 = Some(system_index);
+                                workload_info.batch_info[valid].systems.0 = Some(system_info);
+                            } else {
+                                batches.parallel[valid].1.push(system_index);
+                                workload_info.batch_info[valid].systems.1.push(system_info);
+                            }
+                        } else if non_send_sync.is_some() {
+                            batches.parallel.push((Some(system_index), Vec::new()));
                             workload_info.batch_info.push(BatchInfo {
-                                systems: vec![system_info],
+                                systems: (Some(system_info), Vec::new()),
+                            });
+                        } else {
+                            batches.parallel.push((None, vec![system_index]));
+                            workload_info.batch_info.push(BatchInfo {
+                                systems: (None, vec![system_info]),
                             });
                         }
                     }
@@ -774,16 +872,37 @@ impl WorkloadBuilder {
                 let (system_type_id, system_type_name, system_index, borrow_constraints) =
                     collected_systems.pop().unwrap();
 
-                batches.parallel.push(vec![system_index]);
+                let mut all_storages = None;
+                let mut non_send_sync = None;
+
+                for type_info in &borrow_constraints {
+                    if type_info.storage_id == TypeId::of::<AllStorages>() {
+                        all_storages = Some(type_info);
+                        break;
+                    } else if !type_info.is_send || !type_info.is_sync {
+                        non_send_sync = Some(type_info);
+                        break;
+                    }
+                }
+
+                if all_storages.is_some() || non_send_sync.is_some() {
+                    batches.parallel.push((Some(system_index), Vec::new()));
+                } else {
+                    batches.parallel.push((None, vec![system_index]));
+                }
+
                 batches.sequential.push(system_index);
 
                 let batch_info = BatchInfo {
-                    systems: vec![SystemInfo {
-                        name: system_type_name,
-                        type_id: system_type_id,
-                        borrow: borrow_constraints,
-                        conflict: None,
-                    }],
+                    systems: (
+                        Some(SystemInfo {
+                            name: system_type_name,
+                            type_id: system_type_id,
+                            borrow: borrow_constraints,
+                            conflict: None,
+                        }),
+                        Vec::new(),
+                    ),
                 };
 
                 Ok((
@@ -806,127 +925,226 @@ impl WorkloadBuilder {
                     batch_info: vec![],
                 };
 
-                for (system_type_id, system_type_name, system_index, borrow_constraints) in
-                    collected_systems
+                'systems: for (
+                    system_type_id,
+                    system_type_name,
+                    system_index,
+                    borrow_constraints,
+                ) in collected_systems
                 {
                     batches.sequential.push(system_index);
 
+                    let mut valid = batches.parallel.len();
+
+                    let mut all_storages = None;
                     let mut non_send_sync = None;
 
                     for type_info in &borrow_constraints {
-                        if !type_info.is_send || !type_info.is_sync {
+                        if type_info.storage_id == TypeId::of::<AllStorages>() {
+                            all_storages = Some(type_info.clone());
+                            break;
+                        } else if !type_info.is_send || !type_info.is_sync {
                             non_send_sync = Some(type_info.clone());
                             break;
                         }
                     }
 
-                    if let Some(type_info) = non_send_sync {
-                        let conflict = if batches.parallel.is_empty() {
-                            None
-                        } else {
-                            Some(Conflict::NotSendSync(type_info.clone()))
-                        };
+                    if let Some(all_storages_type_info) = all_storages {
+                        for (i, batch_info) in workload_info.batch_info.iter().enumerate().rev() {
+                            match (
+                                &batch_info.systems.0,
+                                batch_info
+                                    .systems
+                                    .1
+                                    .iter()
+                                    .rev()
+                                    .find(|other_system_info| !other_system_info.borrow.is_empty()),
+                            ) {
+                                (None, None) => valid = i,
+                                (Some(other_system_info), None)
+                                | (None, Some(other_system_info))
+                                | (Some(other_system_info), Some(_)) => {
+                                    let system_info = SystemInfo {
+                                        name: system_type_name,
+                                        type_id: system_type_id,
+                                        borrow: borrow_constraints,
+                                        conflict: Some(Conflict::Borrow {
+                                            type_info: Some(all_storages_type_info.clone()),
+                                            other_system: SystemId {
+                                                name: other_system_info.name,
+                                                type_id: other_system_info.type_id,
+                                            },
+                                            other_type_info: other_system_info
+                                                .borrow
+                                                .last()
+                                                .unwrap()
+                                                .clone(),
+                                        }),
+                                    };
+
+                                    if valid < batches.parallel.len() {
+                                        batches.parallel[valid].0 = Some(system_index);
+                                        workload_info.batch_info[valid].systems.0 =
+                                            Some(system_info);
+                                    } else {
+                                        batches.parallel.push((Some(system_index), Vec::new()));
+                                        workload_info.batch_info.push(BatchInfo {
+                                            systems: (Some(system_info), Vec::new()),
+                                        });
+                                    }
+
+                                    continue 'systems;
+                                }
+                            }
+                        }
 
                         let system_info = SystemInfo {
                             name: system_type_name,
                             type_id: system_type_id,
-                            borrow: vec![type_info.clone()],
-                            conflict,
+                            borrow: borrow_constraints,
+                            conflict: None,
                         };
 
-                        batches.parallel.push(vec![system_index]);
-
-                        workload_info.batch_info.push(BatchInfo {
-                            systems: vec![system_info],
-                        });
+                        if valid < batches.parallel.len() {
+                            batches.parallel[valid].0 = Some(system_index);
+                            workload_info.batch_info[valid].systems.0 = Some(system_info);
+                        } else {
+                            batches.parallel.push((Some(system_index), Vec::new()));
+                            workload_info.batch_info.push(BatchInfo {
+                                systems: (Some(system_info), Vec::new()),
+                            });
+                        }
                     } else {
-                        let mut conflict: Option<Conflict> = None;
-
-                        let mut valid = batches.parallel.len();
+                        let mut conflict = None;
 
                         'batch: for (i, batch_info) in
                             workload_info.batch_info.iter().enumerate().rev()
                         {
-                            for other_system in &batch_info.systems {
-                                for other_type_info in &other_system.borrow {
-                                    for type_info in &borrow_constraints {
-                                        match type_info.mutability {
-                                            Mutability::Exclusive => {
-                                                if !other_type_info.is_send
-                                                    || !other_type_info.is_sync
-                                                {
-                                                    conflict = Some(Conflict::OtherNotSendSync {
-                                                        system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        type_info: other_type_info.clone(),
-                                                    });
+                            if let (Some(non_send_sync_type_info), Some(other_system_info)) =
+                                (&non_send_sync, &batch_info.systems.0)
+                            {
+                                let system_info = SystemInfo {
+                                    name: system_type_name,
+                                    type_id: system_type_id,
+                                    borrow: borrow_constraints,
+                                    conflict: Some(Conflict::Borrow {
+                                        type_info: Some(non_send_sync_type_info.clone()),
+                                        other_system: SystemId {
+                                            name: other_system_info.name,
+                                            type_id: other_system_info.type_id,
+                                        },
+                                        other_type_info: other_system_info
+                                            .borrow
+                                            .last()
+                                            .unwrap()
+                                            .clone(),
+                                    }),
+                                };
 
-                                                    break 'batch;
+                                if valid < batches.parallel.len() {
+                                    batches.parallel[valid].0 = Some(system_index);
+                                    workload_info.batch_info[valid].systems.0 = Some(system_info);
+                                } else {
+                                    batches.parallel.push((Some(system_index), Vec::new()));
+                                    workload_info.batch_info.push(BatchInfo {
+                                        systems: (Some(system_info), Vec::new()),
+                                    });
+                                }
+
+                                continue 'systems;
+                            } else {
+                                for other_system in batch_info
+                                    .systems
+                                    .0
+                                    .iter()
+                                    .chain(batch_info.systems.1.iter())
+                                {
+                                    for other_type_info in &other_system.borrow {
+                                        for type_info in &borrow_constraints {
+                                            match type_info.mutability {
+                                                Mutability::Exclusive => {
+                                                    if (!type_info.is_send || !type_info.is_sync)
+                                                        && (!other_type_info.is_send
+                                                            || !other_type_info.is_sync)
+                                                    {
+                                                        conflict =
+                                                            Some(Conflict::OtherNotSendSync {
+                                                                system: SystemId {
+                                                                    name: other_system.name,
+                                                                    type_id: other_system.type_id,
+                                                                },
+                                                                type_info: other_type_info.clone(),
+                                                            });
+
+                                                        break 'batch;
+                                                    }
+
+                                                    if type_info.storage_id
+                                                        == other_type_info.storage_id
+                                                        || type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                        || other_type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                    {
+                                                        conflict = Some(Conflict::Borrow {
+                                                            type_info: Some(type_info.clone()),
+                                                            other_system: SystemId {
+                                                                name: other_system.name,
+                                                                type_id: other_system.type_id,
+                                                            },
+                                                            other_type_info: other_type_info
+                                                                .clone(),
+                                                        });
+
+                                                        break 'batch;
+                                                    }
                                                 }
+                                                Mutability::Shared => {
+                                                    if (!type_info.is_send || !type_info.is_sync)
+                                                        && (!other_type_info.is_send
+                                                            || !other_type_info.is_sync)
+                                                    {
+                                                        conflict =
+                                                            Some(Conflict::OtherNotSendSync {
+                                                                system: SystemId {
+                                                                    name: other_system.name,
+                                                                    type_id: other_system.type_id,
+                                                                },
+                                                                type_info: other_type_info.clone(),
+                                                            });
 
-                                                if type_info.storage_id
-                                                    == other_type_info.storage_id
-                                                    || type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                    || other_type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                {
-                                                    conflict = Some(Conflict::Borrow {
-                                                        type_info: Some(type_info.clone()),
-                                                        other_system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        other_type_info: other_type_info.clone(),
-                                                    });
+                                                        break 'batch;
+                                                    }
 
-                                                    break 'batch;
-                                                }
-                                            }
-                                            Mutability::Shared => {
-                                                if !other_type_info.is_send
-                                                    || !other_type_info.is_sync
-                                                {
-                                                    conflict = Some(Conflict::OtherNotSendSync {
-                                                        system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        type_info: other_type_info.clone(),
-                                                    });
+                                                    if (type_info.storage_id
+                                                        == other_type_info.storage_id
+                                                        && other_type_info.mutability
+                                                            == Mutability::Exclusive)
+                                                        || type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                        || other_type_info.storage_id
+                                                            == TypeId::of::<AllStorages>()
+                                                    {
+                                                        conflict = Some(Conflict::Borrow {
+                                                            type_info: Some(type_info.clone()),
+                                                            other_system: SystemId {
+                                                                name: other_system.name,
+                                                                type_id: other_system.type_id,
+                                                            },
+                                                            other_type_info: other_type_info
+                                                                .clone(),
+                                                        });
 
-                                                    break 'batch;
-                                                }
-
-                                                if (type_info.storage_id
-                                                    == other_type_info.storage_id
-                                                    && other_type_info.mutability
-                                                        == Mutability::Exclusive)
-                                                    || type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                    || other_type_info.storage_id
-                                                        == TypeId::of::<AllStorages>()
-                                                {
-                                                    conflict = Some(Conflict::Borrow {
-                                                        type_info: Some(type_info.clone()),
-                                                        other_system: SystemId {
-                                                            name: other_system.name,
-                                                            type_id: other_system.type_id,
-                                                        },
-                                                        other_type_info: other_type_info.clone(),
-                                                    });
-
-                                                    break 'batch;
+                                                        break 'batch;
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            valid = i;
+                                valid = i;
+                            }
                         }
 
                         let system_info = SystemInfo {
@@ -937,12 +1155,22 @@ impl WorkloadBuilder {
                         };
 
                         if valid < batches.parallel.len() {
-                            batches.parallel[valid].push(system_index);
-                            workload_info.batch_info[valid].systems.push(system_info);
-                        } else {
-                            batches.parallel.push(vec![system_index]);
+                            if non_send_sync.is_some() {
+                                batches.parallel[valid].0 = Some(system_index);
+                                workload_info.batch_info[valid].systems.0 = Some(system_info);
+                            } else {
+                                batches.parallel[valid].1.push(system_index);
+                                workload_info.batch_info[valid].systems.1.push(system_info);
+                            }
+                        } else if non_send_sync.is_some() {
+                            batches.parallel.push((Some(system_index), Vec::new()));
                             workload_info.batch_info.push(BatchInfo {
-                                systems: vec![system_info],
+                                systems: (Some(system_info), Vec::new()),
+                            });
+                        } else {
+                            batches.parallel.push((None, vec![system_index]));
+                            workload_info.batch_info.push(BatchInfo {
+                                systems: (None, vec![system_info]),
                             });
                         }
                     }
@@ -1003,7 +1231,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("System1"),
             Some(&Batches {
-                parallel: vec![vec![0]],
+                parallel: vec![(None, vec![0])],
                 sequential: vec![0],
             })
         );
@@ -1029,7 +1257,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("System1"),
             Some(&Batches {
-                parallel: vec![vec![0]],
+                parallel: vec![(None, vec![0])],
                 sequential: vec![0],
             })
         );
@@ -1057,7 +1285,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0, 1]],
+                parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1085,7 +1313,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1],
             })
         );
@@ -1113,7 +1341,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1133,7 +1361,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1168,7 +1396,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Combined"),
             Some(&Batches {
-                parallel: vec![vec![0, 2], vec![1]],
+                parallel: vec![(None, vec![0, 2]), (None, vec![1])],
                 sequential: vec![0, 1, 2]
             })
         );
@@ -1195,7 +1423,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0]],
+                parallel: vec![(Some(0), Vec::new())],
                 sequential: vec![0]
             })
         );
@@ -1215,7 +1443,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![0]],
+                parallel: vec![(Some(0), Vec::new()), (Some(0), Vec::new())],
                 sequential: vec![0, 0]
             })
         );
@@ -1235,7 +1463,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
                 sequential: vec![0, 1]
             })
         );
@@ -1255,7 +1483,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1292,12 +1520,18 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![0]],
+                parallel: vec![(Some(0), Vec::new()), (Some(0), Vec::new())],
                 sequential: vec![0, 0]
             })
         );
         assert_eq!(scheduler.default, "Test");
-        assert!(info.batch_info[0].systems[0].conflict.is_none());
+        assert!(info.batch_info[0]
+            .systems
+            .0
+            .as_ref()
+            .unwrap()
+            .conflict
+            .is_none());
 
         let world = World::new();
 
@@ -1313,7 +1547,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(Some(0), Vec::new()), (Some(1), Vec::new())],
                 sequential: vec![0, 1]
             })
         );
@@ -1333,7 +1567,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(Some(0), Vec::new()), (Some(1), Vec::new())],
                 sequential: vec![0, 1]
             })
         );
@@ -1353,12 +1587,12 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(Some(0), vec![1])],
                 sequential: vec![0, 1]
             })
         );
         assert_eq!(scheduler.default, "Test");
-        assert!(info.batch_info[0].systems[0].conflict.is_none());
+        assert!(info.batch_info[0].systems.1[0].conflict.is_none());
 
         let world = World::new();
 
@@ -1374,7 +1608,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![vec![0], vec![1]],
+                parallel: vec![(Some(0), vec![1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1402,7 +1636,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Systems"),
             Some(&Batches {
-                parallel: vec![vec![0, 1]],
+                parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1460,7 +1694,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Combined"),
             Some(&Batches {
-                parallel: vec![vec![0, 3], vec![1, 2]],
+                parallel: vec![(None, vec![0, 3]), (None, vec![1, 2])],
                 sequential: vec![0, 1, 2, 3]
             })
         );

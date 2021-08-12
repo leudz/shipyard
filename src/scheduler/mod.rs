@@ -21,7 +21,7 @@ use hashbrown::HashMap;
 #[derive(Default)]
 #[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub(super) struct Batches {
-    pub(super) parallel: Vec<Vec<usize>>,
+    pub(super) parallel: Vec<(Option<usize>, Vec<usize>)>,
     pub(super) sequential: Vec<usize>,
 }
 

@@ -36,8 +36,14 @@ unsafe impl<'a> BorrowInfo for AllStoragesViewMut<'a> {
             name: type_name::<AllStorages>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<AllStorages>(),
+            #[cfg(not(feature = "thread_local"))]
             is_send: true,
+            #[cfg(not(feature = "thread_local"))]
             is_sync: true,
+            #[cfg(feature = "thread_local")]
+            is_send: false,
+            #[cfg(feature = "thread_local")]
+            is_sync: false,
         });
     }
 }

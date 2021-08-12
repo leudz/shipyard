@@ -24,7 +24,7 @@ pub struct WorkloadInfo {
 #[derive(Debug, Clone)]
 pub struct BatchInfo {
     #[allow(missing_docs)]
-    pub systems: Vec<SystemInfo>,
+    pub systems: (Option<SystemInfo>, Vec<SystemInfo>),
 }
 
 /// Contains information related to a system.

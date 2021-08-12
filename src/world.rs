@@ -679,17 +679,45 @@ let i = world.run(sys1).unwrap();
         #[cfg(feature = "parallel")]
         {
             for batch in &batches.parallel {
-                if batch.len() == 1 {
-                    systems[batch[0]](self)
-                        .map_err(|err| error::RunWorkload::Run((system_names[batch[0]], err)))?;
-                } else {
-                    use rayon::prelude::*;
+                let mut result = Ok(());
 
-                    batch.into_par_iter().try_for_each(|&index| {
-                        (systems[index])(self)
-                            .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
-                    })?;
-                }
+                rayon::in_place_scope(|scope| {
+                    if let Some(index) = batch.0 {
+                        scope.spawn(|_| {
+                            if batch.1.len() == 1 {
+                                result = systems[batch.1[0]](self).map_err(|err| {
+                                    error::RunWorkload::Run((system_names[batch.1[0]], err))
+                                });
+                            } else {
+                                use rayon::prelude::*;
+
+                                result = batch.1.par_iter().try_for_each(|&index| {
+                                    (systems[index])(self).map_err(|err| {
+                                        error::RunWorkload::Run((system_names[index], err))
+                                    })
+                                });
+                            }
+                        });
+
+                        systems[index](self)
+                            .map_err(|err| error::RunWorkload::Run((system_names[index], err)))?;
+                    } else if batch.1.len() == 1 {
+                        result = systems[batch.1[0]](self).map_err(|err| {
+                            error::RunWorkload::Run((system_names[batch.1[0]], err))
+                        });
+                    } else {
+                        use rayon::prelude::*;
+
+                        result = batch.1.par_iter().try_for_each(|&index| {
+                            (systems[index])(self)
+                                .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
+                        });
+                    }
+
+                    Ok(())
+                })?;
+
+                result?;
             }
 
             Ok(())
