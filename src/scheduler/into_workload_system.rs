@@ -128,8 +128,7 @@ macro_rules! impl_system {
                     name: "",
                     storage_id: StorageId::of::<AllStorages>(),
                     mutability: Mutability::Exclusive,
-                    is_send: true,
-                    is_sync: true,
+                    thread_safe: true,
                 }) && borrows.len() > 1
                 {
                     return Err(error::InvalidSystem::AllStorages);
@@ -179,8 +178,7 @@ macro_rules! impl_system {
                     name: "",
                     storage_id: StorageId::of::<AllStorages>(),
                     mutability: Mutability::Exclusive,
-                    is_send: true,
-                    is_sync: true,
+                    thread_safe: true,
                 }) && borrows.len() > 1
                 {
                     return Err(error::InvalidSystem::AllStorages);
@@ -230,8 +228,7 @@ macro_rules! impl_system {
                     name: "",
                     storage_id: StorageId::of::<AllStorages>(),
                     mutability: Mutability::Exclusive,
-                    is_send: true,
-                    is_sync: true,
+                    thread_safe: true,
                 }) && borrows.len() > 1
                 {
                     return Err(error::InvalidSystem::AllStorages);

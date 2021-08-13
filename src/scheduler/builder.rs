@@ -427,7 +427,7 @@ impl WorkloadBuilder {
                     if type_info.storage_id == TypeId::of::<AllStorages>() {
                         all_storages = Some(type_info);
                         break;
-                    } else if !type_info.is_send || !type_info.is_sync {
+                    } else if !type_info.thread_safe {
                         non_send_sync = Some(type_info);
                         break;
                     }
@@ -481,7 +481,7 @@ impl WorkloadBuilder {
                         if type_info.storage_id == TypeId::of::<AllStorages>() {
                             all_storages = Some(type_info.clone());
                             break;
-                        } else if !type_info.is_send || !type_info.is_sync {
+                        } else if !type_info.thread_safe {
                             non_send_sync = Some(type_info.clone());
                             break;
                         }
@@ -601,9 +601,8 @@ impl WorkloadBuilder {
                                         for type_info in &borrow_constraints {
                                             match type_info.mutability {
                                                 Mutability::Exclusive => {
-                                                    if (!type_info.is_send || !type_info.is_sync)
-                                                        && (!other_type_info.is_send
-                                                            || !other_type_info.is_sync)
+                                                    if !type_info.thread_safe
+                                                        && !other_type_info.thread_safe
                                                     {
                                                         conflict =
                                                             Some(Conflict::OtherNotSendSync {
@@ -638,9 +637,8 @@ impl WorkloadBuilder {
                                                     }
                                                 }
                                                 Mutability::Shared => {
-                                                    if (!type_info.is_send || !type_info.is_sync)
-                                                        && (!other_type_info.is_send
-                                                            || !other_type_info.is_sync)
+                                                    if !type_info.thread_safe
+                                                        && !other_type_info.thread_safe
                                                     {
                                                         conflict =
                                                             Some(Conflict::OtherNotSendSync {
@@ -879,7 +877,7 @@ impl WorkloadBuilder {
                     if type_info.storage_id == TypeId::of::<AllStorages>() {
                         all_storages = Some(type_info);
                         break;
-                    } else if !type_info.is_send || !type_info.is_sync {
+                    } else if !type_info.thread_safe {
                         non_send_sync = Some(type_info);
                         break;
                     }
@@ -943,7 +941,7 @@ impl WorkloadBuilder {
                         if type_info.storage_id == TypeId::of::<AllStorages>() {
                             all_storages = Some(type_info.clone());
                             break;
-                        } else if !type_info.is_send || !type_info.is_sync {
+                        } else if !type_info.thread_safe {
                             non_send_sync = Some(type_info.clone());
                             break;
                         }
@@ -1063,9 +1061,8 @@ impl WorkloadBuilder {
                                         for type_info in &borrow_constraints {
                                             match type_info.mutability {
                                                 Mutability::Exclusive => {
-                                                    if (!type_info.is_send || !type_info.is_sync)
-                                                        && (!other_type_info.is_send
-                                                            || !other_type_info.is_sync)
+                                                    if !type_info.thread_safe
+                                                        && !other_type_info.thread_safe
                                                     {
                                                         conflict =
                                                             Some(Conflict::OtherNotSendSync {
@@ -1100,9 +1097,8 @@ impl WorkloadBuilder {
                                                     }
                                                 }
                                                 Mutability::Shared => {
-                                                    if (!type_info.is_send || !type_info.is_sync)
-                                                        && (!other_type_info.is_send
-                                                            || !other_type_info.is_sync)
+                                                    if !type_info.thread_safe
+                                                        && !other_type_info.thread_safe
                                                     {
                                                         conflict =
                                                             Some(Conflict::OtherNotSendSync {
@@ -1520,18 +1516,12 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![(Some(0), Vec::new()), (Some(0), Vec::new())],
+                parallel: vec![(None, vec![0, 0])],
                 sequential: vec![0, 0]
             })
         );
         assert_eq!(scheduler.default, "Test");
-        assert!(info.batch_info[0]
-            .systems
-            .0
-            .as_ref()
-            .unwrap()
-            .conflict
-            .is_none());
+        assert!(info.batch_info[0].systems.1[0].conflict.is_none());
 
         let world = World::new();
 
@@ -1547,7 +1537,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![(Some(0), Vec::new()), (Some(1), Vec::new())],
+                parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
                 sequential: vec![0, 1]
             })
         );
@@ -1567,7 +1557,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![(Some(0), Vec::new()), (Some(1), Vec::new())],
+                parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1587,7 +1577,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![(Some(0), vec![1])],
+                parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1]
             })
         );
@@ -1608,7 +1598,7 @@ mod tests {
         assert_eq!(
             scheduler.workloads.get("Test"),
             Some(&Batches {
-                parallel: vec![(Some(0), vec![1])],
+                parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1]
             })
         );

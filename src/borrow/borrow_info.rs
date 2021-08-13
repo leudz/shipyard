@@ -37,13 +37,9 @@ unsafe impl<'a> BorrowInfo for AllStoragesViewMut<'a> {
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<AllStorages>(),
             #[cfg(not(feature = "thread_local"))]
-            is_send: true,
-            #[cfg(not(feature = "thread_local"))]
-            is_sync: true,
+            thread_safe: true,
             #[cfg(feature = "thread_local")]
-            is_send: false,
-            #[cfg(feature = "thread_local")]
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }
@@ -54,8 +50,7 @@ unsafe impl<'a> BorrowInfo for EntitiesView<'a> {
             name: type_name::<Entities>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Entities>(),
-            is_send: true,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -66,8 +61,7 @@ unsafe impl<'a> BorrowInfo for EntitiesViewMut<'a> {
             name: type_name::<Entities>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Entities>(),
-            is_send: true,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -78,8 +72,7 @@ unsafe impl<'a, T: Send + Sync + Component> BorrowInfo for View<'a, T> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: true,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -91,8 +84,7 @@ unsafe impl<'a, T: Sync + Component> BorrowInfo for NonSend<View<'a, T>> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: false,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -104,8 +96,7 @@ unsafe impl<'a, T: Send + Component> BorrowInfo for NonSync<View<'a, T>> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: true,
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }
@@ -117,8 +108,7 @@ unsafe impl<'a, T: Component> BorrowInfo for NonSendSync<View<'a, T>> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: false,
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }
@@ -129,8 +119,7 @@ unsafe impl<'a, T: Send + Sync + Component> BorrowInfo for ViewMut<'a, T> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: true,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -142,8 +131,7 @@ unsafe impl<'a, T: Sync + Component> BorrowInfo for NonSend<ViewMut<'a, T>> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: false,
-            is_sync: true,
+            thread_safe: false,
         });
     }
 }
@@ -155,8 +143,7 @@ unsafe impl<'a, T: Send + Component> BorrowInfo for NonSync<ViewMut<'a, T>> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: true,
-            is_sync: false,
+            thread_safe: true,
         });
     }
 }
@@ -168,8 +155,7 @@ unsafe impl<'a, T: Component> BorrowInfo for NonSendSync<ViewMut<'a, T>> {
             name: type_name::<SparseSet<T, T::Tracking>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            is_send: false,
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }
@@ -180,8 +166,7 @@ unsafe impl<'a, T: Send + Sync + Component> BorrowInfo for UniqueView<'a, T> {
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: true,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -193,8 +178,7 @@ unsafe impl<'a, T: Sync + Component> BorrowInfo for NonSend<UniqueView<'a, T>> {
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: false,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -206,8 +190,7 @@ unsafe impl<'a, T: Send + Component> BorrowInfo for NonSync<UniqueView<'a, T>> {
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: true,
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }
@@ -219,8 +202,7 @@ unsafe impl<'a, T: Component> BorrowInfo for NonSendSync<UniqueView<'a, T>> {
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Shared,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: false,
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }
@@ -231,8 +213,7 @@ unsafe impl<'a, T: Send + Sync + Component> BorrowInfo for UniqueViewMut<'a, T> 
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: true,
-            is_sync: true,
+            thread_safe: true,
         });
     }
 }
@@ -244,8 +225,7 @@ unsafe impl<'a, T: Sync + Component> BorrowInfo for NonSend<UniqueViewMut<'a, T>
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: false,
-            is_sync: true,
+            thread_safe: false,
         });
     }
 }
@@ -257,8 +237,7 @@ unsafe impl<'a, T: Send + Component> BorrowInfo for NonSync<UniqueViewMut<'a, T>
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: true,
-            is_sync: false,
+            thread_safe: true,
         });
     }
 }
@@ -270,8 +249,7 @@ unsafe impl<'a, T: Component> BorrowInfo for NonSendSync<UniqueViewMut<'a, T>> {
             name: type_name::<Unique<T>>(),
             mutability: Mutability::Exclusive,
             storage_id: StorageId::of::<Unique<T>>(),
-            is_send: false,
-            is_sync: false,
+            thread_safe: false,
         });
     }
 }

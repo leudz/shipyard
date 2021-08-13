@@ -104,9 +104,7 @@ pub struct TypeInfo {
     #[allow(missing_docs)]
     pub storage_id: StorageId,
     #[allow(missing_docs)]
-    pub is_send: bool,
-    #[allow(missing_docs)]
-    pub is_sync: bool,
+    pub thread_safe: bool,
 }
 
 impl PartialEq for TypeInfo {
@@ -125,21 +123,11 @@ impl core::fmt::Debug for TypeInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_struct("TypeInfo");
 
-        match (self.is_send, self.is_sync) {
-            (true, true) => debug_struct.field("name", &self.name),
-            (false, true) => {
-                debug_struct.field("name", &format_args!("shipyard::NonSend<{}>", self.name))
-            }
-            (true, false) => {
-                debug_struct.field("name", &format_args!("shipyard::NonSync<{}>", self.name))
-            }
-            (false, false) => debug_struct.field(
-                "name",
-                &format_args!("shipyard::NonSendSync<{}>", self.name),
-            ),
-        }
-        .field("mutability", &self.mutability)
-        .finish()
+        debug_struct
+            .field("name", &self.name)
+            .field("mutability", &self.mutability)
+            .field("thread_safe", &self.thread_safe)
+            .finish()
     }
 }
 
