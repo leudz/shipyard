@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1 style="display:flex; justify-content:center; align-items:center;">Shipyard<img style="margin:0px 5px; width:50px;" src="./logo.png"></h1> <!-- omit in toc -->
+<h1>Shipyard ⚓</h1> <!-- omit in toc -->
 
 Shipyard is an Entity Component System focused on usability and speed.
 
