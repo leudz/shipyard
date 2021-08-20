@@ -237,7 +237,10 @@ impl Entities {
             storages.add_entity(id, component)
         }
 
-        BulkEntityIter(self.data[entities_len..].iter().copied())
+        BulkEntityIter {
+            iter: self.data[entities_len..].iter().copied(),
+            slice: &self.data[entities_len..],
+        }
     }
     /// Creates an iterator over all entities.
     #[inline]

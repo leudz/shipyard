@@ -47,7 +47,10 @@ impl BulkInsert for () {
         for _ in iter.skip(len) {
             entities.generate();
         }
-        BulkEntityIter(entities.data[entities_len..].iter().copied())
+        BulkEntityIter {
+            iter: entities.data[entities_len..].iter().copied(),
+            slice: &entities.data[entities_len..],
+        }
     }
 }
 
@@ -112,14 +115,12 @@ where
 
         drop((entities, sparse_set));
 
-        BulkEntityIter(
-            all_storages
-                .exclusive_storage_mut::<Entities>()
-                .unwrap()
-                .data[entities_len..]
-                .iter()
-                .copied(),
-        )
+        let entities = all_storages.exclusive_storage_mut::<Entities>().unwrap();
+
+        BulkEntityIter {
+            iter: entities.data[entities_len..].iter().copied(),
+            slice: &entities.data[entities_len..],
+        }
     }
 }
 
@@ -221,7 +222,12 @@ macro_rules! impl_bulk_insert {
 
                 drop((entities, $sparse_set1, $($sparse_set),*));
 
-                BulkEntityIter(all_storages.exclusive_storage_mut::<Entities>().unwrap().data[entities_len..].iter().copied())
+                let entities = all_storages.exclusive_storage_mut::<Entities>().unwrap();
+
+                BulkEntityIter {
+                    iter: entities.data[entities_len..].iter().copied(),
+                    slice: &entities.data[entities_len..],
+                }
             }
         }
     };

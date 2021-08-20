@@ -12,55 +12,65 @@ use core::slice::Iter;
 /// [`AllStorages::bulk_add_entity`]: crate::AllStorages::bulk_add_entity()
 /// [`Entities::bulk_add_entity`]: crate::Entities#method::bulk_add_entity()
 #[derive(Clone, Debug)]
-pub struct BulkEntityIter<'a>(pub(crate) Copied<Iter<'a, EntityId>>);
+pub struct BulkEntityIter<'a> {
+    pub(crate) iter: Copied<Iter<'a, EntityId>>,
+    pub(crate) slice: &'a [EntityId],
+}
+
+impl BulkEntityIter<'_> {
+    /// [`EntityId`] slice of the newly bulk added entities.  
+    pub fn as_slice(&self) -> &[EntityId] {
+        self.slice
+    }
+}
 
 impl<'a> Iterator for BulkEntityIter<'a> {
     type Item = EntityId;
 
     fn next(&mut self) -> Option<EntityId> {
-        self.0.next()
+        self.iter.next()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
+        self.iter.size_hint()
     }
 
     fn fold<Acc, F>(self, init: Acc, f: F) -> Acc
     where
         F: FnMut(Acc, Self::Item) -> Acc,
     {
-        self.0.fold(init, f)
+        self.iter.fold(init, f)
     }
 
     fn nth(&mut self, n: usize) -> Option<EntityId> {
-        self.0.nth(n)
+        self.iter.nth(n)
     }
 
     fn last(self) -> Option<EntityId> {
-        self.0.last()
+        self.iter.last()
     }
 
     fn count(self) -> usize {
-        self.0.count()
+        self.iter.count()
     }
 }
 
 impl<'a> DoubleEndedIterator for BulkEntityIter<'a> {
     fn next_back(&mut self) -> Option<EntityId> {
-        self.0.next_back()
+        self.iter.next_back()
     }
 
     fn rfold<Acc, F>(self, init: Acc, f: F) -> Acc
     where
         F: FnMut(Acc, Self::Item) -> Acc,
     {
-        self.0.rfold(init, f)
+        self.iter.rfold(init, f)
     }
 }
 
 impl<'a> ExactSizeIterator for BulkEntityIter<'a> {
     fn len(&self) -> usize {
-        self.0.len()
+        self.iter.len()
     }
 }
 
