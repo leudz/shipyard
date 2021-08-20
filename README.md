@@ -1,6 +1,6 @@
 <div align="center">
 
-# Shipyard <sub><img src="./logo.png" width=32> </sub> <!-- omit in toc -->
+<h1 style="display:flex; justify-content:center; align-items:center;">Shipyard<img style="margin:0px 5px; width:50px;" src="./logo.png"></h1> <!-- omit in toc -->
 
 Shipyard is an Entity Component System focused on usability and speed.
 
@@ -15,6 +15,7 @@ If you have any question or want to follow the development more closely <sub>[![
 </div>
 
 ## Basic Example <!-- omit in toc -->
+
 ```rust
 use shipyard::{IntoIter, View, ViewMut, World};
 
@@ -55,6 +56,7 @@ Inspired by Erik Hazzard's [Rectangle Eater](http://erikhazzard.github.io/Rectan
 [![Source](https://img.shields.io/badge/View-Source-blue)](square_eater/src/main.rs)
 
 ## Table of Contents <!-- omit in toc -->
+
 - [Origin of the name](#origin-of-the-name)
 - [Motivation](#motivation)
 - [Cargo Features](#cargo-features)
@@ -65,9 +67,9 @@ Inspired by Erik Hazzard's [Rectangle Eater](http://erikhazzard.github.io/Rectan
 
 Assembly lines take input, process it at each step, and output a result. You can have multiple lines working in parallel as long as they don't bother each other.
 
-Shipyards such as the [Venetian Arsenal](https://en.wikipedia.org/wiki/Venetian_Arsenal) are some of the oldest examples of successful, large-scale, industrial assembly lines.  So successful that it could output a fully-finished ship _every day_.
+Shipyards such as the [Venetian Arsenal](https://en.wikipedia.org/wiki/Venetian_Arsenal) are some of the oldest examples of successful, large-scale, industrial assembly lines. So successful that it could output a fully-finished ship _every day_.
 
-*Shipyard* is a project you can use to build your own highly-parallel software processes.
+_Shipyard_ is a project you can use to build your own highly-parallel software processes.
 
 ## Motivation
 
@@ -77,19 +79,19 @@ I initially wanted to make an ECS to learn how it works. After a failed attempt 
 
 ## Cargo Features
 
-- **parallel** *(default)* &mdash; enables workload threading and add parallel iterators
+- **parallel** _(default)_ &mdash; enables workload threading and add parallel iterators
 - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
-- **std** *(default)* &mdash; lets Shipyard use the standard library
+- **std** _(default)_ &mdash; lets Shipyard use the standard library
 - **thread_local** &mdash; adds methods and types required to work with `!Send` and `!Sync` components
 
 ## License
 
 Licensed under either of
 
- * Apache License, Version 2.0
-   ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license
-   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0
+  ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT license
+  ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
 at your option.
 
