@@ -185,7 +185,7 @@ fn move_square(
         acceleration.0 += ACCELERATION_RATE;
     }
 
-    let mut dirs = vec![Vec2::zero(); rects.len()];
+    let mut dirs = vec![Vec2::ZERO; rects.len()];
 
     for ((id, MyRect(rect)), dir) in rects.iter().with_id().zip(&mut dirs) {
         if rect.w > player.rect.w && rect.h > player.rect.h {
@@ -199,7 +199,7 @@ fn move_square(
                 *dir = -*dir;
             }
 
-            let mut neighbourg_dir = Vec2::zero();
+            let mut neighbourg_dir = Vec2::ZERO;
 
             for MyRect(neighbourg) in rects.iter() {
                 if rect.point().distance_squared(neighbourg.point()) < rect.w * rect.h / 1.5 {
@@ -221,7 +221,7 @@ fn move_square(
     }
 
     for (rect, dir) in (&mut rects).iter().zip(dirs) {
-        if dir != Vec2::zero() {
+        if dir != Vec2::ZERO {
             rect.0.move_to(dir);
         }
     }
