@@ -131,7 +131,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: rustup +stable target add wasm32-unknown-unknown
-      - run: cargo +stable build --release --package square_eater --target wasm32-unknown-unknown
+      - run: cargo +stable build --release --package square_eater --target wasm32-unknown-unknown --manifest-path=square_eater/Cargo.toml
       - run: mv ./target/wasm32-unknown-unknown/release/square_eater.wasm ./square_eater/public
       - name: save square_eater
         uses: actions/upload-artifact@v2
