@@ -15,7 +15,7 @@ Then when inside the `square_eater` directory you can use regular `cargo` comman
 
 ### Build WASM
 
-Using [`cargo make`](https://crates.io/crates/cargo-make) so simplify building.\
+Using [`cargo make`](https://crates.io/crates/cargo-make) to simplify building.\
 When in the root directory, build square_eater in release mode, all files will be in the `square_eater/public` directory.
 
 ```shell
