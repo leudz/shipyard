@@ -1,8 +1,8 @@
 # Square eater
 
-In a world where all round shapes have disappeared.
-You are a lone square trying to get bigger in order to survive the continuous red square attacks.
-When all hope is lost, only the legendary gold square can save you!
+In a world where all round shapes have disappeared.\
+You are a lone square trying to get bigger in order to survive the continuous red square attacks.\
+When all hope is lost, only the legendary gold square can save you!\
 [Play Online](https://leudz.github.io/shipyard/square_eater)
 
 Inspired by Erik Hazzard's [Rectangle Eater](http://erikhazzard.github.io/RectangleEater/).
@@ -15,7 +15,7 @@ Then when inside the `square_eater` directory you can use regular `cargo` comman
 
 ### Build WASM
 
-Using [`cargo make`](https://crates.io/crates/cargo-make) so simplify building.
+Using [`cargo make`](https://crates.io/crates/cargo-make) so simplify building.\
 When in the root directory, build square_eater in release mode, all files will be in the `square_eater/public` directory.
 
 ```shell
