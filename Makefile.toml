@@ -36,7 +36,26 @@ args = ["doc", "--all-features", "--no-deps"]
 
 [tasks.build_square_eater]
 command = "cargo"
-args = ["build", "--release", "--package", "square_eater", "--target", "wasm32-unknown-unknown"]
+args = [
+    "build",
+    "--package",
+    "square_eater",
+    "--manifest-path",
+    "square_eater/Cargo.toml",
+    "--release",
+    "--target",
+    "wasm32-unknown-unknown",
+]
+
+[tasks.move_square_eater]
+script_runner = "@shell"
+script = '''
+rm -f ./square_eater/public/square_eater.wasm
+mv ./target/wasm32-unknown-unknown/release/square_eater.wasm ./square_eater/public/
+'''
+
+[tasks.square_eater]
+run_task = { name = ["build_square_eater", "move_square_eater"] }
 
 [tasks.test]
 run_task = { name = ["format", "test-all", "doc", "miri", "clippy", "clean"] }
