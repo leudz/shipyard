@@ -32,6 +32,11 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     fn track_removal() -> bool;
 
     #[doc(hidden)]
+    fn is_deleted(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool;
+    #[doc(hidden)]
+    fn is_removed(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool;
+
+    #[doc(hidden)]
     fn used_memory(_: &SparseSet<T, Self>) -> usize {
         0
     }
@@ -92,6 +97,15 @@ mod nothing {
 
         #[inline]
         fn track_removal() -> bool {
+            false
+        }
+
+        #[inline]
+        fn is_deleted(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+            false
+        }
+        #[inline]
+        fn is_removed(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
             false
         }
 
@@ -228,6 +242,15 @@ mod insertion {
         }
 
         #[inline]
+        fn is_deleted(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+            false
+        }
+        #[inline]
+        fn is_removed(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+            false
+        }
+
+        #[inline]
         fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> Option<T> {
             sparse_set.actual_remove(entity)
         }
@@ -355,6 +378,15 @@ mod modification {
 
         #[inline]
         fn track_removal() -> bool {
+            false
+        }
+
+        #[inline]
+        fn is_deleted(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+            false
+        }
+        #[inline]
+        fn is_removed(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
             false
         }
 
@@ -515,6 +547,14 @@ mod deletion {
             false
         }
 
+        fn is_deleted(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool {
+            sparse_set.deletion_data.iter().any(|(id, _)| *id == entity)
+        }
+        #[inline]
+        fn is_removed(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+            false
+        }
+
         #[inline]
         fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> Option<T> {
             sparse_set.actual_remove(entity)
@@ -670,6 +710,14 @@ mod removal {
         }
 
         #[inline]
+        fn is_deleted(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+            false
+        }
+        fn is_removed(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool {
+            sparse_set.removal_data.iter().any(|id| *id == entity)
+        }
+
+        #[inline]
         fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> Option<T> {
             let component = sparse_set.actual_remove(entity);
 
@@ -822,6 +870,13 @@ mod all {
         #[inline]
         fn track_removal() -> bool {
             true
+        }
+
+        fn is_deleted(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool {
+            sparse_set.deletion_data.iter().any(|(id, _)| *id == entity)
+        }
+        fn is_removed(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool {
+            sparse_set.removal_data.iter().any(|id| *id == entity)
         }
 
         #[inline]
