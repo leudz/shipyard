@@ -188,7 +188,7 @@ impl Entities {
         component: T::Component,
     ) -> EntityId {
         let entity_id = self.generate();
-        storages.add_entity(entity_id, component);
+        AddEntity::add_entity(&mut storages, entity_id, component);
         entity_id
     }
     /// Creates multiple new entities and returns an iterator yielding the new [`EntityId`]s.  
@@ -229,12 +229,12 @@ impl Entities {
 
         storages.bulk_reserve(new_entities);
         for (component, id) in (&mut iter).zip(new_entities.iter().copied()) {
-            storages.add_entity(id, component)
+            AddEntity::add_entity(&mut storages, id, component);
         }
 
         // have to use two loops because of self borrow
         for (component, id) in iter.zip(repeat_with(|| self.generate())) {
-            storages.add_entity(id, component)
+            AddEntity::add_entity(&mut storages, id, component);
         }
 
         BulkEntityIter {
