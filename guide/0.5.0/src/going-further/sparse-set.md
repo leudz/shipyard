@@ -5,6 +5,7 @@
 ### Overview
 
 [`SparseSet`](https://docs.rs/shipyard/0.5.0/shipyard/struct.SparseSet.html) is made of three arrays:
+
 - `sparse` contains indices to the `dense` and `data` arrays
 - `dense` contains [`EntityId`](https://docs.rs/shipyard/0.5.0/shipyard/struct.EntityId.html)
 - `data` contains the actual components
@@ -13,8 +14,13 @@
 `sparse` on the other hand can be as big as the total number of entities created.
 
 Let's look at an example:
+
 ```rust, noplaypen
-{{#include ../../../../tests/book/sparse_set.rs:insertion}}
+let mut world = World::new();
+
+let entity0 = world.add_entity((0u32,));
+let entity1 = world.add_entity((10.0f32,));
+let entity2 = world.add_entity((20u32,));
 ```
 
 The [`World`](https://docs.rs/shipyard/0.5.0/shipyard/struct.World.html) starts out empty, when we add `0u32` a [`SparseSet<u32>`](https://docs.rs/shipyard/0.5.0/shipyard/struct.SparseSet.html) will be generated.
@@ -43,10 +49,11 @@ Removing is done by swap removing from both `dense` and `data` and updating `spa
 Continuing the previous example if we call:
 
 ```rust, noplaypen
-{{#include ../../../../tests/book/sparse_set.rs:removal}}
+world.remove::<(u32,)>(entity0);
 ```
 
 The internal representation now looks like this:
+
 ```txt
 sparse: [dead, dead, 0]
 dense: [2]

@@ -11,6 +11,7 @@ In ECS there's two big ways to split work across cores: running systems on separ
 We'll start by the simplest one to use. So simple that there's nothing to do, workloads handle all the work for you. We even almost used multiple threads in the [Systems chapter](../fundamentals/systems.md).
 
 As long as the "parallel" feature is set (enabled by default) workloads will try to execute systems as much in parallel as possible. There is a set of rules that defines the "possible":
+
 - Systems accessing [`AllStorages`](https://docs.rs/shipyard/0.5.0/shipyard/struct.AllStorages.html) stop all threading.
 - There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/0.5.0/shipyard/struct.ViewMut.html) will block `T` threading.
 
@@ -23,10 +24,15 @@ While parallel iterators does require us to modify our code, it's just a matter 
 Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/0.5.0/shipyard/trait.IntoIter.html#tymethod.par_iter) returns a [`ParallelIterator`](https://docs.rs/rayon/0.5.0/rayon/iter/trait.ParallelIterator.html).
 
 Example:
-```rust, noplaypen
-{{#include ../../../../tests/book/parallelism.rs:import}}
 
-{{#include ../../../../tests/book/parallelism.rs:parallelism}}
+```rust, noplaypen
+use rayon::prelude::*;
+
+fn many_u32s(mut u32s: ViewMut<u32>) {
+    u32s.par_iter().for_each(|i| {
+        // -- snip --
+    });
+}
 ```
 
 Don't replace all your [`iter`](https://docs.rs/shipyard/0.5.0/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on storages large enough to make up for the overhead cost in improved processing efficiency.
