@@ -652,10 +652,10 @@ You can use:
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::AllSystem<'s, (Data,), B, R>>(
         &'s self,
-        s: S,
+        system: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        s.run((data,), self).map_err(error::Run::GetStorage)
+        system.run((data,), self).map_err(error::Run::GetStorage)
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -769,9 +769,9 @@ let i = all_storages.run(sys1).unwrap();
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(
         &'s self,
-        s: S,
+        system: S,
     ) -> Result<R, error::Run> {
-        s.run((), self).map_err(error::Run::GetStorage)
+        system.run((), self).map_err(error::Run::GetStorage)
     }
     /// Deletes any entity with at least one of the given type(s).  
     /// The storage's type has to be used and not the component.  

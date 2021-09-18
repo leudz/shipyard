@@ -481,10 +481,10 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
         &'s self,
-        s: S,
+        system: S,
         data: Data,
     ) -> Result<R, error::Run> {
-        s.run((data,), self).map_err(error::Run::GetStorage)
+        system.run((data,), self).map_err(error::Run::GetStorage)
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -603,9 +603,9 @@ let i = world.run(sys1).unwrap();
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(
         &'s self,
-        s: S,
+        system: S,
     ) -> Result<R, error::Run> {
-        s.run((), self).map_err(error::Run::GetStorage)
+        system.run((), self).map_err(error::Run::GetStorage)
     }
     /// Modifies the current default workload to `name`.
     ///
