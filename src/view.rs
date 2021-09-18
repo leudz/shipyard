@@ -1,5 +1,5 @@
 use crate::all_storages::AllStorages;
-use crate::atomic_refcell::{ExclusiveBorrow, RefMut, SharedBorrow};
+use crate::atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 use crate::component::Component;
 use crate::entities::Entities;
 use crate::sparse_set::SparseSet;
@@ -9,6 +9,25 @@ use crate::unique::{TrackingState, Unique};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
+
+/// Shared view over `AllStorages`.
+pub struct AllStoragesView<'a>(pub(crate) Ref<'a, &'a AllStorages>);
+
+impl Deref for AllStoragesView<'_> {
+    type Target = AllStorages;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<AllStorages> for AllStoragesView<'_> {
+    #[inline]
+    fn as_ref(&self) -> &AllStorages {
+        &self.0
+    }
+}
 
 /// Exclusive view over `AllStorages`.
 pub struct AllStoragesViewMut<'a>(pub(crate) RefMut<'a, &'a mut AllStorages>);

@@ -21,7 +21,8 @@ use crate::atomic_refcell::{Ref, RefMut};
 use crate::component::Component;
 use crate::sparse_set::SparseSet;
 use crate::view::{
-    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
+    View, ViewMut,
 };
 use crate::world::World;
 use crate::{error, track};
@@ -50,6 +51,25 @@ pub trait Borrow<'a> {
 
     /// This function is where the actual borrowing happens.
     fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage>;
+}
+
+/// Helper struct allowing GAT-like behavior in stable.
+pub struct AllStoragesBorrower;
+
+impl IntoBorrow for AllStoragesView<'_> {
+    type Borrow = AllStoragesBorrower;
+}
+
+impl<'a> Borrow<'a> for AllStoragesBorrower {
+    type View = AllStoragesView<'a>;
+
+    fn borrow(world: &'a World) -> Result<Self::View, error::GetStorage> {
+        world
+            .all_storages
+            .borrow()
+            .map(AllStoragesView)
+            .map_err(error::GetStorage::AllStoragesBorrow)
+    }
 }
 
 /// Helper struct allowing GAT-like behavior in stable.
