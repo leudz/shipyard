@@ -93,7 +93,7 @@ pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
 #[cfg(feature = "proc")]
-pub use shipyard_proc::Component;
+pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component};
 pub use sparse_set::{SparseArray, SparseSet, SparseSetDrain};
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]

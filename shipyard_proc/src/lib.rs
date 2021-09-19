@@ -1,9 +1,14 @@
 extern crate proc_macro;
 
-use proc_macro2::{Span, TokenStream};
-use proc_macro_crate::{crate_name, FoundCrate};
-use quote::quote;
-use syn::{Error, Result};
+mod all_storages_borrow_expand;
+mod borrow_expand;
+mod borrow_info_expand;
+mod component_expand;
+
+use all_storages_borrow_expand::expand_all_storages_borrow;
+use borrow_expand::expand_borrow;
+use borrow_info_expand::expand_borrow_info;
+use component_expand::expand_component;
 
 #[proc_macro_derive(Component, attributes(track))]
 pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -26,57 +31,42 @@ pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
-fn expand_component(
-    name: syn::Ident,
-    generics: syn::Generics,
-    attribute_input: Option<&syn::Attribute>,
-) -> Result<TokenStream> {
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+#[proc_macro_derive(Borrow)]
+pub fn borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
-    let tracking = if let Some(tracking_attr) = attribute_input {
-        let tracking: syn::Ident = tracking_attr.parse_args().map_err(|_| {
-            Error::new_spanned(
-                &tracking_attr.tokens,
-                "Track should be one of: Untracked, Insertion, Modification, Deletion, Removal or All.",
-            )
-        })?;
+    let name = input.ident;
+    let generics = input.generics;
+    let vis = input.vis;
+    let data = input.data;
 
-        let tracking_name = tracking.to_string();
+    expand_borrow(name, generics, vis, data)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
 
-        match tracking_name.as_str() {
-            "Untracked" | "Insertion" | "Modification" | "Deletion" | "Removal" | "All" => {}
-            _ => return Err(Error::new_spanned(
-                &tracking,
-                "Track should be one of: Untracked, Insertion, Modification, Deletion, Removal or All.",
-            )),
-        }
+#[proc_macro_derive(AllStoragesBorrow)]
+pub fn all_storages_borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
-        quote!(#tracking)
-    } else {
-        quote!(Untracked)
-    };
+    let name = input.ident;
+    let generics = input.generics;
+    let data = input.data;
 
-    let shipyard_name = crate_name("shipyard").map_err(|_| {
-        Error::new(
-            Span::call_site(),
-            "shipyard needs to be present in `Cargo.toml`",
-        )
-    })?;
+    expand_all_storages_borrow(name, generics, data)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
+}
 
-    match shipyard_name {
-        FoundCrate::Itself => Ok(quote!(
-            impl #impl_generics ::shipyard::Component for #name #ty_generics #where_clause {
-                type Tracking = ::shipyard::track::#tracking;
-            }
-        )),
-        FoundCrate::Name(shipyard_name) => {
-            let shipyard_name = syn::Ident::new(&shipyard_name, Span::call_site());
+#[proc_macro_derive(BorrowInfo)]
+pub fn borrow_info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
-            Ok(quote!(
-                impl #impl_generics #shipyard_name::Component for #name #ty_generics #where_clause {
-                    type Tracking = #shipyard_name::track::#tracking;
-                }
-            ))
-        }
-    }
+    let name = input.ident;
+    let generics = input.generics;
+    let data = input.data;
+
+    expand_borrow_info(name, generics, data)
+        .unwrap_or_else(|err| err.to_compile_error())
+        .into()
 }
