@@ -13,6 +13,13 @@ use core::ops::{Deref, DerefMut};
 /// Shared view over `AllStorages`.
 pub struct AllStoragesView<'a>(pub(crate) Ref<'a, &'a AllStorages>);
 
+impl Clone for AllStoragesView<'_> {
+    #[inline]
+    fn clone(&self) -> Self {
+        AllStoragesView(self.0.clone())
+    }
+}
+
 impl Deref for AllStoragesView<'_> {
     type Target = AllStorages;
 
