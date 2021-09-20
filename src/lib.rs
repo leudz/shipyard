@@ -101,6 +101,7 @@ pub use system::{AllSystem, Nothing, System};
 pub use tracking::{Inserted, InsertedOrModified, Modified};
 pub use unique::Unique;
 pub use view::{
-    AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut,
+    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
+    View, ViewMut,
 };
 pub use world::World;
