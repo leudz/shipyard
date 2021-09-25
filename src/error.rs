@@ -531,3 +531,39 @@ impl Display for UniquePresence {
         Debug::fmt(self, f)
     }
 }
+
+/// Returned when trying to create views for custom storages.
+#[derive(Clone, PartialEq, Eq)]
+pub enum CustomStorageView {
+    #[allow(missing_docs)]
+    GetStorage(GetStorage),
+    #[allow(missing_docs)]
+    WrongType(Cow<'static, str>),
+}
+
+impl From<GetStorage> for CustomStorageView {
+    fn from(get_storage: GetStorage) -> Self {
+        CustomStorageView::GetStorage(get_storage)
+    }
+}
+
+#[cfg(feature = "std")]
+impl Error for CustomStorageView {}
+
+impl Debug for CustomStorageView {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            CustomStorageView::GetStorage(get_storage) => Debug::fmt(get_storage, f),
+            CustomStorageView::WrongType(name) => f.write_fmt(format_args!(
+                "Cannot convert, custom storage is of type: {:?}",
+                name
+            )),
+        }
+    }
+}
+
+impl Display for CustomStorageView {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}

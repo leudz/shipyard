@@ -2,7 +2,9 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 use crate::component::Component;
 use crate::entities::Entities;
+use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::storage::StorageId;
 use crate::track::{self, Tracking};
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
 use crate::unique::{TrackingState, Unique};
@@ -122,8 +124,54 @@ impl DerefMut for EntitiesViewMut<'_> {
 /// Shared view over a component storage.
 pub struct View<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a SparseSet<T, Tracking>,
-    pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) borrow: Option<SharedBorrow<'a>>,
+}
+
+impl<'a, T: Component> View<'a, T> {
+    /// Creates a new [`View`] for custom [`SparseSet`] storage.
+    ///
+    /// ```
+    /// use shipyard::{track, Component, SparseSet, StorageId, View, World};
+    ///
+    /// struct ScriptingComponent(Vec<u8>);
+    /// impl Component for ScriptingComponent {
+    ///     type Tracking = track::Untracked;
+    /// }
+    ///
+    /// let world = World::new();
+    ///
+    /// world.add_custom_storage(
+    ///     StorageId::Custom(0),
+    ///     SparseSet::<ScriptingComponent>::new_custom_storage(),
+    /// ).unwrap();
+    ///
+    /// let all_storages = world.all_storages().unwrap();
+    /// let scripting_storage =
+    ///     View::<ScriptingComponent>::new_for_custom_storage(StorageId::Custom(0), all_storages)
+    ///         .unwrap();
+    /// ```
+    pub fn new_for_custom_storage(
+        storage_id: StorageId,
+        all_storages: Ref<'a, &'a AllStorages>,
+    ) -> Result<Self, error::CustomStorageView> {
+        use crate::all_storages::CustomStorageAccess;
+
+        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+
+        let storage = all_storages.custom_storage_by_id(storage_id)?;
+        let (storage, borrow) = unsafe { Ref::destructure(storage) };
+
+        if let Some(sparse_set) = storage.as_any().downcast_ref() {
+            Ok(View {
+                sparse_set,
+                all_borrow: Some(all_borrow),
+                borrow: Some(borrow),
+            })
+        } else {
+            Err(error::CustomStorageView::WrongType(storage.name()))
+        }
+    }
 }
 
 impl<T: Component<Tracking = track::Insertion>> View<'_, T, track::Insertion> {
@@ -199,8 +247,56 @@ impl<T: fmt::Debug + Component> fmt::Debug for View<'_, T> {
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a mut SparseSet<T, Tracking>,
-    pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
+}
+
+impl<'a, T: Component> ViewMut<'a, T> {
+    /// Creates a new [`ViewMut`] for custom [`SparseSet`] storage.
+    ///
+    /// ```
+    /// use shipyard::{track, Component, SparseSet, StorageId, ViewMut, World};
+    ///
+    /// struct ScriptingComponent(Vec<u8>);
+    /// impl Component for ScriptingComponent {
+    ///     type Tracking = track::Untracked;
+    /// }
+    ///
+    /// let world = World::new();
+    ///
+    /// world.add_custom_storage(
+    ///     StorageId::Custom(0),
+    ///     SparseSet::<ScriptingComponent>::new_custom_storage(),
+    /// ).unwrap();
+    ///
+    /// let all_storages = world.all_storages().unwrap();
+    /// let scripting_storage =
+    ///     ViewMut::<ScriptingComponent>::new_for_custom_storage(StorageId::Custom(0), all_storages)
+    ///         .unwrap();
+    /// ```
+    pub fn new_for_custom_storage(
+        storage_id: StorageId,
+        all_storages: Ref<'a, &'a AllStorages>,
+    ) -> Result<Self, error::CustomStorageView> {
+        use crate::all_storages::CustomStorageAccess;
+
+        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+
+        let storage = all_storages.custom_storage_mut_by_id(storage_id)?;
+        let (storage, borrow) = unsafe { RefMut::destructure(storage) };
+
+        let name = storage.name();
+
+        if let Some(sparse_set) = storage.any_mut().downcast_mut() {
+            Ok(ViewMut {
+                sparse_set,
+                _all_borrow: Some(all_borrow),
+                _borrow: Some(borrow),
+            })
+        } else {
+            Err(error::CustomStorageView::WrongType(name))
+        }
+    }
 }
 
 impl<T: Component<Tracking = track::Insertion>> ViewMut<'_, T, track::Insertion> {

@@ -66,6 +66,11 @@ impl<T: Component> SparseSet<T> {
             removal_data: <T::Tracking as Tracking<T>>::RemovalData::default(),
         }
     }
+    /// Returns a new [`SparseSet`] to be used in custom storage.
+    #[inline]
+    pub fn new_custom_storage() -> Self {
+        SparseSet::new()
+    }
     #[inline]
     pub(crate) fn full_raw_window_mut(&mut self) -> FullRawWindowMut<'_, T, T::Tracking> {
         FullRawWindowMut::new(self)
