@@ -354,7 +354,7 @@ impl WorkloadBuilder {
             workloads.insert(self.name.clone(), Batches::default());
 
             Ok(WorkloadInfo {
-                name: core::mem::take(&mut self.name),
+                name: self.name,
                 batch_info: Vec::new(),
             })
         } else {
@@ -362,7 +362,7 @@ impl WorkloadBuilder {
                 if let WorkUnit::Workload(workload) = work_unit {
                     if !workloads.contains_key(workload) {
                         return Err(error::AddWorkload::UnknownWorkload(
-                            core::mem::take(&mut self.name),
+                            self.name,
                             workload.clone(),
                         ));
                     }
@@ -454,12 +454,12 @@ impl WorkloadBuilder {
                 };
 
                 Ok(WorkloadInfo {
-                    name: core::mem::take(&mut self.name),
+                    name: self.name,
                     batch_info: vec![batch_info],
                 })
             } else {
                 let mut workload_info = WorkloadInfo {
-                    name: core::mem::take(&mut self.name),
+                    name: self.name,
                     batch_info: vec![],
                 };
 
@@ -807,7 +807,7 @@ impl WorkloadBuilder {
                     workloads,
                 },
                 WorkloadInfo {
-                    name: core::mem::take(&mut self.name),
+                    name: self.name,
                     batch_info: Vec::new(),
                 },
             ))
@@ -816,7 +816,7 @@ impl WorkloadBuilder {
                 if let WorkUnit::Workload(workload) = work_unit {
                     if !workloads.contains_key(workload) {
                         return Err(error::AddWorkload::UnknownWorkload(
-                            core::mem::take(&mut self.name),
+                            self.name,
                             workload.clone(),
                         ));
                     }
@@ -913,13 +913,13 @@ impl WorkloadBuilder {
                         workloads,
                     },
                     WorkloadInfo {
-                        name: core::mem::take(&mut self.name),
+                        name: self.name,
                         batch_info: vec![batch_info],
                     },
                 ))
             } else {
                 let mut workload_info = WorkloadInfo {
-                    name: core::mem::take(&mut self.name),
+                    name: self.name.clone(),
                     batch_info: vec![],
                 };
 

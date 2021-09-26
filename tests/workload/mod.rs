@@ -108,7 +108,7 @@ fn are_all_uniques_present_in_world() {
 }
 
 #[test]
-fn run_with_world() {
+fn run_one_with_world() {
     let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
@@ -117,4 +117,32 @@ fn run_with_world() {
 
     workload.run_with_world(&world1).unwrap();
     workload.run_with_world(&world2).unwrap();
+
+    let builder2 = Workload::builder("Named").with_system(|| dbg!(1));
+    let (workload2, _) = builder2.build().unwrap();
+
+    workload2.run_with_world(&world1).unwrap();
+    workload2.run_with_world(&world2).unwrap();
+}
+
+#[test]
+fn run_with_world() {
+    let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let builder = Workload::builder("")
+        .with_system(|| dbg!(1))
+        .with_system(|| dbg!(1));
+    let (workload, _) = builder.build().unwrap();
+
+    workload.run_with_world(&world1).unwrap();
+    workload.run_with_world(&world2).unwrap();
+
+    let builder2 = Workload::builder("Named")
+        .with_system(|| dbg!(1))
+        .with_system(|| dbg!(1));
+    let (workload2, _) = builder2.build().unwrap();
+
+    workload2.run_with_world(&world1).unwrap();
+    workload2.run_with_world(&world2).unwrap();
 }
