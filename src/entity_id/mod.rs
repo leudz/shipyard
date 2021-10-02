@@ -13,6 +13,13 @@ use core::num::NonZeroU64;
 #[repr(transparent)]
 pub struct EntityId(pub(super) NonZeroU64);
 
+/// Allows [`EntityId`] to be stored in collections requiring [`Default`], like `TinyVec`.
+impl Default for EntityId {
+    fn default() -> Self {
+        Self::dead()
+    }
+}
+
 impl EntityId {
     // Number of bits used by the generation
     const GEN_LEN: u64 = 16;
