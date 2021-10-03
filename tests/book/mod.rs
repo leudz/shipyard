@@ -2,6 +2,7 @@ use shipyard::{track, Component};
 
 mod add_components;
 mod add_entity;
+mod delete_components;
 mod delete_entity;
 mod get;
 mod hierarchy;
