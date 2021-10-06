@@ -669,6 +669,30 @@ let i = world.run(sys1).unwrap();
 
         self.run_batches(&scheduler.systems, &scheduler.system_names, batches)
     }
+    /// Returns `true` if the world contains the `name` workload.
+    ///
+    /// ### Borrows
+    ///
+    /// - Scheduler (shared)
+    ///
+    /// ### Errors
+    ///
+    /// - Scheduler borrow failed.
+    ///
+    /// ### Example
+    /// ```
+    /// use shipyard::{Workload, World};
+    ///
+    /// let world = World::new();
+    ///
+    /// Workload::builder("foo").add_to_world(&world).unwrap();
+    ///
+    /// assert!(world.contains_workload("foo").unwrap());
+    /// assert!(!world.contains_workload("bar").unwrap());
+    /// ```
+    pub fn contains_workload(&self, name: impl AsRef<str>) -> Result<bool, error::Borrow> {
+        Ok(self.scheduler.borrow()?.contains_workload(name.as_ref()))
+    }
     #[allow(clippy::type_complexity)]
     pub(crate) fn run_batches(
         &self,

@@ -76,6 +76,9 @@ impl Scheduler {
     pub(crate) fn default_workload(&self) -> &Batches {
         &self.workloads[&self.default]
     }
+    pub(crate) fn contains_workload(&self, name: &str) -> bool {
+        self.workloads.contains_key(name)
+    }
     pub(crate) fn is_empty(&self) -> bool {
         self.workloads.is_empty()
     }
