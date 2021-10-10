@@ -1,7 +1,7 @@
 # Sparse Set
 
-[`SparseSet`] is Shipyard's default storage. This chapter explains the basics of how it
-works, the actual implementation is more optimized both in term of speed and memory.
+[`SparseSet`][sparseset docs] is Shipyard's default storage. This chapter explains the basics
+of how it works, the actual implementation is more optimized both in term of speed and memory.
 
 ### Overview
 
@@ -13,8 +13,7 @@ To insert an integer `i`, we first set the next available slot in the `dense` ar
 and then set `sparse[i]` to the position of `i` in the dense array. Let's walk through
 an example.
 
-We start off with an empty sparse set (sparse set refers to the combination of the sparse
-array and dense array):
+We start off with an empty sparse set:
 
 - Sparse Array: `[]`
 - Dense Array: `[]`
@@ -38,15 +37,20 @@ first check `sparse[check]`. `sparse[check]` is equal to `0` and so next we chec
 
 ### Shipyard
 
-The way Shipyard uses sparse sets is a bit more complicated than in the overview provided above.
+So far, we've only seen how sparse sets can store integers. However, Shipyard has to store both
+entity IDs (basically just integers) and components, requiring us to use a slightly more
+complicated data structure. Shipyard makes two major changes to the traditional sparse set
+described above.
 
-Firstly, Shipyard uses multiple sparse sets, one for each type of component. The `dense` array
-in each sparse set contains the [`EntityIds`] of the entities that have that component.
+Firstly, Shipyard sparse sets are actually composed of three arrays: `sparse`, `dense`, and
+`data`. `dense` stores the entity IDs, whereas `data` contains the actual components of the
+entities. `dense` and `data` are linked: their lengths are always the same. `data[i]` is
+the component for the entity with the ID located at `dense[i]`. Whenever `dense` changes,
+so does `data`.
 
-Secondly, Shipyard sparse sets are actually composed of three arrays: `sparse`, `dense`, and
-`data`. `data` contains the actual components of the entities. `dense` and `data` are linked:
-their lengths are always the same. `data[i]` is the component for the entity with the ID located
-at `dense[i]`. Whenever `dense` changes, so does `data`.
+Secondly, Shipyard uses multiple sparse sets, one for each type of component. The `dense` array
+in each sparse set contains the [`EntityIds`][entityid docs] of the entities that have that
+component.
 
 Let's walk through an example:
 
@@ -74,9 +78,8 @@ SparseSet<SecondComponent>:
 
 ### Iteration
 
-To iterate over a single sparse set (i.e. iterate over all entities with some common
-component), we can simply iterate over the `dense` array. However, Shipyard also lets
-us iterate over multiple sparse sets.
+To iterate over a single sparse set, we can simply iterate over the `data` array.
+However, Shipyard also lets us iterate over multiple sparse sets.
 
 To iterate over multiple sparse sets, we first pick the shortest set (comparing the lengths
 of the `dense` arrays) and then iterate over the `dense` array of the shortest set. For each
@@ -129,10 +132,10 @@ and the indexes at `sparse[2]` and `sparse[3]` were updated.
 
 ### Additional Resources
 
-[This blog post][skypjack] goes into more detail on sparse sets and compares them with
-archetypes, another common way of representing data in ECS libraries. The blog post is
+[This blog post][skypjack blog post] goes into more detail on sparse sets and compares them
+with archetypes, another common way of representing data in ECS libraries. The blog post is
 part of a larger series about the design and internals of ECS systems.
 
-[`entityids`]: https://docs.rs/shipyard/0.5.0/shipyard/struct.EntityId.html
-[`sparseset`]: https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html
-[skypjack]: https://skypjack.github.io/2019-03-07-ecs-baf-part-2/
+[entityid docs]: https://docs.rs/shipyard/0.5.0/shipyard/struct.EntityId.html
+[sparseset docs]: https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html
+[skypjack blog post]: https://skypjack.github.io/2019-03-07-ecs-baf-part-2/
