@@ -2,11 +2,14 @@ use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadI
 use super::{Batches, IntoWorkloadSystem, Scheduler, WorkloadSystem};
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
+use crate::sparse_set::SparseSet;
 use crate::type_id::TypeId;
+use crate::view::AllStoragesView;
 use crate::world::World;
 use crate::{error, track, Component, Unique};
 use alloc::borrow::Cow;
 // this is the macro, not the module
+use crate::storage::StorageId;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -86,10 +89,10 @@ impl From<Cow<'static, str>> for WorkUnit {
 /// A workload is a collection of systems. They will execute as much in parallel as possible.  
 /// They are evaluated first to last when they can't be parallelized.  
 /// The default workload will automatically be set to the first workload added.
-#[derive(Default)]
 pub struct WorkloadBuilder {
     pub(super) systems: Vec<WorkUnit>,
     name: Cow<'static, str>,
+    skip_if: Vec<Box<dyn Fn(AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
 }
 
 impl WorkloadBuilder {
@@ -138,6 +141,7 @@ impl WorkloadBuilder {
         WorkloadBuilder {
             systems: Vec::new(),
             name: name.into(),
+            skip_if: Vec::new(),
         }
     }
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
@@ -415,6 +419,8 @@ impl WorkloadBuilder {
             }
 
             let batches = workloads.entry(self.name.clone()).or_default();
+
+            batches.skip_if = self.skip_if;
 
             if collected_systems.len() == 1 {
                 let (system_type_id, system_type_name, system_index, borrow_constraints) =
@@ -866,6 +872,8 @@ impl WorkloadBuilder {
 
             let batches = workloads.entry(self.name.clone()).or_default();
 
+            batches.skip_if = self.skip_if;
+
             if collected_systems.len() == 1 {
                 let (system_type_id, system_type_name, system_index, borrow_constraints) =
                     collected_systems.pop().unwrap();
@@ -1186,6 +1194,44 @@ impl WorkloadBuilder {
             }
         }
     }
+    /// Do not run the workload if the function evaluates to `true`.
+    pub fn skip_if<F>(mut self, should_skip: F) -> Self
+    where
+        F: Fn(AllStoragesView<'_>) -> bool + Send + Sync + 'static,
+    {
+        self.skip_if.push(Box::new(should_skip));
+        self
+    }
+    /// Do not run the workload if the `T` storage is empty.
+    ///
+    /// If the storage is not present it is considered empty.
+    /// If the storage is already borrowed, assume it's not empty.
+    pub fn skip_if_storage_empty<T: Component>(self) -> Self {
+        let storage_id = StorageId::of::<SparseSet<T>>();
+        self.skip_if_storage_empty_by_id(storage_id)
+    }
+    /// Do not run the workload if the `T` unique storage is not present in the `World`.
+    pub fn skip_if_missing_unique<T: Component>(self) -> Self {
+        let storage_id = StorageId::of::<Unique<T>>();
+        self.skip_if_storage_empty_by_id(storage_id)
+    }
+    /// Do not run the workload if the storage is empty.
+    ///
+    /// If the storage is not present it is considered empty.
+    /// If the storage is already borrowed, assume it's not empty.
+    pub fn skip_if_storage_empty_by_id(self, storage_id: StorageId) -> Self {
+        use crate::all_storages::CustomStorageAccess;
+
+        let should_skip = move |all_storages: AllStoragesView<'_>| match all_storages
+            .custom_storage_by_id(storage_id)
+        {
+            Ok(storage) => storage.is_empty(),
+            Err(error::GetStorage::MissingStorage { .. }) => true,
+            Err(_) => false,
+        };
+
+        self.skip_if(should_skip)
+    }
 }
 
 #[cfg(test)]
@@ -1229,6 +1275,7 @@ mod tests {
             Some(&Batches {
                 parallel: vec![(None, vec![0])],
                 sequential: vec![0],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "System1");
@@ -1255,6 +1302,7 @@ mod tests {
             Some(&Batches {
                 parallel: vec![(None, vec![0])],
                 sequential: vec![0],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "System1");
@@ -1282,7 +1330,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1311,6 +1360,7 @@ mod tests {
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1338,7 +1388,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (None, vec![1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1358,7 +1409,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (None, vec![1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1393,7 +1445,8 @@ mod tests {
             scheduler.workloads.get("Combined"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 2]), (None, vec![1])],
-                sequential: vec![0, 1, 2]
+                sequential: vec![0, 1, 2],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Combined");
@@ -1420,7 +1473,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new())],
-                sequential: vec![0]
+                sequential: vec![0],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1440,7 +1494,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new()), (Some(0), Vec::new())],
-                sequential: vec![0, 0]
+                sequential: vec![0, 0],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1460,7 +1515,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1480,7 +1536,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1517,7 +1574,8 @@ mod tests {
             scheduler.workloads.get("Test"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 0])],
-                sequential: vec![0, 0]
+                sequential: vec![0, 0],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Test");
@@ -1538,7 +1596,8 @@ mod tests {
             scheduler.workloads.get("Test"),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Test");
@@ -1558,7 +1617,8 @@ mod tests {
             scheduler.workloads.get("Test"),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Test");
@@ -1578,7 +1638,8 @@ mod tests {
             scheduler.workloads.get("Test"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Test");
@@ -1599,7 +1660,8 @@ mod tests {
             scheduler.workloads.get("Test"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Test");
@@ -1627,7 +1689,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
-                sequential: vec![0, 1]
+                sequential: vec![0, 1],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1648,7 +1711,8 @@ mod tests {
             scheduler.workloads.get("Systems"),
             Some(&Batches {
                 parallel: vec![],
-                sequential: vec![]
+                sequential: vec![],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Systems");
@@ -1685,7 +1749,8 @@ mod tests {
             scheduler.workloads.get("Combined"),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 3]), (None, vec![1, 2])],
-                sequential: vec![0, 1, 2, 3]
+                sequential: vec![0, 1, 2, 3],
+                skip_if: Vec::new(),
             })
         );
         assert_eq!(scheduler.default, "Combined");
@@ -1735,5 +1800,52 @@ mod tests {
         let scheduler = world.scheduler.borrow_mut().unwrap();
         assert_eq!(scheduler.systems.len(), 0);
         assert_eq!(debug_info.batch_info.len(), 0);
+    }
+
+    #[test]
+    fn skip_if_missing_storage() {
+        let world = World::new();
+
+        Workload::builder("test")
+            .skip_if_storage_empty::<Usize>()
+            .with_system(|| panic!())
+            .build()
+            .unwrap()
+            .0
+            .run_with_world(&world)
+            .unwrap();
+
+        Workload::builder("test")
+            .skip_if_storage_empty::<Usize>()
+            .with_system(|| panic!())
+            .add_to_world(&world)
+            .unwrap();
+
+        world.run_default().unwrap();
+    }
+
+    #[test]
+    fn skip_if_empty_storage() {
+        let mut world = World::new();
+
+        let eid = world.add_entity((Usize(0),));
+        world.remove::<(Usize,)>(eid);
+
+        Workload::builder("test")
+            .skip_if_storage_empty::<Usize>()
+            .with_system(|| panic!())
+            .build()
+            .unwrap()
+            .0
+            .run_with_world(&world)
+            .unwrap();
+
+        Workload::builder("test")
+            .skip_if_storage_empty::<Usize>()
+            .with_system(|| panic!())
+            .add_to_world(&world)
+            .unwrap();
+
+        world.run_default().unwrap();
     }
 }

@@ -700,6 +700,18 @@ let i = world.run(sys1).unwrap();
         system_names: &[&'static str],
         batches: &Batches,
     ) -> Result<(), error::RunWorkload> {
+        // Check for empty first to not borrow AllStorages unnecessarily
+        if !batches.skip_if.is_empty() {
+            // If impossible to check for empty storage, let the workload run and fail later
+            if let Ok(all_storages) = self.borrow::<crate::view::AllStoragesView<'_>>() {
+                for skip_if in &batches.skip_if {
+                    if skip_if(all_storages.clone()) {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         #[cfg(feature = "parallel")]
         {
             for batch in &batches.parallel {

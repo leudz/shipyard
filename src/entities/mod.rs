@@ -367,6 +367,9 @@ impl Storage for Entities {
             component_count: self.data.len(),
         })
     }
+    fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
 }
 
 #[test]

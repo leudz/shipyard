@@ -58,4 +58,8 @@ pub trait Storage: SizedAny {
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, 32>> {
         None
     }
+    /// Returns `true` if the storage is empty.
+    fn is_empty(&self) -> bool {
+        false
+    }
 }

@@ -652,6 +652,9 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
         Some(&self.sparse)
     }
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
 }
 
 #[cfg(test)]

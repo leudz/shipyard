@@ -22,6 +22,9 @@ impl<T: Component> Storage for Unique<T> {
             component_count: 1,
         })
     }
+    fn is_empty(&self) -> bool {
+        false
+    }
 }
 
 impl<T: Component> Unique<T> {

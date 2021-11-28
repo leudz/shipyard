@@ -18,11 +18,41 @@ use alloc::vec::Vec;
 use hashbrown::HashMap;
 
 /// List of indexes into both systems and system_names
-#[derive(Default)]
-#[cfg_attr(test, derive(PartialEq, Eq, Debug))]
 pub(super) struct Batches {
     pub(super) parallel: Vec<(Option<usize>, Vec<usize>)>,
     pub(super) sequential: Vec<usize>,
+    pub(super) skip_if:
+        Vec<Box<dyn Fn(crate::view::AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
+}
+
+#[cfg(test)]
+impl core::fmt::Debug for Batches {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Batches")
+            .field("parallel", &self.parallel)
+            .field("sequential", &self.sequential)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for Batches {
+    fn eq(&self, other: &Self) -> bool {
+        self.parallel == other.parallel && self.sequential == other.sequential
+    }
+}
+
+#[cfg(test)]
+impl Eq for Batches {}
+
+impl Default for Batches {
+    fn default() -> Self {
+        Self {
+            parallel: Vec::new(),
+            sequential: Vec::new(),
+            skip_if: Vec::new(),
+        }
+    }
 }
 
 // systems are stored in an array to easily find if a system was already added
