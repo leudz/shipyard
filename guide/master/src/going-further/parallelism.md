@@ -29,4 +29,4 @@ Example:
 {{#include ../../../../tests/book/parallelism.rs:parallelism}}
 ```
 
-Don't replace all your [`iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on storages large enough to make up for the overhead cost in improved processing efficiency.
+Don't replace all your [`iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter) method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on computations expensive enough to make up for the overhead cost in improved processing efficiency.
