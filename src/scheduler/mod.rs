@@ -18,6 +18,7 @@ use alloc::vec::Vec;
 use hashbrown::HashMap;
 
 /// List of indexes into both systems and system_names
+#[derive(Default)]
 pub(super) struct Batches {
     pub(super) parallel: Vec<(Option<usize>, Vec<usize>)>,
     pub(super) sequential: Vec<usize>,
@@ -44,16 +45,6 @@ impl PartialEq for Batches {
 
 #[cfg(test)]
 impl Eq for Batches {}
-
-impl Default for Batches {
-    fn default() -> Self {
-        Self {
-            parallel: Vec::new(),
-            sequential: Vec::new(),
-            skip_if: Vec::new(),
-        }
-    }
-}
 
 // systems are stored in an array to easily find if a system was already added
 // this wouldn't be possible if they were in the HashMap

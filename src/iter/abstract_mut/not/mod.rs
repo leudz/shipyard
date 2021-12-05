@@ -32,6 +32,9 @@ impl<'w, T: Component> AbstractMut for Not<&'w SparseSet<T, T::Tracking>> {
     unsafe fn get_id(&self, _: usize) -> EntityId {
         unreachable!()
     }
+    fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T, T::Tracking>> {
@@ -57,5 +60,8 @@ impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T, T::Tracking>>
     #[inline]
     unsafe fn get_id(&self, _: usize) -> EntityId {
         unreachable!()
+    }
+    fn len(&self) -> usize {
+        self.0.dense_len
     }
 }

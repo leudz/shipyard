@@ -1,6 +1,7 @@
 use super::abstract_mut::AbstractMut;
 use super::with_id::LastId;
 use crate::entity_id::EntityId;
+use alloc::vec::Vec;
 #[cfg(feature = "parallel")]
 use rayon::iter::plumbing::UnindexedProducer;
 
@@ -12,6 +13,7 @@ pub struct Mixed<Storage> {
     pub(super) end: usize,
     pub(super) mask: u16,
     pub(super) last_id: EntityId,
+    pub(super) rev_next_storage: Vec<(*const EntityId, usize)>,
 }
 
 unsafe impl<Storage: Send> Send for Mixed<Storage> {}
@@ -21,18 +23,24 @@ impl<Storage: AbstractMut> Iterator for Mixed<Storage> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        while self.current < self.end {
-            self.current += 1;
+        loop {
+            while self.current < self.end {
+                let id = unsafe { *self.indices };
 
-            let id = unsafe { *self.indices.add(self.current - 1) };
+                self.current += 1;
+                self.indices = unsafe { self.indices.add(1) };
 
-            if let Some(data_indices) = self.storage.indices_of(id, self.current - 1, self.mask) {
-                self.last_id = id;
-                return Some(unsafe { self.storage.get_datas(data_indices) });
+                if let Some(data_indices) = self.storage.indices_of(id, self.current - 1, self.mask)
+                {
+                    self.last_id = id;
+                    return Some(unsafe { self.storage.get_datas(data_indices) });
+                }
             }
-        }
 
-        None
+            let (next_storage, size) = self.rev_next_storage.pop()?;
+            self.indices = next_storage;
+            self.end += size;
+        }
     }
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -44,18 +52,27 @@ impl<Storage: AbstractMut> Iterator for Mixed<Storage> {
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        while self.current < self.end {
-            self.current += 1;
+        loop {
+            while self.current < self.end {
+                let id = unsafe { *self.indices };
 
-            let id = unsafe { *self.indices.add(self.current - 1) };
+                self.current += 1;
+                self.indices = unsafe { self.indices.add(1) };
 
-            if let Some(data_indices) = self.storage.indices_of(id, self.current - 1, self.mask) {
-                self.last_id = id;
-                init = f(init, unsafe { self.storage.get_datas(data_indices) });
+                if let Some(data_indices) = self.storage.indices_of(id, self.current - 1, self.mask)
+                {
+                    self.last_id = id;
+                    init = f(init, unsafe { self.storage.get_datas(data_indices) });
+                }
+            }
+
+            if let Some((next_storage, size)) = self.rev_next_storage.pop() {
+                self.indices = next_storage;
+                self.end += size;
+            } else {
+                return init;
             }
         }
-
-        init
     }
 }
 
@@ -125,11 +142,12 @@ impl<Storage: AbstractMut + Clone + Send> UnindexedProducer for Mixed<Storage> {
         if len >= 2 {
             let clone = Mixed {
                 storage: self.storage.clone(),
-                indices: self.indices,
+                indices: unsafe { self.indices.add(len / 2) },
                 current: self.current + (len / 2),
                 end: self.end,
                 mask: self.mask,
                 last_id: self.last_id,
+                rev_next_storage: Vec::new(),
             };
 
             self.end = clone.current;

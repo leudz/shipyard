@@ -7,6 +7,7 @@ use super::par_iter::ParIter;
 use super::tight::Tight;
 use crate::entity_id::EntityId;
 use crate::type_id::TypeId;
+use alloc::vec::Vec;
 use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
@@ -95,7 +96,7 @@ pub trait IntoIter {
 
 impl<T: IntoAbstract> IntoIter for T
 where
-    <T::AbsView as AbstractMut>::Index: Clone,
+    <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<T::AbsView>;
     #[cfg(feature = "parallel")]
@@ -103,13 +104,15 @@ where
 
     #[inline]
     fn iter(self) -> Self::IntoIter {
-        match self.len() {
-            Some((len, true)) => Iter::Tight(Tight {
+        let is_exact = !(self.is_not() || self.is_or() || self.is_tracking());
+        match (self.len(), is_exact) {
+            (Some(len), true) => Iter::Tight(Tight {
                 current: 0,
                 end: len,
                 storage: self.into_abstract(),
             }),
-            Some((len, false)) => Iter::Mixed(Mixed {
+            (Some(len), false) => Iter::Mixed(Mixed {
+                rev_next_storage: self.other_dense(),
                 indices: self.dense(),
                 storage: self.into_abstract(),
                 current: 0,
@@ -117,7 +120,7 @@ where
                 mask: 0,
                 last_id: EntityId::dead(),
             }),
-            None => Iter::Tight(Tight {
+            (None, _) => Iter::Tight(Tight {
                 current: 0,
                 end: 0,
                 storage: self.into_abstract(),
@@ -145,21 +148,23 @@ where
 
     #[inline]
     fn iter(self) -> Self::IntoIter {
-        match self.0.len() {
-            Some((len, true)) => Iter::Tight(Tight {
+        let is_exact = !(self.0.is_not() || self.0.is_or() || self.0.is_tracking());
+        match (self.0.len(), is_exact) {
+            (Some(len), true) => Iter::Tight(Tight {
                 current: 0,
                 end: len,
                 storage: (self.0.into_abstract(),),
             }),
-            Some((len, false)) => Iter::Mixed(Mixed {
+            (Some(len), false) => Iter::Mixed(Mixed {
+                rev_next_storage: self.0.other_dense(),
+                indices: self.0.dense(),
+                storage: (self.0.into_abstract(),),
                 current: 0,
                 end: len,
-                indices: self.0.dense(),
                 mask: 0,
                 last_id: EntityId::dead(),
-                storage: (self.0.into_abstract(),),
             }),
-            None => Iter::Tight(Tight {
+            (None, _) => Iter::Tight(Tight {
                 current: 0,
                 end: 0,
                 storage: (self.0.into_abstract(),),
@@ -192,37 +197,41 @@ macro_rules! impl_into_iter {
                 let mut mask: u16 = 0;
                 let mut factored_len = core::usize::MAX;
 
-                if let Some((len, is_exact)) = self.$index1.len() {
-                    smallest = len;
-                    smallest_dense = self.$index1.dense();
+                if !self.$index1.is_or() && !self.$index1.is_not() {
+                    if let Some(len) = self.$index1.len() {
+                        smallest = len;
+                        smallest_dense = self.$index1.dense();
 
-                    if is_exact {
-                        factored_len = len + len * (type_ids.len() - 1) * ACCESS_FACTOR;
-                        mask = 1 << $index1;
-                    } else {
-                        factored_len = len * type_ids.len() * ACCESS_FACTOR;
+                        if !self.$index1.is_tracking() {
+                            factored_len = len + len * (type_ids.len() - 1) * ACCESS_FACTOR;
+                            mask = 1 << $index1;
+                        } else {
+                            factored_len = len * type_ids.len() * ACCESS_FACTOR;
+                        }
                     }
                 }
 
                 $(
-                    if let Some((len, is_exact)) = self.$index.len() {
-                        if is_exact {
-                            let factor = len + len * (type_ids.len() - 1) * ACCESS_FACTOR;
+                    if !self.$index.is_or() && !self.$index.is_not() {
+                        if let Some(len) = self.$index.len() {
+                            if !self.$index.is_tracking() {
+                                let factor = len + len * (type_ids.len() - 1) * ACCESS_FACTOR;
 
-                            if factor < factored_len {
-                                smallest = len;
-                                smallest_dense = self.$index.dense();
-                                mask = 1 << $index;
-                                factored_len = factor;
-                            }
-                        } else {
-                            let factor = len * type_ids.len() * ACCESS_FACTOR;
+                                if factor < factored_len {
+                                    smallest = len;
+                                    smallest_dense = self.$index.dense();
+                                    mask = 1 << $index;
+                                    factored_len = factor;
+                                }
+                            } else {
+                                let factor = len * type_ids.len() * ACCESS_FACTOR;
 
-                            if factor < factored_len {
-                                smallest = len;
-                                smallest_dense = self.$index.dense();
-                                mask = 0;
-                                factored_len = factor;
+                                if factor < factored_len {
+                                    smallest = len;
+                                    smallest_dense = self.$index.dense();
+                                    mask = 0;
+                                    factored_len = factor;
+                                }
                             }
                         }
                     }
@@ -238,6 +247,7 @@ macro_rules! impl_into_iter {
                         indices: smallest_dense,
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                        rev_next_storage: Vec::new(),
                     })
                 } else {
                     Iter::Mixed(Mixed {
@@ -247,6 +257,7 @@ macro_rules! impl_into_iter {
                         indices: smallest_dense,
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                        rev_next_storage: Vec::new(),
                     })
                 }
             }
@@ -261,7 +272,10 @@ macro_rules! impl_into_iter {
                     found = true;
 
                     match self.$index1.len() {
-                        Some((len, is_exact)) => {
+                        Some(len) => {
+                            let is_exact = !(self.$index1.is_not()
+                                || self.$index1.is_or()
+                                || self.$index1.is_tracking());
                             if is_exact {
                                 smallest = len;
                                 smallest_dense = self.$index1.dense();
@@ -280,7 +294,10 @@ macro_rules! impl_into_iter {
                         found = true;
 
                         match self.$index.len() {
-                            Some((len, is_exact)) => {
+                            Some(len) => {
+                                let is_exact = !(self.$index.is_not()
+                                    || self.$index.is_or()
+                                    || self.$index.is_tracking());
                                 if is_exact {
                                     smallest = len;
                                     smallest_dense = self.$index.dense();
@@ -304,6 +321,7 @@ macro_rules! impl_into_iter {
                             indices: smallest_dense,
                             last_id: EntityId::dead(),
                             storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                            rev_next_storage: Vec::new(),
                         })
                     } else {
                         Iter::Mixed(Mixed {
@@ -313,6 +331,7 @@ macro_rules! impl_into_iter {
                             indices: smallest_dense,
                             last_id: EntityId::dead(),
                             storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
+                            rev_next_storage: Vec::new(),
                         })
                     }
                 } else {

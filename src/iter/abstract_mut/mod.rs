@@ -2,6 +2,7 @@ mod inserted;
 mod inserted_or_modified;
 mod modified;
 mod not;
+mod or;
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
@@ -16,6 +17,14 @@ pub trait AbstractMut {
     unsafe fn get_data(&self, index: usize) -> Self::Out;
     unsafe fn get_datas(&self, index: Self::Index) -> Self::Out;
     fn indices_of(&self, entity_id: EntityId, index: usize, mask: u16) -> Option<Self::Index>;
+    fn indices_of_passenger(
+        &self,
+        entity_id: EntityId,
+        index: usize,
+        mask: u16,
+    ) -> Option<Self::Index> {
+        self.indices_of(entity_id, index, mask)
+    }
     unsafe fn indices_of_unchecked(
         &self,
         entity_id: EntityId,
@@ -23,6 +32,7 @@ pub trait AbstractMut {
         mask: u16,
     ) -> Self::Index;
     unsafe fn get_id(&self, index: usize) -> EntityId;
+    fn len(&self) -> usize;
 }
 
 impl<'tmp, T: Component> AbstractMut for &'tmp SparseSet<T, T::Tracking> {
@@ -48,6 +58,9 @@ impl<'tmp, T: Component> AbstractMut for &'tmp SparseSet<T, T::Tracking> {
     #[inline]
     unsafe fn get_id(&self, index: usize) -> EntityId {
         *self.dense.get_unchecked(index)
+    }
+    fn len(&self) -> usize {
+        self.dense.len()
     }
 }
 
@@ -77,6 +90,9 @@ impl<'tmp, T: Component<Tracking = track::Untracked>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         *self.dense.add(index)
     }
+    fn len(&self) -> usize {
+        self.dense_len
+    }
 }
 
 impl<'tmp, T: Component<Tracking = track::Insertion>> AbstractMut
@@ -105,6 +121,9 @@ impl<'tmp, T: Component<Tracking = track::Insertion>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         *self.dense.add(index)
     }
+    fn len(&self) -> usize {
+        self.dense_len
+    }
 }
 
 impl<'tmp, T: Component<Tracking = track::Removal>> AbstractMut
@@ -132,6 +151,9 @@ impl<'tmp, T: Component<Tracking = track::Removal>> AbstractMut
     #[inline]
     unsafe fn get_id(&self, index: usize) -> EntityId {
         *self.dense.add(index)
+    }
+    fn len(&self) -> usize {
+        self.dense_len
     }
 }
 
@@ -166,6 +188,9 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     #[inline]
     unsafe fn get_id(&self, index: usize) -> EntityId {
         *self.dense.add(index)
+    }
+    fn len(&self) -> usize {
+        self.dense_len
     }
 }
 
@@ -215,6 +240,9 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         *self.dense.add(index)
     }
+    fn len(&self) -> usize {
+        self.dense_len
+    }
 }
 
 macro_rules! impl_abstract_mut {
@@ -237,7 +265,7 @@ macro_rules! impl_abstract_mut {
                     if mask & (1 << $index) != 0 {
                         index.into()
                     } else {
-                        self.$index.indices_of(entity_id, index, mask)?
+                        self.$index.indices_of_passenger(entity_id, index, mask)?
                     }
                 },)+))
             }
@@ -254,6 +282,9 @@ macro_rules! impl_abstract_mut {
             #[inline]
             unsafe fn get_id(&self, index: usize) -> EntityId {
                 self.0.get_id(index)
+            }
+            fn len(&self) -> usize {
+                0
             }
         }
     }

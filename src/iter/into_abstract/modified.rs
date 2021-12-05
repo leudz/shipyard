@@ -11,19 +11,15 @@ impl<'tmp, 'v, T: Component<Tracking = track::Modification>> IntoAbstract
     for Modified<&'tmp View<'v, T, track::Modification>>
 {
     type AbsView = Modified<&'tmp SparseSet<T, track::Modification>>;
-    type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0)
     }
-    fn len(&self) -> Option<(usize, bool)> {
-        Some(((**self.0).len(), false))
+    fn len(&self) -> Option<usize> {
+        Some((**self.0).len())
     }
-    fn is_tracking_insertion(&self) -> bool {
-        self.0.is_tracking_insertion()
-    }
-    fn is_tracking_modification(&self) -> bool {
-        self.0.is_tracking_modification()
+    fn is_tracking(&self) -> bool {
+        true
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T, T::Tracking>>()
@@ -41,19 +37,15 @@ impl<'tmp, 'v, T: Component<Tracking = track::All>> IntoAbstract
     for Modified<&'tmp View<'v, T, track::All>>
 {
     type AbsView = Modified<&'tmp SparseSet<T, track::All>>;
-    type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0)
     }
-    fn len(&self) -> Option<(usize, bool)> {
-        Some(((**self.0).len(), false))
+    fn len(&self) -> Option<usize> {
+        Some((**self.0).len())
     }
-    fn is_tracking_insertion(&self) -> bool {
-        self.0.is_tracking_insertion()
-    }
-    fn is_tracking_modification(&self) -> bool {
-        self.0.is_tracking_modification()
+    fn is_tracking(&self) -> bool {
+        true
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T, T::Tracking>>()
@@ -71,19 +63,15 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
     for Modified<&'b ViewMut<'a, T, track::Modification>>
 {
     type AbsView = Modified<&'b SparseSet<T, track::Modification>>;
-    type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0)
     }
-    fn len(&self) -> Option<(usize, bool)> {
-        Some(((*self.0).len(), false))
+    fn len(&self) -> Option<usize> {
+        Some((*self.0).len())
     }
-    fn is_tracking_insertion(&self) -> bool {
-        self.0.is_tracking_insertion()
-    }
-    fn is_tracking_modification(&self) -> bool {
-        self.0.is_tracking_modification()
+    fn is_tracking(&self) -> bool {
+        true
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T, T::Tracking>>()
@@ -101,19 +89,15 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
     for Modified<&'b ViewMut<'a, T, track::All>>
 {
     type AbsView = Modified<&'b SparseSet<T, track::All>>;
-    type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0)
     }
-    fn len(&self) -> Option<(usize, bool)> {
-        Some(((*self.0).len(), false))
+    fn len(&self) -> Option<usize> {
+        Some((*self.0).len())
     }
-    fn is_tracking_insertion(&self) -> bool {
-        self.0.is_tracking_insertion()
-    }
-    fn is_tracking_modification(&self) -> bool {
-        self.0.is_tracking_modification()
+    fn is_tracking(&self) -> bool {
+        true
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T, T::Tracking>>()
@@ -131,19 +115,15 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
     for Modified<&'b mut ViewMut<'a, T, track::Modification>>
 {
     type AbsView = Modified<FullRawWindowMut<'b, T, track::Modification>>;
-    type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0.full_raw_window_mut())
     }
-    fn len(&self) -> Option<(usize, bool)> {
-        Some(((*self.0).len(), false))
+    fn len(&self) -> Option<usize> {
+        Some((*self.0).len())
     }
-    fn is_tracking_insertion(&self) -> bool {
-        self.0.is_tracking_insertion()
-    }
-    fn is_tracking_modification(&self) -> bool {
-        self.0.is_tracking_modification()
+    fn is_tracking(&self) -> bool {
+        true
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T, T::Tracking>>()
@@ -161,19 +141,15 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
     for Modified<&'b mut ViewMut<'a, T, track::All>>
 {
     type AbsView = Modified<FullRawWindowMut<'b, T, track::All>>;
-    type Pack = T;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0.full_raw_window_mut())
     }
-    fn len(&self) -> Option<(usize, bool)> {
-        Some(((*self.0).len(), false))
+    fn len(&self) -> Option<usize> {
+        Some((*self.0).len())
     }
-    fn is_tracking_insertion(&self) -> bool {
-        self.0.is_tracking_insertion()
-    }
-    fn is_tracking_modification(&self) -> bool {
-        self.0.is_tracking_modification()
+    fn is_tracking(&self) -> bool {
+        true
     }
     fn type_id(&self) -> TypeId {
         TypeId::of::<SparseSet<T, T::Tracking>>()

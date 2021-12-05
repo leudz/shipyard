@@ -20,6 +20,10 @@ use alloc::vec::Vec;
 use core::any::type_name;
 
 /// Explains to a workload which storage are borrowed by a system.
+///
+/// # Safety
+///
+/// Must accurately list everything borrowed.
 pub unsafe trait BorrowInfo {
     /// This information is used during workload creation to determine which systems can run in parallel.
     ///

@@ -293,6 +293,32 @@ fn iter_by() {
     assert_eq!(iter.next(), None);
 }
 
+#[test]
+fn or() {
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_entity((U32(0), I16(10)));
+    world.add_entity((U32(1),));
+    world.add_entity((U32(2), I16(12)));
+    world.add_entity((I16(13),));
+    world.add_entity((U32(4), I16(14), USIZE(24)));
+    world.add_entity((I16(15), USIZE(25)));
+
+    world.bulk_add_entity((0..100).map(|_| (USIZE(0),)));
+
+    let (u32s, i16s, usizes) = world
+        .borrow::<(View<U32>, View<I16>, View<USIZE>)>()
+        .unwrap();
+
+    if let iter::Iter::Mixed(mut iter) = (&u32s | &i16s, &usizes).iter() {
+        assert_eq!(iter.next().unwrap(), (OneOfTwo::One(&U32(4)), &USIZE(24)));
+        assert_eq!(iter.next().unwrap(), (OneOfTwo::Two(&I16(15)), &USIZE(25)));
+        assert!(iter.next().is_none());
+    } else {
+        panic!()
+    }
+}
+
 // #[test]
 // fn chunk() {
 //     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();

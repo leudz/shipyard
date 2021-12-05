@@ -26,3 +26,5 @@ pub use par_mixed::ParMixed;
 pub use par_tight::ParTight;
 pub use tight::Tight;
 pub use with_id::{IntoWithId, LastId, WithId};
+
+pub(crate) use into_abstract::IntoAbstract;

@@ -9,7 +9,7 @@ pub struct FullRawWindowMut<'a, T, Tracking> {
     sparse: *mut *mut EntityId,
     sparse_len: usize,
     pub(crate) dense: *mut EntityId,
-    dense_len: usize,
+    pub(crate) dense_len: usize,
     pub(crate) data: *mut T,
     pub(crate) is_tracking_modification: bool,
     _phantom: PhantomData<(&'a mut T, Tracking)>,

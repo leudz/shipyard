@@ -25,7 +25,6 @@ use std::error::Error;
 ///
 /// [`WorkloadBuilder`]: crate::WorkloadBuilder
 /// [`WorkloadBuilder::new`]: crate::WorkloadBuilder::new()
-/// [`WorkloadBuilder::default`]: crate::WorkloadBuilder::default()
 pub struct Workload {
     name: Cow<'static, str>,
     #[allow(clippy::type_complexity)]
