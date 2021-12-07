@@ -3,8 +3,8 @@ mod delete_any;
 mod retain;
 
 pub use custom_storage::CustomStorageAccess;
-pub use delete_any::{CustomDeleteAny, DeleteAny};
-pub use retain::Retain;
+pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
+pub use retain::TupleRetain;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{AllStoragesBorrow, Borrow, IntoBorrow};
@@ -14,7 +14,7 @@ use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-use crate::sparse_set::{AddComponent, BulkAddEntity, Delete, Remove};
+use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{SBox, Storage, StorageId};
 use crate::unique::Unique;
 use crate::{error, Component};
@@ -287,7 +287,7 @@ impl AllStorages {
     ///
     /// all_storages.retain::<SparseSet<U32>>(entity);
     /// ```
-    pub fn retain<S: Retain>(&mut self, entity: EntityId) {
+    pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {
         S::retain(self, entity);
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
@@ -338,7 +338,7 @@ impl AllStorages {
     /// let entity1 = all_storages.add_entity((U32(1), USIZE(11)));
     /// ```
     #[inline]
-    pub fn add_entity<T: AddComponent>(&mut self, component: T) -> EntityId {
+    pub fn add_entity<T: TupleAddComponent>(&mut self, component: T) -> EntityId {
         let entity = self.exclusive_storage_mut::<Entities>().unwrap().generate();
         component.add_component(self, entity);
 
@@ -398,7 +398,7 @@ impl AllStorages {
     /// ```
     #[track_caller]
     #[inline]
-    pub fn add_component<T: AddComponent>(&mut self, entity: EntityId, component: T) {
+    pub fn add_component<T: TupleAddComponent>(&mut self, entity: EntityId, component: T) {
         if self
             .exclusive_storage_mut::<Entities>()
             .unwrap()
@@ -431,7 +431,7 @@ impl AllStorages {
     /// all_storages.delete_component::<(U32,)>(entity);
     /// ```
     #[inline]
-    pub fn delete_component<C: Delete>(&mut self, entity: EntityId) {
+    pub fn delete_component<C: TupleDelete>(&mut self, entity: EntityId) {
         C::delete(self, entity);
     }
     /// Removes components from an entity.  
@@ -457,7 +457,7 @@ impl AllStorages {
     /// assert_eq!(i, Some(U32(0)));
     /// ```
     #[inline]
-    pub fn remove<C: Remove>(&mut self, entity: EntityId) -> C::Out {
+    pub fn remove<C: TupleRemove>(&mut self, entity: EntityId) -> C::Out {
         C::remove(self, entity)
     }
     #[doc = "Borrows the requested storage(s), if it doesn't exist it'll get created.  
@@ -803,7 +803,7 @@ let i = all_storages.run(sys1).unwrap();
     /// // deletes `entity0` and `entity1`
     /// all_storages.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
     /// ```
-    pub fn delete_any<T: DeleteAny>(&mut self) {
+    pub fn delete_any<T: TupleDeleteAny>(&mut self) {
         T::delete_any(self);
     }
     pub(crate) fn entities(&self) -> Result<Ref<'_, &'_ Entities>, error::GetStorage> {

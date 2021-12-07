@@ -2,16 +2,18 @@ use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::storage::{Storage, StorageId};
 
-pub trait Retain {
+/// Trait used as bound for [`World::retain`] and [`AllStorages::retain`].
+pub trait TupleRetain {
+    /// See [`World::retain`] and [`AllStorages::retain`].
     fn retain(all_storage: &mut AllStorages, entity: EntityId);
 }
 
-impl Retain for () {
+impl TupleRetain for () {
     #[inline]
     fn retain(_: &mut AllStorages, _: EntityId) {}
 }
 
-impl<S: 'static + Storage> Retain for S {
+impl<S: 'static + Storage> TupleRetain for S {
     #[inline]
     fn retain(all_storages: &mut AllStorages, entity: EntityId) {
         all_storages.retain_storage(entity, &[StorageId::of::<S>()]);
@@ -20,7 +22,7 @@ impl<S: 'static + Storage> Retain for S {
 
 macro_rules! impl_retain {
     ($(($storage: ident, $index: tt))+) => {
-        impl<$($storage: 'static + Storage),+> Retain for ($($storage,)+) {
+        impl<$($storage: 'static + Storage),+> TupleRetain for ($($storage,)+) {
             #[inline]
             fn retain(all_storages: &mut AllStorages, entity: EntityId) {
                 all_storages.retain_storage(entity, &[$(StorageId::of::<$storage>()),+]);

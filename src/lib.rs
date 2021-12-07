@@ -74,7 +74,7 @@ pub use crate::borrow::NonSendSync;
 pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_entity::AddEntity;
-pub use all_storages::{AllStorages, CustomStorageAccess};
+pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
 #[doc(hidden)]
 pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 pub use atomic_refcell::{Ref, RefMut};
@@ -96,7 +96,10 @@ pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component};
-pub use sparse_set::{SparseArray, SparseSet, SparseSetDrain};
+pub use sparse_set::{
+    BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
+    TupleRemove,
+};
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};

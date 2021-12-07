@@ -7,7 +7,9 @@ use crate::sparse_set::SparseSet;
 use crate::track::{self, Tracking};
 use core::iter::IntoIterator;
 
+/// Trait used as bound for [`World::bulk_add_entity`] and [`AllStorages::bulk_add_entity`].
 pub trait BulkAddEntity {
+    /// See [`World::bulk_add_entity`] and [`AllStorages::bulk_add_entity`].
     fn bulk_add_entity(self, all_storages: &mut AllStorages) -> BulkEntityIter<'_>;
 }
 

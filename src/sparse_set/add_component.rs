@@ -5,16 +5,18 @@ use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::track;
 
-pub trait AddComponent {
+/// Trait used as bound for [`World::add_entity`], [`World::add_component`], [`AllStorages::add_entity`] and [`AllStorages::add_component`].
+pub trait TupleAddComponent {
+    /// See [`World::add_entity`], [`World::add_component`], [`AllStorages::add_entity`] and [`AllStorages::add_component`].
     fn add_component(self, all_storages: &mut AllStorages, entity: EntityId);
 }
 
-impl AddComponent for () {
+impl TupleAddComponent for () {
     #[inline]
     fn add_component(self, _: &mut AllStorages, _: EntityId) {}
 }
 
-impl<T: Send + Sync + Component> AddComponent for (T,)
+impl<T: Send + Sync + Component> TupleAddComponent for (T,)
 where
     <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
 {
@@ -31,7 +33,7 @@ where
 
 macro_rules! impl_add_component {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Send + Sync + Component,)+> AddComponent for ($($type,)+)
+        impl<$($type: Send + Sync + Component,)+> TupleAddComponent for ($($type,)+)
         where
             $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
         {

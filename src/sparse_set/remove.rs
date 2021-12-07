@@ -5,12 +5,15 @@ use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::track;
 
-pub trait Remove {
+/// Trait used as bound for [`World::remove`] and [`AllStorages::remove`].
+pub trait TupleRemove {
+    #[allow(missing_docs)]
     type Out;
+    /// Trait used as bound for [`World::remove`] and [`AllStorages::remove`].
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out;
 }
 
-impl<T: Send + Sync + Component> Remove for (T,)
+impl<T: Send + Sync + Component> TupleRemove for (T,)
 where
     <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
 {
@@ -29,7 +32,7 @@ where
 
 macro_rules! impl_remove_component {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Send + Sync + Component,)+> Remove for ($($type,)+)
+        impl<$($type: Send + Sync + Component,)+> TupleRemove for ($($type,)+)
         where
             $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
         {

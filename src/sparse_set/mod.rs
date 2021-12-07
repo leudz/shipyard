@@ -6,13 +6,13 @@ mod remove;
 mod sparse_array;
 mod window;
 
+pub use add_component::TupleAddComponent;
+pub use bulk_add_entity::BulkAddEntity;
+pub use delete::TupleDelete;
 pub use drain::SparseSetDrain;
+pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
 
-pub(crate) use add_component::AddComponent;
-pub(crate) use bulk_add_entity::BulkAddEntity;
-pub(crate) use delete::Delete;
-pub(crate) use remove::Remove;
 pub(crate) use window::FullRawWindowMut;
 
 use crate::component::Component;

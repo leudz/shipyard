@@ -1,4 +1,4 @@
-use crate::all_storages::{AllStorages, CustomStorageAccess, DeleteAny, Retain};
+use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{Borrow, IntoBorrow};
 use crate::entity_id::EntityId;
@@ -7,7 +7,7 @@ use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::{Batches, Scheduler};
-use crate::sparse_set::{AddComponent, BulkAddEntity, Delete, Remove};
+use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
 use alloc::borrow::Cow;
@@ -851,7 +851,7 @@ impl World {
     /// let entity1 = world.add_entity((U32(1), USIZE(11)));
     /// ```
     #[inline]
-    pub fn add_entity<C: AddComponent>(&mut self, component: C) -> EntityId {
+    pub fn add_entity<C: TupleAddComponent>(&mut self, component: C) -> EntityId {
         self.all_storages.get_mut().add_entity(component)
     }
     /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.  
@@ -906,7 +906,7 @@ impl World {
     /// ```
     #[track_caller]
     #[inline]
-    pub fn add_component<C: AddComponent>(&mut self, entity: EntityId, component: C) {
+    pub fn add_component<C: TupleAddComponent>(&mut self, entity: EntityId, component: C) {
         self.all_storages.get_mut().add_component(entity, component)
     }
     /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
@@ -930,7 +930,7 @@ impl World {
     /// world.delete_component::<(U32,)>(entity);
     /// ```
     #[inline]
-    pub fn delete_component<C: Delete>(&mut self, entity: EntityId) {
+    pub fn delete_component<C: TupleDelete>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().delete_component::<C>(entity)
     }
     /// Removes components from an entity.  
@@ -955,7 +955,7 @@ impl World {
     /// assert_eq!(i, Some(U32(0)));
     /// ```
     #[inline]
-    pub fn remove<C: Remove>(&mut self, entity: EntityId) -> C::Out {
+    pub fn remove<C: TupleRemove>(&mut self, entity: EntityId) -> C::Out {
         self.all_storages.get_mut().remove::<C>(entity)
     }
     /// Deletes an entity with all its components. Returns true if the entity were alive.
@@ -1034,7 +1034,7 @@ impl World {
     /// world.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
     /// ```
     #[inline]
-    pub fn delete_any<S: DeleteAny>(&mut self) {
+    pub fn delete_any<S: TupleDeleteAny>(&mut self) {
         self.all_storages.get_mut().delete_any::<S>();
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
@@ -1059,7 +1059,7 @@ impl World {
     /// world.retain::<SparseSet<U32>>(entity);
     /// ```
     #[inline]
-    pub fn retain<S: Retain>(&mut self, entity: EntityId) {
+    pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().retain::<S>(entity);
     }
     /// Same as `retain` but uses `StorageId` and not generics.  
