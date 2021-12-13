@@ -28,8 +28,11 @@ where
     fn dense(&self) -> *const EntityId {
         (self.0).0.dense()
     }
-    fn other_dense(&self) -> Vec<(*const EntityId, usize)> {
-        vec![((self.0).1.dense(), (self.0).1.len().unwrap())]
+    fn other_dense(&self) -> Vec<core::slice::Iter<'static, EntityId>> {
+        let slice =
+            unsafe { core::slice::from_raw_parts((self.0).1.dense(), (self.0).1.len().unwrap()) };
+
+        vec![slice.iter()]
     }
     fn is_or(&self) -> bool {
         true

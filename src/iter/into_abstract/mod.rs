@@ -39,7 +39,7 @@ pub trait IntoAbstract {
     fn is_or(&self) -> bool {
         false
     }
-    fn other_dense(&self) -> Vec<(*const EntityId, usize)> {
+    fn other_dense(&self) -> Vec<core::slice::Iter<'static, EntityId>> {
         Vec::new()
     }
 }

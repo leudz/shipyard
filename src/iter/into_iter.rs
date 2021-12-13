@@ -111,15 +111,18 @@ where
                 end: len,
                 storage: self.into_abstract(),
             }),
-            (Some(len), false) => Iter::Mixed(Mixed {
-                rev_next_storage: self.other_dense(),
-                indices: self.dense(),
-                storage: self.into_abstract(),
-                current: 0,
-                end: len,
-                mask: 0,
-                last_id: EntityId::dead(),
-            }),
+            (Some(len), false) => {
+                let slice = unsafe { core::slice::from_raw_parts(self.dense(), len) };
+
+                Iter::Mixed(Mixed {
+                    rev_next_storage: self.other_dense(),
+                    indices: slice.iter(),
+                    storage: self.into_abstract(),
+                    count: 0,
+                    mask: 0,
+                    last_id: EntityId::dead(),
+                })
+            }
             (None, _) => Iter::Tight(Tight {
                 current: 0,
                 end: 0,
@@ -155,15 +158,18 @@ where
                 end: len,
                 storage: (self.0.into_abstract(),),
             }),
-            (Some(len), false) => Iter::Mixed(Mixed {
-                rev_next_storage: self.0.other_dense(),
-                indices: self.0.dense(),
-                storage: (self.0.into_abstract(),),
-                current: 0,
-                end: len,
-                mask: 0,
-                last_id: EntityId::dead(),
-            }),
+            (Some(len), false) => {
+                let slice = unsafe { core::slice::from_raw_parts(self.0.dense(), len) };
+
+                Iter::Mixed(Mixed {
+                    rev_next_storage: self.0.other_dense(),
+                    indices: slice.iter(),
+                    storage: (self.0.into_abstract(),),
+                    count: 0,
+                    mask: 0,
+                    last_id: EntityId::dead(),
+                })
+            }
             (None, _) => Iter::Tight(Tight {
                 current: 0,
                 end: 0,
@@ -241,20 +247,20 @@ macro_rules! impl_into_iter {
 
                 if smallest == core::usize::MAX {
                     Iter::Mixed(Mixed {
-                        current: 0,
-                        end: 0,
+                        count: 0,
                         mask,
-                        indices: smallest_dense,
+                        indices: [].iter(),
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
                         rev_next_storage: Vec::new(),
                     })
                 } else {
+                    let slice = unsafe { core::slice::from_raw_parts(smallest_dense, smallest) };
+
                     Iter::Mixed(Mixed {
-                        current: 0,
-                        end: smallest,
+                        count: 0,
                         mask,
-                        indices: smallest_dense,
+                        indices: slice.into_iter(),
                         last_id: EntityId::dead(),
                         storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
                         rev_next_storage: Vec::new(),
@@ -315,20 +321,20 @@ macro_rules! impl_into_iter {
                 if found {
                     if smallest == core::usize::MAX {
                         Iter::Mixed(Mixed {
-                            current: 0,
-                            end: 0,
+                            count: 0,
                             mask,
-                            indices: smallest_dense,
+                            indices: [].iter(),
                             last_id: EntityId::dead(),
                             storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
                             rev_next_storage: Vec::new(),
                         })
                     } else {
+                        let slice = unsafe { core::slice::from_raw_parts(smallest_dense, smallest) };
+
                         Iter::Mixed(Mixed {
-                            current: 0,
-                            end: smallest,
+                            count: 0,
                             mask,
-                            indices: smallest_dense,
+                            indices: slice.into_iter(),
                             last_id: EntityId::dead(),
                             storage: (self.$index1.into_abstract(), $(self.$index.into_abstract(),)+),
                             rev_next_storage: Vec::new(),

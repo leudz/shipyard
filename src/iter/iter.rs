@@ -43,30 +43,6 @@ where
     }
 }
 
-impl<Storage: AbstractMut> DoubleEndedIterator for Iter<Storage>
-where
-    <Storage as AbstractMut>::Index: Clone,
-{
-    #[inline]
-    fn next_back(&mut self) -> Option<Self::Item> {
-        match self {
-            Iter::Tight(tight) => tight.next_back(),
-            Iter::Mixed(mixed) => mixed.next_back(),
-        }
-    }
-    #[inline]
-    fn rfold<B, F>(self, init: B, f: F) -> B
-    where
-        Self: Sized,
-        F: FnMut(B, Self::Item) -> B,
-    {
-        match self {
-            Iter::Tight(tight) => tight.rfold(init, f),
-            Iter::Mixed(mixed) => mixed.rfold(init, f),
-        }
-    }
-}
-
 impl<Storage: AbstractMut> LastId for Iter<Storage> {
     #[inline]
     unsafe fn last_id(&self) -> EntityId {

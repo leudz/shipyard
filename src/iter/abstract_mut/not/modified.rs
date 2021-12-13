@@ -46,6 +46,7 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         self.0.get_id(index)
     }
+    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -90,6 +91,7 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         self.0.get_id(index)
     }
+    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -134,6 +136,7 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         self.0.get_id(index)
     }
+    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -178,6 +181,7 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     unsafe fn get_id(&self, index: usize) -> EntityId {
         self.0.get_id(index)
     }
+    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
