@@ -505,6 +505,14 @@ impl<T: Component> SparseSet<T> {
     pub fn is_removed(&self, entity: EntityId) -> bool {
         T::Tracking::is_removed(self, entity)
     }
+    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
+    ///
+    /// [`take_removed`]: Self::take_removed
+    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    #[inline]
+    pub fn is_removed_or_deleted(&self, entity: EntityId) -> bool {
+        self.is_removed(entity) || self.is_deleted(entity)
+    }
     /// Returns `true` if the storage tracks insertion.
     pub fn is_tracking_insertion(&self) -> bool {
         T::Tracking::track_insertion()
