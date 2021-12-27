@@ -61,12 +61,13 @@ pub(crate) fn expand_all_storages_borrow(
     match fields {
         syn::Fields::Named(fields) => {
             let field_name = fields.named.iter().map(|field| &field.ident);
+            let field_type = fields.named.iter().map(|field| &field.ty);
 
             Ok(quote!(
                 impl #impl_generics ::#shipyard_name::AllStoragesBorrow<#view_lifetime> for #borrower < #(#borrower_generics_idents)* > #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::#shipyard_name::AllStorages) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
+                    fn all_borrow(all_storages: & #view_lifetime ::#shipyard_name::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
                         Ok(#name {
-                            #(#field_name: all_storages.borrow()?),*
+                            #(#field_name: <#field_type as ::#shipyard_name::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?),*
                         })
                     }
                 }
@@ -76,11 +77,14 @@ pub(crate) fn expand_all_storages_borrow(
             let all_storages_borrow = fields
                 .unnamed
                 .iter()
-                .map(|_| quote!(all_storages.borrow()?));
+                .map(|field| {
+                    let field_type = &field.ty;
+                    quote!(<#field_type as ::#shipyard_name::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?)
+                });
 
             Ok(quote!(
                 impl #impl_generics ::#shipyard_name::AllStoragesBorrow<#view_lifetime> for #borrower < #(#borrower_generics_idents)* > #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::#shipyard_name::AllStorages) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
+                    fn all_borrow(all_storages: & #view_lifetime ::#shipyard_name::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
                         Ok(#name(#(#all_storages_borrow),*))
                     }
                 }

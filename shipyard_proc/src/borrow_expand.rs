@@ -64,6 +64,7 @@ pub(crate) fn expand_borrow(
     match fields {
         syn::Fields::Named(fields) => {
             let field_name = fields.named.iter().map(|field| &field.ident);
+            let field_type = fields.named.iter().map(|field| &field.ty);
 
             Ok(quote!(
                 #vis struct #borrower < #(#borrower_generics)* >(::core::marker::PhantomData<(#(#borrower_generics_idents)*)>) #where_clause;
@@ -75,16 +76,22 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::#shipyard_name::Borrow<#view_lifetime> for #borrower < #(#borrower_generics_idents3)* > #where_clause {
                     type View = #name #ty_generics;
 
-                    fn borrow(world: & #view_lifetime ::#shipyard_name::World) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
+                    fn borrow(world: & #view_lifetime ::#shipyard_name::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
                         Ok(#name {
-                            #(#field_name: world.borrow()?),*
+                            #(#field_name: <#field_type as ::#shipyard_name::IntoBorrow>::Borrow::borrow(world, last_run, current)?),*
                         })
                     }
                 }
             ))
         }
         syn::Fields::Unnamed(fields) => {
-            let world_borrow = fields.unnamed.iter().map(|_| quote!(world.borrow()?));
+            let world_borrow = fields
+                .unnamed
+                .iter()
+                .map(|field| {
+                    let field_type = &field.ty;
+                    quote!(<#field_type as ::#shipyard_name::IntoBorrow>::Borrow::borrow(world, last_run, current)?)
+                });
 
             Ok(quote!(
                 #vis struct #borrower < #(#borrower_generics)* >(::core::marker::PhantomData<(#(#borrower_generics_idents)*)>) #where_clause;
@@ -96,7 +103,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::#shipyard_name::Borrow<#view_lifetime> for #borrower < #(#borrower_generics_idents3)* > #where_clause {
                     type View = #name #ty_generics;
 
-                    fn borrow(world: & #view_lifetime ::#shipyard_name::World) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
+                    fn borrow(world: & #view_lifetime ::#shipyard_name::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
                         Ok(#name(#(#world_borrow),*))
                     }
                 }
