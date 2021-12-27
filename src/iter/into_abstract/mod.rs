@@ -7,7 +7,7 @@ mod or;
 use super::abstract_mut::AbstractMut;
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
 use crate::sparse_set::{SparseArray, BUCKET_SIZE};
 use crate::track;
 use crate::type_id::TypeId;
@@ -44,12 +44,12 @@ pub trait IntoAbstract {
     }
 }
 
-impl<'a, T: Component> IntoAbstract for &'a View<'_, T> {
-    type AbsView = &'a SparseSet<T, T::Tracking>;
+impl<'a, T: Component> IntoAbstract for &'a View<'a, T> {
+    type AbsView = FullRawWindow<'a, T, T::Tracking>;
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self
+        FullRawWindow::from_view(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {
@@ -70,11 +70,11 @@ impl<'a, T: Component> IntoAbstract for &'a View<'_, T> {
 }
 
 impl<'a: 'b, 'b, T: Component> IntoAbstract for &'b ViewMut<'a, T> {
-    type AbsView = &'b SparseSet<T, T::Tracking>;
+    type AbsView = FullRawWindow<'b, T, T::Tracking>;
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self
+        FullRawWindow::from_view_mut(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {
@@ -101,7 +101,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Untracked>> IntoAbstract
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self.full_raw_window_mut()
+        FullRawWindowMut::new(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {
@@ -128,7 +128,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> IntoAbstract
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self.full_raw_window_mut()
+        FullRawWindowMut::new(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {
@@ -155,7 +155,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self.full_raw_window_mut()
+        FullRawWindowMut::new(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {
@@ -182,7 +182,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Removal>> IntoAbstract
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self.full_raw_window_mut()
+        FullRawWindowMut::new(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {
@@ -209,7 +209,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
-        self.full_raw_window_mut()
+        FullRawWindowMut::new(self)
     }
     #[inline]
     fn len(&self) -> Option<usize> {

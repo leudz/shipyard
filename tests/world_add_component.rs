@@ -70,21 +70,19 @@ fn update() {
     world.add_component(entity, (USIZE(2usize),));
 
     world
-        .run(|mut usizes: ViewMut<USIZE>| {
+        .run(|usizes: ViewMut<USIZE>| {
             let mut iter = usizes.inserted().iter();
             assert_eq!(iter.next(), Some(&USIZE(2)));
             assert_eq!(iter.next(), None);
 
             usizes.clear_all_inserted();
-
-            usizes[entity] = USIZE(3);
         })
         .unwrap();
 
     world.add_component(entity, (USIZE(4usize),));
 
     world
-        .run(|mut usizes: ViewMut<USIZE>| {
+        .run(|usizes: ViewMut<USIZE>| {
             let mut iter = usizes.modified().iter();
             assert_eq!(iter.next(), Some(&USIZE(4)));
             assert_eq!(iter.next(), None);

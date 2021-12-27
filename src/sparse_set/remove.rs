@@ -3,7 +3,6 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::track;
 
 /// Trait used as bound for [`World::remove`] and [`AllStorages::remove`].
 pub trait TupleRemove {
@@ -15,7 +14,7 @@ pub trait TupleRemove {
 
 impl<T: Send + Sync + Component> TupleRemove for (T,)
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+    T::Tracking: Send + Sync,
 {
     type Out = (Option<T>,);
 
@@ -34,7 +33,7 @@ macro_rules! impl_remove_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Send + Sync + Component,)+> TupleRemove for ($($type,)+)
         where
-            $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
+            $($type::Tracking: Send + Sync),+
         {
             type Out = ($(Option<$type>,)+);
 

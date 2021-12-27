@@ -47,7 +47,8 @@ macro_rules! impl_system {
                 + FnOnce($(<$type::Borrow as Borrow<'s>>::View),+) -> Return
         {
             fn run(self, _: (), world: &'s World) -> Result<Return, error::GetStorage> {
-                Ok((self)($($type::Borrow::borrow(world)?,)+))
+                let current = world.get_current();
+                Ok((self)($($type::Borrow::borrow(world, None, current)?,)+))
             }
         }
 
@@ -57,7 +58,8 @@ macro_rules! impl_system {
                 + FnOnce(Data, $(<$type::Borrow as Borrow<'s>>::View),+) -> Return
         {
             fn run(self, (data,): (Data,), world: &'s World) -> Result<Return, error::GetStorage> {
-                Ok((self)(data, $($type::Borrow::borrow(world)?,)+))
+                let current = world.get_current();
+                Ok((self)(data, $($type::Borrow::borrow(world, None, current)?,)+))
             }
         }
     }

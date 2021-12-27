@@ -12,27 +12,32 @@ use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::sync::atomic::AtomicU32;
 
 /// `World` contains all data this library will manipulate.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
     pub(crate) scheduler: AtomicRefCell<Scheduler>,
+    counter: Arc<AtomicU32>,
 }
 
 #[cfg(feature = "std")]
 impl Default for World {
     /// Creates an empty `World`.
     fn default() -> Self {
+        let counter = Arc::new(AtomicU32::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
-            all_storages: AtomicRefCell::new(AllStorages::new()),
+            all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
             #[cfg(feature = "thread_local")]
             all_storages: AtomicRefCell::new_non_send(
-                AllStorages::new(),
+                AllStorages::new(counter.clone()),
                 std::thread::current().id(),
             ),
             scheduler: AtomicRefCell::new(Default::default()),
+            counter,
         }
     }
 }
@@ -49,15 +54,17 @@ impl World {
     }
     /// Creates an empty `World` with a custom RwLock for `AllStorages`.
     pub fn new_with_custom_lock<L: ShipyardRwLock>() -> Self {
+        let counter = Arc::new(AtomicU32::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
-            all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>()),
+            all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>(counter.clone())),
             #[cfg(feature = "thread_local")]
             all_storages: AtomicRefCell::new_non_send(
-                AllStorages::new_with_lock::<L>(),
+                AllStorages::new_with_lock::<L>(counter.clone()),
                 std::thread::current().id(),
             ),
             scheduler: AtomicRefCell::new(Default::default()),
+            counter,
         }
     }
     /// Adds a new unique storage, unique storages store a single value.  
@@ -371,7 +378,8 @@ let (entities, mut usizes) = world
     where
         V::Borrow: Borrow<'s, View = V>,
     {
-        V::Borrow::borrow(self)
+        let current = self.get_current();
+        V::Borrow::borrow(self, None, current)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -827,6 +835,12 @@ let i = world.run(sys1).unwrap();
             .custom_storage_or_insert_by_id(storage_id, || storage);
 
         Ok(())
+    }
+
+    #[inline]
+    pub(crate) fn get_current(&self) -> u32 {
+        self.counter
+            .fetch_add(1, core::sync::atomic::Ordering::Acquire)
     }
 }
 

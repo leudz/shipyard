@@ -20,6 +20,10 @@ impl<T, const N: usize> SparseArray<T, N> {
         self.0.len()
     }
     #[inline]
+    pub(super) fn as_ptr(&self) -> *const Option<Box<[T; N]>> {
+        self.0.as_ptr()
+    }
+    #[inline]
     pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<[T; N]>> {
         self.0.as_mut_ptr()
     }

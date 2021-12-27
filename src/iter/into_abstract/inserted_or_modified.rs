@@ -1,7 +1,7 @@
 use super::IntoAbstract;
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
 use crate::track;
 use crate::tracking::InsertedOrModified;
 use crate::type_id::TypeId;
@@ -10,10 +10,10 @@ use crate::view::{View, ViewMut};
 impl<'tmp, 'v, T: Component<Tracking = track::Insertion>> IntoAbstract
     for InsertedOrModified<&'tmp View<'v, T, track::Insertion>>
 {
-    type AbsView = InsertedOrModified<&'tmp SparseSet<T, track::Insertion>>;
+    type AbsView = InsertedOrModified<FullRawWindow<'tmp, T, track::Insertion>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0)
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((**self.0).len())
@@ -36,10 +36,10 @@ impl<'tmp, 'v, T: Component<Tracking = track::Insertion>> IntoAbstract
 impl<'tmp, 'v, T: Component<Tracking = track::Modification>> IntoAbstract
     for InsertedOrModified<&'tmp View<'v, T, track::Modification>>
 {
-    type AbsView = InsertedOrModified<&'tmp SparseSet<T, track::Modification>>;
+    type AbsView = InsertedOrModified<FullRawWindow<'tmp, T, track::Modification>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0)
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((**self.0).len())
@@ -62,10 +62,10 @@ impl<'tmp, 'v, T: Component<Tracking = track::Modification>> IntoAbstract
 impl<'tmp, 'v, T: Component<Tracking = track::All>> IntoAbstract
     for InsertedOrModified<&'tmp View<'v, T, track::All>>
 {
-    type AbsView = InsertedOrModified<&'tmp SparseSet<T, track::All>>;
+    type AbsView = InsertedOrModified<FullRawWindow<'tmp, T, track::All>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0)
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((**self.0).len())
@@ -88,10 +88,10 @@ impl<'tmp, 'v, T: Component<Tracking = track::All>> IntoAbstract
 impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> IntoAbstract
     for InsertedOrModified<&'b ViewMut<'a, T, track::Insertion>>
 {
-    type AbsView = InsertedOrModified<&'b SparseSet<T, track::Insertion>>;
+    type AbsView = InsertedOrModified<FullRawWindow<'b, T, track::Insertion>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0)
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((*self.0).len())
@@ -114,10 +114,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> IntoAbstract
 impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
     for InsertedOrModified<&'b ViewMut<'a, T, track::Modification>>
 {
-    type AbsView = InsertedOrModified<&'b SparseSet<T, track::Modification>>;
+    type AbsView = InsertedOrModified<FullRawWindow<'b, T, track::Modification>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0)
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((*self.0).len())
@@ -140,10 +140,10 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
 impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
     for InsertedOrModified<&'b ViewMut<'a, T, track::All>>
 {
-    type AbsView = InsertedOrModified<&'b SparseSet<T, track::All>>;
+    type AbsView = InsertedOrModified<FullRawWindow<'b, T, track::All>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0)
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((*self.0).len())
@@ -169,7 +169,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Insertion>> IntoAbstract
     type AbsView = InsertedOrModified<FullRawWindowMut<'b, T, track::Insertion>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0.full_raw_window_mut())
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((*self.0).len())
@@ -195,7 +195,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
     type AbsView = InsertedOrModified<FullRawWindowMut<'b, T, track::Modification>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0.full_raw_window_mut())
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((*self.0).len())
@@ -221,7 +221,7 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::All>> IntoAbstract
     type AbsView = InsertedOrModified<FullRawWindowMut<'b, T, track::All>>;
 
     fn into_abstract(self) -> Self::AbsView {
-        InsertedOrModified(self.0.full_raw_window_mut())
+        InsertedOrModified(self.0.into_abstract())
     }
     fn len(&self) -> Option<usize> {
         Some((*self.0).len())

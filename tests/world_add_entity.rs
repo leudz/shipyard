@@ -53,8 +53,13 @@ fn cleared_update() {
     let entity1 = world.add_entity((USIZE(1usize),));
 
     world
-        .run(|mut usizes: ViewMut<USIZE>| {
+        .run(|usizes: ViewMut<USIZE>| {
             usizes.clear_all_inserted_and_modified();
+        })
+        .unwrap();
+
+    world
+        .run(|usizes: View<USIZE>| {
             assert_eq!(usizes.inserted().iter().count(), 0);
         })
         .unwrap();
@@ -83,16 +88,16 @@ fn modified_update() {
     let entity1 = world.add_entity((USIZE(1),));
 
     world
-        .run(|mut usizes: ViewMut<USIZE>| {
+        .run(|usizes: ViewMut<USIZE>| {
             usizes.clear_all_inserted_and_modified();
-            usizes[entity1] = USIZE(3);
         })
         .unwrap();
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
     world
-        .run(|usizes: View<USIZE>| {
+        .run(|mut usizes: ViewMut<USIZE>| {
+            usizes[entity1] = USIZE(3);
             assert_eq!(usizes.inserted().iter().count(), 1);
             assert_eq!(*usizes.get(entity1).unwrap(), USIZE(3));
             assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));

@@ -10,12 +10,14 @@ pub(super) struct BorrowState(AtomicUsize);
 pub struct SharedBorrow<'a>(&'a BorrowState);
 
 impl Drop for SharedBorrow<'_> {
+    #[inline]
     fn drop(&mut self) {
         (self.0).0.fetch_sub(1, Ordering::Release);
     }
 }
 
 impl Clone for SharedBorrow<'_> {
+    #[inline]
     fn clone(&self) -> Self {
         self.0.read().unwrap()
     }
@@ -25,15 +27,18 @@ impl Clone for SharedBorrow<'_> {
 pub struct ExclusiveBorrow<'a>(&'a BorrowState);
 
 impl Drop for ExclusiveBorrow<'_> {
+    #[inline]
     fn drop(&mut self) {
         (self.0).0.store(0, Ordering::Release);
     }
 }
 
 impl BorrowState {
+    #[inline]
     pub(super) fn new() -> Self {
         BorrowState(AtomicUsize::new(0))
     }
+    #[inline]
     pub(super) fn read(&self) -> Result<SharedBorrow<'_>, error::Borrow> {
         let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
         if new & HIGH_BIT != 0 {
@@ -45,8 +50,8 @@ impl BorrowState {
         }
     }
 
-    // todo: use
     #[allow(unused)]
+    #[inline]
     pub(super) fn exclusive_read(&self) -> Result<SharedBorrow<'_>, error::Borrow> {
         let old = match self
             .0
@@ -65,6 +70,7 @@ impl BorrowState {
         }
     }
 
+    #[inline]
     pub(super) fn write(&self) -> Result<ExclusiveBorrow<'_>, error::Borrow> {
         let old = match self
             .0

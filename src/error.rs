@@ -456,8 +456,8 @@ impl Display for UniqueRemove {
 
 /// Error returned by [`apply`] and [`apply_mut`].
 ///
-/// [`apply`]: crate::SparseSet::apply()
-/// [`apply_mut`]: crate::SparseSet::apply_mut()
+/// [`apply`]: crate::ViewMut::apply()
+/// [`apply_mut`]: crate::ViewMut::apply_mut()
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Apply {
     #[allow(missing_docs)]

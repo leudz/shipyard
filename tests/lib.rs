@@ -328,26 +328,30 @@ fn par_update_pack() {
                 entities.add_entity(&mut usizes, USIZE(3));
 
                 usizes.clear_all_inserted();
-
-                (&usizes).par_iter().sum::<USIZE>();
-
-                assert_eq!(usizes.modified().iter().count(), 0);
-
-                (&mut usizes).par_iter().for_each(|mut i| {
-                    i.0 += 1;
-                });
-
-                let mut iter = usizes.inserted().iter();
-                assert_eq!(iter.next(), None);
-
-                let mut iter = usizes.modified_mut().iter();
-                assert_eq!(iter.next().map(|x| *x), Some(USIZE(1)));
-                assert_eq!(iter.next().map(|x| *x), Some(USIZE(2)));
-                assert_eq!(iter.next().map(|x| *x), Some(USIZE(3)));
-                assert_eq!(iter.next().map(|x| *x), Some(USIZE(4)));
-                assert!(iter.next().is_none());
             },
         )
+        .unwrap();
+
+    world
+        .run(|mut usizes: ViewMut<USIZE>| {
+            (&usizes).par_iter().sum::<USIZE>();
+
+            assert_eq!(usizes.modified().iter().count(), 0);
+
+            (&mut usizes).par_iter().for_each(|mut i| {
+                i.0 += 1;
+            });
+
+            let mut iter = usizes.inserted().iter();
+            assert_eq!(iter.next(), None);
+
+            let mut iter = usizes.modified_mut().iter();
+            assert_eq!(iter.next().map(|x| *x), Some(USIZE(1)));
+            assert_eq!(iter.next().map(|x| *x), Some(USIZE(2)));
+            assert_eq!(iter.next().map(|x| *x), Some(USIZE(3)));
+            assert_eq!(iter.next().map(|x| *x), Some(USIZE(4)));
+            assert!(iter.next().is_none());
+        })
         .unwrap();
 }
 
@@ -448,26 +452,30 @@ fn par_update_filter() {
                 entities.add_entity(&mut usizes, USIZE(3));
 
                 usizes.clear_all_inserted();
-
-                (&mut usizes)
-                    .par_iter()
-                    .filter(|x| x.0 % 2 == 0)
-                    .for_each(|mut i| {
-                        i.0 += 1;
-                    });
-
-                let mut iter = usizes.inserted().iter();
-                assert_eq!(iter.next(), None);
-
-                let mut modified: Vec<_> = usizes.modified().iter().collect();
-                modified.sort_unstable();
-                assert_eq!(modified, vec![&USIZE(1), &USIZE(3)]);
-
-                let mut iter: Vec<_> = (&usizes).iter().collect();
-                iter.sort_unstable();
-                assert_eq!(iter, vec![&USIZE(1), &USIZE(1), &USIZE(3), &USIZE(3)]);
             },
         )
+        .unwrap();
+
+    world
+        .run(|mut usizes: ViewMut<USIZE>| {
+            (&mut usizes)
+                .par_iter()
+                .filter(|x| x.0 % 2 == 0)
+                .for_each(|mut i| {
+                    i.0 += 1;
+                });
+
+            let mut iter = usizes.inserted().iter();
+            assert_eq!(iter.next(), None);
+
+            let mut modified: Vec<_> = usizes.modified().iter().collect();
+            modified.sort_unstable();
+            assert_eq!(modified, vec![&USIZE(1), &USIZE(3)]);
+
+            let mut iter: Vec<_> = (&usizes).iter().collect();
+            iter.sort_unstable();
+            assert_eq!(iter, vec![&USIZE(1), &USIZE(1), &USIZE(3), &USIZE(3)]);
+        })
         .unwrap();
 }
 

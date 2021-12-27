@@ -32,7 +32,9 @@ impl<T: Component> AddEntity for &mut ViewMut<'_, T> {
 
     #[inline]
     fn add_entity(storage: &mut Self, entity: EntityId, component: Self::Component) {
-        storage.insert(entity, component);
+        storage
+            .sparse_set
+            .insert(entity, component, storage.current);
     }
 }
 

@@ -4,7 +4,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
-use crate::track::{self, Tracking};
+use crate::track::Tracking;
 use core::iter::IntoIterator;
 
 /// Trait used as bound for [`World::bulk_add_entity`] and [`AllStorages::bulk_add_entity`].
@@ -58,60 +58,52 @@ impl BulkInsert for () {
 
 impl<T: Send + Sync + Component> BulkInsert for (T,)
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+    T::Tracking: Send + Sync,
 {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
     ) -> BulkEntityIter<'_> {
         let iter = iter.into_iter();
-        let len = iter.size_hint().0;
-
+        let current = all_storages.get_current();
         let mut entities = all_storages.entities_mut().unwrap();
-        let entities_len = entities.data.len();
-        let new_entities = entities.bulk_generate(len);
-
         let mut sparse_set = all_storages
             .custom_storage_or_insert_mut(SparseSet::<T, T::Tracking>::new)
             .unwrap();
 
-        sparse_set.reserve(len);
+        // add components to the storage
         sparse_set.data.extend(iter.map(|(component,)| component));
 
+        // generate new EntityId for the entities created
+        let entities_len = entities.data.len();
         let old_len = sparse_set.dense.len();
+        let new_entities_count = sparse_set.data.len() - old_len;
+        let new_entities = entities.bulk_generate(new_entities_count);
+
+        // add new EntityId to the storage for the components we added above
+        sparse_set.dense.extend_from_slice(new_entities);
+
+        // add tracking info if needed
         if T::Tracking::track_insertion() {
             sparse_set
-                .dense
-                .extend(new_entities.iter().copied().map(|mut id| {
-                    id.set_inserted();
-                    id
-                }));
-        } else {
-            sparse_set.dense.extend_from_slice(new_entities);
+                .insertion_data
+                .extend(new_entities.iter().map(|_| current));
         }
-
-        let dense_len = sparse_set.dense.len();
-        let data_len = sparse_set.data.len();
-
-        if T::Tracking::track_insertion() {
-            sparse_set.dense.extend((0..data_len - dense_len).map(|_| {
-                let mut id = entities.generate();
-                id.set_inserted();
-                id
-            }));
-        } else {
-            sparse_set
-                .dense
-                .extend((0..data_len - dense_len).map(|_| entities.generate()));
+        if T::Tracking::track_modification() {
+            sparse_set.insertion_data.extend(
+                new_entities
+                    .iter()
+                    .map(|_| current.wrapping_add(u32::MAX / 2)),
+            );
         }
 
         let SparseSet { sparse, dense, .. } = &mut *sparse_set;
 
-        sparse.bulk_allocate(dense[old_len], dense[data_len - 1]);
+        // update sparse to reflect the new state of dense and data
+        sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
         for (i, &entity) in dense[old_len..].iter().enumerate() {
             unsafe {
-                *sparse.get_mut_unchecked(entity) =
-                    EntityId::new_from_parts((old_len + i) as u64, 0, 0);
+                *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
             }
         }
 
@@ -130,18 +122,14 @@ macro_rules! impl_bulk_insert {
     (($type1: ident, $sparse_set1: ident, $index1: tt) $(($type: ident, $sparse_set: ident, $index: tt))*) => {
         impl<$type1: Send + Sync + Component, $($type: Send + Sync + Component,)*> BulkInsert for ($type1, $($type,)*)
         where
-            <$type1::Tracking as track::Tracking<$type1>>::DeletionData: Send + Sync,
-            $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
+            $type1::Tracking: Send + Sync,
+            $($type::Tracking: Send + Sync),+
         {
             #[allow(non_snake_case)]
             fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();
                 let size_hint = iter.size_hint().0;
-
                 let mut entities = all_storages.entities_mut().unwrap();
-                let entities_len = entities.data.len();
-                let new_entities = entities.bulk_generate(size_hint);
-
                 let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1, $type1::Tracking>::new).unwrap();
                 $(
                     let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type, $type::Tracking>::new).unwrap();
@@ -159,65 +147,47 @@ macro_rules! impl_bulk_insert {
                     )*
                 }
 
-                let len = $sparse_set1.data.len() - $sparse_set1.dense.len();
+                let entities_len = entities.data.len();
+                let new_entities_count = $sparse_set1.data.len() - $sparse_set1.dense.len();
+                let new_entities = entities.bulk_generate(new_entities_count);
 
-                let old_len1 = $sparse_set1.dense.len();
                 $sparse_set1.dense.extend_from_slice(new_entities);
-
-                let dense_len = $sparse_set1.dense.len();
-                let data_len = $sparse_set1.data.len();
-                $sparse_set1.dense.extend((0..data_len - dense_len).map(|_| entities.generate()));
-
                 $(
-                    $sparse_set.dense.extend_from_slice(&$sparse_set1.dense[old_len1..]);
+                    $sparse_set.dense.extend_from_slice(new_entities);
                 )*
-
-                let start_entity = $sparse_set1.dense[old_len1];
-                let end_entity = *$sparse_set1.dense.last().unwrap();
-
-                $sparse_set1.sparse.bulk_allocate(start_entity, end_entity);
-                $(
-                    $sparse_set.sparse.bulk_allocate(start_entity, end_entity);
-                )*
-
-                let SparseSet {
-                    sparse: sparse1,
-                    dense: dense1,
-                    ..
-                } = &mut *$sparse_set1;
 
                 if $type1::Tracking::track_insertion() {
-                    for (i, &entity) in dense1[old_len1..].iter().enumerate() {
-                        unsafe {
-                            let mut e = EntityId::new((old_len1 + i) as u64);
-                            e.set_inserted();
-                            *sparse1.get_mut_unchecked(entity) = e;
-                        }
+                    $sparse_set1.insertion_data.extend(new_entities.iter().map(|_| 0));
+                }
+                if $type1::Tracking::track_modification() {
+                    $sparse_set1.modification_data.extend(new_entities.iter().map(|_| 0));
+                }
+                $(
+                    if $type::Tracking::track_insertion() {
+                        $sparse_set.insertion_data.extend(new_entities.iter().map(|_| 0));
                     }
-                } else {
-                    for (i, &entity) in dense1[old_len1..].iter().enumerate() {
-                        unsafe {
-                            *sparse1.get_mut_unchecked(entity) = EntityId::new((old_len1 + i) as u64);
-                        }
+                    if $type::Tracking::track_modification() {
+                        $sparse_set.modification_data.extend(new_entities.iter().map(|_| 0));
+                    }
+                )*
+
+                let old_len = $sparse_set1.dense.len() - new_entities_count;
+                let SparseSet { sparse, dense, .. } = &mut *$sparse_set1;
+
+                sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
+                for (i, &entity) in dense[old_len..].iter().enumerate() {
+                    unsafe {
+                        *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
                     }
                 }
-
                 $(
-                    let old_len = $sparse_set.dense.len() - len;
+                    let old_len = $sparse_set.dense.len() - new_entities_count;
+                    let SparseSet { sparse, dense, .. } = &mut *$sparse_set;
 
-                    if $type::Tracking::track_insertion() {
-                        for (i, &entity) in dense1[old_len1..].iter().enumerate() {
-                            unsafe {
-                                let mut e = EntityId::new((old_len + i) as u64);
-                                e.set_inserted();
-                                *$sparse_set.sparse.get_mut_unchecked(entity) = e;
-                            }
-                        }
-                    } else {
-                        for (i, &entity) in dense1[old_len1..].iter().enumerate() {
-                            unsafe {
-                                *$sparse_set.sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
-                            }
+                    sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
+                    for (i, &entity) in dense[old_len..].iter().enumerate() {
+                        unsafe {
+                            *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
                         }
                     }
                 )*

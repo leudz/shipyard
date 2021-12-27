@@ -69,6 +69,7 @@ fn update() {
     assert_eq!(iter.next(), None);
 
     usizes.clear_all_inserted();
+    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
 
     usizes[entity] = USIZE(3);
 
@@ -79,6 +80,8 @@ fn update() {
     assert_eq!(iter.next(), None);
 
     usizes.clear_all_modified();
+
+    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
 
     entities.add_component(entity, &mut usizes, USIZE(5));
 

@@ -67,6 +67,7 @@ impl<'a, 'b, T: Component<Tracking = track::Untracked>> Get
 {
     type Out = &'b mut T;
 
+    #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
         let index = self
             .index_of(entity)
@@ -84,6 +85,25 @@ impl<'a, 'b, T: Component<Tracking = track::Insertion>> Get
 {
     type Out = &'b mut T;
 
+    #[inline]
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        let index = self
+            .index_of(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })?;
+
+        Ok(unsafe { self.data.get_unchecked_mut(index) })
+    }
+}
+
+impl<'a, 'b, T: Component<Tracking = track::Deletion>> Get
+    for &'b mut ViewMut<'a, T, track::Deletion>
+{
+    type Out = &'b mut T;
+
+    #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
         let index = self
             .index_of(entity)
@@ -101,6 +121,7 @@ impl<'a, 'b, T: Component<Tracking = track::Removal>> Get
 {
     type Out = &'b mut T;
 
+    #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
         let index = self
             .index_of(entity)
@@ -127,12 +148,15 @@ impl<'a, 'b, T: Component<Tracking = track::Modification>> Get
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet { dense, data, .. } = &mut **self;
-
-        let entity = unsafe { dense.get_unchecked_mut(index) };
+        let SparseSet {
+            data,
+            modification_data,
+            ..
+        } = self.sparse_set;
 
         Ok(Mut {
-            flag: Some(entity),
+            flag: Some(unsafe { modification_data.get_unchecked_mut(index) }),
+            current: self.current,
             data: unsafe { data.get_unchecked_mut(index) },
         })
     }
@@ -150,16 +174,15 @@ impl<'a, 'b, T: Component<Tracking = track::All>> Get for &'b mut ViewMut<'a, T,
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet { dense, data, .. } = &mut **self;
-
-        let entity = unsafe { dense.get_unchecked_mut(index) };
+        let SparseSet {
+            data,
+            modification_data,
+            ..
+        } = self.sparse_set;
 
         Ok(Mut {
-            flag: if !entity.is_inserted() {
-                Some(entity)
-            } else {
-                None
-            },
+            flag: Some(unsafe { modification_data.get_unchecked_mut(index) }),
+            current: self.current,
             data: unsafe { data.get_unchecked_mut(index) },
         })
     }

@@ -21,7 +21,7 @@ use std::error::Error;
 
 /// Used to create a [`WorkloadBuilder`].
 ///
-/// You can also use [`WorkloadBuilder::new`] or [`WorkloadBuilder::default`].
+/// You can also use [`WorkloadBuilder::new`].
 ///
 /// [`WorkloadBuilder`]: crate::WorkloadBuilder
 /// [`WorkloadBuilder::new`]: crate::WorkloadBuilder::new()

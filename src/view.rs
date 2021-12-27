@@ -2,7 +2,9 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
 use crate::component::Component;
 use crate::entities::Entities;
+use crate::entity_id::EntityId;
 use crate::error;
+use crate::get::Get;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::track::{self, Tracking};
@@ -126,9 +128,12 @@ pub struct View<'a, T: Component, Tracking: track::Tracking<T> = <T as Component
     pub(crate) sparse_set: &'a SparseSet<T, Tracking>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
+    pub(crate) last_insert: u32,
+    pub(crate) last_modification: u32,
+    pub(crate) current: u32,
 }
 
-impl<'a, T: Component> View<'a, T> {
+impl<'a, T: Component<Tracking = track::Untracked>> View<'a, T, track::Untracked> {
     /// Creates a new [`View`] for custom [`SparseSet`] storage.
     ///
     /// ```
@@ -167,6 +172,9 @@ impl<'a, T: Component> View<'a, T> {
                 sparse_set,
                 all_borrow: Some(all_borrow),
                 borrow: Some(borrow),
+                last_insert: 0,
+                last_modification: 0,
+                current: 0,
             })
         } else {
             Err(error::CustomStorageView::WrongType(storage.name()))
@@ -176,10 +184,12 @@ impl<'a, T: Component> View<'a, T> {
 
 impl<T: Component<Tracking = track::Insertion>> View<'_, T, track::Insertion> {
     /// Wraps this view to be able to iterate *inserted* components.
+    #[inline]
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
@@ -187,10 +197,12 @@ impl<T: Component<Tracking = track::Insertion>> View<'_, T, track::Insertion> {
 
 impl<T: Component<Tracking = track::Modification>> View<'_, T, track::Modification> {
     /// Wraps this view to be able to iterate *modified* components.
+    #[inline]
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
@@ -198,21 +210,24 @@ impl<T: Component<Tracking = track::Modification>> View<'_, T, track::Modificati
 
 impl<T: Component<Tracking = track::All>> View<'_, T, track::All> {
     /// Wraps this view to be able to iterate *inserted* components.
+    #[inline]
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
     /// Wraps this view to be able to iterate *modified* components.
+    #[inline]
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
 }
 
 impl<'a, T: Component> Deref for View<'a, T> {
-    type Target = SparseSet<T, T::Tracking>;
+    type Target = SparseSet<T>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -220,9 +235,9 @@ impl<'a, T: Component> Deref for View<'a, T> {
     }
 }
 
-impl<'a, T: Component> AsRef<SparseSet<T, T::Tracking>> for View<'a, T> {
+impl<'a, T: Component> AsRef<SparseSet<T>> for View<'a, T> {
     #[inline]
-    fn as_ref(&self) -> &SparseSet<T, T::Tracking> {
+    fn as_ref(&self) -> &SparseSet<T> {
         self.sparse_set
     }
 }
@@ -234,6 +249,9 @@ impl<'a, T: Component> Clone for View<'a, T> {
             sparse_set: self.sparse_set,
             borrow: self.borrow.clone(),
             all_borrow: self.all_borrow.clone(),
+            last_insert: self.last_insert,
+            last_modification: self.last_modification,
+            current: self.current,
         }
     }
 }
@@ -244,14 +262,26 @@ impl<T: fmt::Debug + Component> fmt::Debug for View<'_, T> {
     }
 }
 
+impl<T: Component> core::ops::Index<EntityId> for View<'_, T> {
+    type Output = T;
+    #[track_caller]
+    #[inline]
+    fn index(&self, entity: EntityId) -> &Self::Output {
+        self.get(entity).unwrap()
+    }
+}
+
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a mut SparseSet<T, Tracking>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
+    pub(crate) last_insert: u32,
+    pub(crate) last_modification: u32,
+    pub(crate) current: u32,
 }
 
-impl<'a, T: Component> ViewMut<'a, T> {
+impl<'a, T: Component<Tracking = track::Untracked>> ViewMut<'a, T, track::Untracked> {
     /// Creates a new [`ViewMut`] for custom [`SparseSet`] storage.
     ///
     /// ```
@@ -292,6 +322,9 @@ impl<'a, T: Component> ViewMut<'a, T> {
                 sparse_set,
                 _all_borrow: Some(all_borrow),
                 _borrow: Some(borrow),
+                last_insert: 0,
+                last_modification: 0,
+                current: 0,
             })
         } else {
             Err(error::CustomStorageView::WrongType(name))
@@ -299,73 +332,172 @@ impl<'a, T: Component> ViewMut<'a, T> {
     }
 }
 
+impl<'a, T: Component> ViewMut<'a, T> {
+    /// Applies the given function `f` to the entities `a` and `b`.  
+    /// The two entities shouldn't point to the same component.  
+    ///
+    /// ### Panics
+    ///
+    /// - MissingComponent - if one of the entity doesn't have any component in the storage.
+    /// - IdenticalIds - if the two entities point to the same component.
+    #[track_caller]
+    #[inline]
+    pub fn apply<R, F: FnOnce(&mut T, &T) -> R>(&mut self, a: EntityId, b: EntityId, f: F) -> R {
+        T::Tracking::apply(self, a, b, f)
+    }
+    /// Applies the given function `f` to the entities `a` and `b`.  
+    /// The two entities shouldn't point to the same component.  
+    ///
+    /// ### Panics
+    ///
+    /// - MissingComponent - if one of the entity doesn't have any component in the storage.
+    /// - IdenticalIds - if the two entities point to the same component.
+    #[track_caller]
+    #[inline]
+    pub fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
+        &mut self,
+        a: EntityId,
+        b: EntityId,
+        f: F,
+    ) -> R {
+        T::Tracking::apply_mut(self, a, b, f)
+    }
+    /// Returns `true` if `entity`'s component was inserted since the last [`clear_all_inserted`] call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    ///
+    /// [`clear_all_inserted`]: Self::clear_all_inserted
+    #[inline]
+    pub fn is_inserted(&self, entity: EntityId) -> bool {
+        T::Tracking::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
+    }
+    /// Returns `true` if `entity`'s component was modified since the last [`clear_all_modified`] call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    ///
+    /// [`clear_all_modified`]: Self::clear_all_modified
+    #[inline]
+    pub fn is_modified(&self, entity: EntityId) -> bool {
+        T::Tracking::is_modified(
+            self.sparse_set,
+            entity,
+            self.last_modification,
+            self.current,
+        )
+    }
+    /// Returns `true` if `entity`'s component was inserted or modified since the last clear call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    #[inline]
+    pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
+        self.is_inserted(entity) || self.is_modified(entity)
+    }
+}
+
 impl<T: Component<Tracking = track::Insertion>> ViewMut<'_, T, track::Insertion> {
     /// Wraps this view to be able to iterate *inserted* components.
+    #[inline]
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
     /// Wraps this view to be able to iterate *inserted* components.
+    #[inline]
     pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
         Inserted(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
+    }
+    /// Removes the *inserted* flag on all components of this storage.
+    #[inline]
+    pub fn clear_all_inserted(self) {
+        self.sparse_set.private_clear_all_inserted(self.current);
     }
 }
 
 impl<T: Component<Tracking = track::Modification>> ViewMut<'_, T, track::Modification> {
     /// Wraps this view to be able to iterate *modified* components.
+    #[inline]
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
     /// Wraps this view to be able to iterate *modified* components.
+    #[inline]
     pub fn modified_mut(&mut self) -> Modified<&mut Self> {
         Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
+    }
+    /// Removes the *modified* flag on all components of this storage.
+    #[inline]
+    pub fn clear_all_modified(self) {
+        self.sparse_set.private_clear_all_modified(self.current);
     }
 }
 
 impl<T: Component<Tracking = track::All>> ViewMut<'_, T, track::All> {
     /// Wraps this view to be able to iterate *inserted* components.
+    #[inline]
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
     /// Wraps this view to be able to iterate *modified* components.
+    #[inline]
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
     /// Wraps this view to be able to iterate *inserted* components.
+    #[inline]
     pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
         Inserted(self)
     }
     /// Wraps this view to be able to iterate *modified* components.
+    #[inline]
     pub fn modified_mut(&mut self) -> Modified<&mut Self> {
         Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    #[inline]
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
+    }
+    /// Removes the *inserted* flag on all components of this storage.
+    #[inline]
+    pub fn clear_all_inserted(self) {
+        self.sparse_set.private_clear_all_inserted(self.current);
+    }
+    /// Removes the *modified* flag on all components of this storage.
+    #[inline]
+    pub fn clear_all_modified(self) {
+        self.sparse_set.private_clear_all_modified(self.current);
+    }
+    /// Removes the *inserted* and *modified* flags on all components of this storage.
+    #[inline]
+    pub fn clear_all_inserted_and_modified(self) {
+        self.sparse_set
+            .private_clear_all_inserted_and_modified(self.current);
     }
 }
 
 impl<T: Component> Deref for ViewMut<'_, T> {
-    type Target = SparseSet<T, T::Tracking>;
+    type Target = SparseSet<T>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -380,16 +512,16 @@ impl<T: Component> DerefMut for ViewMut<'_, T> {
     }
 }
 
-impl<'a, T: Component> AsRef<SparseSet<T, T::Tracking>> for ViewMut<'a, T> {
+impl<'a, T: Component> AsRef<SparseSet<T>> for ViewMut<'a, T> {
     #[inline]
-    fn as_ref(&self) -> &SparseSet<T, T::Tracking> {
+    fn as_ref(&self) -> &SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component> AsMut<SparseSet<T, T::Tracking>> for ViewMut<'a, T> {
+impl<'a, T: Component> AsMut<SparseSet<T>> for ViewMut<'a, T> {
     #[inline]
-    fn as_mut(&mut self) -> &mut SparseSet<T, T::Tracking> {
+    fn as_mut(&mut self) -> &mut SparseSet<T> {
         self.sparse_set
     }
 }
@@ -407,6 +539,104 @@ impl<T: fmt::Debug + Component> fmt::Debug for ViewMut<'_, T> {
     }
 }
 
+impl<'a, T: Component> core::ops::Index<EntityId> for ViewMut<'a, T> {
+    type Output = T;
+    #[inline]
+    fn index(&self, entity: EntityId) -> &Self::Output {
+        self.get(entity).unwrap()
+    }
+}
+
+impl<'a, T: Component<Tracking = track::Untracked>> core::ops::IndexMut<EntityId>
+    for ViewMut<'a, T, track::Untracked>
+{
+    #[inline]
+    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
+        (&mut *self).get(entity).unwrap()
+    }
+}
+
+impl<'a, T: Component<Tracking = track::Insertion>> core::ops::IndexMut<EntityId>
+    for ViewMut<'a, T, track::Insertion>
+{
+    #[inline]
+    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
+        (&mut *self).get(entity).unwrap()
+    }
+}
+
+impl<'a, T: Component<Tracking = track::Deletion>> core::ops::IndexMut<EntityId>
+    for ViewMut<'a, T, track::Deletion>
+{
+    #[inline]
+    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
+        (&mut *self).get(entity).unwrap()
+    }
+}
+
+impl<'a, T: Component<Tracking = track::Removal>> core::ops::IndexMut<EntityId>
+    for ViewMut<'a, T, track::Removal>
+{
+    #[inline]
+    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
+        (&mut *self).get(entity).unwrap()
+    }
+}
+
+impl<'a, T: Component<Tracking = track::Modification>> core::ops::IndexMut<EntityId>
+    for ViewMut<'a, T, track::Modification>
+{
+    #[inline]
+    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
+        let index = self
+            .index_of(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: core::any::type_name::<T>(),
+            })
+            .unwrap();
+
+        let SparseSet {
+            data,
+            modification_data,
+            ..
+        } = self.sparse_set;
+
+        unsafe {
+            *modification_data.get_unchecked_mut(index) = self.current;
+        };
+
+        unsafe { data.get_unchecked_mut(index) }
+    }
+}
+
+impl<'a, T: Component<Tracking = track::All>> core::ops::IndexMut<EntityId>
+    for ViewMut<'a, T, track::All>
+{
+    #[inline]
+    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
+        let index = self
+            .index_of(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: core::any::type_name::<T>(),
+            })
+            .unwrap();
+
+        let SparseSet {
+            data,
+            modification_data,
+            ..
+        } = self.sparse_set;
+
+        unsafe {
+            *modification_data.get_unchecked_mut(index) = self.current;
+        };
+
+        unsafe { data.get_unchecked_mut(index) }
+    }
+}
+
 /// Shared view over a unique component storage.
 pub struct UniqueView<'a, T: Component, Track: Tracking<T> = <T as Component>::Tracking> {
     pub(crate) unique: &'a Unique<T>,
@@ -418,6 +648,7 @@ pub struct UniqueView<'a, T: Component, Track: Tracking<T> = <T as Component>::T
 impl<T: Component> UniqueView<'_, T> {
     /// Duplicates the [`UniqueView`].
     #[allow(clippy::should_implement_trait)]
+    #[inline]
     pub fn clone(unique: &Self) -> Self {
         UniqueView {
             unique: unique.unique,
@@ -432,12 +663,14 @@ impl<T: Component<Tracking = track::Insertion>> UniqueView<'_, T, track::Inserti
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    #[inline]
     pub fn is_inserted(&self) -> bool {
         self.unique.tracking == TrackingState::Inserted
     }
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Inserted
     }
@@ -447,12 +680,14 @@ impl<T: Component<Tracking = track::Modification>> UniqueView<'_, T, track::Modi
     /// Returns `true` is the component was modified since the last [`clear_modified`] call.
     ///
     /// [`clear_modified`]: UniqueViewMut::clear_modified
+    #[inline]
     pub fn is_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Modified
     }
     /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///
     /// [`clear_modified`]: UniqueViewMut::clear_modified
+    #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Modified
     }
@@ -462,12 +697,14 @@ impl<T: Component<Tracking = track::All>> UniqueView<'_, T, track::All> {
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    #[inline]
     pub fn is_inserted(&self) -> bool {
         self.unique.tracking == TrackingState::Inserted
     }
     /// Returns `true` is the component was modified since the last [`clear_modified`] call.
     ///
     /// [`clear_modified`]: UniqueViewMut::clear_modified
+    #[inline]
     pub fn is_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Modified
     }
@@ -475,6 +712,7 @@ impl<T: Component<Tracking = track::All>> UniqueView<'_, T, track::All> {
     ///
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
     /// [`clear_modified`]: UniqueViewMut::clear_modified
+    #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.unique.tracking != TrackingState::Untracked
     }
@@ -514,16 +752,19 @@ impl<T: Component<Tracking = track::Insertion>> UniqueViewMut<'_, T, track::Inse
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: Self::clear_inserted
+    #[inline]
     pub fn is_inserted(&self) -> bool {
         self.unique.tracking == TrackingState::Inserted
     }
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: Self::clear_inserted
+    #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Inserted
     }
     /// Removes the *inserted* flag on the component of this storage.
+    #[inline]
     pub fn clear_inserted(&mut self) {
         self.unique.tracking = TrackingState::Untracked;
     }
@@ -533,16 +774,19 @@ impl<T: Component<Tracking = track::Modification>> UniqueViewMut<'_, T, track::M
     /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///
     /// [`clear_modified`]: Self::clear_modified
+    #[inline]
     pub fn is_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Modified
     }
     /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///
     /// [`clear_modified`]: Self::clear_modified
+    #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Modified
     }
     /// Removes the *medified* flag on the component of this storage.
+    #[inline]
     pub fn clear_modified(&mut self) {
         self.unique.tracking = TrackingState::Untracked;
     }
@@ -552,12 +796,14 @@ impl<T: Component<Tracking = track::All>> UniqueViewMut<'_, T, track::All> {
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: Self::clear_inserted
+    #[inline]
     pub fn is_inserted(&self) -> bool {
         self.unique.tracking == TrackingState::Inserted
     }
     /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///
     /// [`clear_modified`]: Self::clear_modified
+    #[inline]
     pub fn is_modified(&self) -> bool {
         self.unique.tracking == TrackingState::Modified
     }
@@ -565,22 +811,26 @@ impl<T: Component<Tracking = track::All>> UniqueViewMut<'_, T, track::All> {
     ///
     /// [`clear_inserted`]: Self::clear_inserted
     /// [`clear_modified`]: Self::clear_modified
+    #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.unique.tracking != TrackingState::Untracked
     }
     /// Removes the *inserted* flag on the component of this storage.
+    #[inline]
     pub fn clear_inserted(&mut self) {
         if self.unique.tracking == TrackingState::Inserted {
             self.unique.tracking = TrackingState::Untracked;
         }
     }
     /// Removes the *medified* flag on the component of this storage.
+    #[inline]
     pub fn clear_modified(&mut self) {
         if self.unique.tracking == TrackingState::Modified {
             self.unique.tracking = TrackingState::Untracked;
         }
     }
     /// Removes the *inserted* and *modified* flags on the component of this storage.
+    #[inline]
     pub fn clear_inserted_and_modified(&mut self) {
         self.unique.tracking = TrackingState::Untracked;
     }

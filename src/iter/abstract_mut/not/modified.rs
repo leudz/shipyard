@@ -3,12 +3,12 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::r#mut::Mut;
-use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::track;
 use crate::tracking::Modified;
 
 impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
-    for Not<Modified<&'tmp SparseSet<T, track::Modification>>>
+    for Not<Modified<FullRawWindow<'tmp, T, track::Modification>>>
 {
     type Out = &'tmp T;
     type Index = usize;
@@ -23,8 +23,14 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0 .0.index_of(entity_id) {
-            if unsafe { !(*self.0 .0.dense.get_unchecked(index)).is_modified() } {
+        if let Some(index) = (self.0).0.index_of(entity_id) {
+            if unsafe {
+                !track::is_track_within_bounds(
+                    *(self.0).0.modification_data.add(index),
+                    (self.0).0.last_modification,
+                    (self.0).0.current,
+                )
+            } {
                 Some(index)
             } else {
                 None
@@ -53,7 +59,7 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
 }
 
 impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
-    for Not<Modified<&'tmp SparseSet<T, track::All>>>
+    for Not<Modified<FullRawWindow<'tmp, T, track::All>>>
 {
     type Out = &'tmp T;
     type Index = usize;
@@ -68,8 +74,14 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0 .0.index_of(entity_id) {
-            if unsafe { !(*self.0 .0.dense.get_unchecked(index)).is_modified() } {
+        if let Some(index) = (self.0).0.index_of(entity_id) {
+            if unsafe {
+                !track::is_track_within_bounds(
+                    *(self.0).0.modification_data.add(index),
+                    (self.0).0.last_modification,
+                    (self.0).0.current,
+                )
+            } {
                 Some(index)
             } else {
                 None
@@ -113,8 +125,14 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0 .0.index_of(entity_id) {
-            if unsafe { !(*self.0 .0.dense.add(index)).is_modified() } {
+        if let Some(index) = (self.0).0.index_of(entity_id) {
+            if unsafe {
+                !track::is_track_within_bounds(
+                    *(self.0).0.modification_data.add(index),
+                    (self.0).0.last_modification,
+                    (self.0).0.current,
+                )
+            } {
                 Some(index)
             } else {
                 None
@@ -158,8 +176,14 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = self.0 .0.index_of(entity_id) {
-            if unsafe { !(*self.0 .0.dense.add(index)).is_modified() } {
+        if let Some(index) = (self.0).0.index_of(entity_id) {
+            if unsafe {
+                !track::is_track_within_bounds(
+                    *(self.0).0.modification_data.add(index),
+                    (self.0).0.last_modification,
+                    (self.0).0.current,
+                )
+            } {
                 Some(index)
             } else {
                 None

@@ -10,6 +10,7 @@ use alloc::vec::Vec;
 use core::any::type_name;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
+use core::sync::atomic::{AtomicU32, Ordering};
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -153,9 +154,14 @@ macro_rules! impl_system {
                     }
                 }
 
+                let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((&&self)($($type::Borrow::borrow(&world)?),+))) }),
+                    system_fn: Box::new(move |world: &World| {
+                        let current = world.get_current();
+                        let last_run = last_run.swap(current, Ordering::Acquire);
+                        Ok(drop((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+)))
+                    }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                     generator: |constraints| {
@@ -203,9 +209,14 @@ macro_rules! impl_system {
                     }
                 }
 
+                let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((&&self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
+                    system_fn: Box::new(move |world: &World| {
+                        let current = world.get_current();
+                        let last_run = last_run.swap(current, Ordering::Acquire);
+                        Ok(drop((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
+                    }),
                     system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                     generator: |constraints| {
@@ -253,10 +264,14 @@ macro_rules! impl_system {
                     }
                 }
 
+                let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| { Ok(drop((&&self)($($type::Borrow::borrow(&world)?),+).into().map_err(error::Run::from_custom)?)) }),
-                    system_type_id: TypeId::of::<Func>(),
+                    system_fn: Box::new(move |world: &World| {
+                        let current = world.get_current();
+                        let last_run = last_run.swap(current, Ordering::Acquire);
+                        Ok(drop((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
+                    }),                    system_type_id: TypeId::of::<Func>(),
                     system_type_name: type_name::<Func>(),
                     generator: |constraints| {
                         $(

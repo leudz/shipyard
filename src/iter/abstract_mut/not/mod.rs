@@ -6,9 +6,9 @@ use super::AbstractMut;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
-use crate::sparse_set::{FullRawWindowMut, SparseSet};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 
-impl<'w, T: Component> AbstractMut for Not<&'w SparseSet<T, T::Tracking>> {
+impl<'w, T: Component> AbstractMut for Not<FullRawWindow<'w, T, T::Tracking>> {
     type Out = ();
     type Index = usize;
 

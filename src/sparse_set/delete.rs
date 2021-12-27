@@ -3,7 +3,6 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::track;
 
 /// Trait used as bound for [`World::delete_component`] and [`AllStorages::delete_component`].
 pub trait TupleDelete {
@@ -13,7 +12,7 @@ pub trait TupleDelete {
 
 impl<T: Send + Sync + Component> TupleDelete for (T,)
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+    T::Tracking: Send + Sync,
 {
     #[inline]
     fn delete(all_storages: &mut AllStorages, entity: EntityId) -> bool {
@@ -30,7 +29,7 @@ macro_rules! impl_delete_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Send + Sync + Component,)+> TupleDelete for ($($type,)+)
         where
-            $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
+            $($type::Tracking: Send + Sync),+
         {
             fn delete(all_storages: &mut AllStorages, entity: EntityId) -> bool {
                 $(

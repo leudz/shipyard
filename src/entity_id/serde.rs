@@ -20,8 +20,7 @@ impl Serialize for EntityId {
             ser_struct.serialize_field(FIELDS[1], &(self.gen()))?;
             ser_struct.end()
         } else {
-            let mut clone = self.clone();
-            clone.clear_meta();
+            let clone = self.clone();
             ((clone.0).get() - 1).serialize(serializer)
         }
     }
@@ -88,7 +87,7 @@ impl<'de> Deserialize<'de> for EntityId {
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
-                Ok(EntityId::new_from_parts(index, generation, 0))
+                Ok(EntityId::new_from_parts(index, generation))
             }
 
             fn visit_map<V>(self, mut map: V) -> Result<EntityId, V::Error>
@@ -118,7 +117,7 @@ impl<'de> Deserialize<'de> for EntityId {
                 let index = index.ok_or_else(|| de::Error::missing_field("index"))?;
                 let generation = generation.ok_or_else(|| de::Error::missing_field("gen"))?;
 
-                Ok(EntityId::new_from_parts(index, generation, 0))
+                Ok(EntityId::new_from_parts(index, generation))
             }
         }
 
@@ -143,9 +142,9 @@ fn serde_json() {
 
 #[test]
 fn bincode() {
-    let bytes = bincode::serialize(&EntityId::new_from_parts(10, 2, 0)).unwrap();
+    let bytes = bincode::serialize(&EntityId::new_from_parts(10, 2)).unwrap();
     assert_eq!(&[10, 0, 0, 0, 0, 0, 2, 0][..], &bytes);
 
     let entity = bincode::deserialize::<EntityId>(&bytes).unwrap();
-    assert_eq!(entity, EntityId::new_from_parts(10, 2, 0));
+    assert_eq!(entity, EntityId::new_from_parts(10, 2));
 }

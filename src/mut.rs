@@ -1,8 +1,7 @@
-use crate::entity_id::EntityId;
-
 /// Tracks component modification.
 pub struct Mut<'a, T> {
-    pub(crate) flag: Option<&'a mut EntityId>,
+    pub(crate) flag: Option<&'a mut u32>,
+    pub(crate) current: u32,
     pub(crate) data: &'a mut T,
 }
 
@@ -19,7 +18,7 @@ impl<T> core::ops::DerefMut for Mut<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let Some(flag) = &mut self.flag {
-            flag.set_modified();
+            **flag = self.current;
         }
 
         self.data
@@ -37,7 +36,7 @@ impl<T> AsMut<T> for Mut<'_, T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         if let Some(flag) = &mut self.flag {
-            flag.set_modified();
+            **flag = self.current;
         }
 
         self.data

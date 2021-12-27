@@ -19,7 +19,9 @@ use crate::storage::{SBox, Storage, StorageId};
 use crate::unique::Unique;
 use crate::{error, Component};
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use core::any::type_name;
+use core::sync::atomic::AtomicU32;
 use hashbrown::hash_map::{Entry, HashMap};
 
 /// Contains all storages present in the `World`.
@@ -34,6 +36,7 @@ pub struct AllStorages {
     pub(crate) storages: RwLock<HashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
+    counter: Arc<AtomicU32>,
 }
 
 #[cfg(not(feature = "thread_local"))]
@@ -43,7 +46,7 @@ unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     #[cfg(feature = "std")]
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(counter: Arc<AtomicU32>) -> Self {
         let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -52,9 +55,10 @@ impl AllStorages {
             storages: RwLock::new_std(storages),
             #[cfg(feature = "thread_local")]
             thread_id: std::thread::current().id(),
+            counter,
         }
     }
-    pub(crate) fn new_with_lock<L: ShipyardRwLock>() -> Self {
+    pub(crate) fn new_with_lock<L: ShipyardRwLock>(counter: Arc<AtomicU32>) -> Self {
         let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -63,6 +67,7 @@ impl AllStorages {
             storages: RwLock::new_custom::<L>(storages),
             #[cfg(feature = "thread_local")]
             thread_id: std::thread::current().id(),
+            counter,
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -565,7 +570,8 @@ let (entities, mut usizes) = all_storages
     where
         V::Borrow: Borrow<'s, View = V> + AllStoragesBorrow<'s>,
     {
-        V::Borrow::all_borrow(self)
+        let current = self.get_current();
+        V::Borrow::all_borrow(self, None, current)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -891,6 +897,12 @@ let i = all_storages.run(sys1).unwrap();
     /// Displays storages memory information.
     pub fn memory_usage(&self) -> AllStoragesMemoryUsage<'_> {
         AllStoragesMemoryUsage(self)
+    }
+
+    #[inline]
+    pub(crate) fn get_current(&self) -> u32 {
+        self.counter
+            .fetch_add(1, core::sync::atomic::Ordering::Acquire)
     }
 }
 

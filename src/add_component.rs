@@ -41,7 +41,7 @@ impl<T: Component> AddComponent for ViewMut<'_, T> {
 
     #[inline]
     fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component) {
-        self.insert(entity, component);
+        self.sparse_set.insert(entity, component, self.current);
     }
 }
 
@@ -50,7 +50,7 @@ impl<T: Component> AddComponent for &mut ViewMut<'_, T> {
 
     #[inline]
     fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component) {
-        self.insert(entity, component);
+        self.sparse_set.insert(entity, component, self.current);
     }
 }
 

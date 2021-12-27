@@ -15,18 +15,25 @@ use crate::atomic_refcell::{Ref, RefMut};
 use crate::component::Component;
 use crate::error;
 use crate::sparse_set::SparseSet;
-use crate::track;
 use crate::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 
 /// Allows a type to be borrowed by [`AllStorages::borrow`] and [`AllStorages::run`].
 pub trait AllStoragesBorrow<'a>: Borrow<'a> {
     /// This function is where the actual borrowing happens.
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage>;
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage>;
 }
 
 impl<'a> AllStoragesBorrow<'a> for UnitBorrower {
     #[inline]
-    fn all_borrow(_: &'a AllStorages) -> Result<Self::View, error::GetStorage>
+    fn all_borrow(
+        _: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage>
     where
         Self: Sized,
     {
@@ -36,7 +43,11 @@ impl<'a> AllStoragesBorrow<'a> for UnitBorrower {
 
 impl<'a> AllStoragesBorrow<'a> for EntitiesBorrower {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let entities = all_storages.entities()?;
 
         let (entities, borrow) = unsafe { Ref::destructure(entities) };
@@ -51,7 +62,11 @@ impl<'a> AllStoragesBorrow<'a> for EntitiesBorrower {
 
 impl<'a> AllStoragesBorrow<'a> for EntitiesMutBorrower {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let entities = all_storages.entities_mut()?;
 
         let (entities, borrow) = unsafe { RefMut::destructure(entities) };
@@ -66,15 +81,22 @@ impl<'a> AllStoragesBorrow<'a> for EntitiesMutBorrower {
 
 impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for ViewBorrower<T>
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+    T::Tracking: Send + Sync,
 {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
         Ok(View {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
@@ -85,15 +107,22 @@ where
 #[cfg(feature = "thread_local")]
 impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<ViewBorrower<T>>
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Sync,
+    T::Tracking: Sync,
 {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
         Ok(NonSend(View {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
@@ -104,15 +133,22 @@ where
 #[cfg(feature = "thread_local")]
 impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<ViewBorrower<T>>
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send,
+    T::Tracking: Send,
 {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
         Ok(NonSync(View {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
@@ -123,12 +159,19 @@ where
 #[cfg(feature = "thread_local")]
 impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_sync(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
         Ok(NonSendSync(View {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
@@ -138,15 +181,22 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewBorrower<T>> {
 
 impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for ViewMutBorrower<T>
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+    T::Tracking: Send + Sync,
 {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(ViewMut {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
@@ -157,15 +207,22 @@ where
 #[cfg(feature = "thread_local")]
 impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<ViewMutBorrower<T>>
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Sync,
+    T::Tracking: Sync,
 {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(NonSend(ViewMut {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
@@ -176,15 +233,22 @@ where
 #[cfg(feature = "thread_local")]
 impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<ViewMutBorrower<T>>
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send,
+    T::Tracking: Send,
 {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(NonSync(ViewMut {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
@@ -195,12 +259,19 @@ where
 #[cfg(feature = "thread_local")]
 impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewMutBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_sync_mut(SparseSet::new)?;
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(NonSendSync(ViewMut {
+            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            current,
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
@@ -210,7 +281,11 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewMutBorrower<T>>
 
 impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for UniqueViewBorrower<T> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -227,7 +302,11 @@ impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for UniqueViewBorrowe
 #[cfg(feature = "thread_local")]
 impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<UniqueViewBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -244,7 +323,11 @@ impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<UniqueViewBorrow
 #[cfg(feature = "thread_local")]
 impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<UniqueViewBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -261,7 +344,11 @@ impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<UniqueViewBorrow
 #[cfg(feature = "thread_local")]
 impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
         let (unique, borrow) = unsafe { Ref::destructure(view) };
@@ -277,7 +364,11 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<UniqueViewBorrower<
 
 impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for UniqueViewMutBorrower<T> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -294,7 +385,11 @@ impl<'a, T: Send + Sync + Component> AllStoragesBorrow<'a> for UniqueViewMutBorr
 #[cfg(feature = "thread_local")]
 impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -311,7 +406,11 @@ impl<'a, T: Sync + Component> AllStoragesBorrow<'a> for NonSend<UniqueViewMutBor
 #[cfg(feature = "thread_local")]
 impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -328,7 +427,11 @@ impl<'a, T: Send + Component> AllStoragesBorrow<'a> for NonSync<UniqueViewMutBor
 #[cfg(feature = "thread_local")]
 impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        _last_run: Option<u32>,
+        _current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
@@ -344,8 +447,12 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMutBorrow
 
 impl<'a, T: AllStoragesBorrow<'a>> AllStoragesBorrow<'a> for Option<T> {
     #[inline]
-    fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
-        Ok(T::all_borrow(all_storages).ok())
+    fn all_borrow(
+        all_storages: &'a AllStorages,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, error::GetStorage> {
+        Ok(T::all_borrow(all_storages, last_run, current).ok())
     }
 }
 
@@ -353,8 +460,12 @@ macro_rules! impl_all_storages_borrow {
     ($(($type: ident, $index: tt))+) => {
         impl<'a, $($type: AllStoragesBorrow<'a>),+> AllStoragesBorrow<'a> for ($($type,)+) {
             #[inline]
-            fn all_borrow(all_storages: &'a AllStorages) -> Result<Self::View, error::GetStorage> {
-                Ok(($($type::all_borrow(all_storages)?,)+))
+            fn all_borrow(
+                all_storages: &'a AllStorages,
+                last_run: Option<u32>,
+                current: u32
+            ) -> Result<Self::View, error::GetStorage> {
+                Ok(($($type::all_borrow(all_storages, last_run, current)?,)+))
             }
         }
     }

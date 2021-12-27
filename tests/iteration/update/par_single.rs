@@ -20,6 +20,8 @@ fn filter() {
     entities.add_entity(&mut u32s, U32(5));
     u32s.clear_all_inserted();
 
+    let mut u32s = world.borrow::<ViewMut<U32>>().unwrap();
+
     let im_vec;
     let m_vec;
     let mod_vec;

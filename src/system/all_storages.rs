@@ -49,7 +49,8 @@ macro_rules! impl_all_system {
                 _: (),
                 all_storages: &'s AllStorages,
             ) -> Result<Return, error::GetStorage> {
-                    Ok(self($($type::Borrow::all_borrow(all_storages)?,)+))
+                let current = all_storages.get_current();
+                Ok(self($($type::Borrow::all_borrow(all_storages, None, current)?,)+))
             }
         }
 
@@ -66,7 +67,8 @@ macro_rules! impl_all_system {
                 (data,): (Data,),
                 all_storages: &'s AllStorages,
             ) -> Result<Return, error::GetStorage> {
-                    Ok(self(data, $($type::Borrow::all_borrow(all_storages)?,)+))
+                let current = all_storages.get_current();
+                Ok(self(data, $($type::Borrow::all_borrow(all_storages, None, current)?,)+))
             }
         }
     }

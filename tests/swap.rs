@@ -33,12 +33,18 @@ fn update() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world
+    let entity0 = world
         .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
             let entity0 = entities.add_entity(&mut u32s, U32(0));
 
             u32s.clear_all_inserted();
 
+            entity0
+        })
+        .unwrap();
+
+    world
+        .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
             let entity1 = entities.add_entity(&mut u32s, U32(1));
 
             u32s.apply_mut(entity0, entity1, core::mem::swap);
@@ -52,6 +58,7 @@ fn update() {
 
             let mut modified = u32s.modified().iter();
             assert_eq!(modified.next(), Some(&U32(1)));
+            assert_eq!(modified.next(), Some(&U32(0)));
             assert_eq!(modified.next(), None);
         })
         .unwrap();

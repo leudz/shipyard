@@ -3,7 +3,6 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::track;
 
 /// Trait used as bound for [`World::add_entity`], [`World::add_component`], [`AllStorages::add_entity`] and [`AllStorages::add_component`].
 pub trait TupleAddComponent {
@@ -18,16 +17,17 @@ impl TupleAddComponent for () {
 
 impl<T: Send + Sync + Component> TupleAddComponent for (T,)
 where
-    <T::Tracking as track::Tracking<T>>::DeletionData: Send + Sync,
+    T::Tracking: Send + Sync,
 {
     #[inline]
     fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
+        let current = all_storages.get_current();
         all_storages
             .exclusive_storage_or_insert_mut(
                 StorageId::of::<SparseSet<T, T::Tracking>>(),
                 SparseSet::new,
             )
-            .insert(entity, self.0);
+            .insert(entity, self.0, current);
     }
 }
 
@@ -35,13 +35,14 @@ macro_rules! impl_add_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Send + Sync + Component,)+> TupleAddComponent for ($($type,)+)
         where
-            $(<$type::Tracking as track::Tracking<$type>>::DeletionData: Send + Sync),+
+            $($type::Tracking: Send + Sync),+
         {
             fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
+                let current = all_storages.get_current();
                 $(
                     all_storages
                         .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type, $type::Tracking>>(), SparseSet::new)
-                        .insert(entity, self.$index);
+                        .insert(entity, self.$index, current);
                 )+
             }
         }

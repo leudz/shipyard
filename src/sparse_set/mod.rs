@@ -13,7 +13,7 @@ pub use drain::SparseSetDrain;
 pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
 
-pub(crate) use window::FullRawWindowMut;
+pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
 use crate::component::Component;
 use crate::memory_usage::StorageMemoryUsage;
@@ -21,6 +21,7 @@ use crate::storage::Storage;
 use crate::track;
 use crate::{entity_id::EntityId, track::Tracking};
 use alloc::vec::Vec;
+use core::marker::PhantomData;
 use core::{
     cmp::{Ord, Ordering},
     fmt,
@@ -43,8 +44,13 @@ pub struct SparseSet<T: Component, Track: Tracking<T> = <T as Component>::Tracki
     pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
-    pub(crate) deletion_data: Track::DeletionData,
-    pub(crate) removal_data: Track::RemovalData,
+    pub(crate) last_insert: u32,
+    pub(crate) last_modification: u32,
+    pub(crate) insertion_data: Vec<u32>,
+    pub(crate) modification_data: Vec<u32>,
+    pub(crate) deletion_data: Vec<(EntityId, T)>,
+    pub(crate) removal_data: Vec<EntityId>,
+    track: PhantomData<Track>,
 }
 
 impl<T: fmt::Debug + Component> fmt::Debug for SparseSet<T> {
@@ -62,18 +68,19 @@ impl<T: Component> SparseSet<T> {
             sparse: SparseArray::new(),
             dense: Vec::new(),
             data: Vec::new(),
-            deletion_data: <T::Tracking as Tracking<T>>::DeletionData::default(),
-            removal_data: <T::Tracking as Tracking<T>>::RemovalData::default(),
+            last_insert: 0,
+            last_modification: 0,
+            insertion_data: Vec::new(),
+            modification_data: Vec::new(),
+            deletion_data: Vec::new(),
+            removal_data: Vec::new(),
+            track: PhantomData,
         }
     }
     /// Returns a new [`SparseSet`] to be used in custom storage.
     #[inline]
     pub fn new_custom_storage() -> Self {
         SparseSet::new()
-    }
-    #[inline]
-    pub(crate) fn full_raw_window_mut(&mut self) -> FullRawWindowMut<'_, T, T::Tracking> {
-        FullRawWindowMut::new(self)
     }
     /// Returns a slice of all the components in this storage.
     #[inline]
@@ -129,30 +136,10 @@ impl<T: Component> SparseSet<T> {
     pub fn id_at(&self, index: usize) -> Option<EntityId> {
         self.dense.get(index).copied()
     }
-    fn id_of(&self, entity: EntityId) -> Option<EntityId> {
-        self.index_of(entity)
-            .map(|index| unsafe { *self.dense.get_unchecked(index) })
-    }
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
         self.index_of(entity)
             .map(|index| unsafe { self.data.get_unchecked(index) })
-    }
-    #[inline]
-    pub(crate) fn private_get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
-        let index = self.index_of(entity)?;
-
-        if T::Tracking::track_modification() {
-            unsafe {
-                let dense_entity = self.dense.get_unchecked_mut(index);
-
-                if !dense_entity.is_inserted() {
-                    dense_entity.set_modified();
-                }
-            }
-        }
-
-        Some(unsafe { self.data.get_unchecked_mut(index) })
     }
 }
 
@@ -163,7 +150,7 @@ impl<T: Component> SparseSet<T> {
     ///
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
-    pub(crate) fn insert(&mut self, mut entity: EntityId, value: T) -> Option<T> {
+    pub(crate) fn insert(&mut self, entity: EntityId, value: T, current: u32) -> Option<T> {
         self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
@@ -176,9 +163,10 @@ impl<T: Component> SparseSet<T> {
                 EntityId::new_from_index_and_gen(self.dense.len() as u64, entity.gen());
 
             if T::Tracking::track_insertion() {
-                entity.set_inserted();
-            } else {
-                entity.clear_meta();
+                self.insertion_data.push(current);
+            }
+            if T::Tracking::track_modification() {
+                self.modification_data.push(0);
             }
 
             self.dense.push(entity);
@@ -200,8 +188,12 @@ impl<T: Component> SparseSet<T> {
 
             let dense_entity = unsafe { self.dense.get_unchecked_mut(sparse_entity.uindex()) };
 
-            if T::Tracking::track_modification() && !dense_entity.is_inserted() {
-                dense_entity.set_modified();
+            if T::Tracking::track_modification() {
+                unsafe {
+                    *self
+                        .modification_data
+                        .get_unchecked_mut(sparse_entity.uindex()) = current;
+                }
             }
 
             dense_entity.copy_index_gen(entity);
@@ -257,75 +249,16 @@ impl<T: Component> SparseSet<T> {
 }
 
 impl<T: Component<Tracking = track::Insertion>> SparseSet<T, track::Insertion> {
-    /// Removes the *inserted* flag on `entity`'s component.
-    pub fn clear_inserted(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
-
-            if id.is_inserted() {
-                id.clear_meta();
-            }
-        }
-    }
     /// Removes the *inserted* flag on all components of this storage.
-    pub fn clear_all_inserted(&mut self) {
-        for id in &mut *self.dense {
-            if id.is_inserted() {
-                id.clear_meta();
-            }
-        }
-    }
-    /// Removes the *inserted* and *modified* flags on `entity`'s component.
-    #[inline]
-    pub fn clear_inserted_and_modified(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            unsafe {
-                self.dense.get_unchecked_mut(id.uindex()).clear_meta();
-            }
-        }
-    }
-    /// Removes the *inserted* and *modified* flags on all components of this storage.
-    pub fn clear_all_inserted_and_modified(&mut self) {
-        for id in &mut self.dense {
-            id.clear_meta();
-        }
+    pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
+        self.last_insert = current;
     }
 }
 
 impl<T: Component<Tracking = track::Modification>> SparseSet<T, track::Modification> {
-    /// Removes the *modified* flag on `entity`'s component.
-    #[inline]
-    pub fn clear_modified(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
-
-            if id.is_modified() {
-                id.clear_meta();
-            }
-        }
-    }
     /// Removes the *modified* flag on all components of this storage.
-    pub fn clear_all_modified(&mut self) {
-        for id in &mut *self.dense {
-            if id.is_modified() {
-                id.clear_meta();
-            }
-        }
-    }
-    /// Removes the *inserted* and *modified* flags on `entity`'s component.
-    #[inline]
-    pub fn clear_inserted_and_modified(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            unsafe {
-                self.dense.get_unchecked_mut(id.uindex()).clear_meta();
-            }
-        }
-    }
-    /// Removes the *inserted* and *modified* flags on all components of this storage.
-    pub fn clear_all_inserted_and_modified(&mut self) {
-        for id in &mut self.dense {
-            id.clear_meta();
-        }
+    pub fn private_clear_all_modified(&mut self, current: u32) {
+        self.last_modification = current;
     }
 }
 
@@ -398,97 +331,22 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
             self.deletion_data.drain(..).collect(),
         )
     }
-    /// Removes the *inserted* flag on `entity`'s component.
-    pub fn clear_inserted(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
-
-            if id.is_inserted() {
-                id.clear_meta();
-            }
-        }
-    }
     /// Removes the *inserted* flag on all components of this storage.
-    pub fn clear_all_inserted(&mut self) {
-        for id in &mut *self.dense {
-            if id.is_inserted() {
-                id.clear_meta();
-            }
-        }
-    }
-    /// Removes the *modified* flag on `entity`'s component.
-    #[inline]
-    pub fn clear_modified(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            let id = unsafe { self.dense.get_unchecked_mut(id.uindex()) };
-
-            if id.is_modified() {
-                id.clear_meta();
-            }
-        }
+    pub fn private_clear_all_inserted(&mut self, current: u32) {
+        self.last_insert = current;
     }
     /// Removes the *modified* flag on all components of this storage.
-    pub fn clear_all_modified(&mut self) {
-        for id in &mut *self.dense {
-            if id.is_modified() {
-                id.clear_meta();
-            }
-        }
-    }
-    /// Removes the *inserted* and *modified* flags on `entity`'s component.
-    #[inline]
-    pub fn clear_inserted_and_modified(&mut self, entity: EntityId) {
-        if let Some(id) = self.sparse.get(entity) {
-            unsafe {
-                self.dense.get_unchecked_mut(id.uindex()).clear_meta();
-            }
-        }
+    pub fn private_clear_all_modified(&mut self, current: u32) {
+        self.last_modification = current;
     }
     /// Removes the *inserted* and *modified* flags on all components of this storage.
-    pub fn clear_all_inserted_and_modified(&mut self) {
-        for id in &mut self.dense {
-            id.clear_meta();
-        }
+    pub fn private_clear_all_inserted_and_modified(&mut self, current: u32) {
+        self.last_insert = current;
+        self.last_modification = current;
     }
 }
 
 impl<T: Component> SparseSet<T> {
-    /// Returns `true` if `entity`'s component was inserted since the last [`clear_inserted`] or [`clear_all_inserted`] call.  
-    /// Returns `false` if `entity` does not have a component in this storage.
-    ///
-    /// [`clear_inserted`]: Self::clear_inserted
-    /// [`clear_all_inserted`]: Self::clear_all_inserted
-    #[inline]
-    pub fn is_inserted(&self, entity: EntityId) -> bool {
-        if let Some(id) = self.id_of(entity) {
-            id.is_inserted()
-        } else {
-            false
-        }
-    }
-    /// Returns `true` if `entity`'s component was modified since the last [`clear_modified`] or [`clear_all_modified`] call.  
-    /// Returns `false` if `entity` does not have a component in this storage.
-    ///
-    /// [`clear_modified`]: Self::clear_modified
-    /// [`clear_all_modified`]: Self::clear_all_modified
-    #[inline]
-    pub fn is_modified(&self, entity: EntityId) -> bool {
-        if let Some(id) = self.id_of(entity) {
-            id.is_modified()
-        } else {
-            false
-        }
-    }
-    /// Returns `true` if `entity`'s component was inserted or modified since the last clear call.  
-    /// Returns `false` if `entity` does not have a component in this storage.
-    #[inline]
-    pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
-        if let Some(id) = self.id_of(entity) {
-            id.is_inserted() || id.is_modified()
-        } else {
-            false
-        }
-    }
     /// Returns `true` if `entity`'s component was deleted since the last [`take_deleted`] or [`take_removed_and_deleted`] call.
     ///
     /// [`take_deleted`]: Self::take_deleted
@@ -521,6 +379,10 @@ impl<T: Component> SparseSet<T> {
     pub fn is_tracking_modification(&self) -> bool {
         T::Tracking::track_modification()
     }
+    /// Returns `true` if the storage tracks deletion.
+    pub fn is_tracking_deletion(&self) -> bool {
+        T::Tracking::track_deletion()
+    }
     /// Returns `true` if the storage tracks removal.
     pub fn is_tracking_removal(&self) -> bool {
         T::Tracking::track_removal()
@@ -529,6 +391,7 @@ impl<T: Component> SparseSet<T> {
     pub fn is_tracking_any(&self) -> bool {
         self.is_tracking_insertion()
             || self.is_tracking_modification()
+            || self.is_tracking_deletion()
             || self.is_tracking_removal()
     }
 }
@@ -543,35 +406,6 @@ impl<T: Component> SparseSet<T> {
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
         T::Tracking::clear(self);
-    }
-    /// Applies the given function `f` to the entities `a` and `b`.  
-    /// The two entities shouldn't point to the same component.  
-    ///
-    /// ### Panics
-    ///
-    /// - MissingComponent - if one of the entity doesn't have any component in the storage.
-    /// - IdenticalIds - if the two entities point to the same component.
-    #[track_caller]
-    #[inline]
-    pub fn apply<R, F: FnOnce(&mut T, &T) -> R>(&mut self, a: EntityId, b: EntityId, f: F) -> R {
-        T::Tracking::apply(self, a, b, f)
-    }
-    /// Applies the given function `f` to the entities `a` and `b`.  
-    /// The two entities shouldn't point to the same component.  
-    ///
-    /// ### Panics
-    ///
-    /// - MissingComponent - if one of the entity doesn't have any component in the storage.
-    /// - IdenticalIds - if the two entities point to the same component.
-    #[track_caller]
-    #[inline]
-    pub fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
-        &mut self,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> R {
-        T::Tracking::apply_mut(self, a, b, f)
     }
     /// Creates a draining iterator that empties the storage and yields the removed items.
     pub fn drain(&mut self) -> SparseSetDrain<'_, T> {
@@ -615,23 +449,6 @@ impl<T: Ord + Component> SparseSet<T> {
     }
 }
 
-impl<T: Component> core::ops::Index<EntityId> for SparseSet<T> {
-    type Output = T;
-    #[track_caller]
-    #[inline]
-    fn index(&self, entity: EntityId) -> &Self::Output {
-        self.private_get(entity).unwrap()
-    }
-}
-
-impl<T: Component> core::ops::IndexMut<EntityId> for SparseSet<T> {
-    #[track_caller]
-    #[inline]
-    fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
-        self.private_get_mut(entity).unwrap()
-    }
-}
-
 impl<T: 'static + Component> Storage for SparseSet<T> {
     #[inline]
     fn delete(&mut self, entity: EntityId) {
@@ -647,12 +464,18 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
             allocated_memory_bytes: self.sparse.reserved_memory()
                 + (self.dense.capacity() * core::mem::size_of::<EntityId>())
                 + (self.data.capacity() * core::mem::size_of::<T>())
-                + T::Tracking::used_memory(self)
+                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
+                + (self.modification_data.capacity() * core::mem::size_of::<u32>())
+                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
                 + core::mem::size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
                 + (self.dense.len() * core::mem::size_of::<EntityId>())
                 + (self.data.len() * core::mem::size_of::<T>())
-                + T::Tracking::reserved_memory(self)
+                + (self.insertion_data.len() * core::mem::size_of::<u32>())
+                + (self.modification_data.len() * core::mem::size_of::<u32>())
+                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
                 + core::mem::size_of::<Self>(),
             component_count: self.len(),
         })
@@ -689,173 +512,167 @@ mod tests {
         let mut array = SparseSet::new();
 
         assert!(array
-            .insert(EntityId::new_from_parts(0, 0, 0), STR("0"))
+            .insert(EntityId::new_from_parts(0, 0), STR("0"), 0)
             .is_none());
-        assert_eq!(array.dense, &[EntityId::new_from_parts(0, 0, 0)]);
+        assert_eq!(array.dense, &[EntityId::new_from_parts(0, 0)]);
         assert_eq!(array.data, &[STR("0")]);
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(0, 0, 0)),
+            array.private_get(EntityId::new_from_parts(0, 0)),
             Some(&STR("0"))
         );
 
         assert!(array
-            .insert(EntityId::new_from_parts(1, 0, 0), STR("1"))
+            .insert(EntityId::new_from_parts(1, 0), STR("1"), 0)
             .is_none());
         assert_eq!(
             array.dense,
             &[
-                EntityId::new_from_parts(0, 0, 0),
-                EntityId::new_from_parts(1, 0, 0)
+                EntityId::new_from_parts(0, 0),
+                EntityId::new_from_parts(1, 0)
             ]
         );
         assert_eq!(array.data, &[STR("0"), STR("1")]);
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(0, 0, 0)),
+            array.private_get(EntityId::new_from_parts(0, 0)),
             Some(&STR("0"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(1, 0, 0)),
+            array.private_get(EntityId::new_from_parts(1, 0)),
             Some(&STR("1"))
         );
 
         assert!(array
-            .insert(EntityId::new_from_parts(5, 0, 0), STR("5"))
+            .insert(EntityId::new_from_parts(5, 0), STR("5"), 0)
             .is_none());
         assert_eq!(
             array.dense,
             &[
-                EntityId::new_from_parts(0, 0, 0),
-                EntityId::new_from_parts(1, 0, 0),
-                EntityId::new_from_parts(5, 0, 0)
+                EntityId::new_from_parts(0, 0),
+                EntityId::new_from_parts(1, 0),
+                EntityId::new_from_parts(5, 0)
             ]
         );
         assert_eq!(array.data, &[STR("0"), STR("1"), STR("5")]);
         assert_eq!(
-            array.private_get_mut(EntityId::new_from_parts(5, 0, 0)),
-            Some(&mut STR("5"))
+            array.private_get(EntityId::new_from_parts(5, 0)),
+            Some(&STR("5"))
         );
 
-        assert_eq!(array.private_get(EntityId::new_from_parts(4, 0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(4, 0)), None);
     }
 
     #[test]
     fn remove() {
         let mut array = SparseSet::new();
-        array.insert(EntityId::new_from_parts(0, 0, 0), STR("0"));
-        array.insert(EntityId::new_from_parts(5, 0, 0), STR("5"));
-        array.insert(EntityId::new_from_parts(10, 0, 0), STR("10"));
+        array.insert(EntityId::new_from_parts(0, 0), STR("0"), 0);
+        array.insert(EntityId::new_from_parts(5, 0), STR("5"), 0);
+        array.insert(EntityId::new_from_parts(10, 0), STR("10"), 0);
 
-        assert_eq!(
-            array.remove(EntityId::new_from_parts(0, 0, 0)),
-            Some(STR("0"))
-        );
+        assert_eq!(array.remove(EntityId::new_from_parts(0, 0)), Some(STR("0")));
         assert_eq!(
             array.dense,
             &[
-                EntityId::new_from_parts(10, 0, 0),
-                EntityId::new_from_parts(5, 0, 0)
+                EntityId::new_from_parts(10, 0),
+                EntityId::new_from_parts(5, 0)
             ]
         );
         assert_eq!(array.data, &[STR("10"), STR("5")]);
-        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(5, 0, 0)),
+            array.private_get(EntityId::new_from_parts(5, 0)),
             Some(&STR("5"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(10, 0, 0)),
+            array.private_get(EntityId::new_from_parts(10, 0)),
             Some(&STR("10"))
         );
 
-        array.insert(EntityId::new_from_parts(3, 0, 0), STR("3"));
-        array.insert(EntityId::new_from_parts(100, 0, 0), STR("100"));
+        array.insert(EntityId::new_from_parts(3, 0), STR("3"), 0);
+        array.insert(EntityId::new_from_parts(100, 0), STR("100"), 0);
         assert_eq!(
             array.dense,
             &[
-                EntityId::new_from_parts(10, 0, 0),
-                EntityId::new_from_parts(5, 0, 0),
-                EntityId::new_from_parts(3, 0, 0),
-                EntityId::new_from_parts(100, 0, 0)
+                EntityId::new_from_parts(10, 0),
+                EntityId::new_from_parts(5, 0),
+                EntityId::new_from_parts(3, 0),
+                EntityId::new_from_parts(100, 0)
             ]
         );
         assert_eq!(array.data, &[STR("10"), STR("5"), STR("3"), STR("100")]);
-        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(3, 0, 0)),
+            array.private_get(EntityId::new_from_parts(3, 0)),
             Some(&STR("3"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(5, 0, 0)),
+            array.private_get(EntityId::new_from_parts(5, 0)),
             Some(&STR("5"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(10, 0, 0)),
+            array.private_get(EntityId::new_from_parts(10, 0)),
             Some(&STR("10"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(100, 0, 0)),
+            array.private_get(EntityId::new_from_parts(100, 0)),
             Some(&STR("100"))
         );
 
-        assert_eq!(
-            array.remove(EntityId::new_from_parts(3, 0, 0)),
-            Some(STR("3"))
-        );
+        assert_eq!(array.remove(EntityId::new_from_parts(3, 0)), Some(STR("3")));
         assert_eq!(
             array.dense,
             &[
-                EntityId::new_from_parts(10, 0, 0),
-                EntityId::new_from_parts(5, 0, 0),
-                EntityId::new_from_parts(100, 0, 0)
+                EntityId::new_from_parts(10, 0),
+                EntityId::new_from_parts(5, 0),
+                EntityId::new_from_parts(100, 0)
             ]
         );
         assert_eq!(array.data, &[STR("10"), STR("5"), STR("100")]);
-        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
-        assert_eq!(array.private_get(EntityId::new_from_parts(3, 0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(3, 0)), None);
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(5, 0, 0)),
+            array.private_get(EntityId::new_from_parts(5, 0)),
             Some(&STR("5"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(10, 0, 0)),
+            array.private_get(EntityId::new_from_parts(10, 0)),
             Some(&STR("10"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(100, 0, 0)),
+            array.private_get(EntityId::new_from_parts(100, 0)),
             Some(&STR("100"))
         );
 
         assert_eq!(
-            array.remove(EntityId::new_from_parts(100, 0, 0)),
+            array.remove(EntityId::new_from_parts(100, 0)),
             Some(STR("100"))
         );
         assert_eq!(
             array.dense,
             &[
-                EntityId::new_from_parts(10, 0, 0),
-                EntityId::new_from_parts(5, 0, 0)
+                EntityId::new_from_parts(10, 0),
+                EntityId::new_from_parts(5, 0)
             ]
         );
         assert_eq!(array.data, &[STR("10"), STR("5")]);
-        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0, 0)), None);
-        assert_eq!(array.private_get(EntityId::new_from_parts(3, 0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(3, 0)), None);
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(5, 0, 0)),
+            array.private_get(EntityId::new_from_parts(5, 0)),
             Some(&STR("5"))
         );
         assert_eq!(
-            array.private_get(EntityId::new_from_parts(10, 0, 0)),
+            array.private_get(EntityId::new_from_parts(10, 0)),
             Some(&STR("10"))
         );
-        assert_eq!(array.private_get(EntityId::new_from_parts(100, 0, 0)), None);
+        assert_eq!(array.private_get(EntityId::new_from_parts(100, 0)), None);
     }
 
     #[test]
     fn drain() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), I32(0));
-        sparse_set.insert(EntityId::new(1), I32(1));
+        sparse_set.insert(EntityId::new(0), I32(0), 0);
+        sparse_set.insert(EntityId::new(1), I32(1), 0);
 
         let mut drain = sparse_set.drain();
 
@@ -873,8 +690,8 @@ mod tests {
     fn drain_with_id() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), I32(0));
-        sparse_set.insert(EntityId::new(1), I32(1));
+        sparse_set.insert(EntityId::new(0), I32(0), 0);
+        sparse_set.insert(EntityId::new(1), I32(1), 0);
 
         let mut drain = sparse_set.drain().with_id();
 
@@ -905,7 +722,7 @@ mod tests {
         for i in (0..100).rev() {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i);
-            array.insert(entity_id, I32(i as i32));
+            array.insert(entity_id, I32(i as i32), 0);
         }
 
         array.sort_unstable();
@@ -927,12 +744,12 @@ mod tests {
         for i in 0..20 {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(i);
-            assert!(array.insert(entity_id, I32(i as i32)).is_none());
+            assert!(array.insert(entity_id, I32(i as i32), 0).is_none());
         }
         for i in (20..100).rev() {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i + 20);
-            assert!(array.insert(entity_id, I32(i as i32)).is_none());
+            assert!(array.insert(entity_id, I32(i as i32), 0).is_none());
         }
 
         array.sort_unstable();
@@ -956,9 +773,9 @@ mod tests {
     fn debug() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), STR("0"));
-        sparse_set.insert(EntityId::new(5), STR("5"));
-        sparse_set.insert(EntityId::new(10), STR("10"));
+        sparse_set.insert(EntityId::new(0), STR("0"), 0);
+        sparse_set.insert(EntityId::new(5), STR("5"), 0);
+        sparse_set.insert(EntityId::new(10), STR("10"), 0);
 
         println!("{:#?}", sparse_set);
     }
