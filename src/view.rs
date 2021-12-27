@@ -133,6 +133,36 @@ pub struct View<'a, T: Component, Tracking: track::Tracking<T> = <T as Component
     pub(crate) current: u32,
 }
 
+impl<'a, T: Component> View<'a, T> {
+    /// Returns `true` if `entity`'s component was inserted since the last [`clear_all_inserted`] call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    ///
+    /// [`clear_all_inserted`]: Self::clear_all_inserted
+    #[inline]
+    pub fn is_inserted(&self, entity: EntityId) -> bool {
+        T::Tracking::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
+    }
+    /// Returns `true` if `entity`'s component was modified since the last [`clear_all_modified`] call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    ///
+    /// [`clear_all_modified`]: Self::clear_all_modified
+    #[inline]
+    pub fn is_modified(&self, entity: EntityId) -> bool {
+        T::Tracking::is_modified(
+            self.sparse_set,
+            entity,
+            self.last_modification,
+            self.current,
+        )
+    }
+    /// Returns `true` if `entity`'s component was inserted or modified since the last clear call.  
+    /// Returns `false` if `entity` does not have a component in this storage.
+    #[inline]
+    pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
+        self.is_inserted(entity) || self.is_modified(entity)
+    }
+}
+
 impl<'a, T: Component<Tracking = track::Untracked>> View<'a, T, track::Untracked> {
     /// Creates a new [`View`] for custom [`SparseSet`] storage.
     ///
