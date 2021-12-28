@@ -228,8 +228,12 @@ impl<T: Component> SparseSet<T> {
             }
 
             self.dense.swap_remove(sparse_entity.uindex());
-            self.insertion_data.swap_remove(sparse_entity.uindex());
-            self.modification_data.swap_remove(sparse_entity.uindex());
+            if self.is_tracking_insertion() {
+                self.insertion_data.swap_remove(sparse_entity.uindex());
+            }
+            if self.is_tracking_modification() {
+                self.modification_data.swap_remove(sparse_entity.uindex());
+            }
             let component = self.data.swap_remove(sparse_entity.uindex());
 
             unsafe {
