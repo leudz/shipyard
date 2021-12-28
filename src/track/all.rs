@@ -89,6 +89,8 @@ impl<T: Component<Tracking = All>> Tracking<T> for All {
 
         sparse_set.removal_data.append(&mut sparse_set.dense);
         sparse_set.data.clear();
+        sparse_set.insertion_data.clear();
+        sparse_set.modification_data.clear();
     }
 
     #[track_caller]

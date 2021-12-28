@@ -77,3 +77,35 @@ fn update() {
     assert_eq!(usizes.take_removed(), vec![entity1, entity2]);
     assert_eq!(usizes.len(), 0);
 }
+
+#[test]
+fn inserted() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
+
+    fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE>) {
+        usizes.clear();
+
+        for id in u32s.iter().ids() {
+            usizes.add_component_unchecked(id, USIZE(0));
+        }
+
+        assert_eq!(usizes.inserted().iter().count(), 1);
+    }
+
+    let mut world = World::new();
+
+    world.add_entity((U32(0),));
+
+    Workload::builder("")
+        .with_system(system)
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+}

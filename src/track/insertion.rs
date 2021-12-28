@@ -42,6 +42,7 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
 
         sparse_set.dense.clear();
         sparse_set.data.clear();
+        sparse_set.insertion_data.clear();
     }
 
     #[track_caller]
