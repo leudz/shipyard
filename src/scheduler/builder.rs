@@ -62,6 +62,8 @@ impl Workload {
             &self.systems,
             &self.system_names,
             &self.workloads[&self.name],
+            #[cfg(feature = "tracing")]
+            &self.name,
         )
     }
 }

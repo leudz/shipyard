@@ -19,6 +19,7 @@ lock_api = "0.4"
 rayon = { version = "1", optional = true }
 serde = { version = "1", optional = true, default-features = false }
 shipyard_proc = { version = "0.2", path = "./shipyard_proc", optional = true }
+tracing = { version = "0.1", default-features = false, optional = true }
 
 [features]
 default = ["parallel", "proc", "std"]

@@ -675,7 +675,13 @@ let i = world.run(sys1).unwrap();
 
         let batches = scheduler.workload(name.as_ref())?;
 
-        self.run_batches(&scheduler.systems, &scheduler.system_names, batches)
+        self.run_batches(
+            &scheduler.systems,
+            &scheduler.system_names,
+            batches,
+            #[cfg(feature = "tracing")]
+            name.as_ref(),
+        )
     }
     /// Returns `true` if the world contains the `name` workload.
     ///
@@ -707,6 +713,7 @@ let i = world.run(sys1).unwrap();
         systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
         system_names: &[&'static str],
         batches: &Batches,
+        #[cfg(feature = "tracing")] workload_name: &str,
     ) -> Result<(), error::RunWorkload> {
         // Check for empty first to not borrow AllStorages unnecessarily
         if !batches.skip_if.is_empty() {
@@ -719,6 +726,9 @@ let i = world.run(sys1).unwrap();
                 }
             }
         }
+
+        #[cfg(feature = "tracing")]
+        let parent_span = tracing::trace_info!("run_workload", %workload_name);
 
         #[cfg(feature = "parallel")]
         {
@@ -743,18 +753,60 @@ let i = world.run(sys1).unwrap();
                             }
                         });
 
-                        systems[index](self)
-                            .map_err(|err| error::RunWorkload::Run((system_names[index], err)))?;
+                        #[cfg(feature = "tracing")]
+                        {
+                            let system_name = system_names[index];
+
+                            tracing::trace_info!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
+                                systems[index](self).map_err(|err| {
+                                    error::RunWorkload::Run((system_name, err))
+                                })
+                            })?;
+                        }
+
+                        #[cfg(not(feature = "tracing"))]
+                        {
+                            systems[index](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[index], err))
+                            })?;
+                        }
                     } else if batch.1.len() == 1 {
-                        result = systems[batch.1[0]](self).map_err(|err| {
-                            error::RunWorkload::Run((system_names[batch.1[0]], err))
-                        });
+                        #[cfg(feature = "tracing")]
+                        {
+                            let system_name = system_names[batch.1[0]];
+
+                            result = tracing::trace_info!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
+                                systems[batch.1[0]](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[batch.1[0]], err))
+                            })});
+                        }
+
+                        #[cfg(not(feature = "tracing"))]
+                        {
+                            result = systems[batch.1[0]](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[batch.1[0]], err))
+                            });
+                        }
                     } else {
                         use rayon::prelude::*;
 
                         result = batch.1.par_iter().try_for_each(|&index| {
-                            (systems[index])(self)
-                                .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
+                            #[cfg(feature = "tracing")]
+                            {
+                                let system_name = system_names[index];
+
+                                tracing::trace_info!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
+                                    (systems[index])(self)
+                                        .map_err(|err| error::RunWorkload::Run((system_name, err)))
+                                })
+                            }
+
+                            #[cfg(not(feature = "tracing"))]
+                            {
+                                (systems[index])(self).map_err(|err| {
+                                    error::RunWorkload::Run((system_names[index], err))
+                                })
+                            }
                         });
                     }
 
@@ -769,8 +821,22 @@ let i = world.run(sys1).unwrap();
         #[cfg(not(feature = "parallel"))]
         {
             batches.sequential.iter().try_for_each(|&index| {
-                (systems[index])(self)
-                    .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
+                #[cfg(feature = "tracing")]
+                {
+                    let system_name = system_names[index];
+
+                    tracing::trace_info!(parent: parent_span.clone(), "run_system", %system_name)
+                        .in_scope(|| {
+                            (systems[index])(self)
+                                .map_err(|err| error::RunWorkload::Run((system_name, err)))
+                        })
+                }
+
+                #[cfg(not(feature = "tracing"))]
+                {
+                    (systems[index])(self)
+                        .map_err(|err| error::RunWorkload::Run((system_names[index], err)))
+                }
             })
         }
     }
@@ -797,11 +863,13 @@ let i = world.run(sys1).unwrap();
                 &scheduler.systems,
                 &scheduler.system_names,
                 scheduler.default_workload(),
+                #[cfg(feature = "tracing")]
+                &scheduler.default,
             )?
         }
         Ok(())
     }
-    /// Returns a `Ref<&AllStorages>`, used to implement custom storages.   
+    /// Returns a `Ref<&AllStorages>`, used to implement custom storages.  
     /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
     ///
     /// ### Errors
@@ -810,7 +878,7 @@ let i = world.run(sys1).unwrap();
     pub fn all_storages(&self) -> Result<Ref<'_, &'_ AllStorages>, error::Borrow> {
         self.all_storages.borrow()
     }
-    /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.   
+    /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.  
     /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
     ///
     /// ### Errors

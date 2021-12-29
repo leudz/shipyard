@@ -59,7 +59,7 @@ pub(crate) struct Scheduler {
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
     pub(crate) workloads: HashMap<Cow<'static, str>, Batches>,
-    default: Cow<'static, str>,
+    pub(crate) default: Cow<'static, str>,
 }
 
 impl Default for Scheduler {
