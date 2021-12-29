@@ -96,7 +96,7 @@ fn inserted() {
         assert_eq!(usizes.inserted().iter().count(), 1);
     }
 
-    let mut world = World::new();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.add_entity((U32(0),));
 
