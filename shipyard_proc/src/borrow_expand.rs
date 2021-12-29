@@ -19,10 +19,12 @@ pub(crate) fn expand_borrow(
             syn::GenericParam::Lifetime(lifetime) => Some(&lifetime.lifetime),
             syn::GenericParam::Const(_) => None,
         })
-        .ok_or(Error::new(
-            Span::call_site(),
-            "views need a lifetime to borrow from the World",
-        ))?;
+        .ok_or_else(|| {
+            Error::new(
+                Span::call_site(),
+                "views need a lifetime to borrow from the World",
+            )
+        })?;
 
     let borrower_generics = generics
         .params
