@@ -21,7 +21,7 @@ serde = { version = "1", optional = true, default-features = false }
 shipyard_proc = { version = "0.2", path = "./shipyard_proc", optional = true }
 
 [features]
-default = ["parallel", "std"]
+default = ["parallel", "proc", "std"]
 parallel = ["rayon"]
 proc = ["shipyard_proc"]
 serde1 = ["serde"]
