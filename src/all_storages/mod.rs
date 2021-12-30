@@ -333,7 +333,7 @@ impl AllStorages {
         for storage in self.storages.get_mut().values_mut() {
             unsafe { &mut *storage.0 }
                 .get_mut()
-                .clear_all_removed_and_deleted();
+                .clear_all_removed_or_deleted();
         }
     }
     /// Clear all deletion and removal tracking data older than some timestamp.

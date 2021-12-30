@@ -143,7 +143,7 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
         }
     }
 
-    fn clear_all_removed_and_deleted(sparse_set: &mut SparseSet<T, Self>) {
+    fn clear_all_removed_or_deleted(sparse_set: &mut SparseSet<T, Self>) {
         sparse_set.removal_data.clear();
     }
     fn clear_all_removed_or_deleted_older_than_timestamp(

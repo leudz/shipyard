@@ -209,7 +209,7 @@ impl<T: Component<Tracking = All>> Tracking<T> for All {
         }
     }
 
-    fn clear_all_removed_and_deleted(sparse_set: &mut SparseSet<T, Self>) {
+    fn clear_all_removed_or_deleted(sparse_set: &mut SparseSet<T, Self>) {
         sparse_set.deletion_data.clear();
         sparse_set.removal_data.clear();
     }

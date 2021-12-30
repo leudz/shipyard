@@ -280,7 +280,7 @@ impl<T: Component<Tracking = track::Deletion>> SparseSet<T, track::Deletion> {
         });
     }
     /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_and_deleted(&mut self) {
+    pub fn clear_all_removed_or_deleted(&mut self) {
         self.deletion_data.clear();
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
@@ -489,8 +489,8 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
-    fn clear_all_removed_and_deleted(&mut self) {
-        T::Tracking::clear_all_removed_and_deleted(self)
+    fn clear_all_removed_or_deleted(&mut self) {
+        T::Tracking::clear_all_removed_or_deleted(self)
     }
     fn clear_all_removed_or_deleted_older_than_timestamp(
         &mut self,

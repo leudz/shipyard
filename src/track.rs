@@ -118,7 +118,7 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     fn drain(sparse_set: &'_ mut SparseSet<T, Self>, current: u32) -> SparseSetDrain<'_, T>;
 
     #[doc(hidden)]
-    fn clear_all_removed_and_deleted(_sparse_set: &mut SparseSet<T, Self>) {}
+    fn clear_all_removed_or_deleted(_sparse_set: &mut SparseSet<T, Self>) {}
     #[doc(hidden)]
     fn clear_all_removed_or_deleted_older_than_timestamp(
         _sparse_set: &mut SparseSet<T, Self>,
