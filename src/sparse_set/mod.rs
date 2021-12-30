@@ -48,8 +48,8 @@ pub struct SparseSet<T: Component, Track: Tracking<T> = <T as Component>::Tracki
     pub(crate) last_modification: u32,
     pub(crate) insertion_data: Vec<u32>,
     pub(crate) modification_data: Vec<u32>,
-    pub(crate) deletion_data: Vec<(EntityId, T)>,
-    pub(crate) removal_data: Vec<EntityId>,
+    pub(crate) deletion_data: Vec<(EntityId, u32, T)>,
+    pub(crate) removal_data: Vec<(EntityId, u32)>,
     track: PhantomData<Track>,
 }
 
@@ -208,13 +208,13 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
     #[inline]
-    pub fn remove(&mut self, entity: EntityId) -> Option<T> {
-        T::Tracking::remove(self, entity)
+    pub fn remove(&mut self, entity: EntityId, current: u32) -> Option<T> {
+        T::Tracking::remove(self, entity, current)
     }
     /// Deletes `entity`'s component from this storage.
     #[inline]
-    pub fn delete(&mut self, entity: EntityId) -> bool {
-        T::Tracking::delete(self, entity)
+    pub fn delete(&mut self, entity: EntityId, current: u32) -> bool {
+        T::Tracking::delete(self, entity, current)
     }
     #[inline]
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
@@ -269,74 +269,58 @@ impl<T: Component<Tracking = track::Modification>> SparseSet<T, track::Modificat
 }
 
 impl<T: Component<Tracking = track::Deletion>> SparseSet<T, track::Deletion> {
-    /// Returns the *deleted* components of a storage tracking deletion.
-    pub fn deleted(&self) -> &[(EntityId, T)] {
-        &self.deletion_data
+    /// Clear all deletion tracking data.
+    pub fn clear_all_deleted(&mut self) {
+        self.deletion_data.clear();
     }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.deletion_data.iter().map(|(id, _)| *id)
+    /// Clear all deletion tracking data older than some timestamp.
+    pub fn clear_all_deleted_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
+        self.deletion_data.retain(|(_, t, _)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
     }
-    /// Takes ownership of the *deleted* components of a storage tracking deletion.
-    pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
-        self.deletion_data.drain(..).collect()
+    /// Clear all deletion and removal tracking data.
+    pub fn clear_all_removed_and_deleted(&mut self) {
+        self.deletion_data.clear();
     }
-    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
-    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
-        (Vec::new(), self.deletion_data.drain(..).collect())
+    /// Clear all deletion and removal tracking data older than some timestamp.
+    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        self.deletion_data.retain(|(_, t, _)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
     }
 }
 
 impl<T: Component<Tracking = track::Removal>> SparseSet<T, track::Removal> {
-    /// Returns the ids of *removed* components of a storage tracking removal.
-    pub fn removed(&self) -> &[EntityId] {
-        &self.removal_data
+    /// Clear all removal tracking data.
+    pub fn clear_all_removed(&mut self) {
+        self.removal_data.clear();
     }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.removal_data.iter().copied()
+    /// Clear all removal tracking data older than some timestamp.
+    pub fn clear_all_removed_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
+        self.removal_data.retain(|(_, t)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
     }
-    /// Takes ownership of the ids of *removed* components of a storage tracking removal.
-    pub fn take_removed(&mut self) -> Vec<EntityId> {
-        self.removal_data.drain(..).collect()
+    /// Clear all deletion and removal tracking data.
+    pub fn clear_all_removed_and_deleted(&mut self) {
+        self.removal_data.clear();
     }
-    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
-    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
-        (self.removal_data.drain(..).collect(), Vec::new())
+    /// Clear all deletion and removal tracking data older than some timestamp.
+    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        self.removal_data.retain(|(_, t)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
     }
 }
 
 impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
-    /// Returns the *deleted* components of a storage tracking deletion.
-    pub fn deleted(&self) -> &[(EntityId, T)] {
-        &self.deletion_data
-    }
-    /// Returns the ids of *removed* components of a storage tracking removal.
-    pub fn removed(&self) -> &[EntityId] {
-        &self.removal_data
-    }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.deletion_data
-            .iter()
-            .map(|(id, _)| *id)
-            .chain(self.removal_data.iter().copied())
-    }
-    /// Takes ownership of the *deleted* components of a storage tracking deletion.
-    pub fn take_deleted(&mut self) -> Vec<(EntityId, T)> {
-        self.deletion_data.drain(..).collect()
-    }
-    /// Takes ownership of the ids of *removed* components of a storage tracking removal.
-    pub fn take_removed(&mut self) -> Vec<EntityId> {
-        self.removal_data.drain(..).collect()
-    }
-    /// Takes ownership of the *removed* and *deleted* components of a storage tracking removal and/or deletion.
-    pub fn take_removed_and_deleted(&mut self) -> (Vec<EntityId>, Vec<(EntityId, T)>) {
-        (
-            self.removal_data.drain(..).collect(),
-            self.deletion_data.drain(..).collect(),
-        )
-    }
     /// Removes the *inserted* flag on all components of this storage.
     pub fn private_clear_all_inserted(&mut self, current: u32) {
         self.last_insert = current;
@@ -350,33 +334,46 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
         self.last_insert = current;
         self.last_modification = current;
     }
+    /// Clear all deletion tracking data.
+    pub fn clear_all_deleted(&mut self) {
+        self.deletion_data.clear();
+    }
+    /// Clear all deletion tracking data older than some timestamp.
+    pub fn clear_all_deleted_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
+        self.deletion_data.retain(|(_, t, _)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+    }
+    /// Clear all removal tracking data.
+    pub fn clear_all_removed(&mut self) {
+        self.removal_data.clear();
+    }
+    /// Clear all removal tracking data older than some timestamp.
+    pub fn clear_all_removed_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
+        self.removal_data.retain(|(_, t)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+    }
+    /// Clear all deletion and removal tracking data.
+    pub fn clear_all_removed_and_deleted(&mut self) {
+        self.deletion_data.clear();
+        self.removal_data.clear();
+    }
+    /// Clear all deletion and removal tracking data older than some timestamp.
+    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        self.deletion_data.retain(|(_, t, _)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+        self.removal_data.retain(|(_, t)| {
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+    }
 }
 
 impl<T: Component> SparseSet<T> {
-    /// Returns `true` if `entity`'s component was deleted since the last [`take_deleted`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_deleted`]: Self::take_deleted
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
-    #[inline]
-    pub fn is_deleted(&self, entity: EntityId) -> bool {
-        T::Tracking::is_deleted(self, entity)
-    }
-    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_removed`]: Self::take_removed
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
-    #[inline]
-    pub fn is_removed(&self, entity: EntityId) -> bool {
-        T::Tracking::is_removed(self, entity)
-    }
-    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_removed`]: Self::take_removed
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
-    #[inline]
-    pub fn is_removed_or_deleted(&self, entity: EntityId) -> bool {
-        self.is_removed(entity) || self.is_deleted(entity)
-    }
     /// Returns `true` if the storage tracks insertion.
     pub fn is_tracking_insertion(&self) -> bool {
         T::Tracking::track_insertion()
@@ -410,12 +407,12 @@ impl<T: Component> SparseSet<T> {
         self.data.reserve(additional);
     }
     /// Deletes all components in this storage.
-    pub fn clear(&mut self) {
-        T::Tracking::clear(self);
+    pub(crate) fn private_clear(&mut self, current: u32) {
+        T::Tracking::clear(self, current);
     }
     /// Creates a draining iterator that empties the storage and yields the removed items.
-    pub fn drain(&mut self) -> SparseSetDrain<'_, T> {
-        T::Tracking::drain(self)
+    pub fn drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
+        T::Tracking::drain(self, current)
     }
     /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
     pub fn sort_unstable_by<F: FnMut(&T, &T) -> Ordering>(&mut self, mut compare: F) {
@@ -457,12 +454,12 @@ impl<T: Ord + Component> SparseSet<T> {
 
 impl<T: 'static + Component> Storage for SparseSet<T> {
     #[inline]
-    fn delete(&mut self, entity: EntityId) {
-        SparseSet::delete(self, entity);
+    fn delete(&mut self, entity: EntityId, current: u32) {
+        SparseSet::delete(self, entity, current);
     }
     #[inline]
-    fn clear(&mut self) {
-        <Self>::clear(self);
+    fn clear(&mut self, current: u32) {
+        <Self>::private_clear(self, current);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
@@ -491,6 +488,15 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
     }
     fn is_empty(&self) -> bool {
         self.is_empty()
+    }
+    fn clear_all_removed_and_deleted(&mut self) {
+        T::Tracking::clear_all_removed_and_deleted(self)
+    }
+    fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        T::Tracking::clear_all_removed_or_deleted_older_than_timestamp(self, timestamp)
     }
 }
 
@@ -574,7 +580,10 @@ mod tests {
         array.insert(EntityId::new_from_parts(5, 0), STR("5"), 0);
         array.insert(EntityId::new_from_parts(10, 0), STR("10"), 0);
 
-        assert_eq!(array.remove(EntityId::new_from_parts(0, 0)), Some(STR("0")));
+        assert_eq!(
+            array.remove(EntityId::new_from_parts(0, 0), 0),
+            Some(STR("0")),
+        );
         assert_eq!(
             array.dense,
             &[
@@ -623,7 +632,10 @@ mod tests {
             Some(&STR("100"))
         );
 
-        assert_eq!(array.remove(EntityId::new_from_parts(3, 0)), Some(STR("3")));
+        assert_eq!(
+            array.remove(EntityId::new_from_parts(3, 0), 0),
+            Some(STR("3")),
+        );
         assert_eq!(
             array.dense,
             &[
@@ -649,7 +661,7 @@ mod tests {
         );
 
         assert_eq!(
-            array.remove(EntityId::new_from_parts(100, 0)),
+            array.remove(EntityId::new_from_parts(100, 0), 0),
             Some(STR("100"))
         );
         assert_eq!(
@@ -680,7 +692,7 @@ mod tests {
         sparse_set.insert(EntityId::new(0), I32(0), 0);
         sparse_set.insert(EntityId::new(1), I32(1), 0);
 
-        let mut drain = sparse_set.drain();
+        let mut drain = sparse_set.drain(0);
 
         assert_eq!(drain.next(), Some(I32(0)));
         assert_eq!(drain.next(), Some(I32(1)));
@@ -699,7 +711,7 @@ mod tests {
         sparse_set.insert(EntityId::new(0), I32(0), 0);
         sparse_set.insert(EntityId::new(1), I32(1), 0);
 
-        let mut drain = sparse_set.drain().with_id();
+        let mut drain = sparse_set.drain(0).with_id();
 
         assert_eq!(drain.next(), Some((EntityId::new(0), I32(0))));
         assert_eq!(drain.next(), Some((EntityId::new(1), I32(1))));
@@ -715,8 +727,8 @@ mod tests {
     fn drain_empty() {
         let mut sparse_set = SparseSet::<I32>::new();
 
-        assert_eq!(sparse_set.drain().next(), None);
-        assert_eq!(sparse_set.drain().with_id().next(), None);
+        assert_eq!(sparse_set.drain(0).next(), None);
+        assert_eq!(sparse_set.drain(0).with_id().next(), None);
 
         assert_eq!(sparse_set.len(), 0);
     }

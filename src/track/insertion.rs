@@ -24,16 +24,16 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
     }
 
     #[inline]
-    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> Option<T> {
+    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, _current: u32) -> Option<T> {
         sparse_set.actual_remove(entity)
     }
 
     #[inline]
-    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> bool {
+    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, _current: u32) -> bool {
         sparse_set.actual_remove(entity).is_some()
     }
 
-    fn clear(sparse_set: &mut SparseSet<T, Self>) {
+    fn clear(sparse_set: &mut SparseSet<T, Self>, _current: u32) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -107,7 +107,7 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
         }
     }
 
-    fn drain(sparse_set: &mut SparseSet<T, Self>) -> SparseSetDrain<'_, T> {
+    fn drain(sparse_set: &mut SparseSet<T, Self>, _current: u32) -> SparseSetDrain<'_, T> {
         for id in &sparse_set.dense {
             // SAFE ids from sparse_set.dense are always valid
             unsafe {

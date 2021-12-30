@@ -63,13 +63,13 @@ fn update() {
     assert_eq!(usizes.len(), 1);
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes.modified().iter().count(), 0);
-    assert_eq!(usizes.removed(), &[entity1]);
+    assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1]);
 
     usizes.remove(entity2);
 
-    let mut iter = usizes.removed().iter();
-    assert_eq!(iter.next(), Some(&entity1));
-    assert_eq!(iter.next(), Some(&entity2));
+    let mut iter = usizes.removed();
+    assert_eq!(iter.next(), Some(entity1));
+    assert_eq!(iter.next(), Some(entity2));
     assert_eq!(iter.next(), None);
 }
 
@@ -146,4 +146,38 @@ fn newer_key() {
             },
         )
         .unwrap();
+}
+
+#[test]
+fn track_reset_with_timestamp() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
+
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let entity1 = world.add_entity((USIZE(0),));
+    world.remove::<(USIZE,)>(entity1);
+
+    let time = world.get_tracking_timestamp();
+
+    let entity2 = world.add_entity((USIZE(1),));
+    world.remove::<(USIZE,)>(entity2);
+
+    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
+    drop(usizes);
+
+    world.clear_all_removed_or_deleted_older_than_timestamp(time);
+
+    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity2]);
+    drop(usizes);
+
+    world.clear_all_removed_or_deleted();
+
+    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![]);
 }

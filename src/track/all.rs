@@ -51,28 +51,42 @@ impl<T: Component<Tracking = All>> Tracking<T> for All {
             false
         }
     }
-    fn is_deleted(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool {
-        sparse_set.deletion_data.iter().any(|(id, _)| *id == entity)
+    fn is_deleted(
+        sparse_set: &SparseSet<T, Self>,
+        entity: EntityId,
+        last: u32,
+        current: u32,
+    ) -> bool {
+        sparse_set.deletion_data.iter().any(|(id, timestamp, _)| {
+            *id == entity && super::is_track_within_bounds(*timestamp, last, current)
+        })
     }
-    fn is_removed(sparse_set: &SparseSet<T, Self>, entity: EntityId) -> bool {
-        sparse_set.removal_data.iter().any(|id| *id == entity)
+    fn is_removed(
+        sparse_set: &SparseSet<T, Self>,
+        entity: EntityId,
+        last: u32,
+        current: u32,
+    ) -> bool {
+        sparse_set.removal_data.iter().any(|(id, timestamp)| {
+            *id == entity && super::is_track_within_bounds(*timestamp, last, current)
+        })
     }
 
     #[inline]
-    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> Option<T> {
+    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> Option<T> {
         let component = sparse_set.actual_remove(entity);
 
         if component.is_some() {
-            sparse_set.removal_data.push(entity);
+            sparse_set.removal_data.push((entity, current));
         }
 
         component
     }
 
     #[inline]
-    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> bool {
+    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> bool {
         if let Some(component) = sparse_set.actual_remove(entity) {
-            sparse_set.deletion_data.push((entity, component));
+            sparse_set.deletion_data.push((entity, current, component));
 
             true
         } else {
@@ -80,15 +94,20 @@ impl<T: Component<Tracking = All>> Tracking<T> for All {
         }
     }
 
-    fn clear(sparse_set: &mut SparseSet<T, Self>) {
+    fn clear(sparse_set: &mut SparseSet<T, Self>, current: u32) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
             }
         }
 
-        sparse_set.removal_data.append(&mut sparse_set.dense);
-        sparse_set.data.clear();
+        sparse_set.deletion_data.extend(
+            sparse_set
+                .dense
+                .drain(..)
+                .zip(sparse_set.data.drain(..))
+                .map(|(entity, component)| (entity, current, component)),
+        );
         sparse_set.insertion_data.clear();
         sparse_set.modification_data.clear();
     }
@@ -164,8 +183,10 @@ impl<T: Component<Tracking = All>> Tracking<T> for All {
         }
     }
 
-    fn drain(sparse_set: &mut SparseSet<T, Self>) -> SparseSetDrain<'_, T> {
-        sparse_set.removal_data.extend_from_slice(&sparse_set.dense);
+    fn drain(sparse_set: &mut SparseSet<T, Self>, current: u32) -> SparseSetDrain<'_, T> {
+        sparse_set
+            .removal_data
+            .extend(sparse_set.dense.drain(..).map(|entity| (entity, current)));
 
         for id in &sparse_set.dense {
             // SAFE ids from sparse_set.dense are always valid
@@ -186,5 +207,21 @@ impl<T: Component<Tracking = All>> Tracking<T> for All {
             dense_len,
             data: sparse_set.data.drain(..),
         }
+    }
+
+    fn clear_all_removed_and_deleted(sparse_set: &mut SparseSet<T, Self>) {
+        sparse_set.deletion_data.clear();
+        sparse_set.removal_data.clear();
+    }
+    fn clear_all_removed_or_deleted_older_than_timestamp(
+        sparse_set: &mut SparseSet<T, Self>,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        sparse_set.deletion_data.retain(|(_, t, _)| {
+            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+        sparse_set.removal_data.retain(|(_, t)| {
+            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
     }
 }

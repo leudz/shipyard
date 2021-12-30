@@ -44,7 +44,8 @@ impl<T: Component> Remove for ViewMut<'_, T> {
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
-        SparseSet::remove(&mut *self, entity)
+        let current = self.current;
+        SparseSet::remove(&mut *self, entity, current)
     }
 }
 
@@ -53,7 +54,8 @@ impl<T: Component> Remove for &mut ViewMut<'_, T> {
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
-        SparseSet::remove(*self, entity)
+        let current = self.current;
+        SparseSet::remove(*self, entity, current)
     }
 }
 

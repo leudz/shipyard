@@ -328,7 +328,7 @@ impl Entities {
 }
 
 impl Storage for Entities {
-    fn clear(&mut self) {
+    fn clear(&mut self, _current: u32) {
         if self.data.is_empty() {
             return;
         }

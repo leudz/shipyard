@@ -16,12 +16,14 @@ where
 {
     #[inline]
     fn delete(all_storages: &mut AllStorages, entity: EntityId) -> bool {
+        let current = all_storages.get_current();
+
         all_storages
             .exclusive_storage_or_insert_mut(
                 StorageId::of::<SparseSet<T, T::Tracking>>(),
                 SparseSet::<T>::new,
             )
-            .delete(entity)
+            .delete(entity, current)
     }
 }
 
@@ -32,10 +34,12 @@ macro_rules! impl_delete_component {
             $($type::Tracking: Send + Sync),+
         {
             fn delete(all_storages: &mut AllStorages, entity: EntityId) -> bool {
+                let current = all_storages.get_current();
+
                 $(
                     all_storages
                         .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type, $type::Tracking>>(), SparseSet::<$type>::new)
-                        .delete(entity)
+                        .delete(entity, current)
                 )||+
             }
         }

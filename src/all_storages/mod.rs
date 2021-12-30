@@ -266,8 +266,10 @@ impl AllStorages {
     /// all_storages.strip(entity);
     /// ```
     pub fn strip(&mut self, entity: EntityId) {
+        let current = self.get_current();
+
         for storage in self.storages.get_mut().values_mut() {
-            unsafe { &mut *storage.0 }.get_mut().delete(entity);
+            unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
         }
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
@@ -299,9 +301,11 @@ impl AllStorages {
     /// This is identical to `retain` but uses `StorageId` and not generics.  
     /// You should only use this method if you use a custom storage with a runtime id.
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+        let current = self.get_current();
+
         for (storage_id, storage) in self.storages.get_mut().iter_mut() {
             if !excluded_storage.contains(&*storage_id) {
-                unsafe { &mut *storage.0 }.get_mut().delete(entity);
+                unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
             }
         }
     }
@@ -318,8 +322,29 @@ impl AllStorages {
     /// all_storages.clear();
     /// ```
     pub fn clear(&mut self) {
+        let current = self.get_current();
+
         for storage in self.storages.get_mut().values_mut() {
-            unsafe { &mut *storage.0 }.get_mut().clear();
+            unsafe { &mut *storage.0 }.get_mut().clear(current);
+        }
+    }
+    /// Clear all deletion and removal tracking data.
+    pub fn clear_all_removed_or_deleted(&mut self) {
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }
+                .get_mut()
+                .clear_all_removed_and_deleted();
+        }
+    }
+    /// Clear all deletion and removal tracking data older than some timestamp.
+    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }
+                .get_mut()
+                .clear_all_removed_or_deleted_older_than_timestamp(timestamp);
         }
     }
     /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
@@ -903,6 +928,11 @@ let i = all_storages.run(sys1).unwrap();
     pub(crate) fn get_current(&self) -> u32 {
         self.counter
             .fetch_add(1, core::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Returns a timestamp used to clear tracking information.
+    pub fn get_tracking_timestamp(&self) -> crate::TrackingTimestamp {
+        crate::TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
     }
 }
 

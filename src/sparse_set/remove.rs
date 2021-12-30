@@ -20,12 +20,14 @@ where
 
     #[inline]
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {
+        let current = all_storages.get_current();
+
         (all_storages
             .exclusive_storage_or_insert_mut(
                 StorageId::of::<SparseSet<T, T::Tracking>>(),
                 SparseSet::new,
             )
-            .remove(entity),)
+            .remove(entity, current),)
     }
 }
 
@@ -38,10 +40,12 @@ macro_rules! impl_remove_component {
             type Out = ($(Option<$type>,)+);
 
             fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out {
+                let current = all_storages.get_current();
+
                 ($(
                     all_storages
                         .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type, $type::Tracking>>(), SparseSet::new)
-                        .remove(entity),
+                        .remove(entity, current),
                 )+)
             }
         }

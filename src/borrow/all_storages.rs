@@ -96,6 +96,8 @@ where
         Ok(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run
+                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -122,6 +124,7 @@ where
         Ok(NonSend(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -148,6 +151,7 @@ where
         Ok(NonSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -171,6 +175,7 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewBorrower<T>> {
         Ok(NonSendSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -196,6 +201,8 @@ where
         Ok(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run
+                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -222,6 +229,7 @@ where
         Ok(NonSend(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -248,6 +256,7 @@ where
         Ok(NonSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -271,6 +280,7 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewMutBorrower<T>>
         Ok(NonSendSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),

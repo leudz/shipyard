@@ -55,6 +55,7 @@ mod seal;
 mod sparse_set;
 mod storage;
 mod system;
+mod timestamp;
 /// module related to storage tracking, like insertion or modification.
 pub mod track;
 mod tracking;
@@ -103,6 +104,7 @@ pub use sparse_set::{
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
+pub use timestamp::TrackingTimestamp;
 pub use tracking::{Inserted, InsertedOrModified, Modified};
 pub use unique::Unique;
 pub use view::{

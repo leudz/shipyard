@@ -39,10 +39,10 @@ pub trait Storage: SizedAny {
     }
     /// Deletes an entity from this storage.
     #[inline]
-    fn delete(&mut self, _entity: EntityId) {}
+    fn delete(&mut self, _entity: EntityId, _current: u32) {}
     /// Deletes all components of this storage.
     #[inline]
-    fn clear(&mut self) {}
+    fn clear(&mut self, _current: u32) {}
     /// Returns how much memory this storage uses.
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         None
@@ -61,5 +61,13 @@ pub trait Storage: SizedAny {
     /// Returns `true` if the storage is empty.
     fn is_empty(&self) -> bool {
         false
+    }
+    /// Clear all deletion and removal tracking data.
+    fn clear_all_removed_and_deleted(&mut self) {}
+    /// Clear all deletion and removal tracking data older than some timestamp.
+    fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        _timestamp: crate::TrackingTimestamp,
+    ) {
     }
 }

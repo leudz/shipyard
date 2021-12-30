@@ -61,13 +61,13 @@ fn update() {
     assert_eq!(usizes.len(), 1);
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes.modified().iter().count(), 0);
-    assert_eq!(usizes.removed(), &[]);
+    assert_eq!(usizes.removed().count(), 0);
 
     usizes.delete(entity2);
 
-    let mut iter = usizes.deleted().iter();
-    assert_eq!(iter.next(), Some(&(entity1, USIZE(0))));
-    assert_eq!(iter.next(), Some(&(entity2, USIZE(2))));
+    let mut iter = usizes.deleted();
+    assert_eq!(iter.next(), Some((entity1, &USIZE(0))));
+    assert_eq!(iter.next(), Some((entity2, &USIZE(2))));
     assert_eq!(iter.next(), None);
 }
 
@@ -141,4 +141,74 @@ fn newer_key() {
             },
         )
         .unwrap();
+}
+
+#[test]
+fn track_reset_with_timestamp() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
+
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let entity1 = world.add_entity((USIZE(0),));
+    world.delete_entity(entity1);
+
+    let time = world.get_tracking_timestamp();
+
+    let entity2 = world.add_entity((USIZE(1),));
+    world.delete_entity(entity2);
+
+    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    assert_eq!(
+        usizes.deleted().collect::<Vec<_>>(),
+        vec![(entity1, &USIZE(0)), (entity2, &USIZE(1))]
+    );
+    drop(usizes);
+
+    world.clear_all_removed_or_deleted_older_than_timestamp(time);
+
+    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    assert_eq!(
+        usizes.deleted().collect::<Vec<_>>(),
+        vec![(entity2, &USIZE(1))]
+    );
+    drop(usizes);
+
+    world.clear_all_removed_or_deleted();
+
+    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    assert_eq!(usizes.deleted().collect::<Vec<_>>(), vec![]);
+}
+
+#[test]
+fn track() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::All;
+    }
+
+    fn system(mut entities: EntitiesViewMut, mut usizes: ViewMut<USIZE>) {
+        usizes.clear();
+
+        entities.add_entity(&mut usizes, USIZE(1));
+
+        assert_eq!(usizes.deleted().count(), 1);
+    }
+
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_entity((USIZE(0),));
+
+    Workload::builder("")
+        .with_system(system)
+        .add_to_world(&world)
+        .unwrap();
+
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+    world.run_default().unwrap();
 }

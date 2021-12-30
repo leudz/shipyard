@@ -70,23 +70,33 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     }
     #[doc(hidden)]
     #[inline]
-    fn is_deleted(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+    fn is_deleted(
+        _sparse_set: &SparseSet<T, Self>,
+        _entity: EntityId,
+        _last: u32,
+        _current: u32,
+    ) -> bool {
         false
     }
     #[doc(hidden)]
     #[inline]
-    fn is_removed(_sparse_set: &SparseSet<T, Self>, _entity: EntityId) -> bool {
+    fn is_removed(
+        _sparse_set: &SparseSet<T, Self>,
+        _entity: EntityId,
+        _last: u32,
+        _current: u32,
+    ) -> bool {
         false
     }
 
     #[doc(hidden)]
-    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> Option<T>;
+    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> Option<T>;
 
     #[doc(hidden)]
-    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId) -> bool;
+    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> bool;
 
     #[doc(hidden)]
-    fn clear(sparse_set: &mut SparseSet<T, Self>);
+    fn clear(sparse_set: &mut SparseSet<T, Self>, current: u32);
 
     #[doc(hidden)]
     fn apply<R, F: FnOnce(&mut T, &T) -> R>(
@@ -105,14 +115,20 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     ) -> R;
 
     #[doc(hidden)]
-    fn drain(sparse_set: &mut SparseSet<T, Self>) -> SparseSetDrain<'_, T>;
+    fn drain(sparse_set: &'_ mut SparseSet<T, Self>, current: u32) -> SparseSetDrain<'_, T>;
+
+    #[doc(hidden)]
+    fn clear_all_removed_and_deleted(_sparse_set: &mut SparseSet<T, Self>) {}
+    #[doc(hidden)]
+    fn clear_all_removed_or_deleted_older_than_timestamp(
+        _sparse_set: &mut SparseSet<T, Self>,
+        _timestamp: crate::TrackingTimestamp,
+    ) {
+    }
 }
 
 #[inline]
 pub(crate) fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
-    // dbg!(last);
-    // dbg!(current);
-    // dbg!(timestamp);
     let more_than_last = if timestamp < last {
         u32::MAX - last + timestamp
     } else {

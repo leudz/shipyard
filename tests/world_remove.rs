@@ -66,7 +66,7 @@ fn update() {
             assert_eq!(usizes.len(), 1);
             assert_eq!(usizes.inserted().iter().count(), 1);
             assert_eq!(usizes.modified().iter().count(), 0);
-            assert_eq!(usizes.removed(), &[entity1]);
+            assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1]);
         })
         .unwrap();
 
@@ -74,7 +74,7 @@ fn update() {
 
     world
         .run(|usizes: View<USIZE>| {
-            assert_eq!(usizes.removed(), &[entity1, entity2]);
+            assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
         })
         .unwrap();
 }

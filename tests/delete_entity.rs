@@ -69,7 +69,7 @@ fn update() {
     assert!(!all_storages.delete_entity(entity1));
     drop(all_storages);
 
-    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
     assert_eq!(
         (&usizes).get(entity1),
         Err(error::MissingComponent {
@@ -78,8 +78,9 @@ fn update() {
         })
     );
     assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
-    assert_eq!(usizes.removed().len(), 0);
-    assert_eq!(usizes.take_removed(), vec![]);
-    assert_eq!(usizes.deleted().len(), 1);
-    assert_eq!(usizes.take_deleted(), vec![(entity1, USIZE(0))]);
+    assert_eq!(usizes.removed().count(), 0);
+    assert_eq!(
+        usizes.deleted().collect::<Vec<_>>(),
+        vec![(entity1, &USIZE(0))]
+    );
 }

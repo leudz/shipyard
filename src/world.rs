@@ -910,6 +910,11 @@ let i = world.run(sys1).unwrap();
         self.counter
             .fetch_add(1, core::sync::atomic::Ordering::Acquire)
     }
+
+    /// Returns a timestamp used to clear tracking information.
+    pub fn get_tracking_timestamp(&self) -> crate::TrackingTimestamp {
+        crate::TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
+    }
 }
 
 impl World {
@@ -1166,6 +1171,19 @@ impl World {
     #[inline]
     pub fn clear(&mut self) {
         self.all_storages.get_mut().clear();
+    }
+    /// Clear all deletion and removal tracking data.
+    pub fn clear_all_removed_or_deleted(&mut self) {
+        self.all_storages.get_mut().clear_all_removed_or_deleted()
+    }
+    /// Clear all deletion and removal tracking data older than some timestamp.
+    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+        &mut self,
+        timestamp: crate::TrackingTimestamp,
+    ) {
+        self.all_storages
+            .get_mut()
+            .clear_all_removed_or_deleted_older_than_timestamp(timestamp)
     }
     /// Make the given entity alive.  
     /// Does nothing if an entity with a greater generation is already at this index.  
