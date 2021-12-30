@@ -263,7 +263,7 @@ impl<T: Component<Tracking = track::Insertion>> SparseSet<T, track::Insertion> {
 
 impl<T: Component<Tracking = track::Modification>> SparseSet<T, track::Modification> {
     /// Removes the *modified* flag on all components of this storage.
-    pub fn private_clear_all_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
         self.last_modification = current;
     }
 }
@@ -322,15 +322,15 @@ impl<T: Component<Tracking = track::Removal>> SparseSet<T, track::Removal> {
 
 impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
     /// Removes the *inserted* flag on all components of this storage.
-    pub fn private_clear_all_inserted(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
         self.last_insert = current;
     }
     /// Removes the *modified* flag on all components of this storage.
-    pub fn private_clear_all_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
         self.last_modification = current;
     }
     /// Removes the *inserted* and *modified* flags on all components of this storage.
-    pub fn private_clear_all_inserted_and_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted_and_modified(&mut self, current: u32) {
         self.last_insert = current;
         self.last_modification = current;
     }
