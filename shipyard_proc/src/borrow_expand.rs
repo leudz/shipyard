@@ -68,6 +68,44 @@ pub(crate) fn expand_borrow(
             let field_name = fields.named.iter().map(|field| &field.ident);
             let field_type = fields.named.iter().map(|field| &field.ty);
 
+            let field_is_default = fields.named.iter().map(|field| {
+                field.attrs.iter().any(|attr| {
+                    if attr.path.is_ident("shipyard") {
+                        match attr.parse_meta() {
+                            Ok(syn::Meta::List(list)) => {
+                                list.nested.into_iter().any(|meta| match meta {
+                                    syn::NestedMeta::Meta(syn::Meta::Path(path))
+                                        if path.is_ident("default") =>
+                                    {
+                                        true
+                                    }
+                                    _ => false,
+                                })
+                            }
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    }
+                })
+            });
+
+            let field = field_name
+                .into_iter()
+                .zip(field_type)
+                .zip(field_is_default)
+                .map(|((field_name, field_type), field_is_default)| {
+                    if field_is_default {
+                        quote!(
+                            #field_name: core::default::Default::default(),
+                        )
+                    } else {
+                        quote!(
+                            #field_name: <#field_type as ::#shipyard_name::IntoBorrow>::Borrow::borrow(world, last_run, current)?
+                        )
+                    }
+                });
+
             Ok(quote!(
                 #vis struct #borrower < #(#borrower_generics)* >(::core::marker::PhantomData<(#(#borrower_generics_idents)*)>) #where_clause;
 
@@ -80,7 +118,7 @@ pub(crate) fn expand_borrow(
 
                     fn borrow(world: & #view_lifetime ::#shipyard_name::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
                         Ok(#name {
-                            #(#field_name: <#field_type as ::#shipyard_name::IntoBorrow>::Borrow::borrow(world, last_run, current)?),*
+                            #(#field),*
                         })
                     }
                 }

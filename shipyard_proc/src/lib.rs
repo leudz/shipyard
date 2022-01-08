@@ -31,7 +31,7 @@ pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
-#[proc_macro_derive(Borrow)]
+#[proc_macro_derive(Borrow, attributes(shipyard))]
 pub fn borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
@@ -45,7 +45,7 @@ pub fn borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
-#[proc_macro_derive(AllStoragesBorrow)]
+#[proc_macro_derive(AllStoragesBorrow, attributes(shipyard))]
 pub fn all_storages_borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
@@ -58,7 +58,7 @@ pub fn all_storages_borrow(item: proc_macro::TokenStream) -> proc_macro::TokenSt
         .into()
 }
 
-#[proc_macro_derive(BorrowInfo)]
+#[proc_macro_derive(BorrowInfo, attributes(shipyard))]
 pub fn borrow_info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
