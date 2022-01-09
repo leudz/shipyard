@@ -208,12 +208,12 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
     #[inline]
-    pub fn remove(&mut self, entity: EntityId, current: u32) -> Option<T> {
+    pub(crate) fn remove(&mut self, entity: EntityId, current: u32) -> Option<T> {
         T::Tracking::remove(self, entity, current)
     }
     /// Deletes `entity`'s component from this storage.
     #[inline]
-    pub fn delete(&mut self, entity: EntityId, current: u32) -> bool {
+    pub(crate) fn delete(&mut self, entity: EntityId, current: u32) -> bool {
         T::Tracking::delete(self, entity, current)
     }
     #[inline]
@@ -411,7 +411,8 @@ impl<T: Component> SparseSet<T> {
         T::Tracking::clear(self, current);
     }
     /// Creates a draining iterator that empties the storage and yields the removed items.
-    pub fn drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
+    #[cfg(test)]
+    pub(crate) fn drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
         T::Tracking::drain(self, current)
     }
     /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
