@@ -30,6 +30,7 @@
 extern crate alloc;
 
 mod add_component;
+mod add_distinct_component;
 mod add_entity;
 mod all_storages;
 mod atomic_refcell;
@@ -74,6 +75,7 @@ pub use crate::borrow::NonSendSync;
 #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
+pub use add_distinct_component::AddDistinctComponent;
 pub use add_entity::AddEntity;
 pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
 #[doc(hidden)]

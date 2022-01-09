@@ -3,6 +3,7 @@ mod iterator;
 pub use iterator::EntitiesIter;
 
 use crate::add_component::AddComponent;
+use crate::add_distinct_component::AddDistinctComponent;
 use crate::add_entity::AddEntity;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -84,6 +85,46 @@ impl Entities {
     ) {
         if self.is_alive(entity) {
             storages.add_component_unchecked(entity, component);
+        } else {
+            panic!("{:?}", error::AddComponent::EntityIsNotAlive);
+        }
+    }
+    /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
+    /// If the entity already has this component, it won't be replaced. Very useful if you want accurate modification tracking.  
+    /// `Entities` is only borrowed immutably.  
+    ///
+    /// Returns `true` if the component was added.
+    ///
+    /// ### Panics
+    ///
+    /// - `entity` is not alive.
+    ///
+    /// ### Example
+    /// ```
+    /// use shipyard::{Component, EntitiesView, ViewMut, World};
+    ///
+    /// #[derive(Component, PartialEq)]
+    /// struct U32(u32);
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let entity = world.add_entity(());
+    ///
+    /// let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<U32>)>().unwrap();
+    ///
+    /// assert!(entities.add_distinct_component(entity, &mut u32s, U32(0)));
+    /// assert!(!entities.add_distinct_component(entity, &mut u32s, U32(0)));
+    /// ```
+    #[track_caller]
+    #[inline]
+    pub fn add_distinct_component<S: AddDistinctComponent>(
+        &self,
+        entity: EntityId,
+        mut storages: S,
+        component: S::Component,
+    ) -> bool {
+        if self.is_alive(entity) {
+            storages.add_distinct_component_unchecked(entity, component)
         } else {
             panic!("{:?}", error::AddComponent::EntityIsNotAlive);
         }
