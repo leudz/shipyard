@@ -94,7 +94,7 @@ pub(crate) fn expand_all_storages_borrow(
                 .map(|((field_name, field_type), field_is_default)| {
                     if field_is_default {
                         quote!(
-                            #field_name: core::default::Default::default(),
+                            #field_name: core::default::Default::default()
                         )
                     } else {
                         quote!(
