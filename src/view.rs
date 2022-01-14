@@ -138,7 +138,7 @@ impl<'a, T: Component> View<'a, T> {
     /// Returns `true` if `entity`'s component was inserted since the last [`clear_all_inserted`] call.  
     /// Returns `false` if `entity` does not have a component in this storage.
     ///
-    /// [`clear_all_inserted`]: Self::clear_all_inserted
+    /// [`clear_all_inserted`]: ViewMut::clear_all_inserted
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
         T::Tracking::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
@@ -146,7 +146,7 @@ impl<'a, T: Component> View<'a, T> {
     /// Returns `true` if `entity`'s component was modified since the last [`clear_all_modified`] call.  
     /// Returns `false` if `entity` does not have a component in this storage.
     ///
-    /// [`clear_all_modified`]: Self::clear_all_modified
+    /// [`clear_all_modified`]: ViewMut::clear_all_modified
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
         T::Tracking::is_modified(

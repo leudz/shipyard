@@ -5,6 +5,8 @@ use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
 use crate::track::Tracking;
+#[cfg(doc)]
+use crate::world::World;
 use core::iter::IntoIterator;
 
 /// Trait used as bound for [`World::bulk_add_entity`] and [`AllStorages::bulk_add_entity`].

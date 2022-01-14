@@ -1,9 +1,10 @@
 mod custom_delete_any;
 
-pub use custom_delete_any::CustomDeleteAny;
-
 use crate::all_storages::AllStorages;
 use crate::storage::{Storage, StorageId};
+#[cfg(doc)]
+use crate::world::World;
+pub use custom_delete_any::CustomDeleteAny;
 use hashbrown::hash_set::HashSet;
 
 /// Trait used as a bound for [`World::delete_any`] and [AllStorages::delete_any].

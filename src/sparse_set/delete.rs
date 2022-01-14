@@ -3,6 +3,8 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
+#[cfg(doc)]
+use crate::world::World;
 
 /// Trait used as bound for [`World::delete_component`] and [`AllStorages::delete_component`].
 pub trait TupleDelete {

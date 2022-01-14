@@ -1,6 +1,8 @@
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::storage::{Storage, StorageId};
+#[cfg(doc)]
+use crate::world::World;
 
 /// Trait used as bound for [`World::retain`] and [`AllStorages::retain`].
 pub trait TupleRetain {
