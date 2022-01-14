@@ -80,9 +80,11 @@ I initially wanted to make an ECS to learn how it works. After a failed attempt 
 ## Cargo Features
 
 - **parallel** _(default)_ &mdash; enables workload threading and add parallel iterators
+- **proc** _(default)_ &mdash; re-exports macros from `shipyard_proc`, mainly to derive `Component`
 - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 - **std** _(default)_ &mdash; lets Shipyard use the standard library
 - **thread_local** &mdash; adds methods and types required to work with `!Send` and `!Sync` components
+- **tracing** &mdash; reports workload and system execution
 
 ## License
 

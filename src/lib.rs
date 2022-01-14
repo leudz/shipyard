@@ -5,9 +5,11 @@
 //! ## Features
 //!
 //! - **parallel** *(default)* &mdash; enables workload threading and add parallel iterators
+//! - **proc** *(default)* &mdash; re-exports macros from `shipyard_proc`, mainly to derive `Component`
 //! - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
-//! - **thread_local** &mdash; add methods and types required to work with `!Send` and `!Sync` components
-//! - **std** *(default)* &mdash; let shipyard use the standard library
+//! - **std** *(default)* &mdash; lets Shipyard use the standard library
+//! - **thread_local** &mdash; adds methods and types required to work with `!Send` and `!Sync` components
+//! - **tracing** &mdash; reports workload and system execution
 
 #![warn(elided_lifetimes_in_paths)]
 #![warn(trivial_casts)]
