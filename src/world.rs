@@ -53,7 +53,7 @@ impl World {
         Self::new_with_custom_lock::<parking_lot::RawRwLock>()
     }
     /// Creates an empty `World` with a custom RwLock for `AllStorages`.
-    pub fn new_with_custom_lock<L: ShipyardRwLock>() -> Self {
+    pub fn new_with_custom_lock<L: ShipyardRwLock + Send + Sync>() -> Self {
         let counter = Arc::new(AtomicU32::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]

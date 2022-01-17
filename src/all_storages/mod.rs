@@ -58,7 +58,7 @@ impl AllStorages {
             counter,
         }
     }
-    pub(crate) fn new_with_lock<L: ShipyardRwLock>(counter: Arc<AtomicU32>) -> Self {
+    pub(crate) fn new_with_lock<L: ShipyardRwLock + Send + Sync>(counter: Arc<AtomicU32>) -> Self {
         let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));

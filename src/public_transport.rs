@@ -4,7 +4,7 @@ use core::ops::{Deref, DerefMut};
 
 pub(crate) enum RwLock<T> {
     Custom {
-        lock: Box<dyn ShipyardRwLock>,
+        lock: Box<dyn ShipyardRwLock + Send + Sync>,
         value: UnsafeCell<T>,
     },
     #[cfg(feature = "std")]
@@ -94,7 +94,7 @@ impl<T> Drop for WriteGuard<'_, T> {
 }
 
 impl<T> RwLock<T> {
-    pub(crate) fn new_custom<L: ShipyardRwLock>(value: T) -> Self {
+    pub(crate) fn new_custom<L: ShipyardRwLock + Send + Sync>(value: T) -> Self {
         RwLock::Custom {
             lock: L::new(),
             value: core::cell::UnsafeCell::new(value),
@@ -151,7 +151,7 @@ impl<T> RwLock<T> {
 
 pub trait ShipyardRwLock {
     #[allow(clippy::new_ret_no_self)]
-    fn new() -> Box<dyn ShipyardRwLock>
+    fn new() -> Box<dyn ShipyardRwLock + Send + Sync>
     where
         Self: Sized;
     fn lock_shared(&self);
@@ -162,9 +162,9 @@ pub trait ShipyardRwLock {
 
 impl<T> ShipyardRwLock for T
 where
-    T: 'static + lock_api::RawRwLock,
+    T: 'static + lock_api::RawRwLock + Send + Sync,
 {
-    fn new() -> Box<dyn ShipyardRwLock>
+    fn new() -> Box<dyn ShipyardRwLock + Send + Sync>
     where
         Self: Sized,
     {

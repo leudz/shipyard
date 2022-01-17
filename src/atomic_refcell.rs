@@ -24,6 +24,7 @@ pub struct AtomicRefCell<T: ?Sized> {
 
 // AtomicRefCell can't be Send if it contains !Send components
 #[cfg(not(feature = "thread_local"))]
+#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl<T: ?Sized> Send for AtomicRefCell<T> {}
 
 unsafe impl<T: ?Sized> Sync for AtomicRefCell<T> {}
