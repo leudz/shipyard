@@ -8,8 +8,6 @@ pub(crate) struct TypeIdHasher(u64);
 
 impl Hasher for TypeIdHasher {
     fn write(&mut self, bytes: &[u8]) {
-        use core::convert::TryInto;
-
         self.0 = u64::from_ne_bytes(bytes.try_into().unwrap());
     }
     fn finish(&self) -> u64 {
