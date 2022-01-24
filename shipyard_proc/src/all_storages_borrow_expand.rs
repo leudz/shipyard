@@ -1,5 +1,4 @@
 use proc_macro2::{Span, TokenStream};
-use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::{Error, Result};
 
@@ -35,18 +34,6 @@ pub(crate) fn expand_all_storages_borrow(
         .collect::<Vec<_>>();
 
     let borrower_generics_idents = borrower_generics.iter().map(|generic| &generic.ident);
-
-    let shipyard_name = crate_name("shipyard").map_err(|_| {
-        Error::new(
-            Span::call_site(),
-            "shipyard needs to be present in `Cargo.toml`",
-        )
-    })?;
-
-    let shipyard_name: syn::Ident = match shipyard_name {
-        FoundCrate::Itself => quote::format_ident!("shipyard"),
-        FoundCrate::Name(name) => quote::format_ident!("{}", name),
-    };
 
     let fields = match data {
         syn::Data::Struct(data_struct) => data_struct.fields,
@@ -98,14 +85,14 @@ pub(crate) fn expand_all_storages_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::#shipyard_name::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?
                         )
                     }
                 });
 
             Ok(quote!(
-                impl #impl_generics ::#shipyard_name::AllStoragesBorrow<#view_lifetime> for #borrower < #(#borrower_generics_idents)* > #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::#shipyard_name::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
+                impl #impl_generics ::shipyard::AllStoragesBorrow<#view_lifetime> for #borrower < #(#borrower_generics_idents)* > #where_clause {
+                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -119,12 +106,12 @@ pub(crate) fn expand_all_storages_borrow(
                 .iter()
                 .map(|field| {
                     let field_type = &field.ty;
-                    quote!(<#field_type as ::#shipyard_name::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?)
+                    quote!(<#field_type as ::shipyard::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?)
                 });
 
             Ok(quote!(
-                impl #impl_generics ::#shipyard_name::AllStoragesBorrow<#view_lifetime> for #borrower < #(#borrower_generics_idents)* > #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::#shipyard_name::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View, ::#shipyard_name::error::GetStorage> {
+                impl #impl_generics ::shipyard::AllStoragesBorrow<#view_lifetime> for #borrower < #(#borrower_generics_idents)* > #where_clause {
+                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#all_storages_borrow),*))
                     }
                 }

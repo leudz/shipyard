@@ -1,5 +1,4 @@
-use proc_macro2::{Span, TokenStream};
-use proc_macro_crate::{crate_name, FoundCrate};
+use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Error, Result};
 
@@ -33,21 +32,9 @@ pub(crate) fn expand_component(
         quote!(Untracked)
     };
 
-    let shipyard_name = crate_name("shipyard").map_err(|_| {
-        Error::new(
-            Span::call_site(),
-            "shipyard needs to be present in `Cargo.toml`",
-        )
-    })?;
-
-    let shipyard_name: syn::Ident = match shipyard_name {
-        FoundCrate::Itself => quote::format_ident!("shipyard"),
-        FoundCrate::Name(name) => quote::format_ident!("{}", name),
-    };
-
     Ok(quote!(
-        impl #impl_generics ::#shipyard_name::Component for #name #ty_generics #where_clause {
-            type Tracking = ::#shipyard_name::track::#tracking;
+        impl #impl_generics ::shipyard::Component for #name #ty_generics #where_clause {
+            type Tracking = ::shipyard::track::#tracking;
         }
     ))
 }
