@@ -128,15 +128,13 @@ fn old_id() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world
-        .run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
-            let entity = entities.add_entity(&mut u32s, U32(0));
+    world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
+        let entity = entities.add_entity(&mut u32s, U32(0));
 
-            entities.delete_unchecked(entity);
+        entities.delete_unchecked(entity);
 
-            let entity1 = entities.add_entity((), ());
+        let entity1 = entities.add_entity((), ());
 
-            assert!(u32s.get(entity1).is_err());
-        })
-        .unwrap();
+        assert!(u32s.get(entity1).is_err());
+    });
 }

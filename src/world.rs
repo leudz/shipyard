@@ -75,7 +75,7 @@ impl World {
     ///
     /// - [`AllStorages`] (shared)
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
     ///
@@ -89,7 +89,7 @@ impl World {
     ///
     /// let world = World::new();
     ///
-    /// world.add_unique(U32(0)).unwrap();
+    /// world.add_unique(U32(0));
     ///
     /// let i = world.borrow::<UniqueView<U32>>().unwrap();
     /// assert_eq!(i.0, 0);
@@ -98,12 +98,9 @@ impl World {
     /// [`AllStorages`]: crate::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    pub fn add_unique<T: Send + Sync + Component>(
-        &self,
-        component: T,
-    ) -> Result<(), error::Borrow> {
-        self.all_storages.borrow()?.add_unique(component);
-        Ok(())
+    #[track_caller]
+    pub fn add_unique<T: Send + Sync + Component>(&self, component: T) {
+        self.all_storages.borrow().unwrap().add_unique(component);
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].  
@@ -113,7 +110,7 @@ impl World {
     ///
     /// - [`AllStorages`] (shared)
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
     ///
@@ -128,7 +125,7 @@ impl World {
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Send` type
-    /// world.add_unique_non_send(U32(0)).unwrap();
+    /// world.add_unique_non_send(U32(0));
     ///
     /// let i = world.borrow::<NonSend<UniqueView<U32>>>().unwrap();
     /// assert_eq!(i.0, 0);
@@ -140,12 +137,12 @@ impl World {
     /// [`NonSend`]: crate::NonSend
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-    pub fn add_unique_non_send<T: Sync + Component>(
-        &self,
-        component: T,
-    ) -> Result<(), error::Borrow> {
-        self.all_storages.borrow()?.add_unique_non_send(component);
-        Ok(())
+    #[track_caller]
+    pub fn add_unique_non_send<T: Sync + Component>(&self, component: T) {
+        self.all_storages
+            .borrow()
+            .unwrap()
+            .add_unique_non_send(component);
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].  
@@ -155,7 +152,7 @@ impl World {
     ///
     /// - [`AllStorages`] (shared)
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
     ///
@@ -170,7 +167,7 @@ impl World {
     /// let world = World::new();
     ///
     /// // I'm using `u32` here but imagine it's a `!Sync` type
-    /// world.add_unique_non_sync(U32(0)).unwrap();
+    /// world.add_unique_non_sync(U32(0));
     ///
     /// let i = world.borrow::<NonSync<UniqueView<U32>>>().unwrap();
     /// assert_eq!(i.0, 0);
@@ -182,12 +179,12 @@ impl World {
     /// [`NonSync`]: crate::NonSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-    pub fn add_unique_non_sync<T: Send + Component>(
-        &self,
-        component: T,
-    ) -> Result<(), error::Borrow> {
-        self.all_storages.borrow()?.add_unique_non_sync(component);
-        Ok(())
+    #[track_caller]
+    pub fn add_unique_non_sync<T: Send + Component>(&self, component: T) {
+        self.all_storages
+            .borrow()
+            .unwrap()
+            .add_unique_non_sync(component);
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].  
@@ -197,7 +194,7 @@ impl World {
     ///
     /// - [`AllStorages`] (shared)
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
     ///
@@ -212,7 +209,7 @@ impl World {
     /// struct U32(u32);
     ///
     /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
-    /// world.add_unique_non_send_sync(U32(0)).unwrap();
+    /// world.add_unique_non_send_sync(U32(0));
     ///
     /// let i = world.borrow::<NonSendSync<UniqueView<U32>>>().unwrap();
     /// assert_eq!(i.0, 0);
@@ -224,14 +221,12 @@ impl World {
     /// [`NonSendSync`]: crate::NonSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-    pub fn add_unique_non_send_sync<T: Component>(
-        &self,
-        component: T,
-    ) -> Result<(), error::Borrow> {
+    #[track_caller]
+    pub fn add_unique_non_send_sync<T: Component>(&self, component: T) {
         self.all_storages
-            .borrow()?
+            .borrow()
+            .unwrap()
             .add_unique_non_send_sync(component);
-        Ok(())
     }
     /// Removes a unique storage.
     ///
@@ -256,7 +251,7 @@ impl World {
     ///
     /// let world = World::new();
     ///
-    /// world.add_unique(U32(0)).unwrap();
+    /// world.add_unique(U32(0));
     ///
     /// let i = world.remove_unique::<U32>().unwrap();
     /// assert_eq!(i.0, 0);
@@ -451,7 +446,7 @@ You can use:
 - [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
 - [AllStorages] (shared) + storage (exclusive or shared) for all other views
 
-### Errors
+### Panics
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
@@ -473,7 +468,7 @@ fn sys1((entity, [x, y]): (EntityId, [f32; 2]), mut positions: ViewMut<Position>
 
 let world = World::new();
 
-world.run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
+world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
 ```
 [AllStorages]: crate::AllStorages
 [EntitiesView]: crate::Entities
@@ -487,12 +482,16 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.])).unwrap();
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[track_caller]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
         &'s self,
         system: S,
         data: Data,
-    ) -> Result<R, error::Run> {
-        system.run((data,), self).map_err(error::Run::GetStorage)
+    ) -> R {
+        system
+            .run((data,), self)
+            .map_err(error::Run::GetStorage)
+            .unwrap()
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -563,7 +562,7 @@ You can use:
 - [AllStorages] (exclusive) when requesting [AllStoragesViewMut]
 - [AllStorages] (shared) + storage (exclusive or shared) for all other views
 
-### Errors
+### Panics
 
 - [AllStorages] borrow failed.
 - Storage borrow failed.
@@ -592,10 +591,9 @@ let world = World::new();
 world
     .run(|usizes: View<USIZE>, mut u32s: ViewMut<U32>| {
         // -- snip --
-    })
-    .unwrap();
+    });
 
-let i = world.run(sys1).unwrap();
+let i = world.run(sys1);
 ```
 [AllStorages]: crate::AllStorages
 [EntitiesView]: crate::Entities
@@ -609,11 +607,12 @@ let i = world.run(sys1).unwrap();
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
-    pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(
-        &'s self,
-        system: S,
-    ) -> Result<R, error::Run> {
-        system.run((), self).map_err(error::Run::GetStorage)
+    #[track_caller]
+    pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(&'s self, system: S) -> R {
+        system
+            .run((), self)
+            .map_err(error::Run::GetStorage)
+            .unwrap()
     }
     /// Modifies the current default workload to `name`.
     ///

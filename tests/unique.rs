@@ -10,27 +10,18 @@ impl Component for USIZE {
 #[test]
 fn unique_storage() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_unique(USIZE(0)).unwrap();
+    world.add_unique(USIZE(0));
 
-    world
-        .run(|mut x: UniqueViewMut<USIZE>| {
-            x.0 += 1;
-        })
-        .unwrap();
-    world
-        .run(|x: UniqueView<USIZE>| {
-            assert_eq!(x.0, 1);
-        })
-        .unwrap();
+    world.run(|mut x: UniqueViewMut<USIZE>| {
+        x.0 += 1;
+    });
+    world.run(|x: UniqueView<USIZE>| {
+        assert_eq!(x.0, 1);
+    });
 
     world.remove_unique::<USIZE>().unwrap();
 
-    if let Some(shipyard::error::Run::GetStorage(get_error)) = world
-        .run(|mut x: UniqueViewMut<USIZE>| {
-            x.0 += 1;
-        })
-        .err()
-    {
+    if let Some(get_error) = world.borrow::<UniqueViewMut<USIZE>>().err() {
         assert_eq!(
             get_error,
             shipyard::error::GetStorage::MissingStorage {
@@ -42,15 +33,15 @@ fn unique_storage() {
         panic!()
     }
 
-    world.add_unique(USIZE(0)).unwrap();
+    world.add_unique(USIZE(0));
 }
 
 #[test]
 fn not_unique_storage() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    match world.run(|_: UniqueView<USIZE>| {}).err() {
-        Some(error::Run::GetStorage(get_storage)) => assert_eq!(
+    match world.borrow::<UniqueView<USIZE>>().err() {
+        Some(get_storage) => assert_eq!(
             get_storage,
             shipyard::error::GetStorage::MissingStorage {
                 name: Some(type_name::<Unique<USIZE>>().into()),
@@ -60,8 +51,8 @@ fn not_unique_storage() {
         _ => panic!(),
     }
 
-    match world.run(|_: UniqueViewMut<USIZE>| {}).err() {
-        Some(error::Run::GetStorage(get_storage)) => assert_eq!(
+    match world.borrow::<UniqueViewMut<USIZE>>().err() {
+        Some(get_storage) => assert_eq!(
             get_storage,
             shipyard::error::GetStorage::MissingStorage {
                 name: Some(type_name::<Unique<USIZE>>().into()),
@@ -90,23 +81,17 @@ fn non_send() {
     }
 
     let world = World::default();
-    world
-        .add_unique_non_send(NonSendStruct {
-            value: 0,
-            _phantom: core::marker::PhantomData,
-        })
-        .unwrap();
+    world.add_unique_non_send(NonSendStruct {
+        value: 0,
+        _phantom: core::marker::PhantomData,
+    });
 
-    world
-        .run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
-            x.value += 1;
-        })
-        .unwrap();
-    world
-        .run(|x: NonSend<UniqueView<NonSendStruct>>| {
-            assert_eq!(x.value, 1);
-        })
-        .unwrap();
+    world.run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
+        x.value += 1;
+    });
+    world.run(|x: NonSend<UniqueView<NonSendStruct>>| {
+        assert_eq!(x.value, 1);
+    });
 }
 
 #[cfg(feature = "thread_local")]
@@ -122,23 +107,17 @@ fn non_sync() {
     }
 
     let world = World::default();
-    world
-        .add_unique_non_sync(NonSyncStruct {
-            value: 0,
-            _phantom: core::marker::PhantomData,
-        })
-        .unwrap();
+    world.add_unique_non_sync(NonSyncStruct {
+        value: 0,
+        _phantom: core::marker::PhantomData,
+    });
 
-    world
-        .run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
-            x.value += 1;
-        })
-        .unwrap();
-    world
-        .run(|x: NonSync<UniqueView<NonSyncStruct>>| {
-            assert_eq!(x.value, 1);
-        })
-        .unwrap();
+    world.run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
+        x.value += 1;
+    });
+    world.run(|x: NonSync<UniqueView<NonSyncStruct>>| {
+        assert_eq!(x.value, 1);
+    });
 }
 
 #[cfg(feature = "thread_local")]
@@ -153,23 +132,17 @@ fn non_send_sync() {
     }
 
     let world = World::default();
-    world
-        .add_unique_non_send_sync(NonSendSyncStruct {
-            value: 0,
-            _phantom: core::marker::PhantomData,
-        })
-        .unwrap();
+    world.add_unique_non_send_sync(NonSendSyncStruct {
+        value: 0,
+        _phantom: core::marker::PhantomData,
+    });
 
-    world
-        .run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
-            x.value += 1;
-        })
-        .unwrap();
-    world
-        .run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
-            assert_eq!(x.value, 1);
-        })
-        .unwrap();
+    world.run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
+        x.value += 1;
+    });
+    world.run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
+        assert_eq!(x.value, 1);
+    });
 }
 
 #[test]
@@ -179,7 +152,7 @@ fn non_send_remove() {
         parking_lot::RawRwLock,
     >()));
 
-    world.add_unique_non_send(USIZE(0)).unwrap();
+    world.add_unique_non_send(USIZE(0));
 
     std::thread::spawn(move || {
         if let Some(shipyard::error::UniqueRemove::StorageBorrow(infos)) =

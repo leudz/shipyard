@@ -1,9 +1,11 @@
 mod builder;
 pub mod info;
+mod into_workload;
 mod into_workload_system;
 mod system;
 
-pub use builder::{Workload, WorkloadBuilder};
+pub use builder::{ScheduledWorkload, WorkloadBuilder};
+pub use into_workload::{IntoWorkload, Workload};
 pub use into_workload_system::IntoWorkloadSystem;
 pub use system::WorkloadSystem;
 

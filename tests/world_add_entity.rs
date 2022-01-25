@@ -52,27 +52,21 @@ fn cleared_update() {
 
     let entity1 = world.add_entity((USIZE(1usize),));
 
-    world
-        .run(|usizes: ViewMut<USIZE>| {
-            usizes.clear_all_inserted_and_modified();
-        })
-        .unwrap();
+    world.run(|usizes: ViewMut<USIZE>| {
+        usizes.clear_all_inserted_and_modified();
+    });
 
-    world
-        .run(|usizes: View<USIZE>| {
-            assert_eq!(usizes.inserted().iter().count(), 0);
-        })
-        .unwrap();
+    world.run(|usizes: View<USIZE>| {
+        assert_eq!(usizes.inserted().iter().count(), 0);
+    });
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
-    world
-        .run(|usizes: View<USIZE>| {
-            assert_eq!(usizes.inserted().iter().count(), 1);
-            assert_eq!(*usizes.get(entity1).unwrap(), USIZE(1));
-            assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
-        })
-        .unwrap();
+    world.run(|usizes: View<USIZE>| {
+        assert_eq!(usizes.inserted().iter().count(), 1);
+        assert_eq!(*usizes.get(entity1).unwrap(), USIZE(1));
+        assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
+    });
 }
 
 #[test]
@@ -87,22 +81,18 @@ fn modified_update() {
 
     let entity1 = world.add_entity((USIZE(1),));
 
-    world
-        .run(|usizes: ViewMut<USIZE>| {
-            usizes.clear_all_inserted_and_modified();
-        })
-        .unwrap();
+    world.run(|usizes: ViewMut<USIZE>| {
+        usizes.clear_all_inserted_and_modified();
+    });
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
-    world
-        .run(|mut usizes: ViewMut<USIZE>| {
-            usizes[entity1] = USIZE(3);
-            assert_eq!(usizes.inserted().iter().count(), 1);
-            assert_eq!(*usizes.get(entity1).unwrap(), USIZE(3));
-            assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
-        })
-        .unwrap();
+    world.run(|mut usizes: ViewMut<USIZE>| {
+        usizes[entity1] = USIZE(3);
+        assert_eq!(usizes.inserted().iter().count(), 1);
+        assert_eq!(*usizes.get(entity1).unwrap(), USIZE(3));
+        assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
+    });
 }
 
 #[test]

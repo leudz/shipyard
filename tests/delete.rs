@@ -81,34 +81,22 @@ fn old_key() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let entity = world
-        .run(
-            |(mut entities, mut usizes, mut u32s): (
-                EntitiesViewMut,
-                ViewMut<USIZE>,
-                ViewMut<U32>,
-            )| { entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1))) },
-        )
-        .unwrap();
+    let entity = world.run(
+        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
+            entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)))
+        },
+    );
 
-    world
-        .run(|mut all_storages: AllStoragesViewMut| {
-            all_storages.delete_entity(entity);
-        })
-        .unwrap();
+    world.run(|mut all_storages: AllStoragesViewMut| {
+        all_storages.delete_entity(entity);
+    });
 
-    world
-        .run(
-            |(mut entities, mut usizes, mut u32s): (
-                EntitiesViewMut,
-                ViewMut<USIZE>,
-                ViewMut<U32>,
-            )| {
-                entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
-                assert!(!(&mut usizes, &mut u32s).delete(entity));
-            },
-        )
-        .unwrap();
+    world.run(
+        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
+            entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
+            assert!(!(&mut usizes, &mut u32s).delete(entity));
+        },
+    );
 }
 
 #[test]
@@ -121,26 +109,20 @@ fn newer_key() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world
-        .run(
-            |(mut entities, mut usizes, mut u32s): (
-                EntitiesViewMut,
-                ViewMut<USIZE>,
-                ViewMut<U32>,
-            )| {
-                let entity = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+    world.run(
+        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
+            let entity = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
 
-                entities.delete_unchecked(entity);
-                assert_eq!(usizes.len(), 1);
-                assert_eq!(u32s.len(), 1);
-                let new_entity = entities.add_entity((), ());
-                assert!(!(&mut usizes, &mut u32s).delete(new_entity));
+            entities.delete_unchecked(entity);
+            assert_eq!(usizes.len(), 1);
+            assert_eq!(u32s.len(), 1);
+            let new_entity = entities.add_entity((), ());
+            assert!(!(&mut usizes, &mut u32s).delete(new_entity));
 
-                assert_eq!(usizes.len(), 0);
-                assert_eq!(u32s.len(), 0);
-            },
-        )
-        .unwrap();
+            assert_eq!(usizes.len(), 0);
+            assert_eq!(u32s.len(), 0);
+        },
+    );
 }
 
 #[test]

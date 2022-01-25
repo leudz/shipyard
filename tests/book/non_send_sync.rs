@@ -12,6 +12,7 @@ fn run(rcs_usize: NonSendSync<View<RcUSIZE>>, rc_u32: NonSendSync<UniqueView<RcU
 // ANCHOR_END: non_send_sync
 
 #[test]
+#[should_panic]
 fn test() {
-    let _ = World::new().run(run);
+    World::new().run(run);
 }

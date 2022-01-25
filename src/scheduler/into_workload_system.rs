@@ -38,14 +38,14 @@ pub trait IntoWorkloadSystem<B, R> {
         R: Into<Result<Ok, Err>>;
 }
 
-pub struct Untracked;
+pub struct Nothing;
 
-impl<R, F> IntoWorkloadSystem<Untracked, R> for F
+impl<R, F> IntoWorkloadSystem<Nothing, R> for F
 where
     F: 'static + Send + Sync + Fn() -> R,
 {
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
-        Ok(WorkloadSystem {
+        Ok(WorkloadSystem::System {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)();
@@ -63,7 +63,7 @@ where
     where
         R: Into<Result<Ok, Err>>,
     {
-        Ok(WorkloadSystem {
+        Ok(WorkloadSystem::System {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)().into().map_err(error::Run::from_custom)?;
@@ -81,7 +81,7 @@ where
     where
         R: Into<Result<Ok, Err>>,
     {
-        Ok(WorkloadSystem {
+        Ok(WorkloadSystem::System {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)().into().map_err(error::Run::from_custom)?;
@@ -155,7 +155,7 @@ macro_rules! impl_system {
                 }
 
                 let last_run = AtomicU32::new(0);
-                Ok(WorkloadSystem {
+                Ok(WorkloadSystem::System {
                     borrow_constraints: borrows,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
@@ -210,7 +210,7 @@ macro_rules! impl_system {
                 }
 
                 let last_run = AtomicU32::new(0);
-                Ok(WorkloadSystem {
+                Ok(WorkloadSystem::System {
                     borrow_constraints: borrows,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
@@ -265,7 +265,7 @@ macro_rules! impl_system {
                 }
 
                 let last_run = AtomicU32::new(0);
-                Ok(WorkloadSystem {
+                Ok(WorkloadSystem::System {
                     borrow_constraints: borrows,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();

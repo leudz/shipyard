@@ -229,7 +229,7 @@ impl AllStorages {
     ///     assert!((&u32s).get(entity1).is_err());
     ///     assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
     ///     assert_eq!(u32s.get(entity2), Ok(&U32(3)));
-    /// }).unwrap();
+    /// });
     /// ```
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
         // no need to lock here since we have a unique access
@@ -665,7 +665,7 @@ You can use:
 ### Borrows
 
 - Storage (exclusive or shared)
-### Errors
+### Panics
 
 - Storage borrow failed.
 - Unique storage did not exist.
@@ -681,12 +681,16 @@ You can use:
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[track_caller]
     pub fn run_with_data<'s, Data, B, R, S: crate::system::AllSystem<'s, (Data,), B, R>>(
         &'s self,
         system: S,
         data: Data,
-    ) -> Result<R, error::Run> {
-        system.run((data,), self).map_err(error::Run::GetStorage)
+    ) -> R {
+        system
+            .run((data,), self)
+            .map_err(error::Run::GetStorage)
+            .unwrap()
     }
     #[doc = "Borrows the requested storages and runs the function.
 
@@ -754,7 +758,7 @@ You can use:
 ### Borrows
 
 - Storage (exclusive or shared)
-### Errors
+### Panics
 
 - Storage borrow failed.
 - Unique storage did not exist.
@@ -784,10 +788,9 @@ let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 all_storages
     .run(|usizes: View<USIZE>, mut u32s: ViewMut<U32>| {
         // -- snip --
-    })
-    .unwrap();
+    });
 
-let i = all_storages.run(sys1).unwrap();
+let i = all_storages.run(sys1);
 ```
 [EntitiesView]: crate::Entities
 [EntitiesViewMut]: crate::Entities
@@ -798,11 +801,12 @@ let i = all_storages.run(sys1).unwrap();
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
-    pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(
-        &'s self,
-        system: S,
-    ) -> Result<R, error::Run> {
-        system.run((), self).map_err(error::Run::GetStorage)
+    #[track_caller]
+    pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, system: S) -> R {
+        system
+            .run((), self)
+            .map_err(error::Run::GetStorage)
+            .unwrap()
     }
     /// Deletes any entity with at least one of the given type(s).  
     /// The storage's type has to be used and not the component.  

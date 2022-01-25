@@ -53,30 +53,26 @@ fn update() {
     let (component,) = world.remove::<(USIZE,)>(entity1);
     assert_eq!(component, Some(USIZE(0)));
 
-    world
-        .run(|usizes: View<USIZE>| {
-            assert_eq!(
-                usizes.get(entity1),
-                Err(error::MissingComponent {
-                    id: entity1,
-                    name: type_name::<USIZE>(),
-                })
-            );
-            assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
-            assert_eq!(usizes.len(), 1);
-            assert_eq!(usizes.inserted().iter().count(), 1);
-            assert_eq!(usizes.modified().iter().count(), 0);
-            assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1]);
-        })
-        .unwrap();
+    world.run(|usizes: View<USIZE>| {
+        assert_eq!(
+            usizes.get(entity1),
+            Err(error::MissingComponent {
+                id: entity1,
+                name: type_name::<USIZE>(),
+            })
+        );
+        assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
+        assert_eq!(usizes.len(), 1);
+        assert_eq!(usizes.inserted().iter().count(), 1);
+        assert_eq!(usizes.modified().iter().count(), 0);
+        assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1]);
+    });
 
     world.remove::<(USIZE,)>(entity2);
 
-    world
-        .run(|usizes: View<USIZE>| {
-            assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
-        })
-        .unwrap();
+    world.run(|usizes: View<USIZE>| {
+        assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
+    });
 }
 
 #[test]
@@ -115,12 +111,10 @@ fn newer_key() {
         .unwrap()
         .delete_unchecked(entity);
 
-    world
-        .run(|(usizes, u32s): (ViewMut<USIZE>, ViewMut<U32>)| {
-            assert_eq!(usizes.len(), 1);
-            assert_eq!(u32s.len(), 1);
-        })
-        .unwrap();
+    world.run(|(usizes, u32s): (ViewMut<USIZE>, ViewMut<U32>)| {
+        assert_eq!(usizes.len(), 1);
+        assert_eq!(u32s.len(), 1);
+    });
 
     let new_entity = world.add_entity(());
     let (old_usize, old_u32) = world.remove::<(USIZE, U32)>(new_entity);
@@ -128,10 +122,8 @@ fn newer_key() {
     assert_eq!(old_usize, None);
     assert_eq!(old_u32, None);
 
-    world
-        .run(|(usizes, u32s): (ViewMut<USIZE>, ViewMut<U32>)| {
-            assert_eq!(usizes.len(), 0);
-            assert_eq!(u32s.len(), 0);
-        })
-        .unwrap();
+    world.run(|(usizes, u32s): (ViewMut<USIZE>, ViewMut<U32>)| {
+        assert_eq!(usizes.len(), 0);
+        assert_eq!(u32s.len(), 0);
+    });
 }

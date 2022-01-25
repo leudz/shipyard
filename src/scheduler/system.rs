@@ -1,3 +1,4 @@
+use super::into_workload::Workload;
 use super::{TypeInfo, WorkloadBuilder};
 use crate::error;
 use crate::type_id::TypeId;
@@ -29,17 +30,22 @@ use alloc::vec::Vec;
 /// ```
 ///
 /// [`WorkloadBuilder`]: crate::WorkloadBuilder
-pub struct WorkloadSystem {
-    pub(super) system_type_id: TypeId,
-    pub(super) system_type_name: &'static str,
-    pub(super) system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
-    /// access information
-    pub(super) borrow_constraints: Vec<TypeInfo>,
-    pub(super) generator: fn(&mut Vec<TypeInfo>) -> TypeId,
+pub enum WorkloadSystem {
+    #[doc(hidden)]
+    System {
+        system_type_id: TypeId,
+        system_type_name: &'static str,
+        system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
+        /// access information
+        borrow_constraints: Vec<TypeInfo>,
+        generator: fn(&mut Vec<TypeInfo>) -> TypeId,
+    },
+    #[doc(hidden)]
+    Workload(Workload),
 }
 
 impl Extend<WorkloadSystem> for WorkloadBuilder {
     fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
-        self.systems.extend(iter.into_iter().map(Into::into));
+        self.work_units.extend(iter.into_iter().map(Into::into));
     }
 }

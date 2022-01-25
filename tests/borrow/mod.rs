@@ -186,15 +186,15 @@ fn non_send_sync_storage_in_other_thread() {
 #[test]
 fn add_unique_while_borrowing() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_unique(U32(0)).unwrap();
+    world.add_unique(U32(0));
     let _s = world.borrow::<UniqueView<'_, U32>>().unwrap();
-    world.add_unique(USIZE(0)).unwrap();
+    world.add_unique(USIZE(0));
 }
 
 #[test]
 fn sparse_set_and_unique() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_unique(U32(0)).unwrap();
+    world.add_unique(U32(0));
     world
         .borrow::<(UniqueViewMut<U32>, ViewMut<U32>)>()
         .unwrap();
@@ -214,18 +214,16 @@ fn exhaustive_list() {
         NonSendSync<ViewMut<NotSendSync>>,
     )>();
 
-    world
-        .run(|all_storages: AllStoragesViewMut| {
-            let _ = all_storages.borrow::<(
-                NonSend<View<NotSend>>,
-                NonSync<View<NotSync>>,
-                NonSendSync<View<NotSendSync>>,
-                NonSend<ViewMut<NotSend>>,
-                NonSync<ViewMut<NotSync>>,
-                NonSendSync<ViewMut<NotSendSync>>,
-            )>();
-        })
-        .unwrap();
+    world.run(|all_storages: AllStoragesViewMut| {
+        let _ = all_storages.borrow::<(
+            NonSend<View<NotSend>>,
+            NonSync<View<NotSync>>,
+            NonSendSync<View<NotSendSync>>,
+            NonSend<ViewMut<NotSend>>,
+            NonSync<ViewMut<NotSync>>,
+            NonSendSync<ViewMut<NotSendSync>>,
+        )>();
+    });
 }
 
 #[test]
@@ -233,9 +231,9 @@ fn exhaustive_list() {
 fn unique_exhaustive_list() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_unique_non_send(NotSend(&())).unwrap();
-    world.add_unique_non_sync(NotSync(&())).unwrap();
-    world.add_unique_non_send_sync(NotSendSync(&())).unwrap();
+    world.add_unique_non_send(NotSend(&()));
+    world.add_unique_non_sync(NotSync(&()));
+    world.add_unique_non_send_sync(NotSendSync(&()));
 
     let _ = world.borrow::<(
         NonSend<UniqueView<NotSend>>,
@@ -246,16 +244,14 @@ fn unique_exhaustive_list() {
         NonSendSync<UniqueViewMut<NotSendSync>>,
     )>();
 
-    world
-        .run(|all_storages: AllStoragesViewMut| {
-            let _ = all_storages.borrow::<(
-                NonSend<UniqueView<NotSend>>,
-                NonSync<UniqueView<NotSync>>,
-                NonSendSync<UniqueView<NotSendSync>>,
-                NonSend<UniqueViewMut<NotSend>>,
-                NonSync<UniqueViewMut<NotSync>>,
-                NonSendSync<UniqueViewMut<NotSendSync>>,
-            )>();
-        })
-        .unwrap();
+    world.run(|all_storages: AllStoragesViewMut| {
+        let _ = all_storages.borrow::<(
+            NonSend<UniqueView<NotSend>>,
+            NonSync<UniqueView<NotSync>>,
+            NonSendSync<UniqueView<NotSendSync>>,
+            NonSend<UniqueViewMut<NotSend>>,
+            NonSync<UniqueViewMut<NotSync>>,
+            NonSendSync<UniqueViewMut<NotSendSync>>,
+        )>();
+    });
 }

@@ -30,7 +30,7 @@ fn run() {
 // ANCHOR: run
 let world = World::new();
 
-world.run(create_ints).unwrap();
+world.run(create_ints);
 // ANCHOR_END: run
 }
 
@@ -45,7 +45,7 @@ fn in_acid(season: Season, positions: View<Position>, mut healths: ViewMut<Healt
 
 let world = World::new();
 
-world.run_with_data(in_acid, Season::Spring).unwrap();
+world.run_with_data(in_acid, Season::Spring);
 // ANCHOR_END: in_acid
 }
 
@@ -65,8 +65,7 @@ fn in_acid(
 let world = World::new();
 
 world
-    .run_with_data(in_acid, (Season::Spring, Precipitation(0.1)))
-    .unwrap();
+    .run_with_data(in_acid, (Season::Spring, Precipitation(0.1)));
 // ANCHOR_END: in_acid_multiple
 }
 

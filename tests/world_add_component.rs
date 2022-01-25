@@ -59,47 +59,39 @@ fn update() {
 
     world.add_component(entity, (USIZE(1usize),));
 
-    world
-        .run(|usizes: View<USIZE>| {
-            let mut iter = usizes.inserted().iter();
-            assert_eq!(iter.next(), Some(&USIZE(1)));
-            assert_eq!(iter.next(), None);
-        })
-        .unwrap();
+    world.run(|usizes: View<USIZE>| {
+        let mut iter = usizes.inserted().iter();
+        assert_eq!(iter.next(), Some(&USIZE(1)));
+        assert_eq!(iter.next(), None);
+    });
 
     world.add_component(entity, (USIZE(2usize),));
 
-    world
-        .run(|usizes: ViewMut<USIZE>| {
-            let mut iter = usizes.inserted().iter();
-            assert_eq!(iter.next(), Some(&USIZE(2)));
-            assert_eq!(iter.next(), None);
+    world.run(|usizes: ViewMut<USIZE>| {
+        let mut iter = usizes.inserted().iter();
+        assert_eq!(iter.next(), Some(&USIZE(2)));
+        assert_eq!(iter.next(), None);
 
-            usizes.clear_all_inserted();
-        })
-        .unwrap();
+        usizes.clear_all_inserted();
+    });
 
     world.add_component(entity, (USIZE(4usize),));
 
-    world
-        .run(|usizes: ViewMut<USIZE>| {
-            let mut iter = usizes.modified().iter();
-            assert_eq!(iter.next(), Some(&USIZE(4)));
-            assert_eq!(iter.next(), None);
+    world.run(|usizes: ViewMut<USIZE>| {
+        let mut iter = usizes.modified().iter();
+        assert_eq!(iter.next(), Some(&USIZE(4)));
+        assert_eq!(iter.next(), None);
 
-            usizes.clear_all_modified();
-        })
-        .unwrap();
+        usizes.clear_all_modified();
+    });
 
     world.add_component(entity, (USIZE(5usize),));
 
-    world
-        .run(|usizes: View<USIZE>| {
-            let mut iter = usizes.modified().iter();
-            assert_eq!(iter.next(), Some(&USIZE(5)));
-            assert_eq!(iter.next(), None);
-        })
-        .unwrap();
+    world.run(|usizes: View<USIZE>| {
+        let mut iter = usizes.modified().iter();
+        assert_eq!(iter.next(), Some(&USIZE(5)));
+        assert_eq!(iter.next(), None);
+    });
 }
 
 #[test]

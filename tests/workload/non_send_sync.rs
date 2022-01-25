@@ -15,13 +15,11 @@ fn basic() {
 
     let world = World::default();
 
-    world
-        .run(
-            |mut entities: EntitiesViewMut, mut vecs: NonSendSync<ViewMut<MyRc>>| {
-                entities.add_entity(&mut *vecs, MyRc(Rc::new(RefCell::new(Vec::new()))));
-            },
-        )
-        .unwrap();
+    world.run(
+        |mut entities: EntitiesViewMut, mut vecs: NonSendSync<ViewMut<MyRc>>| {
+            entities.add_entity(&mut *vecs, MyRc(Rc::new(RefCell::new(Vec::new()))));
+        },
+    );
 
     Workload::builder("Push")
         .with_system(push)
@@ -29,9 +27,7 @@ fn basic() {
         .unwrap();
     world.run_default().unwrap();
 
-    world
-        .run(|vecs: NonSendSync<ViewMut<MyRc>>| {
-            assert_eq!(&**vecs.iter().next().unwrap().0.borrow(), &[0][..]);
-        })
-        .unwrap();
+    world.run(|vecs: NonSendSync<ViewMut<MyRc>>| {
+        assert_eq!(&**vecs.iter().next().unwrap().0.borrow(), &[0][..]);
+    });
 }

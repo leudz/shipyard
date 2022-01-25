@@ -98,7 +98,10 @@ pub use or::{OneOfTwo, Or};
 pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
-pub use scheduler::{info, IntoWorkloadSystem, Workload, WorkloadBuilder, WorkloadSystem};
+pub use scheduler::{
+    info, IntoWorkload, IntoWorkloadSystem, ScheduledWorkload, Workload, WorkloadBuilder,
+    WorkloadSystem,
+};
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component};
 pub use sparse_set::{

@@ -14,33 +14,25 @@ impl Component for U32 {
 fn simple() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world
-        .run(|mut all_storages: AllStoragesViewMut| {
-            let (entity0, entity1, entity2, entity3) = all_storages
-                .run(
-                    |mut entities: EntitiesViewMut,
-                     mut u32s: ViewMut<U32>,
-                     mut usizes: ViewMut<USIZE>| {
-                        (
-                            entities.add_entity(&mut u32s, U32(0)),
-                            entities.add_entity((), ()),
-                            entities.add_entity(&mut usizes, USIZE(1)),
-                            entities.add_entity((&mut u32s, &mut usizes), (U32(2), USIZE(3))),
-                        )
-                    },
+    world.run(|mut all_storages: AllStoragesViewMut| {
+        let (entity0, entity1, entity2, entity3) = all_storages.run(
+            |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut usizes: ViewMut<USIZE>| {
+                (
+                    entities.add_entity(&mut u32s, U32(0)),
+                    entities.add_entity((), ()),
+                    entities.add_entity(&mut usizes, USIZE(1)),
+                    entities.add_entity((&mut u32s, &mut usizes), (U32(2), USIZE(3))),
                 )
-                .unwrap();
+            },
+        );
 
-            all_storages.delete_any::<SparseSet<U32>>();
+        all_storages.delete_any::<SparseSet<U32>>();
 
-            all_storages
-                .run(|entities: EntitiesView| {
-                    assert!(!entities.is_alive(entity0));
-                    assert!(entities.is_alive(entity1));
-                    assert!(entities.is_alive(entity2));
-                    assert!(!entities.is_alive(entity3));
-                })
-                .unwrap();
-        })
-        .unwrap();
+        all_storages.run(|entities: EntitiesView| {
+            assert!(!entities.is_alive(entity0));
+            assert!(entities.is_alive(entity1));
+            assert!(entities.is_alive(entity2));
+            assert!(!entities.is_alive(entity3));
+        });
+    });
 }

@@ -37,7 +37,7 @@ fn rename() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_unique(U32(0)).unwrap();
+    world.add_unique(U32(0));
 
     Workload::builder("Empty")
         .with_system(increment)
@@ -64,7 +64,7 @@ fn rename() {
 fn are_all_uniques_present_in_world() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_unique(U32(0)).unwrap();
+    world.add_unique(U32(0));
 
     Workload::builder("")
         .are_all_uniques_present_in_world(&world)

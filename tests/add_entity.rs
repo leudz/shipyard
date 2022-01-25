@@ -15,23 +15,15 @@ fn no_pack() {
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world
-        .run(|mut entities: EntitiesViewMut| {
-            entities.add_entity((), ());
-        })
-        .unwrap();
-    world
-        .run(
-            |(mut entities, mut usizes, mut u32s): (
-                EntitiesViewMut,
-                ViewMut<USIZE>,
-                ViewMut<U32>,
-            )| {
-                let entity1 = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
-                assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&USIZE(0), &U32(1)));
-            },
-        )
-        .unwrap();
+    world.run(|mut entities: EntitiesViewMut| {
+        entities.add_entity((), ());
+    });
+    world.run(
+        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
+            let entity1 = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+            assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&USIZE(0), &U32(1)));
+        },
+    );
 }
 
 #[test]

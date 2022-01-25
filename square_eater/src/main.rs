@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 use shipyard::{
-    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId, SparseSet,
-    UniqueView, UniqueViewMut, View, ViewMut, Workload, World,
+    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
+    IntoWorkloadSystem, SparseSet, UniqueView, UniqueViewMut, View, ViewMut, World,
 };
 
 const WIDTH: i32 = 640;
@@ -72,15 +72,13 @@ fn window_conf() -> Conf {
 fn init_world(world: &mut World) {
     let _ = world.remove_unique::<Player>();
 
-    world
-        .add_unique(Player {
-            is_invincible: false,
-            i_counter: 0,
-            squagum: false,
-            squagum_counter: 0,
-            rect: Rect::new(0., 0., INIT_SIZE * 3., INIT_SIZE * 3.),
-        })
-        .unwrap();
+    world.add_unique(Player {
+        is_invincible: false,
+        i_counter: 0,
+        squagum: false,
+        squagum_counter: 0,
+        rect: Rect::new(0., 0., INIT_SIZE * 3., INIT_SIZE * 3.),
+    });
 
     world.bulk_add_entity((0..7).map(|_| new_square()));
 }
@@ -95,17 +93,18 @@ async fn main() {
     // seed the random number generator with a random value
     rand::srand(macroquad::miniquad::date::now() as u64);
 
-    Workload::builder("Game loop")
-        .with_system(counters)
-        .with_system(move_player)
-        .with_system(move_square)
-        .with_system(grow_square)
-        .with_system(new_squares)
-        .with_system(collision)
-        .with_try_system(clean_up)
-        .with_system(render)
-        .add_to_world(&world)
-        .unwrap();
+    world.add_workload(|| {
+        (
+            counters,
+            move_player,
+            move_square,
+            grow_square,
+            new_squares,
+            collision,
+            clean_up.into_workload_try_system().unwrap(),
+            render,
+        )
+    });
 
     let mut is_started = false;
     loop {
