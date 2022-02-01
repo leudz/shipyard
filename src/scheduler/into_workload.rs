@@ -7,7 +7,7 @@ use alloc::vec;
 
 impl crate::World {
     /// Creates a new workload and store it in the [`World`].
-    pub fn add_workload<Views, R, W, F: Fn() -> W>(&self, workload: F)
+    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
     {
@@ -15,7 +15,7 @@ impl crate::World {
 
         WorkloadBuilder {
             work_units: w.work_units,
-            name: Box::new(core::any::type_name::<F>()),
+            name: Box::new(core::any::TypeId::of::<F>()),
             skip_if: Vec::new(),
         }
         .add_to_world(self)
@@ -36,8 +36,8 @@ impl Workload {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
     /// [`WorkloadBuilder`]: crate::WorkloadBuilder
-    pub fn builder<N: Label>(name: N) -> WorkloadBuilder {
-        WorkloadBuilder::new(name)
+    pub fn builder<L: Label>(label: L) -> WorkloadBuilder {
+        WorkloadBuilder::new(label)
     }
 }
 

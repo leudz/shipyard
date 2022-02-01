@@ -6,7 +6,7 @@ use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-use crate::scheduler::{Batches, Label, Scheduler};
+use crate::scheduler::{AsLabel, Batches, Label, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
@@ -666,20 +666,21 @@ let i = world.run(sys1);
     /// - Workload did not exist.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn run_workload(&self, name: impl Label) -> Result<(), error::RunWorkload> {
+    pub fn run_workload<T>(&self, label: impl AsLabel<T>) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
 
-        let batches = scheduler.workload(&name)?;
+        let label = label.as_label();
+        let batches = scheduler.workload(&*label)?;
 
         self.run_batches(
             &scheduler.systems,
             &scheduler.system_names,
             batches,
             #[cfg(feature = "tracing")]
-            &name,
+            &*label,
         )
     }
     /// Returns `true` if the world contains the `name` workload.

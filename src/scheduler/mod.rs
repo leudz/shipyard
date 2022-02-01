@@ -8,7 +8,7 @@ mod system;
 pub use builder::{ScheduledWorkload, WorkloadBuilder};
 pub use into_workload::{IntoWorkload, Workload};
 pub use into_workload_system::IntoWorkloadSystem;
-pub use label::Label;
+pub use label::{AsLabel, Label};
 pub use system::WorkloadSystem;
 
 pub(crate) use info::TypeInfo;
@@ -109,11 +109,11 @@ impl Scheduler {
     }
     pub(crate) fn rename(&mut self, old: &dyn Label, new: Box<dyn Label>) {
         if let Some(batches) = self.workloads.remove(old) {
-            self.workloads.insert(new.clone(), batches);
-
             if &*self.default == old {
-                self.default = new;
+                self.default = new.clone();
             }
+
+            self.workloads.insert(new, batches);
         }
     }
 }

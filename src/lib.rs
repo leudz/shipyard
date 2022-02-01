@@ -99,8 +99,8 @@ pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{
-    info, IntoWorkload, IntoWorkloadSystem, Label, ScheduledWorkload, Workload, WorkloadBuilder,
-    WorkloadSystem,
+    info, AsLabel, IntoWorkload, IntoWorkloadSystem, Label, ScheduledWorkload, Workload,
+    WorkloadBuilder, WorkloadSystem,
 };
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component};

@@ -532,7 +532,7 @@ fn create_workload(
     workloads: &mut HashMap<Box<dyn Label>, Batches>,
     default: &mut Box<dyn Label>,
 ) -> Result<WorkloadInfo, error::AddWorkload> {
-    if workloads.contains_key(&builder.name) {
+    if workloads.contains_key(&*builder.name) {
         return Err(error::AddWorkload::AlreadyExists);
     }
 
@@ -550,7 +550,7 @@ fn create_workload(
     } else {
         for work_unit in &builder.work_units {
             if let WorkUnit::WorkloadName(workload) = work_unit {
-                if !workloads.contains_key(workload) {
+                if !workloads.contains_key(&**workload) {
                     return Err(error::AddWorkload::UnknownWorkload(
                         builder.name,
                         workload.clone(),

@@ -3,6 +3,8 @@ use core::any::Any;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
+use crate::IntoWorkload;
+
 /// Workload identifier
 ///
 /// Implemented for all types `'static + Send + Sync + Clone + Hash + Eq + Debug`
@@ -70,5 +72,26 @@ impl Eq for dyn Label {}
 impl Debug for dyn Label {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         self.dyn_debug(f)
+    }
+}
+
+/// Converts a value to a `Box<dyn Label>`
+pub trait AsLabel<T> {
+    #[allow(missing_docs)]
+    fn as_label(&self) -> Box<dyn Label>;
+}
+
+impl<Views, R, W, F: Fn() -> W + 'static> AsLabel<(Views, R)> for F
+where
+    W: IntoWorkload<Views, R>,
+{
+    fn as_label(&self) -> Box<dyn Label> {
+        Box::new(core::any::TypeId::of::<F>())
+    }
+}
+
+impl<T: Label> AsLabel<T> for T {
+    fn as_label(&self) -> Box<dyn Label> {
+        T::dyn_clone(self)
     }
 }
