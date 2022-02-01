@@ -2,11 +2,13 @@ mod builder;
 pub mod info;
 mod into_workload;
 mod into_workload_system;
+mod label;
 mod system;
 
 pub use builder::{ScheduledWorkload, WorkloadBuilder};
 pub use into_workload::{IntoWorkload, Workload};
 pub use into_workload_system::IntoWorkloadSystem;
+pub use label::Label;
 pub use system::WorkloadSystem;
 
 pub(crate) use info::TypeInfo;
@@ -14,7 +16,6 @@ pub(crate) use info::TypeInfo;
 use crate::error;
 use crate::type_id::TypeId;
 use crate::World;
-use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use hashbrown::HashMap;
@@ -60,8 +61,8 @@ pub(crate) struct Scheduler {
     // system's `TypeId` to an index into both systems and system_names
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
-    pub(crate) workloads: HashMap<Cow<'static, str>, Batches>,
-    pub(crate) default: Cow<'static, str>,
+    pub(crate) workloads: HashMap<Box<dyn Label>, Batches>,
+    pub(crate) default: Box<dyn Label>,
 }
 
 impl Default for Scheduler {
@@ -72,24 +73,25 @@ impl Default for Scheduler {
             system_generators: Vec::new(),
             lookup_table: HashMap::new(),
             workloads: HashMap::new(),
-            default: "".into(),
+            default: Box::new(""),
         }
     }
 }
 
 impl Scheduler {
-    pub(crate) fn set_default(
+    pub(crate) fn set_default<L: Label>(
         &mut self,
-        name: Cow<'static, str>,
+        label: L,
     ) -> Result<(), error::SetDefaultWorkload> {
-        if self.workloads.contains_key(&name) {
-            self.default = name;
+        let label: Box<dyn Label> = Box::new(label);
+        if self.workloads.contains_key(&label) {
+            self.default = label;
             Ok(())
         } else {
             Err(error::SetDefaultWorkload::MissingWorkload)
         }
     }
-    pub(crate) fn workload(&self, name: &str) -> Result<&Batches, error::RunWorkload> {
+    pub(crate) fn workload(&self, name: &dyn Label) -> Result<&Batches, error::RunWorkload> {
         if let Some(batches) = self.workloads.get(name) {
             Ok(batches)
         } else {
@@ -99,17 +101,17 @@ impl Scheduler {
     pub(crate) fn default_workload(&self) -> &Batches {
         &self.workloads[&self.default]
     }
-    pub(crate) fn contains_workload(&self, name: &str) -> bool {
+    pub(crate) fn contains_workload(&self, name: &dyn Label) -> bool {
         self.workloads.contains_key(name)
     }
     pub(crate) fn is_empty(&self) -> bool {
         self.workloads.is_empty()
     }
-    pub(crate) fn rename(&mut self, old: Cow<'static, str>, new: Cow<'static, str>) {
-        if let Some(batches) = self.workloads.remove(&old) {
+    pub(crate) fn rename(&mut self, old: &dyn Label, new: Box<dyn Label>) {
+        if let Some(batches) = self.workloads.remove(old) {
             self.workloads.insert(new.clone(), batches);
 
-            if self.default == old {
+            if &*self.default == old {
                 self.default = new;
             }
         }

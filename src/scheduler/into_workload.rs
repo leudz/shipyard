@@ -1,6 +1,6 @@
-use super::IntoWorkloadSystem;
-use crate::WorkloadBuilder;
-use alloc::borrow::Cow;
+use crate::scheduler::{IntoWorkloadSystem, Label, WorkloadBuilder};
+use crate::view::AllStoragesView;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 // macro not module
 use alloc::vec;
@@ -15,7 +15,7 @@ impl crate::World {
 
         WorkloadBuilder {
             work_units: w.work_units,
-            name: core::any::type_name::<F>().into(),
+            name: Box::new(core::any::type_name::<F>()),
             skip_if: Vec::new(),
         }
         .add_to_world(self)
@@ -25,14 +25,18 @@ impl crate::World {
 
 /// A collection of system.
 pub struct Workload {
+    #[allow(unused)]
+    pub(super) name: Option<Box<dyn Label>>,
     pub(super) work_units: Vec<super::builder::WorkUnit>,
+    #[allow(unused)]
+    pub(super) skip_if: Vec<Box<dyn Fn(AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
 }
 
 impl Workload {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
     /// [`WorkloadBuilder`]: crate::WorkloadBuilder
-    pub fn builder<N: Into<Cow<'static, str>>>(name: N) -> WorkloadBuilder {
+    pub fn builder<N: Label>(name: N) -> WorkloadBuilder {
         WorkloadBuilder::new(name)
     }
 }
@@ -123,7 +127,19 @@ where
 {
     fn into_workload(self) -> Workload {
         Workload {
+            name: None,
             work_units: vec![self.into_workload_system().unwrap().into()],
+            skip_if: Vec::new(),
+        }
+    }
+}
+
+impl IntoWorkload<(), ()> for WorkloadBuilder {
+    fn into_workload(self) -> Workload {
+        Workload {
+            name: Some(self.name),
+            work_units: self.work_units,
+            skip_if: self.skip_if,
         }
     }
 }
@@ -138,7 +154,9 @@ macro_rules! impl_system {
         {
             fn into_workload(self) -> Workload {
                 let mut workload = Workload {
+                    name: None,
                     work_units: Vec::new(),
+                    skip_if: Vec::new(),
                 };
 
                 $(

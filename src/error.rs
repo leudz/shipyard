@@ -1,8 +1,9 @@
 //! All error types.
 
+use crate::entity_id::EntityId;
 use crate::info::TypeInfo;
+use crate::scheduler::Label;
 use crate::storage::StorageId;
-use crate::EntityId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::fmt::{Debug, Display, Formatter};
@@ -186,14 +187,24 @@ impl Display for AddComponent {
 /// Error type returned by [`WorkloadBuilder::add_to_world`].
 ///
 /// [`WorkloadBuilder::add_to_world`]: crate::WorkloadBuilder::add_to_world()
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Eq)]
 pub enum AddWorkload {
     /// A workload with the same name already exists.
     AlreadyExists,
     /// The `Scheduler` is already borrowed.
     Borrow,
     /// Unknown nested workload.
-    UnknownWorkload(Cow<'static, str>, Cow<'static, str>),
+    UnknownWorkload(Box<dyn Label>, Box<dyn Label>),
+}
+
+// For some reason this trait can't be derived with Box<dyn Label>
+impl PartialEq for AddWorkload {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::UnknownWorkload(l0, l1), Self::UnknownWorkload(r0, r1)) => l0 == r0 && l1 == r1,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -207,7 +218,7 @@ impl Debug for AddWorkload {
                 f.write_str("Cannot mutably borrow the scheduler while it's already borrowed.")
             }
             Self::UnknownWorkload(workload, unknown_workload) => f.write_fmt(format_args!(
-                "Could not find {} workload while building {}'s batches.",
+                "Could not find {:?} workload while building {:?}'s batches.",
                 unknown_workload, workload
             )),
         }
@@ -490,16 +501,27 @@ impl Display for Apply {
 /// Error returned by [`are_all_uniques_present_in_world`].
 ///
 /// [`are_all_uniques_present_in_world`]: crate::WorkloadBuilder::are_all_uniques_present_in_world()
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Eq)]
 pub enum UniquePresence {
     #[allow(missing_docs)]
-    Workload(Cow<'static, str>),
+    Workload(Box<dyn Label>),
     #[allow(missing_docs)]
     Unique(TypeInfo),
     #[allow(missing_docs)]
     AllStorages,
     #[allow(missing_docs)]
     Scheduler,
+}
+
+// For some reason this trait can't be derived with Box<dyn Label>
+impl PartialEq for UniquePresence {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Workload(l0), Self::Workload(r0)) => l0 == r0,
+            (Self::Unique(l0), Self::Unique(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -509,7 +531,7 @@ impl Debug for UniquePresence {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         match self {
             UniquePresence::Workload(workload) => f.write_fmt(format_args!(
-                "{} workload is not present in the World.",
+                "{:?} workload is not present in the World.",
                 workload
             )),
             UniquePresence::Unique(type_info) => f.write_fmt(format_args!(

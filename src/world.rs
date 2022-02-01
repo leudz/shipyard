@@ -6,7 +6,7 @@ use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-use crate::scheduler::{Batches, Scheduler};
+use crate::scheduler::{Batches, Label, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
@@ -644,12 +644,12 @@ let i = world.run(sys1);
     /// - Scheduler borrow failed.
     pub fn rename_workload(
         &self,
-        old_name: impl Into<Cow<'static, str>>,
-        new_name: impl Into<Cow<'static, str>>,
+        old_name: impl Label,
+        new_name: impl Label,
     ) -> Result<(), error::Borrow> {
         self.scheduler
             .borrow_mut()?
-            .rename(old_name.into(), new_name.into());
+            .rename(&old_name, Box::new(new_name));
 
         Ok(())
     }
@@ -666,20 +666,20 @@ let i = world.run(sys1);
     /// - Workload did not exist.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn run_workload(&self, name: impl AsRef<str>) -> Result<(), error::RunWorkload> {
+    pub fn run_workload(&self, name: impl Label) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .borrow()
             .map_err(|_| error::RunWorkload::Scheduler)?;
 
-        let batches = scheduler.workload(name.as_ref())?;
+        let batches = scheduler.workload(&name)?;
 
         self.run_batches(
             &scheduler.systems,
             &scheduler.system_names,
             batches,
             #[cfg(feature = "tracing")]
-            name.as_ref(),
+            &name,
         )
     }
     /// Returns `true` if the world contains the `name` workload.
@@ -703,8 +703,8 @@ let i = world.run(sys1);
     /// assert!(world.contains_workload("foo").unwrap());
     /// assert!(!world.contains_workload("bar").unwrap());
     /// ```
-    pub fn contains_workload(&self, name: impl AsRef<str>) -> Result<bool, error::Borrow> {
-        Ok(self.scheduler.borrow()?.contains_workload(name.as_ref()))
+    pub fn contains_workload(&self, name: impl Label) -> Result<bool, error::Borrow> {
+        Ok(self.scheduler.borrow()?.contains_workload(&name))
     }
     #[allow(clippy::type_complexity)]
     pub(crate) fn run_batches(
@@ -712,7 +712,7 @@ let i = world.run(sys1);
         systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
         system_names: &[&'static str],
         batches: &Batches,
-        #[cfg(feature = "tracing")] workload_name: &str,
+        #[cfg(feature = "tracing")] workload_name: &dyn Label,
     ) -> Result<(), error::RunWorkload> {
         // Check for empty first to not borrow AllStorages unnecessarily
         if !batches.skip_if.is_empty() {
@@ -727,7 +727,7 @@ let i = world.run(sys1);
         }
 
         #[cfg(feature = "tracing")]
-        let parent_span = tracing::info_span!("run_workload", %workload_name);
+        let parent_span = tracing::info_span!("run_workload", ?workload_name);
 
         #[cfg(feature = "parallel")]
         {

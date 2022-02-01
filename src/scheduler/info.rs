@@ -3,8 +3,9 @@
 pub use crate::type_id::TypeId;
 
 use crate::borrow::Mutability;
+use crate::scheduler::Label;
 use crate::storage::StorageId;
-use alloc::borrow::Cow;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 /// Contains information related to a workload.
@@ -13,7 +14,7 @@ use alloc::vec::Vec;
 #[derive(Debug, Clone)]
 pub struct WorkloadInfo {
     #[allow(missing_docs)]
-    pub name: Cow<'static, str>,
+    pub name: Box<dyn Label>,
     #[allow(missing_docs)]
     pub batch_info: Vec<BatchInfo>,
 }
@@ -132,6 +133,7 @@ impl core::fmt::Debug for TypeInfo {
 }
 
 /// Contains a list of workloads, their systems and which storages these systems borrow.
+#[allow(clippy::type_complexity)]
 pub struct WorkloadsTypeUsage(
-    pub hashbrown::HashMap<Cow<'static, str>, Vec<(&'static str, Vec<TypeInfo>)>>,
+    pub hashbrown::HashMap<Box<dyn Label>, Vec<(&'static str, Vec<TypeInfo>)>>,
 );

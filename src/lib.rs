@@ -99,7 +99,7 @@ pub use r#mut::Mut;
 pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{
-    info, IntoWorkload, IntoWorkloadSystem, ScheduledWorkload, Workload, WorkloadBuilder,
+    info, IntoWorkload, IntoWorkloadSystem, Label, ScheduledWorkload, Workload, WorkloadBuilder,
     WorkloadSystem,
 };
 #[cfg(feature = "proc")]

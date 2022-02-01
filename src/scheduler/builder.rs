@@ -1,16 +1,18 @@
-use super::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
-use super::{Batches, IntoWorkloadSystem, Scheduler, WorkloadSystem};
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
+use crate::component::Component;
+use crate::scheduler::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
+use crate::scheduler::{Batches, IntoWorkloadSystem, Label, Scheduler, WorkloadSystem};
 use crate::sparse_set::SparseSet;
 use crate::type_id::TypeId;
+use crate::unique::Unique;
 use crate::view::AllStoragesView;
 use crate::world::World;
-use crate::{error, track, Component, Unique};
-use alloc::borrow::Cow;
+use crate::{error, track};
 // this is the macro, not the module
 use crate::storage::StorageId;
 use alloc::boxed::Box;
+// macro not module
 use alloc::vec;
 use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
@@ -26,7 +28,7 @@ use std::error::Error;
 /// [`WorkloadBuilder`]: crate::WorkloadBuilder
 /// [`WorkloadBuilder::new`]: crate::WorkloadBuilder::new()
 pub struct ScheduledWorkload {
-    name: Cow<'static, str>,
+    name: Box<dyn Label>,
     #[allow(clippy::type_complexity)]
     systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
     system_names: Vec<&'static str>,
@@ -36,15 +38,15 @@ pub struct ScheduledWorkload {
     #[allow(unused)]
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
-    workloads: HashMap<Cow<'static, str>, Batches>,
+    workloads: HashMap<Box<dyn Label>, Batches>,
 }
 
 impl ScheduledWorkload {
     /// Creates a new empty [`WorkloadBuilder`].
     ///
     /// [`WorkloadBuilder`]: crate::WorkloadBuilder
-    pub fn builder<N: Into<Cow<'static, str>>>(name: N) -> WorkloadBuilder {
-        WorkloadBuilder::new(name)
+    pub fn builder<L: Label>(label: L) -> WorkloadBuilder {
+        WorkloadBuilder::new(label)
     }
 
     /// Runs the workload.
@@ -70,7 +72,7 @@ impl ScheduledWorkload {
 
 pub(super) enum WorkUnit {
     System(WorkloadSystem),
-    WorkloadName(Cow<'static, str>),
+    WorkloadName(Box<dyn Label>),
 }
 
 impl From<WorkloadSystem> for WorkUnit {
@@ -79,8 +81,8 @@ impl From<WorkloadSystem> for WorkUnit {
     }
 }
 
-impl From<Cow<'static, str>> for WorkUnit {
-    fn from(workload: Cow<'static, str>) -> Self {
+impl From<Box<dyn Label>> for WorkUnit {
+    fn from(workload: Box<dyn Label>) -> Self {
         WorkUnit::WorkloadName(workload)
     }
 }
@@ -92,7 +94,7 @@ impl From<Cow<'static, str>> for WorkUnit {
 /// The default workload will automatically be set to the first workload added.
 pub struct WorkloadBuilder {
     pub(super) work_units: Vec<WorkUnit>,
-    pub(super) name: Cow<'static, str>,
+    pub(super) name: Box<dyn Label>,
     pub(super) skip_if: Vec<Box<dyn Fn(AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
 }
 
@@ -138,10 +140,10 @@ impl WorkloadBuilder {
     ///
     /// world.run_default();
     /// ```
-    pub fn new<N: Into<Cow<'static, str>>>(name: N) -> Self {
+    pub fn new<L: Label>(label: L) -> Self {
         WorkloadBuilder {
             work_units: Vec::new(),
-            name: name.into(),
+            name: Box::new(label),
             skip_if: Vec::new(),
         }
     }
@@ -154,8 +156,8 @@ impl WorkloadBuilder {
     }
     /// Nests a workload by adding all its systems.  
     /// This other workload must be present in the `World` by the time `add_to_world` is called.
-    pub fn with_workload<W: Into<Cow<'static, str>> + 'static>(mut self, workload: W) -> Self {
-        let workload = workload.into();
+    pub fn with_workload<W: Label>(mut self, workload: W) -> Self {
+        let workload: Box<dyn Label> = Box::new(workload);
 
         self.work_units.push(workload.into());
 
@@ -423,6 +425,8 @@ impl WorkloadBuilder {
             workloads: HashMap::new(),
         };
 
+        let mut default: Box<dyn Label> = Box::new("");
+
         let workload_info = create_workload(
             self,
             &mut workload.systems,
@@ -430,7 +434,7 @@ impl WorkloadBuilder {
             &mut workload.system_generators,
             &mut workload.lookup_table,
             &mut workload.workloads,
-            &mut Cow::default(),
+            &mut default,
         )?;
 
         Ok((workload, workload_info))
@@ -525,8 +529,8 @@ fn create_workload(
     system_names: &mut Vec<&'static str>,
     system_generators: &mut Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
     lookup_table: &mut HashMap<TypeId, usize>,
-    workloads: &mut HashMap<Cow<'static, str>, Batches>,
-    default: &mut Cow<'static, str>,
+    workloads: &mut HashMap<Box<dyn Label>, Batches>,
+    default: &mut Box<dyn Label>,
 ) -> Result<WorkloadInfo, error::AddWorkload> {
     if workloads.contains_key(&builder.name) {
         return Err(error::AddWorkload::AlreadyExists);
@@ -875,7 +879,7 @@ fn flatten_work_unit(
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync>>,
     lookup_table: &mut HashMap<TypeId, usize>,
     collected_systems: &mut Vec<(TypeId, &str, usize, Vec<TypeInfo>)>,
-    workloads: &mut HashMap<Cow<'static, str>, Batches>,
+    workloads: &mut HashMap<Box<dyn Label>, Batches>,
     system_generators: &mut Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
     system_names: &mut Vec<&'static str>,
 ) {
@@ -967,17 +971,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("System1");
         assert_eq!(scheduler.systems.len(), 1);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("System1"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0])],
                 sequential: vec![0],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "System1");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -994,17 +999,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("System1");
         assert_eq!(scheduler.systems.len(), 1);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("System1"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0])],
                 sequential: vec![0],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "System1");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1023,17 +1029,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1052,17 +1059,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1081,17 +1089,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
 
         let world = World::new();
 
@@ -1102,17 +1111,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (None, vec![1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1138,17 +1148,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Combined");
         assert_eq!(scheduler.systems.len(), 3);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Combined"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 2]), (None, vec![1])],
                 sequential: vec![0, 1, 2],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Combined");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1166,17 +1177,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 1);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new())],
                 sequential: vec![0],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
 
         let world = World::new();
 
@@ -1190,14 +1202,14 @@ mod tests {
         assert_eq!(scheduler.systems.len(), 1);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new()), (Some(0), Vec::new())],
                 sequential: vec![0, 0],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
 
         let world = World::new();
 
@@ -1208,17 +1220,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
 
         let world = World::new();
 
@@ -1232,14 +1245,14 @@ mod tests {
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[cfg(feature = "thread_local")]
@@ -1267,17 +1280,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Test");
         assert_eq!(scheduler.systems.len(), 1);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Test"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 0])],
                 sequential: vec![0, 0],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Test");
+        assert_eq!(&scheduler.default, &label);
         assert!(info.batch_info[0].systems.1[0].conflict.is_none());
 
         let world = World::new();
@@ -1292,14 +1306,14 @@ mod tests {
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Test"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0]), (Some(1), Vec::new())],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Test");
+        assert_eq!(&scheduler.default, &label);
 
         let world = World::new();
 
@@ -1313,14 +1327,14 @@ mod tests {
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Test"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(Some(0), Vec::new()), (None, vec![1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Test");
+        assert_eq!(&scheduler.default, &label);
 
         let world = World::new();
 
@@ -1334,14 +1348,14 @@ mod tests {
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Test"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Test");
+        assert_eq!(&scheduler.default, &label);
         assert!(info.batch_info[0].systems.1[0].conflict.is_none());
 
         let world = World::new();
@@ -1356,14 +1370,14 @@ mod tests {
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Test"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Test");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1382,17 +1396,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Systems");
         assert_eq!(scheduler.systems.len(), 2);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Systems"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 1])],
                 sequential: vec![0, 1],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Systems");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1405,18 +1420,21 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        let scheduler = world.scheduler.borrow_mut().unwrap();
-        assert_eq!(scheduler.systems.len(), 0);
-        assert_eq!(scheduler.workloads.len(), 1);
-        assert_eq!(
-            scheduler.workloads.get("Systems"),
-            Some(&Batches {
-                parallel: vec![],
-                sequential: vec![],
-                skip_if: Vec::new(),
-            })
-        );
-        assert_eq!(scheduler.default, "Systems");
+        dbg!("here");
+
+        // let scheduler = world.scheduler.borrow_mut().unwrap();
+        // let label: Box<dyn Label> = Box::new("Systems");
+        // assert_eq!(scheduler.systems.len(), 0);
+        // assert_eq!(scheduler.workloads.len(), 1);
+        // assert_eq!(
+        //     scheduler.workloads.get(&label),
+        //     Some(&Batches {
+        //         parallel: vec![],
+        //         sequential: vec![],
+        //         skip_if: Vec::new(),
+        //     })
+        // );
+        // assert_eq!(&scheduler.default, &label);
     }
 
     #[test]
@@ -1444,17 +1462,18 @@ mod tests {
             .unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
+        let label: Box<dyn Label> = Box::new("Combined");
         assert_eq!(scheduler.systems.len(), 4);
         assert_eq!(scheduler.workloads.len(), 1);
         assert_eq!(
-            scheduler.workloads.get("Combined"),
+            scheduler.workloads.get(&label),
             Some(&Batches {
                 parallel: vec![(None, vec![0, 3]), (None, vec![1, 2])],
                 sequential: vec![0, 1, 2, 3],
                 skip_if: Vec::new(),
             })
         );
-        assert_eq!(scheduler.default, "Combined");
+        assert_eq!(&scheduler.default, &label);
     }
 
     #[test]

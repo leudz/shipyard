@@ -79,7 +79,7 @@ fn are_all_uniques_present_in_world() {
         Workload::builder("")
             .with_workload("other_workload")
             .are_all_uniques_present_in_world(&world),
-        Err(error::UniquePresence::Workload("other_workload".into()))
+        Err(error::UniquePresence::Workload(Box::new("other_workload")))
     );
 
     let type_info = {
