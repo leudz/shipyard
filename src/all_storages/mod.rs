@@ -96,7 +96,7 @@ impl AllStorages {
         self.storages
             .write()
             .entry(storage_id)
-            .or_insert_with(|| SBox::new(Unique::new(component)));
+            .or_insert_with(|| SBox::new(Unique::new(component, self.get_tracking_timestamp().0)));
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
@@ -110,10 +110,12 @@ impl AllStorages {
         if std::thread::current().id() == self.thread_id {
             let storage_id = StorageId::of::<Unique<T>>();
 
-            self.storages
-                .write()
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_send(Unique::new(component), self.thread_id));
+            self.storages.write().entry(storage_id).or_insert_with(|| {
+                SBox::new_non_send(
+                    Unique::new(component, self.get_tracking_timestamp().0),
+                    self.thread_id,
+                )
+            });
         }
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -127,10 +129,9 @@ impl AllStorages {
     pub fn add_unique_non_sync<T: Send + Component>(&self, component: T) {
         let storage_id = StorageId::of::<Unique<T>>();
 
-        self.storages
-            .write()
-            .entry(storage_id)
-            .or_insert_with(|| SBox::new_non_sync(Unique::new(component)));
+        self.storages.write().entry(storage_id).or_insert_with(|| {
+            SBox::new_non_sync(Unique::new(component, self.get_tracking_timestamp().0))
+        });
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
@@ -144,10 +145,12 @@ impl AllStorages {
         if std::thread::current().id() == self.thread_id {
             let storage_id = StorageId::of::<Unique<T>>();
 
-            self.storages
-                .write()
-                .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_send_sync(Unique::new(component), self.thread_id));
+            self.storages.write().entry(storage_id).or_insert_with(|| {
+                SBox::new_non_send_sync(
+                    Unique::new(component, self.get_tracking_timestamp().0),
+                    self.thread_id,
+                )
+            });
         }
     }
     /// Removes a unique storage.

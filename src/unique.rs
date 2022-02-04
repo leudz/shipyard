@@ -1,16 +1,12 @@
 use crate::{memory_usage::StorageMemoryUsage, storage::Storage, Component};
 
-#[derive(PartialEq, Eq)]
-pub(crate) enum TrackingState {
-    Inserted,
-    Modified,
-    Untracked,
-}
-
 /// Unique storage.
 pub struct Unique<T: Component> {
     pub(crate) value: T,
-    pub(crate) tracking: TrackingState,
+    pub(crate) insert: u32,
+    pub(crate) modification: u32,
+    pub(crate) last_insert: u32,
+    pub(crate) last_modification: u32,
 }
 
 impl<T: Component> Storage for Unique<T> {
@@ -28,10 +24,13 @@ impl<T: Component> Storage for Unique<T> {
 }
 
 impl<T: Component> Unique<T> {
-    pub(crate) fn new(value: T) -> Self {
+    pub(crate) fn new(value: T, current: u32) -> Self {
         Unique {
             value,
-            tracking: TrackingState::Inserted,
+            insert: current,
+            modification: 0,
+            last_insert: 0,
+            last_modification: 0,
         }
     }
 }
