@@ -8,47 +8,68 @@ pub(crate) fn expand_borrow(
     vis: syn::Visibility,
     data: syn::Data,
 ) -> Result<TokenStream> {
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    let view_lifetime = generics
-        .params
-        .first()
-        .and_then(|generic| match generic {
-            syn::GenericParam::Type(_) => None,
-            syn::GenericParam::Lifetime(lifetime) => Some(&lifetime.lifetime),
-            syn::GenericParam::Const(_) => None,
-        })
-        .ok_or_else(|| {
-            Error::new(
-                Span::call_site(),
-                "views need a lifetime to borrow from the World",
-            )
-        })?;
-
-    let borrower_generics = generics
-        .params
-        .iter()
-        .filter_map(|param| match param {
-            syn::GenericParam::Type(generic) => Some(generic),
-            syn::GenericParam::Lifetime(_) | syn::GenericParam::Const(_) => None,
-        })
-        .collect::<Vec<_>>();
-
-    let borrower_generics_idents = borrower_generics.iter().map(|generic| &generic.ident);
-    let borrower_generics_idents2 = borrower_generics_idents.clone();
-    let borrower_generics_idents3 = borrower_generics_idents.clone();
+    let view_lifetime = generics.lifetimes().next().ok_or_else(|| {
+        Error::new(
+            name.span(),
+            "views need a lifetime to borrow from the World",
+        )
+    })?;
 
     let fields = match data {
         syn::Data::Struct(data_struct) => data_struct.fields,
         _ => {
             return Err(Error::new(
                 Span::call_site(),
-                "System can only be implemented on structs",
+                "Borrow can only be implemented on structs",
             ))
         }
     };
 
     let borrower = quote::format_ident!("{}Borrower", name);
+
+    let borrower_generics = syn::Generics {
+        lt_token: generics.lt_token,
+        params: std::iter::FromIterator::from_iter(generics.params.clone().into_pairs().filter(
+            |pair| match pair.value() {
+                syn::GenericParam::Type(_) => true,
+                syn::GenericParam::Lifetime(_) => false,
+                syn::GenericParam::Const(_) => true,
+            },
+        )),
+        gt_token: generics.gt_token,
+        where_clause: generics
+            .where_clause
+            .as_ref()
+            .map(|where_clause| syn::WhereClause {
+                where_token: where_clause.where_token,
+                predicates: std::iter::FromIterator::from_iter(
+                    where_clause.predicates.clone().into_pairs().filter(|pair| {
+                        match pair.value() {
+                            syn::WherePredicate::Type(_) => true,
+                            syn::WherePredicate::Lifetime(_) => false,
+                            syn::WherePredicate::Eq(_) => true,
+                        }
+                    }),
+                ),
+            }),
+    };
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let (_borrower_impl_generics, borrower_ty_generics, borrower_where_clause) =
+        borrower_generics.split_for_impl();
+
+    let borrower_field_type = borrower_generics
+        .const_params()
+        .map(|const_param| &const_param.ident)
+        .chain(
+            borrower_generics
+                .type_params()
+                .map(|type_param| &type_param.ident),
+        );
+
+    let borrower_field = quote!(
+        ::core::marker::PhantomData<(#(#borrower_field_type,)*)>
+    );
 
     match fields {
         syn::Fields::Named(fields) => {
@@ -94,13 +115,13 @@ pub(crate) fn expand_borrow(
                 });
 
             Ok(quote!(
-                #vis struct #borrower < #(#borrower_generics)* >(::core::marker::PhantomData<(#(#borrower_generics_idents)*)>) #where_clause;
+                #vis struct #borrower #borrower_ty_generics (#borrower_field) #borrower_where_clause;
 
                 impl #impl_generics ::shipyard::IntoBorrow for #name #ty_generics #where_clause {
-                    type Borrow = #borrower< #(#borrower_generics_idents2)* >;
+                    type Borrow = #borrower #borrower_ty_generics;
                 }
 
-                impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower < #(#borrower_generics_idents3)* > #where_clause {
+                impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
                     type View = #name #ty_generics;
 
                     fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
@@ -121,13 +142,13 @@ pub(crate) fn expand_borrow(
                 });
 
             Ok(quote!(
-                #vis struct #borrower < #(#borrower_generics)* >(::core::marker::PhantomData<(#(#borrower_generics_idents)*)>) #where_clause;
+                #vis struct #borrower #borrower_ty_generics (#borrower_field) #borrower_where_clause;
 
                 impl #impl_generics ::shipyard::IntoBorrow for #name #ty_generics #where_clause {
-                    type Borrow = #borrower< #(#borrower_generics_idents2)* >;
+                    type Borrow = #borrower #borrower_ty_generics;
                 }
 
-                impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower < #(#borrower_generics_idents3)* > #where_clause {
+                impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
                     type View = #name #ty_generics;
 
                     fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
@@ -136,8 +157,9 @@ pub(crate) fn expand_borrow(
                 }
             ))
         }
-        syn::Fields::Unit => Ok(quote!(
-            unreachable!("Unit struct cannot borrow from World");
+        syn::Fields::Unit => Err(Error::new(
+            Span::call_site(),
+            "Unit struct cannot borrow from World",
         )),
     }
 }

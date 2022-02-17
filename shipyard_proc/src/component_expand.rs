@@ -7,8 +7,6 @@ pub(crate) fn expand_component(
     generics: syn::Generics,
     attribute_input: Option<&syn::Attribute>,
 ) -> Result<TokenStream> {
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
     let tracking = if let Some(tracking_attr) = attribute_input {
         let tracking: syn::Ident = tracking_attr.parse_args().map_err(|_| {
             Error::new_spanned(
@@ -31,6 +29,8 @@ pub(crate) fn expand_component(
     } else {
         quote!(Untracked)
     };
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     Ok(quote!(
         impl #impl_generics ::shipyard::Component for #name #ty_generics #where_clause {

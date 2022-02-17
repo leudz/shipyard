@@ -7,17 +7,17 @@ pub(crate) fn expand_borrow_info(
     generics: syn::Generics,
     data: syn::Data,
 ) -> Result<TokenStream> {
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
     let fields = match data {
         syn::Data::Struct(data_struct) => data_struct.fields,
         _ => {
             return Err(Error::new(
                 Span::call_site(),
-                "System can only be implemented on structs",
+                "BorrowInfo can only be implemented on structs",
             ))
         }
     };
+
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     match fields {
         syn::Fields::Named(fields) => {
@@ -76,8 +76,9 @@ pub(crate) fn expand_borrow_info(
                 }
             ))
         }
-        syn::Fields::Unit => Ok(quote!(
-            unreachable!("Unit struct cannot borrow from World");
+        syn::Fields::Unit => Err(Error::new(
+            Span::call_site(),
+            "Unit struct cannot borrow from World",
         )),
     }
 }
