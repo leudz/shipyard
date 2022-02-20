@@ -641,22 +641,18 @@ let i = world.run(sys1);
     ///
     /// - Scheduler (exclusive)
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - Scheduler borrow failed.
-    pub fn rename_workload<T, U>(
-        &self,
-        old_name: impl AsLabel<T>,
-        new_name: impl AsLabel<U>,
-    ) -> Result<(), error::Borrow> {
+    #[track_caller]
+    pub fn rename_workload<T, U>(&self, old_name: impl AsLabel<T>, new_name: impl AsLabel<U>) {
         let old_label = old_name.as_label();
         let new_label = new_name.as_label();
 
         self.scheduler
-            .borrow_mut()?
+            .borrow_mut()
+            .unwrap()
             .rename(&old_label, Box::new(new_label));
-
-        Ok(())
     }
     /// Runs the `name` workload.
     ///
@@ -694,7 +690,7 @@ let i = world.run(sys1);
     ///
     /// - Scheduler (shared)
     ///
-    /// ### Errors
+    /// ### Panics
     ///
     /// - Scheduler borrow failed.
     ///
@@ -706,12 +702,14 @@ let i = world.run(sys1);
     ///
     /// Workload::builder("foo").add_to_world(&world).unwrap();
     ///
-    /// assert!(world.contains_workload("foo").unwrap());
-    /// assert!(!world.contains_workload("bar").unwrap());
+    /// assert!(world.contains_workload("foo"));
+    /// assert!(!world.contains_workload("bar"));
     /// ```
-    pub fn contains_workload<T>(&self, name: impl AsLabel<T>) -> Result<bool, error::Borrow> {
+    #[track_caller]
+    pub fn contains_workload<T>(&self, name: impl AsLabel<T>) -> bool {
         let label = name.as_label();
-        Ok(self.scheduler.borrow()?.contains_workload(&*label))
+
+        self.scheduler.borrow().unwrap().contains_workload(&*label)
     }
     #[allow(clippy::type_complexity)]
     pub(crate) fn run_batches(

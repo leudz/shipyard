@@ -44,7 +44,7 @@ fn rename() {
         .add_to_world(&world)
         .unwrap();
 
-    world.rename_workload("Empty", "New Empty").unwrap();
+    world.rename_workload("Empty", "New Empty");
 
     assert_eq!(
         world
@@ -154,7 +154,7 @@ fn contains() {
     }
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.add_workload(w);
-    assert!(world.contains_workload(w.as_label()).unwrap());
-    assert!(world.contains_workload(w).unwrap());
+    assert!(world.contains_workload(w.as_label()));
+    assert!(world.contains_workload(w));
     world.run_workload(w).unwrap();
 }
