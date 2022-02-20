@@ -146,3 +146,15 @@ fn run_with_world() {
     workload2.run_with_world(&world1).unwrap();
     workload2.run_with_world(&world2).unwrap();
 }
+
+#[test]
+fn contains() {
+    fn w() -> Workload {
+        (|| {}).into_workload()
+    }
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    world.add_workload(w);
+    assert!(world.contains_workload(w.as_label()).unwrap());
+    assert!(world.contains_workload(w).unwrap());
+    world.run_workload(w).unwrap();
+}

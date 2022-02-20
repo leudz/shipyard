@@ -1,9 +1,11 @@
+use crate::IntoWorkload;
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::string::String;
 use core::any::Any;
+use core::any::TypeId;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
-
-use crate::IntoWorkload;
 
 /// Workload identifier
 ///
@@ -14,36 +16,76 @@ pub trait Label: 'static + Send + Sync {
     #[allow(missing_docs)]
     fn dyn_eq(&self, other: &dyn Label) -> bool;
     #[allow(missing_docs)]
-    fn dyn_hash(&self, hasher: &mut dyn Hasher);
+    fn dyn_hash(&self, state: &mut dyn Hasher);
     #[allow(missing_docs)]
     fn dyn_clone(&self) -> Box<dyn Label>;
     #[allow(missing_docs)]
     fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error>;
 }
 
-impl<L: 'static + Send + Sync + Clone + Hash + Eq + Debug> Label for L {
+macro_rules! impl_label {
+    ($($type: ty),+) => {
+        $(
+            impl Label for $type {
+                fn as_any(&self) -> &dyn Any {
+                    self
+                }
+                fn dyn_eq(&self, other: &dyn Label) -> bool {
+                    if let Some(other) = other.as_any().downcast_ref::<Self>() {
+                        self == other
+                    } else {
+                        false
+                    }
+                }
+                fn dyn_hash(&self, mut state: &mut dyn Hasher) {
+                    Self::hash(self, &mut state);
+                }
+                fn dyn_clone(&self) -> Box<dyn Label> {
+                    Box::new(self.clone())
+                }
+                fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+                    Self::fmt(self, f)
+                }
+            }
+        )+
+    };
+}
+
+impl_label![&'static str, String, Cow<'static, str>, TypeId];
+
+impl Label for Box<dyn Label> {
     fn as_any(&self) -> &dyn Any {
-        self
+        (**self).as_any()
     }
-
     fn dyn_eq(&self, other: &dyn Label) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<L>() {
-            self == other
-        } else {
-            false
-        }
+        (**self).dyn_eq(other)
     }
-
-    fn dyn_hash(&self, mut state: &mut dyn Hasher) {
-        L::hash(self, &mut state);
+    fn dyn_hash(&self, state: &mut dyn Hasher) {
+        (**self).dyn_hash(state);
     }
-
     fn dyn_clone(&self) -> Box<dyn Label> {
-        Box::new(L::clone(self))
+        (**self).dyn_clone()
     }
-
     fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        L::fmt(self, f)
+        (**self).dyn_debug(f)
+    }
+}
+
+impl Label for crate::WorkloadBuilder {
+    fn as_any(&self) -> &dyn Any {
+        &self.name
+    }
+    fn dyn_eq(&self, other: &dyn Label) -> bool {
+        self.name.dyn_eq(other)
+    }
+    fn dyn_hash(&self, state: &mut dyn Hasher) {
+        self.name.dyn_hash(state)
+    }
+    fn dyn_clone(&self) -> Box<dyn Label> {
+        self.name.dyn_clone()
+    }
+    fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        self.name.dyn_debug(f)
     }
 }
 

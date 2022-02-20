@@ -6,7 +6,9 @@ use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-use crate::scheduler::{AsLabel, Batches, Label, Scheduler};
+#[cfg(feature = "tracing")]
+use crate::scheduler::Label;
+use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::{error, Component};
@@ -642,14 +644,17 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
-    pub fn rename_workload(
+    pub fn rename_workload<T, U>(
         &self,
-        old_name: impl Label,
-        new_name: impl Label,
+        old_name: impl AsLabel<T>,
+        new_name: impl AsLabel<U>,
     ) -> Result<(), error::Borrow> {
+        let old_label = old_name.as_label();
+        let new_label = new_name.as_label();
+
         self.scheduler
             .borrow_mut()?
-            .rename(&old_name, Box::new(new_name));
+            .rename(&old_label, Box::new(new_label));
 
         Ok(())
     }
@@ -704,8 +709,9 @@ let i = world.run(sys1);
     /// assert!(world.contains_workload("foo").unwrap());
     /// assert!(!world.contains_workload("bar").unwrap());
     /// ```
-    pub fn contains_workload(&self, name: impl Label) -> Result<bool, error::Borrow> {
-        Ok(self.scheduler.borrow()?.contains_workload(&name))
+    pub fn contains_workload<T>(&self, name: impl AsLabel<T>) -> Result<bool, error::Borrow> {
+        let label = name.as_label();
+        Ok(self.scheduler.borrow()?.contains_workload(&*label))
     }
     #[allow(clippy::type_complexity)]
     pub(crate) fn run_batches(
