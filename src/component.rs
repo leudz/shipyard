@@ -6,3 +6,7 @@ pub trait Component: Sized + 'static {
     /// Can be one of: [`track::Untracked`], [`track::Insertion`], [`track::Modification`], [`track::Removal`], [`track::All`].
     type Tracking: track::Tracking;
 }
+
+impl<T: Component> Component for Option<T> {
+    type Tracking = <T as Component>::Tracking;
+}
