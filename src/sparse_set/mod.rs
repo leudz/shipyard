@@ -40,7 +40,7 @@ pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
 // It mimics the dense vector in regard to insertion/deletion.
 
 // Inserted and modified info is only present in dense
-pub struct SparseSet<T: Component, Track: Tracking<T> = <T as Component>::Tracking> {
+pub struct SparseSet<T: Component, Track: Tracking = <T as Component>::Tracking> {
     pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,

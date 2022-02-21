@@ -26,7 +26,7 @@ pub struct Removal(());
 pub struct All(());
 
 /// Trait implemented by all trackings.
-pub trait Tracking<T: Component>: Sized + Sealed {
+pub trait Tracking: 'static + Sized + Sealed {
     #[doc(hidden)]
     #[inline]
     fn track_insertion() -> bool {
@@ -50,7 +50,7 @@ pub trait Tracking<T: Component>: Sized + Sealed {
 
     #[doc(hidden)]
     #[inline]
-    fn is_inserted(
+    fn is_inserted<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
         _last: u32,
@@ -60,7 +60,7 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     }
     #[doc(hidden)]
     #[inline]
-    fn is_modified(
+    fn is_modified<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
         _last: u32,
@@ -70,7 +70,7 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     }
     #[doc(hidden)]
     #[inline]
-    fn is_deleted(
+    fn is_deleted<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
         _last: u32,
@@ -80,7 +80,7 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     }
     #[doc(hidden)]
     #[inline]
-    fn is_removed(
+    fn is_removed<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
         _last: u32,
@@ -90,16 +90,24 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     }
 
     #[doc(hidden)]
-    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> Option<T>;
+    fn remove<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        entity: EntityId,
+        current: u32,
+    ) -> Option<T>;
 
     #[doc(hidden)]
-    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> bool;
+    fn delete<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        entity: EntityId,
+        current: u32,
+    ) -> bool;
 
     #[doc(hidden)]
-    fn clear(sparse_set: &mut SparseSet<T, Self>, current: u32);
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32);
 
     #[doc(hidden)]
-    fn apply<R, F: FnOnce(&mut T, &T) -> R>(
+    fn apply<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &T) -> R>(
         sparse_set: &mut ViewMut<'_, T, Self>,
         a: EntityId,
         b: EntityId,
@@ -107,7 +115,7 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     ) -> R;
 
     #[doc(hidden)]
-    fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
+    fn apply_mut<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &mut T) -> R>(
         sparse_set: &mut ViewMut<'_, T, Self>,
         a: EntityId,
         b: EntityId,
@@ -115,12 +123,18 @@ pub trait Tracking<T: Component>: Sized + Sealed {
     ) -> R;
 
     #[doc(hidden)]
-    fn drain(sparse_set: &'_ mut SparseSet<T, Self>, current: u32) -> SparseSetDrain<'_, T>;
+    fn drain<T: Component<Tracking = Self>>(
+        sparse_set: &'_ mut SparseSet<T, Self>,
+        current: u32,
+    ) -> SparseSetDrain<'_, T>;
 
     #[doc(hidden)]
-    fn clear_all_removed_or_deleted(_sparse_set: &mut SparseSet<T, Self>) {}
+    fn clear_all_removed_or_deleted<T: Component<Tracking = Self>>(
+        _sparse_set: &mut SparseSet<T, Self>,
+    ) {
+    }
     #[doc(hidden)]
-    fn clear_all_removed_or_deleted_older_than_timestamp(
+    fn clear_all_removed_or_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
         _sparse_set: &mut SparseSet<T, Self>,
         _timestamp: crate::TrackingTimestamp,
     ) {

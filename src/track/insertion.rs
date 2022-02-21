@@ -4,13 +4,13 @@ use crate::{seal::Sealed, Component, EntityId, SparseSet, SparseSetDrain};
 
 impl Sealed for Insertion {}
 
-impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
+impl Tracking for Insertion {
     #[inline]
     fn track_insertion() -> bool {
         true
     }
 
-    fn is_inserted(
+    fn is_inserted<T: Component<Tracking = Self>>(
         sparse_set: &SparseSet<T, Self>,
         entity: EntityId,
         last: u32,
@@ -24,16 +24,24 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
     }
 
     #[inline]
-    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, _current: u32) -> Option<T> {
+    fn remove<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        entity: EntityId,
+        _current: u32,
+    ) -> Option<T> {
         sparse_set.actual_remove(entity)
     }
 
     #[inline]
-    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, _current: u32) -> bool {
+    fn delete<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        entity: EntityId,
+        _current: u32,
+    ) -> bool {
         sparse_set.actual_remove(entity).is_some()
     }
 
-    fn clear(sparse_set: &mut SparseSet<T, Self>, _current: u32) {
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, _current: u32) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -47,7 +55,7 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
 
     #[track_caller]
     #[inline]
-    fn apply<R, F: FnOnce(&mut T, &T) -> R>(
+    fn apply<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &T) -> R>(
         sparse_set: &mut ViewMut<'_, T, Self>,
         a: EntityId,
         b: EntityId,
@@ -78,7 +86,7 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
 
     #[track_caller]
     #[inline]
-    fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
+    fn apply_mut<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &mut T) -> R>(
         sparse_set: &mut ViewMut<'_, T, Self>,
         a: EntityId,
         b: EntityId,
@@ -107,7 +115,10 @@ impl<T: Component<Tracking = Insertion>> Tracking<T> for Insertion {
         }
     }
 
-    fn drain(sparse_set: &mut SparseSet<T, Self>, _current: u32) -> SparseSetDrain<'_, T> {
+    fn drain<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        _current: u32,
+    ) -> SparseSetDrain<'_, T> {
         for id in &sparse_set.dense {
             // SAFE ids from sparse_set.dense are always valid
             unsafe {

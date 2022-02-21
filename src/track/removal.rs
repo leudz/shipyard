@@ -6,13 +6,13 @@ use crate::{Component, SparseSet, SparseSetDrain};
 
 impl Sealed for Removal {}
 
-impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
+impl Tracking for Removal {
     #[inline]
     fn track_removal() -> bool {
         true
     }
 
-    fn is_removed(
+    fn is_removed<T: Component<Tracking = Self>>(
         sparse_set: &SparseSet<T, Self>,
         entity: EntityId,
         last: u32,
@@ -24,7 +24,11 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
     }
 
     #[inline]
-    fn remove(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, current: u32) -> Option<T> {
+    fn remove<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        entity: EntityId,
+        current: u32,
+    ) -> Option<T> {
         let component = sparse_set.actual_remove(entity);
 
         if component.is_some() {
@@ -35,11 +39,15 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
     }
 
     #[inline]
-    fn delete(sparse_set: &mut SparseSet<T, Self>, entity: EntityId, _current: u32) -> bool {
+    fn delete<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        entity: EntityId,
+        _current: u32,
+    ) -> bool {
         sparse_set.actual_remove(entity).is_some()
     }
 
-    fn clear(sparse_set: &mut SparseSet<T, Self>, current: u32) {
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -57,7 +65,7 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
 
     #[track_caller]
     #[inline]
-    fn apply<R, F: FnOnce(&mut T, &T) -> R>(
+    fn apply<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &T) -> R>(
         sparse_set: &mut ViewMut<'_, T, Self>,
         a: EntityId,
         b: EntityId,
@@ -88,7 +96,7 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
 
     #[track_caller]
     #[inline]
-    fn apply_mut<R, F: FnOnce(&mut T, &mut T) -> R>(
+    fn apply_mut<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &mut T) -> R>(
         sparse_set: &mut ViewMut<'_, T, Self>,
         a: EntityId,
         b: EntityId,
@@ -117,7 +125,10 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
         }
     }
 
-    fn drain(sparse_set: &mut SparseSet<T, Self>, current: u32) -> SparseSetDrain<'_, T> {
+    fn drain<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+        current: u32,
+    ) -> SparseSetDrain<'_, T> {
         sparse_set
             .removal_data
             .extend(sparse_set.dense.drain(..).map(|entity| (entity, current)));
@@ -143,10 +154,12 @@ impl<T: Component<Tracking = Removal>> Tracking<T> for Removal {
         }
     }
 
-    fn clear_all_removed_or_deleted(sparse_set: &mut SparseSet<T, Self>) {
+    fn clear_all_removed_or_deleted<T: Component<Tracking = Self>>(
+        sparse_set: &mut SparseSet<T, Self>,
+    ) {
         sparse_set.removal_data.clear();
     }
-    fn clear_all_removed_or_deleted_older_than_timestamp(
+    fn clear_all_removed_or_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         timestamp: crate::TrackingTimestamp,
     ) {

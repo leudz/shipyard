@@ -123,7 +123,7 @@ impl DerefMut for EntitiesViewMut<'_> {
 }
 
 /// Shared view over a component storage.
-pub struct View<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
+pub struct View<'a, T: Component, Tracking: track::Tracking = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a SparseSet<T, Tracking>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
@@ -466,7 +466,7 @@ impl<T: Component> core::ops::Index<EntityId> for View<'_, T> {
 }
 
 /// Exclusive view over a component storage.
-pub struct ViewMut<'a, T: Component, Tracking: track::Tracking<T> = <T as Component>::Tracking> {
+pub struct ViewMut<'a, T: Component, Tracking: track::Tracking = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a mut SparseSet<T, Tracking>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
