@@ -77,7 +77,7 @@ impl EntityId {
         EntityId(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
     #[inline]
-    pub(crate) fn new_from_parts(index: u64, gen: u16) -> Self {
+    pub(crate) const fn new_from_parts(index: u64, gen: u16) -> Self {
         assert!(index < Self::INDEX_MASK);
         assert!(gen <= Self::max_gen());
 
@@ -87,7 +87,7 @@ impl EntityId {
     }
     /// Build a new `EntityId` with the given index and generation.
     #[inline]
-    pub fn new_from_index_and_gen(index: u64, gen: u16) -> Self {
+    pub const fn new_from_index_and_gen(index: u64, gen: u16) -> Self {
         EntityId::new_from_parts(index, gen)
     }
     #[cfg(test)]
@@ -115,7 +115,7 @@ impl EntityId {
     /// Maximum generation of a valid [`EntityId`].
     /// A dead id will be above that.
     #[inline]
-    pub(crate) fn max_gen() -> u16 {
+    pub(crate) const fn max_gen() -> u16 {
         Self::MAX_GEN
     }
     #[inline]
