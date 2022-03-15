@@ -414,7 +414,7 @@ impl WorkloadBuilder {
 
         Ok(())
     }
-    /// Build the [`Workload`] from the [`WorkloadBuilder`].
+    /// Build the [`Workload`](super::Workload) from the [`WorkloadBuilder`].
     pub fn build(self) -> Result<(ScheduledWorkload, WorkloadInfo), error::AddWorkload> {
         let mut workload = ScheduledWorkload {
             name: self.name.clone(),

@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use alloc::vec;
 
 impl crate::World {
-    /// Creates a new workload and store it in the [`World`].
+    /// Creates a new workload and store it in the [`World`](crate::World).
     pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
