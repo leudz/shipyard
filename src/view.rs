@@ -134,18 +134,16 @@ pub struct View<'a, T: Component, Tracking: track::Tracking = <T as Component>::
 }
 
 impl<'a, T: Component> View<'a, T> {
-    /// Returns `true` if `entity`'s component was inserted since the last [`clear_all_inserted`] call.  
+    /// Inside a workload returns `true` if `entity`'s component was inserted since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was inserted since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
     /// Returns `false` if `entity` does not have a component in this storage.
-    ///
-    /// [`clear_all_inserted`]: ViewMut::clear_all_inserted
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
         T::Tracking::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
     }
-    /// Returns `true` if `entity`'s component was modified since the last [`clear_all_modified`] call.  
+    /// Inside a workload returns `true` if `entity`'s component was modified since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was modified since the last call to [`clear_all_modified`](ViewMut::clear_all_modified).\
     /// Returns `false` if `entity` does not have a component in this storage.
-    ///
-    /// [`clear_all_modified`]: ViewMut::clear_all_modified
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
         T::Tracking::is_modified(
@@ -155,32 +153,30 @@ impl<'a, T: Component> View<'a, T> {
             self.current,
         )
     }
-    /// Returns `true` if `entity`'s component was inserted or modified since the last clear call.  
+    /// Inside a workload returns `true` if `entity`'s component was inserted or modified since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last clear call.\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
         self.is_inserted(entity) || self.is_modified(entity)
     }
-    /// Returns `true` if `entity`'s component was deleted since the last [`take_deleted`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_deleted`]: Self::take_deleted
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    /// Inside a workload returns `true` if `entity`'s component was deleted since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was deleted since the last call to [`clear_all_deleted`](SparseSet::clear_all_deleted).\
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_deleted(&self, entity: EntityId) -> bool {
         T::Tracking::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
     }
-    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_removed`]: Self::take_removed
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    /// Inside a workload returns `true` if `entity`'s component was removed since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was removed since the last call to [`clear_all_removed`](SparseSet::clear_all_removed).\
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed(&self, entity: EntityId) -> bool {
         T::Tracking::is_removed(self, entity, self.last_removal_or_deletion, self.current)
     }
-    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_removed`]: Self::take_removed
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    /// Inside a workload returns `true` if `entity`'s component was deleted or removed since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was deleted or removed since the last clear call.\
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed_or_deleted(&self, entity: EntityId) -> bool {
         self.is_removed(entity) || self.is_deleted(entity)
@@ -558,18 +554,16 @@ impl<'a, T: Component> ViewMut<'a, T> {
     ) -> R {
         T::Tracking::apply_mut(self, a, b, f)
     }
-    /// Returns `true` if `entity`'s component was inserted since the last [`clear_all_inserted`] call.  
+    /// Inside a workload returns `true` if `entity`'s component was inserted since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was inserted since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
     /// Returns `false` if `entity` does not have a component in this storage.
-    ///
-    /// [`clear_all_inserted`]: Self::clear_all_inserted
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
         T::Tracking::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
     }
-    /// Returns `true` if `entity`'s component was modified since the last [`clear_all_modified`] call.  
+    /// Inside a workload returns `true` if `entity`'s component was modified since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was modified since the last call to [`clear_all_modified`](ViewMut::clear_all_modified).\
     /// Returns `false` if `entity` does not have a component in this storage.
-    ///
-    /// [`clear_all_modified`]: Self::clear_all_modified
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
         T::Tracking::is_modified(
@@ -579,32 +573,30 @@ impl<'a, T: Component> ViewMut<'a, T> {
             self.current,
         )
     }
-    /// Returns `true` if `entity`'s component was inserted or modified since the last clear call.  
+    /// Inside a workload returns `true` if `entity`'s component was inserted or modified since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last clear call.\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
         self.is_inserted(entity) || self.is_modified(entity)
     }
-    /// Returns `true` if `entity`'s component was deleted since the last [`take_deleted`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_deleted`]: Self::take_deleted
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    /// Inside a workload returns `true` if `entity`'s component was deleted since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was deleted since the last call to [`clear_all_deleted`](SparseSet::clear_all_deleted).\
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_deleted(&self, entity: EntityId) -> bool {
         T::Tracking::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
     }
-    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_removed`]: Self::take_removed
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    /// Inside a workload returns `true` if `entity`'s component was removed since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was removed since the last call to [`clear_all_removed`](SparseSet::clear_all_removed).\
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed(&self, entity: EntityId) -> bool {
         T::Tracking::is_removed(self, entity, self.last_removal_or_deletion, self.current)
     }
-    /// Returns `true` if `entity`'s component was removed since the last [`take_removed`] or [`take_removed_and_deleted`] call.
-    ///
-    /// [`take_removed`]: Self::take_removed
-    /// [`take_removed_and_deleted`]: Self::take_removed_and_deleted
+    /// Inside a workload returns `true` if `entity`'s component was deleted or removed since the last run of this system.\
+    /// Outside workloads returns `true` if `entity`'s component was deleted or removed since the last clear call.\
+    /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed_or_deleted(&self, entity: EntityId) -> bool {
         self.is_removed(entity) || self.is_deleted(entity)
