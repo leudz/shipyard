@@ -23,6 +23,8 @@ pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
     pub(crate) scheduler: AtomicRefCell<Scheduler>,
     counter: Arc<AtomicU32>,
+    #[cfg(feature = "parallel")]
+    thread_pool: Option<rayon::ThreadPool>,
 }
 
 #[cfg(feature = "std")]
@@ -40,6 +42,8 @@ impl Default for World {
             ),
             scheduler: AtomicRefCell::new(Default::default()),
             counter,
+            #[cfg(feature = "parallel")]
+            thread_pool: None,
         }
     }
 }
@@ -67,7 +71,60 @@ impl World {
             ),
             scheduler: AtomicRefCell::new(Default::default()),
             counter,
+            #[cfg(feature = "parallel")]
+            thread_pool: None,
         }
+    }
+    /// Creates an empty [`World`] with a local [`ThreadPool`](rayon::ThreadPool).
+    ///
+    /// This is useful when you have multiple [`Worlds`](World) or something else using [`rayon`] and want them to stay isolated.\
+    /// For example with a single [`ThreadPool`](rayon::ThreadPool), a panic would take down all [`Worlds`](World).\
+    /// With a [`ThreadPool`](rayon::ThreadPool) per [`World`] we can keep the panic confined to a single [`World`].
+    #[cfg(feature = "parallel")]
+    pub fn new_with_local_thread_pool(thread_pool: rayon::ThreadPool) -> Self {
+        let counter = Arc::new(AtomicU32::new(1));
+        World {
+            #[cfg(not(feature = "thread_local"))]
+            all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
+            #[cfg(feature = "thread_local")]
+            all_storages: AtomicRefCell::new_non_send(
+                AllStorages::new(counter.clone()),
+                std::thread::current().id(),
+            ),
+            scheduler: AtomicRefCell::new(Default::default()),
+            counter,
+            #[cfg(feature = "parallel")]
+            thread_pool: Some(thread_pool),
+        }
+    }
+    /// Creates an empty [`World`] with a custom RwLock for [`AllStorages`] and a local [`ThreadPool`](rayon::ThreadPool).
+    ///
+    /// The local [`ThreadPool`](rayon::ThreadPool) is useful when you have multiple [`Worlds`](World) or something else using [`rayon`] and want them to stay isolated.\
+    /// For example with a single [`ThreadPool`](rayon::ThreadPool), a panic would take down all [`Worlds`](World).\
+    /// With a [`ThreadPool`](rayon::ThreadPool) per [`World`] we can keep the panic confined to a single [`World`].
+    #[cfg(feature = "parallel")]
+    pub fn new_with_custom_lock_and_local_thread_pool<L: ShipyardRwLock + Send + Sync>(
+        thread_pool: rayon::ThreadPool,
+    ) -> Self {
+        let counter = Arc::new(AtomicU32::new(1));
+        World {
+            #[cfg(not(feature = "thread_local"))]
+            all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>(counter.clone())),
+            #[cfg(feature = "thread_local")]
+            all_storages: AtomicRefCell::new_non_send(
+                AllStorages::new_with_lock::<L>(counter.clone()),
+                std::thread::current().id(),
+            ),
+            scheduler: AtomicRefCell::new(Default::default()),
+            counter,
+            #[cfg(feature = "parallel")]
+            thread_pool: Some(thread_pool),
+        }
+    }
+    /// Removes the local [`ThreadPool`](rayon::ThreadPool).
+    #[cfg(feature = "parallel")]
+    pub fn remove_local_thread_pool(&mut self) -> Option<rayon::ThreadPool> {
+        self.thread_pool.take()
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
@@ -736,65 +793,66 @@ let i = world.run(sys1);
 
         #[cfg(feature = "parallel")]
         {
-            for batch in &batches.parallel {
-                let mut result = Ok(());
+            let run_batch = || -> Result<(), error::RunWorkload> {
+                for batch in &batches.parallel {
+                    let mut result = Ok(());
 
-                rayon::in_place_scope(|scope| {
-                    if let Some(index) = batch.0 {
-                        scope.spawn(|_| {
-                            if batch.1.len() == 1 {
-                                result = systems[batch.1[0]](self).map_err(|err| {
-                                    error::RunWorkload::Run((system_names[batch.1[0]], err))
-                                });
-                            } else {
-                                use rayon::prelude::*;
+                    rayon::in_place_scope(|scope| {
+                        if let Some(index) = batch.0 {
+                            scope.spawn(|_| {
+                                if batch.1.len() == 1 {
+                                    result = systems[batch.1[0]](self).map_err(|err| {
+                                        error::RunWorkload::Run((system_names[batch.1[0]], err))
+                                    });
+                                } else {
+                                    use rayon::prelude::*;
 
-                                result = batch.1.par_iter().try_for_each(|&index| {
-                                    (systems[index])(self).map_err(|err| {
-                                        error::RunWorkload::Run((system_names[index], err))
-                                    })
-                                });
-                            }
-                        });
+                                    result = batch.1.par_iter().try_for_each(|&index| {
+                                        (systems[index])(self).map_err(|err| {
+                                            error::RunWorkload::Run((system_names[index], err))
+                                        })
+                                    });
+                                }
+                            });
 
-                        #[cfg(feature = "tracing")]
-                        {
-                            let system_name = system_names[index];
+                            #[cfg(feature = "tracing")]
+                            {
+                                let system_name = system_names[index];
 
-                            tracing::info_span!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
+                                tracing::info_span!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
                                 systems[index](self).map_err(|err| {
                                     error::RunWorkload::Run((system_name, err))
                                 })
                             })?;
-                        }
+                            }
 
-                        #[cfg(not(feature = "tracing"))]
-                        {
-                            systems[index](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[index], err))
-                            })?;
-                        }
-                    } else if batch.1.len() == 1 {
-                        #[cfg(feature = "tracing")]
-                        {
-                            let system_name = system_names[batch.1[0]];
+                            #[cfg(not(feature = "tracing"))]
+                            {
+                                systems[index](self).map_err(|err| {
+                                    error::RunWorkload::Run((system_names[index], err))
+                                })?;
+                            }
+                        } else if batch.1.len() == 1 {
+                            #[cfg(feature = "tracing")]
+                            {
+                                let system_name = system_names[batch.1[0]];
 
-                            result = tracing::info_span!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
+                                result = tracing::info_span!(parent: parent_span.clone(), "run_system", %system_name).in_scope(|| {
                                 systems[batch.1[0]](self).map_err(|err| {
                                 error::RunWorkload::Run((system_names[batch.1[0]], err))
                             })});
-                        }
+                            }
 
-                        #[cfg(not(feature = "tracing"))]
-                        {
-                            result = systems[batch.1[0]](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[batch.1[0]], err))
-                            });
-                        }
-                    } else {
-                        use rayon::prelude::*;
+                            #[cfg(not(feature = "tracing"))]
+                            {
+                                result = systems[batch.1[0]](self).map_err(|err| {
+                                    error::RunWorkload::Run((system_names[batch.1[0]], err))
+                                });
+                            }
+                        } else {
+                            use rayon::prelude::*;
 
-                        result = batch.1.par_iter().try_for_each(|&index| {
+                            result = batch.1.par_iter().try_for_each(|&index| {
                             #[cfg(feature = "tracing")]
                             {
                                 let system_name = system_names[index];
@@ -812,15 +870,28 @@ let i = world.run(sys1);
                                 })
                             }
                         });
-                    }
+                        }
 
-                    Ok(())
-                })?;
+                        Ok(())
+                    })?;
 
-                result?;
+                    result?;
+                }
+
+                Ok(())
+            };
+
+            if let Some(thread_pool) = &self.thread_pool {
+                let mut result = Ok(());
+                thread_pool.scope(|_| {
+                    result = run_batch();
+                });
+
+                result
+            } else {
+                // Use non local ThreadPool
+                run_batch()
             }
-
-            Ok(())
         }
         #[cfg(not(feature = "parallel"))]
         {
