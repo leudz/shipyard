@@ -19,10 +19,10 @@ fn view() {
 // ANCHOR: view
 let world = World::new();
 
-let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+world.run(|mut all_storages: AllStoragesViewMut| {
+    let id = all_storages.add_entity((U32(0),));
 
-let id = all_storages.add_entity((U32(0),));
-
-all_storages.delete_entity(id);
+    all_storages.delete_entity(id);
+});
 // ANCHOR_END: view
 }

@@ -32,14 +32,14 @@ fn view() {
 // ANCHOR: view
 let world = World::new();
 
-let (mut entities, mut u32s, mut usizes) = world
-    .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<USIZE>)>()
-    .unwrap();
+world.run(
+    |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut usizes: ViewMut<USIZE>| {
+        let id = entities.add_entity((&mut u32s, &mut usizes), (U32(0), USIZE(1)));
 
-let id = entities.add_entity((&mut u32s, &mut usizes), (U32(0), USIZE(1)));
-
-u32s.delete(id);
-(&mut u32s, &mut usizes).delete(id);
+        u32s.delete(id);
+        (&mut u32s, &mut usizes).delete(id);
+    },
+);
 // ANCHOR_END: view
 }
 
@@ -49,10 +49,10 @@ fn view_all() {
 // ANCHOR: view_all
 let world = World::new();
 
-let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+world.run(|mut all_storages: AllStoragesViewMut| {
+    let id = all_storages.add_entity((U32(0), USIZE(1)));
 
-let id = all_storages.add_entity((U32(0), USIZE(1)));
-
-all_storages.strip(id);
+    all_storages.strip(id);
+});
 // ANCHOR_END: view_all
 }

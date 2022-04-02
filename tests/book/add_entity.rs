@@ -21,12 +21,13 @@ fn view() {
 // ANCHOR: view
 let world = World::new();
 
-let (mut entities, mut u32s, mut usizes) = world
-    .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<USIZE>)>()
-    .unwrap();
-
-let empty_entity = entities.add_entity((), ());
-let single_component = entities.add_entity(&mut u32s, U32(0));
-let multiple_components = entities.add_entity((&mut u32s, &mut usizes), (U32(0), USIZE(1)));
+world.run(
+    |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut usizes: ViewMut<USIZE>| {
+        let empty_entity = entities.add_entity((), ());
+        let single_component = entities.add_entity(&mut u32s, U32(0));
+        let multiple_components =
+            entities.add_entity((&mut u32s, &mut usizes), (U32(0), USIZE(1)));
+    },
+);
 // ANCHOR_END: view
 }

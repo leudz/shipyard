@@ -6,6 +6,7 @@ use shipyard::*;
 fn new() {
 // ANCHOR: world_new
 let world = World::default();
+// or
 let world = World::new();
 // ANCHOR_END: world_new
 }
@@ -17,6 +18,6 @@ fn view() {
 // ANCHOR: view
 let world = World::new();
 
-let entities = world.borrow::<EntitiesView>().unwrap();
+world.run(|entities: EntitiesView| {});
 // ANCHOR_END: view
 }
