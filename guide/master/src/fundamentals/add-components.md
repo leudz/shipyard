@@ -13,11 +13,10 @@ Adding another component of the same type will replace the existing one.
 
 ## View
 
-You'll notice that we use [`EntitiesView`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesView.html) and not [`EntitiesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html) to add components.  
-The entities storage is only used to check if the [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) is alive.  
-We could of course use [`EntitiesViewMut`](https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html), but exclusive access is not necessary.
+When adding components, the entities storage is only used to check if the [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) is alive.  
+We don't need exclusive access to the entities storage.
 
-If you don't need or want to check if the entity is alive, you can use the [`AddComponent::add_component_unchecked`](https://docs.rs/shipyard/latest/shipyard/trait.AddComponent.html).
+If you don't need to check if the entity is alive, you can use the [`AddComponent`](https://docs.rs/shipyard/latest/shipyard/trait.AddComponent.html) trait and do without the entities storage entirely.
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/add_components.rs:view}}
