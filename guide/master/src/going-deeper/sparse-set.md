@@ -136,6 +136,6 @@ and the indexes at `sparse[2]` and `sparse[3]` were updated.
 with archetypes, another common way of representing data in ECS libraries. The blog post is
 part of a larger series about the design and internals of ECS systems.
 
-[entityid docs]: https://docs.rs/shipyard/0.5.0/shipyard/struct.EntityId.html
+[entityid docs]: https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html
 [sparseset docs]: https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html
 [skypjack blog post]: https://skypjack.github.io/2019-03-07-ecs-baf-part-2/
