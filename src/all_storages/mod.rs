@@ -8,6 +8,7 @@ pub use retain::TupleRetain;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{AllStoragesBorrow, Borrow, IntoBorrow};
+use crate::component::Unique;
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::memory_usage::AllStoragesMemoryUsage;
@@ -16,8 +17,7 @@ use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{SBox, Storage, StorageId};
-use crate::unique::Unique;
-use crate::{error, Component};
+use crate::{error, UniqueStorage};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
@@ -77,9 +77,9 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, Component, World};
+    /// use shipyard::{AllStoragesViewMut, Unique, World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Unique)]
     /// struct USIZE(usize);
     ///
     /// let world = World::new();
@@ -90,13 +90,15 @@ impl AllStorages {
     ///
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    pub fn add_unique<T: Send + Sync + Component>(&self, component: T) {
-        let storage_id = StorageId::of::<Unique<T>>();
+    pub fn add_unique<T: Send + Sync + Unique>(&self, component: T) {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
 
-        self.storages
-            .write()
-            .entry(storage_id)
-            .or_insert_with(|| SBox::new(Unique::new(component, self.get_tracking_timestamp().0)));
+        self.storages.write().entry(storage_id).or_insert_with(|| {
+            SBox::new(UniqueStorage::new(
+                component,
+                self.get_tracking_timestamp().0,
+            ))
+        });
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
@@ -106,13 +108,13 @@ impl AllStorages {
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send<T: Sync + Component>(&self, component: T) {
+    pub fn add_unique_non_send<T: Sync + Unique>(&self, component: T) {
         if std::thread::current().id() == self.thread_id {
-            let storage_id = StorageId::of::<Unique<T>>();
+            let storage_id = StorageId::of::<UniqueStorage<T>>();
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send(
-                    Unique::new(component, self.get_tracking_timestamp().0),
+                    UniqueStorage::new(component, self.get_tracking_timestamp().0),
                     self.thread_id,
                 )
             });
@@ -126,11 +128,14 @@ impl AllStorages {
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_sync<T: Send + Component>(&self, component: T) {
-        let storage_id = StorageId::of::<Unique<T>>();
+    pub fn add_unique_non_sync<T: Send + Unique>(&self, component: T) {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
 
         self.storages.write().entry(storage_id).or_insert_with(|| {
-            SBox::new_non_sync(Unique::new(component, self.get_tracking_timestamp().0))
+            SBox::new_non_sync(UniqueStorage::new(
+                component,
+                self.get_tracking_timestamp().0,
+            ))
         });
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -141,13 +146,13 @@ impl AllStorages {
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send_sync<T: Component>(&self, component: T) {
+    pub fn add_unique_non_send_sync<T: Unique>(&self, component: T) {
         if std::thread::current().id() == self.thread_id {
-            let storage_id = StorageId::of::<Unique<T>>();
+            let storage_id = StorageId::of::<UniqueStorage<T>>();
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send_sync(
-                    Unique::new(component, self.get_tracking_timestamp().0),
+                    UniqueStorage::new(component, self.get_tracking_timestamp().0),
                     self.thread_id,
                 )
             });
@@ -167,9 +172,9 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, Component, World};
+    /// use shipyard::{AllStoragesViewMut, Unique, World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Unique)]
     /// struct USIZE(usize);
     ///
     /// let world = World::new();
@@ -178,8 +183,8 @@ impl AllStorages {
     /// all_storages.add_unique(USIZE(0));
     /// let i = all_storages.remove_unique::<USIZE>().unwrap();
     /// ```
-    pub fn remove_unique<T: Component>(&self) -> Result<T, error::UniqueRemove> {
-        let storage_id = StorageId::of::<Unique<T>>();
+    pub fn remove_unique<T: Unique>(&self) -> Result<T, error::UniqueRemove> {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
 
         {
             let mut storages = self.storages.write();
@@ -197,8 +202,8 @@ impl AllStorages {
                 return Err(error::UniqueRemove::MissingUnique(type_name::<T>()));
             };
 
-            let unique: Box<AtomicRefCell<Unique<T>>> =
-                unsafe { Box::from_raw(storage.0 as *mut AtomicRefCell<Unique<T>>) };
+            let unique: Box<AtomicRefCell<UniqueStorage<T>>> =
+                unsafe { Box::from_raw(storage.0 as *mut AtomicRefCell<UniqueStorage<T>>) };
 
             core::mem::forget(storage);
 

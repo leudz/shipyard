@@ -9,10 +9,10 @@ mod non_sync;
 
 use crate::all_storages::CustomStorageAccess;
 use crate::atomic_refcell::{Ref, RefMut};
-use crate::component::Component;
+use crate::component::{Component, Unique};
 use crate::error;
 use crate::sparse_set::SparseSet;
-use crate::unique::Unique;
+use crate::unique::UniqueStorage;
 use crate::view::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
@@ -563,11 +563,11 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
 /// Helper struct allowing GAT-like behavior in stable.
 pub struct UniqueViewBorrower<T>(T);
 
-impl<T: Send + Sync + Component> IntoBorrow for UniqueView<'_, T> {
+impl<T: Send + Sync + Unique> IntoBorrow for UniqueView<'_, T> {
     type Borrow = UniqueViewBorrower<T>;
 }
 
-impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewBorrower<T> {
+impl<'a, T: Send + Sync + Unique> Borrow<'a> for UniqueViewBorrower<T> {
     type View = UniqueView<'a, T>;
 
     #[inline]
@@ -601,12 +601,12 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewBorrower<T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Sync + Component> IntoBorrow for NonSend<UniqueView<'_, T>> {
+impl<T: Sync + Unique> IntoBorrow for NonSend<UniqueView<'_, T>> {
     type Borrow = NonSend<UniqueViewBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
+impl<'a, T: Sync + Unique> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
     type View = NonSend<UniqueView<'a, T>>;
 
     #[inline]
@@ -640,12 +640,12 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Send + Component> IntoBorrow for NonSync<UniqueView<'_, T>> {
+impl<T: Send + Unique> IntoBorrow for NonSync<UniqueView<'_, T>> {
     type Borrow = NonSync<UniqueViewBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
+impl<'a, T: Send + Unique> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
     type View = NonSync<UniqueView<'a, T>>;
 
     #[inline]
@@ -679,12 +679,12 @@ impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component> IntoBorrow for NonSendSync<UniqueView<'_, T>> {
+impl<T: Unique> IntoBorrow for NonSendSync<UniqueView<'_, T>> {
     type Borrow = NonSendSync<UniqueViewBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Component> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
+impl<'a, T: Unique> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     type View = NonSendSync<UniqueView<'a, T>>;
 
     #[inline]
@@ -720,11 +720,11 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
 /// Helper struct allowing GAT-like behavior in stable.
 pub struct UniqueViewMutBorrower<T>(T);
 
-impl<T: Send + Sync + Component> IntoBorrow for UniqueViewMut<'_, T> {
+impl<T: Send + Sync + Unique> IntoBorrow for UniqueViewMut<'_, T> {
     type Borrow = UniqueViewMutBorrower<T>;
 }
 
-impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewMutBorrower<T> {
+impl<'a, T: Send + Sync + Unique> Borrow<'a> for UniqueViewMutBorrower<T> {
     type View = UniqueViewMut<'a, T>;
 
     #[inline]
@@ -742,7 +742,7 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewMutBorrower<T> {
             )
         };
 
-        let view = all_storages.custom_storage_mut::<Unique<T>>()?;
+        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
@@ -758,12 +758,12 @@ impl<'a, T: Send + Sync + Component> Borrow<'a> for UniqueViewMutBorrower<T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Sync + Component> IntoBorrow for NonSend<UniqueViewMut<'_, T>> {
+impl<T: Sync + Unique> IntoBorrow for NonSend<UniqueViewMut<'_, T>> {
     type Borrow = NonSend<UniqueViewMutBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
+impl<'a, T: Sync + Unique> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     type View = NonSend<UniqueViewMut<'a, T>>;
 
     #[inline]
@@ -781,7 +781,7 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
             )
         };
 
-        let view = all_storages.custom_storage_mut::<Unique<T>>()?;
+        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
@@ -797,12 +797,12 @@ impl<'a, T: Sync + Component> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Send + Component> IntoBorrow for NonSync<UniqueViewMut<'_, T>> {
+impl<T: Send + Unique> IntoBorrow for NonSync<UniqueViewMut<'_, T>> {
     type Borrow = NonSync<UniqueViewMutBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
+impl<'a, T: Send + Unique> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     type View = NonSync<UniqueViewMut<'a, T>>;
 
     #[inline]
@@ -820,7 +820,7 @@ impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
             )
         };
 
-        let view = all_storages.custom_storage_mut::<Unique<T>>()?;
+        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
@@ -836,12 +836,12 @@ impl<'a, T: Send + Component> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component> IntoBorrow for NonSendSync<UniqueViewMut<'_, T>> {
+impl<T: Unique> IntoBorrow for NonSendSync<UniqueViewMut<'_, T>> {
     type Borrow = NonSendSync<UniqueViewMutBorrower<T>>;
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Component> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
+impl<'a, T: Unique> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
     type View = NonSendSync<UniqueViewMut<'a, T>>;
 
     #[inline]
@@ -859,7 +859,7 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
             )
         };
 
-        let view = all_storages.custom_storage_mut::<Unique<T>>()?;
+        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 

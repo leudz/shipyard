@@ -85,7 +85,7 @@ pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
 pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, IntoBorrow, Mutability};
-pub use component::Component;
+pub use component::{Component, Unique};
 pub use contains::Contains;
 pub use delete::Delete;
 pub use entities::Entities;
@@ -103,7 +103,7 @@ pub use scheduler::{
     WorkloadBuilder, WorkloadSystem,
 };
 #[cfg(feature = "proc")]
-pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component};
+pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component, Unique};
 pub use sparse_set::{
     BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
     TupleRemove,
@@ -113,7 +113,7 @@ pub use storage::{Storage, StorageId};
 pub use system::{AllSystem, Nothing, System};
 pub use timestamp::TrackingTimestamp;
 pub use tracking::{Inserted, InsertedOrModified, Modified};
-pub use unique::Unique;
+pub use unique::UniqueStorage;
 pub use view::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,

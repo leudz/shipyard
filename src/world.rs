@@ -1,7 +1,9 @@
 use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
 use crate::borrow::{Borrow, IntoBorrow};
+use crate::component::Unique;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
@@ -11,7 +13,6 @@ use crate::scheduler::Label;
 use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
-use crate::{error, Component};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -141,9 +142,9 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{Component, UniqueView, World};
+    /// use shipyard::{Unique, UniqueView, World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Unique)]
     /// struct U32(u32);
     ///
     /// let world = World::new();
@@ -158,7 +159,7 @@ impl World {
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
     #[track_caller]
-    pub fn add_unique<T: Send + Sync + Component>(&self, component: T) {
+    pub fn add_unique<T: Send + Sync + Unique>(&self, component: T) {
         self.all_storages.borrow().unwrap().add_unique(component);
     }
     /// Adds a new unique storage, unique storages store a single value.  
@@ -176,9 +177,9 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{Component, NonSend, UniqueView, World};
+    /// use shipyard::{NonSend, Unique, UniqueView, World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Unique)]
     /// struct U32(u32);
     ///
     /// let world = World::new();
@@ -197,7 +198,7 @@ impl World {
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]
-    pub fn add_unique_non_send<T: Sync + Component>(&self, component: T) {
+    pub fn add_unique_non_send<T: Sync + Unique>(&self, component: T) {
         self.all_storages
             .borrow()
             .unwrap()
@@ -218,9 +219,9 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{Component, NonSync, UniqueView, World};
+    /// use shipyard::{NonSync, Unique, UniqueView, World};
     ///
-    /// #[derive(Component)]
+    /// #[derive(Unique)]
     /// struct U32(u32);
     ///
     /// let world = World::new();
@@ -239,7 +240,7 @@ impl World {
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]
-    pub fn add_unique_non_sync<T: Send + Component>(&self, component: T) {
+    pub fn add_unique_non_sync<T: Send + Unique>(&self, component: T) {
         self.all_storages
             .borrow()
             .unwrap()
@@ -260,11 +261,11 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{Component, NonSendSync, UniqueView, World};
+    /// use shipyard::{NonSendSync, Unique, UniqueView, World};
     ///
     /// let world = World::new();
     ///
-    /// #[derive(Component)]
+    /// #[derive(Unique)]
     /// struct U32(u32);
     ///
     /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
@@ -281,7 +282,7 @@ impl World {
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]
-    pub fn add_unique_non_send_sync<T: Component>(&self, component: T) {
+    pub fn add_unique_non_send_sync<T: Unique>(&self, component: T) {
         self.all_storages
             .borrow()
             .unwrap()
@@ -303,9 +304,9 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{Component, UniqueView, World};
+    /// use shipyard::{Unique, UniqueView, World};
     ///
-    /// #[derive(Component, Debug)]
+    /// #[derive(Unique, Debug)]
     /// struct U32(u32);
     ///
     /// let world = World::new();
@@ -317,7 +318,7 @@ impl World {
     /// ```
     ///
     /// [`AllStorages`]: crate::AllStorages
-    pub fn remove_unique<T: Component>(&self) -> Result<T, error::UniqueRemove> {
+    pub fn remove_unique<T: Unique>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .borrow()
             .map_err(|_| error::UniqueRemove::AllStorages)?

@@ -1,6 +1,6 @@
 use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ExclusiveBorrow, Ref, RefMut, SharedBorrow};
-use crate::component::Component;
+use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -9,7 +9,7 @@ use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::track::{self, Tracking};
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
-use crate::unique::Unique;
+use crate::unique::UniqueStorage;
 use core::fmt;
 use core::ops::{Deref, DerefMut};
 
@@ -992,8 +992,8 @@ impl<'a, T: Component<Tracking = track::All>> core::ops::IndexMut<EntityId>
 }
 
 /// Shared view over a unique component storage.
-pub struct UniqueView<'a, T: Component> {
-    pub(crate) unique: &'a Unique<T>,
+pub struct UniqueView<'a, T: Unique> {
+    pub(crate) unique: &'a UniqueStorage<T>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) last_insert: u32,
@@ -1001,7 +1001,7 @@ pub struct UniqueView<'a, T: Component> {
     pub(crate) current: u32,
 }
 
-impl<T: Component> UniqueView<'_, T> {
+impl<T: Unique> UniqueView<'_, T> {
     /// Duplicates the [`UniqueView`].
     #[allow(clippy::should_implement_trait)]
     #[inline]
@@ -1017,7 +1017,7 @@ impl<T: Component> UniqueView<'_, T> {
     }
 }
 
-impl<T: Component> UniqueView<'_, T> {
+impl<T: Unique> UniqueView<'_, T> {
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
@@ -1046,7 +1046,7 @@ impl<T: Component> UniqueView<'_, T> {
     }
 }
 
-impl<T: Component> Deref for UniqueView<'_, T> {
+impl<T: Unique> Deref for UniqueView<'_, T> {
     type Target = T;
 
     #[inline]
@@ -1055,22 +1055,22 @@ impl<T: Component> Deref for UniqueView<'_, T> {
     }
 }
 
-impl<T: Component> AsRef<T> for UniqueView<'_, T> {
+impl<T: Unique> AsRef<T> for UniqueView<'_, T> {
     #[inline]
     fn as_ref(&self) -> &T {
         &self.unique.value
     }
 }
 
-impl<T: fmt::Debug + Component> fmt::Debug for UniqueView<'_, T> {
+impl<T: fmt::Debug + Unique> fmt::Debug for UniqueView<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.unique.value.fmt(f)
     }
 }
 
 /// Exclusive view over a unique component storage.
-pub struct UniqueViewMut<'a, T: Component> {
-    pub(crate) unique: &'a mut Unique<T>,
+pub struct UniqueViewMut<'a, T: Unique> {
+    pub(crate) unique: &'a mut UniqueStorage<T>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) last_insert: u32,
@@ -1078,7 +1078,7 @@ pub struct UniqueViewMut<'a, T: Component> {
     pub(crate) current: u32,
 }
 
-impl<T: Component> UniqueViewMut<'_, T> {
+impl<T: Unique> UniqueViewMut<'_, T> {
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
     /// [`clear_inserted`]: Self::clear_inserted
@@ -1123,7 +1123,7 @@ impl<T: Component> UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component> Deref for UniqueViewMut<'_, T> {
+impl<T: Unique> Deref for UniqueViewMut<'_, T> {
     type Target = T;
 
     #[inline]
@@ -1132,7 +1132,7 @@ impl<T: Component> Deref for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component> DerefMut for UniqueViewMut<'_, T> {
+impl<T: Unique> DerefMut for UniqueViewMut<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.unique.modification = self.current;
@@ -1141,14 +1141,14 @@ impl<T: Component> DerefMut for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: Component> AsRef<T> for UniqueViewMut<'_, T> {
+impl<T: Unique> AsRef<T> for UniqueViewMut<'_, T> {
     #[inline]
     fn as_ref(&self) -> &T {
         &self.unique.value
     }
 }
 
-impl<T: Component> AsMut<T> for UniqueViewMut<'_, T> {
+impl<T: Unique> AsMut<T> for UniqueViewMut<'_, T> {
     #[inline]
     fn as_mut(&mut self) -> &mut T {
         self.unique.modification = self.current;
@@ -1157,7 +1157,7 @@ impl<T: Component> AsMut<T> for UniqueViewMut<'_, T> {
     }
 }
 
-impl<T: fmt::Debug + Component> fmt::Debug for UniqueViewMut<'_, T> {
+impl<T: fmt::Debug + Unique> fmt::Debug for UniqueViewMut<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.unique.value.fmt(f)
     }

@@ -1,11 +1,11 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
-use crate::component::Component;
+use crate::component::{Component, Unique};
 use crate::scheduler::info::{BatchInfo, Conflict, SystemId, SystemInfo, TypeInfo, WorkloadInfo};
 use crate::scheduler::{Batches, IntoWorkloadSystem, Label, Scheduler, WorkloadSystem};
 use crate::sparse_set::SparseSet;
 use crate::type_id::TypeId;
-use crate::unique::Unique;
+use crate::unique::UniqueStorage;
 use crate::view::AllStoragesView;
 use crate::world::World;
 use crate::{error, track};
@@ -375,6 +375,9 @@ impl WorkloadBuilder {
         impl Component for ComponentType {
             type Tracking = track::Untracked;
         }
+        impl Unique for ComponentType {
+            type Tracking = track::Untracked;
+        }
 
         let all_storages = world
             .all_storages
@@ -386,7 +389,7 @@ impl WorkloadBuilder {
             .borrow()
             .map_err(|_| error::UniquePresence::Scheduler)?;
 
-        let unique_name = core::any::type_name::<Unique<ComponentType>>()
+        let unique_name = core::any::type_name::<UniqueStorage<ComponentType>>()
             .split_once('<')
             .unwrap()
             .0;
@@ -456,8 +459,8 @@ impl WorkloadBuilder {
         self.skip_if_storage_empty_by_id(storage_id)
     }
     /// Do not run the workload if the `T` unique storage is not present in the `World`.
-    pub fn skip_if_missing_unique<T: Component>(self) -> Self {
-        let storage_id = StorageId::of::<Unique<T>>();
+    pub fn skip_if_missing_unique<T: Unique>(self) -> Self {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
         self.skip_if_storage_empty_by_id(storage_id)
     }
     /// Do not run the workload if the storage is empty.
@@ -940,7 +943,7 @@ fn flatten_work_unit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::component::Component;
+    use crate::component::{Component, Unique};
     use crate::track;
 
     struct Usize(usize);
@@ -954,6 +957,15 @@ mod tests {
         type Tracking = track::Untracked;
     }
     impl Component for U16 {
+        type Tracking = track::Untracked;
+    }
+    impl Unique for Usize {
+        type Tracking = track::Untracked;
+    }
+    impl Unique for U32 {
+        type Tracking = track::Untracked;
+    }
+    impl Unique for U16 {
         type Tracking = track::Untracked;
     }
 

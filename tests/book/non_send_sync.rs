@@ -2,7 +2,7 @@ use shipyard::*;
 use std::rc::Rc;
 
 // ANCHOR: non_send_sync
-#[derive(Component)]
+#[derive(Unique)]
 struct RcU32(Rc<u32>);
 #[derive(Component)]
 struct RcUSIZE(Rc<usize>);

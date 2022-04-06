@@ -5,9 +5,15 @@ struct U32(u32);
 impl Component for U32 {
     type Tracking = track::Untracked;
 }
+impl Unique for U32 {
+    type Tracking = track::Untracked;
+}
 
 struct USIZE(usize);
 impl Component for USIZE {
+    type Tracking = track::Untracked;
+}
+impl Unique for USIZE {
     type Tracking = track::Untracked;
 }
 

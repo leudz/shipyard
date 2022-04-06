@@ -6,6 +6,9 @@ struct USIZE(usize);
 impl Component for USIZE {
     type Tracking = track::Untracked;
 }
+impl Unique for USIZE {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn unique_storage() {
@@ -25,8 +28,8 @@ fn unique_storage() {
         assert_eq!(
             get_error,
             shipyard::error::GetStorage::MissingStorage {
-                name: Some(type_name::<Unique<USIZE>>().into()),
-                id: StorageId::of::<Unique<USIZE>>(),
+                name: Some(type_name::<UniqueStorage<USIZE>>().into()),
+                id: StorageId::of::<UniqueStorage<USIZE>>(),
             }
         );
     } else {
@@ -44,8 +47,8 @@ fn not_unique_storage() {
         Some(get_storage) => assert_eq!(
             get_storage,
             shipyard::error::GetStorage::MissingStorage {
-                name: Some(type_name::<Unique<USIZE>>().into()),
-                id: StorageId::of::<Unique<USIZE>>(),
+                name: Some(type_name::<UniqueStorage<USIZE>>().into()),
+                id: StorageId::of::<UniqueStorage<USIZE>>(),
             }
         ),
         _ => panic!(),
@@ -55,8 +58,8 @@ fn not_unique_storage() {
         Some(get_storage) => assert_eq!(
             get_storage,
             shipyard::error::GetStorage::MissingStorage {
-                name: Some(type_name::<Unique<USIZE>>().into()),
-                id: StorageId::of::<Unique<USIZE>>(),
+                name: Some(type_name::<UniqueStorage<USIZE>>().into()),
+                id: StorageId::of::<UniqueStorage<USIZE>>(),
             }
         ),
         _ => panic!(),
@@ -77,6 +80,9 @@ fn non_send() {
     }
     unsafe impl Sync for NonSendStruct {}
     impl Component for NonSendStruct {
+        type Tracking = track::Untracked;
+    }
+    impl Unique for NonSendStruct {
         type Tracking = track::Untracked;
     }
 
@@ -105,6 +111,9 @@ fn non_sync() {
     impl Component for NonSyncStruct {
         type Tracking = track::Untracked;
     }
+    impl Unique for NonSyncStruct {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::default();
     world.add_unique_non_sync(NonSyncStruct {
@@ -128,6 +137,9 @@ fn non_send_sync() {
         _phantom: core::marker::PhantomData<*const ()>,
     }
     impl Component for NonSendSyncStruct {
+        type Tracking = track::Untracked;
+    }
+    impl Unique for NonSendSyncStruct {
         type Tracking = track::Untracked;
     }
 
