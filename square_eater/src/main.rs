@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 use shipyard::{
     AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkloadSystem, SparseSet, UniqueView, UniqueViewMut, View, ViewMut, World,
+    IntoWorkloadSystem, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
 };
 
 const WIDTH: i32 = 640;
@@ -17,7 +17,7 @@ const SQUAGUM_SPAWN_RATE: u32 = 150;
 #[derive(Component)]
 struct MyRect(macroquad::prelude::Rect);
 
-#[derive(Component)]
+#[derive(Unique)]
 struct Player {
     is_invincible: bool,
     i_counter: u32,

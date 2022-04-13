@@ -3,24 +3,24 @@ use crate::geometry::*;
 pub use crate::fps::FpsCounter;
 pub use crate::hud::Hud;
 pub use crate::renderer::SceneRenderer;
-use shipyard::Component;
+use shipyard::{Component, Unique};
 
-#[derive(Component)]
+#[derive(Unique)]
 pub struct ImageArea(pub Area);
 
-#[derive(Component)]
+#[derive(Unique)]
 pub struct StageArea(pub Area);
 
-#[derive(Component)]
+#[derive(Unique)]
 pub struct InstancePositions(pub Vec<f32>);
 
-#[derive(Component)]
+#[derive(Unique)]
 pub struct Fps(pub u32);
 
-#[derive(Component)]
+#[derive(Unique)]
 pub struct Timestamp(pub f64);
 
-#[derive(Component, PartialEq)]
+#[derive(Unique, PartialEq)]
 pub enum Controller {
     Adding,
     Waiting,

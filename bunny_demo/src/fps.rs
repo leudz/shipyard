@@ -1,6 +1,6 @@
-use shipyard::Component;
+use shipyard::Unique;
 
-#[derive(Component)]
+#[derive(Unique)]
 pub struct FpsCounter {
     begin_time: f64,
     prev_time: f64,
