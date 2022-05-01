@@ -48,7 +48,6 @@ impl Display for Borrow {
 }
 
 /// Error related to acquiring a storage.
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum GetStorage {
     #[allow(missing_docs)]
     AllStoragesBorrow(Borrow),
@@ -65,6 +64,59 @@ pub enum GetStorage {
         name: Option<&'static str>,
         id: StorageId,
     },
+    /// Error returned by a custom view.
+    #[cfg(feature = "std")]
+    Custom(Box<dyn Error + Send + Sync>),
+    /// Error returned by a custom view.
+    #[cfg(not(feature = "std"))]
+    Custom(Box<dyn core::any::Any + Send>),
+}
+
+impl GetStorage {
+    #[cfg(feature = "std")]
+    #[allow(missing_docs)]
+    pub fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> Self {
+        GetStorage::Custom(error.into())
+    }
+    #[cfg(not(feature = "std"))]
+    #[allow(missing_docs)]
+    pub fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
+        GetStorage::Custom(Box::new(error))
+    }
+}
+
+impl PartialEq for GetStorage {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::AllStoragesBorrow(l_borrow), Self::AllStoragesBorrow(r_borrow)) => {
+                l_borrow == r_borrow
+            }
+            (
+                Self::StorageBorrow {
+                    name: l_name,
+                    id: l_id,
+                    borrow: l_borrow,
+                },
+                Self::StorageBorrow {
+                    name: r_name,
+                    id: r_id,
+                    borrow: r_borrow,
+                },
+            ) => l_name == r_name && l_id == r_id && l_borrow == r_borrow,
+            (Self::Entities(l_borrow), Self::Entities(r_borrow)) => l_borrow == r_borrow,
+            (
+                Self::MissingStorage {
+                    name: l_name,
+                    id: l_id,
+                },
+                Self::MissingStorage {
+                    name: r_name,
+                    id: r_id,
+                },
+            ) => l_name == r_name && l_id == r_id,
+            _ => false,
+        }
+    }
 }
 
 #[cfg(feature = "std")]
@@ -107,10 +159,13 @@ impl Debug for GetStorage {
                 _ => unreachable!(),
             },
             Self::MissingStorage { name, id } => if let Some(name) = name {
-                    f.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", name))
-                } else {
-                    f.write_fmt(format_args!("{:?} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", id))
-                }
+                f.write_fmt(format_args!("{} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", name))
+            } else {
+                f.write_fmt(format_args!("{:?} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", id))
+            }
+            Self::Custom(err) => {
+                f.write_fmt(format_args!("Storage borrow failed with a custom error, {:?}.", err))
+            }
         }
     }
 }
@@ -340,12 +395,25 @@ impl From<GetStorage> for Run {
 
 impl Run {
     #[cfg(feature = "std")]
-    pub(crate) fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> Self {
+    #[allow(missing_docs)]
+    pub fn from_custom<E: Into<Box<dyn Error + Send + Sync>>>(error: E) -> Self {
         Run::Custom(error.into())
     }
     #[cfg(not(feature = "std"))]
-    pub(crate) fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
+    #[allow(missing_docs)]
+    pub fn from_custom<E: core::any::Any + Send>(error: E) -> Self {
         Run::Custom(Box::new(error))
+    }
+}
+
+impl PartialEq for Run {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::GetStorage(l_get_storage), Self::GetStorage(r_get_storage)) => {
+                l_get_storage == r_get_storage
+            }
+            _ => false,
+        }
     }
 }
 
@@ -555,7 +623,6 @@ impl Display for UniquePresence {
 }
 
 /// Returned when trying to create views for custom storages.
-#[derive(Clone, PartialEq, Eq)]
 pub enum CustomStorageView {
     #[allow(missing_docs)]
     GetStorage(GetStorage),
