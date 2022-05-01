@@ -24,6 +24,33 @@ use core::any::type_name;
 /// # Safety
 ///
 /// Must accurately list everything borrowed.
+///
+/// ### Example of manual implementation:
+/// ```rust
+/// use shipyard::{BorrowInfo, info::TypeInfo, View, UniqueView};
+///
+/// # struct Camera {}
+/// # impl shipyard::Unique for Camera {
+/// #     type Tracking = shipyard::track::Untracked;
+/// # }
+/// # struct Position {}
+/// # impl shipyard::Component for Position {
+/// #     type Tracking = shipyard::track::Untracked;
+/// # }
+/// #
+/// struct CameraView<'v> {
+///     camera: UniqueView<'v, Camera>,
+///     position: View<'v, Position>,
+/// }
+///
+/// // SAFE: All storages info are recorded.
+/// unsafe impl BorrowInfo for CameraView<'_> {
+///     fn borrow_info(info: &mut Vec<TypeInfo>) {
+///         <UniqueView<'_, Camera>>::borrow_info(info);
+///         <View<'_, Position>>::borrow_info(info);
+///     }
+/// }
+/// ```
 pub unsafe trait BorrowInfo {
     /// This information is used during workload creation to determine which systems can run in parallel.
     ///

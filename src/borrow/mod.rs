@@ -38,12 +38,91 @@ pub enum Mutability {
 }
 
 /// Transforms a view into a helper type. This allows workloads to have the current syntax.
+///
+/// ### Example of manual implementation:
+/// ```rust
+/// use shipyard::{IntoBorrow, View, UniqueView};
+///
+/// # struct Camera {}
+/// # impl shipyard::Unique for Camera {
+/// #     type Tracking = shipyard::track::Untracked;
+/// # }
+/// # struct Position {}
+/// # impl shipyard::Component for Position {
+/// #     type Tracking = shipyard::track::Untracked;
+/// # }
+/// #
+/// struct CameraView<'v> {
+///     camera: UniqueView<'v, Camera>,
+///     position: View<'v, Position>,
+/// }
+/// // There shouldn't be any lifetime on this struct.
+/// // If the custom view has generics, PhantomData can be used to make the compiler happy.
+/// struct CameraViewBorrower {}
+///
+/// impl IntoBorrow for CameraView<'_> {
+///     type Borrow = CameraViewBorrower;
+/// }
+///
+/// # // This is needed for the IntoBorrow::Borrow bound
+/// # impl<'v> shipyard::Borrow<'v> for CameraViewBorrower {
+/// #     type View = CameraView<'v>;
+/// #
+/// #     fn borrow(
+/// #         world: &'v shipyard::World,
+/// #         last_run: Option<u32>,
+/// #         current: u32,
+/// #     ) -> Result<Self::View, shipyard::error::GetStorage> {
+/// #         Ok(CameraView {
+/// #             camera: <UniqueView<'v, Camera> as IntoBorrow>::Borrow::borrow(world, last_run, current)?,
+/// #             position: <View<'v, Position> as IntoBorrow>::Borrow::borrow(world, last_run, current)?,
+/// #         })
+/// #     }
+/// # }
+/// ```
 pub trait IntoBorrow {
     /// Helper type almost allowing GAT on stable.
     type Borrow: for<'a> Borrow<'a>;
 }
 
 /// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and workloads.
+///
+/// ### Example of manual implementation:
+/// ```rust
+/// use shipyard::{Borrow, IntoBorrow, View, UniqueView, World};
+///
+/// # struct Camera {}
+/// # impl shipyard::Unique for Camera {
+/// #     type Tracking = shipyard::track::Untracked;
+/// # }
+/// # struct Position {}
+/// # impl shipyard::Component for Position {
+/// #     type Tracking = shipyard::track::Untracked;
+/// # }
+/// #
+/// struct CameraView<'v> {
+///     camera: UniqueView<'v, Camera>,
+///     position: View<'v, Position>,
+/// }
+/// // There shouldn't be any lifetime on this struct.
+/// // If the custom view has generics, PhantomData can be used to make the compiler happy.
+/// struct CameraViewBorrower {}
+///
+/// impl<'v> Borrow<'v> for CameraViewBorrower {
+///     type View = CameraView<'v>;
+///
+///     fn borrow(
+///         world: &'v World,
+///         last_run: Option<u32>,
+///         current: u32,
+///     ) -> Result<Self::View, shipyard::error::GetStorage> {
+///         Ok(CameraView {
+///             camera: <UniqueView<'v, Camera> as IntoBorrow>::Borrow::borrow(world, last_run, current)?,
+///             position: <View<'v, Position> as IntoBorrow>::Borrow::borrow(world, last_run, current)?,
+///         })
+///     }
+/// }
+/// ```
 pub trait Borrow<'a> {
     #[allow(missing_docs)]
     type View;
