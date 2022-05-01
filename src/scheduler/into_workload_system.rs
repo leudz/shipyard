@@ -20,7 +20,7 @@ use std::error::Error;
 pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;
-    /// Wraps a failible function in a struct containing all information required by a workload.  
+    /// Wraps a fallible function in a struct containing all information required by a workload.  
     /// The workload will stop if an error is returned.
     #[cfg(feature = "std")]
     fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
@@ -28,7 +28,7 @@ pub trait IntoWorkloadSystem<B, R> {
     ) -> Result<WorkloadSystem, error::InvalidSystem>
     where
         R: Into<Result<Ok, Err>>;
-    /// Wraps a failible function in a struct containing all information required by a workload.  
+    /// Wraps a fallible function in a struct containing all information required by a workload.  
     /// The workload will stop if an error is returned.
     #[cfg(not(feature = "std"))]
     fn into_workload_try_system<Ok, Err: 'static + Send + Any>(

@@ -6,7 +6,7 @@ use crate::view::{View, ViewMut};
 use crate::{error, track};
 use core::any::type_name;
 
-/// Retrives components based on their type and entity id.
+/// Retrieves components based on their type and entity id.
 pub trait Get {
     #[allow(missing_docs)]
     type Out;

@@ -6,7 +6,7 @@ pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
-/// A trait to querry the amount of memory a storage uses.
+/// A trait to query the amount of memory a storage uses.
 pub struct StorageMemoryUsage {
     #[allow(missing_docs)]
     pub storage_name: Cow<'static, str>,

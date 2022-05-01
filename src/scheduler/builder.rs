@@ -209,7 +209,7 @@ impl WorkloadBuilder {
 
         self
     }
-    /// Adds a failible system to the workload being created.  
+    /// Adds a fallible system to the workload being created.  
     /// The workload's execution will stop if any error is encountered.
     ///
     /// ### Example:
@@ -268,7 +268,7 @@ impl WorkloadBuilder {
 
         self
     }
-    /// Adds a failible system to the workload being created.  
+    /// Adds a fallible system to the workload being created.  
     /// The workload's execution will stop if any error is encountered.
     ///
     /// ### Example:

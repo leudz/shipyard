@@ -59,7 +59,7 @@ impl World {
     pub fn new() -> Self {
         Self::new_with_custom_lock::<parking_lot::RawRwLock>()
     }
-    /// Creates an empty `World` with a custom RwLock for `AllStorages`.
+    /// Creates an empty `World` with a custom `RwLock` for `AllStorages`.
     pub fn new_with_custom_lock<L: ShipyardRwLock + Send + Sync>() -> Self {
         let counter = Arc::new(AtomicU32::new(1));
         World {
@@ -98,7 +98,7 @@ impl World {
             thread_pool: Some(thread_pool),
         }
     }
-    /// Creates an empty [`World`] with a custom RwLock for [`AllStorages`] and a local [`ThreadPool`](rayon::ThreadPool).
+    /// Creates an empty [`World`] with a custom `RwLock` for [`AllStorages`] and a local [`ThreadPool`](rayon::ThreadPool).
     ///
     /// The local [`ThreadPool`](rayon::ThreadPool) is useful when you have multiple [`Worlds`](World) or something else using [`rayon`] and want them to stay isolated.\
     /// For example with a single [`ThreadPool`](rayon::ThreadPool), a panic would take down all [`Worlds`](World).\

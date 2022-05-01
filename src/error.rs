@@ -13,9 +13,9 @@ use std::error::Error;
 /// AtomicRefCell's borrow error.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Borrow {
-    /// The Storage was borrowed when an exclusive borrow occured.
+    /// The Storage was borrowed when an exclusive borrow occurred.
     Unique,
-    /// The Storage was borrowed exclusively when a shared borrow occured.
+    /// The Storage was borrowed exclusively when a shared borrow occurred.
     Shared,
     /// The Storage of a `!Send` component was accessed from an other thread.
     WrongThread,
@@ -157,7 +157,7 @@ impl Display for NewEntity {
     }
 }
 
-/// Retured by [`AllStorages::add_component`] and [`World::add_component`] when trying to add components to an entity that is not alive.
+/// Returned by [`AllStorages::add_component`] and [`World::add_component`] when trying to add components to an entity that is not alive.
 ///
 /// [`AllStorages::add_component`]: crate::all_storages::AllStorages::add_component()
 /// [`World::add_component`]: crate::world::World::add_component()
@@ -231,7 +231,7 @@ impl Display for AddWorkload {
     }
 }
 
-/// Trying to set the default workload to a non existant one will result in this error.
+/// Trying to set the default workload to a non existent one will result in this error.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SetDefaultWorkload {
     /// The `Scheduler` is already borrowed.
@@ -261,7 +261,7 @@ impl Display for SetDefaultWorkload {
 }
 
 /// Error returned by [`run_default`] and [`run_workload`].  
-/// The error can be a storage error, problem with the scheduler's borrowing, a non existant workload or a custom error.
+/// The error can be a storage error, problem with the scheduler's borrowing, a non existent workload or a custom error.
 ///
 /// [`run_default`]: crate::World#method::run_default()
 /// [`run_workload`]: crate::World#method::run_workload()
@@ -405,7 +405,7 @@ pub enum InvalidSystem {
     AllStorages,
     /// Multiple views of the same storage including an exclusive one.
     MultipleViews,
-    /// Multiple exclusive views fo the same storage.
+    /// Multiple exclusive views for the same storage.
     MultipleViewsMut,
 }
 
@@ -438,7 +438,7 @@ pub enum UniqueRemove {
     AllStorages,
     /// No unique storage of this type exist.
     MissingUnique(&'static str),
-    /// The uniuqe storage is already borrowed.
+    /// The unique storage is already borrowed.
     StorageBorrow((&'static str, Borrow)),
 }
 

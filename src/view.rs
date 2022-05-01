@@ -1110,7 +1110,7 @@ impl<T: Unique> UniqueViewMut<'_, T> {
     pub fn clear_inserted(self) {
         self.unique.last_insert = self.current;
     }
-    /// Removes the *medified* flag on the component of this storage.
+    /// Removes the *modified* flag on the component of this storage.
     #[inline]
     pub fn clear_modified(self) {
         self.unique.last_modification = self.current;

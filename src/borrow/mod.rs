@@ -27,7 +27,7 @@ pub use non_send_sync::NonSendSync;
 #[cfg(feature = "thread_local")]
 pub use non_sync::NonSync;
 
-/// Describes if a storage is borrowed exlusively or not.  
+/// Describes if a storage is borrowed exclusively or not.  
 /// It is used to display workloads' borrowing information.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mutability {
@@ -43,7 +43,7 @@ pub trait IntoBorrow {
     type Borrow: for<'a> Borrow<'a>;
 }
 
-/// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and worklaods.
+/// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and workloads.
 pub trait Borrow<'a> {
     #[allow(missing_docs)]
     type View;
