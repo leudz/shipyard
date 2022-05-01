@@ -43,7 +43,7 @@ use core::any::type_name;
 ///     position: View<'v, Position>,
 /// }
 ///
-/// // SAFE: All storages info are recorded.
+/// // SAFE: All storages info is recorded.
 /// unsafe impl BorrowInfo for CameraView<'_> {
 ///     fn borrow_info(info: &mut Vec<TypeInfo>) {
 ///         <UniqueView<'_, Camera>>::borrow_info(info);
