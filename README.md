@@ -17,9 +17,11 @@ If you have any question or want to follow the development more closely <sub>[![
 ## Basic Example <!-- omit in toc -->
 
 ```rust
-use shipyard::{IntoIter, View, ViewMut, World};
+use shipyard::{Component, IntoIter, View, ViewMut, World};
 
+#[derive(Component)]
 struct Health(u32);
+#[derive(Component)]
 struct Position {
     x: f32,
     y: f32,
@@ -44,7 +46,7 @@ fn main() {
 
     world.add_entity((Position { x: 0.0, y: 0.0 }, Health(1000)));
 
-    world.run(in_acid).unwrap();
+    world.run(in_acid);
 }
 ```
 
