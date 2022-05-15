@@ -5,9 +5,9 @@ pub(crate) use hasher::TypeIdHasher;
 use core::hash::{Hash, Hasher};
 
 /// Custom `TypeId` to be able to deserialize it.
-#[derive(
-    Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
+
 pub struct TypeId(pub(crate) u64);
 
 impl TypeId {

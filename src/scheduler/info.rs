@@ -7,6 +7,7 @@ use crate::scheduler::Label;
 use crate::storage::StorageId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::string::String;
 use alloc::vec::Vec;
 
 /// Contains information related to a workload.
@@ -150,7 +151,7 @@ impl core::fmt::Debug for TypeInfo {
     }
 }
 
-impl std::hash::Hash for TypeInfo {
+impl core::hash::Hash for TypeInfo {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.storage_id.hash(state);
         self.mutability.hash(state);

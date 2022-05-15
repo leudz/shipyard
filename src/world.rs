@@ -15,6 +15,7 @@ use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemo
 use crate::storage::{Storage, StorageId};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::format;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::sync::atomic::AtomicU32;
