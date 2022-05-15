@@ -5,3 +5,4 @@ guide/*/output
 tutorial/output
 node_modules
 bunny_demo/public/wasm
+*.wasm
