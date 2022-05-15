@@ -1,3 +1,4 @@
+#[cfg(all(feature = "std", feature = "proc"))]
 #[test]
 fn example() {
     use shipyard::{Component, IntoIter, View, ViewMut, World};
