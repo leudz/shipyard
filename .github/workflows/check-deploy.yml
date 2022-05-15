@@ -145,8 +145,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: rustup +stable target add wasm32-unknown-unknown
-      - run: cargo +stable build --release --package visualizer --target wasm32-unknown-unknown --manifest-path=visualizer/Cargo.toml
-      - run: mv ./target/wasm32-unknown-unknown/release/visualizer.wasm ./visualizer/out
+      - run: cargo +stable build --lib --release --package visualizer --target wasm32-unknown-unknown --manifest-path=visualizer/Cargo.toml
+      - uses: jetli/wasm-bindgen-action@v0.1.0
+        with:
+          version: 'latest'
+      - run: wasm-bindgen target/wasm32-unknown-unknown/release/visualizer.wasm --out-dir visualizer/out --no-modules --no-typescript
       - name: save visualizer
         uses: actions/upload-artifact@v2
         with:
