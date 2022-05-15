@@ -3,6 +3,7 @@ use core::cmp::Ordering;
 
 /// Id of a storage, can be a `TypeId` or `u64`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum StorageId {
     /// Identify a Rust type known at compile time
     TypeId(TypeId),

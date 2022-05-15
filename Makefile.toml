@@ -59,3 +59,39 @@ run_task = { name = ["build_square_eater", "move_square_eater"] }
 
 [tasks.test]
 run_task = { name = ["format", "test-all", "doc", "miri", "clippy", "clean"] }
+
+[tasks.cargo_visualizer]
+command = "cargo"
+args = [
+    "build",
+    "--package",
+    "visualizer",
+    "--manifest-path",
+    "visualizer/Cargo.toml",
+    "--lib",
+    "--target",
+    "wasm32-unknown-unknown",
+]
+
+[tasks.wasm_bindgen_visualizer]
+install_crate = "wasm-bindgen-cli"
+dependencies = ["cargo_visualizer"]
+command = "wasm-bindgen"
+args = [
+    "target/wasm32-unknown-unknown/debug/visualizer.wasm",
+    "--out-dir",
+    "visualizer/out",
+    "--no-modules",
+    "--no-typescript",
+]
+
+[tasks.visualizer]
+dependencies = ["wasm_bindgen_visualizer"]
+install_crate = "miniserve"
+command = "miniserve"
+args = ["--spa", "--index", "index.html", "visualizer/out"]
+
+[tasks.dev_visualizer]
+install_crate = "watchexec-cli"
+command = "watchexec"
+args = ["-r", "-w", "visualizer/src", "cargo", "make", "visualizer"]

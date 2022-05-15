@@ -29,7 +29,8 @@ pub use non_sync::NonSync;
 
 /// Describes if a storage is borrowed exclusively or not.  
 /// It is used to display workloads' borrowing information.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum Mutability {
     #[allow(missing_docs)]
     Shared,

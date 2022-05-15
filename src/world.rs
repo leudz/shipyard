@@ -1273,14 +1273,23 @@ impl World {
         WorldMemoryUsage(self)
     }
     /// Returns a list of workloads, their systems and which storages these systems borrow.
-    pub fn workloads_type_usage(&mut self) -> WorkloadsTypeUsage {
+    ///
+    /// ### Borrows
+    ///
+    /// - [`Scheduler`] (shared)
+    ///
+    /// ### Panics
+    ///
+    /// - [`Scheduler`] borrow failed.
+    #[track_caller]
+    pub fn workloads_type_usage(&self) -> WorkloadsTypeUsage {
         let mut workload_type_info = hashbrown::HashMap::new();
 
-        let scheduler = self.scheduler.get_mut();
+        let scheduler = self.scheduler.borrow().unwrap();
 
         for (workload_name, batches) in &scheduler.workloads {
             workload_type_info.insert(
-                workload_name.clone(),
+                format!("{workload_name:?}"),
                 batches
                     .sequential
                     .iter()
@@ -1290,7 +1299,7 @@ impl World {
 
                         scheduler.system_generators[*system_index](&mut system_storage_borrowed);
 
-                        (system_name, system_storage_borrowed)
+                        (system_name.into(), system_storage_borrowed)
                     })
                     .collect(),
             );

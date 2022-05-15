@@ -126,7 +126,7 @@ macro_rules! impl_system {
                 )+
 
                 if borrows.contains(&TypeInfo {
-                    name: "",
+                    name: "".into(),
                     storage_id: StorageId::of::<AllStorages>(),
                     mutability: Mutability::Exclusive,
                     thread_safe: true,
@@ -181,7 +181,7 @@ macro_rules! impl_system {
                 )+
 
                 if borrows.contains(&TypeInfo {
-                    name: "",
+                    name: "".into(),
                     storage_id: StorageId::of::<AllStorages>(),
                     mutability: Mutability::Exclusive,
                     thread_safe: true,

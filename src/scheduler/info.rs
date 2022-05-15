@@ -5,6 +5,7 @@ pub use crate::type_id::TypeId;
 use crate::borrow::Mutability;
 use crate::scheduler::Label;
 use crate::storage::StorageId;
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -97,9 +98,10 @@ impl core::fmt::Debug for SystemId {
 
 /// Identify a type.
 #[derive(Clone, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct TypeInfo {
     #[allow(missing_docs)]
-    pub name: &'static str,
+    pub name: Cow<'static, str>,
     #[allow(missing_docs)]
     pub mutability: Mutability,
     #[allow(missing_docs)]
@@ -120,6 +122,22 @@ impl PartialEq<(TypeId, Mutability)> for TypeInfo {
     }
 }
 
+impl PartialOrd for TypeInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TypeInfo {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        match self.storage_id.cmp(&other.storage_id) {
+            core::cmp::Ordering::Equal => {}
+            ord => return ord,
+        }
+        self.mutability.cmp(&other.mutability)
+    }
+}
+
 impl core::fmt::Debug for TypeInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_struct("TypeInfo");
@@ -132,8 +150,17 @@ impl core::fmt::Debug for TypeInfo {
     }
 }
 
+impl std::hash::Hash for TypeInfo {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.storage_id.hash(state);
+        self.mutability.hash(state);
+    }
+}
+
 /// Contains a list of workloads, their systems and which storages these systems borrow.
 #[allow(clippy::type_complexity)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorkloadsTypeUsage(
-    pub hashbrown::HashMap<Box<dyn Label>, Vec<(&'static str, Vec<TypeInfo>)>>,
+    pub hashbrown::HashMap<String, Vec<(Cow<'static, str>, Vec<TypeInfo>)>>,
 );
