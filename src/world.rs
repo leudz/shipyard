@@ -793,6 +793,8 @@ let i = world.run(sys1);
         #[cfg(feature = "tracing")]
         let parent_span = tracing::info_span!("workload", name = ?workload_name);
 
+        let _parent_span = parent_span.enter();
+
         #[cfg(feature = "parallel")]
         {
             let run_batch = || -> Result<(), error::RunWorkload> {
@@ -822,10 +824,10 @@ let i = world.run(sys1);
                                 let system_name = system_names[index];
 
                                 tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name).in_scope(|| {
-                                systems[index](self).map_err(|err| {
-                                    error::RunWorkload::Run((system_name, err))
-                                })
-                            })?;
+                                    systems[index](self).map_err(|err| {
+                                        error::RunWorkload::Run((system_name, err))
+                                    })
+                                })?;
                             }
 
                             #[cfg(not(feature = "tracing"))]
@@ -840,9 +842,9 @@ let i = world.run(sys1);
                                 let system_name = system_names[batch.1[0]];
 
                                 result = tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name).in_scope(|| {
-                                systems[batch.1[0]](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[batch.1[0]], err))
-                            })});
+                                    systems[batch.1[0]](self).map_err(|err| {
+                                    error::RunWorkload::Run((system_names[batch.1[0]], err))
+                                })});
                             }
 
                             #[cfg(not(feature = "tracing"))]
