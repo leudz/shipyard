@@ -9,57 +9,49 @@ on:
       - master
 
 jobs:
-  install-stable:
-    runs-on: ubuntu-latest
-    steps:
-      - name: install rust stable
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: 1.61.0
-          profile: minimal
-          components: clippy, rustfmt
   fmt:
     runs-on: ubuntu-latest
-    needs: install-stable
     steps:
       - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
-      - run: cargo +stable fmt -- --check
+      - run: cargo fmt -- --check
   miri:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-
-      - name: install rust nightly
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
-          profile: minimal
           components: miri
 
-      - run: cargo +nightly miri test --tests --lib --no-default-features
+      - run: cargo miri test --tests --lib --no-default-features
   clippy:
     runs-on: ubuntu-latest
-    needs: install-stable
     steps:
       - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
-      - run: cargo +stable clippy
+      - run: cargo clippy
         env:
           RUSTFLAGS: -D warnings
   all-features:
     runs-on: ubuntu-latest
-    needs: install-stable
     steps:
       - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@stable
 
-      - run: cargo +stable test --all-features
+      - run: cargo test --all-features
   guide_master:
     runs-on: ubuntu-latest
     needs: [fmt, miri, clippy, all-features]
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
         uses: peaceiris/actions-mdbook@v1
@@ -82,6 +74,7 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
         uses: peaceiris/actions-mdbook@v1
@@ -104,8 +97,9 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
-
-      - run: rustup +stable target add wasm32-unknown-unknown
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-unknown-unknown
 
       - name: install node
         uses: actions/setup-node@v1
@@ -130,8 +124,10 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
-      - run: rustup +stable target add wasm32-unknown-unknown
-      - run: cargo +stable build --release --package square_eater --target wasm32-unknown-unknown --manifest-path=square_eater/Cargo.toml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-unknown-unknown
+      - run: cargo build --release --package square_eater --target wasm32-unknown-unknown --manifest-path=square_eater/Cargo.toml
       - run: mv ./target/wasm32-unknown-unknown/release/square_eater.wasm ./square_eater/public
       - name: save square_eater
         uses: actions/upload-artifact@v2
@@ -144,8 +140,10 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v2
-      - run: rustup +stable target add wasm32-unknown-unknown
-      - run: cargo +stable build --lib --release --package visualizer --target wasm32-unknown-unknown --manifest-path=visualizer/Cargo.toml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          target: wasm32-unknown-unknown
+      - run: cargo build --lib --release --package visualizer --target wasm32-unknown-unknown --manifest-path=visualizer/Cargo.toml
       - uses: jetli/wasm-bindgen-action@v0.1.0
         with:
           version: 'latest'
