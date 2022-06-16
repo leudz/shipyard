@@ -2,7 +2,7 @@ use super::AbstractMut;
 use crate::entity_id::EntityId;
 use crate::or::{OneOfTwo, Or};
 
-impl<'w, T: AbstractMut, U: AbstractMut> AbstractMut for Or<(T, U)>
+impl<T: AbstractMut, U: AbstractMut> AbstractMut for Or<(T, U)>
 where
     <U as AbstractMut>::Index: Into<usize> + Clone,
 {

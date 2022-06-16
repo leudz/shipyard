@@ -312,7 +312,7 @@ impl AllStorages {
         let current = self.get_current();
 
         for (storage_id, storage) in self.storages.get_mut().iter_mut() {
-            if !excluded_storage.contains(&*storage_id) {
+            if !excluded_storage.contains(storage_id) {
                 unsafe { &mut *storage.0 }.get_mut().delete(entity, current);
             }
         }

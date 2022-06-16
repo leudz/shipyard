@@ -1,4 +1,6 @@
+use crate::info::Requirements;
 use crate::scheduler::{IntoWorkloadSystem, Label, WorkloadBuilder};
+use crate::type_id::TypeId;
 use crate::view::AllStoragesView;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -15,8 +17,10 @@ impl crate::World {
 
         WorkloadBuilder {
             work_units: w.work_units,
-            name: Box::new(core::any::TypeId::of::<F>()),
+            name: Box::new(TypeId::of::<F>()),
             skip_if: Vec::new(),
+            before: w.before,
+            after: w.after,
         }
         .add_to_world(self)
         .unwrap();
@@ -30,6 +34,8 @@ pub struct Workload {
     pub(super) work_units: Vec<super::builder::WorkUnit>,
     #[allow(unused)]
     pub(super) skip_if: Vec<Box<dyn Fn(AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
+    pub(super) before: Requirements,
+    pub(super) after: Requirements,
 }
 
 impl Workload {
@@ -130,6 +136,8 @@ where
             name: None,
             work_units: vec![self.into_workload_system().unwrap().into()],
             skip_if: Vec::new(),
+            before: Requirements::new(),
+            after: Requirements::new(),
         }
     }
 }
@@ -140,6 +148,8 @@ impl IntoWorkload<(), ()> for WorkloadBuilder {
             name: Some(self.name),
             work_units: self.work_units,
             skip_if: self.skip_if,
+            before: self.before,
+            after: self.after,
         }
     }
 }
@@ -157,6 +167,8 @@ macro_rules! impl_system {
                     name: None,
                     work_units: Vec::new(),
                     skip_if: Vec::new(),
+                    before: Requirements::new(),
+                    after: Requirements::new(),
                 };
 
                 $(

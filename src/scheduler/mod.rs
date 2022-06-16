@@ -14,6 +14,7 @@ pub use system::WorkloadSystem;
 pub(crate) use info::TypeInfo;
 
 use crate::error;
+use crate::info::Requirements;
 use crate::type_id::TypeId;
 use crate::World;
 use alloc::boxed::Box;
@@ -58,6 +59,12 @@ pub(crate) struct Scheduler {
     pub(crate) systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
     pub(crate) system_names: Vec<&'static str>,
     pub(crate) system_generators: Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
+    // Workload label and system index in the workload's sequential ordering to system requirements
+    pub(crate) system_labels: HashMap<(Box<dyn Label>, usize), Box<dyn Label>>,
+    // Workload label and system index in the workload's sequential ordering to system requirements
+    pub(crate) system_before: HashMap<(Box<dyn Label>, usize), Requirements>,
+    // Workload label and system index in the workload's sequential ordering to system requirements
+    pub(crate) system_after: HashMap<(Box<dyn Label>, usize), Requirements>,
     // system's `TypeId` to an index into both systems and system_names
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
@@ -71,6 +78,9 @@ impl Default for Scheduler {
             systems: Vec::new(),
             system_names: Vec::new(),
             system_generators: Vec::new(),
+            system_labels: HashMap::new(),
+            system_before: HashMap::new(),
+            system_after: HashMap::new(),
             lookup_table: HashMap::new(),
             workloads: HashMap::new(),
             default: Box::new(""),

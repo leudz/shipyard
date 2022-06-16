@@ -300,7 +300,7 @@ unsafe impl<'a, T: Unique> BorrowInfo for NonSendSync<UniqueViewMut<'a, T>> {
     }
 }
 
-unsafe impl<'a, T: BorrowInfo> BorrowInfo for Option<T> {
+unsafe impl<T: BorrowInfo> BorrowInfo for Option<T> {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         T::borrow_info(info);
     }
@@ -308,7 +308,7 @@ unsafe impl<'a, T: BorrowInfo> BorrowInfo for Option<T> {
 
 macro_rules! impl_borrow_info {
     ($(($type: ident, $index: tt))+) => {
-        unsafe impl<'a, $($type: BorrowInfo),+> BorrowInfo for ($($type,)+) {
+        unsafe impl<$($type: BorrowInfo),+> BorrowInfo for ($($type,)+) {
             fn borrow_info(info: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_info(info);

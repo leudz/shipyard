@@ -1,15 +1,13 @@
-use crate::IntoWorkload;
+use crate::type_id::TypeId;
+use crate::IntoWorkloadSystem;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
 use core::any::Any;
-use core::any::TypeId;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
 /// Workload identifier
-///
-/// Implemented for all types `'static + Send + Sync + Clone + Hash + Eq + Debug`
 pub trait Label: 'static + Send + Sync {
     #[allow(missing_docs)]
     fn as_any(&self) -> &dyn Any;
@@ -123,12 +121,12 @@ pub trait AsLabel<T> {
     fn as_label(&self) -> Box<dyn Label>;
 }
 
-impl<Views, R, W, F: Fn() -> W + 'static> AsLabel<(Views, R)> for F
+impl<Views, R, W> AsLabel<(Views, R)> for W
 where
-    W: IntoWorkload<Views, R>,
+    W: IntoWorkloadSystem<Views, R> + 'static,
 {
     fn as_label(&self) -> Box<dyn Label> {
-        Box::new(core::any::TypeId::of::<F>())
+        Box::new(TypeId::of::<W>())
     }
 }
 

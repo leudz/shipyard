@@ -1,6 +1,4 @@
-use crate::components::*;
-use crate::config::*;
-use crate::geometry::*;
+use crate::{components::*, config::*, geometry::*};
 use rand::prelude::*;
 use shipyard::*;
 

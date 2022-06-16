@@ -1,10 +1,9 @@
 //! Types for displaying workload information.
 
-pub use crate::type_id::TypeId;
-
 use crate::borrow::Mutability;
-use crate::scheduler::Label;
+use crate::scheduler::{AsLabel, Label};
 use crate::storage::StorageId;
+pub use crate::type_id::TypeId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -165,3 +164,76 @@ impl core::hash::Hash for TypeInfo {
 pub struct WorkloadsTypeUsage(
     pub hashbrown::HashMap<String, Vec<(Cow<'static, str>, Vec<TypeInfo>)>>,
 );
+
+/// List of before/after requirements for a system or workload.
+/// The list dedups items.
+#[derive(Clone, Debug)]
+pub struct Requirements(Vec<Box<dyn Label>>);
+
+impl Requirements {
+    pub(crate) fn new() -> Requirements {
+        Requirements(Vec::new())
+    }
+
+    pub(crate) fn add<T>(&mut self, label: impl AsLabel<T>) -> bool {
+        let label = label.as_label();
+
+        // Can't use binary search here as Label can't be ordered
+        if !self.0.contains(&label) {
+            self.0.push(label);
+
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub(crate) fn iter(&self) -> RequirementsIter<'_> {
+        self.into_iter()
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl<'a> IntoIterator for &'a Requirements {
+    type Item = &'a Box<dyn Label>;
+
+    type IntoIter = RequirementsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        RequirementsIter(self.0.iter())
+    }
+}
+
+/// Iterator for [`Requirements`]
+pub struct RequirementsIter<'a>(core::slice::Iter<'a, Box<dyn Label>>);
+
+impl<'a> Iterator for RequirementsIter<'a> {
+    type Item = &'a Box<dyn Label>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+impl Extend<Box<dyn Label>> for Requirements {
+    fn extend<T: IntoIterator<Item = Box<dyn Label>>>(&mut self, iter: T) {
+        for label in iter {
+            self.add(label);
+        }
+    }
+}
+
+impl<'a> Extend<&'a Box<dyn Label>> for Requirements {
+    fn extend<T: IntoIterator<Item = &'a Box<dyn Label>>>(&mut self, iter: T) {
+        for label in iter {
+            self.add(label.clone());
+        }
+    }
+}
