@@ -6,6 +6,7 @@ use crate::scheduler::Label;
 use crate::storage::StorageId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::fmt::{Debug, Display, Formatter};
 #[cfg(feature = "std")]
 use std::error::Error;
