@@ -1106,8 +1106,8 @@ fn valid_sequential(
     system_name: &'static str,
     system_generators: &[fn(&mut Vec<TypeInfo>) -> TypeId],
 ) -> Result<usize, error::ImpossibleRequirements> {
-    let mut valid_start = 0;
-    let mut valid_end = sequential.len();
+    let mut valid_start = sequential.len();
+    let mut valid_end = 0;
 
     let before = &memoize_before[&index];
     let after = &memoize_after[&index];
@@ -1123,7 +1123,7 @@ fn valid_sequential(
         if before.iter().any(|system| system == &other_system) {
             break;
         } else {
-            valid_start += 1;
+            valid_end += 1;
         }
     }
     for other_index in (0..sequential.len()).rev() {
@@ -1137,15 +1137,15 @@ fn valid_sequential(
         if after.iter().any(|system| system == &other_system) {
             break;
         } else {
-            valid_end -= 1;
+            valid_start -= 1;
         }
     }
 
     if valid_start > valid_end {
         return Err(error::ImpossibleRequirements::ImpossibleConstraints(
             system_name.as_label(),
-            valid_start,
-            valid_end,
+            before.iter().cloned().collect(),
+            after.iter().cloned().collect(),
         ));
     }
 
@@ -1163,8 +1163,8 @@ fn valid_parallel(
     system_name: &'static str,
     system_generators: &[fn(&mut Vec<TypeInfo>) -> TypeId],
 ) -> Result<usize, error::ImpossibleRequirements> {
-    let mut valid_start = 0;
-    let mut valid_end = parallel.len();
+    let mut valid_start = parallel.len();
+    let mut valid_end = 0;
 
     let before = &memoize_before[&index];
     let after = &memoize_after[&index];
@@ -1192,7 +1192,7 @@ fn valid_parallel(
             }
         }
 
-        valid_start += 1;
+        valid_end += 1;
     }
 
     'outer: for (single_system, systems) in parallel.iter().rev() {
@@ -1218,14 +1218,14 @@ fn valid_parallel(
             }
         }
 
-        valid_end -= 1;
+        valid_start -= 1;
     }
 
     if valid_start > valid_end {
         return Err(error::ImpossibleRequirements::ImpossibleConstraints(
             system_name.as_label(),
-            valid_start,
-            valid_end,
+            before.iter().cloned().collect(),
+            after.iter().cloned().collect(),
         ));
     }
 
@@ -1349,7 +1349,7 @@ fn flatten_work_unit(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, Workload};
+    use crate::{track, IntoWorkload, Workload};
 
     struct Usize(usize);
     struct U32(u32);
@@ -2037,6 +2037,10 @@ mod tests {
 
     #[test]
     fn before_after_loop() {
+        fn type_name_of<T>(_: T) -> &'static str {
+            core::any::type_name::<T>()
+        }
+
         fn a() {}
         fn b() {}
 
@@ -2045,11 +2049,22 @@ mod tests {
             .with_system(b.after_all(a))
             .build();
 
-        assert_eq!(
-            result.err(),
-            Some(error::AddWorkload::ImpossibleRequirements(
-                error::ImpossibleRequirements::ImpossibleConstraints("".as_label(), 0, 1)
-            ))
+        // HashMap makes this error random between a and b
+        assert!(
+            result.as_ref().err()
+                == Some(&error::AddWorkload::ImpossibleRequirements(
+                    error::ImpossibleRequirements::BeforeAndAfter(
+                        type_name_of(a).as_label(),
+                        TypeId::of_val(&b).as_label(),
+                    )
+                ))
+                || result.as_ref().err()
+                    == Some(&error::AddWorkload::ImpossibleRequirements(
+                        error::ImpossibleRequirements::BeforeAndAfter(
+                            type_name_of(b).as_label(),
+                            TypeId::of_val(&a).as_label(),
+                        )
+                    ))
         );
     }
 
@@ -2092,5 +2107,32 @@ mod tests {
         let batches = &workload.workloads[&"".as_label()];
         assert_eq!(batches.sequential, &[0]);
         assert_eq!(batches.parallel, &[(None, vec![0])]);
+    }
+
+    #[test]
+    fn before_after_workload() {
+        // TODO: make this test not use workloads, it tests the placing logic when there is no requirements
+        mod render {
+            pub fn pre_pass() {}
+            pub fn tonemapping() {}
+        }
+        mod prepare_render {
+            pub fn time() {}
+        }
+        fn tonemapping() -> Workload {
+            render::tonemapping.into_workload()
+        }
+        fn prepare_render() -> Workload {
+            prepare_render::time.into_workload()
+        }
+        fn render() -> Workload {
+            render::pre_pass.into_workload()
+        }
+        fn render_workload() -> Workload {
+            (prepare_render(), tonemapping.after_all(render)).into_workload()
+        }
+
+        let world = World::new();
+        world.add_workload(render_workload);
     }
 }

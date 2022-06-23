@@ -14,6 +14,10 @@ impl TypeId {
     pub(crate) fn of<T: ?Sized + 'static>() -> Self {
         core::any::TypeId::of::<T>().into()
     }
+    #[cfg(test)]
+    pub(crate) fn of_val<T: ?Sized + 'static>(_: &T) -> Self {
+        core::any::TypeId::of::<T>().into()
+    }
 }
 
 impl From<core::any::TypeId> for TypeId {

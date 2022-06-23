@@ -267,6 +267,9 @@ impl PartialEq for AddWorkload {
             (AddWorkload::UnknownWorkload(l0, l1), AddWorkload::UnknownWorkload(r0, r1)) => {
                 l0 == r0 && l1 == r1
             }
+            (AddWorkload::ImpossibleRequirements(l0), AddWorkload::ImpossibleRequirements(r0)) => {
+                l0 == r0
+            }
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
@@ -676,7 +679,7 @@ pub enum ImpossibleRequirements {
     #[allow(missing_docs)]
     BeforeAndAfter(Box<dyn Label>, Box<dyn Label>),
     #[allow(missing_docs)]
-    ImpossibleConstraints(Box<dyn Label>, usize, usize),
+    ImpossibleConstraints(Box<dyn Label>, Vec<Box<dyn Label>>, Vec<Box<dyn Label>>),
 }
 
 impl PartialEq for ImpossibleRequirements {
@@ -687,9 +690,9 @@ impl PartialEq for ImpossibleRequirements {
                 ImpossibleRequirements::BeforeAndAfter(other_system, other_conflict),
             ) => system == other_system && conflict == other_conflict,
             (
-                ImpossibleRequirements::ImpossibleConstraints(workload1, index1, other_index1),
-                ImpossibleRequirements::ImpossibleConstraints(workload2, index2, other_index2),
-            ) => workload1 == workload2 && index1 == index2 && other_index1 == other_index2,
+                ImpossibleRequirements::ImpossibleConstraints(workload1, before1, after1),
+                ImpossibleRequirements::ImpossibleConstraints(workload2, before2, after2),
+            ) => workload1 == workload2 && before1 == before2 && after1 == after2,
             _ => false,
         }
     }
@@ -707,11 +710,12 @@ impl Debug for ImpossibleRequirements {
                     system, other_system
                 ))
             }
-            ImpossibleRequirements::ImpossibleConstraints(system, start, end) => {
-                f.write_fmt(format_args!(
-                    "{:?} must be placed after position {} but before position {}.",
-                    system, start, end
-                ))
+            ImpossibleRequirements::ImpossibleConstraints(system, before, after) => {
+                f.write_fmt(format_args!("{:?} cannot be placed.", system))?;
+                f.write_str("\n")?;
+                f.write_fmt(format_args!("Before: {:?}", before))?;
+                f.write_str("\n")?;
+                f.write_fmt(format_args!("After: {:?}", after))
             }
         }
     }
