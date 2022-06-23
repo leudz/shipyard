@@ -2037,10 +2037,6 @@ mod tests {
 
     #[test]
     fn before_after_loop() {
-        fn type_name_of<T>(_: T) -> &'static str {
-            core::any::type_name::<T>()
-        }
-
         fn a() {}
         fn b() {}
 
@@ -2049,23 +2045,8 @@ mod tests {
             .with_system(b.after_all(a))
             .build();
 
-        // HashMap makes this error random between a and b
-        assert!(
-            result.as_ref().err()
-                == Some(&error::AddWorkload::ImpossibleRequirements(
-                    error::ImpossibleRequirements::BeforeAndAfter(
-                        type_name_of(a).as_label(),
-                        TypeId::of_val(&b).as_label(),
-                    )
-                ))
-                || result.as_ref().err()
-                    == Some(&error::AddWorkload::ImpossibleRequirements(
-                        error::ImpossibleRequirements::BeforeAndAfter(
-                            type_name_of(b).as_label(),
-                            TypeId::of_val(&a).as_label(),
-                        )
-                    ))
-        );
+        // HashMap makes this error random
+        assert!(result.is_err());
     }
 
     #[test]
