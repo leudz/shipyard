@@ -1258,8 +1258,6 @@ fn flatten_work_unit(
             system_type_id,
             generator,
             system_fn,
-            before,
-            after,
         }) => {
             let borrow_constraints = core::mem::take(&mut borrow_constraints);
             let system_type_name = system_type_name;
@@ -1277,8 +1275,8 @@ fn flatten_work_unit(
                 system_type_name,
                 system_index,
                 borrow_constraints,
-                before,
-                after,
+                Requirements::new(),
+                Requirements::new(),
             ));
         }
         WorkUnit::WorkloadName(workload) => {
@@ -1349,7 +1347,7 @@ fn flatten_work_unit(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, Workload};
+    use crate::{track, IntoWorkload, Workload};
 
     struct Usize(usize);
     struct U32(u32);

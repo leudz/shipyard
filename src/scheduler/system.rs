@@ -1,7 +1,6 @@
 use super::into_workload::Workload;
 use super::{TypeInfo, WorkloadBuilder};
 use crate::error;
-use crate::info::Requirements;
 use crate::type_id::TypeId;
 use crate::world::World;
 use alloc::boxed::Box;
@@ -40,8 +39,6 @@ pub enum WorkloadSystem {
         /// access information
         borrow_constraints: Vec<TypeInfo>,
         generator: fn(&mut Vec<TypeInfo>) -> TypeId,
-        before: Requirements,
-        after: Requirements,
     },
     #[doc(hidden)]
     Workload(Workload),

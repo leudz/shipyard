@@ -2,6 +2,7 @@ use crate::info::Requirements;
 use crate::scheduler::{IntoWorkloadSystem, Label, WorkloadBuilder};
 use crate::type_id::TypeId;
 use crate::view::AllStoragesView;
+use crate::{AsLabel, WorkloadSystem};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 // macro not module
@@ -119,11 +120,27 @@ pub trait IntoWorkload<Views, R> {
     /// assert_eq!(world.borrow::<View<Health>>().unwrap().len(), 900);
     /// ```
     fn into_workload(self) -> Workload;
+    /// When building a workload, this system or workload will be placed before all invocation of the other system or workload.
+    fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
+    /// When building a workload, this system or workload will be placed after all invocation of the other system or workload.
+    fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
 }
 
 impl IntoWorkload<(), ()> for Workload {
     fn into_workload(self) -> Workload {
         self
+    }
+
+    fn before_all<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.before.add(other.as_label());
+
+        WorkloadSystem::Workload(self)
+    }
+
+    fn after_all<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.after.add(other.as_label());
+
+        WorkloadSystem::Workload(self)
     }
 }
 
@@ -140,6 +157,14 @@ where
             after: Requirements::new(),
         }
     }
+
+    fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.into_workload().before_all(other)
+    }
+
+    fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.into_workload().after_all(other)
+    }
 }
 
 impl IntoWorkload<(), ()> for WorkloadBuilder {
@@ -151,6 +176,14 @@ impl IntoWorkload<(), ()> for WorkloadBuilder {
             before: self.before,
             after: self.after,
         }
+    }
+
+    fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.into_workload().before_all(other)
+    }
+
+    fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.into_workload().after_all(other)
     }
 }
 
@@ -177,6 +210,14 @@ macro_rules! impl_system {
                 )+
 
                 workload
+            }
+
+            fn before_all<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                self.into_workload().before_all(other)
+            }
+
+            fn after_all<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                self.into_workload().after_all(other)
             }
         }
     };
