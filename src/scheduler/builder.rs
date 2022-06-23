@@ -1349,7 +1349,7 @@ fn flatten_work_unit(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, IntoWorkload, Workload};
+    use crate::{track, Workload};
 
     struct Usize(usize);
     struct U32(u32);
@@ -2110,29 +2110,23 @@ mod tests {
     }
 
     #[test]
-    fn before_after_workload() {
-        // TODO: make this test not use workloads, it tests the placing logic when there is no requirements
-        mod render {
-            pub fn pre_pass() {}
-            pub fn tonemapping() {}
-        }
-        mod prepare_render {
-            pub fn time() {}
-        }
-        fn tonemapping() -> Workload {
-            render::tonemapping.into_workload()
-        }
-        fn prepare_render() -> Workload {
-            prepare_render::time.into_workload()
-        }
-        fn render() -> Workload {
-            render::pre_pass.into_workload()
-        }
-        fn render_workload() -> Workload {
-            (prepare_render(), tonemapping.after_all(render)).into_workload()
-        }
+    fn before_after_absent_system() {
+        fn a() {}
+        fn b() {}
+        fn c() {}
 
-        let world = World::new();
-        world.add_workload(render_workload);
+        let (workload, _) = Workload::builder("")
+            .with_system(a)
+            .with_system(c.after_all(b))
+            .build()
+            .unwrap();
+
+        // HashMap makes this error random between a and c
+        let batches = &workload.workloads[&"".as_label()];
+        assert!(batches.sequential == &[0, 1] || batches.sequential == &[1, 0]);
+        assert!(
+            batches.parallel == &[(None, vec![0]), (None, vec![1])]
+                || batches.parallel == &[(None, vec![1]), (None, vec![0])]
+        );
     }
 }
