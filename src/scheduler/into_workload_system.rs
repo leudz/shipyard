@@ -45,11 +45,17 @@ pub trait IntoWorkloadSystem<B, R> {
 
 pub struct Nothing;
 
-impl<R, F> IntoWorkloadSystem<Nothing, R> for F
+impl<R: 'static, F> IntoWorkloadSystem<Nothing, R> for F
 where
     F: 'static + Send + Sync + Fn() -> R,
 {
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
+        let system_type_name = type_name::<F>();
+
+        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
+        }
+
         Ok(WorkloadSystem::System {
             borrow_constraints: Vec::new(),
             before: Requirements::new(),
@@ -59,7 +65,7 @@ where
                 Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
-            system_type_name: type_name::<F>(),
+            system_type_name,
             generator: |_| TypeId::of::<F>(),
         })
     }
@@ -70,6 +76,12 @@ where
     where
         R: Into<Result<Ok, Err>>,
     {
+        let system_type_name = type_name::<F>();
+
+        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
+        }
+
         Ok(WorkloadSystem::System {
             borrow_constraints: Vec::new(),
             before: Requirements::new(),
@@ -79,7 +91,7 @@ where
                 Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
-            system_type_name: type_name::<F>(),
+            system_type_name,
             generator: |_| TypeId::of::<F>(),
         })
     }
@@ -90,6 +102,12 @@ where
     where
         R: Into<Result<Ok, Err>>,
     {
+        let system_type_name = type_name::<F>();
+
+        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
+        }
+
         Ok(WorkloadSystem::System {
             borrow_constraints: Vec::new(),
             before: Requirements::new(),
@@ -99,11 +117,21 @@ where
                 Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
-            system_type_name: type_name::<F>(),
+            system_type_name,
             generator: |_| TypeId::of::<F>(),
         })
     }
+    #[track_caller]
     fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        let system_type_name = type_name::<F>();
+
+        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+            panic!(
+                "{}",
+                error::InvalidSystem::WorkloadUsedAsSystem(system_type_name)
+            );
+        }
+
         let mut before = Requirements::new();
         before.add(other.as_label());
 
@@ -116,11 +144,21 @@ where
                 Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
-            system_type_name: type_name::<F>(),
+            system_type_name,
             generator: |_| TypeId::of::<F>(),
         }
     }
+    #[track_caller]
     fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        let system_type_name = type_name::<F>();
+
+        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+            panic!(
+                "{}",
+                error::InvalidSystem::WorkloadUsedAsSystem(system_type_name)
+            );
+        }
+
         let mut after = Requirements::new();
         after.add(other.as_label());
 
@@ -133,7 +171,7 @@ where
                 Ok(())
             }),
             system_type_id: TypeId::of::<F>(),
-            system_type_name: type_name::<F>(),
+            system_type_name,
             generator: |_| TypeId::of::<F>(),
         }
     }

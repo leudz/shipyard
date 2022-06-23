@@ -491,6 +491,8 @@ pub enum InvalidSystem {
     MultipleViews,
     /// Multiple exclusive views for the same storage.
     MultipleViewsMut,
+    /// System returning `Workload`
+    WorkloadUsedAsSystem(&'static str),
 }
 
 #[cfg(feature = "std")]
@@ -502,6 +504,7 @@ impl Debug for InvalidSystem {
             InvalidSystem::AllStorages => f.write_str("A system borrowing both AllStorages and a storage can't run. You can borrow the storage inside the system with AllStorages::borrow or AllStorages::run instead."),
             InvalidSystem::MultipleViews => f.write_str("Multiple views of the same storage including an exclusive borrow, consider removing the shared borrow."),
             InvalidSystem::MultipleViewsMut => f.write_str("Multiple exclusive views of the same storage, consider removing one."),
+            InvalidSystem::WorkloadUsedAsSystem(system_name) => f.write_fmt(format_args!("Workload used as a system, you should call it `{}()`.", system_name)),
         }
     }
 }
