@@ -15,7 +15,7 @@ As long as the "parallel" feature is set (enabled by default) workloads will try
 - There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will block `T` threading.
 
 When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.  
-[`add_to_world`](https://docs.rs/shipyard/latest/shipyard/struct.WorkloadBuilder.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.
+[`add_to_world`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.
 
 ### Inner-parallelism
 

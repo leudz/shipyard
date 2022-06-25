@@ -10,7 +10,7 @@ Workload::builder("Add & Check")
 
 ## IntoBorrow
 
-Let's start with `WorkloadBuilder::with_system`.\
+Let's start with `Workload::with_system`.\
 It should accept any system, a system being a function with 0 to 10 views as arguments and returning anything.\
 Since it has to accept multiple types we have to make a trait, `IntoWorkloadSystem`.\
 Ideally this trait would be implemented like this:

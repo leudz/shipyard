@@ -246,9 +246,9 @@ impl Display for AddComponent {
     }
 }
 
-/// Error type returned by [`WorkloadBuilder::add_to_world`].
+/// Error type returned by [`Workload::add_to_world`].
 ///
-/// [`WorkloadBuilder::add_to_world`]: crate::WorkloadBuilder::add_to_world()
+/// [`Workload::add_to_world`]: crate::Workload::add_to_world()
 #[derive(Clone, Eq)]
 pub enum AddWorkload {
     /// A workload with the same name already exists.
@@ -588,7 +588,7 @@ impl Display for Apply {
 
 /// Error returned by [`are_all_uniques_present_in_world`].
 ///
-/// [`are_all_uniques_present_in_world`]: crate::WorkloadBuilder::are_all_uniques_present_in_world()
+/// [`are_all_uniques_present_in_world`]: crate::Workload::are_all_uniques_present_in_world()
 #[derive(Clone, Eq)]
 pub enum UniquePresence {
     #[allow(missing_docs)]

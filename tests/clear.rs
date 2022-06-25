@@ -102,7 +102,7 @@ fn inserted() {
 
     world.add_entity((U32(0),));
 
-    Workload::builder("")
+    Workload::new("")
         .with_system(system)
         .add_to_world(&world)
         .unwrap();

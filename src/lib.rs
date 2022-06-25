@@ -100,7 +100,7 @@ pub use remove::Remove;
 pub use reserve::{BulkEntityIter, BulkReserve};
 pub use scheduler::{
     info, AsLabel, IntoWorkload, IntoWorkloadSystem, Label, ScheduledWorkload, Workload,
-    WorkloadBuilder, WorkloadSystem,
+    WorkloadSystem,
 };
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component, Unique};

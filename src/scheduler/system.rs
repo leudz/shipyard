@@ -1,12 +1,12 @@
-use super::into_workload::Workload;
-use super::{TypeInfo, WorkloadBuilder};
+use super::TypeInfo;
 use crate::error;
+use crate::scheduler::workload::Workload;
 use crate::type_id::TypeId;
 use crate::world::World;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
-/// Self contained system that may be inserted into a [`WorkloadBuilder`].
+/// Self contained system that may be inserted into a [`Workload`].
 ///
 /// ### Example:
 ///
@@ -24,12 +24,12 @@ use alloc::vec::Vec;
 ///
 /// let workload_sys1: WorkloadSystem = sys1.into_workload_system().unwrap();
 ///
-/// let mut workload = Workload::builder("my_workload")
+/// let mut workload = Workload::new("my_workload")
 ///     .with_system(workload_sys1)
 ///     .with_system(sys2);
 /// ```
 ///
-/// [`WorkloadBuilder`]: crate::WorkloadBuilder
+/// [`Workload`]: crate::Workload
 pub enum WorkloadSystem {
     #[doc(hidden)]
     System {
@@ -44,7 +44,7 @@ pub enum WorkloadSystem {
     Workload(Workload),
 }
 
-impl Extend<WorkloadSystem> for WorkloadBuilder {
+impl Extend<WorkloadSystem> for Workload {
     fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
         self.work_units.extend(iter.into_iter().map(Into::into));
     }

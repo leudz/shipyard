@@ -1,16 +1,15 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
-use crate::component::{Component, Unique};
 use crate::scheduler::info::{
     BatchInfo, Conflict, Requirements, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
 };
-use crate::scheduler::{AsLabel, Batches, IntoWorkloadSystem, Label, Scheduler, WorkloadSystem};
-use crate::sparse_set::SparseSet;
+use crate::scheduler::{AsLabel, Batches, Label, Scheduler, WorkloadSystem};
 use crate::type_id::TypeId;
-use crate::unique::UniqueStorage;
-use crate::view::AllStoragesView;
 use crate::world::World;
-use crate::{error, track};
+use crate::{
+    error, track, AllStoragesView, Component, IntoWorkload, IntoWorkloadSystem, SparseSet, Unique,
+    UniqueStorage,
+};
 // this is the macro, not the module
 use crate::storage::StorageId;
 use alloc::boxed::Box;
@@ -23,12 +22,12 @@ use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::error::Error;
 
-/// Used to create a [`WorkloadBuilder`].
+/// Used to create a [`Workload`].
 ///
-/// You can also use [`WorkloadBuilder::new`].
+/// You can also use [`Workload::new`].
 ///
-/// [`WorkloadBuilder`]: crate::WorkloadBuilder
-/// [`WorkloadBuilder::new`]: crate::WorkloadBuilder::new()
+/// [`Workload`]: crate::Workload
+/// [`Workload::new`]: crate::Workload::new()
 pub struct ScheduledWorkload {
     name: Box<dyn Label>,
     #[allow(clippy::type_complexity)]
@@ -44,13 +43,6 @@ pub struct ScheduledWorkload {
 }
 
 impl ScheduledWorkload {
-    /// Creates a new empty [`WorkloadBuilder`].
-    ///
-    /// [`WorkloadBuilder`]: crate::WorkloadBuilder
-    pub fn builder<L: Label>(label: L) -> WorkloadBuilder {
-        WorkloadBuilder::new(label)
-    }
-
     /// Runs the workload.
     ///
     /// ### Borrows
@@ -89,23 +81,45 @@ impl From<Box<dyn Label>> for WorkUnit {
     }
 }
 
+impl World {
+    /// Creates a new workload and store it in the [`World`](crate::World).
+    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
+    where
+        W: IntoWorkload<Views, R>,
+    {
+        let w = workload().into_workload();
+
+        Workload {
+            work_units: w.work_units,
+            name: Box::new(TypeId::of::<F>()),
+            skip_if: Vec::new(),
+            before: w.before,
+            after: w.after,
+        }
+        .add_to_world(self)
+        .unwrap();
+    }
+}
+
 /// Keeps information to create a workload.
 ///
 /// A workload is a collection of systems. They will execute as much in parallel as possible.  
 /// They are evaluated first to last when they can't be parallelized.  
 /// The default workload will automatically be set to the first workload added.
-pub struct WorkloadBuilder {
-    pub(super) work_units: Vec<WorkUnit>,
+pub struct Workload {
+    #[allow(unused)]
     pub(super) name: Box<dyn Label>,
+    pub(super) work_units: Vec<WorkUnit>,
+    #[allow(unused)]
     pub(super) skip_if: Vec<Box<dyn Fn(AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
     pub(super) before: Requirements,
     pub(super) after: Requirements,
 }
 
-impl WorkloadBuilder {
-    /// Creates a new empty [`WorkloadBuilder`].
+impl Workload {
+    /// Creates a new empty [`Workload`].
     ///
-    /// [`WorkloadBuilder`]: crate::WorkloadBuilder
+    /// [`Workload`]: crate::Workload
     ///
     /// ### Example
     /// ```
@@ -136,7 +150,7 @@ impl WorkloadBuilder {
     /// world.add_entity((USIZE(2), U32(3)));
     /// world.add_entity((USIZE(4), U32(5)));
     ///
-    /// Workload::builder("Add & Check")
+    /// Workload::new("Add & Check")
     ///     .with_system(add)
     ///     .with_system(check)
     ///     .add_to_world(&world)
@@ -145,7 +159,7 @@ impl WorkloadBuilder {
     /// world.run_default();
     /// ```
     pub fn new<L: Label>(label: L) -> Self {
-        WorkloadBuilder {
+        Workload {
             work_units: Vec::new(),
             name: Box::new(label),
             skip_if: Vec::new(),
@@ -200,7 +214,7 @@ impl WorkloadBuilder {
     /// world.add_entity((USIZE(2), U32(3)));
     /// world.add_entity((USIZE(4), U32(5)));
     ///
-    /// Workload::builder("Add & Check")
+    /// Workload::new("Add & Check")
     ///     .with_system(add)
     ///     .with_system(check)
     ///     .add_to_world(&world)
@@ -249,7 +263,7 @@ impl WorkloadBuilder {
     /// world.add_entity((USIZE(2), U32(3)));
     /// world.add_entity((USIZE(4), U32(5)));
     ///
-    /// Workload::builder("Add & Check")
+    /// Workload::new("Add & Check")
     ///     .with_system(add)
     ///     .with_try_system(check)
     ///     .add_to_world(&world)
@@ -302,7 +316,7 @@ impl WorkloadBuilder {
     /// world.add_entity((2usize, 3u32));
     /// world.add_entity((4usize, 5u32));
     ///
-    /// Workload::builder("Add & Check")
+    /// Workload::new("Add & Check")
     ///     .with_system(add)
     ///     .with_try_system(check)
     ///     .add_to_world(&world)
@@ -429,7 +443,7 @@ impl WorkloadBuilder {
 
         Ok(())
     }
-    /// Build the [`Workload`](super::Workload) from the [`WorkloadBuilder`].
+    /// Build the [`Workload`](super::Workload) from the [`Workload`].
     pub fn build(self) -> Result<(ScheduledWorkload, WorkloadInfo), error::AddWorkload> {
         let mut workload = ScheduledWorkload {
             name: self.name.clone(),
@@ -542,7 +556,7 @@ fn check_uniques_in_work_unit(
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn create_workload(
-    mut builder: WorkloadBuilder,
+    mut builder: Workload,
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
     system_names: &mut Vec<&'static str>,
     system_generators: &mut Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
@@ -1347,7 +1361,7 @@ fn flatten_work_unit(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, IntoWorkload, Workload};
+    use crate::{track, IntoWorkload};
 
     struct Usize(usize);
     struct U32(u32);
@@ -1380,7 +1394,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("System1")
+        Workload::new("System1")
             .with_system(system1)
             .add_to_world(&world)
             .unwrap();
@@ -1408,7 +1422,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("System1")
+        Workload::new("System1")
             .with_system(system1)
             .add_to_world(&world)
             .unwrap();
@@ -1437,7 +1451,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system1)
             .with_system(system2.into_workload_system().unwrap())
             .add_to_world(&world)
@@ -1467,7 +1481,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system1)
             .with_system(system2)
             .add_to_world(&world)
@@ -1497,7 +1511,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system1)
             .with_system(system2)
             .add_to_world(&world)
@@ -1519,7 +1533,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system2)
             .with_system(system1)
             .add_to_world(&world)
@@ -1550,13 +1564,13 @@ mod tests {
 
         let world = World::new();
 
-        let mut group_a = ScheduledWorkload::builder("Group A")
+        let mut group_a = Workload::new("Group A")
             .with_system(system_a1)
             .with_system(system_a2);
 
-        let mut group_b = ScheduledWorkload::builder("Group B").with_system(system_b1);
+        let mut group_b = Workload::new("Group B").with_system(system_b1);
 
-        ScheduledWorkload::builder("Combined")
+        Workload::new("Combined")
             .append(&mut group_a)
             .append(&mut group_b)
             .add_to_world(&world)
@@ -1586,7 +1600,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system2)
             .add_to_world(&world)
             .unwrap();
@@ -1607,7 +1621,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system2)
             .with_system(system2)
             .add_to_world(&world)
@@ -1628,7 +1642,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system1)
             .with_system(system2)
             .add_to_world(&world)
@@ -1650,7 +1664,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system2)
             .with_system(system1)
             .add_to_world(&world)
@@ -1688,7 +1702,7 @@ mod tests {
 
         let world = World::new();
 
-        let info = ScheduledWorkload::builder("Test")
+        let info = Workload::new("Test")
             .with_system(sys1)
             .with_system(sys1)
             .add_to_world(&world)
@@ -1711,7 +1725,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Test")
+        Workload::new("Test")
             .with_system(sys1)
             .with_system(sys2)
             .add_to_world(&world)
@@ -1732,7 +1746,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Test")
+        Workload::new("Test")
             .with_system(sys2)
             .with_system(sys1)
             .add_to_world(&world)
@@ -1753,7 +1767,7 @@ mod tests {
 
         let world = World::new();
 
-        let info = ScheduledWorkload::builder("Test")
+        let info = Workload::new("Test")
             .with_system(sys1)
             .with_system(sys3)
             .add_to_world(&world)
@@ -1775,7 +1789,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Test")
+        Workload::new("Test")
             .with_system(sys1)
             .with_system(sys4)
             .add_to_world(&world)
@@ -1804,7 +1818,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
+        Workload::new("Systems")
             .with_system(system1)
             .with_system(system2)
             .add_to_world(&world)
@@ -1831,9 +1845,7 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("Systems")
-            .add_to_world(&world)
-            .unwrap();
+        Workload::new("Systems").add_to_world(&world).unwrap();
 
         let scheduler = world.scheduler.borrow_mut().unwrap();
         let label: Box<dyn Label> = Box::new("Systems");
@@ -1861,13 +1873,13 @@ mod tests {
 
         let world = World::new();
 
-        let mut group_a = ScheduledWorkload::builder("Group A")
+        let mut group_a = Workload::new("Group A")
             .with_system(sys_a1)
             .with_system(sys_a2);
-        let mut group_b = ScheduledWorkload::builder("Group B").with_system(sys_b1);
-        let mut group_c = ScheduledWorkload::builder("Group C").with_system(sys_c1);
+        let mut group_b = Workload::new("Group B").with_system(sys_b1);
+        let mut group_c = Workload::new("Group C").with_system(sys_c1);
 
-        ScheduledWorkload::builder("Combined")
+        Workload::new("Combined")
             .append(&mut group_a)
             .append(&mut group_b)
             .append(&mut group_c)
@@ -1898,14 +1910,14 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("1")
+        Workload::new("1")
             .with_system(sys1)
             .with_system(sys2)
             .with_system(sys1)
             .add_to_world(&world)
             .unwrap();
 
-        let debug_info = ScheduledWorkload::builder("2")
+        let debug_info = Workload::new("2")
             .with_workload("1")
             .with_system(sys1)
             .with_workload("1")
@@ -1923,11 +1935,9 @@ mod tests {
 
         let world = World::new();
 
-        ScheduledWorkload::builder("1")
-            .add_to_world(&world)
-            .unwrap();
+        Workload::new("1").add_to_world(&world).unwrap();
 
-        let debug_info = ScheduledWorkload::builder("2")
+        let debug_info = Workload::new("2")
             .with_workload("1")
             .add_to_world(&world)
             .unwrap();
@@ -1941,7 +1951,7 @@ mod tests {
     fn skip_if_missing_storage() {
         let world = World::new();
 
-        ScheduledWorkload::builder("test")
+        Workload::new("test")
             .skip_if_storage_empty::<Usize>()
             .with_system(|| panic!())
             .build()
@@ -1950,7 +1960,7 @@ mod tests {
             .run_with_world(&world)
             .unwrap();
 
-        ScheduledWorkload::builder("test")
+        Workload::new("test")
             .skip_if_storage_empty::<Usize>()
             .with_system(|| panic!())
             .add_to_world(&world)
@@ -1966,7 +1976,7 @@ mod tests {
         let eid = world.add_entity((Usize(0),));
         world.remove::<(Usize,)>(eid);
 
-        ScheduledWorkload::builder("test")
+        Workload::new("test")
             .skip_if_storage_empty::<Usize>()
             .with_system(|| panic!())
             .build()
@@ -1975,7 +1985,7 @@ mod tests {
             .run_with_world(&world)
             .unwrap();
 
-        ScheduledWorkload::builder("test")
+        Workload::new("test")
             .skip_if_storage_empty::<Usize>()
             .with_system(|| panic!())
             .add_to_world(&world)
@@ -1990,7 +2000,7 @@ mod tests {
         fn b() {}
         fn c() {}
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(c.after_all(b))
             .with_system(b.after_all(a))
             .with_system(a)
@@ -2004,7 +2014,7 @@ mod tests {
             &[(None, vec![2]), (None, vec![1]), (None, vec![0])]
         );
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(a)
             .with_system(b.after_all(a))
             .with_system(c.after_all(b))
@@ -2018,7 +2028,7 @@ mod tests {
             &[(None, vec![0]), (None, vec![1]), (None, vec![2])]
         );
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(b.after_all(a))
             .with_system(a)
             .with_system(c.after_all(b))
@@ -2038,7 +2048,7 @@ mod tests {
         fn a() {}
         fn b() {}
 
-        let result = Workload::builder("")
+        let result = Workload::new("")
             .with_system(a.after_all(b))
             .with_system(b.after_all(a))
             .build();
@@ -2052,7 +2062,7 @@ mod tests {
         fn a() {}
         fn b() {}
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(a.before_all(b))
             .with_system(b.after_all(a))
             .build()
@@ -2062,7 +2072,7 @@ mod tests {
         assert_eq!(batches.sequential, &[0, 1]);
         assert_eq!(batches.parallel, &[(None, vec![0]), (None, vec![1])]);
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(b.after_all(a))
             .with_system(a.before_all(b))
             .build()
@@ -2078,7 +2088,7 @@ mod tests {
         fn a() {}
         fn b() {}
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(a.before_all(b))
             .build()
             .unwrap();
@@ -2094,7 +2104,7 @@ mod tests {
         fn b() {}
         fn c() {}
 
-        let (workload, _) = Workload::builder("")
+        let (workload, _) = Workload::new("")
             .with_system(a)
             .with_system(c.after_all(b))
             .build()

@@ -1,6 +1,7 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
 use crate::error;
+use crate::scheduler::workload::Workload;
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
@@ -47,7 +48,7 @@ where
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
         let system_type_name = type_name::<F>();
 
-        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
             return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
         }
 
@@ -71,7 +72,7 @@ where
     {
         let system_type_name = type_name::<F>();
 
-        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
             return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
         }
 
@@ -95,7 +96,7 @@ where
     {
         let system_type_name = type_name::<F>();
 
-        if TypeId::of::<R>() == TypeId::of::<crate::scheduler::Workload>() {
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
             return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
         }
 

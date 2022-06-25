@@ -21,7 +21,7 @@ fn basic() {
         },
     );
 
-    Workload::builder("Push")
+    Workload::new("Push")
         .with_system(push)
         .add_to_world(&world)
         .unwrap();

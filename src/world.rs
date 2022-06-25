@@ -759,7 +759,7 @@ let i = world.run(sys1);
     ///
     /// let world = World::new();
     ///
-    /// Workload::builder("foo").add_to_world(&world).unwrap();
+    /// Workload::new("foo").add_to_world(&world).unwrap();
     ///
     /// assert!(world.contains_workload("foo"));
     /// assert!(!world.contains_workload("bar"));

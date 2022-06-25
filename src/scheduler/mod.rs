@@ -1,15 +1,15 @@
-mod builder;
 pub mod info;
 mod into_workload;
 mod into_workload_system;
 mod label;
 mod system;
+mod workload;
 
-pub use builder::{ScheduledWorkload, WorkloadBuilder};
-pub use into_workload::{IntoWorkload, Workload};
+pub use into_workload::IntoWorkload;
 pub use into_workload_system::IntoWorkloadSystem;
 pub use label::{AsLabel, Label};
 pub use system::WorkloadSystem;
+pub use workload::{ScheduledWorkload, Workload};
 
 pub(crate) use info::TypeInfo;
 

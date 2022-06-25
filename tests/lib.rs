@@ -84,7 +84,7 @@ fn system() {
         },
     );
 
-    Workload::builder("")
+    Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
         .unwrap();
@@ -121,7 +121,7 @@ fn systems() {
         },
     );
 
-    Workload::builder("")
+    Workload::new("")
         .with_system(system1)
         .with_system(system2)
         .add_to_world(&world)
@@ -197,7 +197,7 @@ fn two_workloads() {
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    Workload::builder("")
+    Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
         .unwrap();
@@ -220,7 +220,7 @@ fn two_bad_workloads() {
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    Workload::builder("")
+    Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
         .unwrap();

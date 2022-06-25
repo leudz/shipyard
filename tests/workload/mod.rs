@@ -23,12 +23,12 @@ use shipyard::*;
 fn duplicate_name() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    Workload::builder("")
+    Workload::new("")
         .with_system(|| {})
         .add_to_world(&world)
         .unwrap();
     assert_eq!(
-        Workload::builder("").add_to_world(&world).err(),
+        Workload::new("").add_to_world(&world).err(),
         Some(error::AddWorkload::AlreadyExists)
     );
 
@@ -45,7 +45,7 @@ fn rename() {
 
     world.add_unique(U32(0));
 
-    Workload::builder("Empty")
+    Workload::new("Empty")
         .with_system(increment)
         .add_to_world(&world)
         .unwrap();
@@ -72,17 +72,17 @@ fn are_all_uniques_present_in_world() {
 
     world.add_unique(U32(0));
 
-    Workload::builder("")
+    Workload::new("")
         .are_all_uniques_present_in_world(&world)
         .unwrap();
 
-    Workload::builder("")
+    Workload::new("")
         .with_system(|_: UniqueView<U32>| {})
         .are_all_uniques_present_in_world(&world)
         .unwrap();
 
     assert_eq!(
-        Workload::builder("")
+        Workload::new("")
             .with_workload("other_workload")
             .are_all_uniques_present_in_world(&world),
         Err(error::UniquePresence::Workload(Box::new("other_workload")))
@@ -94,7 +94,7 @@ fn are_all_uniques_present_in_world() {
         borrow_info.remove(0)
     };
     assert_eq!(
-        Workload::builder("")
+        Workload::new("")
             .with_system(|_: UniqueView<USIZE>| {})
             .are_all_uniques_present_in_world(&world),
         Err(error::UniquePresence::Unique(type_info).into())
@@ -106,7 +106,7 @@ fn are_all_uniques_present_in_world() {
         borrow_info.remove(0)
     };
     assert_eq!(
-        Workload::builder("")
+        Workload::new("")
             .with_system(|_: UniqueViewMut<USIZE>| {})
             .are_all_uniques_present_in_world(&world),
         Err(error::UniquePresence::Unique(type_info).into())
@@ -118,13 +118,13 @@ fn run_one_with_world() {
     let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let builder = Workload::builder("").with_system(|| dbg!(1));
+    let builder = Workload::new("").with_system(|| dbg!(1));
     let (workload, _) = builder.build().unwrap();
 
     workload.run_with_world(&world1).unwrap();
     workload.run_with_world(&world2).unwrap();
 
-    let builder2 = Workload::builder("Named").with_system(|| dbg!(1));
+    let builder2 = Workload::new("Named").with_system(|| dbg!(1));
     let (workload2, _) = builder2.build().unwrap();
 
     workload2.run_with_world(&world1).unwrap();
@@ -136,7 +136,7 @@ fn run_with_world() {
     let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let builder = Workload::builder("")
+    let builder = Workload::new("")
         .with_system(|| dbg!(1))
         .with_system(|| dbg!(1));
     let (workload, _) = builder.build().unwrap();
@@ -144,7 +144,7 @@ fn run_with_world() {
     workload.run_with_world(&world1).unwrap();
     workload.run_with_world(&world2).unwrap();
 
-    let builder2 = Workload::builder("Named")
+    let builder2 = Workload::new("Named")
         .with_system(|| dbg!(1))
         .with_system(|| dbg!(1));
     let (workload2, _) = builder2.build().unwrap();

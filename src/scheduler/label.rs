@@ -69,7 +69,7 @@ impl Label for Box<dyn Label> {
     }
 }
 
-impl Label for crate::WorkloadBuilder {
+impl Label for crate::Workload {
     fn as_any(&self) -> &dyn Any {
         &self.name
     }

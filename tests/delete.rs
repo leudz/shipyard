@@ -185,7 +185,7 @@ fn track() {
 
     world.add_entity((USIZE(0),));
 
-    Workload::builder("")
+    Workload::new("")
         .with_system(system)
         .add_to_world(&world)
         .unwrap();
