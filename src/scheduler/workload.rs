@@ -1259,7 +1259,7 @@ fn flatten_work_unit(
         Requirements,
         Requirements,
     )>,
-    workloads: &mut HashMap<Box<dyn Label>, Batches>,
+    workloads: &HashMap<Box<dyn Label>, Batches>,
     system_generators: &mut Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
     system_names: &mut Vec<&'static str>,
     system_before: &HashMap<(Box<dyn Label>, usize), Requirements>,
