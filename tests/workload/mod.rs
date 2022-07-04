@@ -81,13 +81,6 @@ fn are_all_uniques_present_in_world() {
         .are_all_uniques_present_in_world(&world)
         .unwrap();
 
-    assert_eq!(
-        Workload::new("")
-            .with_workload("other_workload")
-            .are_all_uniques_present_in_world(&world),
-        Err(error::UniquePresence::Workload(Box::new("other_workload")))
-    );
-
     let type_info = {
         let mut borrow_info = Vec::new();
         UniqueView::<USIZE>::borrow_info(&mut borrow_info);

@@ -35,8 +35,6 @@ fn unique_storage() {
     } else {
         panic!()
     }
-
-    world.add_unique(USIZE(0));
 }
 
 #[test]

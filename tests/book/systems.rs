@@ -1,7 +1,7 @@
 use super::U32;
 use shipyard::{
-    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId, SparseSet,
-    View, ViewMut, Workload, World,
+    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
+    IntoWorkload, SparseSet, View, ViewMut, Workload, World,
 };
 
 #[derive(Component)]
@@ -119,20 +119,18 @@ fn clear_deleted_u32s(mut all_storages: AllStoragesViewMut) {
     all_storages.delete_any::<SparseSet<Dead<u32>>>();
 }
 
+fn filter_u32() -> Workload {
+    (flag_deleted_u32s, clear_deleted_u32s).into_workload()
+}
+
+fn main_loop() -> Workload {
+    (increment, filter_u32()).into_workload()
+}
+
 let world = World::new();
 
-Workload::new("Filter u32")
-    .with_system(flag_deleted_u32s)
-    .with_system(clear_deleted_u32s)
-    .add_to_world(&world)
-    .unwrap();
+world.add_workload(main_loop);
 
-Workload::new("Loop")
-    .with_system(increment)
-    .with_workload("Filter u32")
-    .add_to_world(&world)
-    .unwrap();
-
-world.run_workload("Loop").unwrap();
+world.run_workload(main_loop).unwrap();
 // ANCHOR_END: nested_workload
 }

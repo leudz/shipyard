@@ -1,9 +1,7 @@
 use crate::info::Requirements;
 use crate::scheduler::workload::Workload;
-use crate::scheduler::AsLabel;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
-use crate::WorkloadSystem;
 use alloc::vec::Vec;
 // macro not module
 use alloc::boxed::Box;
@@ -81,27 +79,11 @@ pub trait IntoWorkload<Views, R> {
     /// assert_eq!(world.borrow::<View<Health>>().unwrap().len(), 900);
     /// ```
     fn into_workload(self) -> Workload;
-    /// When building a workload, this system or workload will be placed before all invocation of the other system or workload.
-    fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
-    /// When building a workload, this system or workload will be placed after all invocation of the other system or workload.
-    fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
 }
 
 impl IntoWorkload<(), ()> for Workload {
     fn into_workload(self) -> Workload {
         self
-    }
-
-    fn before_all<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
-        self.before.add(other.as_label());
-
-        WorkloadSystem::Workload(self)
-    }
-
-    fn after_all<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
-        self.after.add(other.as_label());
-
-        WorkloadSystem::Workload(self)
     }
 }
 
@@ -112,23 +94,17 @@ where
     fn into_workload(self) -> Workload {
         Workload {
             name: Box::new(TypeId::of::<Sys>()),
-            work_units: vec![self.into_workload_system().unwrap().into()],
-            skip_if: Vec::new(),
-            before: Requirements::new(),
-            after: Requirements::new(),
+            systems: vec![self.into_workload_system().unwrap()],
+            run_if: None,
+            tags: vec![Box::new(TypeId::of::<Sys>())],
+            before_all: Requirements::new(),
+            after_all: Requirements::new(),
+            overwritten_name: false,
         }
-    }
-
-    fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        self.into_workload().before_all(other)
-    }
-
-    fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-        self.into_workload().after_all(other)
     }
 }
 
-macro_rules! impl_system {
+macro_rules! impl_into_workload {
     ($(($type: ident, $borrow: ident, $return: ident, $index: tt))+) => {
         impl<$($type, $borrow, $return),+> IntoWorkload<($($borrow,)+), ($($return,)+)> for ($($type,)+)
         where
@@ -139,40 +115,34 @@ macro_rules! impl_system {
             fn into_workload(self) -> Workload {
                 let mut workload = Workload {
                     name: Box::new(TypeId::of::<($($type,)+)>()),
-                    work_units: Vec::new(),
-                    skip_if: Vec::new(),
-                    before: Requirements::new(),
-                    after: Requirements::new(),
+                    systems: Vec::new(),
+                    run_if: None,
+                    before_all: Requirements::new(),
+                    after_all: Requirements::new(),
+                    tags: vec![Box::new(TypeId::of::<($($type,)+)>())],
+                    overwritten_name: false,
                 };
 
                 $(
-                    let w = self.$index.into_workload();
-                    workload.work_units.extend(w.work_units);
+                    let mut w = self.$index.into_workload();
+                    workload = workload.merge(&mut w);
                 )+
 
                 workload
-            }
-
-            fn before_all<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
-                self.into_workload().before_all(other)
-            }
-
-            fn after_all<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
-                self.into_workload().after_all(other)
             }
         }
     };
 }
 
-macro_rules! system {
+macro_rules! into_workload {
     ($(($type: ident, $borrow: ident, $return: ident, $index: tt))*;($type1: ident, $borrow1: ident, $return1: ident, $index1: tt) $(($queue_type: ident, $queue_borrow: ident, $queue_return: ident, $queue_index: tt))*) => {
-        impl_system![$(($type, $borrow, $return, $index))*];
-        system![$(($type, $borrow, $return, $index))* ($type1, $borrow1, $return1, $index1); $(($queue_type, $queue_borrow, $queue_return, $queue_index))*];
+        impl_into_workload![$(($type, $borrow, $return, $index))*];
+        into_workload![$(($type, $borrow, $return, $index))* ($type1, $borrow1, $return1, $index1); $(($queue_type, $queue_borrow, $queue_return, $queue_index))*];
     };
     ($(($type: ident, $borrow: ident, $return: ident, $index: tt))*;) => {
-        impl_system![$(($type, $borrow, $return, $index))*];
+        impl_into_workload![$(($type, $borrow, $return, $index))*];
     }
 }
 
-system![(A, ViewsA, Ra, 0); (B, ViewsB, Rb, 1) (C, ViewsC, Rc, 2) (D, ViewsD, Rd, 3) (E, ViewsE, Re, 4) (F, ViewsF, Rf, 5) (G, ViewsG, Rg, 6) (H, ViewsH, Rh, 7) (I, ViewsI, Ri, 8) (J, ViewsJ, Rj, 9)
+into_workload![(A, ViewsA, Ra, 0); (B, ViewsB, Rb, 1) (C, ViewsC, Rc, 2) (D, ViewsD, Rd, 3) (E, ViewsE, Re, 4) (F, ViewsF, Rf, 5) (G, ViewsG, Rg, 6) (H, ViewsH, Rh, 7) (I, ViewsI, Ri, 8) (J, ViewsJ, Rj, 9)
         (K, ViewsK, Rk, 10) (L, ViewsL, Rl, 11) (M, ViewsM, Rm, 12) (N, ViewsN, Rn, 13) (O, ViewsO, Ro, 14) (P, ViewsP, Rp, 15) (Q, ViewsQ, Rq, 16) (R, ViewsR, Rr, 17) (S, ViewsS, Rs, 18) (T, ViewsT, Rt, 19)];

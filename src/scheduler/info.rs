@@ -33,7 +33,7 @@ pub struct BatchInfo {
 #[derive(Clone)]
 pub struct SystemInfo {
     #[allow(missing_docs)]
-    pub name: &'static str,
+    pub name: Box<dyn Label>,
     #[allow(missing_docs)]
     pub type_id: TypeId,
     #[allow(missing_docs)]
@@ -79,7 +79,7 @@ pub enum Conflict {
 #[derive(Clone, Eq)]
 pub struct SystemId {
     #[allow(missing_docs)]
-    pub name: &'static str,
+    pub name: Box<dyn Label>,
     #[allow(missing_docs)]
     pub type_id: TypeId,
 }
@@ -92,7 +92,7 @@ impl PartialEq for SystemId {
 
 impl core::fmt::Debug for SystemId {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str(self.name)
+        f.write_fmt(format_args!("{:?}", self.name))
     }
 }
 
@@ -161,9 +161,7 @@ impl core::hash::Hash for TypeInfo {
 #[allow(clippy::type_complexity)]
 #[derive(Debug)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
-pub struct WorkloadsTypeUsage(
-    pub hashbrown::HashMap<String, Vec<(Cow<'static, str>, Vec<TypeInfo>)>>,
-);
+pub struct WorkloadsTypeUsage(pub hashbrown::HashMap<String, Vec<(String, Vec<TypeInfo>)>>);
 
 /// List of before/after requirements for a system or workload.
 /// The list dedups items.
@@ -198,6 +196,10 @@ impl Requirements {
 
     pub(crate) fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub(crate) fn clear(&mut self) {
+        self.0.clear();
     }
 }
 

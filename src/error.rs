@@ -255,8 +255,6 @@ pub enum AddWorkload {
     AlreadyExists,
     /// The `Scheduler` is already borrowed.
     Borrow,
-    /// Unknown nested workload.
-    UnknownWorkload(Box<dyn Label>, Box<dyn Label>),
     /// This workload cannot be created.
     ImpossibleRequirements(ImpossibleRequirements),
 }
@@ -265,9 +263,6 @@ pub enum AddWorkload {
 impl PartialEq for AddWorkload {
     fn eq(&self, other: &AddWorkload) -> bool {
         match (self, other) {
-            (AddWorkload::UnknownWorkload(l0, l1), AddWorkload::UnknownWorkload(r0, r1)) => {
-                l0 == r0 && l1 == r1
-            }
             (AddWorkload::ImpossibleRequirements(l0), AddWorkload::ImpossibleRequirements(r0)) => {
                 l0 == r0
             }
@@ -286,10 +281,6 @@ impl Debug for AddWorkload {
             AddWorkload::Borrow => {
                 f.write_str("Cannot mutably borrow the scheduler while it's already borrowed.")
             }
-            AddWorkload::UnknownWorkload(workload, unknown_workload) => f.write_fmt(format_args!(
-                "Could not find {:?} workload while building {:?}'s batches.",
-                unknown_workload, workload
-            )),
             AddWorkload::ImpossibleRequirements(err) => Debug::fmt(err, f),
         }
     }
@@ -341,7 +332,7 @@ pub enum RunWorkload {
     /// The `Scheduler` is exclusively borrowed.
     Scheduler,
     /// Error while running a system.
-    Run((&'static str, Run)),
+    Run((Box<dyn Label>, Run)),
     /// Workload is not present in the world.
     MissingWorkload,
 }
@@ -376,7 +367,7 @@ impl Debug for RunWorkload {
             }
             RunWorkload::MissingWorkload => f.write_str("No workload with this name exists."),
             RunWorkload::Run((system_name, run)) => {
-                f.write_fmt(format_args!("System {} failed: {:?}", system_name, run))
+                f.write_fmt(format_args!("System {:?} failed: {:?}", system_name, run))
             }
         }
     }

@@ -1,8 +1,9 @@
 use super::TypeInfo;
-use crate::error;
+use crate::info::Requirements;
 use crate::scheduler::workload::Workload;
 use crate::type_id::TypeId;
 use crate::world::World;
+use crate::{error, Label};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -30,22 +31,65 @@ use alloc::vec::Vec;
 /// ```
 ///
 /// [`Workload`]: crate::Workload
-pub enum WorkloadSystem {
+#[allow(clippy::type_complexity)]
+pub struct WorkloadSystem {
     #[doc(hidden)]
-    System {
-        system_type_id: TypeId,
-        system_type_name: &'static str,
-        system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
-        /// access information
-        borrow_constraints: Vec<TypeInfo>,
-        generator: fn(&mut Vec<TypeInfo>) -> TypeId,
-    },
-    #[doc(hidden)]
-    Workload(Workload),
+    pub(crate) type_id: TypeId,
+    pub(crate) display_name: Box<dyn Label>,
+    pub(crate) system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
+    /// access information
+    pub(crate) borrow_constraints: Vec<TypeInfo>,
+    pub(crate) generator: Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>,
+    pub(crate) run_if:
+        Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>>,
+    pub(crate) tags: Vec<Box<dyn Label>>,
+    pub(crate) before_all: Requirements,
+    pub(crate) after_all: Requirements,
 }
 
 impl Extend<WorkloadSystem> for Workload {
     fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
-        self.work_units.extend(iter.into_iter().map(Into::into));
+        self.systems.extend(iter.into_iter());
+    }
+}
+
+pub struct RunIf {
+    pub(crate) system_fn: Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>,
+}
+
+pub trait WorkloadRunIfFn: Send + Sync + 'static {
+    fn run(&self, world: &'_ World) -> Result<bool, error::Run>;
+    fn clone(&self) -> Box<dyn WorkloadRunIfFn>;
+}
+
+impl<F: Fn(&World) -> Result<bool, error::Run> + Clone + Send + Sync + 'static> WorkloadRunIfFn
+    for F
+{
+    fn run(&self, world: &'_ World) -> Result<bool, error::Run> {
+        (self)(world)
+    }
+
+    fn clone(&self) -> Box<dyn WorkloadRunIfFn> {
+        Box::new(self.clone())
+    }
+}
+
+pub(crate) trait ExtractWorkloadRunIf {
+    fn to_non_clone(
+        self,
+    ) -> Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>;
+}
+
+impl ExtractWorkloadRunIf for Box<dyn WorkloadRunIfFn> {
+    fn to_non_clone(
+        self,
+    ) -> Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static> {
+        Box::new(move |world| self.run(world))
+    }
+}
+
+impl Clone for Box<dyn WorkloadRunIfFn> {
+    fn clone(&self) -> Box<dyn WorkloadRunIfFn> {
+        WorkloadRunIfFn::clone(&**self)
     }
 }

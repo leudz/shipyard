@@ -1,5 +1,6 @@
 pub mod info;
 mod into_workload;
+mod into_workload_run_if;
 mod into_workload_system;
 mod label;
 mod system;
@@ -14,7 +15,7 @@ pub use workload::{ScheduledWorkload, Workload};
 pub(crate) use info::TypeInfo;
 
 use crate::error;
-use crate::info::Requirements;
+use crate::scheduler::system::WorkloadRunIfFn;
 use crate::type_id::TypeId;
 use crate::World;
 use alloc::boxed::Box;
@@ -23,11 +24,17 @@ use hashbrown::HashMap;
 
 /// List of indexes into both systems and system_names
 #[derive(Default)]
+#[allow(clippy::type_complexity)]
 pub(super) struct Batches {
+    /// Index into the list of systems
     pub(super) parallel: Vec<(Option<usize>, Vec<usize>)>,
+    /// Index into `sequential_run_if`
+    pub(super) parallel_run_if: Vec<(Option<usize>, Vec<usize>)>,
+    /// Index into the list of systems
     pub(super) sequential: Vec<usize>,
-    pub(super) skip_if:
-        Vec<Box<dyn Fn(crate::view::AllStoragesView<'_>) -> bool + Send + Sync + 'static>>,
+    pub(super) sequential_run_if:
+        Vec<Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>>,
+    pub(super) run_if: Option<Box<dyn WorkloadRunIfFn>>,
 }
 
 #[cfg(test)]
@@ -57,14 +64,9 @@ impl Eq for Batches {}
 #[allow(clippy::type_complexity)]
 pub(crate) struct Scheduler {
     pub(crate) systems: Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
-    pub(crate) system_names: Vec<&'static str>,
-    pub(crate) system_generators: Vec<fn(&mut Vec<TypeInfo>) -> TypeId>,
-    // Workload label and system index in the workload's sequential ordering to system requirements
-    pub(crate) system_labels: HashMap<(Box<dyn Label>, usize), Box<dyn Label>>,
-    // Workload label and system index in the workload's sequential ordering to system requirements
-    pub(crate) system_before: HashMap<(Box<dyn Label>, usize), Requirements>,
-    // Workload label and system index in the workload's sequential ordering to system requirements
-    pub(crate) system_after: HashMap<(Box<dyn Label>, usize), Requirements>,
+    pub(crate) system_names: Vec<Box<dyn Label>>,
+    pub(crate) system_generators:
+        Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     // system's `TypeId` to an index into both systems and system_names
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
@@ -78,9 +80,6 @@ impl Default for Scheduler {
             systems: Vec::new(),
             system_names: Vec::new(),
             system_generators: Vec::new(),
-            system_labels: HashMap::new(),
-            system_before: HashMap::new(),
-            system_after: HashMap::new(),
             lookup_table: HashMap::new(),
             workloads: HashMap::new(),
             default: Box::new(""),

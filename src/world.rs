@@ -8,7 +8,6 @@ use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
-#[cfg(feature = "tracing")]
 use crate::scheduler::Label;
 use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
@@ -739,7 +738,6 @@ let i = world.run(sys1);
             &scheduler.systems,
             &scheduler.system_names,
             batches,
-            #[cfg(feature = "tracing")]
             &*label,
         )
     }
@@ -774,19 +772,17 @@ let i = world.run(sys1);
     pub(crate) fn run_batches(
         &self,
         systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
-        system_names: &[&'static str],
+        system_names: &[Box<dyn Label>],
         batches: &Batches,
-        #[cfg(feature = "tracing")] workload_name: &dyn Label,
+        workload_name: &dyn Label,
     ) -> Result<(), error::RunWorkload> {
-        // Check for empty first to not borrow AllStorages unnecessarily
-        if !batches.skip_if.is_empty() {
-            // If impossible to check for empty storage, let the workload run and fail later
-            if let Ok(all_storages) = self.borrow::<crate::view::AllStoragesView<'_>>() {
-                for skip_if in &batches.skip_if {
-                    if skip_if(all_storages.clone()) {
-                        return Ok(());
-                    }
-                }
+        if let Some(run_if) = &batches.run_if {
+            // If impossible to check, let the workload run and fail later
+            if !run_if
+                .run(self)
+                .map_err(|err| error::RunWorkload::Run((workload_name.dyn_clone(), err)))?
+            {
+                return Ok(());
             }
         }
 
@@ -798,17 +794,55 @@ let i = world.run(sys1);
         #[cfg(feature = "parallel")]
         {
             let run_batch = || -> Result<(), error::RunWorkload> {
-                for batch in &batches.parallel {
+                for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if)
+                {
                     let mut result = Ok(());
+                    let run_if = (
+                        if let Some(run_if_index) = batches_run_if.0 {
+                            if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
+                                (run_if)(self).map_err(|err| {
+                                    error::RunWorkload::Run((
+                                        system_names[batch.0.unwrap()].clone(),
+                                        err,
+                                    ))
+                                })?
+                            } else {
+                                true
+                            }
+                        } else {
+                            true
+                        },
+                        batches_run_if
+                            .1
+                            .iter()
+                            .map(|run_if_index| {
+                                if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
+                                    Ok((run_if)(self)?)
+                                } else {
+                                    Ok(true)
+                                }
+                            })
+                            .collect::<Result<Vec<_>, error::Run>>()
+                            .map_err(|err| {
+                                error::RunWorkload::Run((
+                                    system_names[batch.0.unwrap()].clone(),
+                                    err,
+                                ))
+                            })?,
+                    );
 
                     rayon::in_place_scope(|scope| {
                         if let Some(index) = batch.0 {
                             scope.spawn(|_| {
                                 if batch.1.len() == 1 {
-                                    let system_name = system_names[batch.1[0]];
+                                    if !run_if.1[0] {
+                                        return;
+                                    }
+
+                                    let system_name = system_names[batch.1[0]].clone();
 
                                     #[cfg(feature = "tracing")]
-                                    let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name);
+                                    let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                                     #[cfg(feature = "tracing")]
                                     let _system_span = system_span.enter();
 
@@ -818,11 +852,15 @@ let i = world.run(sys1);
                                 } else {
                                     use rayon::prelude::*;
 
-                                    result = batch.1.par_iter().try_for_each(|&index| {
-                                        let system_name = system_names[index];
+                                    result = batch.1.par_iter().zip(run_if.1).try_for_each(|(&index, should_run)| {
+                                        if !should_run {
+                                            return Ok(());
+                                        }
+
+                                        let system_name = system_names[index].clone();
 
                                         #[cfg(feature = "tracing")]
-                                        let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name);
+                                        let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                                         #[cfg(feature = "tracing")]
                                         let _system_span = system_span.enter();
 
@@ -833,20 +871,28 @@ let i = world.run(sys1);
                                 }
                             });
 
-                            let system_name = system_names[index];
+                            if !run_if.0 {
+                                return Ok(());
+                            }
+
+                            let system_name = system_names[index].clone();
 
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name);
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                             #[cfg(feature = "tracing")]
                             let _system_span = system_span.enter();
 
                             systems[index](self)
                                 .map_err(|err| error::RunWorkload::Run((system_name, err)))?;
                         } else if batch.1.len() == 1 {
-                            let system_name = system_names[batch.1[0]];
+                            if !run_if.1[0] {
+                                return Ok(());
+                            }
+
+                            let system_name = system_names[batch.1[0]].clone();
 
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name);
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                             #[cfg(feature = "tracing")]
                             let _system_span = system_span.enter();
 
@@ -855,11 +901,15 @@ let i = world.run(sys1);
                         } else {
                             use rayon::prelude::*;
 
-                            result = batch.1.par_iter().try_for_each(|&index| {
-                                let system_name = system_names[index];
+                            result = batch.1.par_iter().zip(run_if.1).try_for_each(|(&index, should_run)| {
+                                if !should_run {
+                                    return Ok(());
+                                }
+
+                                let system_name = system_names[index].clone();
 
                                 #[cfg(feature = "tracing")]
-                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name);
+                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                                 #[cfg(feature = "tracing")]
                                     let _system_span = system_span.enter();
 
@@ -892,16 +942,20 @@ let i = world.run(sys1);
         }
         #[cfg(not(feature = "parallel"))]
         {
-            batches.sequential.iter().try_for_each(|&index| {
-                let system_name = system_names[index];
+            batches.sequential.iter().zip(&batches.sequential_run_if).try_for_each(|(&index, run_if)| {
+                let system_name = &system_names[index];
+
+                if !run_if.as_ref().map(|run_if| (run_if)(self)).unwrap_or(Ok(true)).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))? {
+                    return Ok(());
+                }
 
                 #[cfg(feature = "tracing")]
                 let system_span =
-                    tracing::info_span!(parent: parent_span.clone(), "system", name = %system_name);
+                    tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                 #[cfg(feature = "tracing")]
                 let _system_span = system_span.enter();
 
-                (systems[index])(self).map_err(|err| error::RunWorkload::Run((system_name, err)))
+                (systems[index])(self).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))
             })
         }
     }
@@ -928,7 +982,6 @@ let i = world.run(sys1);
                 &scheduler.systems,
                 &scheduler.system_names,
                 scheduler.default_workload(),
-                #[cfg(feature = "tracing")]
                 &scheduler.default,
             )?
         }
@@ -1283,12 +1336,12 @@ impl World {
                     .sequential
                     .iter()
                     .map(|system_index| {
-                        let system_name = scheduler.system_names[*system_index];
+                        let system_name = scheduler.system_names[*system_index].clone();
                         let mut system_storage_borrowed = Vec::new();
 
                         scheduler.system_generators[*system_index](&mut system_storage_borrowed);
 
-                        (system_name.into(), system_storage_borrowed)
+                        (format!("{:?}", system_name), system_storage_borrowed)
                     })
                     .collect(),
             );
