@@ -1,4 +1,5 @@
 use crate::info::Requirements;
+use crate::scheduler::label::SequentialLabel;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
@@ -79,10 +80,43 @@ pub trait IntoWorkload<Views, R> {
     /// assert_eq!(world.borrow::<View<Health>>().unwrap().len(), 900);
     /// ```
     fn into_workload(self) -> Workload;
+    /// Converts to a collection of systems.  
+    /// All systems will run one after the other. Does not propagate into nested [`Workload`] but they will run sequentially between them.
+    ///
+    /// Not different than [`into_workload`](IntoWorkload::into_workload) for a single system.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{IntoWorkload, Workload};
+    ///
+    /// fn sys1() {}
+    /// fn sys2() {}
+    /// fn sys3() {}
+    /// fn sys4() {}
+    /// fn workload1() -> Workload {
+    ///     (sys1, sys2).into_workload()
+    /// }
+    ///
+    /// (workload1(), sys3, sys4).into_sequential_workload();
+    /// ```
+    ///
+    /// In this example `sys1` and `sys2` can run in parallel but always before `sys3`.  
+    /// `sys3` and `sys4` run sequentially.
+    fn into_sequential_workload(self) -> Workload;
 }
 
 impl IntoWorkload<(), ()> for Workload {
     fn into_workload(self) -> Workload {
+        self
+    }
+    fn into_sequential_workload(mut self) -> Workload {
+        for index in 0..self.systems.len() {
+            if let Some(next_system) = self.systems.get(index + 1) {
+                let tag = SequentialLabel(next_system.type_id);
+                self.systems[index].before_all.add(tag);
+            }
+        }
+
         self
     }
 }
@@ -101,6 +135,10 @@ where
             after_all: Requirements::new(),
             overwritten_name: false,
         }
+    }
+
+    fn into_sequential_workload(self) -> Workload {
+        self.into_workload()
     }
 }
 
@@ -126,6 +164,38 @@ macro_rules! impl_into_workload {
                 $(
                     let mut w = self.$index.into_workload();
                     workload = workload.merge(&mut w);
+                )+
+
+                workload
+            }
+
+            fn into_sequential_workload(self) -> Workload {
+                let mut workload = Workload {
+                    name: Box::new(TypeId::of::<($($type,)+)>()),
+                    systems: Vec::new(),
+                    run_if: None,
+                    before_all: Requirements::new(),
+                    after_all: Requirements::new(),
+                    tags: vec![Box::new(TypeId::of::<($($type,)+)>())],
+                    overwritten_name: false,
+                };
+
+                let mut sequential_tags = Vec::new();
+
+                let mut workloads = ($({
+                    let w = self.$index.into_workload();
+
+                    sequential_tags.push(w.name.clone());
+
+                    w
+                },)+);
+
+                $(
+                    if let Some(sequential_tag) = sequential_tags.get($index + 1) {
+                        workloads.$index = workloads.$index.before_all(sequential_tag.clone());
+                    }
+
+                    workload = workload.merge(&mut workloads.$index);
                 )+
 
                 workload

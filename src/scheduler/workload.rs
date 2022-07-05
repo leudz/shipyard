@@ -171,9 +171,7 @@ impl Workload {
         self.propagate();
         other.propagate();
 
-        self.systems.append(&mut other.systems);
-
-        self
+        self.append(other)
     }
     /// Propagates all information into the systems.  
     /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
@@ -564,6 +562,7 @@ impl Workload {
     pub fn rename<T>(mut self, name: impl AsLabel<T>) -> Workload {
         self.name = name.as_label();
         self.overwritten_name = true;
+        self.tags.push(self.name.clone());
 
         self
     }
@@ -764,7 +763,7 @@ fn create_workload(
             )
             .map_err(error::AddWorkload::ImpossibleRequirements)?;
 
-            let (_, WorkloadSystem { type_id, .. }) = &collected_systems[index];
+            let tags = &collected_tags[index];
 
             for (
                 other_index,
@@ -777,13 +776,11 @@ fn create_workload(
                 ),
             ) in collected_systems.iter().enumerate()
             {
-                let system = type_id.as_label();
-
                 if memoize_after
                     .get(&other_index)
                     .unwrap()
                     .iter()
-                    .any(|requirement| requirement == &system)
+                    .any(|requirement| tags.contains(requirement))
                     && memoize_before
                         .get_mut(&index)
                         .unwrap()
@@ -796,7 +793,7 @@ fn create_workload(
                     .get(&other_index)
                     .unwrap()
                     .iter()
-                    .any(|requirement| requirement == &system)
+                    .any(|requirement| tags.contains(requirement))
                     && memoize_after
                         .get_mut(&index)
                         .unwrap()
@@ -1232,7 +1229,7 @@ fn insert_before_after_system(
     )
     .map_err(error::AddWorkload::ImpossibleRequirements)?;
 
-    let parallel_position = valid_parallel(
+    let (parallel_position, can_go_in) = valid_parallel(
         index,
         memoize_before,
         memoize_after,
@@ -1267,48 +1264,88 @@ fn insert_before_after_system(
         type_info.storage_id == StorageId::of::<AllStorages>() || !type_info.thread_safe
     });
 
+    let mut conflict = None;
+    if can_go_in {
+        if single_system {
+            if let Some(other_system) = &workload_info.batch_info[parallel_position].systems.0 {
+                conflict = Some(Conflict::OtherNotSendSync {
+                    system: SystemId {
+                        name: display_name.dyn_clone(),
+                        type_id,
+                    },
+                    type_info: other_system.borrow[0].clone(),
+                })
+            }
+        } else {
+            for other_system in &workload_info.batch_info[parallel_position].systems.1 {
+                check_conflict(other_system, &borrow_constraints, &mut conflict);
+
+                if conflict.is_some() {
+                    break;
+                }
+            }
+        }
+    }
+
     let system_info = SystemInfo {
         name: display_name.dyn_clone(),
         type_id,
         borrow: borrow_constraints,
-        conflict: None,
+        conflict,
     };
 
-    batches.parallel.insert(
-        parallel_position,
-        if single_system {
-            (Some(system_index), Vec::new())
-        } else {
-            (None, vec![system_index])
-        },
-    );
-    batches.parallel_run_if.insert(
-        parallel_position,
-        if single_system {
-            (Some(batches.sequential_run_if.len() - 1), Vec::new())
-        } else {
-            (None, vec![batches.sequential_run_if.len() - 1])
-        },
-    );
-    par_system_index_map.insert(
-        parallel_position,
-        if single_system {
-            (Some(index), Vec::new())
-        } else {
-            (None, vec![index])
-        },
-    );
-
-    workload_info.batch_info.insert(
-        parallel_position,
-        BatchInfo {
-            systems: if single_system {
-                (Some(system_info), Vec::new())
+    if !can_go_in || system_info.conflict.is_some() {
+        batches.parallel.insert(
+            parallel_position,
+            if single_system {
+                (Some(system_index), Vec::new())
             } else {
-                (None, vec![system_info])
+                (None, vec![system_index])
             },
-        },
-    );
+        );
+        batches.parallel_run_if.insert(
+            parallel_position,
+            if single_system {
+                (Some(batches.sequential_run_if.len() - 1), Vec::new())
+            } else {
+                (None, vec![batches.sequential_run_if.len() - 1])
+            },
+        );
+        par_system_index_map.insert(
+            parallel_position,
+            if single_system {
+                (Some(index), Vec::new())
+            } else {
+                (None, vec![index])
+            },
+        );
+
+        workload_info.batch_info.insert(
+            parallel_position,
+            BatchInfo {
+                systems: if single_system {
+                    (Some(system_info), Vec::new())
+                } else {
+                    (None, vec![system_info])
+                },
+            },
+        );
+    } else if single_system {
+        batches.parallel[parallel_position].0 = Some(system_index);
+        batches.parallel_run_if[parallel_position].0 = Some(batches.sequential_run_if.len() - 1);
+        par_system_index_map[parallel_position].0 = Some(index);
+        workload_info.batch_info[parallel_position].systems.0 = Some(system_info);
+    } else {
+        batches.parallel[parallel_position].1.push(system_index);
+        batches.parallel_run_if[parallel_position]
+            .1
+            .push(batches.sequential_run_if.len() - 1);
+        par_system_index_map[parallel_position].1.push(index);
+        workload_info.batch_info[parallel_position]
+            .systems
+            .1
+            .push(system_info);
+    }
 
     Ok(())
 }
@@ -1322,8 +1359,8 @@ fn valid_sequential(
     system_index_map: &[usize],
     display_name: &dyn Label,
 ) -> Result<usize, error::ImpossibleRequirements> {
-    let mut valid_start = sequential_len;
-    let mut valid_end = 0;
+    let mut valid_start = 0;
+    let mut valid_end = sequential_len;
 
     let before = &memoize_before[&index];
     let after = &memoize_after[&index];
@@ -1334,7 +1371,7 @@ fn valid_sequential(
         if before.iter().any(|system| other_tags.contains(system)) {
             break;
         } else {
-            valid_end += 1;
+            valid_start += 1;
         }
     }
     for other_index in (0..sequential_len).rev() {
@@ -1343,11 +1380,11 @@ fn valid_sequential(
         if after.iter().any(|system| other_tags.contains(system)) {
             break;
         } else {
-            valid_start -= 1;
+            valid_end -= 1;
         }
     }
 
-    if valid_start > valid_end {
+    if valid_start < valid_end {
         return Err(error::ImpossibleRequirements::ImpossibleConstraints(
             display_name.dyn_clone(),
             before.iter().cloned().collect(),
@@ -1366,9 +1403,9 @@ fn valid_parallel(
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[(Option<usize>, Vec<usize>)],
     display_name: &dyn Label,
-) -> Result<usize, error::ImpossibleRequirements> {
-    let mut valid_start = parallel.len();
-    let mut valid_end = 0;
+) -> Result<(usize, bool), error::ImpossibleRequirements> {
+    let mut valid_start = 0;
+    let mut valid_end = parallel.len();
 
     let before = &memoize_before[&index];
     let after = &memoize_after[&index];
@@ -1377,7 +1414,10 @@ fn valid_parallel(
         if other_single.is_some() {
             let other_tags = &collected_tags[system_index_map[i].0.unwrap()];
 
-            if before.iter().any(|system| other_tags.contains(system)) {
+            if before
+                .iter()
+                .any(|before_requirement| other_tags.contains(before_requirement))
+            {
                 break 'outer_before;
             }
         }
@@ -1385,19 +1425,25 @@ fn valid_parallel(
         for other_index in 0..other_indices.len() {
             let other_tags = &collected_tags[system_index_map[i].1[other_index]];
 
-            if before.iter().any(|system| other_tags.contains(system)) {
+            if before
+                .iter()
+                .any(|before_requirement| other_tags.contains(before_requirement))
+            {
                 break 'outer_before;
             }
         }
 
-        valid_end += 1;
+        valid_start += 1;
     }
 
     'outer_after: for (i, (other_single, other_indices)) in parallel.iter().enumerate().rev() {
         if other_single.is_some() {
             let other_tags = &collected_tags[system_index_map[i].0.unwrap()];
 
-            if after.iter().any(|system| other_tags.contains(system)) {
+            if after
+                .iter()
+                .any(|after_requirement| other_tags.contains(after_requirement))
+            {
                 break 'outer_after;
             }
         }
@@ -1405,15 +1451,18 @@ fn valid_parallel(
         for other_index in 0..other_indices.len() {
             let other_tags = &collected_tags[system_index_map[i].1[other_index]];
 
-            if after.iter().any(|system| other_tags.contains(system)) {
+            if after
+                .iter()
+                .any(|after_requirement| other_tags.contains(after_requirement))
+            {
                 break 'outer_after;
             }
         }
 
-        valid_start -= 1;
+        valid_end -= 1;
     }
 
-    if valid_start > valid_end {
+    if valid_start < valid_end {
         return Err(error::ImpossibleRequirements::ImpossibleConstraints(
             display_name.dyn_clone(),
             before.iter().cloned().collect(),
@@ -1421,7 +1470,11 @@ fn valid_parallel(
         ));
     }
 
-    Ok(valid_start)
+    if valid_start == valid_end {
+        Ok((valid_start, false))
+    } else {
+        Ok((valid_end, true))
+    }
 }
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
@@ -2258,10 +2311,7 @@ mod tests {
         // HashMap makes this error random between a and c
         let batches = &workload.workloads[&"".as_label()];
         assert!(batches.sequential == &[0, 1] || batches.sequential == &[1, 0]);
-        assert!(
-            batches.parallel == &[(None, vec![0]), (None, vec![1])]
-                || batches.parallel == &[(None, vec![1]), (None, vec![0])]
-        );
+        assert_eq!(batches.parallel, &[(None, vec![0, 1])]);
     }
 
     #[test]
@@ -2296,6 +2346,30 @@ mod tests {
         assert_eq!(
             batches.parallel,
             &[(None, vec![2]), (None, vec![1]), (None, vec![0])]
+        );
+    }
+
+    #[test]
+    fn sequential_workload() {
+        fn sys0() {}
+        fn sys1() {}
+        fn sys2() {}
+        fn sys3() {}
+        fn workload1() -> Workload {
+            (sys0, sys1).into_workload()
+        }
+
+        let (workload, _) = (workload1(), sys2, sys3)
+            .into_sequential_workload()
+            .rename("")
+            .build()
+            .unwrap();
+
+        let batches = &workload.workloads[&"".as_label()];
+        assert_eq!(batches.sequential, &[0, 1, 2, 3]);
+        assert_eq!(
+            batches.parallel,
+            &[(None, vec![0, 1]), (None, vec![2]), (None, vec![3])]
         );
     }
 }
