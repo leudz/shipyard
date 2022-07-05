@@ -1,6 +1,6 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
-use crate::info::Requirements;
+use crate::info::DedupedLabels;
 use crate::scheduler::into_workload_run_if::IntoRunIf;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::{TypeInfo, WorkloadSystem};
@@ -132,6 +132,18 @@ pub trait IntoWorkloadSystem<B, R> {
     fn display_name<T>(self, name: impl AsLabel<T>) -> WorkloadSystem;
     /// Adds a tag to this system. Tags can be used to control system ordering when running workloads.
     fn tag<T>(self, tag: impl AsLabel<T>) -> WorkloadSystem;
+    /// When building a workload, this system will assert that at least one of the other system is present in the workload.
+    ///
+    /// Does not change system ordering.
+    fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
+    /// When building a workload, this system will assert that at least one of the other system is present before itself in the workload.
+    ///
+    /// Does not change system ordering.
+    fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
+    /// When building a workload, this system will assert that at least one of the other system is present after itself in the workload.
+    ///
+    /// Does not change system ordering.
+    fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
 }
 
 pub struct Nothing;
@@ -156,10 +168,13 @@ where
             type_id: TypeId::of::<F>(),
             display_name: Box::new(system_type_name),
             generator: Box::new(|_| TypeId::of::<F>()),
-            before_all: Requirements::new(),
-            after_all: Requirements::new(),
+            before_all: DedupedLabels::new(),
+            after_all: DedupedLabels::new(),
             tags: vec![Box::new(TypeId::of::<F>())],
             run_if: None,
+            require_in_workload: DedupedLabels::new(),
+            require_before: DedupedLabels::new(),
+            require_after: DedupedLabels::new(),
         })
     }
     #[cfg(feature = "std")]
@@ -184,10 +199,13 @@ where
             type_id: TypeId::of::<F>(),
             display_name: Box::new(system_type_name),
             generator: Box::new(|_| TypeId::of::<F>()),
-            before_all: Requirements::new(),
-            after_all: Requirements::new(),
+            before_all: DedupedLabels::new(),
+            after_all: DedupedLabels::new(),
             tags: vec![Box::new(TypeId::of::<F>())],
             run_if: None,
+            require_in_workload: DedupedLabels::new(),
+            require_before: DedupedLabels::new(),
+            require_after: DedupedLabels::new(),
         })
     }
     #[cfg(not(feature = "std"))]
@@ -212,10 +230,13 @@ where
             type_id: TypeId::of::<F>(),
             display_name: Box::new(system_type_name),
             generator: Box::new(|_| TypeId::of::<F>()),
-            before_all: Requirements::new(),
-            after_all: Requirements::new(),
+            before_all: DedupedLabels::new(),
+            after_all: DedupedLabels::new(),
             tags: vec![Box::new(TypeId::of::<F>())],
             run_if: None,
+            require_in_workload: DedupedLabels::new(),
+            require_before: DedupedLabels::new(),
+            require_after: DedupedLabels::new(),
         })
     }
     #[track_caller]
@@ -264,6 +285,30 @@ where
         let mut system = self.into_workload_system().unwrap();
 
         system.tags.push(tag.as_label());
+
+        system
+    }
+    #[track_caller]
+    fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        let mut system = self.into_workload_system().unwrap();
+
+        system.require_in_workload.add(other);
+
+        system
+    }
+    #[track_caller]
+    fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        let mut system = self.into_workload_system().unwrap();
+
+        system.require_before.add(other);
+
+        system
+    }
+    #[track_caller]
+    fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+        let mut system = self.into_workload_system().unwrap();
+
+        system.require_after.add(other);
 
         system
     }
@@ -320,6 +365,24 @@ impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
     }
     fn tag<T>(mut self, tag: impl AsLabel<T>) -> WorkloadSystem {
         self.tags.push(tag.as_label());
+
+        self
+    }
+    #[track_caller]
+    fn require_in_workload<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.require_in_workload.add(other);
+
+        self
+    }
+    #[track_caller]
+    fn require_before<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.require_before.add(other);
+
+        self
+    }
+    #[track_caller]
+    fn require_after<T>(mut self, other: impl AsLabel<T>) -> WorkloadSystem {
+        self.require_after.add(other);
 
         self
     }
@@ -381,8 +444,8 @@ macro_rules! impl_into_workload_system {
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),
-                    before_all: Requirements::new(),
-                    after_all: Requirements::new(),
+                    before_all: DedupedLabels::new(),
+                    after_all: DedupedLabels::new(),
                     tags: vec![Box::new(TypeId::of::<Func>())],
                     generator: Box::new(|constraints| {
                         $(
@@ -392,6 +455,9 @@ macro_rules! impl_into_workload_system {
                         TypeId::of::<Func>()
                     }),
                     run_if: None,
+                    require_in_workload: DedupedLabels::new(),
+                    require_before: DedupedLabels::new(),
+                    require_after: DedupedLabels::new(),
                 })
             }
             #[cfg(feature = "std")]
@@ -447,10 +513,13 @@ macro_rules! impl_into_workload_system {
 
                         TypeId::of::<Func>()
                     }),
-                    before_all: Requirements::new(),
-                    after_all: Requirements::new(),
+                    before_all: DedupedLabels::new(),
+                    after_all: DedupedLabels::new(),
                     tags: vec![Box::new(TypeId::of::<Func>())],
                     run_if: None,
+                    require_in_workload: DedupedLabels::new(),
+                    require_before: DedupedLabels::new(),
+                    require_after: DedupedLabels::new(),
                 })
             }
             #[cfg(not(feature = "std"))]
@@ -506,10 +575,13 @@ macro_rules! impl_into_workload_system {
 
                         TypeId::of::<Func>()
                     }),
-                    before_all: Requirements::new(),
-                    after_all: Requirements::new(),
+                    before_all: DedupedLabels::new(),
+                    after_all: DedupedLabels::new(),
                     tags: vec![Box::new(TypeId::of::<Func>())],
                     run_if: None,
+                    require_in_workload: DedupedLabels::new(),
+                    require_before: DedupedLabels::new(),
+                    require_after: DedupedLabels::new(),
                 })
             }
             #[track_caller]
@@ -558,6 +630,30 @@ macro_rules! impl_into_workload_system {
                 let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
 
                 system.tags.push(tag.as_label());
+
+                system
+            }
+            #[track_caller]
+            fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+
+                system.require_in_workload.add(other);
+
+                system
+            }
+            #[track_caller]
+            fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+
+                system.require_before.add(other);
+
+                system
+            }
+            #[track_caller]
+            fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+
+                system.require_after.add(other);
 
                 system
             }

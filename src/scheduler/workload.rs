@@ -1,7 +1,7 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::scheduler::info::{
-    BatchInfo, Conflict, Requirements, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
+    BatchInfo, Conflict, DedupedLabels, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
 };
 use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
@@ -98,9 +98,11 @@ pub struct Workload {
     pub(super) tags: Vec<Box<dyn Label>>,
     pub(super) systems: Vec<WorkloadSystem>,
     pub(super) run_if: Option<Box<dyn WorkloadRunIfFn>>,
-    pub(super) before_all: Requirements,
-    pub(super) after_all: Requirements,
+    pub(super) before_all: DedupedLabels,
+    pub(super) after_all: DedupedLabels,
     pub(super) overwritten_name: bool,
+    pub(super) require_before: DedupedLabels,
+    pub(super) require_after: DedupedLabels,
 }
 
 impl Workload {
@@ -153,9 +155,11 @@ impl Workload {
             name: label.clone(),
             run_if: None,
             tags: vec![label],
-            before_all: Requirements::new(),
-            after_all: Requirements::new(),
+            before_all: DedupedLabels::new(),
+            after_all: DedupedLabels::new(),
             overwritten_name: false,
+            require_before: DedupedLabels::new(),
+            require_after: DedupedLabels::new(),
         }
     }
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
@@ -190,12 +194,20 @@ impl Workload {
 
             system.before_all.extend(self.before_all.iter().cloned());
             system.after_all.extend(self.after_all.iter().cloned());
+            system
+                .require_before
+                .extend(self.require_before.iter().cloned());
+            system
+                .require_after
+                .extend(self.require_after.iter().cloned());
         }
 
         self.run_if = None;
         self.tags.clear();
         self.before_all.clear();
         self.after_all.clear();
+        self.require_before.clear();
+        self.require_after.clear();
     }
     /// Adds a system to the workload being created.
     ///
@@ -721,6 +733,10 @@ fn create_workload(
     let mut memoize_before = HashMap::new();
     let mut memoize_after = HashMap::new();
     let mut collected_tags = Vec::new();
+    let mut collected_require_in_workload = Vec::new();
+    let mut collected_before = Vec::new();
+    let mut collected_after = Vec::new();
+    let mut collected_names = Vec::new();
 
     for (
         index,
@@ -730,6 +746,10 @@ fn create_workload(
                 before_all,
                 after_all,
                 tags,
+                require_in_workload,
+                require_before,
+                require_after,
+                display_name,
                 ..
             },
         ),
@@ -738,6 +758,10 @@ fn create_workload(
         memoize_before.insert(index, before_all.clone());
         memoize_after.insert(index, after_all.clone());
         collected_tags.push(core::mem::take(tags));
+        collected_require_in_workload.push(core::mem::take(require_in_workload));
+        collected_before.push(core::mem::take(require_before));
+        collected_after.push(core::mem::take(require_after));
+        collected_names.push(display_name.clone());
     }
 
     let mut new_requirements = true;
@@ -894,6 +918,102 @@ fn create_workload(
         )?;
     }
 
+    for (i, &index) in seq_system_index_map.iter().enumerate() {
+        let mut require_in_workload = collected_require_in_workload[index].to_vec();
+        let mut require_before = collected_before[index].to_vec();
+        let mut require_after = collected_after[index].to_vec();
+
+        for other_tag in seq_system_index_map[..i]
+            .iter()
+            .flat_map(|&other_index| &collected_tags[other_index])
+        {
+            require_in_workload.retain(|require| require != other_tag);
+            require_before.retain(|require| require != other_tag);
+        }
+
+        for other_tag in seq_system_index_map[i..]
+            .iter()
+            .skip(1)
+            .flat_map(|&other_index| &collected_tags[other_index])
+        {
+            require_in_workload.retain(|require| require != other_tag);
+            require_after.retain(|require| require != other_tag);
+        }
+
+        if !require_in_workload.is_empty() {
+            return Err(error::AddWorkload::MissingInWorkload(
+                collected_names[index].clone(),
+                require_in_workload,
+            ));
+        }
+        if !require_before.is_empty() {
+            return Err(error::AddWorkload::MissingBefore(
+                collected_names[index].clone(),
+                require_before,
+            ));
+        }
+        if !require_after.is_empty() {
+            return Err(error::AddWorkload::MissingAfter(
+                collected_names[index].clone(),
+                require_after,
+            ));
+        }
+    }
+
+    for (i, &index) in
+        par_system_index_map
+            .iter()
+            .enumerate()
+            .flat_map(|(i, (single_system, systems))| {
+                single_system
+                    .iter()
+                    .chain(systems)
+                    .map(move |index| (i, index))
+            })
+    {
+        let mut require_in_workload = collected_require_in_workload[index].to_vec();
+        let mut require_before = collected_before[index].to_vec();
+        let mut require_after = collected_after[index].to_vec();
+
+        for other_tag in par_system_index_map[..i]
+            .iter()
+            .flat_map(|(single_system, systems)| single_system.iter().chain(systems))
+            .flat_map(|&other_index| &collected_tags[other_index])
+        {
+            require_in_workload.retain(|require| require != other_tag);
+            require_before.retain(|require| require != other_tag);
+        }
+
+        for other_tag in par_system_index_map[i..]
+            .iter()
+            .skip(1)
+            .flat_map(|(single_system, systems)| single_system.iter().chain(systems))
+            .flat_map(|&other_index| &collected_tags[other_index])
+        {
+            require_in_workload.retain(|require| require != other_tag);
+            require_after.retain(|require| require != other_tag);
+        }
+
+        if !require_in_workload.is_empty() {
+            return Err(error::AddWorkload::MissingInWorkload(
+                collected_names[index].clone(),
+                require_in_workload,
+            ));
+        }
+        if !require_before.is_empty() {
+            return Err(error::AddWorkload::MissingBefore(
+                collected_names[index].clone(),
+                require_before,
+            ));
+        }
+        if !require_after.is_empty() {
+            return Err(error::AddWorkload::MissingAfter(
+                collected_names[index].clone(),
+                require_after,
+            ));
+        }
+    }
+
     Ok(workload_info)
 }
 
@@ -902,7 +1022,7 @@ fn dependencies(
     index: usize,
     collected_systems: &[(usize, WorkloadSystem)],
     collected_tags: &[Vec<Box<dyn Label>>],
-    memoize: &mut HashMap<usize, Requirements>,
+    memoize: &mut HashMap<usize, DedupedLabels>,
     new_requirements: &mut bool,
 ) -> Result<(), error::ImpossibleRequirements> {
     let mut new = memoize.get(&index).unwrap().clone();
@@ -1213,8 +1333,8 @@ fn insert_before_after_system(
     display_name: &dyn Label,
     borrow_constraints: Vec<TypeInfo>,
     run_if: Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>,
-    memoize_before: &HashMap<usize, Requirements>,
-    memoize_after: &HashMap<usize, Requirements>,
+    memoize_before: &HashMap<usize, DedupedLabels>,
+    memoize_after: &HashMap<usize, DedupedLabels>,
     seq_system_index_map: &mut Vec<usize>,
     par_system_index_map: &mut Vec<(Option<usize>, Vec<usize>)>,
 ) -> Result<(), error::AddWorkload> {
@@ -1352,8 +1472,8 @@ fn insert_before_after_system(
 
 fn valid_sequential(
     index: usize,
-    memoize_before: &HashMap<usize, Requirements>,
-    memoize_after: &HashMap<usize, Requirements>,
+    memoize_before: &HashMap<usize, DedupedLabels>,
+    memoize_after: &HashMap<usize, DedupedLabels>,
     sequential_len: usize,
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[usize],
@@ -1397,8 +1517,8 @@ fn valid_sequential(
 
 fn valid_parallel(
     index: usize,
-    memoize_before: &HashMap<usize, Requirements>,
-    memoize_after: &HashMap<usize, Requirements>,
+    memoize_before: &HashMap<usize, DedupedLabels>,
+    memoize_after: &HashMap<usize, DedupedLabels>,
     parallel: &[(Option<usize>, Vec<usize>)],
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[(Option<usize>, Vec<usize>)],
@@ -2322,8 +2442,13 @@ mod tests {
 
         let (workload, _) = Workload::new("")
             .with_system(a.tag("a"))
-            .with_system(b.tag("b").before_all("a"))
-            .with_system(c.tag("c").before_all("b"))
+            .with_system(
+                b.tag("b")
+                    .before_all("a")
+                    .require_after("a")
+                    .require_before("c"),
+            )
+            .with_system(c.tag("c").before_all("b").require_after("b"))
             .build()
             .unwrap();
 

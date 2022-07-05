@@ -257,6 +257,12 @@ pub enum AddWorkload {
     Borrow,
     /// This workload cannot be created.
     ImpossibleRequirements(ImpossibleRequirements),
+    /// A system declared some requirements that are not met.
+    MissingInWorkload(Box<dyn Label>, Vec<Box<dyn Label>>),
+    /// A system declared some requirements that are not met.
+    MissingBefore(Box<dyn Label>, Vec<Box<dyn Label>>),
+    /// A system declared some requirements that are not met.
+    MissingAfter(Box<dyn Label>, Vec<Box<dyn Label>>),
 }
 
 // For some reason this trait can't be derived with Box<dyn Label>
@@ -265,6 +271,15 @@ impl PartialEq for AddWorkload {
         match (self, other) {
             (AddWorkload::ImpossibleRequirements(l0), AddWorkload::ImpossibleRequirements(r0)) => {
                 l0 == r0
+            }
+            (AddWorkload::MissingInWorkload(l0, l1), AddWorkload::MissingInWorkload(r0, r1)) => {
+                l0 == r0 && l1 == r1
+            }
+            (AddWorkload::MissingBefore(l0, l1), AddWorkload::MissingBefore(r0, r1)) => {
+                l0 == r0 && l1 == r1
+            }
+            (AddWorkload::MissingAfter(l0, l1), AddWorkload::MissingAfter(r0, r1)) => {
+                l0 == r0 && l1 == r1
             }
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
@@ -282,6 +297,20 @@ impl Debug for AddWorkload {
                 f.write_str("Cannot mutably borrow the scheduler while it's already borrowed.")
             }
             AddWorkload::ImpossibleRequirements(err) => Debug::fmt(err, f),
+            AddWorkload::MissingInWorkload(system_name, missing_in_workload) => {
+                f.write_fmt(format_args!(
+                    "System {:?} is missing some systems in workload: {:?}",
+                    system_name, missing_in_workload
+                ))
+            }
+            AddWorkload::MissingBefore(system_name, missing_before) => f.write_fmt(format_args!(
+                "System {:?} is missing some systems before: {:?}",
+                system_name, missing_before
+            )),
+            AddWorkload::MissingAfter(system_name, missing_after) => f.write_fmt(format_args!(
+                "System {:?} is missing some systems after: {:?}",
+                system_name, missing_after
+            )),
         }
     }
 }

@@ -165,12 +165,12 @@ pub struct WorkloadsTypeUsage(pub hashbrown::HashMap<String, Vec<(String, Vec<Ty
 
 /// List of before/after requirements for a system or workload.
 /// The list dedups items.
-#[derive(Clone, Debug)]
-pub struct Requirements(Vec<Box<dyn Label>>);
+#[derive(Clone, Debug, Default)]
+pub struct DedupedLabels(Vec<Box<dyn Label>>);
 
-impl Requirements {
-    pub(crate) fn new() -> Requirements {
-        Requirements(Vec::new())
+impl DedupedLabels {
+    pub(crate) fn new() -> DedupedLabels {
+        DedupedLabels(Vec::new())
     }
 
     pub(crate) fn add<T>(&mut self, label: impl AsLabel<T>) -> bool {
@@ -201,9 +201,13 @@ impl Requirements {
     pub(crate) fn clear(&mut self) {
         self.0.clear();
     }
+
+    pub(crate) fn to_vec(&self) -> Vec<Box<dyn Label>> {
+        self.0.clone()
+    }
 }
 
-impl<'a> IntoIterator for &'a Requirements {
+impl<'a> IntoIterator for &'a DedupedLabels {
     type Item = &'a Box<dyn Label>;
 
     type IntoIter = RequirementsIter<'a>;
@@ -224,7 +228,7 @@ impl<'a> Iterator for RequirementsIter<'a> {
     }
 }
 
-impl Extend<Box<dyn Label>> for Requirements {
+impl Extend<Box<dyn Label>> for DedupedLabels {
     fn extend<T: IntoIterator<Item = Box<dyn Label>>>(&mut self, iter: T) {
         for label in iter {
             self.add(label);
@@ -232,7 +236,7 @@ impl Extend<Box<dyn Label>> for Requirements {
     }
 }
 
-impl<'a> Extend<&'a Box<dyn Label>> for Requirements {
+impl<'a> Extend<&'a Box<dyn Label>> for DedupedLabels {
     fn extend<T: IntoIterator<Item = &'a Box<dyn Label>>>(&mut self, iter: T) {
         for label in iter {
             self.add(label.clone());

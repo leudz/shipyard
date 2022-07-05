@@ -1,5 +1,5 @@
 use super::TypeInfo;
-use crate::info::Requirements;
+use crate::info::DedupedLabels;
 use crate::scheduler::workload::Workload;
 use crate::type_id::TypeId;
 use crate::world::World;
@@ -43,8 +43,11 @@ pub struct WorkloadSystem {
     pub(crate) run_if:
         Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>>,
     pub(crate) tags: Vec<Box<dyn Label>>,
-    pub(crate) before_all: Requirements,
-    pub(crate) after_all: Requirements,
+    pub(crate) before_all: DedupedLabels,
+    pub(crate) after_all: DedupedLabels,
+    pub(crate) require_in_workload: DedupedLabels,
+    pub(crate) require_before: DedupedLabels,
+    pub(crate) require_after: DedupedLabels,
 }
 
 impl Extend<WorkloadSystem> for Workload {

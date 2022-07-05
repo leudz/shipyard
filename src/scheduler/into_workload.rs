@@ -1,4 +1,4 @@
-use crate::info::Requirements;
+use crate::info::DedupedLabels;
 use crate::scheduler::label::SequentialLabel;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
@@ -131,9 +131,11 @@ where
             systems: vec![self.into_workload_system().unwrap()],
             run_if: None,
             tags: vec![Box::new(TypeId::of::<Sys>())],
-            before_all: Requirements::new(),
-            after_all: Requirements::new(),
+            before_all: DedupedLabels::new(),
+            after_all: DedupedLabels::new(),
             overwritten_name: false,
+            require_before: DedupedLabels::new(),
+            require_after: DedupedLabels::new(),
         }
     }
 
@@ -155,10 +157,12 @@ macro_rules! impl_into_workload {
                     name: Box::new(TypeId::of::<($($type,)+)>()),
                     systems: Vec::new(),
                     run_if: None,
-                    before_all: Requirements::new(),
-                    after_all: Requirements::new(),
+                    before_all: DedupedLabels::new(),
+                    after_all: DedupedLabels::new(),
                     tags: vec![Box::new(TypeId::of::<($($type,)+)>())],
                     overwritten_name: false,
+                    require_before: DedupedLabels::new(),
+                    require_after: DedupedLabels::new(),
                 };
 
                 $(
@@ -174,10 +178,12 @@ macro_rules! impl_into_workload {
                     name: Box::new(TypeId::of::<($($type,)+)>()),
                     systems: Vec::new(),
                     run_if: None,
-                    before_all: Requirements::new(),
-                    after_all: Requirements::new(),
+                    before_all: DedupedLabels::new(),
+                    after_all: DedupedLabels::new(),
                     tags: vec![Box::new(TypeId::of::<($($type,)+)>())],
                     overwritten_name: false,
+                    require_before: DedupedLabels::new(),
+                    require_after: DedupedLabels::new(),
                 };
 
                 let mut sequential_tags = Vec::new();
