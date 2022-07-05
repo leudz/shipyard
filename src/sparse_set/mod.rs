@@ -236,11 +236,14 @@ impl<T: Component> SparseSet<T> {
             }
             let component = self.data.swap_remove(sparse_entity.uindex());
 
-            unsafe {
-                let last = *self.dense.get_unchecked(sparse_entity.uindex());
-                self.sparse
-                    .get_mut_unchecked(last)
-                    .copy_index(sparse_entity);
+            // The SparseSet could now be empty or the removed component could have been the last one
+            if sparse_entity.uindex() < self.dense.len() {
+                unsafe {
+                    let last = *self.dense.get_unchecked(sparse_entity.uindex());
+                    self.sparse
+                        .get_mut_unchecked(last)
+                        .copy_index(sparse_entity);
+                }
             }
 
             if entity.gen() == sparse_entity.gen() {
