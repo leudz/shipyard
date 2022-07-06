@@ -173,6 +173,11 @@ impl DedupedLabels {
         DedupedLabels(Vec::new())
     }
 
+    pub(crate) fn with_capacity(capacity: usize) -> DedupedLabels {
+        DedupedLabels(Vec::with_capacity(capacity))
+    }
+
+    /// Returns `true` if the `Label` was not already present.
     pub(crate) fn add<T>(&mut self, label: impl AsLabel<T>) -> bool {
         let label = label.as_label();
 

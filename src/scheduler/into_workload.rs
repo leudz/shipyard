@@ -86,6 +86,10 @@ pub trait IntoWorkload<Views, R> {
     ///
     /// Not different than [`into_workload`](IntoWorkload::into_workload) for a single system.
     ///
+    /// ### Panics
+    ///
+    /// - If two identical systems are present in the workload. This is a limitation with the current expressivity of `before`/`after`.
+    ///
     /// ### Example:
     /// ```
     /// use shipyard::{IntoWorkload, Workload};
@@ -176,6 +180,7 @@ macro_rules! impl_into_workload {
                 workload
             }
 
+            #[track_caller]
             fn into_sequential_workload(self) -> Workload {
                 let mut workload = Workload {
                     name: Box::new(TypeId::of::<($($type,)+)>()),
@@ -209,6 +214,14 @@ macro_rules! impl_into_workload {
 
                     workload = workload.merge(&mut workloads.$index);
                 )+
+
+                let mut system_names = DedupedLabels::with_capacity(workload.systems.len());
+
+                for system in &workload.systems {
+                    if !system_names.add(system.type_id.as_label()) {
+                        panic!("{:?} appears twice in this workload. `into_sequential_workload` cannot currently handle this case.", system.display_name);
+                    }
+                }
 
                 workload
             }
