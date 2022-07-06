@@ -144,6 +144,7 @@ impl Label for SequentialLabel {
         self
     }
 
+    #[allow(clippy::op_ref)]
     fn dyn_eq(&self, other: &dyn Label) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<SequentialLabel>() {
             &self.0 == &other.0

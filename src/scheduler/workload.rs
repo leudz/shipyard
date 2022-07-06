@@ -1026,12 +1026,10 @@ fn dependencies(
 
     for system in memoize.get(&index).unwrap() {
         for other_index in 0..collected_tags.len() {
-            if other_index != index {
-                if collected_tags[other_index].contains(system) {
-                    let other = memoize.get(&other_index).unwrap().clone();
+            if other_index != index && collected_tags[other_index].contains(system) {
+                let other = memoize.get(&other_index).unwrap().clone();
 
-                    new.extend(other.iter());
-                }
+                new.extend(other.iter());
             }
         }
     }
