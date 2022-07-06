@@ -394,7 +394,7 @@ impl Debug for RunWorkload {
             RunWorkload::Scheduler => {
                 f.write_str("Cannot borrow the scheduler while it's already mutably borrowed.")
             }
-            RunWorkload::MissingWorkload => f.write_str("No workload with this name exists."),
+            RunWorkload::MissingWorkload => f.write_str("No workload with this name exists. You first need to add the workload using `World::add_workload`."),
             RunWorkload::Run((system_name, run)) => {
                 f.write_fmt(format_args!("System {:?} failed: {:?}", system_name, run))
             }
