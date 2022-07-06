@@ -764,6 +764,27 @@ fn create_workload(
         collected_names.push(display_name.clone());
     }
 
+    // Remove before/after that are not present in the workload
+    // This makes the systems with no before/after present scheduled like regular systems
+    for (index, before) in &mut memoize_before {
+        before.retain(|label| {
+            collected_tags
+                .iter()
+                .enumerate()
+                .flat_map(|(i, tags)| if i != *index { &**tags } else { &[] })
+                .any(|tag| tag == label)
+        });
+    }
+    for (index, after) in &mut memoize_after {
+        after.retain(|label| {
+            collected_tags
+                .iter()
+                .enumerate()
+                .flat_map(|(i, tags)| if i != *index { &**tags } else { &[] })
+                .any(|tag| tag == label)
+        });
+    }
+
     let mut new_requirements = true;
     while new_requirements {
         new_requirements = false;
@@ -851,8 +872,8 @@ fn create_workload(
     let (collected_systems, before_after_collected_systems) = collected_systems
         .into_iter()
         .enumerate()
-        .partition::<Vec<_>, _>(|(_, system)| {
-            system.1.before_all.is_empty() && system.1.after_all.is_empty()
+        .partition::<Vec<_>, _>(|(index, _)| {
+            memoize_before[index].is_empty() && memoize_after[index].is_empty()
         });
 
     for (
@@ -1393,6 +1414,14 @@ fn insert_before_after_system(
                     type_info: other_system.borrow[0].clone(),
                 })
             }
+
+            for other_system in &workload_info.batch_info[parallel_position].systems.1 {
+                check_conflict(other_system, &borrow_constraints, &mut conflict);
+
+                if conflict.is_some() {
+                    break;
+                }
+            }
         } else {
             for other_system in &workload_info.batch_info[parallel_position].systems.1 {
                 check_conflict(other_system, &borrow_constraints, &mut conflict);
@@ -1620,7 +1649,7 @@ fn insert_system_in_scheduler(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, UniqueView, UniqueViewMut};
+    use crate::{track, UniqueView, UniqueViewMut, View};
 
     struct Usize(usize);
     struct U32(u32);
@@ -2493,5 +2522,24 @@ mod tests {
             batches.parallel,
             &[(None, vec![0, 1]), (None, vec![2]), (None, vec![3])]
         );
+    }
+
+    #[test]
+    fn before_after_borrow_conflict() {
+        fn sys0(_: View<'_, U32>) {}
+        fn sys1(_: AllStoragesViewMut<'_>) {}
+
+        let (workload, _) = (sys0, sys1.before_all("not present"), sys0)
+            .into_workload()
+            .rename("")
+            .build()
+            .unwrap();
+
+        let batches = &workload.workloads[&"".as_label()];
+        assert_eq!(
+            batches.parallel,
+            &[(None, vec![0]), (Some(1), Vec::new()), (None, vec![0])]
+        );
+        assert_eq!(batches.sequential, &[0, 1, 0]);
     }
 }

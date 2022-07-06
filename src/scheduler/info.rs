@@ -210,6 +210,10 @@ impl DedupedLabels {
     pub(crate) fn to_vec(&self) -> Vec<Box<dyn Label>> {
         self.0.clone()
     }
+
+    pub(crate) fn retain<F: FnMut(&Box<dyn Label>) -> bool>(&mut self, f: F) {
+        self.0.retain(f);
+    }
 }
 
 impl<'a> IntoIterator for &'a DedupedLabels {
