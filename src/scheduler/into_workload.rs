@@ -190,7 +190,10 @@ macro_rules! impl_into_workload {
                 let mut sequential_tags = Vec::new();
 
                 let mut workloads = ($({
-                    let w = self.$index.into_workload();
+                    let mut w = self.$index.into_workload();
+
+                    let tag = SequentialLabel(w.name.clone());
+                    w = w.tag(tag.clone());
 
                     sequential_tags.push(SequentialLabel(w.name.clone()));
 
