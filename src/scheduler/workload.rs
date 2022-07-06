@@ -771,7 +771,6 @@ fn create_workload(
         for index in 0..collected_systems.len() {
             dependencies(
                 index,
-                &collected_systems,
                 &collected_tags,
                 &mut memoize_before,
                 &mut new_requirements,
@@ -780,7 +779,6 @@ fn create_workload(
 
             dependencies(
                 index,
-                &collected_systems,
                 &collected_tags,
                 &mut memoize_after,
                 &mut new_requirements,
@@ -1020,7 +1018,6 @@ fn create_workload(
 #[allow(clippy::needless_range_loop)]
 fn dependencies(
     index: usize,
-    collected_systems: &[(usize, WorkloadSystem)],
     collected_tags: &[Vec<Box<dyn Label>>],
     memoize: &mut HashMap<usize, DedupedLabels>,
     new_requirements: &mut bool,
@@ -1028,11 +1025,13 @@ fn dependencies(
     let mut new = memoize.get(&index).unwrap().clone();
 
     for system in memoize.get(&index).unwrap() {
-        for other_index in 0..collected_systems.len() {
-            if collected_tags[other_index].contains(system) {
-                let other = memoize.get(&other_index).unwrap().clone();
+        for other_index in 0..collected_tags.len() {
+            if other_index != index {
+                if collected_tags[other_index].contains(system) {
+                    let other = memoize.get(&other_index).unwrap().clone();
 
-                new.extend(other.iter());
+                    new.extend(other.iter());
+                }
             }
         }
     }

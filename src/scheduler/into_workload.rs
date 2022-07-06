@@ -3,6 +3,7 @@ use crate::scheduler::label::SequentialLabel;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
+use crate::AsLabel;
 use alloc::vec::Vec;
 // macro not module
 use alloc::boxed::Box;
@@ -112,7 +113,7 @@ impl IntoWorkload<(), ()> for Workload {
     fn into_sequential_workload(mut self) -> Workload {
         for index in 0..self.systems.len() {
             if let Some(next_system) = self.systems.get(index + 1) {
-                let tag = SequentialLabel(next_system.type_id);
+                let tag = SequentialLabel(next_system.type_id.as_label());
                 self.systems[index].before_all.add(tag);
             }
         }
@@ -191,7 +192,7 @@ macro_rules! impl_into_workload {
                 let mut workloads = ($({
                     let w = self.$index.into_workload();
 
-                    sequential_tags.push(w.name.clone());
+                    sequential_tags.push(SequentialLabel(w.name.clone()));
 
                     w
                 },)+);

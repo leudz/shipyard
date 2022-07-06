@@ -136,8 +136,8 @@ impl<T: Label> AsLabel<T> for T {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash)]
-pub(crate) struct SequentialLabel(pub(crate) TypeId);
+#[derive(Clone, Debug, Hash)]
+pub(crate) struct SequentialLabel(pub(crate) Box<dyn Label>);
 
 impl Label for SequentialLabel {
     fn as_any(&self) -> &dyn Any {
@@ -146,7 +146,7 @@ impl Label for SequentialLabel {
 
     fn dyn_eq(&self, other: &dyn Label) -> bool {
         if let Some(other) = other.as_any().downcast_ref::<SequentialLabel>() {
-            self.0 == other.0
+            &self.0 == &other.0
         } else {
             false
         }
@@ -157,7 +157,7 @@ impl Label for SequentialLabel {
     }
 
     fn dyn_clone(&self) -> Box<dyn Label> {
-        Box::new(SequentialLabel(self.0))
+        Box::new(SequentialLabel(self.0.clone()))
     }
 
     fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
