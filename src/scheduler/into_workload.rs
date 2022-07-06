@@ -127,11 +127,13 @@ where
     Sys: IntoWorkloadSystem<Views, R> + 'static,
 {
     fn into_workload(self) -> Workload {
+        let system = self.into_workload_system().unwrap();
+
         Workload {
-            name: Box::new(TypeId::of::<Sys>()),
-            systems: vec![self.into_workload_system().unwrap()],
+            name: Box::new(system.type_id),
+            tags: vec![Box::new(system.type_id)],
+            systems: vec![system],
             run_if: None,
-            tags: vec![Box::new(TypeId::of::<Sys>())],
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
             overwritten_name: false,
@@ -195,7 +197,7 @@ macro_rules! impl_into_workload {
                     let tag = SequentialLabel(w.name.clone());
                     w = w.tag(tag.clone());
 
-                    sequential_tags.push(SequentialLabel(w.name.clone()));
+                    sequential_tags.push(tag);
 
                     w
                 },)+);
