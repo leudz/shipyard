@@ -126,7 +126,7 @@ where
     W: IntoWorkloadSystem<Views, R> + 'static,
 {
     fn as_label(&self) -> Box<dyn Label> {
-        Box::new(TypeId::of::<W>())
+        self.label()
     }
 }
 
@@ -163,5 +163,71 @@ impl Label for SequentialLabel {
 
     fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         SequentialLabel::fmt(self, f)
+    }
+}
+
+#[derive(Clone, Debug, Hash)]
+pub(crate) struct SystemLabel {
+    pub(crate) type_id: TypeId,
+    pub(crate) name: Box<dyn Label>,
+}
+
+impl Label for SystemLabel {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    #[allow(clippy::op_ref)]
+    fn dyn_eq(&self, other: &dyn Label) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<SystemLabel>() {
+            self.type_id == other.type_id
+        } else {
+            false
+        }
+    }
+
+    fn dyn_hash(&self, mut state: &mut dyn Hasher) {
+        TypeId::hash(&self.type_id, &mut state)
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Label> {
+        Box::new(self.clone())
+    }
+
+    fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.write_fmt(format_args!("System({:?})", self.name))
+    }
+}
+
+#[derive(Clone, Debug, Hash)]
+pub(crate) struct WorkloadLabel {
+    pub(crate) type_id: TypeId,
+    pub(crate) name: Box<dyn Label>,
+}
+
+impl Label for WorkloadLabel {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    #[allow(clippy::op_ref)]
+    fn dyn_eq(&self, other: &dyn Label) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<WorkloadLabel>() {
+            self.type_id == other.type_id
+        } else {
+            false
+        }
+    }
+
+    fn dyn_hash(&self, mut state: &mut dyn Hasher) {
+        TypeId::hash(&self.type_id, &mut state)
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Label> {
+        Box::new(self.clone())
+    }
+
+    fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        f.write_fmt(format_args!("Workload({:?})", self.name))
     }
 }

@@ -2,11 +2,12 @@ use crate::all_storages::AllStorages;
 use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
 use crate::info::DedupedLabels;
 use crate::scheduler::into_workload_run_if::IntoRunIf;
+use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::workload::Workload;
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
-use crate::{error, AllStoragesViewMut, AsLabel, Unique, UniqueStorage};
+use crate::{error, AllStoragesViewMut, AsLabel, Label, Unique, UniqueStorage};
 use crate::{Component, SparseSet, World};
 use alloc::boxed::Box;
 use alloc::vec;
@@ -144,6 +145,8 @@ pub trait IntoWorkloadSystem<B, R> {
     ///
     /// Does not change system ordering.
     fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
+    /// Returns this systems's label.
+    fn label(&self) -> Box<dyn Label>;
 }
 
 pub struct Nothing;
@@ -170,7 +173,10 @@ where
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
-            tags: vec![Box::new(TypeId::of::<F>())],
+            tags: vec![Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })],
             run_if: None,
             require_in_workload: DedupedLabels::new(),
             require_before: DedupedLabels::new(),
@@ -201,7 +207,10 @@ where
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
-            tags: vec![Box::new(TypeId::of::<F>())],
+            tags: vec![Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })],
             run_if: None,
             require_in_workload: DedupedLabels::new(),
             require_before: DedupedLabels::new(),
@@ -232,7 +241,10 @@ where
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
-            tags: vec![Box::new(TypeId::of::<F>())],
+            tags: vec![Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })],
             run_if: None,
             require_in_workload: DedupedLabels::new(),
             require_before: DedupedLabels::new(),
@@ -312,6 +324,19 @@ where
 
         system
     }
+    fn label(&self) -> Box<dyn Label> {
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
+            Box::new(WorkloadLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })
+        } else {
+            Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })
+        }
+    }
 }
 
 impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
@@ -386,6 +411,12 @@ impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
 
         self
     }
+    fn label(&self) -> Box<dyn Label> {
+        Box::new(SystemLabel {
+            type_id: self.type_id,
+            name: self.display_name.clone(),
+        })
+    }
 }
 
 macro_rules! impl_into_workload_system {
@@ -446,7 +477,10 @@ macro_rules! impl_into_workload_system {
                     display_name: Box::new(type_name::<Func>()),
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(TypeId::of::<Func>())],
+                    tags: vec![Box::new(SystemLabel {
+                        type_id: TypeId::of::<Func>(),
+                        name: type_name::<Func>().as_label(),
+                    })],
                     generator: Box::new(|constraints| {
                         $(
                             $type::borrow_info(constraints);
@@ -515,7 +549,10 @@ macro_rules! impl_into_workload_system {
                     }),
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(TypeId::of::<Func>())],
+                    tags: vec![Box::new(SystemLabel {
+                        type_id: TypeId::of::<Func>(),
+                        name: type_name::<Func>().as_label(),
+                    })],
                     run_if: None,
                     require_in_workload: DedupedLabels::new(),
                     require_before: DedupedLabels::new(),
@@ -577,7 +614,10 @@ macro_rules! impl_into_workload_system {
                     }),
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(TypeId::of::<Func>())],
+                    tags: vec![Box::new(SystemLabel {
+                        type_id: TypeId::of::<Func>(),
+                        name: type_name::<Func>().as_label(),
+                    })],
                     run_if: None,
                     require_in_workload: DedupedLabels::new(),
                     require_before: DedupedLabels::new(),
@@ -656,6 +696,12 @@ macro_rules! impl_into_workload_system {
                 system.require_after.add(other);
 
                 system
+            }
+            fn label(&self) -> Box<dyn Label> {
+                Box::new(SystemLabel {
+                    type_id: TypeId::of::<Func>(),
+                    name: type_name::<Func>().as_label(),
+                })
             }
         }
     }

@@ -1,5 +1,5 @@
 use crate::info::DedupedLabels;
-use crate::scheduler::label::SequentialLabel;
+use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
@@ -134,8 +134,8 @@ where
         let system = self.into_workload_system().unwrap();
 
         Workload {
-            name: Box::new(system.type_id),
-            tags: vec![Box::new(system.type_id)],
+            name: system.label(),
+            tags: vec![system.label()],
             systems: vec![system],
             run_if: None,
             before_all: DedupedLabels::new(),
@@ -160,13 +160,18 @@ macro_rules! impl_into_workload {
             )+
         {
             fn into_workload(self) -> Workload {
+                let name = Box::new(WorkloadLabel {
+                    type_id: TypeId::of::<($($type,)+)>(),
+                    name: TypeId::of::<($($type,)+)>().as_label(),
+                });
+
                 let mut workload = Workload {
-                    name: Box::new(TypeId::of::<($($type,)+)>()),
+                    tags: vec![name.clone()],
+                    name,
                     systems: Vec::new(),
                     run_if: None,
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(TypeId::of::<($($type,)+)>())],
                     overwritten_name: false,
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),
@@ -182,13 +187,18 @@ macro_rules! impl_into_workload {
 
             #[track_caller]
             fn into_sequential_workload(self) -> Workload {
+                let name = Box::new(WorkloadLabel {
+                    type_id: TypeId::of::<($($type,)+)>(),
+                    name: TypeId::of::<($($type,)+)>().as_label(),
+                });
+
                 let mut workload = Workload {
-                    name: Box::new(TypeId::of::<($($type,)+)>()),
+                    tags: vec![name.clone()],
+                    name,
                     systems: Vec::new(),
                     run_if: None,
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(TypeId::of::<($($type,)+)>())],
                     overwritten_name: false,
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),

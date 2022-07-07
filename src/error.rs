@@ -299,16 +299,16 @@ impl Debug for AddWorkload {
             AddWorkload::ImpossibleRequirements(err) => Debug::fmt(err, f),
             AddWorkload::MissingInWorkload(system_name, missing_in_workload) => {
                 f.write_fmt(format_args!(
-                    "System {:?} is missing some systems in workload: {:?}",
+                    "System({:?}) is missing some systems in workload: {:?}",
                     system_name, missing_in_workload
                 ))
             }
             AddWorkload::MissingBefore(system_name, missing_before) => f.write_fmt(format_args!(
-                "System {:?} is missing some systems before: {:?}",
+                "System({:?}) is missing some systems before: {:?}",
                 system_name, missing_before
             )),
             AddWorkload::MissingAfter(system_name, missing_after) => f.write_fmt(format_args!(
-                "System {:?} is missing some systems after: {:?}",
+                "System({:?}) is missing some systems after: {:?}",
                 system_name, missing_after
             )),
         }
@@ -730,12 +730,12 @@ impl Debug for ImpossibleRequirements {
         match self {
             ImpossibleRequirements::BeforeAndAfter(system, other_system) => {
                 f.write_fmt(format_args!(
-                    "{:?} needs to be both before and after {:?}",
+                    "System({:?}) needs to be both before and after {:?}",
                     system, other_system
                 ))
             }
             ImpossibleRequirements::ImpossibleConstraints(system, before, after) => {
-                f.write_fmt(format_args!("{:?} cannot be placed.", system))?;
+                f.write_fmt(format_args!("System({:?}) cannot be placed.", system))?;
                 f.write_str("\n")?;
                 f.write_fmt(format_args!("Before: {:?}", before))?;
                 f.write_str("\n")?;

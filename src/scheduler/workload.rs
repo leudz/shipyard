@@ -4,6 +4,7 @@ use crate::scheduler::info::{
     BatchInfo, Conflict, DedupedLabels, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
 };
 use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
+use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
 use crate::scheduler::{AsLabel, Batches, Label, Scheduler, WorkloadSystem};
 use crate::type_id::TypeId;
@@ -18,6 +19,7 @@ use alloc::boxed::Box;
 // macro not module
 use alloc::vec;
 use alloc::vec::Vec;
+use core::any::type_name;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
 use core::ops::Not;
@@ -74,14 +76,20 @@ impl World {
     {
         let mut w = workload().into_workload();
 
-        w.tags.push(Box::new(TypeId::of::<F>()));
+        w.tags.push(Box::new(WorkloadLabel {
+            type_id: TypeId::of::<F>(),
+            name: type_name::<F>().as_label(),
+        }));
 
         w.name = if w.overwritten_name {
             w.tags.push(w.name.clone());
 
             w.name
         } else {
-            Box::new(TypeId::of::<F>())
+            Box::new(WorkloadLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })
         };
 
         w.add_to_world(self).unwrap();
@@ -429,7 +437,7 @@ impl Workload {
             .map_err(|_| error::UniquePresence::AllStorages)?;
         let storages = all_storages.storages.read();
 
-        let unique_name = core::any::type_name::<UniqueStorage<ComponentType>>()
+        let unique_name = type_name::<UniqueStorage<ComponentType>>()
             .split_once('<')
             .unwrap()
             .0;
@@ -584,6 +592,10 @@ impl Workload {
         self.tags.push(tag.as_label());
 
         self
+    }
+    /// Returns this workload's label.
+    pub fn label(&self) -> Box<dyn Label> {
+        self.name.clone()
     }
 }
 
@@ -814,6 +826,7 @@ fn create_workload(
                     _,
                     WorkloadSystem {
                         type_id: other_type_id,
+                        display_name,
                         ..
                     },
                 ),
@@ -824,10 +837,10 @@ fn create_workload(
                     .unwrap()
                     .iter()
                     .any(|requirement| tags.contains(requirement))
-                    && memoize_before
-                        .get_mut(&index)
-                        .unwrap()
-                        .add(other_type_id.as_label())
+                    && memoize_before.get_mut(&index).unwrap().add(SystemLabel {
+                        type_id: *other_type_id,
+                        name: display_name.clone(),
+                    })
                 {
                     new_requirements = true;
                 }
@@ -837,10 +850,10 @@ fn create_workload(
                     .unwrap()
                     .iter()
                     .any(|requirement| tags.contains(requirement))
-                    && memoize_after
-                        .get_mut(&index)
-                        .unwrap()
-                        .add(other_type_id.as_label())
+                    && memoize_after.get_mut(&index).unwrap().add(SystemLabel {
+                        type_id: *other_type_id,
+                        name: display_name.clone(),
+                    })
                 {
                     new_requirements = true;
                 }
@@ -858,7 +871,7 @@ fn create_workload(
             {
                 return Err(error::AddWorkload::ImpossibleRequirements(
                     error::ImpossibleRequirements::BeforeAndAfter(
-                        collected_systems[*before].1.display_name.as_label(),
+                        collected_systems[*before].1.display_name.clone(),
                         before_requirement.clone(),
                     ),
                 ));
