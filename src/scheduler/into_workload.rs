@@ -1,5 +1,7 @@
+use core::any::{type_name, Any};
+
 use crate::info::DedupedLabels;
-use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
+use crate::scheduler::label::{SequentialLabel, SystemLabel, WorkloadLabel};
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
@@ -102,7 +104,7 @@ pub trait IntoWorkload<Views, R> {
     ///     (sys1, sys2).into_workload()
     /// }
     ///
-    /// (workload1(), sys3, sys4).into_sequential_workload();
+    /// (workload1, sys3, sys4).into_sequential_workload();
     /// ```
     ///
     /// In this example `sys1` and `sys2` can run in parallel but always before `sys3`.  
@@ -110,39 +112,46 @@ pub trait IntoWorkload<Views, R> {
     fn into_sequential_workload(self) -> Workload;
 }
 
-impl IntoWorkload<(), ()> for Workload {
-    fn into_workload(self) -> Workload {
-        self
-    }
-    fn into_sequential_workload(mut self) -> Workload {
-        for index in 0..self.systems.len() {
-            if let Some(next_system) = self.systems.get(index + 1) {
-                let tag = SequentialLabel(next_system.type_id.as_label());
-                self.systems[index].before_all.add(tag);
-            }
-        }
-
-        self
-    }
-}
-
 impl<Views, R, Sys> IntoWorkload<Views, R> for Sys
 where
     Sys: IntoWorkloadSystem<Views, R> + 'static,
+    R: 'static,
 {
     fn into_workload(self) -> Workload {
-        let system = self.into_workload_system().unwrap();
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
+            let workload: Box<dyn Any> = Box::new(self.call());
+            let mut workload = *workload.downcast::<Workload>().unwrap();
 
-        Workload {
-            name: system.label(),
-            tags: vec![system.label()],
-            systems: vec![system],
-            run_if: None,
-            before_all: DedupedLabels::new(),
-            after_all: DedupedLabels::new(),
-            overwritten_name: false,
-            require_before: DedupedLabels::new(),
-            require_after: DedupedLabels::new(),
+            let label = WorkloadLabel {
+                type_id: TypeId::of::<Sys>(),
+                name: type_name::<Sys>().as_label(),
+            };
+
+            workload = workload.tag(label.clone());
+            workload.name = Box::new(label);
+
+            workload
+        } else {
+            let system = self.into_workload_system().unwrap();
+
+            let system_label = system.label();
+            let system_label = system_label.as_any().downcast_ref::<SystemLabel>().unwrap();
+            let label = Box::new(WorkloadLabel {
+                type_id: system_label.type_id,
+                name: system_label.name.clone(),
+            });
+
+            Workload {
+                name: label.clone(),
+                tags: vec![label],
+                systems: vec![system],
+                run_if: None,
+                before_all: DedupedLabels::new(),
+                after_all: DedupedLabels::new(),
+                overwritten_name: false,
+                require_before: DedupedLabels::new(),
+                require_after: DedupedLabels::new(),
+            }
         }
     }
 

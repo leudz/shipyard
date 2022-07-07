@@ -147,6 +147,8 @@ pub trait IntoWorkloadSystem<B, R> {
     fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
     /// Returns this systems's label.
     fn label(&self) -> Box<dyn Label>;
+    #[doc(hidden)]
+    fn call(&self) -> R;
 }
 
 pub struct Nothing;
@@ -337,6 +339,9 @@ where
             })
         }
     }
+    fn call(&self) -> R {
+        (self)()
+    }
 }
 
 impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
@@ -417,6 +422,7 @@ impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
             name: self.display_name.clone(),
         })
     }
+    fn call(&self) {}
 }
 
 macro_rules! impl_into_workload_system {
@@ -702,6 +708,9 @@ macro_rules! impl_into_workload_system {
                     type_id: TypeId::of::<Func>(),
                     name: type_name::<Func>().as_label(),
                 })
+            }
+            fn call(&self) -> R {
+                unreachable!()
             }
         }
     }

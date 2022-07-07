@@ -124,7 +124,7 @@ fn filter_u32() -> Workload {
 }
 
 fn main_loop() -> Workload {
-    (increment, filter_u32()).into_workload()
+    (increment, filter_u32).into_workload()
 }
 
 let world = World::new();
