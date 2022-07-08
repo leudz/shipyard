@@ -145,7 +145,7 @@ pub trait IntoWorkloadSystem<B, R> {
     ///
     /// Does not change system ordering.
     fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
-    /// Returns this systems's label.
+    #[doc(hidden)]
     fn label(&self) -> Box<dyn Label>;
     #[doc(hidden)]
     fn call(&self) -> R;

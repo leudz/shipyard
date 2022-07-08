@@ -10,8 +10,8 @@ use crate::scheduler::{AsLabel, Batches, Label, Scheduler, WorkloadSystem};
 use crate::type_id::TypeId;
 use crate::world::World;
 use crate::{
-    error, track, AllStoragesViewMut, Component, IntoWorkloadSystem, SparseSet, Unique,
-    UniqueStorage,
+    error, track, AllStoragesViewMut, Component, IntoWorkload, IntoWorkloadSystem, SparseSet,
+    Unique, UniqueStorage,
 };
 // this is the macro, not the module
 use crate::storage::StorageId;
@@ -70,8 +70,11 @@ impl ScheduledWorkload {
 
 impl World {
     /// Creates a new workload and store it in the [`World`](crate::World).
-    pub fn add_workload<F: Fn() -> Workload + 'static>(&self, workload: F) {
-        let mut w = workload();
+    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
+    where
+        W: IntoWorkload<Views, R>,
+    {
+        let mut w = workload().into_workload();
 
         w.tags.push(Box::new(WorkloadLabel {
             type_id: TypeId::of::<F>(),
@@ -589,10 +592,6 @@ impl Workload {
         self.tags.push(tag.as_label());
 
         self
-    }
-    /// Returns this workload's label.
-    pub fn label(&self) -> Box<dyn Label> {
-        self.name.clone()
     }
 }
 
@@ -2335,14 +2334,11 @@ mod tests {
 
         world.add_workload(|| {
             (
-                || {
-                    (|| panic!())
-                        .into_workload()
-                        .skip_if_missing_unique::<U32>()
-                },
-                || (|mut u: UniqueViewMut<'_, Usize>| u.0 += 1).into_workload(),
+                (|| panic!())
+                    .into_workload()
+                    .skip_if_missing_unique::<U32>(),
+                (|mut u: UniqueViewMut<'_, Usize>| u.0 += 1).into_workload(),
             )
-                .into_workload()
         });
 
         world.run_default().unwrap();

@@ -69,24 +69,6 @@ impl Label for Box<dyn Label> {
     }
 }
 
-impl Label for crate::Workload {
-    fn as_any(&self) -> &dyn Any {
-        &self.name
-    }
-    fn dyn_eq(&self, other: &dyn Label) -> bool {
-        self.name.dyn_eq(other)
-    }
-    fn dyn_hash(&self, state: &mut dyn Hasher) {
-        self.name.dyn_hash(state)
-    }
-    fn dyn_clone(&self) -> Box<dyn Label> {
-        self.name.dyn_clone()
-    }
-    fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-        self.name.dyn_debug(f)
-    }
-}
-
 impl Clone for Box<dyn Label> {
     fn clone(&self) -> Self {
         // Box<dyn Label> implements Label, we have to deref to get the actual type

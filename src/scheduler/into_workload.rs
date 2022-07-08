@@ -112,6 +112,22 @@ pub trait IntoWorkload<Views, R> {
     fn into_sequential_workload(self) -> Workload;
 }
 
+impl IntoWorkload<Workload, Workload> for Workload {
+    fn into_workload(self) -> Workload {
+        self
+    }
+    fn into_sequential_workload(mut self) -> Workload {
+        for index in 0..self.systems.len() {
+            if let Some(next_system) = self.systems.get(index + 1) {
+                let tag = SequentialLabel(next_system.type_id.as_label());
+                self.systems[index].before_all.add(tag);
+            }
+        }
+
+        self
+    }
+}
+
 impl<Views, R, Sys> IntoWorkload<Views, R> for Sys
 where
     Sys: IntoWorkloadSystem<Views, R> + 'static,
@@ -169,9 +185,12 @@ macro_rules! impl_into_workload {
             )+
         {
             fn into_workload(self) -> Workload {
+                let closure = || {};
+                let type_id = closure.type_id().into();
+
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId::of::<($($type,)+)>(),
-                    name: TypeId::of::<($($type,)+)>().as_label(),
+                    type_id,
+                    name: type_id.as_label(),
                 });
 
                 let mut workload = Workload {

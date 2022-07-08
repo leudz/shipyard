@@ -1,8 +1,7 @@
 use macroquad::prelude::*;
 use shipyard::{
     AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkload, IntoWorkloadSystem, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut,
-    World,
+    IntoWorkloadSystem, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
 };
 
 const WIDTH: i32 = 640;
@@ -105,7 +104,6 @@ async fn main() {
             clean_up.into_workload_try_system().unwrap(),
             render,
         )
-            .into_workload()
     });
 
     let mut is_started = false;
