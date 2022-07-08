@@ -215,9 +215,12 @@ macro_rules! impl_into_workload {
 
             #[track_caller]
             fn into_sequential_workload(self) -> Workload {
+                let closure = || {};
+                let type_id = closure.type_id().into();
+
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId::of::<($($type,)+)>(),
-                    name: TypeId::of::<($($type,)+)>().as_label(),
+                    type_id,
+                    name: type_id.as_label(),
                 });
 
                 let mut workload = Workload {
