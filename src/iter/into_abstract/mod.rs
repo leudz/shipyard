@@ -16,29 +16,39 @@ use alloc::vec::Vec;
 
 // Allows to make ViewMut's sparse and dense fields immutable
 // This is necessary to index into them
-#[doc(hidden)]
+#[allow(missing_docs)]
 #[allow(clippy::len_without_is_empty)]
 pub trait IntoAbstract {
     type AbsView: AbstractMut;
 
+    #[doc(hidden)]
     fn into_abstract(self) -> Self::AbsView;
+    #[doc(hidden)]
     fn len(&self) -> Option<usize>;
+    #[doc(hidden)]
     fn type_id(&self) -> TypeId;
+    #[doc(hidden)]
     fn inner_type_id(&self) -> TypeId;
+    #[doc(hidden)]
     fn dense(&self) -> *const EntityId;
     #[inline]
+    #[doc(hidden)]
     fn sparse(&self) -> *const SparseArray<EntityId, BUCKET_SIZE> {
         core::ptr::null()
     }
+    #[doc(hidden)]
     fn is_tracking(&self) -> bool {
         false
     }
+    #[doc(hidden)]
     fn is_not(&self) -> bool {
         false
     }
+    #[doc(hidden)]
     fn is_or(&self) -> bool {
         false
     }
+    #[doc(hidden)]
     fn other_dense(&self) -> Vec<core::slice::Iter<'static, EntityId>> {
         Vec::new()
     }

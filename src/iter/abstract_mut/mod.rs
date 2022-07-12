@@ -10,14 +10,20 @@ use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::track;
 
+#[allow(missing_docs)]
+#[allow(clippy::len_without_is_empty)]
 pub trait AbstractMut {
     type Out;
     type Index;
 
+    #[doc(hidden)]
     unsafe fn get_data(&self, index: usize) -> Self::Out;
+    #[doc(hidden)]
     unsafe fn get_datas(&self, index: Self::Index) -> Self::Out;
+    #[doc(hidden)]
     fn indices_of(&self, entity_id: EntityId, index: usize, mask: u16) -> Option<Self::Index>;
     #[inline]
+    #[doc(hidden)]
     fn indices_of_passenger(
         &self,
         entity_id: EntityId,
@@ -26,13 +32,16 @@ pub trait AbstractMut {
     ) -> Option<Self::Index> {
         self.indices_of(entity_id, index, mask)
     }
+    #[doc(hidden)]
     unsafe fn indices_of_unchecked(
         &self,
         entity_id: EntityId,
         index: usize,
         mask: u16,
     ) -> Self::Index;
+    #[doc(hidden)]
     unsafe fn get_id(&self, index: usize) -> EntityId;
+    #[doc(hidden)]
     fn len(&self) -> usize;
 }
 

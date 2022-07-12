@@ -15,6 +15,8 @@ mod par_tight;
 mod tight;
 mod with_id;
 
+pub use abstract_mut::AbstractMut;
+pub use into_abstract::IntoAbstract;
 pub use into_iter::IntoIter;
 pub use iter::Iter;
 pub use mixed::Mixed;
@@ -26,5 +28,3 @@ pub use par_mixed::ParMixed;
 pub use par_tight::ParTight;
 pub use tight::Tight;
 pub use with_id::{IntoWithId, LastId, WithId};
-
-pub(crate) use into_abstract::IntoAbstract;
