@@ -1,5 +1,5 @@
 use crate::info::DedupedLabels;
-use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
+use crate::scheduler::label::{SequentialLabel, SystemLabel, WorkloadLabel};
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
@@ -149,12 +149,11 @@ where
         } else {
             let system = self.into_workload_system().unwrap();
 
-            let closure = || {};
-            let type_id = closure.type_id().into();
-
+            let system_label = system.label();
+            let system_label = system_label.as_any().downcast_ref::<SystemLabel>().unwrap();
             let name = Box::new(WorkloadLabel {
-                type_id,
-                name: type_id.as_label(),
+                type_id: system_label.type_id,
+                name: system_label.name.clone(),
             });
 
             Workload {
