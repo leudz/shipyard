@@ -1,5 +1,5 @@
 use crate::type_id::TypeId;
-use crate::{IntoNestedWorkload, IntoWorkloadSystem, Workload};
+use crate::{IntoWorkloadSystem, Workload};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -103,27 +103,23 @@ pub trait AsLabel<T> {
     fn as_label(&self) -> Box<dyn Label>;
 }
 
-impl<Views, Sys> AsLabel<(Views, ())> for Sys
+impl<Views, R, Sys> AsLabel<(Views, R)> for Sys
 where
-    Sys: IntoWorkloadSystem<Views, ()> + 'static,
+    Sys: IntoWorkloadSystem<Views, R> + 'static,
+    R: 'static,
 {
     fn as_label(&self) -> Box<dyn Label> {
-        Box::new(SystemLabel {
-            type_id: TypeId::of::<Sys>(),
-            name: type_name::<Sys>().as_label(),
-        })
-    }
-}
-
-impl<Views, Sys> AsLabel<(Views, Workload)> for Sys
-where
-    Sys: IntoNestedWorkload<Views, Workload> + 'static,
-{
-    fn as_label(&self) -> Box<dyn Label> {
-        Box::new(WorkloadLabel {
-            type_id: TypeId::of::<Sys>(),
-            name: type_name::<Sys>().as_label(),
-        })
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
+            Box::new(WorkloadLabel {
+                type_id: TypeId::of::<Sys>(),
+                name: type_name::<Sys>().as_label(),
+            })
+        } else {
+            Box::new(SystemLabel {
+                type_id: TypeId::of::<Sys>(),
+                name: type_name::<Sys>().as_label(),
+            })
+        }
     }
 }
 

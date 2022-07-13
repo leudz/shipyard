@@ -3,16 +3,12 @@ use crate::borrow::Mutability;
 use crate::scheduler::info::{
     BatchInfo, Conflict, DedupedLabels, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
 };
-use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
 use crate::scheduler::{AsLabel, Batches, IntoWorkloadTrySystem, Label, Scheduler, WorkloadSystem};
 use crate::type_id::TypeId;
 use crate::world::World;
-use crate::{
-    error, track, AllStoragesViewMut, Component, IntoWorkload, IntoWorkloadSystem, SparseSet,
-    Unique, UniqueStorage,
-};
+use crate::{error, track, Component, IntoWorkload, IntoWorkloadSystem, Unique, UniqueStorage};
 // this is the macro, not the module
 use crate::storage::StorageId;
 use alloc::boxed::Box;
@@ -22,7 +18,6 @@ use alloc::vec::Vec;
 use core::any::type_name;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
-use core::ops::Not;
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::error::Error;
@@ -474,124 +469,6 @@ impl Workload {
         )?;
 
         Ok((workload, workload_info))
-    }
-    /// Only run the workload if the function evaluates to `true`.
-    #[track_caller]
-    pub fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, run_if: Run) -> Workload {
-        let run_if = run_if.into_workload_run_if().unwrap();
-
-        self.run_if = if let Some(prev_run_if) = self.run_if.take() {
-            Some(Box::new(move |world: &World| {
-                Ok(prev_run_if.run(world)? && run_if.run(world)?)
-            }))
-        } else {
-            Some(run_if)
-        };
-
-        self
-    }
-    /// Only run the workload if the `T` storage is empty.
-    ///
-    /// If the storage is not present it is considered empty.
-    /// If the storage is already borrowed, assume it's not empty.
-    pub fn run_if_storage_empty<T: Component>(self) -> Workload {
-        let storage_id = StorageId::of::<SparseSet<T>>();
-        self.run_if_storage_empty_by_id(storage_id)
-    }
-    /// Only run the workload if the `T` unique storage is not present in the `World`.
-    pub fn run_if_missing_unique<T: Unique>(self) -> Workload {
-        let storage_id = StorageId::of::<UniqueStorage<T>>();
-        self.run_if_storage_empty_by_id(storage_id)
-    }
-    /// Only run the workload if the storage is empty.
-    ///
-    /// If the storage is not present it is considered empty.
-    /// If the storage is already borrowed, assume it's not empty.
-    pub fn run_if_storage_empty_by_id(self, storage_id: StorageId) -> Workload {
-        use crate::all_storages::CustomStorageAccess;
-
-        let run_if = move |all_storages: AllStoragesViewMut<'_>| match all_storages
-            .custom_storage_by_id(storage_id)
-        {
-            Ok(storage) => storage.is_empty(),
-            Err(error::GetStorage::MissingStorage { .. }) => true,
-            Err(_) => false,
-        };
-
-        self.run_if(run_if)
-    }
-    /// Do not run the workload if the function evaluates to `true`.
-    pub fn skip_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, should_skip: Run) -> Self {
-        let mut should_skip = should_skip.into_workload_run_if().unwrap();
-
-        should_skip = Box::new(move |world: &World| should_skip.run(world).map(Not::not));
-
-        self.run_if = if let Some(prev_run_if) = self.run_if.take() {
-            Some(Box::new(move |world: &World| {
-                Ok(prev_run_if.run(world)? && should_skip.run(world)?)
-            }))
-        } else {
-            Some(should_skip)
-        };
-
-        self
-    }
-    /// Do not run the workload if the `T` storage is empty.
-    ///
-    /// If the storage is not present it is considered empty.
-    /// If the storage is already borrowed, assume it's not empty.
-    pub fn skip_if_storage_empty<T: Component>(self) -> Self {
-        let storage_id = StorageId::of::<SparseSet<T>>();
-        self.skip_if_storage_empty_by_id(storage_id)
-    }
-    /// Do not run the workload if the `T` unique storage is not present in the `World`.
-    pub fn skip_if_missing_unique<T: Unique>(self) -> Self {
-        let storage_id = StorageId::of::<UniqueStorage<T>>();
-        self.skip_if_storage_empty_by_id(storage_id)
-    }
-    /// Do not run the workload if the storage is empty.
-    ///
-    /// If the storage is not present it is considered empty.
-    /// If the storage is already borrowed, assume it's not empty.
-    pub fn skip_if_storage_empty_by_id(self, storage_id: StorageId) -> Self {
-        use crate::all_storages::CustomStorageAccess;
-
-        let should_skip = move |all_storages: AllStoragesViewMut<'_>| match all_storages
-            .custom_storage_by_id(storage_id)
-        {
-            Ok(storage) => storage.is_empty(),
-            Err(error::GetStorage::MissingStorage { .. }) => true,
-            Err(_) => false,
-        };
-
-        self.skip_if(should_skip)
-    }
-    /// When building a workload, all systems within this workload will be placed before all invocation of the other system or workload.
-    pub fn before_all<T>(mut self, other: impl AsLabel<T>) -> Workload {
-        self.before_all.add(other);
-
-        self
-    }
-    /// When building a workload, all systems within this workload will be placed after all invocation of the other system or workload.
-    pub fn after_all<T>(mut self, other: impl AsLabel<T>) -> Workload {
-        self.after_all.add(other);
-
-        self
-    }
-    /// Changes the name of this workload.
-    pub fn rename<T>(mut self, name: impl AsLabel<T>) -> Workload {
-        self.name = name.as_label();
-        self.overwritten_name = true;
-        self.tags.push(self.name.clone());
-
-        self
-    }
-    /// Adds a tag to this workload. Tags can be used to control system ordering when running workloads.
-    #[track_caller]
-    pub fn tag<T>(mut self, tag: impl AsLabel<T>) -> Workload {
-        self.tags.push(tag.as_label());
-
-        self
     }
 }
 
@@ -1658,7 +1535,10 @@ fn insert_system_in_scheduler(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, IntoNestedWorkload, IntoWorkload, UniqueView, UniqueViewMut, View};
+    use crate::{
+        track, AllStoragesViewMut, IntoWorkload, SystemModificator, UniqueView, UniqueViewMut,
+        View, WorkloadModificator,
+    };
 
     struct Usize(usize);
     struct U32(u32);

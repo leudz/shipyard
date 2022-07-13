@@ -1,9 +1,9 @@
 use crate::info::DedupedLabels;
 use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
 use crate::scheduler::workload::Workload;
-use crate::scheduler::{IntoNestedWorkload, IntoWorkloadSystem};
+use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
-use crate::AsLabel;
+use crate::{AsLabel, WorkloadModificator};
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
 // macro not module
@@ -127,59 +127,58 @@ impl IntoWorkload<Workload, Workload> for Workload {
     }
 }
 
-impl<Views, Sys> IntoWorkload<Views, Workload> for Sys
+impl<Views, R, Sys> IntoWorkload<Views, R> for Sys
 where
-    Sys: IntoNestedWorkload<Views, Workload> + 'static,
+    Sys: IntoWorkloadSystem<Views, R> + 'static,
+    R: 'static,
 {
     fn into_workload(self) -> Workload {
-        let mut workload = self.into_nested_workload();
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
+            let workload: Box<dyn Any> = Box::new(self.call());
+            let mut workload = *workload.downcast::<Workload>().unwrap();
 
-        let label = WorkloadLabel {
-            type_id: TypeId::of::<Sys>(),
-            name: type_name::<Sys>().as_label(),
-        };
+            let label = WorkloadLabel {
+                type_id: TypeId::of::<Sys>(),
+                name: type_name::<Sys>().as_label(),
+            };
 
-        workload = workload.tag(label.clone());
-        workload.name = Box::new(label);
+            workload = workload.tag(label.clone());
+            workload.name = Box::new(label);
 
-        workload
-    }
+            workload
+        } else {
+            let system = self.into_workload_system().unwrap();
 
-    fn into_sequential_workload(self) -> Workload {
-        self.into_nested_workload().into_sequential_workload()
-    }
-}
+            let closure = || {};
+            let type_id = closure.type_id().into();
 
-impl<Views, Sys> IntoWorkload<Views, ()> for Sys
-where
-    Sys: IntoWorkloadSystem<Views, ()> + 'static,
-{
-    fn into_workload(self) -> Workload {
-        let system = self.into_workload_system().unwrap();
+            let name = Box::new(WorkloadLabel {
+                type_id,
+                name: type_id.as_label(),
+            });
 
-        let closure = || {};
-        let type_id = closure.type_id().into();
-
-        let name = Box::new(WorkloadLabel {
-            type_id,
-            name: type_id.as_label(),
-        });
-
-        Workload {
-            name: name.clone(),
-            tags: vec![name],
-            systems: vec![system],
-            run_if: None,
-            before_all: DedupedLabels::new(),
-            after_all: DedupedLabels::new(),
-            overwritten_name: false,
-            require_before: DedupedLabels::new(),
-            require_after: DedupedLabels::new(),
+            Workload {
+                name: name.clone(),
+                tags: vec![name],
+                systems: vec![system],
+                run_if: None,
+                before_all: DedupedLabels::new(),
+                after_all: DedupedLabels::new(),
+                overwritten_name: false,
+                require_before: DedupedLabels::new(),
+                require_after: DedupedLabels::new(),
+            }
         }
     }
 
     fn into_sequential_workload(self) -> Workload {
-        self.into_workload()
+        let workload = self.into_workload();
+
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
+            workload.into_sequential_workload()
+        } else {
+            workload
+        }
     }
 }
 

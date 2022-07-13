@@ -1,6 +1,5 @@
 use crate::error;
 use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
-use crate::scheduler::into_workload_system::Nothing;
 use crate::scheduler::workload::Workload;
 use crate::storage::StorageId;
 use crate::AllStoragesViewMut;
@@ -9,11 +8,12 @@ use crate::Component;
 use crate::SparseSet;
 use crate::Unique;
 use crate::UniqueStorage;
+use crate::World;
+use alloc::boxed::Box;
+use core::ops::Not;
 
-/// Converts to a collection of systems.
-pub trait IntoNestedWorkload<B, R> {
-    /// Converts to a collection of systems.
-    fn into_nested_workload(self) -> Workload;
+/// Modifies a workload.
+pub trait WorkloadModificator {
     /// Only run the workload if the function evaluates to `true`.
     fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, run_if: Run) -> Workload;
     /// Only run the workload if the `T` storage is empty.
@@ -106,13 +106,107 @@ pub trait IntoNestedWorkload<B, R> {
     fn tag<T>(self, tag: impl AsLabel<T>) -> Workload;
 }
 
-impl<F> IntoNestedWorkload<Nothing, Workload> for F
-where
-    F: 'static + Send + Sync + Fn() -> Workload,
-{
-    fn into_nested_workload(self) -> Workload {
-        (self)()
+impl WorkloadModificator for Workload {
+    #[track_caller]
+    fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, run_if: Run) -> Workload {
+        let run_if = run_if.into_workload_run_if().unwrap();
+
+        self.run_if = if let Some(prev_run_if) = self.run_if.take() {
+            Some(Box::new(move |world: &World| {
+                Ok(prev_run_if.run(world)? && run_if.run(world)?)
+            }))
+        } else {
+            Some(run_if)
+        };
+
+        self
     }
+    fn run_if_storage_empty<T: Component>(self) -> Workload {
+        let storage_id = StorageId::of::<SparseSet<T>>();
+        self.run_if_storage_empty_by_id(storage_id)
+    }
+    fn run_if_missing_unique<T: Unique>(self) -> Workload {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
+        self.run_if_storage_empty_by_id(storage_id)
+    }
+    fn run_if_storage_empty_by_id(self, storage_id: StorageId) -> Workload {
+        use crate::all_storages::CustomStorageAccess;
+
+        let run_if = move |all_storages: AllStoragesViewMut<'_>| match all_storages
+            .custom_storage_by_id(storage_id)
+        {
+            Ok(storage) => storage.is_empty(),
+            Err(error::GetStorage::MissingStorage { .. }) => true,
+            Err(_) => false,
+        };
+
+        self.run_if(run_if)
+    }
+    fn skip_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, should_skip: Run) -> Self {
+        let mut should_skip = should_skip.into_workload_run_if().unwrap();
+
+        should_skip = Box::new(move |world: &World| should_skip.run(world).map(Not::not));
+
+        self.run_if = if let Some(prev_run_if) = self.run_if.take() {
+            Some(Box::new(move |world: &World| {
+                Ok(prev_run_if.run(world)? && should_skip.run(world)?)
+            }))
+        } else {
+            Some(should_skip)
+        };
+
+        self
+    }
+    fn skip_if_storage_empty<T: Component>(self) -> Self {
+        let storage_id = StorageId::of::<SparseSet<T>>();
+        self.skip_if_storage_empty_by_id(storage_id)
+    }
+    fn skip_if_missing_unique<T: Unique>(self) -> Self {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
+        self.skip_if_storage_empty_by_id(storage_id)
+    }
+    fn skip_if_storage_empty_by_id(self, storage_id: StorageId) -> Self {
+        use crate::all_storages::CustomStorageAccess;
+
+        let should_skip = move |all_storages: AllStoragesViewMut<'_>| match all_storages
+            .custom_storage_by_id(storage_id)
+        {
+            Ok(storage) => storage.is_empty(),
+            Err(error::GetStorage::MissingStorage { .. }) => true,
+            Err(_) => false,
+        };
+
+        self.skip_if(should_skip)
+    }
+    fn before_all<T>(mut self, other: impl AsLabel<T>) -> Workload {
+        self.before_all.add(other);
+
+        self
+    }
+    fn after_all<T>(mut self, other: impl AsLabel<T>) -> Workload {
+        self.after_all.add(other);
+
+        self
+    }
+    fn rename<T>(mut self, name: impl AsLabel<T>) -> Workload {
+        self.name = name.as_label();
+        self.overwritten_name = true;
+        self.tags.push(self.name.clone());
+
+        self
+    }
+    #[track_caller]
+    fn tag<T>(mut self, tag: impl AsLabel<T>) -> Workload {
+        self.tags.push(tag.as_label());
+
+        self
+    }
+}
+
+impl<W> WorkloadModificator for W
+where
+    W: 'static + Send + Sync + Fn() -> Workload,
+{
     #[track_caller]
     fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, run_if: Run) -> Workload {
         (self)().run_if(run_if)
