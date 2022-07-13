@@ -109,17 +109,7 @@ where
     R: 'static,
 {
     fn as_label(&self) -> Box<dyn Label> {
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            Box::new(WorkloadLabel {
-                type_id: TypeId::of::<Sys>(),
-                name: type_name::<Sys>().as_label(),
-            })
-        } else {
-            Box::new(SystemLabel {
-                type_id: TypeId::of::<Sys>(),
-                name: type_name::<Sys>().as_label(),
-            })
-        }
+        self.label()
     }
 }
 

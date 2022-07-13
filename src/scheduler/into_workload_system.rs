@@ -1,12 +1,12 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
 use crate::info::DedupedLabels;
-use crate::scheduler::label::SystemLabel;
+use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
-use crate::World;
-use crate::{error, AsLabel};
+use crate::{error, AsLabel, Workload};
+use crate::{Label, World};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -19,6 +19,8 @@ use core::sync::atomic::{AtomicU32, Ordering};
 pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;
+    // This can't be removed because of `WorkloadSystem`
+    fn label(&self) -> Box<dyn Label>;
     #[doc(hidden)]
     fn call(&self) -> R;
 }
@@ -54,6 +56,19 @@ where
             require_after: DedupedLabels::new(),
         })
     }
+    fn label(&self) -> Box<dyn Label> {
+        if TypeId::of::<R>() == TypeId::of::<Workload>() {
+            Box::new(WorkloadLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })
+        } else {
+            Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: type_name::<F>().as_label(),
+            })
+        }
+    }
     fn call(&self) -> R {
         (self)()
     }
@@ -62,6 +77,12 @@ where
 impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
         Ok(self)
+    }
+    fn label(&self) -> Box<dyn Label> {
+        Box::new(SystemLabel {
+            type_id: self.type_id,
+            name: self.display_name.clone(),
+        })
     }
     fn call(&self) {
         unreachable!()
@@ -142,6 +163,12 @@ macro_rules! impl_into_workload_system {
                     require_in_workload: DedupedLabels::new(),
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),
+                })
+            }
+            fn label(&self) -> Box<dyn Label> {
+                Box::new(SystemLabel {
+                    type_id: TypeId::of::<Func>(),
+                    name: type_name::<Func>().as_label(),
                 })
             }
             fn call(&self) -> R {
