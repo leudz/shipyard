@@ -52,10 +52,6 @@ where
     {
         let system_type_name = type_name::<F>();
 
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
-        }
-
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
@@ -85,10 +81,6 @@ where
         R: Into<Result<Ok, Err>>,
     {
         let system_type_name = type_name::<F>();
-
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
-        }
 
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
