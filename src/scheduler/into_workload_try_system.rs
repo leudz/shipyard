@@ -64,7 +64,7 @@ where
             after_all: DedupedLabels::new(),
             tags: vec![Box::new(SystemLabel {
                 type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
+                name: system_type_name.as_label(),
             })],
             run_if: None,
             require_in_workload: DedupedLabels::new(),
@@ -94,7 +94,7 @@ where
             after_all: DedupedLabels::new(),
             tags: vec![Box::new(SystemLabel {
                 type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
+                name: system_type_name.as_label(),
             })],
             run_if: None,
             require_in_workload: DedupedLabels::new(),

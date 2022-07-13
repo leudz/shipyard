@@ -1,14 +1,21 @@
 use crate::info::DedupedLabels;
-use crate::scheduler::label::{SequentialLabel, SystemLabel, WorkloadLabel};
+use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
 use crate::{AsLabel, WorkloadModificator};
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
+use core::sync::atomic::{AtomicU64, Ordering};
 // macro not module
 use alloc::boxed::Box;
+use alloc::string::ToString;
 use alloc::vec;
+
+static WORKLOAD_ID: AtomicU64 = AtomicU64::new(1);
+fn unique_id() -> u64 {
+    WORKLOAD_ID.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Converts to a collection of systems.
 pub trait IntoWorkload<Views, R> {
@@ -116,6 +123,14 @@ impl IntoWorkload<Workload, Workload> for Workload {
         self
     }
     fn into_sequential_workload(mut self) -> Workload {
+        let mut system_names = DedupedLabels::with_capacity(self.systems.len());
+
+        for system in &self.systems {
+            if !system_names.add(system.type_id.as_label()) {
+                panic!("{:?} appears twice in this workload. `into_sequential_workload` cannot currently handle this case.", system.display_name);
+            }
+        }
+
         for index in 0..self.systems.len() {
             if let Some(next_system) = self.systems.get(index + 1) {
                 let tag = SequentialLabel(next_system.type_id.as_label());
@@ -149,11 +164,11 @@ where
         } else {
             let system = self.into_workload_system().unwrap();
 
-            let system_label = system.label();
-            let system_label = system_label.as_any().downcast_ref::<SystemLabel>().unwrap();
+            let unique_id = unique_id();
+
             let name = Box::new(WorkloadLabel {
-                type_id: system_label.type_id,
-                name: system_label.name.clone(),
+                type_id: TypeId(unique_id),
+                name: unique_id.to_string().as_label(),
             });
 
             Workload {
@@ -190,12 +205,11 @@ macro_rules! impl_into_workload {
             )+
         {
             fn into_workload(self) -> Workload {
-                let closure = || {};
-                let type_id = closure.type_id().into();
+                let unique_id = unique_id();
 
                 let name = Box::new(WorkloadLabel {
-                    type_id,
-                    name: type_id.as_label(),
+                    type_id: TypeId(unique_id),
+                    name: unique_id.to_string().as_label(),
                 });
 
                 let mut workload = Workload {
@@ -220,12 +234,11 @@ macro_rules! impl_into_workload {
 
             #[track_caller]
             fn into_sequential_workload(self) -> Workload {
-                let closure = || {};
-                let type_id = closure.type_id().into();
+                let unique_id = unique_id();
 
                 let name = Box::new(WorkloadLabel {
-                    type_id,
-                    name: type_id.as_label(),
+                    type_id: TypeId(unique_id),
+                    name: unique_id.to_string().as_label(),
                 });
 
                 let mut workload = Workload {
