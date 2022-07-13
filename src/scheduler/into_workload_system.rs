@@ -20,6 +20,7 @@ pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;
     // This can't be removed because of `WorkloadSystem`
+    #[doc(hidden)]
     fn label(&self) -> Box<dyn Label>;
     #[doc(hidden)]
     fn call(&self) -> R;

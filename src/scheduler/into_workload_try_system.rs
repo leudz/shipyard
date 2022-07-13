@@ -3,7 +3,6 @@ use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
 use crate::info::DedupedLabels;
 use crate::scheduler::into_workload_system::Nothing;
 use crate::scheduler::label::SystemLabel;
-use crate::scheduler::workload::Workload;
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::type_id::TypeId;

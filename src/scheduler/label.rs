@@ -1,9 +1,9 @@
 use crate::type_id::TypeId;
-use crate::{IntoWorkloadSystem, Workload};
+use crate::IntoWorkloadSystem;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
-use core::any::{type_name, Any};
+use core::any::Any;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
