@@ -111,13 +111,17 @@ fn run_one_with_world() {
     let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let builder = Workload::new("").with_system(|| dbg!(1));
+    let builder = Workload::new("").with_system(|| {
+        dbg!(1);
+    });
     let (workload, _) = builder.build().unwrap();
 
     workload.run_with_world(&world1).unwrap();
     workload.run_with_world(&world2).unwrap();
 
-    let builder2 = Workload::new("Named").with_system(|| dbg!(1));
+    let builder2 = Workload::new("Named").with_system(|| {
+        dbg!(1);
+    });
     let (workload2, _) = builder2.build().unwrap();
 
     workload2.run_with_world(&world1).unwrap();
@@ -130,30 +134,26 @@ fn run_with_world() {
     let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let builder = Workload::new("")
-        .with_system(|| dbg!(1))
-        .with_system(|| dbg!(1));
+        .with_system(|| {
+            dbg!(1);
+        })
+        .with_system(|| {
+            dbg!(1);
+        });
     let (workload, _) = builder.build().unwrap();
 
     workload.run_with_world(&world1).unwrap();
     workload.run_with_world(&world2).unwrap();
 
     let builder2 = Workload::new("Named")
-        .with_system(|| dbg!(1))
-        .with_system(|| dbg!(1));
+        .with_system(|| {
+            dbg!(1);
+        })
+        .with_system(|| {
+            dbg!(1);
+        });
     let (workload2, _) = builder2.build().unwrap();
 
     workload2.run_with_world(&world1).unwrap();
     workload2.run_with_world(&world2).unwrap();
-}
-
-#[test]
-fn contains() {
-    fn w() -> Workload {
-        (|| {}).into_workload()
-    }
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    world.add_workload(w);
-    assert!(world.contains_workload(w.as_label()));
-    assert!(world.contains_workload(w));
-    world.run_workload(w).unwrap();
 }

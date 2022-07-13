@@ -1,9 +1,9 @@
 use crate::type_id::TypeId;
-use crate::IntoWorkloadSystem;
+use crate::{IntoNestedWorkload, IntoWorkloadSystem, Workload};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
-use core::any::Any;
+use core::any::{type_name, Any};
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 
@@ -103,12 +103,27 @@ pub trait AsLabel<T> {
     fn as_label(&self) -> Box<dyn Label>;
 }
 
-impl<Views, R, W> AsLabel<(Views, R)> for W
+impl<Views, Sys> AsLabel<(Views, ())> for Sys
 where
-    W: IntoWorkloadSystem<Views, R> + 'static,
+    Sys: IntoWorkloadSystem<Views, ()> + 'static,
 {
     fn as_label(&self) -> Box<dyn Label> {
-        self.label()
+        Box::new(SystemLabel {
+            type_id: TypeId::of::<Sys>(),
+            name: type_name::<Sys>().as_label(),
+        })
+    }
+}
+
+impl<Views, Sys> AsLabel<(Views, Workload)> for Sys
+where
+    Sys: IntoNestedWorkload<Views, Workload> + 'static,
+{
+    fn as_label(&self) -> Box<dyn Label> {
+        Box::new(WorkloadLabel {
+            type_id: TypeId::of::<Sys>(),
+            name: type_name::<Sys>().as_label(),
+        })
     }
 }
 

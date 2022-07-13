@@ -1,7 +1,7 @@
 use macroquad::prelude::*;
 use shipyard::{
     AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkloadSystem, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
+    IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
 };
 
 const WIDTH: i32 = 640;

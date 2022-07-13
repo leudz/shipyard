@@ -6,7 +6,7 @@ use crate::scheduler::info::{
 use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
-use crate::scheduler::{AsLabel, Batches, Label, Scheduler, WorkloadSystem};
+use crate::scheduler::{AsLabel, Batches, IntoWorkloadTrySystem, Label, Scheduler, WorkloadSystem};
 use crate::type_id::TypeId;
 use crate::world::World;
 use crate::{
@@ -257,7 +257,7 @@ impl Workload {
     /// world.run_default();
     /// ```
     #[track_caller]
-    pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(mut self, system: S) -> Workload {
+    pub fn with_system<B, S: IntoWorkloadSystem<B, ()>>(mut self, system: S) -> Workload {
         self.systems.push(system.into_workload_system().unwrap());
 
         self
@@ -311,7 +311,7 @@ impl Workload {
         Ok,
         Err: 'static + Into<Box<dyn Error + Send + Sync>>,
         R: Into<Result<Ok, Err>>,
-        S: IntoWorkloadSystem<B, R>,
+        S: IntoWorkloadTrySystem<B, R>,
     >(
         mut self,
         system: S,
@@ -364,7 +364,7 @@ impl Workload {
         Ok,
         Err: 'static + Send + Any,
         R: Into<Result<Ok, Err>>,
-        S: IntoWorkloadSystem<B, R>,
+        S: IntoWorkloadTrySystem<B, R>,
     >(
         mut self,
         system: S,
@@ -475,7 +475,7 @@ impl Workload {
 
         Ok((workload, workload_info))
     }
-    /// Only run the system if the function evaluates to `true`.
+    /// Only run the workload if the function evaluates to `true`.
     #[track_caller]
     pub fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(mut self, run_if: Run) -> Workload {
         let run_if = run_if.into_workload_run_if().unwrap();
@@ -490,7 +490,7 @@ impl Workload {
 
         self
     }
-    /// Only run the system if the `T` storage is empty.
+    /// Only run the workload if the `T` storage is empty.
     ///
     /// If the storage is not present it is considered empty.
     /// If the storage is already borrowed, assume it's not empty.
@@ -498,12 +498,12 @@ impl Workload {
         let storage_id = StorageId::of::<SparseSet<T>>();
         self.run_if_storage_empty_by_id(storage_id)
     }
-    /// Only run the system if the `T` unique storage is not present in the `World`.
+    /// Only run the workload if the `T` unique storage is not present in the `World`.
     pub fn run_if_missing_unique<T: Unique>(self) -> Workload {
         let storage_id = StorageId::of::<UniqueStorage<T>>();
         self.run_if_storage_empty_by_id(storage_id)
     }
-    /// Only run the system if the storage is empty.
+    /// Only run the workload if the storage is empty.
     ///
     /// If the storage is not present it is considered empty.
     /// If the storage is already borrowed, assume it's not empty.
@@ -1658,7 +1658,7 @@ fn insert_system_in_scheduler(
 mod tests {
     use super::*;
     use crate::component::{Component, Unique};
-    use crate::{track, IntoWorkload, UniqueView, UniqueViewMut, View};
+    use crate::{track, IntoNestedWorkload, IntoWorkload, UniqueView, UniqueViewMut, View};
 
     struct Usize(usize);
     struct U32(u32);
@@ -2263,7 +2263,7 @@ mod tests {
         let world = World::new();
 
         Workload::new("test")
-            .with_system((|| panic!()).skip_if_storage_empty::<Usize>())
+            .with_system((|| -> () { panic!() }).skip_if_storage_empty::<Usize>())
             .build()
             .unwrap()
             .0
@@ -2271,7 +2271,7 @@ mod tests {
             .unwrap();
 
         Workload::new("test")
-            .with_system((|| panic!()).skip_if_storage_empty::<Usize>())
+            .with_system((|| -> () { panic!() }).skip_if_storage_empty::<Usize>())
             .add_to_world(&world)
             .unwrap();
 
@@ -2287,7 +2287,7 @@ mod tests {
 
         Workload::new("test")
             .skip_if_storage_empty::<Usize>()
-            .with_system(|| panic!())
+            .with_system(|| -> () { panic!() })
             .build()
             .unwrap()
             .0
@@ -2296,7 +2296,7 @@ mod tests {
 
         Workload::new("test")
             .skip_if_storage_empty::<Usize>()
-            .with_system(|| panic!())
+            .with_system(|| -> () { panic!() })
             .add_to_world(&world)
             .unwrap();
 
@@ -2311,7 +2311,7 @@ mod tests {
         world.remove::<(Usize,)>(eid);
 
         Workload::new("test")
-            .with_system((|| panic!()).skip_if_storage_empty::<Usize>())
+            .with_system((|| -> () { panic!() }).skip_if_storage_empty::<Usize>())
             .build()
             .unwrap()
             .0
@@ -2319,7 +2319,7 @@ mod tests {
             .unwrap();
 
         Workload::new("test")
-            .with_system((|| panic!()).skip_if_storage_empty::<Usize>())
+            .with_system((|| -> () { panic!() }).skip_if_storage_empty::<Usize>())
             .add_to_world(&world)
             .unwrap();
 
@@ -2334,7 +2334,7 @@ mod tests {
 
         world.add_workload(|| {
             (
-                (|| panic!())
+                (|| -> () { panic!() })
                     .into_workload()
                     .skip_if_missing_unique::<U32>(),
                 (|mut u: UniqueViewMut<'_, Usize>| u.0 += 1).into_workload(),
@@ -2518,7 +2518,7 @@ mod tests {
             (sys0, sys1).into_workload()
         }
 
-        let (workload, _) = (workload1, sys2, sys3)
+        let (workload, _) = (workload1.before_all(sys2), sys2, sys3)
             .into_sequential_workload()
             .rename("")
             .build()
@@ -2549,5 +2549,24 @@ mod tests {
             &[(None, vec![0]), (Some(1), Vec::new()), (None, vec![0])]
         );
         assert_eq!(batches.sequential, &[0, 1, 0]);
+    }
+
+    #[test]
+    fn contains() {
+        fn type_name_of<T: 'static>(_: &T) -> &'static str {
+            type_name::<T>()
+        }
+
+        fn w() -> Workload {
+            (|| {}).into_workload()
+        }
+        let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+        world.add_workload(w);
+        assert!(world.contains_workload(WorkloadLabel {
+            type_id: TypeId::of_val(&w),
+            name: type_name_of(&w).as_label()
+        }));
+        assert!(world.contains_workload(w));
+        world.run_workload(w).unwrap();
     }
 }

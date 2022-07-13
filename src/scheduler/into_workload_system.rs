@@ -2,23 +2,18 @@ use crate::all_storages::AllStorages;
 use crate::borrow::{Borrow, BorrowInfo, IntoBorrow, Mutability};
 use crate::info::DedupedLabels;
 use crate::scheduler::into_workload_run_if::IntoRunIf;
-use crate::scheduler::label::{SystemLabel, WorkloadLabel};
-use crate::scheduler::workload::Workload;
+use crate::scheduler::label::SystemLabel;
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
-use crate::{error, AllStoragesViewMut, AsLabel, Label, Unique, UniqueStorage};
+use crate::{error, AllStoragesViewMut, AsLabel, Unique, UniqueStorage};
 use crate::{Component, SparseSet, World};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
-#[cfg(not(feature = "std"))]
-use core::any::Any;
 use core::ops::Not;
 use core::sync::atomic::{AtomicU32, Ordering};
-#[cfg(feature = "std")]
-use std::error::Error;
 
 /// Trait used to add systems to a workload.
 ///
@@ -26,22 +21,6 @@ use std::error::Error;
 pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;
-    /// Wraps a fallible function in a struct containing all information required by a workload.  
-    /// The workload will stop if an error is returned.
-    #[cfg(feature = "std")]
-    fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
-        self,
-    ) -> Result<WorkloadSystem, error::InvalidSystem>
-    where
-        R: Into<Result<Ok, Err>>;
-    /// Wraps a fallible function in a struct containing all information required by a workload.  
-    /// The workload will stop if an error is returned.
-    #[cfg(not(feature = "std"))]
-    fn into_workload_try_system<Ok, Err: 'static + Send + Any>(
-        self,
-    ) -> Result<WorkloadSystem, error::InvalidSystem>
-    where
-        R: Into<Result<Ok, Err>>;
     /// Only run the system if the function evaluates to `true`.
     fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem;
     /// Only run the system if the `T` storage is empty.
@@ -145,97 +124,21 @@ pub trait IntoWorkloadSystem<B, R> {
     ///
     /// Does not change system ordering.
     fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem;
-    #[doc(hidden)]
-    fn label(&self) -> Box<dyn Label>;
-    #[doc(hidden)]
-    fn call(&self) -> R;
 }
 
 pub struct Nothing;
 
-impl<R: 'static, F> IntoWorkloadSystem<Nothing, R> for F
+impl<F> IntoWorkloadSystem<Nothing, ()> for F
 where
-    F: 'static + Send + Sync + Fn() -> R,
+    F: 'static + Send + Sync + Fn(),
 {
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
         let system_type_name = type_name::<F>();
-
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
-        }
 
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)();
-                Ok(())
-            }),
-            type_id: TypeId::of::<F>(),
-            display_name: Box::new(system_type_name),
-            generator: Box::new(|_| TypeId::of::<F>()),
-            before_all: DedupedLabels::new(),
-            after_all: DedupedLabels::new(),
-            tags: vec![Box::new(SystemLabel {
-                type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
-            })],
-            run_if: None,
-            require_in_workload: DedupedLabels::new(),
-            require_before: DedupedLabels::new(),
-            require_after: DedupedLabels::new(),
-        })
-    }
-    #[cfg(feature = "std")]
-    fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
-        self,
-    ) -> Result<WorkloadSystem, error::InvalidSystem>
-    where
-        R: Into<Result<Ok, Err>>,
-    {
-        let system_type_name = type_name::<F>();
-
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
-        }
-
-        Ok(WorkloadSystem {
-            borrow_constraints: Vec::new(),
-            system_fn: Box::new(move |_: &World| {
-                (self)().into().map_err(error::Run::from_custom)?;
-                Ok(())
-            }),
-            type_id: TypeId::of::<F>(),
-            display_name: Box::new(system_type_name),
-            generator: Box::new(|_| TypeId::of::<F>()),
-            before_all: DedupedLabels::new(),
-            after_all: DedupedLabels::new(),
-            tags: vec![Box::new(SystemLabel {
-                type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
-            })],
-            run_if: None,
-            require_in_workload: DedupedLabels::new(),
-            require_before: DedupedLabels::new(),
-            require_after: DedupedLabels::new(),
-        })
-    }
-    #[cfg(not(feature = "std"))]
-    fn into_workload_try_system<Ok, Err: 'static + Send + Any>(
-        self,
-    ) -> Result<WorkloadSystem, error::InvalidSystem>
-    where
-        R: Into<Result<Ok, Err>>,
-    {
-        let system_type_name = type_name::<F>();
-
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            return Err(error::InvalidSystem::WorkloadUsedAsSystem(system_type_name));
-        }
-
-        Ok(WorkloadSystem {
-            borrow_constraints: Vec::new(),
-            system_fn: Box::new(move |_: &World| {
-                (self)().into().map_err(error::Run::from_custom)?;
                 Ok(())
             }),
             type_id: TypeId::of::<F>(),
@@ -326,34 +229,10 @@ where
 
         system
     }
-    fn label(&self) -> Box<dyn Label> {
-        if TypeId::of::<R>() == TypeId::of::<Workload>() {
-            Box::new(WorkloadLabel {
-                type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
-            })
-        } else {
-            Box::new(SystemLabel {
-                type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
-            })
-        }
-    }
-    fn call(&self) -> R {
-        (self)()
-    }
 }
 
 impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
-        Ok(self)
-    }
-    #[cfg(feature = "std")]
-    fn into_workload_try_system<Ok, Err>(self) -> Result<WorkloadSystem, error::InvalidSystem> {
-        Ok(self)
-    }
-    #[cfg(not(feature = "std"))]
-    fn into_workload_try_system<Ok, Err>(self) -> Result<WorkloadSystem, error::InvalidSystem> {
         Ok(self)
     }
     #[track_caller]
@@ -416,25 +295,18 @@ impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
 
         self
     }
-    fn label(&self) -> Box<dyn Label> {
-        Box::new(SystemLabel {
-            type_id: self.type_id,
-            name: self.display_name.clone(),
-        })
-    }
-    fn call(&self) {}
 }
 
 macro_rules! impl_into_workload_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: IntoBorrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func
+        impl<$($type: IntoBorrow + BorrowInfo,)+ Func> IntoWorkloadSystem<($($type,)+), ()> for Func
         where
             Func: 'static
                 + Send
                 + Sync,
             for<'a, 'b> &'b Func:
-                Fn($($type),+) -> R
-                + Fn($(<$type::Borrow as Borrow<'a>>::View),+) -> R {
+                Fn($($type),+)
+                + Fn($(<$type::Borrow as Borrow<'a>>::View),+) {
 
             fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -477,7 +349,7 @@ macro_rules! impl_into_workload_system {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+)))
+                        Ok((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+))
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),
@@ -494,136 +366,6 @@ macro_rules! impl_into_workload_system {
 
                         TypeId::of::<Func>()
                     }),
-                    run_if: None,
-                    require_in_workload: DedupedLabels::new(),
-                    require_before: DedupedLabels::new(),
-                    require_after: DedupedLabels::new(),
-                })
-            }
-            #[cfg(feature = "std")]
-            fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(self) -> Result<WorkloadSystem, error::InvalidSystem> where R: Into<Result<Ok, Err>> {
-                let mut borrows = Vec::new();
-                $(
-                    $type::borrow_info(&mut borrows);
-                )+
-
-                if borrows.contains(&TypeInfo {
-                    name: "".into(),
-                    storage_id: StorageId::of::<AllStorages>(),
-                    mutability: Mutability::Exclusive,
-                    thread_safe: true,
-                }) && borrows.len() > 1
-                {
-                    return Err(error::InvalidSystem::AllStorages);
-                }
-
-                if borrows.len() > 1 {
-                    for (i, a_type_info) in borrows[..borrows.len() - 1].iter().enumerate() {
-                        for b_type_info in &borrows[i + 1..] {
-                            if a_type_info.storage_id == b_type_info.storage_id {
-                                match (a_type_info.mutability, b_type_info.mutability) {
-                                    (Mutability::Exclusive, Mutability::Exclusive) => {
-                                        return Err(error::InvalidSystem::MultipleViewsMut)
-                                    }
-                                    (Mutability::Exclusive, Mutability::Shared)
-                                    | (Mutability::Shared, Mutability::Exclusive) => {
-                                        return Err(error::InvalidSystem::MultipleViews)
-                                    }
-                                    (Mutability::Shared, Mutability::Shared) => {}
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let last_run = AtomicU32::new(0);
-                Ok(WorkloadSystem {
-                    borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| {
-                        let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
-                    }),
-                    type_id: TypeId::of::<Func>(),
-                    display_name: Box::new(type_name::<Func>()),
-                    generator: Box::new(|constraints| {
-                        $(
-                            $type::borrow_info(constraints);
-                        )+
-
-                        TypeId::of::<Func>()
-                    }),
-                    before_all: DedupedLabels::new(),
-                    after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(SystemLabel {
-                        type_id: TypeId::of::<Func>(),
-                        name: type_name::<Func>().as_label(),
-                    })],
-                    run_if: None,
-                    require_in_workload: DedupedLabels::new(),
-                    require_before: DedupedLabels::new(),
-                    require_after: DedupedLabels::new(),
-                })
-            }
-            #[cfg(not(feature = "std"))]
-            fn into_workload_try_system<Ok, Err: 'static + Send + Any>(self) -> Result<WorkloadSystem, error::InvalidSystem> where R: Into<Result<Ok, Err>> {
-                let mut borrows = Vec::new();
-                $(
-                    $type::borrow_info(&mut borrows);
-                )+
-
-                if borrows.contains(&TypeInfo {
-                    name: "".into(),
-                    storage_id: StorageId::of::<AllStorages>(),
-                    mutability: Mutability::Exclusive,
-                    thread_safe: true,
-                }) && borrows.len() > 1
-                {
-                    return Err(error::InvalidSystem::AllStorages);
-                }
-
-                if borrows.len() > 1 {
-                    for (i, a_type_info) in borrows[..borrows.len() - 1].iter().enumerate() {
-                        for b_type_info in &borrows[i + 1..] {
-                            if a_type_info.storage_id == b_type_info.storage_id {
-                                match (a_type_info.mutability, b_type_info.mutability) {
-                                    (Mutability::Exclusive, Mutability::Exclusive) => {
-                                        return Err(error::InvalidSystem::MultipleViewsMut)
-                                    }
-                                    (Mutability::Exclusive, Mutability::Shared)
-                                    | (Mutability::Shared, Mutability::Exclusive) => {
-                                        return Err(error::InvalidSystem::MultipleViews)
-                                    }
-                                    (Mutability::Shared, Mutability::Shared) => {}
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let last_run = AtomicU32::new(0);
-                Ok(WorkloadSystem {
-                    borrow_constraints: borrows,
-                    system_fn: Box::new(move |world: &World| {
-                        let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::Borrow::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
-                    }),
-                    type_id: TypeId::of::<Func>(),
-                    display_name: Box::new(type_name::<Func>()),
-                    generator: Box::new(|constraints| {
-                        $(
-                            $type::borrow_info(constraints);
-                        )+
-
-                        TypeId::of::<Func>()
-                    }),
-                    before_all: DedupedLabels::new(),
-                    after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(SystemLabel {
-                        type_id: TypeId::of::<Func>(),
-                        name: type_name::<Func>().as_label(),
-                    })],
                     run_if: None,
                     require_in_workload: DedupedLabels::new(),
                     require_before: DedupedLabels::new(),
@@ -632,7 +374,7 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
                 let run_if = run_if.into_workload_run_if().unwrap();
 
                 system.run_if = Some(run_if.system_fn);
@@ -645,11 +387,11 @@ macro_rules! impl_into_workload_system {
 
                 run_if.system_fn = Box::new(move |world| (run_if.system_fn)(world).map(Not::not));
 
-                IntoWorkloadSystem::<($($type,)+), R>::run_if(self, run_if)
+                IntoWorkloadSystem::<($($type,)+), ()>::run_if(self, run_if)
             }
             #[track_caller]
             fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.before_all.add(other);
 
@@ -657,7 +399,7 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.after_all.add(other);
 
@@ -665,7 +407,7 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn display_name<T>(self, name: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.display_name = name.as_label();
 
@@ -673,7 +415,7 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn tag<T>(self, tag: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.tags.push(tag.as_label());
 
@@ -681,7 +423,7 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.require_in_workload.add(other);
 
@@ -689,7 +431,7 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.require_before.add(other);
 
@@ -697,20 +439,11 @@ macro_rules! impl_into_workload_system {
             }
             #[track_caller]
             fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), ()>::into_workload_system(self).unwrap();
 
                 system.require_after.add(other);
 
                 system
-            }
-            fn label(&self) -> Box<dyn Label> {
-                Box::new(SystemLabel {
-                    type_id: TypeId::of::<Func>(),
-                    name: type_name::<Func>().as_label(),
-                })
-            }
-            fn call(&self) -> R {
-                unreachable!()
             }
         }
     }

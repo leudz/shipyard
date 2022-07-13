@@ -1,13 +1,17 @@
 pub mod info;
+mod into_nested_workload;
 mod into_workload;
 mod into_workload_run_if;
 mod into_workload_system;
+mod into_workload_try_system;
 mod label;
 mod system;
 mod workload;
 
+pub use into_nested_workload::IntoNestedWorkload;
 pub use into_workload::IntoWorkload;
 pub use into_workload_system::IntoWorkloadSystem;
+pub use into_workload_try_system::IntoWorkloadTrySystem;
 pub use label::{AsLabel, Label};
 pub use system::WorkloadSystem;
 pub use workload::{ScheduledWorkload, Workload};
