@@ -1,7 +1,9 @@
 use crate::error;
 use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
+use crate::scheduler::label::WorkloadLabel;
 use crate::scheduler::workload::Workload;
 use crate::storage::StorageId;
+use crate::type_id::TypeId;
 use crate::AllStoragesViewMut;
 use crate::AsLabel;
 use crate::Component;
@@ -10,6 +12,7 @@ use crate::Unique;
 use crate::UniqueStorage;
 use crate::World;
 use alloc::boxed::Box;
+use core::any::type_name;
 use core::ops::Not;
 
 /// Modifies a workload.
@@ -195,7 +198,6 @@ impl WorkloadModificator for Workload {
 
         self
     }
-    #[track_caller]
     fn tag<T>(mut self, tag: impl AsLabel<T>) -> Workload {
         self.tags.push(tag.as_label());
 
@@ -207,28 +209,82 @@ impl<W> WorkloadModificator for W
 where
     W: 'static + Send + Sync + Fn() -> Workload,
 {
-    #[track_caller]
     fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, run_if: Run) -> Workload {
-        (self)().run_if(run_if)
+        let mut workload = (self)();
+
+        let label = WorkloadLabel {
+            type_id: TypeId::of::<W>(),
+            name: type_name::<W>().as_label(),
+        };
+
+        workload = workload.tag(label.clone());
+        workload.name = Box::new(label);
+
+        workload.run_if(run_if)
     }
-    #[track_caller]
     fn skip_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, should_skip: Run) -> Workload {
-        (self)().skip_if(should_skip)
+        let mut workload = (self)();
+
+        let label = WorkloadLabel {
+            type_id: TypeId::of::<W>(),
+            name: type_name::<W>().as_label(),
+        };
+
+        workload = workload.tag(label.clone());
+        workload.name = Box::new(label);
+
+        workload.skip_if(should_skip)
     }
-    #[track_caller]
     fn before_all<T>(self, other: impl AsLabel<T>) -> Workload {
-        (self)().before_all(other)
+        let mut workload = (self)();
+
+        let label = WorkloadLabel {
+            type_id: TypeId::of::<W>(),
+            name: type_name::<W>().as_label(),
+        };
+
+        workload = workload.tag(label.clone());
+        workload.name = Box::new(label);
+
+        workload.before_all(other)
     }
-    #[track_caller]
     fn after_all<T>(self, other: impl AsLabel<T>) -> Workload {
-        (self)().after_all(other)
+        let mut workload = (self)();
+
+        let label = WorkloadLabel {
+            type_id: TypeId::of::<W>(),
+            name: type_name::<W>().as_label(),
+        };
+
+        workload = workload.tag(label.clone());
+        workload.name = Box::new(label);
+
+        workload.after_all(other)
     }
-    #[track_caller]
     fn rename<T>(self, name: impl AsLabel<T>) -> Workload {
-        (self)().rename(name)
+        let mut workload = (self)();
+
+        let label = WorkloadLabel {
+            type_id: TypeId::of::<W>(),
+            name: type_name::<W>().as_label(),
+        };
+
+        workload = workload.tag(label.clone());
+        workload.name = Box::new(label);
+
+        workload.rename(name)
     }
-    #[track_caller]
     fn tag<T>(self, tag: impl AsLabel<T>) -> Workload {
-        (self)().tag(tag)
+        let mut workload = (self)();
+
+        let label = WorkloadLabel {
+            type_id: TypeId::of::<W>(),
+            name: type_name::<W>().as_label(),
+        };
+
+        workload = workload.tag(label.clone());
+        workload.name = Box::new(label);
+
+        workload.tag(tag)
     }
 }
