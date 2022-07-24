@@ -548,6 +548,11 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
         system: S,
         data: Data,
     ) -> R {
+        #[cfg(feature = "tracing")]
+        let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
+        #[cfg(feature = "tracing")]
+        let _system_span = system_span.enter();
+
         system
             .run((data,), self)
             .map_err(error::Run::GetStorage)
@@ -669,6 +674,11 @@ let i = world.run(sys1);
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
     pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(&'s self, system: S) -> R {
+        #[cfg(feature = "tracing")]
+        let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
+        #[cfg(feature = "tracing")]
+        let _system_span = system_span.enter();
+
         system
             .run((), self)
             .map_err(error::Run::GetStorage)
@@ -911,7 +921,7 @@ let i = world.run(sys1);
                                 #[cfg(feature = "tracing")]
                                 let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
                                 #[cfg(feature = "tracing")]
-                                    let _system_span = system_span.enter();
+                                let _system_span = system_span.enter();
 
                                 (systems[index])(self).map_err(|err| {
                                     error::RunWorkload::Run((system_name, err))

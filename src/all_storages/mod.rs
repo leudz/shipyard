@@ -695,6 +695,11 @@ You can use:
         system: S,
         data: Data,
     ) -> R {
+        #[cfg(feature = "tracing")]
+        let system_span = tracing::info_span!("system", name = ?type_name::<S>());
+        #[cfg(feature = "tracing")]
+        let _system_span = system_span.enter();
+
         system
             .run((data,), self)
             .map_err(error::Run::GetStorage)
@@ -811,6 +816,11 @@ let i = all_storages.run(sys1);
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, system: S) -> R {
+        #[cfg(feature = "tracing")]
+        let system_span = tracing::info_span!("system", name = ?type_name::<S>());
+        #[cfg(feature = "tracing")]
+        let _system_span = system_span.enter();
+
         system
             .run((), self)
             .map_err(error::Run::GetStorage)
