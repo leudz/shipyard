@@ -17,7 +17,7 @@ eframe = "0.18.0"
 egui = "0.18.1"
 enum-map = "2.1.0"
 serde_json = "1.0.81"
-shipyard = { path = "..", features = ["serde1"] }
+shipyard = { version = "0.6.0-alpha.5", features = ["serde1"] }
 syntect = { version = "4.2.0", default-features = false, features = [
     "default-fancy",
 ] }
