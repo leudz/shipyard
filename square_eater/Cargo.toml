@@ -2,7 +2,7 @@
 name = "square_eater"
 version = "0.1.0"
 authors = ["leudz <dylan.ancel@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 macroquad = "0.3.8"
