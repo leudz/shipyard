@@ -106,13 +106,11 @@ jobs:
 
       - run: wasm-pack build bunny_demo --target web --release --out-dir public/wasm
 
-      - run: mv ./bunny_demo/public ./bunny_demo/bunny_demo
-
       - name: save bunny_demo
         uses: actions/upload-artifact@v2
         with:
           name: bunny_demo
-          path: bunny_demo/bunny_demo
+          path: bunny_demo/public/*
   square_eater:
     runs-on: ubuntu-latest
     needs: [fmt, miri, clippy, all-features]
