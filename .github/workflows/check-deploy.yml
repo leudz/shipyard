@@ -9,8 +9,29 @@ on:
       - master
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      deploy: ${{ steps.filter.outputs.deploy }}
+    steps:
+    - uses: dorny/paths-filter@v2
+      id: filter
+      with:
+        filters: |
+          code:
+            - 'src/**'
+            - 'tests/**'
+            - 'Cargo.toml'
+          deploy:
+            - 'bunny_demo/**'
+            - 'guide/**'
+            - 'square_eater/**'
+            - 'visualizer/**'
   fmt:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -20,6 +41,8 @@ jobs:
       - run: cargo fmt -- --check
   miri:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
@@ -29,6 +52,8 @@ jobs:
       - run: cargo miri test --tests --lib --no-default-features
   clippy:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -40,6 +65,8 @@ jobs:
           RUSTFLAGS: -D warnings
   all-features:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -47,8 +74,8 @@ jobs:
       - run: cargo test --all-features
   guide_master:
     runs-on: ubuntu-latest
-    needs: [fmt, miri, clippy, all-features]
-    if: github.event_name == 'push'
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -70,8 +97,8 @@ jobs:
           path: guide/master/guide_master/html
   guide_0_5_0:
     runs-on: ubuntu-latest
-    needs: [fmt, miri, clippy, all-features]
-    if: github.event_name == 'push'
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -93,8 +120,8 @@ jobs:
           path: guide/0.5.0/guide_0_5_0/html
   bunny_demo:
     runs-on: ubuntu-latest
-    needs: [fmt, miri, clippy, all-features]
-    if: github.event_name == 'push'
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -115,8 +142,8 @@ jobs:
           path: bunny_demo/public
   square_eater:
     runs-on: ubuntu-latest
-    needs: [fmt, miri, clippy, all-features]
-    if: github.event_name == 'push'
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -131,8 +158,8 @@ jobs:
           path: square_eater/public
   visualizer:
     runs-on: ubuntu-latest
-    needs: [fmt, miri, clippy, all-features]
-    if: github.event_name == 'push'
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@stable
@@ -150,8 +177,8 @@ jobs:
           path: visualizer/out
   deploy:
     runs-on: ubuntu-latest
-    needs: [guide_master, guide_0_5_0, bunny_demo, square_eater, visualizer]
-    if: github.event_name == 'push'
+    needs: [changes, guide_master, guide_0_5_0, bunny_demo, square_eater, visualizer]
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - name: load guide master
         uses: actions/download-artifact@v2
