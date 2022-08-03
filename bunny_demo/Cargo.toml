@@ -1,59 +1,47 @@
 [package]
-name = "shipyard_bunny_demo"
+name = "bunny_demo"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "bunny_demo"
+path = "src/main.rs"
 
 [lib]
-crate-type = ["cdylib"]
+name = "bunny_demo_lib"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-rand = "0.8.5"
-nalgebra = "0.28.0"
-wasm-bindgen = "0.2.74"
-js-sys = "0.3.51"
-wasm-bindgen-futures = "0.4.24"
-gloo-events = "0.1.1"
-awsm_web = { version = "0.1.9", features = [
-    "tick",
-    "webgl",
-    "loaders",
-    "audio",
-], default-features = false }
-wee_alloc = { version = "0.4.5", optional = true }
-wasm-logger = { version = "0.2.0", optional = true }
-shipyard = { path = "../", features = [
-    "proc",
-    "thread_local",
-], default-features = false }
-cfg-if = "1.0.0"
-log = "0.4.14"
-lazy_static = "1.4.0"
-getrandom = { version = "0.2.3", features = ["js"] }
+bytemuck = "1.10.0"
+egui = { git = "https://github.com/emilk/egui" }
+egui-wgpu = { git = "https://github.com/emilk/egui" }
+egui-winit = { git = "https://github.com/emilk/egui", default-features = false }
+env_logger = "0.9.0"
+glam = "0.21.2"
+image = { version = "0.24.2", default-features = false, features = [
+    "png",
+    "jpeg",
+] }
+log = "0.4.17"
+nanorand = { version = "0.7.0", default-features = false, features = [
+    "getrandom",
+    "tls",
+] }
+pollster = "0.2.5"
+shipyard = "0.6.0-alpha.5"
+wgpu = "0.13.1"
+winit = "0.26.1"
 
-# The `console_error_panic_hook` crate provides better debugging of panics by
-# logging them with `console.error`. This is great for development, but requires
-# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
-# code size when deploying.
-console_error_panic_hook = { version = "0.1.6", optional = true }
-
-[dependencies.web-sys]
-version = "0.3.46"
-features = [
-    "console",
-    "MouseEvent",
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.7"
+console_log = "0.2.0"
+wgpu = { version = "0.13.1", features = ["webgl"] }
+wasm-bindgen = "0.2.81"
+wasm-bindgen-futures = "0.4.31"
+web-sys = { version = "0.3.58", features = [
     "Document",
-    "Element",
-    "HtmlAnchorElement",
-    "HtmlElement",
-    "HtmlButtonElement",
-    "HtmlCanvasElement",
-    "CssStyleDeclaration",
-    "Node",
     "Window",
+    "Element",
     "Performance",
-
-]
-
-[features]
-default = ["wee_alloc"]
-dev = ["wee_alloc", "wasm-logger", "console_error_panic_hook"]
+] }
