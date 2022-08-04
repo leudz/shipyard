@@ -28,33 +28,34 @@ pub async fn run() {
 
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let mut state = egui_winit::State::new(&event_loop);
+    let context = egui::Context::default();
 
     #[cfg(target_arch = "wasm32")]
     {
         // Winit prevents sizing with CSS, so we have to set
         // the size manually when on web.
         use winit::dpi::PhysicalSize;
-
         use winit::platform::web::WindowExtWebSys;
+
         web_sys::window()
             .and_then(|win| {
-                let width = win.inner_width().unwrap().as_f64().unwrap();
-                let height = win.inner_height().unwrap().as_f64().unwrap();
+                let dpr = win.device_pixel_ratio();
+                let width = win.inner_width().unwrap().as_f64().unwrap() * dpr;
+                let height = win.inner_height().unwrap().as_f64().unwrap() * dpr;
                 window.set_inner_size(PhysicalSize::new(width, height));
+                state.set_pixels_per_point(dpr as f32);
 
                 win.document()
             })
             .and_then(|doc| {
-                let dst = doc.get_element_by_id("wasm-example")?;
-                let canvas = web_sys::Element::from(window.canvas());
-                dst.append_child(&canvas).ok()?;
+                let dst = doc.get_element_by_id("bunny_demo")?;
+                let canvas_element = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas_element).ok()?;
                 Some(())
             })
             .expect("Couldn't append canvas to document body.");
     }
-
-    let mut state = egui_winit::State::new(&event_loop);
-    let context = egui::Context::default();
 
     let world = World::new();
 
