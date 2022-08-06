@@ -10,11 +10,6 @@ struct Position;
 struct Health;
 
 #[derive(Component)]
-enum Season {
-    Spring,
-}
-
-#[derive(Component)]
 struct Precipitation(f32);
 
 #[allow(unused)]
@@ -37,41 +32,6 @@ world.run(create_ints);
 #[test]
 #[allow(unused)]
 #[rustfmt::skip]
-fn single_run_with_data() {
-// ANCHOR: in_acid
-fn in_acid(season: Season, positions: View<Position>, mut healths: ViewMut<Health>) {
-    // -- snip --
-}
-
-let world = World::new();
-
-world.run_with_data(in_acid, Season::Spring);
-// ANCHOR_END: in_acid
-}
-
-#[test]
-#[allow(unused)]
-#[rustfmt::skip]
-fn multiple_run_with_data() {
-// ANCHOR: in_acid_multiple
-fn in_acid(
-    (season, precipitation): (Season, Precipitation),
-    positions: View<Position>,
-    mut healths: ViewMut<Health>,
-) {
-    // -- snip --
-}
-
-let world = World::new();
-
-world
-    .run_with_data(in_acid, (Season::Spring, Precipitation(0.1)));
-// ANCHOR_END: in_acid_multiple
-}
-
-#[test]
-#[allow(unused)]
-#[rustfmt::skip]
 fn workload() {
 // ANCHOR: workload
 fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>) {
@@ -82,15 +42,15 @@ fn delete_ints(mut u32s: ViewMut<U32>) {
     // -- snip --
 }
 
+fn int_cycle() -> Workload {
+    (create_ints, delete_ints).into_workload()
+}
+
 let world = World::new();
 
-Workload::new("Int cycle")
-    .with_system(create_ints)
-    .with_system(delete_ints)
-    .add_to_world(&world)
-    .unwrap();
+world.add_workload(int_cycle);
 
-world.run_workload("Int cycle").unwrap();
+world.run_workload(int_cycle).unwrap();
 // ANCHOR_END: workload
 }
 
