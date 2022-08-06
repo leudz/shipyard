@@ -9,7 +9,7 @@ let mut world = World::new();
 
 let id = world.add_entity(());
 
-world.add_component(id, (U32(0),));
+world.add_component(id, U32(0));
 world.add_component(id, (U32(0), USIZE(1)));
 // ANCHOR_END: world
 }

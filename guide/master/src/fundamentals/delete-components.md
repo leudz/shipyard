@@ -8,8 +8,6 @@ Deleting a component will erase it from the storage but will not return it.
 {{#include ../../../../tests/book/delete_components.rs:world}}
 ```
 
-⚠️ We have to use a single element tuple `(T,)` to delete a single component entity.
-
 #### All Components
 
 ```rust, noplaypen

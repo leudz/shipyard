@@ -12,7 +12,7 @@ pub trait TupleDelete {
     fn delete(all_storages: &mut AllStorages, entity: EntityId) -> bool;
 }
 
-impl<T: Send + Sync + Component> TupleDelete for (T,)
+impl<T: Send + Sync + Component> TupleDelete for T
 where
     T::Tracking: Send + Sync,
 {
@@ -58,4 +58,4 @@ macro_rules! delete_component {
     }
 }
 
-delete_component![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+delete_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

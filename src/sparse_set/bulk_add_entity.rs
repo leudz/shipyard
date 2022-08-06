@@ -58,7 +58,7 @@ impl BulkInsert for () {
     }
 }
 
-impl<T: Send + Sync + Component> BulkInsert for (T,)
+impl<T: Send + Sync + Component> BulkInsert for T
 where
     T::Tracking: Send + Sync,
 {
@@ -74,7 +74,7 @@ where
             .unwrap();
 
         // add components to the storage
-        sparse_set.data.extend(iter.map(|(component,)| component));
+        sparse_set.data.extend(iter);
 
         // generate new EntityId for the entities created
         let entities_len = entities.data.len();
@@ -117,6 +117,18 @@ where
             iter: entities.data[entities_len..].iter().copied(),
             slice: &entities.data[entities_len..],
         }
+    }
+}
+
+impl<T: Send + Sync + Component> BulkInsert for (T,)
+where
+    T::Tracking: Send + Sync,
+{
+    fn bulk_insert<I: IntoIterator<Item = Self>>(
+        all_storages: &mut AllStorages,
+        iter: I,
+    ) -> BulkEntityIter<'_> {
+        T::bulk_insert(all_storages, iter.into_iter().map(|(t,)| t))
     }
 }
 

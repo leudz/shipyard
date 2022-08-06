@@ -17,7 +17,7 @@ impl TupleAddComponent for () {
     fn add_component(self, _: &mut AllStorages, _: EntityId) {}
 }
 
-impl<T: Send + Sync + Component> TupleAddComponent for (T,)
+impl<T: Send + Sync + Component> TupleAddComponent for T
 where
     T::Tracking: Send + Sync,
 {
@@ -29,7 +29,7 @@ where
                 StorageId::of::<SparseSet<T, T::Tracking>>(),
                 SparseSet::new,
             )
-            .insert(entity, self.0, current);
+            .insert(entity, self, current);
     }
 }
 
@@ -61,4 +61,4 @@ macro_rules! add_component {
     }
 }
 
-add_component![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+add_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

@@ -9,8 +9,6 @@ Adding another component of the same type will replace the existing one.
 {{#include ../../../../tests/book/add_components.rs:world}}
 ```
 
-⚠️ We have to use a single element tuple `(T,)` to add a single component.
-
 ## View
 
 When adding components, the entities storage is only used to check if the [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) is alive.  

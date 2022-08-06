@@ -14,7 +14,7 @@ pub trait TupleRemove {
     fn remove(all_storages: &mut AllStorages, entity: EntityId) -> Self::Out;
 }
 
-impl<T: Send + Sync + Component> TupleRemove for (T,)
+impl<T: Send + Sync + Component> TupleRemove for T
 where
     T::Tracking: Send + Sync,
 {
@@ -64,4 +64,4 @@ macro_rules! remove_component {
     }
 }
 
-remove_component![(A, 0) (B, 1); (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+remove_component![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

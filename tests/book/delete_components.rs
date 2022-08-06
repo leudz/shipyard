@@ -9,7 +9,7 @@ let mut world = World::new();
 
 let id = world.add_entity((U32(0), USIZE(1)));
 
-world.delete_component::<(U32,)>(id);
+world.delete_component::<U32>(id);
 world.delete_component::<(U32, USIZE)>(id);
 // ANCHOR_END: world
 }

@@ -9,7 +9,7 @@ fn world() {
 let mut world = World::new();
 
 let empty_entity = world.add_entity(());
-let single_component = world.add_entity((U32(0),));
+let single_component = world.add_entity(U32(0));
 let multiple_components = world.add_entity((U32(0), USIZE(1)));
 // ANCHOR_END: world
 }
