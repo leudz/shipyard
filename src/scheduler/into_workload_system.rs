@@ -15,7 +15,8 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 /// Trait used to add systems to a workload.
 ///
-/// Usually you don't have to use it directly.
+/// Usually you don't have to use it directly except if you want to handle the error.\
+/// To modify the system execution see [SystemModificator](crate::SystemModificator).
 pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;

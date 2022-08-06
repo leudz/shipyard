@@ -18,6 +18,8 @@ fn unique_id() -> u64 {
 }
 
 /// Converts to a collection of systems.
+///
+/// To modify the workload execution see [WorkloadModificator](crate::WorkloadModificator).
 pub trait IntoWorkload<Views, R> {
     /// Converts to a collection of systems.
     ///
