@@ -91,8 +91,8 @@ impl<'a, T: Component, U: IntoAbstract> BitOr<U> for &'a mut ViewMut<'a, T> {
     }
 }
 
+/// Returned when iterating with [`Or`](crate::Or) filter.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-#[allow(missing_docs)]
 pub enum OneOfTwo<T, U> {
     #[allow(missing_docs)]
     One(T),
