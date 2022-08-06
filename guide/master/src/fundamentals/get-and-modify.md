@@ -7,8 +7,3 @@ To access or update components you can use [`Get::get`](https://docs.rs/shipyard
 ```
 
 When using a single view, if you are certain an entity has the desired component, you can access it via index.
-
-### Fast Get
-
-Using [`get`](https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get) with [`&mut ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will return [`Mut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.Mut.html). This struct helps fine track component modification.  
-[`FastGet::fast_get`](https://docs.rs/shipyard/latest/shipyard/trait.FastGet.html#tymethod.fast_get) can be used to opt out of this fine tracking and get back `&mut T`.
