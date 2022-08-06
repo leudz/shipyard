@@ -1,5 +1,6 @@
-use super::USIZE;
+use super::Pos;
 use shipyard::*;
+use std::cmp::PartialOrd;
 
 #[derive(Component)]
 struct Parent {
@@ -337,10 +338,10 @@ fn test_hierarchy() {
 fn test_sorting() {
     let world = World::new();
 
-    let (mut hierarchy, mut usizes) = world
+    let (mut hierarchy, mut vm_pos) = world
         .borrow::<(
             (EntitiesViewMut, ViewMut<Parent>, ViewMut<Child>),
-            ViewMut<USIZE>,
+            ViewMut<Pos>,
         )>()
         .unwrap();
 
@@ -352,17 +353,19 @@ fn test_sorting() {
     let e3 = hierarchy.attach_new(root);
     let e4 = hierarchy.attach_new(root);
 
-    hierarchy.0.add_component(e0, &mut usizes, USIZE(7));
-    hierarchy.0.add_component(e1, &mut usizes, USIZE(5));
-    hierarchy.0.add_component(e2, &mut usizes, USIZE(6));
-    hierarchy.0.add_component(e3, &mut usizes, USIZE(1));
-    hierarchy.0.add_component(e4, &mut usizes, USIZE(3));
+    hierarchy.0.add_component(e0, &mut vm_pos, Pos(7.0, 0.0));
+    hierarchy.0.add_component(e1, &mut vm_pos, Pos(5.0, 0.0));
+    hierarchy.0.add_component(e2, &mut vm_pos, Pos(6.0, 0.0));
+    hierarchy.0.add_component(e3, &mut vm_pos, Pos(1.0, 0.0));
+    hierarchy.0.add_component(e4, &mut vm_pos, Pos(3.0, 0.0));
 
     assert!((&hierarchy.1, &hierarchy.2)
         .children(root)
         .eq([e0, e1, e2, e3, e4].iter().cloned()));
 
-    hierarchy.sort_children_by(root, |a, b| usizes[*a].0.cmp(&usizes[*b].0));
+    hierarchy.sort_children_by(root, |a, b| {
+        vm_pos[*a].0.partial_cmp(&vm_pos[*b].0).unwrap()
+    });
 
     assert!((&hierarchy.1, &hierarchy.2)
         .children(root)

@@ -18,22 +18,42 @@ mod syntactic_peculiarities;
 mod systems;
 mod uniques;
 mod world;
-mod world_insides;
 
+// ANCHOR: component_manual
 #[derive(Debug)]
-struct USIZE(usize);
-impl Component for USIZE {
+struct Pos(f32, f32);
+impl Component for Pos {
+    // We'll come back to this in a later chapter
     type Tracking = track::Untracked;
 }
 
 #[derive(Debug)]
-struct U32(u32);
-impl Component for U32 {
+struct Vel(f32, f32);
+impl Component for Vel {
     type Tracking = track::Untracked;
 }
+// ANCHOR_END: component_manual
 
-#[derive(Debug)]
-struct F32(f32);
-impl Component for F32 {
-    type Tracking = track::Untracked;
+impl Pos {
+    fn new() -> Pos {
+        Pos(0.0, 0.0)
+    }
+}
+
+impl Vel {
+    fn new() -> Vel {
+        Vel(0.0, 0.0)
+    }
+}
+
+#[rustfmt::skip]
+#[allow(unused)]
+fn component_derive() {
+// ANCHOR: component_derive
+#[derive(Component, Debug)]
+struct Pos(f32, f32);
+
+#[derive(Component, Debug)]
+struct Vel(f32, f32);
+// ANCHOR_END: component_derive
 }

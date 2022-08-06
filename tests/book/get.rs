@@ -1,4 +1,4 @@
-use super::{U32, USIZE};
+use super::{Pos, Vel};
 use shipyard::{Get, ViewMut, World};
 
 #[test]
@@ -7,15 +7,15 @@ fn get() {
 // ANCHOR: get
 let mut world = World::new();
 
-let id = world.add_entity((U32(0), USIZE(1)));
+let id = world.add_entity((Pos::new(), Vel::new()));
 
-world.run(|mut u32s: ViewMut<U32>, mut usizes: ViewMut<USIZE>| {
-    (&mut usizes).get(id).unwrap().0 += 1;
+world.run(|mut vm_pos: ViewMut<Pos>, mut vm_vel: ViewMut<Vel>| {
+    (&mut vm_vel).get(id).unwrap().0 += 1.0;
 
-    let (mut i, j) = (&mut u32s, &usizes).get(id).unwrap();
-    i.0 += j.0 as u32;
+    let (mut i, j) = (&mut vm_pos, &vm_vel).get(id).unwrap();
+    i.0 += j.0;
 
-    u32s[id].0 += 1;
+    vm_pos[id].0 += 1.0;
 });
 // ANCHOR_END: get
 }

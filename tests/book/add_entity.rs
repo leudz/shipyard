@@ -1,4 +1,4 @@
-use super::{U32, USIZE};
+use super::{Pos, Vel};
 use shipyard::{EntitiesViewMut, ViewMut, World};
 
 #[test]
@@ -9,8 +9,8 @@ fn world() {
 let mut world = World::new();
 
 let empty_entity = world.add_entity(());
-let single_component = world.add_entity(U32(0));
-let multiple_components = world.add_entity((U32(0), USIZE(1)));
+let single_component = world.add_entity(Pos::new());
+let multiple_components = world.add_entity((Pos::new(), Vel::new()));
 // ANCHOR_END: world
 }
 
@@ -22,11 +22,11 @@ fn view() {
 let world = World::new();
 
 world.run(
-    |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut usizes: ViewMut<USIZE>| {
+    |mut entities: EntitiesViewMut, mut vm_pos: ViewMut<Pos>, mut vm_vel: ViewMut<Vel>| {
         let empty_entity = entities.add_entity((), ());
-        let single_component = entities.add_entity(&mut u32s, U32(0));
+        let single_component = entities.add_entity(&mut vm_pos, Pos::new());
         let multiple_components =
-            entities.add_entity((&mut u32s, &mut usizes), (U32(0), USIZE(1)));
+            entities.add_entity((&mut vm_pos, &mut vm_vel), (Pos::new(), Vel::new()));
     },
 );
 // ANCHOR_END: view

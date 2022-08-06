@@ -1,4 +1,4 @@
-use super::U32;
+use super::Pos;
 use shipyard::{AllStoragesViewMut, World};
 
 #[test]
@@ -7,7 +7,7 @@ fn world() {
 // ANCHOR: world
 let mut world = World::new();
 
-let id = world.add_entity(U32(0));
+let id = world.add_entity(Pos::new());
 
 world.delete_entity(id);
 // ANCHOR_END: world
@@ -20,7 +20,7 @@ fn view() {
 let world = World::new();
 
 world.run(|mut all_storages: AllStoragesViewMut| {
-    let id = all_storages.add_entity(U32(0));
+    let id = all_storages.add_entity(Pos::new());
 
     all_storages.delete_entity(id);
 });

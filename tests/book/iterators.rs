@@ -1,4 +1,4 @@
-use super::{U32, USIZE};
+use super::{Pos, Vel};
 use shipyard::{IntoIter, IntoWithId, View, ViewMut, World};
 
 #[test]
@@ -7,13 +7,13 @@ fn iter() {
 // ANCHOR: iter
 let world = World::new();
 
-world.run(|mut u32s: ViewMut<U32>, usizes: View<USIZE>| {
-    for i in u32s.iter() {
+world.run(|mut vm_pos: ViewMut<Pos>, v_vel: View<Vel>| {
+    for i in vm_pos.iter() {
         dbg!(i);
     }
     
-    for (mut i, j) in (&mut u32s, &usizes).iter() {
-        i.0 += j.0 as u32;
+    for (mut i, j) in (&mut vm_pos, &v_vel).iter() {
+        i.0 += j.0;
     }
 });
 // ANCHOR_END: iter
@@ -25,8 +25,8 @@ fn with_id() {
 // ANCHOR: with_id
 let world = World::new();
 
-world.run(|u32s: View<U32>| {
-    for (id, i) in u32s.iter().with_id() {
+world.run(|v_pos: View<Pos>| {
+    for (id, i) in v_pos.iter().with_id() {
         println!("{:?} belongs to entity {:?}", i, id);
     }
 });
@@ -39,8 +39,8 @@ fn not() {
 // ANCHOR: not
 let world = World::new();
 
-world.run(|u32s: View<U32>, usizes: View<USIZE>| {
-    for (i, _) in (&u32s, !&usizes).iter() {
+world.run(|v_pos: View<Pos>, v_vel: View<Vel>| {
+    for (i, _) in (&v_pos, !&v_vel).iter() {
         dbg!(i);
     }
 });

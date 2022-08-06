@@ -1,4 +1,4 @@
-use super::USIZE;
+use super::Pos;
 use shipyard::*;
 
 #[test]
@@ -17,7 +17,7 @@ fn multiple() {
     world.run(|all_storages: AllStoragesViewMut| {
         // do something with all_storages
 
-        all_storages.run(|_usizes: View<USIZE>| {
+        all_storages.run(|_v_pos: View<Pos>| {
             // -- snip --
         });
     });

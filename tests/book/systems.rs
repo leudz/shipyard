@@ -1,4 +1,4 @@
-use super::U32;
+use super::Vel;
 use shipyard::{
     AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
     IntoWorkload, SparseSet, View, ViewMut, Workload, World,
@@ -14,7 +14,7 @@ struct Precipitation(f32);
 
 #[allow(unused)]
 // ANCHOR: create_ints
-fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>) {
+fn create_ints(mut entities: EntitiesViewMut, mut vm_vel: ViewMut<Vel>) {
     // -- snip --
 }
 // ANCHOR_END: create_ints
@@ -34,11 +34,11 @@ world.run(create_ints);
 #[rustfmt::skip]
 fn workload() {
 // ANCHOR: workload
-fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>) {
+fn create_ints(mut entities: EntitiesViewMut, mut vm_vel: ViewMut<Vel>) {
     // -- snip --
 }
 
-fn delete_ints(mut u32s: ViewMut<U32>) {
+fn delete_ints(mut vm_vel: ViewMut<Vel>) {
     // -- snip --
 }
 
@@ -61,30 +61,30 @@ fn workload_nesting() {
 #[derive(Component)]
 struct Dead<T: 'static>(core::marker::PhantomData<T>);
 
-fn increment(mut u32s: ViewMut<U32>) {
-    for mut i in (&mut u32s).iter() {
-        i.0 += 1;
+fn increment(mut vm_vel: ViewMut<Vel>) {
+    for mut i in (&mut vm_vel).iter() {
+        i.0 += 1.0;
     }
 }
 
-fn flag_deleted_u32s(u32s: View<U32>, mut deads: ViewMut<Dead<u32>>) {
-    for (id, i) in u32s.iter().with_id() {
-        if i.0 > 100 {
+fn flag_deleted_vel(v_vel: View<Vel>, mut deads: ViewMut<Dead<Vel>>) {
+    for (id, i) in v_vel.iter().with_id() {
+        if i.0 > 100.0 {
             deads.add_component_unchecked(id, Dead(core::marker::PhantomData));
         }
     }
 }
 
-fn clear_deleted_u32s(mut all_storages: AllStoragesViewMut) {
+fn clear_deleted_vel(mut all_storages: AllStoragesViewMut) {
     all_storages.delete_any::<SparseSet<Dead<u32>>>();
 }
 
-fn filter_u32() -> Workload {
-    (flag_deleted_u32s, clear_deleted_u32s).into_workload()
+fn filter_vel() -> Workload {
+    (flag_deleted_vel, clear_deleted_vel).into_workload()
 }
 
 fn main_loop() -> Workload {
-    (increment, filter_u32).into_workload()
+    (increment, filter_vel).into_workload()
 }
 
 let world = World::new();

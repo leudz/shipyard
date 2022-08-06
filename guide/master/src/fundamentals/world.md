@@ -10,8 +10,6 @@ You can use [`new`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#m
 {{#include ../../../../tests/book/world.rs:world_new}}
 ```
 
-There is no need to register components, storages are created on first access.
-
 ## Views
 
 While some actions are available directly on [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), you'll often interact with it through views. They allow access to one or multiple storage.  
@@ -26,4 +24,21 @@ For example if you want a shared access to the entities storage:
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/world.rs:view}}
+```
+
+## Components
+
+Components are identified with the [`Component`](https://docs.rs/shipyard/latest/shipyard/trait.Component.html) trait.\
+While it can be cumbersome for small projects, this trait becomes self-documenting and helps identify what is present in the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html).
+
+Throughout this guide we'll use a couple of components, the following snippet is assumed to be present in all other snippets:
+
+```rust, noplaypen
+{{#include ../../../../tests/book/mod.rs:component_derive}}
+```
+
+[`Component`](https://docs.rs/shipyard/latest/shipyard/trait.Component.html) can also be implemented manually.
+
+```rust, noplaypen
+{{#include ../../../../tests/book/mod.rs:component_manual}}
 ```

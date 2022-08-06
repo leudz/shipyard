@@ -1,4 +1,4 @@
-use super::U32;
+use super::Pos;
 use shipyard::*;
 
 // ANCHOR: import
@@ -7,8 +7,8 @@ use rayon::prelude::*;
 
 #[allow(unused)]
 // ANCHOR: parallelism
-fn many_u32s(mut u32s: ViewMut<U32>) {
-    u32s.par_iter().for_each(|i| {
+fn many_vm_pos(mut vm_pos: ViewMut<Pos>) {
+    vm_pos.par_iter().for_each(|i| {
         // -- snip --
     });
 }
