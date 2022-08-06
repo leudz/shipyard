@@ -226,7 +226,7 @@ impl<'a> IntoIterator for &'a DedupedLabels {
     }
 }
 
-/// Iterator for [`Requirements`]
+/// Iterator for requirements
 pub struct RequirementsIter<'a>(core::slice::Iter<'a, Box<dyn Label>>);
 
 impl<'a> Iterator for RequirementsIter<'a> {

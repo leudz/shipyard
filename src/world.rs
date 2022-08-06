@@ -1328,11 +1328,11 @@ impl World {
     ///
     /// ### Borrows
     ///
-    /// - [`Scheduler`] (shared)
+    /// - Scheduler (shared)
     ///
     /// ### Panics
     ///
-    /// - [`Scheduler`] borrow failed.
+    /// - Scheduler borrow failed.
     #[track_caller]
     pub fn workloads_type_usage(&self) -> WorkloadsTypeUsage {
         let mut workload_type_info = hashbrown::HashMap::new();
