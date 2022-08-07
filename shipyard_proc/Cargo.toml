@@ -1,6 +1,6 @@
 [package]
 name = "shipyard_proc"
-version = "0.3.0-alpha.2"
+version = "0.3.0"
 authors = ["leudz <dylan.ancel@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
