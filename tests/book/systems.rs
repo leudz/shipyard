@@ -76,7 +76,7 @@ fn flag_deleted_vel(v_vel: View<Vel>, mut deads: ViewMut<Dead<Vel>>) {
 }
 
 fn clear_deleted_vel(mut all_storages: AllStoragesViewMut) {
-    all_storages.delete_any::<SparseSet<Dead<u32>>>();
+    all_storages.delete_any::<SparseSet<Dead<Vel>>>();
 }
 
 fn filter_vel() -> Workload {
