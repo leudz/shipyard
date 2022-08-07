@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 macroquad = "0.3.8"
 sapp-wasm = "=0.1.26"
-shipyard = { version = "0.6.0-alpha.5", features = [
+shipyard = { version = "0.6.1", features = [
     "proc",
     "std",
 ], default-features = false }
