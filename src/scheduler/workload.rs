@@ -28,6 +28,7 @@ use std::error::Error;
 ///
 /// [`Workload`]: crate::Workload
 /// [`Workload::new`]: crate::Workload::new()
+#[allow(clippy::type_complexity)]
 pub struct ScheduledWorkload {
     name: Box<dyn Label>,
     #[allow(clippy::type_complexity)]
