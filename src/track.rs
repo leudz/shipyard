@@ -26,7 +26,7 @@ pub struct Removal(());
 pub struct All(());
 
 /// Trait implemented by all trackings.
-pub trait Tracking: 'static + Sized + Sealed {
+pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     #[doc(hidden)]
     #[inline]
     fn track_insertion() -> bool {
