@@ -56,6 +56,7 @@ impl Extend<WorkloadSystem> for Workload {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub struct RunIf {
     pub(crate) system_fn: Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>,
 }
@@ -77,6 +78,7 @@ impl<F: Fn(&World) -> Result<bool, error::Run> + Clone + Send + Sync + 'static> 
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) trait ExtractWorkloadRunIf {
     fn to_non_clone(
         self,
