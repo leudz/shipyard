@@ -152,13 +152,13 @@ fn track_reset_with_timestamp() {
     assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
     drop(usizes);
 
-    world.clear_all_removed_or_deleted_older_than_timestamp(time);
+    world.clear_all_removed_and_deleted_older_than_timestamp(time);
 
     let usizes = world.borrow::<View<USIZE>>().unwrap();
     assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity2]);
     drop(usizes);
 
-    world.clear_all_removed_or_deleted();
+    world.clear_all_removed_and_deleted();
 
     let usizes = world.borrow::<View<USIZE>>().unwrap();
     assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![]);

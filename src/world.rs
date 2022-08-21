@@ -1301,17 +1301,17 @@ impl World {
         self.all_storages.get_mut().clear();
     }
     /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_or_deleted(&mut self) {
-        self.all_storages.get_mut().clear_all_removed_or_deleted()
+    pub fn clear_all_removed_and_deleted(&mut self) {
+        self.all_storages.get_mut().clear_all_removed_and_deleted()
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
-    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+    pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         timestamp: crate::TrackingTimestamp,
     ) {
         self.all_storages
             .get_mut()
-            .clear_all_removed_or_deleted_older_than_timestamp(timestamp)
+            .clear_all_removed_and_deleted_older_than_timestamp(timestamp)
     }
     /// Make the given entity alive.  
     /// Does nothing if an entity with a greater generation is already at this index.  

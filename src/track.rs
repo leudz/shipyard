@@ -129,12 +129,12 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     ) -> SparseSetDrain<'_, T>;
 
     #[doc(hidden)]
-    fn clear_all_removed_or_deleted<T: Component<Tracking = Self>>(
+    fn clear_all_removed_and_deleted<T: Component<Tracking = Self>>(
         _sparse_set: &mut SparseSet<T, Self>,
     ) {
     }
     #[doc(hidden)]
-    fn clear_all_removed_or_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
+    fn clear_all_removed_and_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
         _sparse_set: &mut SparseSet<T, Self>,
         _timestamp: crate::TrackingTimestamp,
     ) {

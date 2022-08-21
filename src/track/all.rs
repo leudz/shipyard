@@ -223,13 +223,13 @@ impl Tracking for All {
         }
     }
 
-    fn clear_all_removed_or_deleted<T: Component<Tracking = Self>>(
+    fn clear_all_removed_and_deleted<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
     ) {
         sparse_set.deletion_data.clear();
         sparse_set.removal_data.clear();
     }
-    fn clear_all_removed_or_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
+    fn clear_all_removed_and_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         timestamp: crate::TrackingTimestamp,
     ) {

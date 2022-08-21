@@ -312,11 +312,11 @@ impl<Track: RemovalTracking, T: Component<Tracking = Track>> SparseSet<T, Track>
 
 impl<Track: RemovalOrDeletionTracking, T: Component<Tracking = Track>> SparseSet<T, Track> {
     /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_or_deleted(&mut self) {
+    pub fn clear_all_removed_and_deleted(&mut self) {
         self.removal_data.clear();
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
-    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+    pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         timestamp: crate::TrackingTimestamp,
     ) {
@@ -446,14 +446,14 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
-    fn clear_all_removed_or_deleted(&mut self) {
-        T::Tracking::clear_all_removed_or_deleted(self)
+    fn clear_all_removed_and_deleted(&mut self) {
+        T::Tracking::clear_all_removed_and_deleted(self)
     }
-    fn clear_all_removed_or_deleted_older_than_timestamp(
+    fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         timestamp: crate::TrackingTimestamp,
     ) {
-        T::Tracking::clear_all_removed_or_deleted_older_than_timestamp(self, timestamp)
+        T::Tracking::clear_all_removed_and_deleted_older_than_timestamp(self, timestamp)
     }
 }
 

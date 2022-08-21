@@ -66,4 +66,4 @@ You can reset out of workload tracking info with:
 You can also reset removed and deleted information older than some timestamp.
 
 Use `World::get_tracking_timestamp` or `AllStorages::get_tracking_timestamp` to get a timestamp.\
-Then call `clear_all_deleted_older_than_timestamp`, `clear_all_removed_older_than_timestamp` or `clear_all_removed_or_deleted_older_than_timestamp`.
+Then call `clear_all_deleted_older_than_timestamp`, `clear_all_removed_older_than_timestamp` or `clear_all_removed_and_deleted_older_than_timestamp`.

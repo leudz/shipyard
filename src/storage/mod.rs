@@ -63,9 +63,9 @@ pub trait Storage: SizedAny {
         false
     }
     /// Clear all deletion and removal tracking data.
-    fn clear_all_removed_or_deleted(&mut self) {}
+    fn clear_all_removed_and_deleted(&mut self) {}
     /// Clear all deletion and removal tracking data older than some timestamp.
-    fn clear_all_removed_or_deleted_older_than_timestamp(
+    fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         _timestamp: crate::TrackingTimestamp,
     ) {

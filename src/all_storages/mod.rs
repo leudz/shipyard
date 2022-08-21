@@ -337,22 +337,22 @@ impl AllStorages {
         }
     }
     /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_or_deleted(&mut self) {
+    pub fn clear_all_removed_and_deleted(&mut self) {
         for storage in self.storages.get_mut().values_mut() {
             unsafe { &mut *storage.0 }
                 .get_mut()
-                .clear_all_removed_or_deleted();
+                .clear_all_removed_and_deleted();
         }
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
-    pub fn clear_all_removed_or_deleted_older_than_timestamp(
+    pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         timestamp: crate::TrackingTimestamp,
     ) {
         for storage in self.storages.get_mut().values_mut() {
             unsafe { &mut *storage.0 }
                 .get_mut()
-                .clear_all_removed_or_deleted_older_than_timestamp(timestamp);
+                .clear_all_removed_and_deleted_older_than_timestamp(timestamp);
         }
     }
     /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
