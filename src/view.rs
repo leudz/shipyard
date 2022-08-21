@@ -7,7 +7,10 @@ use crate::error;
 use crate::get::Get;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::track::{self, Tracking};
+use crate::track::{
+    self, DeletionTracking, InsertionOrModificationTracking, InsertionTracking,
+    ModificationTracking, RemovalOrDeletionTracking, RemovalTracking, Tracking,
+};
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
 use crate::unique::UniqueStorage;
 use core::fmt;
@@ -233,25 +236,23 @@ impl<'a, T: Component<Tracking = track::Untracked>> View<'a, T, track::Untracked
     }
 }
 
-impl<T: Component<Tracking = track::Insertion>> View<'_, T, track::Insertion> {
+impl<Track: InsertionTracking, T: Component<Tracking = Track>> View<'_, T, Track> {
     /// Wraps this view to be able to iterate *inserted* components.
     #[inline]
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
-    #[inline]
-    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
-        InsertedOrModified(self)
-    }
 }
 
-impl<T: Component<Tracking = track::Modification>> View<'_, T, track::Modification> {
+impl<Track: ModificationTracking, T: Component<Tracking = Track>> View<'_, T, Track> {
     /// Wraps this view to be able to iterate *modified* components.
     #[inline]
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
+}
+
+impl<Track: InsertionOrModificationTracking, T: Component<Tracking = Track>> View<'_, T, Track> {
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
     #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
@@ -259,7 +260,7 @@ impl<T: Component<Tracking = track::Modification>> View<'_, T, track::Modificati
     }
 }
 
-impl<T: Component<Tracking = track::Deletion>> View<'_, T, track::Deletion> {
+impl<Track: DeletionTracking, T: Component<Tracking = Track>> View<'_, T, Track> {
     /// Returns the *deleted* components of a storage tracking deletion.
     pub fn deleted(&self) -> impl Iterator<Item = (EntityId, &T)> + '_ {
         self.sparse_set
@@ -277,26 +278,9 @@ impl<T: Component<Tracking = track::Deletion>> View<'_, T, track::Deletion> {
                 }
             })
     }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .deletion_data
-            .iter()
-            .filter_map(move |(entity, timestamp, _)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-    }
 }
 
-impl<T: Component<Tracking = track::Removal>> View<'_, T, track::Removal> {
+impl<Track: RemovalTracking, T: Component<Tracking = Track>> View<'_, T, Track> {
     /// Returns the ids of *removed* components of a storage tracking removal.
     pub fn removed(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.sparse_set
@@ -314,104 +298,19 @@ impl<T: Component<Tracking = track::Removal>> View<'_, T, track::Removal> {
                 }
             })
     }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .removal_data
-            .iter()
-            .filter_map(move |(entity, timestamp)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-    }
 }
 
-impl<T: Component<Tracking = track::All>> View<'_, T, track::All> {
-    /// Wraps this view to be able to iterate *inserted* components.
-    #[inline]
-    pub fn inserted(&self) -> Inserted<&Self> {
-        Inserted(self)
-    }
-    /// Wraps this view to be able to iterate *modified* components.
-    #[inline]
-    pub fn modified(&self) -> Modified<&Self> {
-        Modified(self)
-    }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
-    #[inline]
-    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
-        InsertedOrModified(self)
-    }
-    /// Returns the *deleted* components of a storage tracking deletion.
-    pub fn deleted(&self) -> impl Iterator<Item = (EntityId, &T)> + '_ {
-        self.sparse_set
-            .deletion_data
-            .iter()
-            .filter_map(move |(entity, timestamp, component)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some((*entity, component))
-                } else {
-                    None
-                }
-            })
-    }
-    /// Returns the ids of *removed* components of a storage tracking removal.
-    pub fn removed(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .removal_data
-            .iter()
-            .filter_map(move |(entity, timestamp)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-    }
+impl<Track: RemovalOrDeletionTracking, T: Component<Tracking = Track>> View<'_, T, Track> {
     /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .deletion_data
-            .iter()
-            .filter_map(move |(entity, timestamp, _)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-            .chain(
-                self.sparse_set
-                    .removal_data
-                    .iter()
-                    .filter_map(move |(entity, timestamp)| {
-                        if track::is_track_within_bounds(*timestamp, self.last_insert, self.current)
-                        {
-                            Some(*entity)
-                        } else {
-                            None
-                        }
-                    }),
-            )
+        Track::removed_or_deleted(self.sparse_set).filter_map(move |(entity, timestamp)| {
+            if track::is_track_within_bounds(timestamp, self.last_removal_or_deletion, self.current)
+            {
+                Some(entity)
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -607,26 +506,16 @@ impl<'a, T: Component> ViewMut<'a, T> {
     }
 }
 
-impl<T: Component<Tracking = track::Insertion>> ViewMut<'_, T, track::Insertion> {
+impl<Track: InsertionTracking, T: Component<Tracking = Track>> ViewMut<'_, T, Track> {
     /// Wraps this view to be able to iterate *inserted* components.
     #[inline]
     pub fn inserted(&self) -> Inserted<&Self> {
         Inserted(self)
     }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
-    #[inline]
-    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
-        InsertedOrModified(self)
-    }
     /// Wraps this view to be able to iterate *inserted* components.
     #[inline]
     pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
         Inserted(self)
-    }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
-    #[inline]
-    pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
-        InsertedOrModified(self)
     }
     /// Removes the *inserted* flag on all components of this storage.
     #[inline]
@@ -635,26 +524,16 @@ impl<T: Component<Tracking = track::Insertion>> ViewMut<'_, T, track::Insertion>
     }
 }
 
-impl<T: Component<Tracking = track::Modification>> ViewMut<'_, T, track::Modification> {
+impl<Track: ModificationTracking, T: Component<Tracking = Track>> ViewMut<'_, T, Track> {
     /// Wraps this view to be able to iterate *modified* components.
     #[inline]
     pub fn modified(&self) -> Modified<&Self> {
         Modified(self)
     }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
-    #[inline]
-    pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
-        InsertedOrModified(self)
-    }
     /// Wraps this view to be able to iterate *modified* components.
     #[inline]
     pub fn modified_mut(&mut self) -> Modified<&mut Self> {
         Modified(self)
-    }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
-    #[inline]
-    pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
-        InsertedOrModified(self)
     }
     /// Removes the *modified* flag on all components of this storage.
     #[inline]
@@ -663,127 +542,31 @@ impl<T: Component<Tracking = track::Modification>> ViewMut<'_, T, track::Modific
     }
 }
 
-impl<T: Component<Tracking = track::Deletion>> ViewMut<'_, T, track::Deletion> {
-    /// Returns the *deleted* components of a storage tracking deletion.
-    pub fn deleted(&self) -> impl Iterator<Item = (EntityId, &T)> + '_ {
-        self.sparse_set
-            .deletion_data
-            .iter()
-            .filter_map(move |(entity, timestamp, component)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some((*entity, component))
-                } else {
-                    None
-                }
-            })
-    }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .deletion_data
-            .iter()
-            .filter_map(move |(entity, timestamp, _)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-    }
-}
-
-impl<T: Component<Tracking = track::Removal>> ViewMut<'_, T, track::Removal> {
-    /// Returns the ids of *removed* components of a storage tracking removal.
-    pub fn removed(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .removal_data
-            .iter()
-            .filter_map(move |(entity, timestamp)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-    }
-    /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
-    pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .removal_data
-            .iter()
-            .filter_map(move |(entity, timestamp)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-    }
-}
-
-impl<T: Component<Tracking = track::All>> ViewMut<'_, T, track::All> {
-    /// Wraps this view to be able to iterate *inserted* components.
-    #[inline]
-    pub fn inserted(&self) -> Inserted<&Self> {
-        Inserted(self)
-    }
-    /// Wraps this view to be able to iterate *modified* components.
-    #[inline]
-    pub fn modified(&self) -> Modified<&Self> {
-        Modified(self)
-    }
+impl<Track: InsertionOrModificationTracking, T: Component<Tracking = Track>> ViewMut<'_, T, Track> {
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
     #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
-    }
-    /// Wraps this view to be able to iterate *inserted* components.
-    #[inline]
-    pub fn inserted_mut(&mut self) -> Inserted<&mut Self> {
-        Inserted(self)
-    }
-    /// Wraps this view to be able to iterate *modified* components.
-    #[inline]
-    pub fn modified_mut(&mut self) -> Modified<&mut Self> {
-        Modified(self)
     }
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
     #[inline]
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
     }
-    /// Removes the *inserted* flag on all components of this storage.
-    #[inline]
-    pub fn clear_all_inserted(self) {
-        self.sparse_set.private_clear_all_inserted(self.current);
-    }
-    /// Removes the *modified* flag on all components of this storage.
-    #[inline]
-    pub fn clear_all_modified(self) {
-        self.sparse_set.private_clear_all_modified(self.current);
-    }
+}
+
+impl<Track: InsertionTracking + ModificationTracking, T: Component<Tracking = Track>>
+    ViewMut<'_, T, Track>
+{
     /// Removes the *inserted* and *modified* flags on all components of this storage.
     #[inline]
     pub fn clear_all_inserted_and_modified(self) {
         self.sparse_set
             .private_clear_all_inserted_and_modified(self.current);
     }
+}
+
+impl<Track: DeletionTracking, T: Component<Tracking = Track>> ViewMut<'_, T, Track> {
     /// Returns the *deleted* components of a storage tracking deletion.
     pub fn deleted(&self) -> impl Iterator<Item = (EntityId, &T)> + '_ {
         self.sparse_set
@@ -801,6 +584,9 @@ impl<T: Component<Tracking = track::All>> ViewMut<'_, T, track::All> {
                 }
             })
     }
+}
+
+impl<Track: RemovalTracking, T: Component<Tracking = Track>> ViewMut<'_, T, Track> {
     /// Returns the ids of *removed* components of a storage tracking removal.
     pub fn removed(&self) -> impl Iterator<Item = EntityId> + '_ {
         self.sparse_set
@@ -818,35 +604,19 @@ impl<T: Component<Tracking = track::All>> ViewMut<'_, T, track::All> {
                 }
             })
     }
+}
+
+impl<Track: RemovalOrDeletionTracking, T: Component<Tracking = Track>> ViewMut<'_, T, Track> {
     /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        self.sparse_set
-            .deletion_data
-            .iter()
-            .filter_map(move |(entity, timestamp, _)| {
-                if track::is_track_within_bounds(
-                    *timestamp,
-                    self.last_removal_or_deletion,
-                    self.current,
-                ) {
-                    Some(*entity)
-                } else {
-                    None
-                }
-            })
-            .chain(
-                self.sparse_set
-                    .removal_data
-                    .iter()
-                    .filter_map(move |(entity, timestamp)| {
-                        if track::is_track_within_bounds(*timestamp, self.last_insert, self.current)
-                        {
-                            Some(*entity)
-                        } else {
-                            None
-                        }
-                    }),
-            )
+        Track::removed_or_deleted(self.sparse_set).filter_map(move |(entity, timestamp)| {
+            if track::is_track_within_bounds(timestamp, self.last_removal_or_deletion, self.current)
+            {
+                Some(entity)
+            } else {
+                None
+            }
+        })
     }
 }
 

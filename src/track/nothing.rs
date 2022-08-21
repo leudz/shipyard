@@ -1,4 +1,4 @@
-use super::{Tracking, Untracked};
+use crate::track::{Tracking, Untracked};
 use crate::view::ViewMut;
 use crate::{seal::Sealed, Component, EntityId, SparseSet, SparseSetDrain};
 

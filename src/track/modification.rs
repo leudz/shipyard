@@ -1,4 +1,4 @@
-use super::{Modification, Tracking};
+use crate::track::{InsertionOrModificationTracking, Modification, ModificationTracking, Tracking};
 use crate::view::ViewMut;
 use crate::{seal::Sealed, Component, EntityId, SparseSet, SparseSetDrain};
 
@@ -151,3 +151,6 @@ impl Tracking for Modification {
         }
     }
 }
+
+impl ModificationTracking for Modification {}
+impl InsertionOrModificationTracking for Modification {}

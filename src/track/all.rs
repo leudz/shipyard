@@ -1,6 +1,9 @@
-use super::{All, Tracking};
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
+use crate::track::{
+    map_deletion_data, All, DeletionTracking, InsertionOrModificationTracking, InsertionTracking,
+    ModificationTracking, RemovalOrDeletionTracking, RemovalTracking, Tracking,
+};
 use crate::view::ViewMut;
 use crate::{Component, SparseSet, SparseSetDrain};
 
@@ -236,5 +239,29 @@ impl Tracking for All {
         sparse_set.removal_data.retain(|(_, t)| {
             super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
         });
+    }
+}
+
+impl InsertionTracking for All {}
+impl ModificationTracking for All {}
+impl InsertionOrModificationTracking for All {}
+impl RemovalTracking for All {}
+impl DeletionTracking for All {}
+impl RemovalOrDeletionTracking for All {
+    #[allow(trivial_casts)]
+    fn removed_or_deleted<T: Component<Tracking = Self>>(
+        sparse_set: &SparseSet<T, Self>,
+    ) -> core::iter::Chain<
+        core::iter::Map<
+            core::slice::Iter<'_, (EntityId, u32, T)>,
+            for<'r> fn(&'r (EntityId, u32, T)) -> (EntityId, u32),
+        >,
+        core::iter::Copied<core::slice::Iter<'_, (EntityId, u32)>>,
+    > {
+        sparse_set
+            .deletion_data
+            .iter()
+            .map(map_deletion_data as _)
+            .chain(sparse_set.removal_data.iter().copied())
     }
 }

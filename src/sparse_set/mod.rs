@@ -18,7 +18,10 @@ pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 use crate::component::Component;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::storage::Storage;
-use crate::track;
+use crate::track::{
+    self, DeletionTracking, InsertionTracking, ModificationTracking, RemovalOrDeletionTracking,
+    RemovalTracking,
+};
 use crate::{entity_id::EntityId, track::Tracking};
 use alloc::vec::Vec;
 use core::marker::PhantomData;
@@ -257,86 +260,31 @@ impl<T: Component> SparseSet<T> {
     }
 }
 
-impl<T: Component<Tracking = track::Insertion>> SparseSet<T, track::Insertion> {
+impl<Track: InsertionTracking, T: Component<Tracking = Track>> SparseSet<T, Track> {
     /// Removes the *inserted* flag on all components of this storage.
     pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
         self.last_insert = current;
     }
 }
 
-impl<T: Component<Tracking = track::Modification>> SparseSet<T, track::Modification> {
+impl<Track: ModificationTracking, T: Component<Tracking = Track>> SparseSet<T, Track> {
     /// Removes the *modified* flag on all components of this storage.
     pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
         self.last_modification = current;
     }
 }
 
-impl<T: Component<Tracking = track::Deletion>> SparseSet<T, track::Deletion> {
-    /// Clear all deletion tracking data.
-    pub fn clear_all_deleted(&mut self) {
-        self.deletion_data.clear();
-    }
-    /// Clear all deletion tracking data older than some timestamp.
-    pub fn clear_all_deleted_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
-        self.deletion_data.retain(|(_, t, _)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
-    }
-    /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_or_deleted(&mut self) {
-        self.deletion_data.clear();
-    }
-    /// Clear all deletion and removal tracking data older than some timestamp.
-    pub fn clear_all_removed_or_deleted_older_than_timestamp(
-        &mut self,
-        timestamp: crate::TrackingTimestamp,
-    ) {
-        self.deletion_data.retain(|(_, t, _)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
-    }
-}
-
-impl<T: Component<Tracking = track::Removal>> SparseSet<T, track::Removal> {
-    /// Clear all removal tracking data.
-    pub fn clear_all_removed(&mut self) {
-        self.removal_data.clear();
-    }
-    /// Clear all removal tracking data older than some timestamp.
-    pub fn clear_all_removed_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
-        self.removal_data.retain(|(_, t)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
-    }
-    /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_and_deleted(&mut self) {
-        self.removal_data.clear();
-    }
-    /// Clear all deletion and removal tracking data older than some timestamp.
-    pub fn clear_all_removed_or_deleted_older_than_timestamp(
-        &mut self,
-        timestamp: crate::TrackingTimestamp,
-    ) {
-        self.removal_data.retain(|(_, t)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
-    }
-}
-
-impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
-    /// Removes the *inserted* flag on all components of this storage.
-    pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
-        self.last_insert = current;
-    }
-    /// Removes the *modified* flag on all components of this storage.
-    pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
-        self.last_modification = current;
-    }
+impl<Track: InsertionTracking + ModificationTracking, T: Component<Tracking = Track>>
+    SparseSet<T, Track>
+{
     /// Removes the *inserted* and *modified* flags on all components of this storage.
     pub(crate) fn private_clear_all_inserted_and_modified(&mut self, current: u32) {
         self.last_insert = current;
         self.last_modification = current;
     }
+}
+
+impl<Track: DeletionTracking, T: Component<Tracking = Track>> SparseSet<T, Track> {
     /// Clear all deletion tracking data.
     pub fn clear_all_deleted(&mut self) {
         self.deletion_data.clear();
@@ -347,6 +295,9 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
             track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
         });
     }
+}
+
+impl<Track: RemovalTracking, T: Component<Tracking = Track>> SparseSet<T, Track> {
     /// Clear all removal tracking data.
     pub fn clear_all_removed(&mut self) {
         self.removal_data.clear();
@@ -357,9 +308,11 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
             track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
         });
     }
+}
+
+impl<Track: RemovalOrDeletionTracking, T: Component<Tracking = Track>> SparseSet<T, Track> {
     /// Clear all deletion and removal tracking data.
-    pub fn clear_all_removed_and_deleted(&mut self) {
-        self.deletion_data.clear();
+    pub fn clear_all_removed_or_deleted(&mut self) {
         self.removal_data.clear();
     }
     /// Clear all deletion and removal tracking data older than some timestamp.

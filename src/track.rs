@@ -141,6 +141,31 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     }
 }
 
+/// Bound for tracking insertion.
+pub trait InsertionTracking: Tracking + InsertionOrModificationTracking {}
+/// Bound for tracking modification.
+pub trait ModificationTracking: Tracking + InsertionOrModificationTracking {}
+/// Bound for tracking insertion or modification.
+pub trait InsertionOrModificationTracking: Tracking {}
+/// Bound for tracking removal.
+pub trait RemovalTracking: Tracking + RemovalOrDeletionTracking {}
+/// Bound for tracking deletion.
+pub trait DeletionTracking: Tracking + RemovalOrDeletionTracking {}
+/// Bound for tracking removal or deletion.
+pub trait RemovalOrDeletionTracking: Tracking {
+    #[doc(hidden)]
+    #[allow(clippy::type_complexity)]
+    fn removed_or_deleted<T: Component<Tracking = Self>>(
+        sparse_set: &SparseSet<T, Self>,
+    ) -> core::iter::Chain<
+        core::iter::Map<
+            core::slice::Iter<'_, (EntityId, u32, T)>,
+            fn(&(EntityId, u32, T)) -> (EntityId, u32),
+        >,
+        core::iter::Copied<core::slice::Iter<'_, (EntityId, u32)>>,
+    >;
+}
+
 #[inline]
 pub(crate) fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
     let more_than_last = if timestamp < last {
@@ -155,4 +180,8 @@ pub(crate) fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) ->
     };
 
     more_than_last < u32::MAX / 2 && more_than_last > 0 && less_than_current < u32::MAX / 2
+}
+
+fn map_deletion_data<T>(&(entity_id, timestamp, _): &(EntityId, u32, T)) -> (EntityId, u32) {
+    (entity_id, timestamp)
 }
