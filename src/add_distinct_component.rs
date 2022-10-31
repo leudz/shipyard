@@ -50,6 +50,7 @@ impl<T: Component + PartialEq> AddDistinctComponent for ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
+    #[track_caller]
     fn add_distinct_component_unchecked(
         &mut self,
         entity: EntityId,
@@ -70,6 +71,7 @@ impl<T: Component + PartialEq> AddDistinctComponent for &mut ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
+    #[track_caller]
     fn add_distinct_component_unchecked(
         &mut self,
         entity: EntityId,

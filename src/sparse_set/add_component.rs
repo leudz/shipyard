@@ -22,6 +22,7 @@ where
     T::Tracking: Send + Sync,
 {
     #[inline]
+    #[track_caller]
     fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
         let current = all_storages.get_current();
         all_storages
@@ -39,6 +40,7 @@ macro_rules! impl_add_component {
         where
             $($type::Tracking: Send + Sync),+
         {
+            #[track_caller]
             fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
                 let current = all_storages.get_current();
                 $(

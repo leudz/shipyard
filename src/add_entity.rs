@@ -31,6 +31,7 @@ impl<T: Component> AddEntity for &mut ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
+    #[track_caller]
     fn add_entity(storage: &mut Self, entity: EntityId, component: Self::Component) {
         storage
             .sparse_set

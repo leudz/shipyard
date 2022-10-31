@@ -40,6 +40,7 @@ impl<T: Component> AddComponent for ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
+    #[track_caller]
     fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component) {
         self.sparse_set.insert(entity, component, self.current);
     }
@@ -49,6 +50,7 @@ impl<T: Component> AddComponent for &mut ViewMut<'_, T> {
     type Component = T;
 
     #[inline]
+    #[track_caller]
     fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component) {
         self.sparse_set.insert(entity, component, self.current);
     }
@@ -60,6 +62,7 @@ macro_rules! impl_add_component {
             type Component = ($($storage::Component,)+);
 
             #[inline]
+            #[track_caller]
             fn add_component_unchecked(&mut self, entity: EntityId, component: Self::Component) {
                 $(
                     self.$index.add_component_unchecked(entity, component.$index);

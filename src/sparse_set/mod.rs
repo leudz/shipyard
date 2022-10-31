@@ -153,6 +153,7 @@ impl<T: Component> SparseSet<T> {
     ///
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
+    #[track_caller]
     pub(crate) fn insert(&mut self, entity: EntityId, value: T, current: u32) -> Option<T> {
         self.sparse.allocate_at(entity);
 

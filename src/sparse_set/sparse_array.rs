@@ -51,7 +51,12 @@ impl<T, const N: usize> SparseArray<T, N> {
 
 impl<const N: usize> SparseArray<EntityId, N> {
     #[inline]
+    #[track_caller]
     pub(super) fn allocate_at(&mut self, entity: EntityId) {
+        if entity.is_dead() {
+            panic!("Tried to add a component with a dead entity.");
+        }
+
         if entity.bucket() >= self.0.len() {
             self.0.resize(entity.bucket() + 1, None);
         }
