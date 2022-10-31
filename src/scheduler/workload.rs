@@ -2345,7 +2345,7 @@ mod tests {
 
         // HashMap makes this error random between a and c
         let batches = &workload.workloads[&"".as_label()];
-        assert!(batches.sequential == &[0, 1] || batches.sequential == &[1, 0]);
+        assert!(batches.sequential == [0, 1] || batches.sequential == [1, 0]);
         assert_eq!(batches.parallel, &[(None, vec![0, 1])]);
     }
 

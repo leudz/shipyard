@@ -76,7 +76,7 @@ impl AllStoragesBorrow for EntitiesViewMut<'_> {
     }
 }
 
-impl<'a, T: Send + Sync + Component> AllStoragesBorrow for View<'_, T>
+impl<T: Send + Sync + Component> AllStoragesBorrow for View<'_, T>
 where
     T::Tracking: Send + Sync,
 {
@@ -181,7 +181,7 @@ impl<'a, T: Component> AllStoragesBorrow for NonSendSync<View<'_, T>> {
     }
 }
 
-impl<'a, T: Send + Sync + Component> AllStoragesBorrow for ViewMut<'_, T>
+impl<T: Send + Sync + Component> AllStoragesBorrow for ViewMut<'_, T>
 where
     T::Tracking: Send + Sync,
 {
@@ -286,7 +286,7 @@ impl<'a, T: Component> AllStoragesBorrow for NonSendSync<ViewMut<'_, T>> {
     }
 }
 
-impl<'a, T: Send + Sync + Unique> AllStoragesBorrow for UniqueView<'_, T> {
+impl<T: Send + Sync + Unique> AllStoragesBorrow for UniqueView<'_, T> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -377,7 +377,7 @@ impl<'a, T: Unique> AllStoragesBorrow for NonSendSync<UniqueView<'_, T>> {
     }
 }
 
-impl<'a, T: Send + Sync + Unique> AllStoragesBorrow for UniqueViewMut<'_, T> {
+impl<T: Send + Sync + Unique> AllStoragesBorrow for UniqueViewMut<'_, T> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -468,7 +468,7 @@ impl<'a, T: Unique> AllStoragesBorrow for NonSendSync<UniqueViewMut<'_, T>> {
     }
 }
 
-impl<'a, T: AllStoragesBorrow> AllStoragesBorrow for Option<T> {
+impl<T: AllStoragesBorrow> AllStoragesBorrow for Option<T> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,

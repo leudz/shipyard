@@ -80,16 +80,9 @@ pub(crate) fn expand_borrow(
                 field.attrs.iter().any(|attr| {
                     if attr.path.is_ident("shipyard") {
                         match attr.parse_meta() {
-                            Ok(syn::Meta::List(list)) => {
-                                list.nested.into_iter().any(|meta| match meta {
-                                    syn::NestedMeta::Meta(syn::Meta::Path(path))
-                                        if path.is_ident("default") =>
-                                    {
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                            }
+                            Ok(syn::Meta::List(list)) => list.nested.into_iter().any(|meta| {
+                                matches!(meta, syn::NestedMeta::Meta(syn::Meta::Path(path)) if path.is_ident("default"))
+                            }),
                             _ => false,
                         }
                     } else {

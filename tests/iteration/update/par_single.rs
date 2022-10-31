@@ -22,17 +22,13 @@ fn filter() {
 
     let mut u32s = world.borrow::<ViewMut<U32>>().unwrap();
 
-    let im_vec;
-    let m_vec;
-    let mod_vec;
-
     let iter = u32s.par_iter();
     assert_eq!(iter.opt_len(), Some(6));
-    im_vec = iter.filter(|&&x| x.0 % 2 == 0).collect::<Vec<_>>();
+    let im_vec = iter.filter(|&&x| x.0 % 2 == 0).collect::<Vec<_>>();
     assert_eq!(im_vec, vec![&U32(0), &U32(2), &U32(4)]);
     drop(im_vec);
 
-    m_vec = (&mut u32s)
+    let m_vec = (&mut u32s)
         .par_iter()
         .filter(|x| x.0 % 2 != 0)
         .map(|mut x| {
@@ -42,7 +38,7 @@ fn filter() {
         .map(|x| *x)
         .collect::<Vec<_>>();
     assert_eq!(m_vec, vec![U32(2), U32(4), U32(6)]);
-    mod_vec = u32s.modified().par_iter().collect::<Vec<_>>();
+    let mod_vec = u32s.modified().par_iter().collect::<Vec<_>>();
 
     assert_eq!(mod_vec, vec![&U32(2), &U32(4), &U32(6)]);
 }
