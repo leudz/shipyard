@@ -7,7 +7,7 @@ pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
 pub use retain::TupleRetain;
 
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::{AllStoragesBorrow, Borrow, IntoBorrow};
+use crate::borrow::AllStoragesBorrow;
 use crate::component::Unique;
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
@@ -17,6 +17,7 @@ use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{SBox, Storage, StorageId};
+use crate::system::AllSystem;
 use crate::{error, UniqueStorage};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -599,12 +600,9 @@ let (entities, mut usizes) = all_storages
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
-    pub fn borrow<'s, V: IntoBorrow>(&'s self) -> Result<V, error::GetStorage>
-    where
-        V::Borrow: Borrow<'s, View = V> + AllStoragesBorrow<'s>,
-    {
+    pub fn borrow<V: AllStoragesBorrow>(&self) -> Result<V::View<'_>, error::GetStorage> {
         let current = self.get_current();
-        V::Borrow::all_borrow(self, None, current)
+        V::all_borrow(self, None, current)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -690,8 +688,8 @@ You can use:
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run_with_data<'s, Data, B, R, S: crate::system::AllSystem<'s, (Data,), B, R>>(
-        &'s self,
+    pub fn run_with_data<Data, B, R, S: AllSystem<(Data,), B, R>>(
+        &self,
         system: S,
         data: Data,
     ) -> R {
@@ -815,7 +813,7 @@ let i = all_storages.run(sys1);
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, system: S) -> R {
+    pub fn run<B, R, S: AllSystem<(), B, R>>(&self, system: S) -> R {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?type_name::<S>());
         #[cfg(feature = "tracing")]

@@ -84,7 +84,7 @@ pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRe
 pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
-pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, IntoBorrow, Mutability};
+pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, Mutability};
 pub use component::{Component, Unique};
 pub use contains::Contains;
 pub use delete::Delete;

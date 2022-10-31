@@ -18,7 +18,7 @@ impl Drop for SBox {
     fn drop(&mut self) {
         // SAFE the pointer came from a `Box` of the same type
         unsafe {
-            Box::from_raw(self.0);
+            let _ = Box::from_raw(self.0);
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::borrow::{Borrow, BorrowInfo, IntoBorrow};
+use crate::borrow::{Borrow, BorrowInfo};
 use crate::scheduler::into_workload_run_if::IntoRunIf;
 use crate::scheduler::{IntoWorkloadSystem, WorkloadSystem};
 use crate::storage::StorageId;
@@ -260,7 +260,7 @@ impl SystemModificator<WorkloadSystem, ()> for WorkloadSystem {
 
 macro_rules! impl_into_workload_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: IntoBorrow + BorrowInfo,)+ R, Func> SystemModificator<($($type,)+), R> for Func
+        impl<$($type: Borrow + BorrowInfo,)+ R, Func> SystemModificator<($($type,)+), R> for Func
         where
             R: 'static,
             Func: 'static
@@ -268,7 +268,7 @@ macro_rules! impl_into_workload_system {
                 + Sync,
             for<'a, 'b> &'b Func:
                 Fn($($type),+) -> R
-                + Fn($(<$type::Borrow as Borrow<'a>>::View),+) -> R {
+                + Fn($($type::View<'a>),+) -> R {
 
             #[track_caller]
             fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {

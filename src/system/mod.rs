@@ -2,7 +2,7 @@ mod all_storages;
 
 pub use all_storages::AllSystem;
 
-use crate::borrow::{Borrow, IntoBorrow};
+use crate::borrow::Borrow;
 use crate::error;
 use crate::world::World;
 
@@ -14,52 +14,52 @@ pub struct Nothing;
 /// `Data` is the external data passed to the system through `run_with_data`.
 /// `Borrow` are the storages borrowed.
 /// `Return` is the type returned by the system.
-pub trait System<'s, Data, Borrow, Return> {
+pub trait System<Data, Borrow, Return> {
     #[allow(missing_docs)]
-    fn run(self, data: Data, world: &'s World) -> Result<Return, error::GetStorage>;
+    fn run(self, data: Data, world: &World) -> Result<Return, error::GetStorage>;
 }
 
 // `Nothing` has to be used and not `()` to not conflict where `A = ()`
-impl<'s, Return, F> System<'s, (), Nothing, Return> for F
+impl<Return, F> System<(), Nothing, Return> for F
 where
     F: FnOnce() -> Return,
 {
-    fn run(self, _: (), _: &'s World) -> Result<Return, error::GetStorage> {
+    fn run(self, _: (), _: &World) -> Result<Return, error::GetStorage> {
         Ok((self)())
     }
 }
 
 // `Nothing` has to be used and not `()` to not conflict where `A = ()`
-impl<'s, Data, Return, F> System<'s, (Data,), Nothing, Return> for F
+impl<Data, Return, F> System<(Data,), Nothing, Return> for F
 where
     F: FnOnce(Data) -> Return,
 {
-    fn run(self, (data,): (Data,), _: &'s World) -> Result<Return, error::GetStorage> {
+    fn run(self, (data,): (Data,), _: &World) -> Result<Return, error::GetStorage> {
         Ok((self)(data))
     }
 }
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<'s, $($type: IntoBorrow,)+ Return, Func> System<'s, (), ($($type,)+), Return> for Func
+        impl<$($type: Borrow,)+ Return, Func> System<(), ($($type,)+), Return> for Func
         where
             Func: FnOnce($($type),+) -> Return
-                + FnOnce($(<$type::Borrow as Borrow<'s>>::View),+) -> Return
+                + FnOnce($($type::View<'_>),+) -> Return
         {
-            fn run(self, _: (), world: &'s World) -> Result<Return, error::GetStorage> {
+            fn run(self, _: (), world: &World) -> Result<Return, error::GetStorage> {
                 let current = world.get_current();
-                Ok((self)($($type::Borrow::borrow(world, None, current)?,)+))
+                Ok((self)($($type::borrow(world, None, current)?,)+))
             }
         }
 
-        impl<'s, Data, $($type: IntoBorrow,)+ Return, Func> System<'s, (Data,), ($($type,)+), Return> for Func
+        impl<Data, $($type: Borrow,)+ Return, Func> System<(Data,), ($($type,)+), Return> for Func
         where
             Func: FnOnce(Data, $($type),+) -> Return
-                + FnOnce(Data, $(<$type::Borrow as Borrow<'s>>::View),+) -> Return
+                + FnOnce(Data, $($type::View<'_>),+) -> Return
         {
-            fn run(self, (data,): (Data,), world: &'s World) -> Result<Return, error::GetStorage> {
+            fn run(self, (data,): (Data,), world: &World) -> Result<Return, error::GetStorage> {
                 let current = world.get_current();
-                Ok((self)(data, $($type::Borrow::borrow(world, None, current)?,)+))
+                Ok((self)(data, $($type::borrow(world, None, current)?,)+))
             }
         }
     }

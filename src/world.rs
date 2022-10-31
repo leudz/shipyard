@@ -1,6 +1,6 @@
 use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::{Borrow, IntoBorrow};
+use crate::borrow::Borrow;
 use crate::component::Unique;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -12,6 +12,7 @@ use crate::scheduler::Label;
 use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
+use crate::system::System;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::format;
@@ -429,12 +430,9 @@ let (entities, mut usizes) = world
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
-    pub fn borrow<'s, V: IntoBorrow>(&'s self) -> Result<V, error::GetStorage>
-    where
-        V::Borrow: Borrow<'s, View = V>,
-    {
+    pub fn borrow<V: Borrow>(&self) -> Result<V::View<'_>, error::GetStorage> {
         let current = self.get_current();
-        V::Borrow::borrow(self, None, current)
+        V::borrow(self, None, current)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
@@ -543,11 +541,7 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run_with_data<'s, Data, B, R, S: crate::system::System<'s, (Data,), B, R>>(
-        &'s self,
-        system: S,
-        data: Data,
-    ) -> R {
+    pub fn run_with_data<Data, B, R, S: System<(Data,), B, R>>(&self, system: S, data: Data) -> R {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
         #[cfg(feature = "tracing")]
@@ -673,7 +667,7 @@ let i = world.run(sys1);
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(&'s self, system: S) -> R {
+    pub fn run<B, R, S: System<(), B, R>>(&self, system: S) -> R {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
         #[cfg(feature = "tracing")]
