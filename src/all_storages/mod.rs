@@ -73,7 +73,6 @@ impl AllStorages {
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.
     ///
     /// ### Example
     ///
@@ -94,12 +93,13 @@ impl AllStorages {
     pub fn add_unique<T: Send + Sync + Unique>(&self, component: T) {
         let storage_id = StorageId::of::<UniqueStorage<T>>();
 
-        self.storages.write().entry(storage_id).or_insert_with(|| {
-            SBox::new(UniqueStorage::new(
+        self.storages
+            .write()
+            .entry(storage_id)
+            .insert(SBox::new(UniqueStorage::new(
                 component,
                 self.get_tracking_timestamp().0,
-            ))
-        });
+            )));
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  

@@ -130,7 +130,6 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store a single value.  
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
-    /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
     ///
