@@ -7,13 +7,6 @@ pub(crate) fn expand_all_storages_borrow(
     generics: syn::Generics,
     data: syn::Data,
 ) -> Result<TokenStream> {
-    let view_lifetime = generics.lifetimes().next().ok_or_else(|| {
-        Error::new(
-            name.span(),
-            "views need a lifetime to borrow from the World",
-        )
-    })?;
-
     let fields = match data {
         syn::Data::Struct(data_struct) => data_struct.fields,
         _ => {
@@ -24,38 +17,7 @@ pub(crate) fn expand_all_storages_borrow(
         }
     };
 
-    let borrower = quote::format_ident!("{}Borrower", name);
-
-    let borrower_generics = syn::Generics {
-        lt_token: generics.lt_token,
-        params: std::iter::FromIterator::from_iter(generics.params.clone().into_pairs().filter(
-            |pair| match pair.value() {
-                syn::GenericParam::Type(_) => true,
-                syn::GenericParam::Lifetime(_) => false,
-                syn::GenericParam::Const(_) => true,
-            },
-        )),
-        gt_token: generics.gt_token,
-        where_clause: generics
-            .where_clause
-            .as_ref()
-            .map(|where_clause| syn::WhereClause {
-                where_token: where_clause.where_token,
-                predicates: std::iter::FromIterator::from_iter(
-                    where_clause.predicates.clone().into_pairs().filter(|pair| {
-                        match pair.value() {
-                            syn::WherePredicate::Type(_) => true,
-                            syn::WherePredicate::Lifetime(_) => false,
-                            syn::WherePredicate::Eq(_) => true,
-                        }
-                    }),
-                ),
-            }),
-    };
-
-    let (impl_generics, _ty_generics, where_clause) = generics.split_for_impl();
-    let (_borrower_impl_generics, borrower_ty_generics, _borrower_where_clause) =
-        borrower_generics.split_for_impl();
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     match fields {
         syn::Fields::Named(fields) => {
@@ -88,14 +50,14 @@ pub(crate) fn expand_all_storages_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::IntoBorrow>::Borrow::all_borrow(all_storages, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::AllStoragesBorrow>::all_borrow(all_storages, last_run, current)?
                         )
                     }
                 });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::AllStoragesBorrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                impl #impl_generics ::shipyard::AllStoragesBorrow for #name #ty_generics #where_clause {
+                    fn all_borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -113,8 +75,8 @@ pub(crate) fn expand_all_storages_borrow(
                 });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::AllStoragesBorrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                impl #impl_generics ::shipyard::AllStoragesBorrow for #name #ty_generics #where_clause {
+                    fn all_borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#all_storages_borrow),*))
                     }
                 }

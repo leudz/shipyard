@@ -58,10 +58,9 @@ pub fn borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     let name = input.ident;
     let generics = input.generics;
-    let vis = input.vis;
     let data = input.data;
 
-    expand_borrow(name, generics, vis, data)
+    expand_borrow(name, generics, data)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

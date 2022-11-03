@@ -1,20 +1,12 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Result};
+use syn::{parse_quote, Error, Result};
 
 pub(crate) fn expand_borrow(
     name: syn::Ident,
     generics: syn::Generics,
-    vis: syn::Visibility,
     data: syn::Data,
 ) -> Result<TokenStream> {
-    let view_lifetime = generics.lifetimes().next().ok_or_else(|| {
-        Error::new(
-            name.span(),
-            "views need a lifetime to borrow from the World",
-        )
-    })?;
-
     let fields = match data {
         syn::Data::Struct(data_struct) => data_struct.fields,
         _ => {
@@ -25,51 +17,19 @@ pub(crate) fn expand_borrow(
         }
     };
 
-    let borrower = quote::format_ident!("{}Borrower", name);
-
-    let borrower_generics = syn::Generics {
-        lt_token: generics.lt_token,
-        params: std::iter::FromIterator::from_iter(generics.params.clone().into_pairs().filter(
-            |pair| match pair.value() {
-                syn::GenericParam::Type(_) => true,
-                syn::GenericParam::Lifetime(_) => false,
-                syn::GenericParam::Const(_) => true,
-            },
-        )),
-        gt_token: generics.gt_token,
-        where_clause: generics
-            .where_clause
-            .as_ref()
-            .map(|where_clause| syn::WhereClause {
-                where_token: where_clause.where_token,
-                predicates: std::iter::FromIterator::from_iter(
-                    where_clause.predicates.clone().into_pairs().filter(|pair| {
-                        match pair.value() {
-                            syn::WherePredicate::Type(_) => true,
-                            syn::WherePredicate::Lifetime(_) => false,
-                            syn::WherePredicate::Eq(_) => true,
-                        }
-                    }),
-                ),
-            }),
-    };
+    let mut gat_generics = generics.clone();
+    for generic in gat_generics.params.iter_mut() {
+        match generic {
+            syn::GenericParam::Lifetime(lifetime) => {
+                lifetime.lifetime = parse_quote!('__view);
+                break;
+            }
+            _ => {}
+        }
+    }
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-    let (_borrower_impl_generics, borrower_ty_generics, borrower_where_clause) =
-        borrower_generics.split_for_impl();
-
-    let borrower_field_type = borrower_generics
-        .const_params()
-        .map(|const_param| &const_param.ident)
-        .chain(
-            borrower_generics
-                .type_params()
-                .map(|type_param| &type_param.ident),
-        );
-
-    let borrower_field = quote!(
-        ::core::marker::PhantomData<(#(#borrower_field_type,)*)>
-    );
+    let (_, gat_ty_generics, _) = gat_generics.split_for_impl();
 
     match fields {
         syn::Fields::Named(fields) => {
@@ -102,22 +62,16 @@ pub(crate) fn expand_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::IntoBorrow>::Borrow::borrow(world, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::Borrow>::borrow(world, last_run, current)?
                         )
                     }
                 });
 
             Ok(quote!(
-                #vis struct #borrower #borrower_ty_generics (#borrower_field) #borrower_where_clause;
+                impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
+                    type View<'__view> = #name #gat_ty_generics;
 
-                impl #impl_generics ::shipyard::IntoBorrow for #name #ty_generics #where_clause {
-                    type Borrow = #borrower #borrower_ty_generics;
-                }
-
-                impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
-                    type View = #name #ty_generics;
-
-                    fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                    fn borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -126,25 +80,16 @@ pub(crate) fn expand_borrow(
             ))
         }
         syn::Fields::Unnamed(fields) => {
-            let world_borrow = fields
-                .unnamed
-                .iter()
-                .map(|field| {
-                    let field_type = &field.ty;
-                    quote!(<#field_type as ::shipyard::IntoBorrow>::Borrow::borrow(world, last_run, current)?)
-                });
+            let world_borrow = fields.unnamed.iter().map(|field| {
+                let field_type = &field.ty;
+                quote!(<#field_type as ::shipyard::Borrow>::borrow(world, last_run, current)?)
+            });
 
             Ok(quote!(
-                #vis struct #borrower #borrower_ty_generics (#borrower_field) #borrower_where_clause;
+                impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
+                    type View<'__view> = #name #gat_ty_generics;
 
-                impl #impl_generics ::shipyard::IntoBorrow for #name #ty_generics #where_clause {
-                    type Borrow = #borrower #borrower_ty_generics;
-                }
-
-                impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
-                    type View = #name #ty_generics;
-
-                    fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                    fn borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#world_borrow),*))
                     }
                 }
