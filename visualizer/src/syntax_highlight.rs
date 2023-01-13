@@ -1,5 +1,3 @@
-// Copyright (c) 2018-2021 Emil Ernerfeldt <emil.ernerfeldt@gmail.com>
-
 use egui::text::LayoutJob;
 
 /// View some code with syntax highlighting and selection.
@@ -13,12 +11,12 @@ pub fn code_view_ui(ui: &mut egui::Ui, mut code: &str) {
         ui.fonts().layout_job(layout_job)
     };
 
+    let rows = code.lines().count();
+
     ui.add(
         egui::TextEdit::multiline(&mut code)
-            .font(egui::TextStyle::Monospace) // for cursor height
             .code_editor()
-            .desired_rows(1)
-            .lock_focus(true)
+            .desired_rows(rows)
             .layouter(&mut layouter),
     );
 }
@@ -31,12 +29,14 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
         }
     }
 
-    type HighlightCache<'a> = egui::util::cache::FrameCache<LayoutJob, Highlighter>;
+    type HighlightCache = egui::util::cache::FrameCache<LayoutJob, Highlighter>;
 
     let mut memory = ctx.memory();
-    let highlight_cache = memory.caches.cache::<HighlightCache<'_>>();
+    let highlight_cache = memory.caches.cache::<HighlightCache>();
     highlight_cache.get((theme, code, language))
 }
+
+// ----------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Hash, PartialEq)]
 #[allow(unused)]
@@ -107,6 +107,8 @@ impl CodeTheme {
     }
 }
 
+// ----------------------------------------------------------------------------
+
 struct Highlighter {
     ps: syntect::parsing::SyntaxSet,
     ts: syntect::highlighting::ThemeSet,
@@ -128,7 +130,7 @@ impl Highlighter {
             // Fallback:
             LayoutJob::simple(
                 code.into(),
-                egui::FontId::monospace(14.0),
+                egui::FontId::monospace(12.0),
                 if theme.dark_mode {
                     egui::Color32::LIGHT_GRAY
                 } else {
@@ -160,7 +162,7 @@ impl Highlighter {
         };
 
         for line in LinesWithEndings::from(text) {
-            for (style, range) in h.highlight(line, &self.ps) {
+            for (style, range) in h.highlight_line(line, &self.ps).ok()? {
                 let fg = style.foreground;
                 let text_color = egui::Color32::from_rgb(fg.r, fg.g, fg.b);
                 let italics = style.font_style.contains(FontStyle::ITALIC);
@@ -168,13 +170,13 @@ impl Highlighter {
                 let underline = if underline {
                     egui::Stroke::new(1.0, text_color)
                 } else {
-                    egui::Stroke::none()
+                    egui::Stroke::NONE
                 };
                 job.sections.push(LayoutSection {
                     leading_space: 0.0,
                     byte_range: as_byte_range(text, range),
                     format: TextFormat {
-                        font_id: egui::FontId::monospace(14.0),
+                        font_id: egui::FontId::monospace(12.0),
                         color: text_color,
                         italics,
                         underline,
