@@ -3,7 +3,7 @@ use egui::{ClippedPrimitive, Context};
 use egui_wgpu::renderer::ScreenDescriptor;
 use image::GenericImageView;
 use shipyard::{Unique, UniqueView, UniqueViewMut, View, World};
-use wgpu::{include_wgsl, util::DeviceExt};
+use wgpu::{include_wgsl, util::DeviceExt, CommandEncoderDescriptor};
 use winit::window::Window;
 
 #[repr(C)]
@@ -48,7 +48,7 @@ pub(crate) struct Graphics {
     pub(crate) bunny_diffuse_bind_group: wgpu::BindGroup,
     pub(crate) context: egui::Context,
     pub(crate) input: egui::RawInput,
-    pub(crate) egui_render_pass: egui_wgpu::renderer::RenderPass,
+    pub(crate) egui_render_pass: egui_wgpu::Renderer,
 }
 
 pub(crate) async fn init_graphics(world: &World, window: &Window, context: Context) {
@@ -87,6 +87,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto,
     };
     surface.configure(&device, &config);
 
@@ -270,7 +271,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
 
     context.set_pixels_per_point(window.scale_factor() as f32);
 
-    let egui_render_pass = egui_wgpu::renderer::RenderPass::new(&device, supported_format, 1);
+    let egui_render_pass = egui_wgpu::Renderer::new(&device, supported_format, None, 1);
 
     world.add_unique(Graphics {
         surface,
@@ -371,11 +372,9 @@ pub(crate) fn render(
         render_pass.set_vertex_buffer(1, graphics.instance_buffer.slice(..));
         render_pass.draw(0..6, 0..graphics.vertex_count);
 
-        graphics.egui_render_pass.execute_with_renderpass(
-            &mut render_pass,
-            &paint_jobs,
-            &screen_descriptor,
-        );
+        graphics
+            .egui_render_pass
+            .render(&mut render_pass, &paint_jobs, &screen_descriptor);
     }
 
     graphics.queue.submit(std::iter::once(encoder.finish()));
@@ -443,9 +442,17 @@ fn update_egui_render_pass(
     for id in &egui_output.textures_delta.free {
         graphics.egui_render_pass.free_texture(id);
     }
+
+    let mut command_encoder = graphics
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("egui"),
+        });
+
     graphics.egui_render_pass.update_buffers(
         &graphics.device,
         &graphics.queue,
+        &mut command_encoder,
         &paint_jobs,
         &screen_descriptor,
     );
