@@ -24,11 +24,13 @@ jobs:
             - 'src/**'
             - 'tests/**'
             - 'Cargo.toml'
+            - '.github/**'
           deploy:
             - 'bunny_demo/**'
             - 'guide/**'
             - 'square_eater/**'
             - 'visualizer/**'
+            - '.github/**'
   fmt:
     runs-on: ubuntu-latest
     needs: changes
