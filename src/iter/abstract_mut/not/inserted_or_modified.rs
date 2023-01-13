@@ -23,21 +23,13 @@ impl<'tmp, T: Component<Tracking = track::Insertion>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = (self.0).0.index_of(entity_id) {
-            if unsafe {
-                !track::is_track_within_bounds(
-                    *(self.0).0.insertion_data.add(index),
-                    (self.0).0.last_insertion,
-                    (self.0).0.current,
-                )
-            } {
-                Some(index)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
+            !track::is_track_within_bounds(
+                *(self.0).0.insertion_data.add(index),
+                (self.0).0.last_insertion,
+                (self.0).0.current,
+            )
+        })
     }
     #[inline]
     unsafe fn indices_of_unchecked(
@@ -74,21 +66,13 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = (self.0).0.index_of(entity_id) {
-            if unsafe {
-                !track::is_track_within_bounds(
-                    *(self.0).0.modification_data.add(index),
-                    (self.0).0.last_modification,
-                    (self.0).0.current,
-                )
-            } {
-                Some(index)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
+            !track::is_track_within_bounds(
+                *(self.0).0.modification_data.add(index),
+                (self.0).0.last_modification,
+                (self.0).0.current,
+            )
+        })
     }
     #[inline]
     unsafe fn indices_of_unchecked(
@@ -125,25 +109,17 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = (self.0).0.index_of(entity_id) {
-            if unsafe {
-                !track::is_track_within_bounds(
-                    *(self.0).0.insertion_data.add(index),
-                    (self.0).0.last_insertion,
-                    (self.0).0.current,
-                ) && !track::is_track_within_bounds(
-                    *(self.0).0.modification_data.add(index),
-                    (self.0).0.last_modification,
-                    (self.0).0.current,
-                )
-            } {
-                Some(index)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
+            !track::is_track_within_bounds(
+                *(self.0).0.insertion_data.add(index),
+                (self.0).0.last_insertion,
+                (self.0).0.current,
+            ) && !track::is_track_within_bounds(
+                *(self.0).0.modification_data.add(index),
+                (self.0).0.last_modification,
+                (self.0).0.current,
+            )
+        })
     }
     #[inline]
     unsafe fn indices_of_unchecked(
@@ -180,21 +156,13 @@ impl<'tmp, T: Component<Tracking = track::Insertion>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = (self.0).0.index_of(entity_id) {
-            if unsafe {
-                !track::is_track_within_bounds(
-                    *(self.0).0.insertion_data.add(index),
-                    (self.0).0.last_insertion,
-                    (self.0).0.current,
-                )
-            } {
-                Some(index)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
+            !track::is_track_within_bounds(
+                *(self.0).0.insertion_data.add(index),
+                (self.0).0.last_insertion,
+                (self.0).0.current,
+            )
+        })
     }
     #[inline]
     unsafe fn indices_of_unchecked(
@@ -231,21 +199,13 @@ impl<'tmp, T: Component<Tracking = track::Modification>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = (self.0).0.index_of(entity_id) {
-            if unsafe {
-                !track::is_track_within_bounds(
-                    *(self.0).0.modification_data.add(index),
-                    (self.0).0.last_modification,
-                    (self.0).0.current,
-                )
-            } {
-                Some(index)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
+            !track::is_track_within_bounds(
+                *(self.0).0.modification_data.add(index),
+                (self.0).0.last_modification,
+                (self.0).0.current,
+            )
+        })
     }
     #[inline]
     unsafe fn indices_of_unchecked(
@@ -282,25 +242,17 @@ impl<'tmp, T: Component<Tracking = track::All>> AbstractMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        if let Some(index) = (self.0).0.index_of(entity_id) {
-            if unsafe {
-                !track::is_track_within_bounds(
-                    *(self.0).0.insertion_data.add(index),
-                    (self.0).0.last_insertion,
-                    (self.0).0.current,
-                ) && !track::is_track_within_bounds(
-                    *(self.0).0.modification_data.add(index),
-                    (self.0).0.last_modification,
-                    (self.0).0.current,
-                )
-            } {
-                Some(index)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
+            !track::is_track_within_bounds(
+                *(self.0).0.insertion_data.add(index),
+                (self.0).0.last_insertion,
+                (self.0).0.current,
+            ) && !track::is_track_within_bounds(
+                *(self.0).0.modification_data.add(index),
+                (self.0).0.last_modification,
+                (self.0).0.current,
+            )
+        })
     }
     #[inline]
     unsafe fn indices_of_unchecked(
