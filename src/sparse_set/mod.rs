@@ -225,8 +225,6 @@ impl<T: Component> SparseSet<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
         if entity.gen() >= sparse_entity.gen() {
-            let sparse_entity = self.sparse.get(entity)?;
-
             unsafe {
                 *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
             }
