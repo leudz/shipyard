@@ -13,7 +13,6 @@ use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::system::System;
-use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
@@ -687,14 +686,14 @@ let i = world.run(sys1);
     ///
     /// - Scheduler borrow failed.
     /// - Workload did not exist.
-    pub fn set_default_workload(
+    pub fn set_default_workload<T>(
         &self,
-        name: impl Into<Cow<'static, str>>,
+        name: impl AsLabel<T>,
     ) -> Result<(), error::SetDefaultWorkload> {
         self.scheduler
             .borrow_mut()
             .map_err(|_| error::SetDefaultWorkload::Borrow)?
-            .set_default(name.into())
+            .set_default(name.as_label())
     }
     /// Changes the name of a workload if it exists.
     ///
