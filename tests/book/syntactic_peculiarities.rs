@@ -5,7 +5,7 @@ use shipyard::*;
 #[allow(clippy::toplevel_ref_arg)]
 fn ref_mut(ref mut vm_pos: ViewMut<Pos>) {
     let id = EntityId::dead();
-    let pos: &mut Pos = vm_pos.get(id).unwrap();
+    let pos: Mut<Pos> = vm_pos.get(id).unwrap();
 }
 
 #[allow(unused)]

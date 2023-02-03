@@ -3,27 +3,17 @@ use shipyard::error;
 use shipyard::*;
 
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
-impl Unique for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
+impl Unique for USIZE {}
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
-impl Unique for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
+impl Unique for U32 {}
 
 #[derive(PartialEq, Eq, Debug)]
 struct I32(i32);
-impl Component for I32 {
-    type Tracking = track::Untracked;
-}
+impl Component for I32 {}
 
 #[cfg(feature = "thread_local")]
 struct NotSend(*const ());
@@ -32,13 +22,9 @@ struct NotSend(*const ());
 unsafe impl Sync for NotSend {}
 
 #[cfg(feature = "thread_local")]
-impl Component for NotSend {
-    type Tracking = track::Untracked;
-}
+impl Component for NotSend {}
 #[cfg(feature = "thread_local")]
-impl Unique for NotSend {
-    type Tracking = track::Untracked;
-}
+impl Unique for NotSend {}
 
 #[cfg(feature = "thread_local")]
 struct NotSync(*const ());
@@ -47,25 +33,17 @@ struct NotSync(*const ());
 unsafe impl Send for NotSync {}
 
 #[cfg(feature = "thread_local")]
-impl Component for NotSync {
-    type Tracking = track::Untracked;
-}
+impl Component for NotSync {}
 #[cfg(feature = "thread_local")]
-impl Unique for NotSync {
-    type Tracking = track::Untracked;
-}
+impl Unique for NotSync {}
 
 #[cfg(feature = "thread_local")]
 struct NotSendSync(*const ());
 
 #[cfg(feature = "thread_local")]
-impl Component for NotSendSync {
-    type Tracking = track::Untracked;
-}
+impl Component for NotSendSync {}
 #[cfg(feature = "thread_local")]
-impl Unique for NotSendSync {
-    type Tracking = track::Untracked;
-}
+impl Unique for NotSendSync {}
 
 #[test]
 fn simple_borrow() {

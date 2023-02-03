@@ -2,17 +2,13 @@ use shipyard::*;
 
 #[derive(Debug, PartialEq, Eq)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn no_pack() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.run(|mut entities: EntitiesViewMut| {
@@ -30,12 +26,13 @@ fn no_pack() {
 fn update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    world.track_all::<USIZE>();
+    let (mut entities, mut usizes) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .unwrap();
 
     let entity = entities.add_entity(&mut usizes, USIZE(0));
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -46,17 +43,18 @@ fn update() {
 fn cleared_update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    world.track_all::<USIZE>();
+    let (mut entities, mut usizes) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .unwrap();
 
     let entity1 = entities.add_entity(&mut usizes, USIZE(1));
-    usizes.clear_all_inserted_and_modified();
+    usizes.clear_all_inserted();
 
-    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
     assert_eq!(usizes.inserted().iter().count(), 0);
     let entity2 = entities.add_entity(&mut usizes, USIZE(2));
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -68,31 +66,29 @@ fn cleared_update() {
 fn modified_update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    world.track_all::<USIZE>();
+    let (mut entities, mut usizes) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .unwrap();
 
     let entity1 = entities.add_entity(&mut usizes, USIZE(1));
     usizes.clear_all_inserted_and_modified();
 
-    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
     usizes[entity1] = USIZE(3);
     let entity2 = entities.add_entity(&mut usizes, USIZE(2));
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(*usizes.get(entity1).unwrap(), USIZE(3));
     assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
 }
-
 #[test]
 fn bulk() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
@@ -128,9 +124,7 @@ fn bulk() {
 #[test]
 fn bulk_unequal_length() {
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 

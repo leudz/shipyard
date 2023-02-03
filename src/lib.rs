@@ -25,6 +25,7 @@
 #![warn(clippy::items_after_statements)]
 #![warn(clippy::print_stdout)]
 #![warn(clippy::maybe_infinite_iter)]
+#![allow(clippy::uninlined_format_args)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
@@ -58,7 +59,6 @@ mod seal;
 mod sparse_set;
 mod storage;
 mod system;
-mod timestamp;
 /// module related to storage tracking, like insertion or modification.
 pub mod track;
 mod tracking;
@@ -111,8 +111,11 @@ pub use sparse_set::{
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
-pub use timestamp::TrackingTimestamp;
-pub use tracking::{Inserted, InsertedOrModified, Modified};
+pub use tracking::{
+    DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking, TrackingTimestamp,
+    TupleTrack,
+};
 pub use unique::UniqueStorage;
 pub use view::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,

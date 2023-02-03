@@ -9,19 +9,19 @@ pub trait Contains {
     fn contains(&self, entity: EntityId) -> bool;
 }
 
-impl<'a: 'b, 'b, T: Component> Contains for &'b View<'a, T> {
+impl<'a: 'b, 'b, T: Component, const TRACK: u32> Contains for &'b View<'a, T, TRACK> {
     fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(self, entity)
     }
 }
 
-impl<'a: 'b, 'b, T: Component> Contains for &'b ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: Component, const TRACK: u32> Contains for &'b ViewMut<'a, T, TRACK> {
     fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(&**self, entity)
     }
 }
 
-impl<'a: 'b, 'b, T: Component> Contains for &'b mut ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: Component, const TRACK: u32> Contains for &'b mut ViewMut<'a, T, TRACK> {
     fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(&**self, entity)
     }

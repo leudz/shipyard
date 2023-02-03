@@ -2,17 +2,13 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn no_pack() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
@@ -49,17 +45,17 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
     let entity = world.add_entity(());
 
     world.add_component(entity, (USIZE(1usize),));
 
-    world.run(|usizes: View<USIZE>| {
+    world.run(|usizes: View<USIZE, { track::All }>| {
         let mut iter = usizes.inserted().iter();
         assert_eq!(iter.next(), Some(&USIZE(1)));
         assert_eq!(iter.next(), None);
@@ -67,7 +63,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(2usize),));
 
-    world.run(|usizes: ViewMut<USIZE>| {
+    world.run(|usizes: ViewMut<USIZE, { track::All }>| {
         let mut iter = usizes.inserted().iter();
         assert_eq!(iter.next(), Some(&USIZE(2)));
         assert_eq!(iter.next(), None);
@@ -77,7 +73,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(4usize),));
 
-    world.run(|usizes: ViewMut<USIZE>| {
+    world.run(|usizes: ViewMut<USIZE, { track::All }>| {
         let mut iter = usizes.modified().iter();
         assert_eq!(iter.next(), Some(&USIZE(4)));
         assert_eq!(iter.next(), None);
@@ -87,7 +83,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(5usize),));
 
-    world.run(|usizes: View<USIZE>| {
+    world.run(|usizes: View<USIZE, { track::All }>| {
         let mut iter = usizes.modified().iter();
         assert_eq!(iter.next(), Some(&USIZE(5)));
         assert_eq!(iter.next(), None);
@@ -99,9 +95,7 @@ fn update() {
 fn dead_entity() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 

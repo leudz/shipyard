@@ -2,20 +2,12 @@
 mod non_send_sync;
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
-impl Unique for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
+impl Unique for U32 {}
 
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
-impl Unique for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
+impl Unique for USIZE {}
 
 use shipyard::*;
 

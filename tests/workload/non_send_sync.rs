@@ -3,9 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 struct MyRc(Rc<RefCell<Vec<u32>>>);
-impl Component for MyRc {
-    type Tracking = track::Untracked;
-}
+impl Component for MyRc {}
 
 #[test]
 fn basic() {

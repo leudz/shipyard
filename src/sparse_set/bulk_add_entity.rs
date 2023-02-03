@@ -4,7 +4,6 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
-use crate::track::Tracking;
 #[cfg(doc)]
 use crate::world::World;
 use core::iter::IntoIterator;
@@ -58,10 +57,7 @@ impl BulkInsert for () {
     }
 }
 
-impl<T: Send + Sync + Component> BulkInsert for T
-where
-    T::Tracking: Send + Sync,
-{
+impl<T: Send + Sync + Component> BulkInsert for T {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
@@ -70,7 +66,7 @@ where
         let current = all_storages.get_current();
         let mut entities = all_storages.entities_mut().unwrap();
         let mut sparse_set = all_storages
-            .custom_storage_or_insert_mut(SparseSet::<T, T::Tracking>::new)
+            .custom_storage_or_insert_mut(SparseSet::<T>::new)
             .unwrap();
 
         // add components to the storage
@@ -86,17 +82,15 @@ where
         sparse_set.dense.extend_from_slice(new_entities);
 
         // add tracking info if needed
-        if T::Tracking::track_insertion() {
+        if sparse_set.is_tracking_insertion() {
             sparse_set
                 .insertion_data
                 .extend(new_entities.iter().map(|_| current));
         }
-        if T::Tracking::track_modification() {
-            sparse_set.insertion_data.extend(
-                new_entities
-                    .iter()
-                    .map(|_| current.wrapping_add(u32::MAX / 2)),
-            );
+        if sparse_set.is_tracking_modification() {
+            sparse_set
+                .modification_data
+                .extend(new_entities.iter().map(|_| 0));
         }
 
         let SparseSet { sparse, dense, .. } = &mut *sparse_set;
@@ -120,10 +114,7 @@ where
     }
 }
 
-impl<T: Send + Sync + Component> BulkInsert for (T,)
-where
-    T::Tracking: Send + Sync,
-{
+impl<T: Send + Sync + Component> BulkInsert for (T,) {
     fn bulk_insert<I: IntoIterator<Item = Self>>(
         all_storages: &mut AllStorages,
         iter: I,
@@ -134,19 +125,15 @@ where
 
 macro_rules! impl_bulk_insert {
     (($type1: ident, $sparse_set1: ident, $index1: tt) $(($type: ident, $sparse_set: ident, $index: tt))*) => {
-        impl<$type1: Send + Sync + Component, $($type: Send + Sync + Component,)*> BulkInsert for ($type1, $($type,)*)
-        where
-            $type1::Tracking: Send + Sync,
-            $($type::Tracking: Send + Sync),+
-        {
+        impl<$type1: Send + Sync + Component, $($type: Send + Sync + Component,)*> BulkInsert for ($type1, $($type,)*) {
             #[allow(non_snake_case)]
             fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();
                 let size_hint = iter.size_hint().0;
                 let mut entities = all_storages.entities_mut().unwrap();
-                let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1, $type1::Tracking>::new).unwrap();
+                let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1>::new).unwrap();
                 $(
-                    let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type, $type::Tracking>::new).unwrap();
+                    let mut $sparse_set = all_storages.custom_storage_or_insert_mut(SparseSet::<$type>::new).unwrap();
                 )*
 
                 $sparse_set1.reserve(size_hint);
@@ -170,17 +157,17 @@ macro_rules! impl_bulk_insert {
                     $sparse_set.dense.extend_from_slice(new_entities);
                 )*
 
-                if $type1::Tracking::track_insertion() {
+                if $sparse_set1.is_tracking_insertion() {
                     $sparse_set1.insertion_data.extend(new_entities.iter().map(|_| 0));
                 }
-                if $type1::Tracking::track_modification() {
+                if $sparse_set1.is_tracking_modification() {
                     $sparse_set1.modification_data.extend(new_entities.iter().map(|_| 0));
                 }
                 $(
-                    if $type::Tracking::track_insertion() {
+                    if $sparse_set.is_tracking_insertion() {
                         $sparse_set.insertion_data.extend(new_entities.iter().map(|_| 0));
                     }
-                    if $type::Tracking::track_modification() {
+                    if $sparse_set.is_tracking_modification() {
                         $sparse_set.modification_data.extend(new_entities.iter().map(|_| 0));
                     }
                 )*

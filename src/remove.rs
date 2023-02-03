@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::sparse_set::SparseSet;
+use crate::tracking::{Track, Tracking};
 use crate::view::ViewMut;
 
 /// Removes component from entities.
@@ -39,23 +39,29 @@ impl Remove for () {
     fn remove(&mut self, _: EntityId) -> Self::Out {}
 }
 
-impl<T: Component> Remove for ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> Remove for ViewMut<'_, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
         let current = self.current;
-        SparseSet::remove(&mut *self, entity, current)
+        Track::<TRACK>::remove(&mut *self, entity, current)
     }
 }
 
-impl<T: Component> Remove for &mut ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> Remove for &mut ViewMut<'_, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
         let current = self.current;
-        SparseSet::remove(*self, entity, current)
+        Track::<TRACK>::remove(*self, entity, current)
     }
 }
 

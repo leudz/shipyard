@@ -76,10 +76,7 @@ impl AllStoragesBorrow for EntitiesViewMut<'_> {
     }
 }
 
-impl<T: Send + Sync + Component> AllStoragesBorrow for View<'_, T>
-where
-    T::Tracking: Send + Sync,
-{
+impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for View<'_, T, TRACK> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -90,9 +87,11 @@ where
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run
                 .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -104,10 +103,7 @@ where
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Component> AllStoragesBorrow for NonSend<View<'_, T>>
-where
-    T::Tracking: Sync,
-{
+impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<View<'_, T, TRACK>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -118,9 +114,11 @@ where
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(NonSend(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
@@ -131,10 +129,7 @@ where
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Component> AllStoragesBorrow for NonSync<View<'_, T>>
-where
-    T::Tracking: Send,
-{
+impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<View<'_, T, TRACK>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -145,9 +140,11 @@ where
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(NonSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
@@ -158,7 +155,7 @@ where
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Component> AllStoragesBorrow for NonSendSync<View<'_, T>> {
+impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<View<'_, T, TRACK>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -169,9 +166,11 @@ impl<'a, T: Component> AllStoragesBorrow for NonSendSync<View<'_, T>> {
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(NonSendSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
@@ -181,10 +180,7 @@ impl<'a, T: Component> AllStoragesBorrow for NonSendSync<View<'_, T>> {
     }
 }
 
-impl<T: Send + Sync + Component> AllStoragesBorrow for ViewMut<'_, T>
-where
-    T::Tracking: Send + Sync,
-{
+impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for ViewMut<'_, T, TRACK> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -195,9 +191,11 @@ where
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run
                 .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -209,10 +207,7 @@ where
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Component> AllStoragesBorrow for NonSend<ViewMut<'_, T>>
-where
-    T::Tracking: Sync,
-{
+impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<ViewMut<'_, T, TRACK>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -223,9 +218,11 @@ where
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(NonSend(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
@@ -236,10 +233,7 @@ where
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Component> AllStoragesBorrow for NonSync<ViewMut<'_, T>>
-where
-    T::Tracking: Send,
-{
+impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<ViewMut<'_, T, TRACK>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -250,9 +244,11 @@ where
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(NonSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
@@ -263,7 +259,7 @@ where
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Component> AllStoragesBorrow for NonSendSync<ViewMut<'_, T>> {
+impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<ViewMut<'_, T, TRACK>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -274,9 +270,11 @@ impl<'a, T: Component> AllStoragesBorrow for NonSendSync<ViewMut<'_, T>> {
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
+        sparse_set.check_tracking::<TRACK>()?;
+
         Ok(NonSendSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modification),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
@@ -309,7 +307,7 @@ impl<T: Send + Sync + Unique> AllStoragesBorrow for UniqueView<'_, T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueView<'_, T>> {
+impl<T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueView<'_, T>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -332,7 +330,7 @@ impl<'a, T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueView<'_, T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Unique> AllStoragesBorrow for NonSync<UniqueView<'_, T>> {
+impl<T: Send + Unique> AllStoragesBorrow for NonSync<UniqueView<'_, T>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -355,7 +353,7 @@ impl<'a, T: Send + Unique> AllStoragesBorrow for NonSync<UniqueView<'_, T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Unique> AllStoragesBorrow for NonSendSync<UniqueView<'_, T>> {
+impl<T: Unique> AllStoragesBorrow for NonSendSync<UniqueView<'_, T>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -400,7 +398,7 @@ impl<T: Send + Sync + Unique> AllStoragesBorrow for UniqueViewMut<'_, T> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueViewMut<'_, T>> {
+impl<T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueViewMut<'_, T>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -423,7 +421,7 @@ impl<'a, T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueViewMut<'_, T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Send + Unique> AllStoragesBorrow for NonSync<UniqueViewMut<'_, T>> {
+impl<T: Send + Unique> AllStoragesBorrow for NonSync<UniqueViewMut<'_, T>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -446,7 +444,7 @@ impl<'a, T: Send + Unique> AllStoragesBorrow for NonSync<UniqueViewMut<'_, T>> {
 }
 
 #[cfg(feature = "thread_local")]
-impl<'a, T: Unique> AllStoragesBorrow for NonSendSync<UniqueViewMut<'_, T>> {
+impl<T: Unique> AllStoragesBorrow for NonSendSync<UniqueViewMut<'_, T>> {
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,

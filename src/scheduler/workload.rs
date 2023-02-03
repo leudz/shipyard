@@ -1,16 +1,17 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
+use crate::component::{Component, Unique};
 use crate::scheduler::info::{
     BatchInfo, Conflict, DedupedLabels, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
 };
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
 use crate::scheduler::{AsLabel, Batches, IntoWorkloadTrySystem, Label, Scheduler, WorkloadSystem};
-use crate::type_id::TypeId;
-use crate::world::World;
-use crate::{error, track, Component, IntoWorkload, IntoWorkloadSystem, Unique, UniqueStorage};
-// this is the macro, not the module
 use crate::storage::StorageId;
+use crate::type_id::TypeId;
+use crate::unique::UniqueStorage;
+use crate::world::World;
+use crate::{error, IntoWorkload, IntoWorkloadSystem};
 use alloc::boxed::Box;
 // macro not module
 use alloc::vec;
@@ -39,6 +40,7 @@ pub struct ScheduledWorkload {
     // system's `TypeId` to an index into both systems and system_names
     #[allow(unused)]
     lookup_table: HashMap<TypeId, usize>,
+    tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     /// workload name to list of "batches"
     workloads: HashMap<Box<dyn Label>, Batches>,
 }
@@ -61,6 +63,29 @@ impl ScheduledWorkload {
             &self.workloads[&self.name],
             &self.name,
         )
+    }
+
+    /// Apply tracking to all storages using it during this workload.
+    ///
+    /// ### Borrows
+    ///
+    /// - [`AllStorages`] (shared)
+    /// - Systems' storage (exclusive) to enable tracking
+    ///
+    /// ### Errors
+    ///
+    /// - [`AllStorages`] borrow failed.
+    /// - Storage borrow failed.
+    pub fn apply_tracking(&self, world: &World) -> Result<(), error::GetStorage> {
+        let all_storages = world
+            .all_storages()
+            .map_err(error::GetStorage::AllStoragesBorrow)?;
+
+        for enable_tracking_fn in &self.tracking_to_enable {
+            (enable_tracking_fn)(&all_storages)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -376,14 +401,16 @@ impl Workload {
     /// ### Borrows
     ///
     /// - Scheduler (exclusive)
+    /// - [`AllStorages`] (shared)
+    /// - Systems' storage (exclusive) to enable tracking
     ///
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
     /// - Workload with an identical name already present.
     /// - Nested workload is not present in `world`.
-    ///
-    /// [`World`]: crate::World
+    /// - [`AllStorages`] borrow failed.
+    /// - Storage borrow failed.
     #[allow(clippy::blocks_in_if_conditions)]
     pub fn add_to_world(self, world: &World) -> Result<WorkloadInfo, error::AddWorkload> {
         let Scheduler {
@@ -398,15 +425,33 @@ impl Workload {
             .borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
-        create_workload(
+        let mut tracking_to_enable = Vec::new();
+
+        let workload_info = create_workload(
             self,
             systems,
             system_names,
             system_generators,
             lookup_table,
+            &mut tracking_to_enable,
             workloads,
             default,
-        )
+        )?;
+
+        let all_storages = world
+            .all_storages()
+            .map_err(|_| error::AddWorkload::TrackingAllStoragesBorrow)?;
+
+        for enable_tracking_fn in &tracking_to_enable {
+            (enable_tracking_fn)(&all_storages).map_err(|err| match err {
+                error::GetStorage::StorageBorrow { name, id, borrow } => {
+                    error::AddWorkload::TrackingStorageBorrow { name, id, borrow }
+                }
+                _ => unreachable!(),
+            })?;
+        }
+
+        Ok(workload_info)
     }
     /// Returns the first [`Unique`] storage borrowed by this workload that is not present in `world`.\
     /// If the workload contains nested workloads they have to be present in the `World`.
@@ -420,12 +465,8 @@ impl Workload {
     ) -> Result<(), error::UniquePresence> {
         struct ComponentType;
 
-        impl Component for ComponentType {
-            type Tracking = track::Untracked;
-        }
-        impl Unique for ComponentType {
-            type Tracking = track::Untracked;
-        }
+        impl Component for ComponentType {}
+        impl Unique for ComponentType {}
 
         let all_storages = world
             .all_storages
@@ -454,6 +495,7 @@ impl Workload {
             system_names: Vec::new(),
             system_generators: Vec::new(),
             lookup_table: HashMap::new(),
+            tracking_to_enable: Vec::new(),
             workloads: HashMap::new(),
         };
 
@@ -465,6 +507,7 @@ impl Workload {
             &mut workload.system_names,
             &mut workload.system_generators,
             &mut workload.lookup_table,
+            &mut workload.tracking_to_enable,
             &mut workload.workloads,
             &mut default,
         )?;
@@ -499,6 +542,7 @@ fn create_workload(
     system_names: &mut Vec<Box<dyn Label>>,
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     lookup_table: &mut HashMap<TypeId, usize>,
+    tracking_to_enable: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     workloads: &mut HashMap<Box<dyn Label>, Batches>,
     default: &mut Box<dyn Label>,
 ) -> Result<WorkloadInfo, error::AddWorkload> {
@@ -509,7 +553,11 @@ fn create_workload(
     let mut collected_systems: Vec<(usize, WorkloadSystem)> =
         Vec::with_capacity(builder.systems.len());
 
-    for system in builder.systems.drain(..) {
+    for mut system in builder.systems.drain(..) {
+        for tracking_to_enable_fn in system.tracking_to_enable.drain(..) {
+            tracking_to_enable.push(tracking_to_enable_fn);
+        }
+
         insert_system_in_scheduler(
             system,
             systems,
@@ -1537,32 +1585,20 @@ mod tests {
     use super::*;
     use crate::component::{Component, Unique};
     use crate::{
-        track, AllStoragesViewMut, IntoWorkload, SystemModificator, UniqueView, UniqueViewMut,
-        View, WorkloadModificator,
+        AllStoragesViewMut, IntoWorkload, SystemModificator, UniqueView, UniqueViewMut, View,
+        WorkloadModificator,
     };
 
     struct Usize(usize);
     struct U32(u32);
     struct U16(u16);
 
-    impl Component for Usize {
-        type Tracking = track::Untracked;
-    }
-    impl Component for U32 {
-        type Tracking = track::Untracked;
-    }
-    impl Component for U16 {
-        type Tracking = track::Untracked;
-    }
-    impl Unique for Usize {
-        type Tracking = track::Untracked;
-    }
-    impl Unique for U32 {
-        type Tracking = track::Untracked;
-    }
-    impl Unique for U16 {
-        type Tracking = track::Untracked;
-    }
+    impl Component for Usize {}
+    impl Component for U32 {}
+    impl Component for U16 {}
+    impl Unique for Usize {}
+    impl Unique for U32 {}
+    impl Unique for U16 {}
 
     #[test]
     fn single_immutable() {
@@ -1891,9 +1927,7 @@ mod tests {
 
         struct NotSend(*const ());
         unsafe impl Sync for NotSend {}
-        impl Component for NotSend {
-            type Tracking = track::Untracked;
-        }
+        impl Component for NotSend {}
 
         fn sys1(_: NonSend<View<'_, NotSend>>) {}
         fn sys2(_: NonSend<ViewMut<'_, NotSend>>) {}

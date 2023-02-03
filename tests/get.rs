@@ -4,15 +4,11 @@ use shipyard::*;
 fn type_check() {
     #[derive(Debug, PartialEq)]
     struct Life(f32);
-    impl Component for Life {
-        type Tracking = track::Modification;
-    }
+    impl Component for Life {}
 
     #[derive(Debug, PartialEq)]
     struct Energy(f32);
-    impl Component for Energy {
-        type Tracking = track::Untracked;
-    }
+    impl Component for Energy {}
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
@@ -24,7 +20,7 @@ fn type_check() {
     let entity = entities.add_entity((&mut vm_life, &mut vm_energy), (Life(0.), Energy(0.)));
 
     let life: Mut<Life> = (&mut vm_life).get(entity).unwrap();
-    let energy: &mut Energy = (&mut vm_energy).get(entity).unwrap();
+    let energy: Mut<Energy> = (&mut vm_energy).get(entity).unwrap();
 
     assert_eq!(*life, Life(0.));
     assert_eq!(*energy, Energy(0.));
@@ -34,15 +30,11 @@ fn type_check() {
 fn non_packed() {
     #[derive(PartialEq, Eq, Debug)]
     struct U32(u32);
-    impl Component for U32 {
-        type Tracking = track::Untracked;
-    }
+    impl Component for U32 {}
 
     #[derive(PartialEq, Eq, Debug)]
     struct I16(i16);
-    impl Component for I16 {
-        type Tracking = track::Untracked;
-    }
+    impl Component for I16 {}
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
@@ -78,17 +70,14 @@ fn non_packed() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct U32(u32);
-    impl Component for U32 {
-        type Tracking = track::All;
-    }
+    impl Component for U32 {}
 
     #[derive(PartialEq, Eq, Debug)]
     struct I16(i16);
-    impl Component for I16 {
-        type Tracking = track::All;
-    }
+    impl Component for I16 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    world.track_all::<(U32, I16)>();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
@@ -118,13 +107,10 @@ fn update() {
     assert!((&u32s, &i16s).get(entity3).is_err());
     assert_eq!((&u32s, &i16s).get(entity4), Ok((&U32(4), &I16(14))));
 }
-
 #[test]
 fn old_id() {
     struct U32(u32);
-    impl Component for U32 {
-        type Tracking = track::All;
-    }
+    impl Component for U32 {}
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 

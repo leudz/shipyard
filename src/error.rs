@@ -1,9 +1,9 @@
 //! All error types.
 
-use crate::entity_id::EntityId;
 use crate::info::TypeInfo;
 use crate::scheduler::Label;
 use crate::storage::StorageId;
+use crate::{entity_id::EntityId, tracking::tracking_fmt};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -66,6 +66,12 @@ pub enum GetStorage {
     MissingStorage {
         name: Option<&'static str>,
         id: StorageId,
+    },
+    #[allow(missing_docs)]
+    TrackingNotEnabled {
+        name: Option<&'static str>,
+        id: StorageId,
+        tracking: u32,
     },
     /// Error returned by a custom view.
     #[cfg(feature = "std")]
@@ -168,6 +174,11 @@ impl Debug for GetStorage {
             } else {
                 f.write_fmt(format_args!("{:?} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", id))
             }
+            GetStorage::TrackingNotEnabled { name, id, tracking } => if let Some(name) = name {
+                f.write_fmt(format_args!("{} tracking is not enabled for {} storage.", tracking_fmt(*tracking), name))
+            } else {
+                f.write_fmt(format_args!("{} tracking is not enabled for {:?} storage.", tracking_fmt(*tracking), id))
+            }
             GetStorage::Custom(err) => {
                 f.write_fmt(format_args!("Storage borrow failed with a custom error, {:?}.", err))
             }
@@ -263,6 +274,14 @@ pub enum AddWorkload {
     MissingBefore(Box<dyn Label>, Vec<Box<dyn Label>>),
     /// A system declared some requirements that are not met.
     MissingAfter(Box<dyn Label>, Vec<Box<dyn Label>>),
+    #[allow(missing_docs)]
+    TrackingAllStoragesBorrow,
+    #[allow(missing_docs)]
+    TrackingStorageBorrow {
+        name: Option<&'static str>,
+        id: StorageId,
+        borrow: Borrow,
+    },
 }
 
 // For some reason this trait can't be derived with Box<dyn Label>
@@ -281,6 +300,18 @@ impl PartialEq for AddWorkload {
             (AddWorkload::MissingAfter(l0, l1), AddWorkload::MissingAfter(r0, r1)) => {
                 l0 == r0 && l1 == r1
             }
+            (
+                AddWorkload::TrackingStorageBorrow {
+                    name: l_name,
+                    id: l_id,
+                    borrow: l_borrow,
+                },
+                AddWorkload::TrackingStorageBorrow {
+                    name: r_name,
+                    id: r_id,
+                    borrow: r_borrow,
+                },
+            ) => l_name == r_name && l_id == r_id && l_borrow == r_borrow,
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
@@ -311,6 +342,30 @@ impl Debug for AddWorkload {
                 "System({:?}) is missing some systems after: {:?}",
                 system_name, missing_after
             )),
+            AddWorkload::TrackingAllStoragesBorrow => f.write_str(
+                "Cannot immutably borrow AllStorages while it's already mutably borrowed.",
+            ),
+            AddWorkload::TrackingStorageBorrow { name, id, borrow } => {
+                if let Some(name) = name {
+                    match borrow {
+                        Borrow::Unique => f.write_fmt(format_args!("Cannot mutably borrow {} storage while it's already borrowed.", name)),
+                        Borrow::Shared => {
+                            f.write_fmt(format_args!("Cannot immutably borrow {} storage while it's already mutably borrowed.", name))
+                        },
+                        Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
+                        Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
+                    }
+                } else {
+                    match borrow {
+                        Borrow::Unique => f.write_fmt(format_args!("Cannot mutably borrow {:?} storage while it's already borrowed.", id)),
+                        Borrow::Shared => {
+                            f.write_fmt(format_args!("Cannot immutably borrow {:?} storage while it's already mutably borrowed.", id))
+                        },
+                        Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {:?} storage from multiple thread at the same time because it's !Sync.", id)),
+                        Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {:?} storage from other thread than the one it was created in because it's !Send and !Sync.", id)),
+                    }
+                }
+            }
         }
     }
 }
@@ -352,7 +407,7 @@ impl Display for SetDefaultWorkload {
     }
 }
 
-/// Error returned by [`run_default`] and [`run_workload`].  
+/// Error returned by [`run_default`] and [`run_workload`].
 /// The error can be a storage error, problem with the scheduler's borrowing, a non existent workload or a custom error.
 ///
 /// [`run_default`]: crate::World#method::run_default()
@@ -408,7 +463,7 @@ impl Display for RunWorkload {
     }
 }
 
-/// Error returned by [`World::run`] and [`AllStorages::run`].  
+/// Error returned by [`World::run`] and [`AllStorages::run`].
 /// Can refer to an invalid storage borrow or a custom error.
 ///
 /// [`World::run`]: crate::World::run()

@@ -60,13 +60,13 @@ pub trait IntoWorkload<Views, R> {
     /// }
     ///
     /// fn meal(mut fats: ViewMut<Fat>) {
-    ///     for fat in (&mut fats).iter() {
+    ///     for mut fat in (&mut fats).iter() {
     ///         fat.0 += 3.0;
     ///     }
     /// }
     ///
     /// fn age(mut healths: ViewMut<Health>) {
-    ///     (&mut healths).iter().for_each(|health| {
+    ///     (&mut healths).iter().for_each(|mut health| {
     ///         health.0 -= 4.0;
     ///     });
     /// }

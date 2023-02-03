@@ -39,6 +39,7 @@ where
 
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
+            tracking_to_enable: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)();
                 Ok(())
@@ -138,9 +139,15 @@ macro_rules! impl_into_workload_system {
                     }
                 }
 
+                let mut tracking_to_enable = Vec::new();
+                $(
+                    $type::enable_tracking(&mut tracking_to_enable);
+                )+
+
                 let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
+                    tracking_to_enable,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = last_run.swap(current, Ordering::Acquire);

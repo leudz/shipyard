@@ -17,18 +17,7 @@ pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let name = input.ident;
     let generics = input.generics;
 
-    let attribute_input: Option<&syn::Attribute> = input
-        .attrs
-        .iter()
-        .filter(|attr| match attr.style {
-            syn::AttrStyle::Outer => true,
-            syn::AttrStyle::Inner(_) => false,
-        })
-        .find(|attr| attr.path.get_ident().map(ToString::to_string) == Some("track".to_string()));
-
-    expand_component(name, generics, attribute_input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
+    expand_component(name, generics).into()
 }
 
 #[proc_macro_derive(Unique, attributes(track))]
@@ -38,18 +27,7 @@ pub fn unique(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let name = input.ident;
     let generics = input.generics;
 
-    let attribute_input: Option<&syn::Attribute> = input
-        .attrs
-        .iter()
-        .filter(|attr| match attr.style {
-            syn::AttrStyle::Outer => true,
-            syn::AttrStyle::Inner(_) => false,
-        })
-        .find(|attr| attr.path.get_ident().map(ToString::to_string) == Some("track".to_string()));
-
-    expand_unique(name, generics, attribute_input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
+    expand_unique(name, generics).into()
 }
 
 #[proc_macro_derive(Borrow, attributes(shipyard))]

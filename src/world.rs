@@ -13,6 +13,7 @@ use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::system::System;
+use crate::tracking::{TrackingTimestamp, TupleTrack};
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
@@ -1032,8 +1033,8 @@ let i = world.run(sys1);
     }
 
     /// Returns a timestamp used to clear tracking information.
-    pub fn get_tracking_timestamp(&self) -> crate::TrackingTimestamp {
-        crate::TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
+    pub fn get_tracking_timestamp(&self) -> TrackingTimestamp {
+        TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
     }
 }
 
@@ -1299,7 +1300,7 @@ impl World {
     /// Clear all deletion and removal tracking data older than some timestamp.
     pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
-        timestamp: crate::TrackingTimestamp,
+        timestamp: TrackingTimestamp,
     ) {
         self.all_storages
             .get_mut()
@@ -1350,6 +1351,35 @@ impl World {
         }
 
         WorkloadsTypeUsage(workload_type_info)
+    }
+
+    /// Enable insertion tracking for the given components.
+    pub fn track_insertion<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_insertion::<T>();
+        self
+    }
+
+    /// Enable modification tracking for the given components.
+    pub fn track_modification<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_modification::<T>();
+        self
+    }
+
+    /// Enable deletion tracking for the given components.
+    pub fn track_deletion<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_deletion::<T>();
+        self
+    }
+
+    /// Enable removal tracking for the given components.
+    pub fn track_removal<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_removal::<T>();
+        self
+    }
+
+    /// Enable insertion, deletion and removal tracking for the given components.
+    pub fn track_all<T: TupleTrack>(&mut self) {
+        self.all_storages.get_mut().track_all::<T>();
     }
 }
 

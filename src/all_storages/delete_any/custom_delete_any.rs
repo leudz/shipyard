@@ -13,7 +13,7 @@ impl CustomDeleteAny for () {
     fn delete_any(&mut self, _: &mut HashSet<EntityId>, _current: u32) {}
 }
 
-impl<T: Component> CustomDeleteAny for SparseSet<T, T::Tracking> {
+impl<T: Component> CustomDeleteAny for SparseSet<T> {
     #[inline]
     fn delete_any(&mut self, ids: &mut HashSet<EntityId>, current: u32) {
         ids.extend(&self.dense);

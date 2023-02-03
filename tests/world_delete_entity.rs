@@ -4,17 +4,13 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn no_pack() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
@@ -47,11 +43,11 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
     let entity1 = world.add_entity((USIZE(0),));
     let entity2 = world.add_entity((USIZE(2),));
@@ -59,7 +55,7 @@ fn update() {
     assert!(world.delete_entity(entity1));
     assert!(!world.delete_entity(entity1));
 
-    let usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
     assert_eq!(
         (&usizes).get(entity1),
         Err(error::MissingComponent {

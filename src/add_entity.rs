@@ -18,7 +18,7 @@ impl AddEntity for () {
     fn add_entity(_: &mut Self, _: EntityId, _: Self::Component) {}
 }
 
-impl<T: Component> AddEntity for ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> AddEntity for ViewMut<'_, T, TRACK> {
     type Component = T;
 
     #[inline]
@@ -27,7 +27,7 @@ impl<T: Component> AddEntity for ViewMut<'_, T> {
     }
 }
 
-impl<T: Component> AddEntity for &mut ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> AddEntity for &mut ViewMut<'_, T, TRACK> {
     type Component = T;
 
     #[inline]

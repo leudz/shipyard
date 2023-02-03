@@ -8,6 +8,7 @@ pub(crate) use sbox::SBox;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::sparse_set::SparseArray;
+use crate::tracking::TrackingTimestamp;
 use alloc::borrow::Cow;
 use core::any::Any;
 
@@ -67,7 +68,7 @@ pub trait Storage: SizedAny {
     /// Clear all deletion and removal tracking data older than some timestamp.
     fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
-        _timestamp: crate::TrackingTimestamp,
+        _timestamp: TrackingTimestamp,
     ) {
     }
 }

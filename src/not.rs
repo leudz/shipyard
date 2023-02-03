@@ -1,7 +1,5 @@
-use crate::{
-    component::Component,
-    view::{View, ViewMut},
-};
+use crate::component::Component;
+use crate::view::{View, ViewMut};
 use core::ops::Not as NotOps;
 
 /// Used to filter out components.
@@ -36,21 +34,21 @@ use core::ops::Not as NotOps;
 #[derive(Copy, Clone)]
 pub struct Not<T>(pub(crate) T);
 
-impl<T: Component> NotOps for &View<'_, T> {
+impl<T: Component, const TRACK: u32> NotOps for &View<'_, T, TRACK> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T: Component> NotOps for &ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> NotOps for &ViewMut<'_, T, TRACK> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T: Component> NotOps for &mut ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> NotOps for &mut ViewMut<'_, T, TRACK> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)

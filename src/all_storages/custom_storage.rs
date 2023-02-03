@@ -147,10 +147,10 @@ pub trait CustomStorageAccess {
     ///
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_send_mut<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_mut<S, F>(
+        &self,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
@@ -159,11 +159,11 @@ pub trait CustomStorageAccess {
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     /// [`StorageId`]: crate::storage::StorageId
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_send_mut_by_id<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_mut_by_id<S, F>(
+        &self,
         storage_id: StorageId,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
@@ -171,10 +171,10 @@ pub trait CustomStorageAccess {
     ///
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_sync_mut<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_sync_mut<S, F>(
+        &self,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
@@ -183,11 +183,11 @@ pub trait CustomStorageAccess {
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     /// [`StorageId`]: crate::storage::StorageId
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_sync_mut_by_id<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_sync_mut_by_id<S, F>(
+        &self,
         storage_id: StorageId,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
@@ -195,10 +195,10 @@ pub trait CustomStorageAccess {
     ///
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_send_sync_mut<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_sync_mut<S, F>(
+        &self,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage,
         F: FnOnce() -> S;
@@ -207,11 +207,11 @@ pub trait CustomStorageAccess {
     /// [`RefMut`]: crate::atomic_refcell::RefMut
     /// [`StorageId`]: crate::storage::StorageId
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_send_sync_mut_by_id<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_sync_mut_by_id<S, F>(
+        &self,
         storage_id: StorageId,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage,
         F: FnOnce() -> S;
@@ -614,10 +614,10 @@ impl CustomStorageAccess for AllStorages {
     }
     #[cfg(feature = "thread_local")]
     #[inline]
-    fn custom_storage_or_insert_non_send_mut<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_mut<S, F>(
+        &self,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S,
@@ -625,11 +625,11 @@ impl CustomStorageAccess for AllStorages {
         self.custom_storage_or_insert_non_send_mut_by_id(StorageId::of::<S>(), f)
     }
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_send_mut_by_id<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_mut_by_id<S, F>(
+        &self,
         storage_id: StorageId,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S,
@@ -681,10 +681,10 @@ impl CustomStorageAccess for AllStorages {
     }
     #[cfg(feature = "thread_local")]
     #[inline]
-    fn custom_storage_or_insert_non_sync_mut<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_sync_mut<S, F>(
+        &self,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S,
@@ -692,11 +692,11 @@ impl CustomStorageAccess for AllStorages {
         self.custom_storage_or_insert_non_sync_mut_by_id(StorageId::of::<S>(), f)
     }
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_sync_mut_by_id<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_sync_mut_by_id<S, F>(
+        &self,
         storage_id: StorageId,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S,
@@ -740,10 +740,10 @@ impl CustomStorageAccess for AllStorages {
     }
     #[cfg(feature = "thread_local")]
     #[inline]
-    fn custom_storage_or_insert_non_send_sync_mut<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_sync_mut<S, F>(
+        &self,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage,
         F: FnOnce() -> S,
@@ -751,11 +751,11 @@ impl CustomStorageAccess for AllStorages {
         self.custom_storage_or_insert_non_send_sync_mut_by_id(StorageId::of::<S>(), f)
     }
     #[cfg(feature = "thread_local")]
-    fn custom_storage_or_insert_non_send_sync_mut_by_id<'a, S, F>(
-        &'a self,
+    fn custom_storage_or_insert_non_send_sync_mut_by_id<S, F>(
+        &self,
         storage_id: StorageId,
         f: F,
-    ) -> Result<RefMut<'a, &'a mut S>, error::GetStorage>
+    ) -> Result<RefMut<'_, &'_ mut S>, error::GetStorage>
     where
         S: 'static + Storage,
         F: FnOnce() -> S,

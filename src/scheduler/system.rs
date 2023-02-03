@@ -1,9 +1,11 @@
 use super::TypeInfo;
+use crate::all_storages::AllStorages;
+use crate::error;
 use crate::info::DedupedLabels;
+use crate::scheduler::label::Label;
 use crate::scheduler::workload::Workload;
 use crate::type_id::TypeId;
 use crate::world::World;
-use crate::{error, Label};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 
@@ -39,6 +41,7 @@ pub struct WorkloadSystem {
     pub(crate) system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
     /// access information
     pub(crate) borrow_constraints: Vec<TypeInfo>,
+    pub(crate) tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     pub(crate) generator: Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>,
     pub(crate) run_if:
         Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>>,

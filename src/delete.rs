@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::sparse_set::SparseSet;
+use crate::tracking::{Track, Tracking};
 use crate::view::ViewMut;
 
 /// Deletes component from entities.
@@ -36,19 +36,25 @@ impl Delete for () {
     }
 }
 
-impl<T: Component> Delete for ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> Delete for ViewMut<'_, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn delete(&mut self, entity: EntityId) -> bool {
         let current = self.current;
-        SparseSet::delete(&mut *self, entity, current)
+        Track::<TRACK>::delete(&mut *self, entity, current)
     }
 }
 
-impl<T: Component> Delete for &mut ViewMut<'_, T> {
+impl<T: Component, const TRACK: u32> Delete for &mut ViewMut<'_, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn delete(&mut self, entity: EntityId) -> bool {
         let current = self.current;
-        SparseSet::delete(*self, entity, current)
+        Track::delete(*self, entity, current)
     }
 }
 
