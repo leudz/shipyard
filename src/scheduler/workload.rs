@@ -13,6 +13,7 @@ use crate::unique::UniqueStorage;
 use crate::world::World;
 use crate::{error, IntoWorkload, IntoWorkloadSystem};
 use alloc::boxed::Box;
+use alloc::format;
 // macro not module
 use alloc::vec;
 use alloc::vec::Vec;
@@ -132,6 +133,7 @@ pub struct Workload {
     pub(super) overwritten_name: bool,
     pub(super) require_before: DedupedLabels,
     pub(super) require_after: DedupedLabels,
+    pub(super) barriers: Vec<usize>,
 }
 
 impl Workload {
@@ -189,6 +191,7 @@ impl Workload {
             overwritten_name: false,
             require_before: DedupedLabels::new(),
             require_after: DedupedLabels::new(),
+            barriers: Vec::new(),
         }
     }
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
@@ -514,6 +517,12 @@ impl Workload {
 
         Ok((workload, workload_info))
     }
+    /// Stop parallelism between systems before and after the barrier.
+    pub fn with_barrier(mut self) -> Self {
+        self.barriers.push(self.systems.len());
+
+        self
+    }
 }
 
 fn check_uniques_in_systems(
@@ -548,6 +557,18 @@ fn create_workload(
 ) -> Result<WorkloadInfo, error::AddWorkload> {
     if workloads.contains_key(&*builder.name) {
         return Err(error::AddWorkload::AlreadyExists);
+    }
+
+    for index in builder.barriers.drain(..) {
+        let tag = format!("__barrier__{}", index);
+
+        for system in &mut builder.systems[..index] {
+            system.tags.push(Box::new(tag.clone()));
+        }
+
+        for system in &mut builder.systems[index..] {
+            system.after_all.add(tag.clone());
+        }
     }
 
     let mut collected_systems: Vec<(usize, WorkloadSystem)> =
@@ -2483,5 +2504,40 @@ mod tests {
         }));
         assert!(world.contains_workload(w));
         world.run_workload(w).unwrap();
+    }
+
+    #[test]
+    fn barrier() {
+        let workload = Workload::new("")
+            .with_system(|| {})
+            .with_system(|| {})
+            .with_barrier()
+            .with_system(|| {})
+            .with_system(|| {})
+            .with_barrier()
+            .with_system(|| {})
+            .with_system(|| {})
+            .build()
+            .unwrap();
+
+        assert_eq!(workload.1.batch_info.len(), 3);
+
+        let workload = Workload::new("")
+            .with_barrier()
+            .with_system(|| {})
+            .with_system(|| {})
+            .build()
+            .unwrap();
+
+        assert_eq!(workload.1.batch_info.len(), 1);
+
+        let workload = Workload::new("")
+            .with_system(|| {})
+            .with_system(|| {})
+            .with_barrier()
+            .build()
+            .unwrap();
+
+        assert_eq!(workload.1.batch_info.len(), 1);
     }
 }

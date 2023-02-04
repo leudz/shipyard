@@ -183,6 +183,7 @@ where
                 overwritten_name: false,
                 require_before: DedupedLabels::new(),
                 require_after: DedupedLabels::new(),
+                barriers: Vec::new(),
             }
         }
     }
@@ -224,6 +225,7 @@ macro_rules! impl_into_workload {
                     overwritten_name: false,
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),
+                    barriers: Vec::new(),
                 };
 
                 $(
@@ -253,6 +255,7 @@ macro_rules! impl_into_workload {
                     overwritten_name: false,
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),
+                    barriers: Vec::new(),
                 };
 
                 let mut sequential_tags = Vec::new();
