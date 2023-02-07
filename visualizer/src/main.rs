@@ -1,7 +1,7 @@
 // hide console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use visualizer::MyApp;
+use visualizer_lib::MyApp;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
