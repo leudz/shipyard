@@ -103,3 +103,52 @@ fn no_pack_unchecked() {
     (&mut u32s, &mut usizes).add_component_unchecked(entity1, (U32(3), USIZE(2)));
     assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&USIZE(2), &U32(3)));
 }
+
+#[test]
+fn workload_add() {
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let eid = world.add_entity(());
+
+    world.add_workload(move || {
+        (
+            move |mut vm_u32: ViewMut<U32>| {
+                vm_u32.add_component_unchecked(eid, U32(0));
+            },
+            |v_u32: View<U32, { track::Insertion + track::Modification }>| {
+                assert_eq!(v_u32.inserted_or_modified().iter().count(), 1)
+            },
+        )
+            .into_workload()
+    });
+
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+}
+
+#[test]
+fn workload_add_and_remove() {
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let eid = world.add_entity(());
+
+    world.add_workload(move || {
+        (
+            move |mut vm_u32: ViewMut<U32>| {
+                vm_u32.add_component_unchecked(eid, U32(0));
+            },
+            |v_u32: View<U32, { track::Insertion + track::Modification }>| {
+                assert_eq!(v_u32.inserted().iter().count(), 1)
+            },
+            move |mut vm_u32: ViewMut<U32>| {
+                vm_u32.remove(eid);
+            },
+        )
+            .into_workload()
+    });
+
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+}

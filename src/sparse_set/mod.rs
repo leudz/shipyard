@@ -251,6 +251,9 @@ impl<T: Component> SparseSet<T> {
             if self.is_tracking_insertion() {
                 self.insertion_data.swap_remove(sparse_entity.uindex());
             }
+            if self.is_tracking_modification() {
+                self.modification_data.swap_remove(sparse_entity.uindex());
+            }
             let component = self.data.swap_remove(sparse_entity.uindex());
 
             // The SparseSet could now be empty or the removed component could have been the last one
@@ -327,19 +330,23 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Make this storage track insertions.
     pub fn track_insertion(&mut self) -> &mut SparseSet<T> {
-        self.is_tracking_insertion = true;
+        if !self.is_tracking_insertion() {
+            self.is_tracking_insertion = true;
 
-        self.insertion_data
-            .extend(core::iter::repeat(0).take(self.dense.len()));
+            self.insertion_data
+                .extend(core::iter::repeat(0).take(self.dense.len()));
+        }
 
         self
     }
     /// Make this storage track modification.
     pub fn track_modification(&mut self) -> &mut SparseSet<T> {
-        self.is_tracking_modification = true;
+        if !self.is_tracking_modification() {
+            self.is_tracking_modification = true;
 
-        self.modification_data
-            .extend(core::iter::repeat(0).take(self.dense.len()));
+            self.modification_data
+                .extend(core::iter::repeat(0).take(self.dense.len()));
+        }
 
         self
     }
@@ -937,5 +944,19 @@ mod tests {
         sparse_set.insert(EntityId::new(10), STR("10"), 0);
 
         println!("{:#?}", sparse_set);
+    }
+
+    #[test]
+    fn multiple_enable_tracking() {
+        let mut sparse_set = SparseSet::new();
+
+        sparse_set.insert(EntityId::new_from_parts(0, 0), I32(0), 0);
+
+        sparse_set.track_all();
+        sparse_set.track_all();
+        sparse_set.track_all();
+
+        assert_eq!(sparse_set.insertion_data.len(), 1);
+        assert_eq!(sparse_set.modification_data.len(), 1);
     }
 }
