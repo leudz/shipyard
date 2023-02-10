@@ -229,8 +229,8 @@ macro_rules! impl_into_workload {
                 };
 
                 $(
-                    let mut w = self.$index.into_workload();
-                    workload = workload.merge(&mut w);
+                    let w = self.$index.into_workload();
+                    workload = workload.merge(w);
                 )+
 
                 workload
@@ -276,7 +276,7 @@ macro_rules! impl_into_workload {
                         workloads.$index = workloads.$index.before_all(sequential_tag.clone());
                     }
 
-                    workload = workload.merge(&mut workloads.$index);
+                    workload = workload.merge(workloads.$index);
                 )+
 
                 let mut system_names = DedupedLabels::with_capacity(workload.systems.len());

@@ -203,11 +203,19 @@ impl Workload {
     }
     /// Propagates all information from `self` and `other` into their respective systems before merging their systems.  
     /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
-    pub fn merge(mut self, other: &mut Workload) -> Workload {
+    pub fn merge(mut self, mut other: Workload) -> Workload {
         self.propagate();
         other.propagate();
 
-        self.append(other)
+        let systems_len = self.systems.len();
+        self.barriers.extend(
+            other
+                .barriers
+                .drain(..)
+                .map(|barrier| barrier + systems_len),
+        );
+
+        self.append(&mut other)
     }
     /// Propagates all information into the systems.  
     /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
