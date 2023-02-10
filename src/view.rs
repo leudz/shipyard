@@ -130,7 +130,7 @@ pub struct View<'a, T: Component, const TRACK: u32 = { track::Untracked }> {
     pub(crate) sparse_set: &'a SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insert: u32,
+    pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
     pub(crate) current: u32,
@@ -173,7 +173,7 @@ impl<'a, T: Component> View<'a, T, { track::Untracked }> {
                 sparse_set,
                 all_borrow: Some(all_borrow),
                 borrow: Some(borrow),
-                last_insert: 0,
+                last_insertion: 0,
                 last_modification: 0,
                 last_removal_or_deletion: 0,
                 current: 0,
@@ -199,7 +199,7 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
+        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
     }
 }
 
@@ -242,7 +242,7 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
+        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
             || Track::<TRACK>::is_modified(
                 self.sparse_set,
                 entity,
@@ -356,7 +356,7 @@ impl<'a, T: Component, const TRACK: u32> Clone for View<'a, T, TRACK> {
             sparse_set: self.sparse_set,
             borrow: self.borrow.clone(),
             all_borrow: self.all_borrow.clone(),
-            last_insert: self.last_insert,
+            last_insertion: self.last_insertion,
             last_modification: self.last_modification,
             last_removal_or_deletion: self.last_removal_or_deletion,
             current: self.current,
@@ -384,7 +384,7 @@ pub struct ViewMut<'a, T: Component, const TRACK: u32 = { track::Untracked }> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
-    pub(crate) last_insert: u32,
+    pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
     pub(crate) current: u32,
@@ -429,7 +429,7 @@ impl<'a, T: Component> ViewMut<'a, T, { track::Untracked }> {
                 sparse_set,
                 _all_borrow: Some(all_borrow),
                 _borrow: Some(borrow),
-                last_insert: 0,
+                last_insertion: 0,
                 last_modification: 0,
                 last_removal_or_deletion: 0,
                 current: 0,
@@ -486,7 +486,7 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insert, self.current)
+        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
     }
     /// Wraps this view to be able to iterate *inserted* components.
     #[inline]
@@ -727,7 +727,7 @@ pub struct UniqueView<'a, T: Unique> {
     pub(crate) unique: &'a UniqueStorage<T>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insert: u32,
+    pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) current: u32,
 }
@@ -741,7 +741,7 @@ impl<T: Unique> UniqueView<'_, T> {
             unique: unique.unique,
             borrow: unique.borrow.clone(),
             all_borrow: unique.all_borrow.clone(),
-            last_insert: unique.last_insert,
+            last_insertion: unique.last_insertion,
             last_modification: unique.last_modification,
             current: unique.current,
         }
@@ -754,7 +754,7 @@ impl<T: Unique> UniqueView<'_, T> {
     /// [`clear_inserted`]: UniqueViewMut::clear_inserted
     #[inline]
     pub fn is_inserted(&self) -> bool {
-        is_track_within_bounds(self.unique.insert, self.last_insert, self.current)
+        is_track_within_bounds(self.unique.insert, self.last_insertion, self.current)
     }
     /// Returns `true` is the component was modified since the last [`clear_modified`] call.
     ///
@@ -804,7 +804,7 @@ pub struct UniqueViewMut<'a, T: Unique> {
     pub(crate) unique: &'a mut UniqueStorage<T>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insert: u32,
+    pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) current: u32,
 }
@@ -815,7 +815,7 @@ impl<T: Unique> UniqueViewMut<'_, T> {
     /// [`clear_inserted`]: Self::clear_inserted
     #[inline]
     pub fn is_inserted(&self) -> bool {
-        is_track_within_bounds(self.unique.insert, self.last_insert, self.current)
+        is_track_within_bounds(self.unique.insert, self.last_insertion, self.current)
     }
     /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///

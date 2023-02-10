@@ -24,42 +24,42 @@ unsafe impl<T: Send + Component> Send for FullRawWindow<'_, T> {}
 
 impl<'w, T: Component> FullRawWindow<'w, T> {
     #[inline]
-    pub(crate) fn from_view<const TRACK: u32>(sparse_set: &View<'_, T, TRACK>) -> Self {
-        let sparse_len = sparse_set.sparse.len();
-        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = sparse_set.sparse.as_ptr();
+    pub(crate) fn from_view<const TRACK: u32>(view: &View<'_, T, TRACK>) -> Self {
+        let sparse_len = view.sparse.len();
+        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
         FullRawWindow {
             sparse,
             sparse_len,
-            dense: sparse_set.dense.as_ptr(),
-            dense_len: sparse_set.dense.len(),
-            data: sparse_set.data.as_ptr(),
-            insertion_data: sparse_set.insertion_data.as_ptr(),
-            modification_data: sparse_set.modification_data.as_ptr(),
-            last_insertion: sparse_set.last_insert,
-            last_modification: sparse_set.last_modified,
-            current: sparse_set.current,
+            dense: view.dense.as_ptr(),
+            dense_len: view.dense.len(),
+            data: view.data.as_ptr(),
+            insertion_data: view.insertion_data.as_ptr(),
+            modification_data: view.modification_data.as_ptr(),
+            last_insertion: view.last_insertion,
+            last_modification: view.last_modification,
+            current: view.current,
             _phantom: PhantomData,
         }
     }
     #[inline]
-    pub(crate) fn from_view_mut<const TRACK: u32>(sparse_set: &ViewMut<'_, T, TRACK>) -> Self {
-        let sparse_len = sparse_set.sparse.len();
-        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = sparse_set.sparse.as_ptr();
+    pub(crate) fn from_view_mut<const TRACK: u32>(view: &ViewMut<'_, T, TRACK>) -> Self {
+        let sparse_len = view.sparse.len();
+        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
         FullRawWindow {
             sparse,
             sparse_len,
-            dense: sparse_set.dense.as_ptr(),
-            dense_len: sparse_set.dense.len(),
-            data: sparse_set.data.as_ptr(),
-            insertion_data: sparse_set.insertion_data.as_ptr(),
-            modification_data: sparse_set.modification_data.as_ptr(),
-            last_insertion: sparse_set.last_insert,
-            last_modification: sparse_set.last_modified,
-            current: sparse_set.current,
+            dense: view.dense.as_ptr(),
+            dense_len: view.dense.len(),
+            data: view.data.as_ptr(),
+            insertion_data: view.insertion_data.as_ptr(),
+            modification_data: view.modification_data.as_ptr(),
+            last_insertion: view.last_insertion,
+            last_modification: view.last_modification,
+            current: view.current,
             _phantom: PhantomData,
         }
     }
@@ -141,24 +141,23 @@ unsafe impl<T: Send + Component> Send for FullRawWindowMut<'_, T> {}
 
 impl<'w, T: Component> FullRawWindowMut<'w, T> {
     #[inline]
-    pub(crate) fn new<const TRACK: u32>(sparse_set: &mut ViewMut<'_, T, TRACK>) -> Self {
-        let sparse_len = sparse_set.sparse.len();
-        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
-            sparse_set.sparse.as_mut_ptr();
+    pub(crate) fn new<const TRACK: u32>(view: &mut ViewMut<'_, T, TRACK>) -> Self {
+        let sparse_len = view.sparse.len();
+        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
 
         FullRawWindowMut {
             sparse,
             sparse_len,
-            dense: sparse_set.dense.as_mut_ptr(),
-            dense_len: sparse_set.dense.len(),
-            data: sparse_set.data.as_mut_ptr(),
-            insertion_data: sparse_set.insertion_data.as_ptr(),
-            modification_data: sparse_set.modification_data.as_mut_ptr(),
-            last_insertion: sparse_set.last_insert,
-            last_modification: sparse_set.last_modified,
-            current: sparse_set.current,
-            is_tracking_modification: sparse_set.is_tracking_modification(),
+            dense: view.dense.as_mut_ptr(),
+            dense_len: view.dense.len(),
+            data: view.data.as_mut_ptr(),
+            insertion_data: view.insertion_data.as_ptr(),
+            modification_data: view.modification_data.as_mut_ptr(),
+            last_insertion: view.last_insertion,
+            last_modification: view.last_modification,
+            current: view.current,
+            is_tracking_modification: view.is_tracking_modification(),
             _phantom: PhantomData,
         }
     }

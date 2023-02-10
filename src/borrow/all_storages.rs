@@ -90,7 +90,7 @@ impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for View<'_
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(View {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run
                 .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
@@ -117,7 +117,7 @@ impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<View<'
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(NonSend(View {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -143,7 +143,7 @@ impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<View<'
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(NonSync(View {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -169,7 +169,7 @@ impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<View<'_, 
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(NonSendSync(View {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -194,7 +194,7 @@ impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for ViewMut
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(ViewMut {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run
                 .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
@@ -221,7 +221,7 @@ impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<ViewMu
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(NonSend(ViewMut {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -247,7 +247,7 @@ impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<ViewMu
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(NonSync(ViewMut {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -273,7 +273,7 @@ impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<ViewMut<'
         sparse_set.check_tracking::<TRACK>()?;
 
         Ok(NonSendSync(ViewMut {
-            last_insert: last_run.unwrap_or(sparse_set.last_insert),
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
@@ -299,7 +299,7 @@ impl<T: Send + Sync + Unique> AllStoragesBorrow for UniqueView<'_, T> {
             unique,
             borrow: Some(borrow),
             all_borrow: None,
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
         })
@@ -322,7 +322,7 @@ impl<T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueView<'_, T>> {
             unique,
             borrow: Some(borrow),
             all_borrow: None,
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
         }))
@@ -345,7 +345,7 @@ impl<T: Send + Unique> AllStoragesBorrow for NonSync<UniqueView<'_, T>> {
             unique,
             borrow: Some(borrow),
             all_borrow: None,
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
         }))
@@ -368,7 +368,7 @@ impl<T: Unique> AllStoragesBorrow for NonSendSync<UniqueView<'_, T>> {
             unique,
             borrow: Some(borrow),
             all_borrow: None,
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
         }))
@@ -387,7 +387,7 @@ impl<T: Send + Sync + Unique> AllStoragesBorrow for UniqueViewMut<'_, T> {
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(UniqueViewMut {
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
             unique,
@@ -410,7 +410,7 @@ impl<T: Sync + Unique> AllStoragesBorrow for NonSend<UniqueViewMut<'_, T>> {
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(NonSend(UniqueViewMut {
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
             unique,
@@ -433,7 +433,7 @@ impl<T: Send + Unique> AllStoragesBorrow for NonSync<UniqueViewMut<'_, T>> {
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(NonSync(UniqueViewMut {
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
             unique,
@@ -456,7 +456,7 @@ impl<T: Unique> AllStoragesBorrow for NonSendSync<UniqueViewMut<'_, T>> {
         let (unique, borrow) = unsafe { RefMut::destructure(view) };
 
         Ok(NonSendSync(UniqueViewMut {
-            last_insert: last_run.unwrap_or(unique.last_insert),
+            last_insertion: last_run.unwrap_or(unique.last_insert),
             last_modification: last_run.unwrap_or(unique.last_modification),
             current,
             unique,
