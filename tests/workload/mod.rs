@@ -149,3 +149,19 @@ fn run_with_world() {
     workload2.run_with_world(&world1).unwrap();
     workload2.run_with_world(&world2).unwrap();
 }
+
+#[test]
+fn enable_tracking() {
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_entity(U32(0));
+
+    world.add_workload(|| {
+        (|v_u32: View<U32, { track::Insertion + track::Modification }>| {
+            for _ in v_u32.inserted_or_modified().iter() {}
+        })
+        .into_workload()
+    });
+
+    world.run_default().unwrap();
+}

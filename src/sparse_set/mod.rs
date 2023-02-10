@@ -400,16 +400,16 @@ impl<T: Component> SparseSet<T> {
     }
     pub(crate) fn enable_tracking<const TRACK: u32>(&mut self) {
         if TRACK & track::Insertion != 0 {
-            self.is_tracking_insertion = true;
+            self.track_insertion();
         }
         if TRACK & track::Modification != 0 {
-            self.is_tracking_modification = true;
+            self.track_modification();
         }
         if TRACK & track::Deletion != 0 {
-            self.is_tracking_deletion = true;
+            self.track_deletion();
         }
         if TRACK & track::Removal != 0 {
-            self.is_tracking_removal = true;
+            self.track_removal();
         }
     }
 }
