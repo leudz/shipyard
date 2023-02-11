@@ -92,7 +92,7 @@ impl ScheduledWorkload {
 
 impl World {
     /// Creates a new workload and store it in the [`World`](crate::World).
-    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
+    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F) -> WorkloadInfo
     where
         W: IntoWorkload<Views, R>,
     {
@@ -114,7 +114,7 @@ impl World {
             })
         };
 
-        w.add_to_world(self).unwrap();
+        w.add_to_world(self).unwrap()
     }
 }
 
