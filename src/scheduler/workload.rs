@@ -289,7 +289,7 @@ impl Workload {
     /// world.run_default();
     /// ```
     #[track_caller]
-    pub fn with_system<B, S: IntoWorkloadSystem<B, ()>>(mut self, system: S) -> Workload {
+    pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(mut self, system: S) -> Workload {
         self.systems.push(system.into_workload_system().unwrap());
 
         self
@@ -2547,5 +2547,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(workload.1.batch_info.len(), 1);
+    }
+
+    #[test]
+    fn with_system_return_type() {
+        Workload::new("").with_system(|| 0usize).build().unwrap();
     }
 }
