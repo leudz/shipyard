@@ -9,6 +9,7 @@ struct USIZE(usize);
 impl Component for USIZE {}
 impl Unique for USIZE {}
 
+use core::any::type_name;
 use shipyard::*;
 
 #[test]
@@ -178,4 +179,24 @@ fn check_nested_workloads_run_if() {
     });
 
     world.run_default().unwrap();
+}
+
+#[test]
+fn check_run_if_error() {
+    fn type_name_of<F: FnOnce() + 'static>(_: F) -> &'static str {
+        type_name::<F>()
+    }
+
+    fn sys() {}
+
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_workload(|| (|| {}, sys.run_if(|_: UniqueView<USIZE>| true)).into_workload());
+
+    match world.run_default() {
+        Err(error::RunWorkload::Run((label, _))) => {
+            assert!(label.dyn_eq(&*type_name_of(sys).as_label()));
+        }
+        _ => panic!(),
+    }
 }

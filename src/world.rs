@@ -820,18 +820,17 @@ let i = world.run(sys1);
                             .iter()
                             .map(|run_if_index| {
                                 if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
-                                    Ok((run_if)(self)?)
+                                    (run_if)(self).map_err(|err| {
+                                        error::RunWorkload::Run((
+                                            system_names[batches.sequential[*run_if_index]].clone(),
+                                            err,
+                                        ))
+                                    })
                                 } else {
                                     Ok(true)
                                 }
                             })
-                            .collect::<Result<Vec<_>, error::Run>>()
-                            .map_err(|err| {
-                                error::RunWorkload::Run((
-                                    system_names[batch.0.unwrap()].clone(),
-                                    err,
-                                ))
-                            })?,
+                            .collect::<Result<Vec<_>, error::RunWorkload>>()?,
                     );
 
                     rayon::in_place_scope(|scope| {
