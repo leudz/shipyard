@@ -44,7 +44,7 @@ pub struct SystemInfo {
 
 impl core::fmt::Debug for SystemInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("StorageInfo")
+        f.debug_struct("SystemInfo")
             .field("name", &self.name)
             .field("borrow", &self.borrow)
             .field("conflict", &self.conflict)
