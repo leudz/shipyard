@@ -165,3 +165,17 @@ fn enable_tracking() {
 
     world.run_default().unwrap();
 }
+
+/// System run_if should not run if a workload run_if returns `false`
+#[test]
+fn check_nested_workloads_run_if() {
+    fn sys() {}
+
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_workload(|| {
+        (sys.run_if(|| panic!()).into_workload().run_if(|| false),).into_workload()
+    });
+
+    world.run_default().unwrap();
+}

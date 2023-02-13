@@ -226,7 +226,7 @@ impl Workload {
                 (None, Some(run_if)) => Some(run_if.to_non_clone()),
                 (Some(run_if), None) => Some(run_if),
                 (Some(system_run_if), Some(workload_run_if)) => Some(Box::new(move |world| {
-                    Ok((system_run_if)(world)? && workload_run_if.clone().run(world)?)
+                    Ok(workload_run_if.clone().run(world)? && (system_run_if)(world)?)
                 })),
             };
 
