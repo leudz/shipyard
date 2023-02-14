@@ -10,7 +10,7 @@ use borrow_expand::expand_borrow;
 use borrow_info_expand::expand_borrow_info;
 use component_expand::{expand_component, expand_unique};
 
-#[proc_macro_derive(Component, attributes(track))]
+#[proc_macro_derive(Component)]
 pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
@@ -20,7 +20,7 @@ pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     expand_component(name, generics).into()
 }
 
-#[proc_macro_derive(Unique, attributes(track))]
+#[proc_macro_derive(Unique)]
 pub fn unique(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
