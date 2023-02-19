@@ -567,8 +567,7 @@ impl<T: Component> SparseSet<T> {
     }
 
     /// Creates a draining iterator that empties the storage and yields the removed items.
-    #[cfg(test)]
-    fn private_drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
+    pub(crate) fn private_drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
         if self.is_tracking_removal {
             self.removal_data
                 .extend(self.dense.iter().map(|&entity| (entity, current)));

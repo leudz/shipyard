@@ -5,7 +5,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::get::Get;
-use crate::sparse_set::SparseSet;
+use crate::sparse_set::{SparseSet, SparseSetDrain};
 use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
@@ -447,6 +447,10 @@ where
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
         self.sparse_set.private_clear(self.current);
+    }
+    /// Creates a draining iterator that empties the storage and yields the removed items.
+    pub fn drain(&mut self) -> SparseSetDrain<'_, T> {
+        self.sparse_set.private_drain(self.current)
     }
     /// Applies the given function `f` to the entities `a` and `b`.\
     /// The two entities shouldn't point to the same component.  
