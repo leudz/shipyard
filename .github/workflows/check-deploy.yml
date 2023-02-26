@@ -197,7 +197,7 @@ jobs:
       - uses: jetli/trunk-action@v0.4.0
         with:
           version: 'latest'
-      - run: trunk build --public-url "visualizer/" --release visualizer/index.html
+      - run: trunk build --public-url "shipyard/visualizer/" --release visualizer/index.html
       - name: save visualizer
         uses: actions/upload-artifact@v2
         with:
