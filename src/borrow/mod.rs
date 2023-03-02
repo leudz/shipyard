@@ -13,7 +13,7 @@ use crate::component::{Component, Unique};
 use crate::error;
 use crate::sparse_set::SparseSet;
 use crate::unique::UniqueStorage;
-use crate::view::{
+use crate::views::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
 };

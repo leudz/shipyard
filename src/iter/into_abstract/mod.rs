@@ -10,7 +10,7 @@ use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
 use crate::sparse_set::{SparseArray, BUCKET_SIZE};
 use crate::type_id::TypeId;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 use alloc::vec::Vec;
 
 // Allows to make ViewMut's sparse and dense fields immutable

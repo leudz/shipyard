@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 use alloc::boxed::Box;
 use core::hint::unreachable_unchecked;
 use core::marker::PhantomData;

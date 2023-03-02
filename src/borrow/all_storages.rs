@@ -11,7 +11,7 @@ use crate::component::Unique;
 use crate::error;
 use crate::sparse_set::SparseSet;
 use crate::unique::UniqueStorage;
-use crate::view::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
+use crate::views::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 use crate::Borrow;
 
 /// Allows a type to be borrowed by [`AllStorages::borrow`] and [`AllStorages::run`].

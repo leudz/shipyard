@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::view::ViewMut;
+use crate::views::ViewMut;
 
 /// Trait describing how to add a new entity to a storage.
 pub trait AddEntity {

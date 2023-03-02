@@ -4,7 +4,7 @@ use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
 use crate::tracking::{InsertedOrModified, InsertionTracking, ModificationTracking, Track};
 use crate::type_id::TypeId;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 
 impl<'tmp, 'v, T: Component, const TRACK: u32> IntoAbstract
     for InsertedOrModified<&'tmp View<'v, T, TRACK>>

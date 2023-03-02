@@ -64,7 +64,7 @@ pub mod track;
 mod tracking;
 mod type_id;
 mod unique;
-mod view;
+mod views;
 mod world;
 
 #[cfg(feature = "thread_local")]
@@ -117,7 +117,7 @@ pub use tracking::{
     TupleTrack,
 };
 pub use unique::UniqueStorage;
-pub use view::{
+pub use views::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
 };

@@ -2,7 +2,7 @@ use crate::{
     component::Component,
     iter::IntoAbstract,
     tracking::Inserted,
-    view::{View, ViewMut},
+    views::{View, ViewMut},
 };
 use core::ops::BitOr;
 

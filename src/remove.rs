@@ -1,7 +1,7 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::tracking::{Track, Tracking};
-use crate::view::ViewMut;
+use crate::views::ViewMut;
 
 /// Removes component from entities.
 pub trait Remove {

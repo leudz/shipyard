@@ -1,7 +1,7 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 
 /// Checks if an entity has some components.
 pub trait Contains {

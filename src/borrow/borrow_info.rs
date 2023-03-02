@@ -13,7 +13,7 @@ use crate::scheduler::TypeInfo;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::unique::UniqueStorage;
-use crate::view::{
+use crate::views::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
 };

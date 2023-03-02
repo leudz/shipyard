@@ -3,7 +3,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::r#mut::Mut;
 use crate::sparse_set::SparseSet;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 use core::any::type_name;
 
 /// Retrieves components based on their type and entity id.

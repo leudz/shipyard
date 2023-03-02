@@ -1,5 +1,5 @@
 use crate::component::Component;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 use core::ops::Not as NotOps;
 
 /// Used to filter out components.

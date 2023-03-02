@@ -4,7 +4,7 @@ use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
 use crate::tracking::{ModificationTracking, Modified, Track};
 use crate::type_id::TypeId;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 
 impl<'tmp, 'v, T: Component, const TRACK: u32> IntoAbstract for Modified<&'tmp View<'v, T, TRACK>>
 where
