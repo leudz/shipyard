@@ -227,7 +227,17 @@ unsafe impl<'a, T: Send + Sync + Component, const TRACK: u32> BorrowInfo for Vie
             thread_safe: true,
         });
     }
-    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_mut(SparseSet::<T>::new)?
+                .enable_tracking::<TRACK>();
+
+            Ok(())
+        })
+    }
 }
 
 #[cfg(feature = "thread_local")]
