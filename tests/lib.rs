@@ -1,6 +1,7 @@
 #[cfg(all(feature = "std", feature = "proc"))]
 mod book;
 mod borrow;
+#[cfg(feature = "proc")]
 mod derive;
 mod iteration;
 #[cfg(feature = "serde1")]

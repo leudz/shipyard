@@ -1,6 +1,5 @@
 use shipyard::*;
 
-#[cfg(feature = "proc")]
 #[test]
 fn check_derive() {
     #[derive(Component, Unique, Borrow, AllStoragesBorrow, BorrowInfo)]
