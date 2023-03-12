@@ -1387,7 +1387,13 @@ fn insert_before_after_system(
                 }
             }
         } else {
-            for other_system in &workload_info.batch_info[parallel_position].systems.1 {
+            for other_system in workload_info.batch_info[parallel_position]
+                .systems
+                .0
+                .as_ref()
+                .into_iter()
+                .chain(&workload_info.batch_info[parallel_position].systems.1)
+            {
                 check_conflict(other_system, &borrow_constraints, &mut conflict);
 
                 if conflict.is_some() {
@@ -2449,6 +2455,29 @@ mod tests {
         assert_eq!(
             batches.parallel,
             &[(None, vec![2]), (None, vec![1]), (None, vec![0])]
+        );
+    }
+
+    #[test]
+    fn after_all_single_system() {
+        let (workload, _) = Workload::new("")
+            .with_system((|| {}).tag("this"))
+            .with_system((|_: AllStoragesViewMut<'_>| {}).after_all("this"))
+            .with_system((|_: View<'_, Usize>| {}).after_all("this"))
+            .build()
+            .unwrap();
+
+        let batches = &workload.workloads[&"".as_label()];
+
+        assert_eq!(
+            batches,
+            &Batches {
+                parallel: vec![(None, vec![0]), (None, vec![2]), (Some(1), vec![])],
+                parallel_run_if: Vec::new(),
+                sequential: vec![0, 1, 2],
+                sequential_run_if: Vec::new(),
+                run_if: None,
+            }
         );
     }
 
