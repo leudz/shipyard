@@ -200,3 +200,20 @@ fn check_run_if_error() {
         _ => panic!(),
     }
 }
+
+#[test]
+fn tracking_enabled() {
+    fn w() -> Workload {
+        (
+            |_: View<USIZE, { track::All }>| {},
+            |_: ViewMut<USIZE, { track::All }>| {},
+        )
+            .into_workload()
+    }
+
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_workload(w);
+
+    world.run_workload(w).unwrap();
+}

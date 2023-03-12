@@ -5,6 +5,14 @@ use std::rc::Rc;
 struct MyRc(Rc<RefCell<Vec<u32>>>);
 impl Component for MyRc {}
 
+struct NotSend(*const ());
+impl Component for NotSend {}
+unsafe impl Sync for NotSend {}
+
+struct NotSync(*const ());
+impl Component for NotSync {}
+unsafe impl Send for NotSync {}
+
 #[test]
 fn basic() {
     fn push(vecs: NonSendSync<View<MyRc>>) {
@@ -28,4 +36,25 @@ fn basic() {
     world.run(|vecs: NonSendSync<ViewMut<MyRc>>| {
         assert_eq!(&**vecs.iter().next().unwrap().0.borrow(), &[0][..]);
     });
+}
+
+#[test]
+fn tracking_enabled() {
+    fn w() -> Workload {
+        (
+            |_: NonSend<View<NotSend, { track::All }>>| {},
+            |_: NonSend<ViewMut<NotSend, { track::All }>>| {},
+            |_: NonSync<View<NotSync, { track::All }>>| {},
+            |_: NonSync<ViewMut<NotSync, { track::All }>>| {},
+            |_: NonSendSync<View<MyRc, { track::All }>>| {},
+            |_: NonSendSync<ViewMut<MyRc, { track::All }>>| {},
+        )
+            .into_workload()
+    }
+
+    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    world.add_workload(w);
+
+    world.run_workload(w).unwrap();
 }
