@@ -780,7 +780,6 @@ let i = world.run(sys1);
         workload_name: &dyn Label,
     ) -> Result<(), error::RunWorkload> {
         if let Some(run_if) = &batches.run_if {
-            // If impossible to check, let the workload run and fail later
             if !run_if
                 .run(self)
                 .map_err(|err| error::RunWorkload::Run((workload_name.dyn_clone(), err)))?
@@ -789,117 +788,81 @@ let i = world.run(sys1);
             }
         }
 
+        #[cfg(feature = "parallel")]
+        {
+            self.run_batches_parallel(systems, system_names, batches, workload_name)
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.run_batches_sequential(systems, system_names, batches, workload_name)
+        }
+    }
+    #[cfg(feature = "parallel")]
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_batches_parallel(
+        &self,
+        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
+        system_names: &[Box<dyn Label>],
+        batches: &Batches,
+        #[cfg_attr(not(feature = "tracing"), allow(unused))] workload_name: &dyn Label,
+    ) -> Result<(), error::RunWorkload> {
         #[cfg(feature = "tracing")]
         let parent_span = tracing::info_span!("workload", name = ?workload_name);
         #[cfg(feature = "tracing")]
         let _parent_span = parent_span.enter();
 
-        #[cfg(feature = "parallel")]
-        {
-            let run_batch = || -> Result<(), error::RunWorkload> {
-                for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if)
-                {
-                    let mut result = Ok(());
-                    let run_if = (
-                        if let Some(run_if_index) = batches_run_if.0 {
-                            if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
-                                (run_if)(self).map_err(|err| {
-                                    error::RunWorkload::Run((
-                                        system_names[batch.0.unwrap()].clone(),
-                                        err,
-                                    ))
-                                })?
-                            } else {
-                                true
-                            }
+        let run_batch = || -> Result<(), error::RunWorkload> {
+            for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
+                let mut result = Ok(());
+                let run_if = (
+                    if let Some(run_if_index) = batches_run_if.0 {
+                        if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
+                            (run_if)(self).map_err(|err| {
+                                error::RunWorkload::Run((
+                                    system_names[batch.0.unwrap()].clone(),
+                                    err,
+                                ))
+                            })?
                         } else {
                             true
-                        },
-                        batches_run_if
-                            .1
-                            .iter()
-                            .map(|run_if_index| {
-                                if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
-                                    (run_if)(self).map_err(|err| {
-                                        error::RunWorkload::Run((
-                                            system_names[batches.sequential[*run_if_index]].clone(),
-                                            err,
-                                        ))
-                                    })
-                                } else {
-                                    Ok(true)
-                                }
-                            })
-                            .collect::<Result<Vec<_>, error::RunWorkload>>()?,
-                    );
-
-                    rayon::in_place_scope(|scope| {
-                        if let Some(index) = batch.0 {
-                            scope.spawn(|_| {
-                                if batch.1.len() == 1 {
-                                    if !run_if.1[0] {
-                                        return;
-                                    }
-
-                                    let system_name = system_names[batch.1[0]].clone();
-
-                                    #[cfg(feature = "tracing")]
-                                    let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                    #[cfg(feature = "tracing")]
-                                    let _system_span = system_span.enter();
-
-                                    result = systems[batch.1[0]](self).map_err(|err| {
-                                        error::RunWorkload::Run((system_name, err))
-                                    });
-                                } else {
-                                    use rayon::prelude::*;
-
-                                    result = batch.1.par_iter().zip(run_if.1).try_for_each(|(&index, should_run)| {
-                                        if !should_run {
-                                            return Ok(());
-                                        }
-
-                                        let system_name = system_names[index].clone();
-
-                                        #[cfg(feature = "tracing")]
-                                        let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                        #[cfg(feature = "tracing")]
-                                        let _system_span = system_span.enter();
-
-                                        (systems[index])(self).map_err(|err| {
-                                            error::RunWorkload::Run((system_name, err))
-                                        })
-                                    });
-                                }
-                            });
-
-                            if !run_if.0 {
-                                return Ok(());
+                        }
+                    } else {
+                        true
+                    },
+                    batches_run_if
+                        .1
+                        .iter()
+                        .map(|run_if_index| {
+                            if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
+                                (run_if)(self).map_err(|err| {
+                                    error::RunWorkload::Run((
+                                        system_names[batches.sequential[*run_if_index]].clone(),
+                                        err,
+                                    ))
+                                })
+                            } else {
+                                Ok(true)
                             }
+                        })
+                        .collect::<Result<Vec<_>, error::RunWorkload>>()?,
+                );
 
-                            let system_name = system_names[index].clone();
-
-                            #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
-
-                            systems[index](self)
-                                .map_err(|err| error::RunWorkload::Run((system_name, err)))?;
-                        } else if batch.1.len() == 1 {
+                rayon::in_place_scope(|scope| {
+                    scope.spawn(|_| {
+                        if batch.1.len() == 1 {
                             if !run_if.1[0] {
-                                return Ok(());
+                                return;
                             }
 
-                            let system_name = system_names[batch.1[0]].clone();
-
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[batch.1[0]]);
                             #[cfg(feature = "tracing")]
                             let _system_span = system_span.enter();
 
-                            result = systems[batch.1[0]](self)
-                                .map_err(|err| error::RunWorkload::Run((system_name, err)));
+                            result = systems[batch.1[0]](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[batch.1[0]].clone(), err))
+                            });
                         } else {
                             use rayon::prelude::*;
 
@@ -908,47 +871,74 @@ let i = world.run(sys1);
                                     return Ok(());
                                 }
 
-                                let system_name = system_names[index].clone();
-
                                 #[cfg(feature = "tracing")]
-                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
+                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
                                 #[cfg(feature = "tracing")]
                                 let _system_span = system_span.enter();
 
                                 (systems[index])(self).map_err(|err| {
-                                    error::RunWorkload::Run((system_name, err))
+                                    error::RunWorkload::Run((system_names[index].clone(), err))
                                 })
                             });
                         }
+                    });
 
-                        Ok(())
+                    if let Some(index) = batch.0 {
+                        if run_if.0 {
+                            #[cfg(feature = "tracing")]
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
+                            #[cfg(feature = "tracing")]
+                            let _system_span = system_span.enter();
+
+                            systems[index](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[index].clone(), err))
+                            })?;
+                        }
+                    }
+
+                    Ok(())
+                })?;
+
+                result?;
+            }
+
+            Ok(())
+        };
+
+        if let Some(thread_pool) = &self.thread_pool {
+            thread_pool.scope(|_| run_batch())
+        } else {
+            // Use non local ThreadPool
+            run_batch()
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_batches_sequential(
+        &self,
+        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
+        system_names: &[Box<dyn Label>],
+        batches: &Batches,
+        #[cfg_attr(not(feature = "tracing"), allow(unused))] workload_name: &dyn Label,
+    ) -> Result<(), error::RunWorkload> {
+        #[cfg(feature = "tracing")]
+        let parent_span = tracing::info_span!("workload", name = ?workload_name);
+        #[cfg(feature = "tracing")]
+        let _parent_span = parent_span.enter();
+
+        batches
+            .sequential
+            .iter()
+            .zip(&batches.sequential_run_if)
+            .try_for_each(|(&index, run_if)| {
+                if let Some(run_if) = run_if.as_ref() {
+                    let should_run = (run_if)(self).map_err(|err| {
+                        error::RunWorkload::Run((system_names[index].clone(), err))
                     })?;
 
-                    result?;
-                }
-
-                Ok(())
-            };
-
-            if let Some(thread_pool) = &self.thread_pool {
-                let mut result = Ok(());
-                thread_pool.scope(|_| {
-                    result = run_batch();
-                });
-
-                result
-            } else {
-                // Use non local ThreadPool
-                run_batch()
-            }
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            batches.sequential.iter().zip(&batches.sequential_run_if).try_for_each(|(&index, run_if)| {
-                let system_name = &system_names[index];
-
-                if !run_if.as_ref().map(|run_if| (run_if)(self)).unwrap_or(Ok(true)).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))? {
-                    return Ok(());
+                    if !should_run {
+                        return Ok(());
+                    }
                 }
 
                 #[cfg(feature = "tracing")]
@@ -957,9 +947,9 @@ let i = world.run(sys1);
                 #[cfg(feature = "tracing")]
                 let _system_span = system_span.enter();
 
-                (systems[index])(self).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))
+                (systems[index])(self)
+                    .map_err(|err| error::RunWorkload::Run((system_names[index].clone(), err)))
             })
-        }
     }
     /// Run the default workload if there is one.
     ///
