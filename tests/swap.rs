@@ -30,7 +30,7 @@ fn update() {
     world.borrow::<ViewMut<U32>>().unwrap().track_all();
 
     let entity0 = world.run(
-        |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32, { track::All }>| {
+        |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32, track::All>| {
             let entity0 = entities.add_entity(&mut u32s, U32(0));
 
             u32s.clear_all_inserted();
@@ -40,7 +40,7 @@ fn update() {
     );
 
     world.run(
-        |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32, { track::All }>| {
+        |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32, track::All>| {
             let entity1 = entities.add_entity(&mut u32s, U32(1));
 
             u32s.apply_mut(entity0, entity1, core::mem::swap);

@@ -6,7 +6,7 @@ use crate::tracking::{Inserted, InsertionTracking, Track};
 use crate::type_id::TypeId;
 use crate::views::{View, ViewMut};
 
-impl<'tmp, 'v, T: Component, const TRACK: u32> IntoAbstract for Inserted<&'tmp View<'v, T, TRACK>>
+impl<'tmp, 'v, T: Component, TRACK> IntoAbstract for Inserted<&'tmp View<'v, T, TRACK>>
 where
     Track<TRACK>: InsertionTracking,
 {
@@ -33,8 +33,7 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, const TRACK: u32> IntoAbstract
-    for Inserted<&'b ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for Inserted<&'b ViewMut<'a, T, TRACK>>
 where
     Track<TRACK>: InsertionTracking,
 {
@@ -61,8 +60,7 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, const TRACK: u32> IntoAbstract
-    for Inserted<&'b mut ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for Inserted<&'b mut ViewMut<'a, T, TRACK>>
 where
     Track<TRACK>: InsertionTracking,
 {

@@ -49,7 +49,7 @@ fn update() {
     let (component,) = world.remove::<(USIZE,)>(entity1);
     assert_eq!(component, Some(USIZE(0)));
 
-    world.run(|usizes: View<USIZE, { track::All }>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         assert_eq!(
             usizes.get(entity1),
             Err(error::MissingComponent {
@@ -65,7 +65,7 @@ fn update() {
 
     world.remove::<(USIZE,)>(entity2);
 
-    world.run(|usizes: View<USIZE, { track::All }>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
     });
 }

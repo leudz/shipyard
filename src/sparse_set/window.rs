@@ -24,7 +24,7 @@ unsafe impl<T: Send + Component> Send for FullRawWindow<'_, T> {}
 
 impl<'w, T: Component> FullRawWindow<'w, T> {
     #[inline]
-    pub(crate) fn from_view<const TRACK: u32>(view: &View<'_, T, TRACK>) -> Self {
+    pub(crate) fn from_view<TRACK>(view: &View<'_, T, TRACK>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
@@ -44,7 +44,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         }
     }
     #[inline]
-    pub(crate) fn from_view_mut<const TRACK: u32>(view: &ViewMut<'_, T, TRACK>) -> Self {
+    pub(crate) fn from_view_mut<TRACK>(view: &ViewMut<'_, T, TRACK>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
@@ -141,7 +141,7 @@ unsafe impl<T: Send + Component> Send for FullRawWindowMut<'_, T> {}
 
 impl<'w, T: Component> FullRawWindowMut<'w, T> {
     #[inline]
-    pub(crate) fn new<const TRACK: u32>(view: &mut ViewMut<'_, T, TRACK>) -> Self {
+    pub(crate) fn new<TRACK>(view: &mut ViewMut<'_, T, TRACK>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;

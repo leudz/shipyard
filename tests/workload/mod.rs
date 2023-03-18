@@ -158,7 +158,7 @@ fn enable_tracking() {
     world.add_entity(U32(0));
 
     world.add_workload(|| {
-        (|v_u32: View<U32, { track::Insertion + track::Modification }>| {
+        (|v_u32: View<U32, track::InsertionAndModification>| {
             for _ in v_u32.inserted_or_modified().iter() {}
         })
         .into_workload()
@@ -205,8 +205,8 @@ fn check_run_if_error() {
 fn tracking_enabled() {
     fn w() -> Workload {
         (
-            |_: View<USIZE, { track::All }>| {},
-            |_: ViewMut<USIZE, { track::All }>| {},
+            |_: View<USIZE, track::All>| {},
+            |_: ViewMut<USIZE, track::All>| {},
         )
             .into_workload()
     }

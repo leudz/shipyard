@@ -53,7 +53,7 @@ fn update() {
     all_storages.clear();
     drop(all_storages);
 
-    let usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
+    let usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
     assert_eq!(
         (&usizes).get(entity1),
         Err(error::MissingComponent {
@@ -81,7 +81,7 @@ fn inserted() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE, { track::All }>) {
+    fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE, track::All>) {
         usizes.clear();
 
         for id in u32s.iter().ids() {

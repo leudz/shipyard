@@ -55,7 +55,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(1usize),));
 
-    world.run(|usizes: View<USIZE, { track::All }>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         let mut iter = usizes.inserted().iter();
         assert_eq!(iter.next(), Some(&USIZE(1)));
         assert_eq!(iter.next(), None);
@@ -63,7 +63,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(2usize),));
 
-    world.run(|usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|usizes: ViewMut<USIZE, track::All>| {
         let mut iter = usizes.inserted().iter();
         assert_eq!(iter.next(), Some(&USIZE(2)));
         assert_eq!(iter.next(), None);
@@ -73,7 +73,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(4usize),));
 
-    world.run(|usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|usizes: ViewMut<USIZE, track::All>| {
         let mut iter = usizes.modified().iter();
         assert_eq!(iter.next(), Some(&USIZE(4)));
         assert_eq!(iter.next(), None);
@@ -83,7 +83,7 @@ fn update() {
 
     world.add_component(entity, (USIZE(5usize),));
 
-    world.run(|usizes: View<USIZE, { track::All }>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         let mut iter = usizes.modified().iter();
         assert_eq!(iter.next(), Some(&USIZE(5)));
         assert_eq!(iter.next(), None);

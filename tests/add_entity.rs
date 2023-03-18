@@ -31,7 +31,7 @@ fn update() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
         .unwrap();
 
     let entity = entities.add_entity(&mut usizes, USIZE(0));
@@ -48,13 +48,13 @@ fn cleared_update() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
         .unwrap();
 
     let entity1 = entities.add_entity(&mut usizes, USIZE(1));
     usizes.clear_all_inserted();
 
-    let mut usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
     assert_eq!(usizes.inserted().iter().count(), 0);
     let entity2 = entities.add_entity(&mut usizes, USIZE(2));
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -71,13 +71,13 @@ fn modified_update() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
         .unwrap();
 
     let entity1 = entities.add_entity(&mut usizes, USIZE(1));
     usizes.clear_all_inserted_and_modified();
 
-    let mut usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
     usizes[entity1] = USIZE(3);
     let entity2 = entities.add_entity(&mut usizes, USIZE(2));
     assert_eq!(usizes.inserted().iter().count(), 1);
@@ -147,7 +147,7 @@ fn workload() {
             |mut entities: EntitiesViewMut, mut vm_u32: ViewMut<U32>| {
                 entities.add_entity(&mut vm_u32, U32(0));
             },
-            |v_u32: View<U32, { track::Insertion }>| assert_eq!(v_u32.inserted().iter().count(), 1),
+            |v_u32: View<U32, track::Insertion>| assert_eq!(v_u32.inserted().iter().count(), 1),
         )
             .into_workload()
     });

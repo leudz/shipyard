@@ -277,7 +277,7 @@ fn par_update_pack() {
     world.track_all::<USIZE>();
 
     world.run(
-        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE, { track::All }>)| {
+        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE, track::All>)| {
             entities.add_entity(&mut usizes, USIZE(0));
             entities.add_entity(&mut usizes, USIZE(1));
             entities.add_entity(&mut usizes, USIZE(2));
@@ -287,7 +287,7 @@ fn par_update_pack() {
         },
     );
 
-    world.run(|mut usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|mut usizes: ViewMut<USIZE, track::All>| {
         (&usizes).par_iter().sum::<USIZE>();
 
         assert_eq!(usizes.modified().iter().count(), 0);
@@ -325,7 +325,7 @@ fn par_multiple_update_pack() {
         |(mut entities, mut usizes, mut u32s): (
             EntitiesViewMut,
             ViewMut<USIZE>,
-            ViewMut<U32, { track::All }>,
+            ViewMut<U32, track::All>,
         )| {
             entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
             entities.add_entity(&mut usizes, USIZE(2));
@@ -339,7 +339,7 @@ fn par_multiple_update_pack() {
     );
 
     world.run(
-        |(mut usizes, mut u32s): (ViewMut<USIZE>, ViewMut<U32, { track::All }>)| {
+        |(mut usizes, mut u32s): (ViewMut<USIZE>, ViewMut<U32, track::All>)| {
             if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
                 iter.for_each(|_| {});
             } else {
@@ -393,7 +393,7 @@ fn par_update_filter() {
     world.track_all::<USIZE>();
 
     world.run(
-        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE, { track::All }>)| {
+        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE, track::All>)| {
             entities.add_entity(&mut usizes, USIZE(0));
             entities.add_entity(&mut usizes, USIZE(1));
             entities.add_entity(&mut usizes, USIZE(2));
@@ -403,7 +403,7 @@ fn par_update_filter() {
         },
     );
 
-    world.run(|mut usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|mut usizes: ViewMut<USIZE, track::All>| {
         (&mut usizes)
             .par_iter()
             .filter(|x| x.0 % 2 == 0)

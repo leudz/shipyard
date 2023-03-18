@@ -34,7 +34,7 @@ pub trait Get {
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
 }
 
-impl<'a, 'b, T: Component, const TRACK: u32> Get for &'b View<'a, T, TRACK> {
+impl<'a, 'b, T: Component, TRACK> Get for &'b View<'a, T, TRACK> {
     type Out = &'b T;
 
     #[inline]
@@ -48,7 +48,7 @@ impl<'a, 'b, T: Component, const TRACK: u32> Get for &'b View<'a, T, TRACK> {
     }
 }
 
-impl<'a, 'b, T: Component, const TRACK: u32> Get for &'b ViewMut<'a, T, TRACK> {
+impl<'a, 'b, T: Component, TRACK> Get for &'b ViewMut<'a, T, TRACK> {
     type Out = &'b T;
 
     #[inline]
@@ -62,7 +62,7 @@ impl<'a, 'b, T: Component, const TRACK: u32> Get for &'b ViewMut<'a, T, TRACK> {
     }
 }
 
-impl<'a, 'b, T: Component, const TRACK: u32> Get for &'b mut ViewMut<'a, T, TRACK> {
+impl<'a, 'b, T: Component, TRACK> Get for &'b mut ViewMut<'a, T, TRACK> {
     type Out = Mut<'b, T>;
 
     #[inline]

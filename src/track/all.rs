@@ -2,7 +2,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::All;
+use crate::track::{All, AllConst};
 use crate::tracking::{
     is_track_within_bounds, map_deletion_data, DeletionTracking, InsertionTracking,
     ModificationTracking, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
@@ -12,6 +12,10 @@ use crate::tracking::{
 impl Sealed for Track<All> {}
 
 impl Tracking for Track<All> {
+    fn as_const() -> u32 {
+        AllConst
+    }
+
     #[inline]
     fn is_inserted<T: Component>(
         sparse_set: &SparseSet<T>,

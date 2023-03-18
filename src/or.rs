@@ -25,11 +25,11 @@ use core::ops::BitOr;
 ///
 /// world.add_entity((A(0),));
 /// world.add_entity((A(1), B(10)));
-/// world.borrow::<ViewMut<A, { track::All }>>().unwrap().clear_all_inserted();
+/// world.borrow::<ViewMut<A, track::All>>().unwrap().clear_all_inserted();
 /// world.add_entity((B(20),));
 /// world.add_entity((A(3),));
 ///
-/// let (a, b) = world.borrow::<(View<A, { track::All }>, View<B, { track::All }>)>().unwrap();
+/// let (a, b) = world.borrow::<(View<A, track::All>, View<B, track::All>)>().unwrap();
 ///
 /// assert_eq!(
 ///     (a.inserted() | b.inserted()).iter().collect::<Vec<_>>(),
@@ -43,7 +43,7 @@ use core::ops::BitOr;
 #[derive(Copy, Clone)]
 pub struct Or<T>(pub(crate) T);
 
-impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U> for &'a View<'a, T, TRACK> {
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a View<'a, T, TRACK> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -51,9 +51,7 @@ impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U> for &'a View<
     }
 }
 
-impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U>
-    for Inserted<&'a View<'a, T, TRACK>>
-{
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for Inserted<&'a View<'a, T, TRACK>> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -61,7 +59,7 @@ impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U>
     }
 }
 
-impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T, TRACK> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -69,9 +67,7 @@ impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U> for &'a ViewM
     }
 }
 
-impl<'a, T: Component, const TRACK: u32, U: IntoAbstract> BitOr<U>
-    for &'a mut ViewMut<'a, T, TRACK>
-{
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a mut ViewMut<'a, T, TRACK> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {

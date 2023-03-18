@@ -48,7 +48,7 @@ fn update() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
         .unwrap();
 
     let entity = entities.add_entity((), ());
@@ -66,7 +66,7 @@ fn update() {
     assert_eq!(iter.next(), None);
 
     usizes.clear_all_inserted();
-    let mut usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
 
     usizes[entity] = USIZE(3);
 
@@ -78,7 +78,7 @@ fn update() {
 
     usizes.clear_all_modified();
 
-    let mut usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
 
     entities.add_component(entity, &mut usizes, USIZE(5));
 
@@ -115,7 +115,7 @@ fn workload_add() {
             move |mut vm_u32: ViewMut<U32>| {
                 vm_u32.add_component_unchecked(eid, U32(0));
             },
-            |v_u32: View<U32, { track::Insertion + track::Modification }>| {
+            |v_u32: View<U32, track::InsertionAndModification>| {
                 assert_eq!(v_u32.inserted_or_modified().iter().count(), 1)
             },
         )
@@ -138,7 +138,7 @@ fn workload_add_and_remove() {
             move |mut vm_u32: ViewMut<U32>| {
                 vm_u32.add_component_unchecked(eid, U32(0));
             },
-            |v_u32: View<U32, { track::Insertion + track::Modification }>| {
+            |v_u32: View<U32, track::InsertionAndModification>| {
                 assert_eq!(v_u32.inserted().iter().count(), 1)
             },
             move |mut vm_u32: ViewMut<U32>| {

@@ -53,7 +53,7 @@ pub trait IntoAbstract {
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> IntoAbstract for &'a View<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> IntoAbstract for &'a View<'a, T, TRACK> {
     type AbsView = FullRawWindow<'a, T>;
 
     #[inline]
@@ -78,7 +78,7 @@ impl<'a, T: Component, const TRACK: u32> IntoAbstract for &'a View<'a, T, TRACK>
     }
 }
 
-impl<'a: 'b, 'b, T: Component, const TRACK: u32> IntoAbstract for &'b ViewMut<'a, T, TRACK> {
+impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for &'b ViewMut<'a, T, TRACK> {
     type AbsView = FullRawWindow<'b, T>;
 
     #[inline]
@@ -103,7 +103,7 @@ impl<'a: 'b, 'b, T: Component, const TRACK: u32> IntoAbstract for &'b ViewMut<'a
     }
 }
 
-impl<'a: 'b, 'b, T: Component, const TRACK: u32> IntoAbstract for &'b mut ViewMut<'a, T, TRACK> {
+impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for &'b mut ViewMut<'a, T, TRACK> {
     type AbsView = FullRawWindowMut<'b, T>;
 
     #[inline]

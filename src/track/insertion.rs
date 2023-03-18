@@ -2,12 +2,16 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::Insertion;
+use crate::track::{Insertion, InsertionConst};
 use crate::tracking::{is_track_within_bounds, InsertionTracking, Track, Tracking};
 
 impl Sealed for Track<Insertion> {}
 
 impl Tracking for Track<Insertion> {
+    fn as_const() -> u32 {
+        InsertionConst
+    }
+
     #[inline]
     fn is_inserted<T: Component>(
         sparse_set: &SparseSet<T>,

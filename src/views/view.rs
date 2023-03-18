@@ -12,10 +12,11 @@ use crate::tracking::{
     ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
 };
 use core::fmt;
+use core::marker::PhantomData;
 use core::ops::Deref;
 
 /// Shared view over a component storage.
-pub struct View<'a, T: Component, const TRACK: u32 = { track::Untracked }> {
+pub struct View<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
@@ -23,9 +24,10 @@ pub struct View<'a, T: Component, const TRACK: u32 = { track::Untracked }> {
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
     pub(crate) current: u32,
+    pub(crate) phantom: PhantomData<TRACK>,
 }
 
-impl<'a, T: Component> View<'a, T, { track::Untracked }> {
+impl<'a, T: Component> View<'a, T, track::Untracked> {
     /// Creates a new [`View`] for custom [`SparseSet`] storage.
     ///
     /// ```
@@ -66,6 +68,7 @@ impl<'a, T: Component> View<'a, T, { track::Untracked }> {
                 last_modification: 0,
                 last_removal_or_deletion: 0,
                 current: 0,
+                phantom: PhantomData,
             })
         } else {
             Err(error::CustomStorageView::WrongType(storage.name()))
@@ -73,7 +76,7 @@ impl<'a, T: Component> View<'a, T, { track::Untracked }> {
     }
 }
 
-impl<const TRACK: u32, T: Component> View<'_, T, TRACK>
+impl<TRACK, T: Component> View<'_, T, TRACK>
 where
     Track<TRACK>: InsertionTracking,
 {
@@ -92,7 +95,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> View<'_, T, TRACK>
+impl<TRACK, T: Component> View<'_, T, TRACK>
 where
     Track<TRACK>: ModificationTracking,
 {
@@ -116,7 +119,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> View<'_, T, TRACK>
+impl<TRACK, T: Component> View<'_, T, TRACK>
 where
     Track<TRACK>: InsertionTracking + ModificationTracking,
 {
@@ -141,7 +144,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> View<'_, T, TRACK>
+impl<TRACK, T: Component> View<'_, T, TRACK>
 where
     Track<TRACK>: DeletionTracking,
 {
@@ -168,7 +171,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> View<'_, T, TRACK>
+impl<TRACK, T: Component> View<'_, T, TRACK>
 where
     Track<TRACK>: RemovalTracking,
 {
@@ -195,7 +198,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> View<'_, T, TRACK>
+impl<TRACK, T: Component> View<'_, T, TRACK>
 where
     Track<TRACK>: RemovalTracking + DeletionTracking,
 {
@@ -222,7 +225,7 @@ where
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> Deref for View<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> Deref for View<'a, T, TRACK> {
     type Target = SparseSet<T>;
 
     #[inline]
@@ -231,14 +234,14 @@ impl<'a, T: Component, const TRACK: u32> Deref for View<'a, T, TRACK> {
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> AsRef<SparseSet<T>> for View<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> AsRef<SparseSet<T>> for View<'a, T, TRACK> {
     #[inline]
     fn as_ref(&self) -> &SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> Clone for View<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> Clone for View<'a, T, TRACK> {
     #[inline]
     fn clone(&self) -> Self {
         View {
@@ -249,17 +252,18 @@ impl<'a, T: Component, const TRACK: u32> Clone for View<'a, T, TRACK> {
             last_modification: self.last_modification,
             last_removal_or_deletion: self.last_removal_or_deletion,
             current: self.current,
+            phantom: PhantomData,
         }
     }
 }
 
-impl<T: fmt::Debug + Component, const TRACK: u32> fmt::Debug for View<'_, T, TRACK> {
+impl<T: fmt::Debug + Component, TRACK> fmt::Debug for View<'_, T, TRACK> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.sparse_set.fmt(f)
     }
 }
 
-impl<T: Component, const TRACK: u32> core::ops::Index<EntityId> for View<'_, T, TRACK> {
+impl<T: Component, TRACK> core::ops::Index<EntityId> for View<'_, T, TRACK> {
     type Output = T;
     #[track_caller]
     #[inline]

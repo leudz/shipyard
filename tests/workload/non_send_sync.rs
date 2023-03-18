@@ -42,12 +42,12 @@ fn basic() {
 fn tracking_enabled() {
     fn w() -> Workload {
         (
-            |_: NonSend<View<NotSend, { track::All }>>| {},
-            |_: NonSend<ViewMut<NotSend, { track::All }>>| {},
-            |_: NonSync<View<NotSync, { track::All }>>| {},
-            |_: NonSync<ViewMut<NotSync, { track::All }>>| {},
-            |_: NonSendSync<View<MyRc, { track::All }>>| {},
-            |_: NonSendSync<ViewMut<MyRc, { track::All }>>| {},
+            |_: NonSend<View<NotSend, track::All>>| {},
+            |_: NonSend<ViewMut<NotSend, track::All>>| {},
+            |_: NonSync<View<NotSync, track::All>>| {},
+            |_: NonSync<ViewMut<NotSync, track::All>>| {},
+            |_: NonSendSync<View<MyRc, track::All>>| {},
+            |_: NonSendSync<ViewMut<MyRc, track::All>>| {},
         )
             .into_workload()
     }

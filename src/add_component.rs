@@ -36,7 +36,7 @@ impl AddComponent for () {
     fn add_component_unchecked(&mut self, _: EntityId, _: Self::Component) {}
 }
 
-impl<T: Component, const TRACK: u32> AddComponent for ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> AddComponent for ViewMut<'_, T, TRACK> {
     type Component = T;
 
     #[inline]
@@ -46,7 +46,7 @@ impl<T: Component, const TRACK: u32> AddComponent for ViewMut<'_, T, TRACK> {
     }
 }
 
-impl<T: Component, const TRACK: u32> AddComponent for &mut ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> AddComponent for &mut ViewMut<'_, T, TRACK> {
     type Component = T;
 
     #[inline]

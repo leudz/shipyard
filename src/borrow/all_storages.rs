@@ -10,9 +10,11 @@ use crate::component::Component;
 use crate::component::Unique;
 use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::tracking::{Track, Tracking};
 use crate::unique::UniqueStorage;
 use crate::views::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 use crate::Borrow;
+use core::marker::PhantomData;
 
 /// Allows a type to be borrowed by [`AllStorages::borrow`] and [`AllStorages::run`].
 pub trait AllStoragesBorrow: Borrow {
@@ -76,7 +78,10 @@ impl AllStoragesBorrow for EntitiesViewMut<'_> {
     }
 }
 
-impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for View<'_, T, TRACK> {
+impl<T: Send + Sync + Component, TRACK> AllStoragesBorrow for View<'_, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -87,7 +92,7 @@ impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for View<'_
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -98,12 +103,16 @@ impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for View<'_
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
+            phantom: PhantomData,
         })
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<View<'_, T, TRACK>> {
+impl<T: Sync + Component, TRACK> AllStoragesBorrow for NonSend<View<'_, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -114,7 +123,7 @@ impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<View<'
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(NonSend(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -124,12 +133,16 @@ impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<View<'
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
+            phantom: PhantomData,
         }))
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<View<'_, T, TRACK>> {
+impl<T: Send + Component, TRACK> AllStoragesBorrow for NonSync<View<'_, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -140,7 +153,7 @@ impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<View<'
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(NonSync(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -150,12 +163,16 @@ impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<View<'
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
+            phantom: PhantomData,
         }))
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<View<'_, T, TRACK>> {
+impl<T: Component, TRACK> AllStoragesBorrow for NonSendSync<View<'_, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -166,7 +183,7 @@ impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<View<'_, 
 
         let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(NonSendSync(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -176,11 +193,15 @@ impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<View<'_, 
             sparse_set,
             borrow: Some(borrow),
             all_borrow: None,
+            phantom: PhantomData,
         }))
     }
 }
 
-impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for ViewMut<'_, T, TRACK> {
+impl<T: Send + Sync + Component, TRACK> AllStoragesBorrow for ViewMut<'_, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -191,7 +212,7 @@ impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for ViewMut
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -202,12 +223,16 @@ impl<T: Send + Sync + Component, const TRACK: u32> AllStoragesBorrow for ViewMut
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
+            phantom: PhantomData,
         })
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<ViewMut<'_, T, TRACK>> {
+impl<T: Sync + Component, TRACK> AllStoragesBorrow for NonSend<ViewMut<'_, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -218,7 +243,7 @@ impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<ViewMu
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(NonSend(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -228,12 +253,16 @@ impl<T: Sync + Component, const TRACK: u32> AllStoragesBorrow for NonSend<ViewMu
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
+            phantom: PhantomData,
         }))
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<ViewMut<'_, T, TRACK>> {
+impl<T: Send + Component, TRACK> AllStoragesBorrow for NonSync<ViewMut<'_, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -244,7 +273,7 @@ impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<ViewMu
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(NonSync(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -254,12 +283,16 @@ impl<T: Send + Component, const TRACK: u32> AllStoragesBorrow for NonSync<ViewMu
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
+            phantom: PhantomData,
         }))
     }
 }
 
 #[cfg(feature = "thread_local")]
-impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<ViewMut<'_, T, TRACK>> {
+impl<T: Component, TRACK> AllStoragesBorrow for NonSendSync<ViewMut<'_, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     #[inline]
     fn all_borrow(
         all_storages: &AllStorages,
@@ -270,7 +303,7 @@ impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<ViewMut<'
 
         let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
 
-        sparse_set.check_tracking::<TRACK>()?;
+        sparse_set.check_tracking::<Track<TRACK>>()?;
 
         Ok(NonSendSync(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
@@ -280,6 +313,7 @@ impl<T: Component, const TRACK: u32> AllStoragesBorrow for NonSendSync<ViewMut<'
             sparse_set,
             _borrow: Some(borrow),
             _all_borrow: None,
+            phantom: PhantomData,
         }))
     }
 }

@@ -85,14 +85,14 @@ pub trait BulkReserve {
 
 impl BulkReserve for () {}
 
-impl<T: Component, const TRACK: u32> BulkReserve for ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> BulkReserve for ViewMut<'_, T, TRACK> {
     #[inline]
     fn bulk_reserve(&mut self, new_entities: &[EntityId]) {
         <&mut Self>::bulk_reserve(&mut &mut *self, new_entities);
     }
 }
 
-impl<T: Component, const TRACK: u32> BulkReserve for &mut ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> BulkReserve for &mut ViewMut<'_, T, TRACK> {
     #[inline]
     fn bulk_reserve(&mut self, new_entities: &[EntityId]) {
         if !new_entities.is_empty() {

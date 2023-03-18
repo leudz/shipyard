@@ -12,10 +12,11 @@ use crate::tracking::{
     ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
 };
 use core::fmt;
+use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
 /// Exclusive view over a component storage.
-pub struct ViewMut<'a, T: Component, const TRACK: u32 = { track::Untracked }> {
+pub struct ViewMut<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
@@ -23,9 +24,10 @@ pub struct ViewMut<'a, T: Component, const TRACK: u32 = { track::Untracked }> {
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
     pub(crate) current: u32,
+    pub(crate) phantom: PhantomData<TRACK>,
 }
 
-impl<'a, T: Component> ViewMut<'a, T, { track::Untracked }> {
+impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
     /// Creates a new [`ViewMut`] for custom [`SparseSet`] storage.
     ///
     /// ```
@@ -68,6 +70,7 @@ impl<'a, T: Component> ViewMut<'a, T, { track::Untracked }> {
                 last_modification: 0,
                 last_removal_or_deletion: 0,
                 current: 0,
+                phantom: PhantomData,
             })
         } else {
             Err(error::CustomStorageView::WrongType(name))
@@ -75,7 +78,7 @@ impl<'a, T: Component> ViewMut<'a, T, { track::Untracked }> {
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> ViewMut<'a, T, TRACK>
+impl<'a, T: Component, TRACK> ViewMut<'a, T, TRACK>
 where
     Track<TRACK>: Tracking,
 {
@@ -116,7 +119,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> ViewMut<'_, T, TRACK>
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: InsertionTracking,
 {
@@ -144,7 +147,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> ViewMut<'_, T, TRACK>
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: ModificationTracking,
 {
@@ -177,7 +180,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> ViewMut<'_, T, TRACK>
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: InsertionTracking + ModificationTracking,
 {
@@ -206,7 +209,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> ViewMut<'_, T, TRACK>
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: DeletionTracking,
 {
@@ -232,7 +235,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> ViewMut<'_, T, TRACK>
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: RemovalTracking,
 {
@@ -258,7 +261,7 @@ where
     }
 }
 
-impl<const TRACK: u32, T: Component> ViewMut<'_, T, TRACK>
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: RemovalOrDeletionTracking,
 {
@@ -282,7 +285,7 @@ where
     }
 }
 
-impl<T: Component, const TRACK: u32> Deref for ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> Deref for ViewMut<'_, T, TRACK> {
     type Target = SparseSet<T>;
 
     #[inline]
@@ -291,41 +294,41 @@ impl<T: Component, const TRACK: u32> Deref for ViewMut<'_, T, TRACK> {
     }
 }
 
-impl<T: Component, const TRACK: u32> DerefMut for ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> DerefMut for ViewMut<'_, T, TRACK> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> AsRef<SparseSet<T>> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> AsRef<SparseSet<T>> for ViewMut<'a, T, TRACK> {
     #[inline]
     fn as_ref(&self) -> &SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> AsMut<SparseSet<T>> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> AsMut<SparseSet<T>> for ViewMut<'a, T, TRACK> {
     #[inline]
     fn as_mut(&mut self) -> &mut SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> AsMut<Self> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> AsMut<Self> for ViewMut<'a, T, TRACK> {
     #[inline]
     fn as_mut(&mut self) -> &mut Self {
         self
     }
 }
 
-impl<T: fmt::Debug + Component, const TRACK: u32> fmt::Debug for ViewMut<'_, T, TRACK> {
+impl<T: fmt::Debug + Component, TRACK> fmt::Debug for ViewMut<'_, T, TRACK> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.sparse_set.fmt(f)
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> core::ops::Index<EntityId> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> core::ops::Index<EntityId> for ViewMut<'a, T, TRACK> {
     type Output = T;
     #[inline]
     fn index(&self, entity: EntityId) -> &Self::Output {
@@ -333,7 +336,7 @@ impl<'a, T: Component, const TRACK: u32> core::ops::Index<EntityId> for ViewMut<
     }
 }
 
-impl<'a, T: Component, const TRACK: u32> core::ops::IndexMut<EntityId> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, TRACK> core::ops::IndexMut<EntityId> for ViewMut<'a, T, TRACK> {
     #[inline]
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
         let index = self

@@ -55,7 +55,7 @@ fn update() {
     assert!(world.delete_entity(entity1));
     assert!(!world.delete_entity(entity1));
 
-    let usizes = world.borrow::<ViewMut<USIZE, { track::All }>>().unwrap();
+    let usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
     assert_eq!(
         (&usizes).get(entity1),
         Err(error::MissingComponent {

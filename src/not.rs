@@ -34,21 +34,21 @@ use core::ops::Not as NotOps;
 #[derive(Copy, Clone)]
 pub struct Not<T>(pub(crate) T);
 
-impl<T: Component, const TRACK: u32> NotOps for &View<'_, T, TRACK> {
+impl<T: Component, TRACK> NotOps for &View<'_, T, TRACK> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T: Component, const TRACK: u32> NotOps for &ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> NotOps for &ViewMut<'_, T, TRACK> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T: Component, const TRACK: u32> NotOps for &mut ViewMut<'_, T, TRACK> {
+impl<T: Component, TRACK> NotOps for &mut ViewMut<'_, T, TRACK> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)

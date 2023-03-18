@@ -31,7 +31,7 @@ fn update() {
 
     let entity = world.add_entity((USIZE(0),));
 
-    let usizes = world.borrow::<View<USIZE, { track::All }>>().unwrap();
+    let usizes = world.borrow::<View<USIZE, track::All>>().unwrap();
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes[entity], USIZE(0));
 }
@@ -48,17 +48,17 @@ fn cleared_update() {
 
     let entity1 = world.add_entity((USIZE(1usize),));
 
-    world.run(|usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|usizes: ViewMut<USIZE, track::All>| {
         usizes.clear_all_inserted();
     });
 
-    world.run(|usizes: View<USIZE, { track::All }>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         assert_eq!(usizes.inserted().iter().count(), 0);
     });
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
-    world.run(|usizes: View<USIZE, { track::All }>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         assert_eq!(usizes.inserted().iter().count(), 1);
         assert_eq!(*usizes.get(entity1).unwrap(), USIZE(1));
         assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
@@ -76,13 +76,13 @@ fn modified_update() {
 
     let entity1 = world.add_entity((USIZE(1),));
 
-    world.run(|usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|usizes: ViewMut<USIZE, track::All>| {
         usizes.clear_all_inserted_and_modified();
     });
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
-    world.run(|mut usizes: ViewMut<USIZE, { track::All }>| {
+    world.run(|mut usizes: ViewMut<USIZE, track::All>| {
         usizes[entity1] = USIZE(3);
         assert_eq!(usizes.inserted().iter().count(), 1);
         assert_eq!(*usizes.get(entity1).unwrap(), USIZE(3));

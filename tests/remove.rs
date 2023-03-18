@@ -42,7 +42,7 @@ fn update() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE, { track::All }>)>()
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
         .unwrap();
 
     let entity1 = entities.add_entity(&mut usizes, USIZE(0));
@@ -140,18 +140,18 @@ fn track_reset_with_timestamp() {
     let entity2 = world.add_entity((USIZE(1),));
     world.remove::<(USIZE,)>(entity2);
 
-    let usizes = world.borrow::<View<USIZE, { track::All }>>().unwrap();
+    let usizes = world.borrow::<View<USIZE, track::All>>().unwrap();
     assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity1, entity2]);
     drop(usizes);
 
     world.clear_all_removed_and_deleted_older_than_timestamp(time);
 
-    let usizes = world.borrow::<View<USIZE, { track::All }>>().unwrap();
+    let usizes = world.borrow::<View<USIZE, track::All>>().unwrap();
     assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![entity2]);
     drop(usizes);
 
     world.clear_all_removed_and_deleted();
 
-    let usizes = world.borrow::<View<USIZE, { track::All }>>().unwrap();
+    let usizes = world.borrow::<View<USIZE, track::All>>().unwrap();
     assert_eq!(usizes.removed().collect::<Vec<_>>(), vec![]);
 }

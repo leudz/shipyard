@@ -19,6 +19,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::storage::{Storage, StorageId};
+use crate::tracking::Tracking;
 use crate::tracking::{is_track_within_bounds, TrackingTimestamp};
 use crate::{error, track};
 use alloc::vec::Vec;
@@ -390,32 +391,33 @@ impl<T: Component> SparseSet<T> {
             || self.is_tracking_deletion()
             || self.is_tracking_removal()
     }
-    pub(crate) fn check_tracking<const TRACK: u32>(&self) -> Result<(), error::GetStorage> {
-        if (TRACK & track::Insertion != 0 && !self.is_tracking_insertion())
-            || (TRACK & track::Modification != 0 && !self.is_tracking_modification())
-            || (TRACK & track::Deletion != 0 && !self.is_tracking_deletion())
-            || (TRACK & track::Removal != 0 && !self.is_tracking_removal())
+    pub(crate) fn check_tracking<TRACK: Tracking>(&self) -> Result<(), error::GetStorage> {
+        if (TRACK::as_const() & track::InsertionConst != 0 && !self.is_tracking_insertion())
+            || (TRACK::as_const() & track::ModificationConst != 0
+                && !self.is_tracking_modification())
+            || (TRACK::as_const() & track::DeletionConst != 0 && !self.is_tracking_deletion())
+            || (TRACK::as_const() & track::RemovalConst != 0 && !self.is_tracking_removal())
         {
             return Err(error::GetStorage::TrackingNotEnabled {
                 name: Some(type_name::<SparseSet<T>>()),
                 id: StorageId::of::<SparseSet<T>>(),
-                tracking: TRACK,
+                tracking: TRACK::as_const(),
             });
         }
 
         Ok(())
     }
-    pub(crate) fn enable_tracking<const TRACK: u32>(&mut self) {
-        if TRACK & track::Insertion != 0 {
+    pub(crate) fn enable_tracking<TRACK: Tracking>(&mut self) {
+        if TRACK::as_const() & track::InsertionConst != 0 {
             self.track_insertion();
         }
-        if TRACK & track::Modification != 0 {
+        if TRACK::as_const() & track::ModificationConst != 0 {
             self.track_modification();
         }
-        if TRACK & track::Deletion != 0 {
+        if TRACK::as_const() & track::DeletionConst != 0 {
             self.track_deletion();
         }
-        if TRACK & track::Removal != 0 {
+        if TRACK::as_const() & track::RemovalConst != 0 {
             self.track_removal();
         }
     }

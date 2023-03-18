@@ -36,7 +36,7 @@ impl Delete for () {
     }
 }
 
-impl<T: Component, const TRACK: u32> Delete for ViewMut<'_, T, TRACK>
+impl<T: Component, TRACK> Delete for ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: Tracking,
 {
@@ -47,7 +47,7 @@ where
     }
 }
 
-impl<T: Component, const TRACK: u32> Delete for &mut ViewMut<'_, T, TRACK>
+impl<T: Component, TRACK> Delete for &mut ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: Tracking,
 {

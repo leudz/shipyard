@@ -39,7 +39,7 @@ impl Remove for () {
     fn remove(&mut self, _: EntityId) -> Self::Out {}
 }
 
-impl<T: Component, const TRACK: u32> Remove for ViewMut<'_, T, TRACK>
+impl<T: Component, TRACK> Remove for ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: Tracking,
 {
@@ -52,7 +52,7 @@ where
     }
 }
 
-impl<T: Component, const TRACK: u32> Remove for &mut ViewMut<'_, T, TRACK>
+impl<T: Component, TRACK> Remove for &mut ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: Tracking,
 {
