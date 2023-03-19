@@ -35,16 +35,17 @@ pub(crate) fn expand_borrow(
 
             let field_is_default = fields.named.iter().map(|field| {
                 field.attrs.iter().any(|attr| {
-                    if attr.path.is_ident("shipyard") {
-                        match attr.parse_meta() {
-                            Ok(syn::Meta::List(list)) => list.nested.into_iter().any(|meta| {
-                                matches!(meta, syn::NestedMeta::Meta(syn::Meta::Path(path)) if path.is_ident("default"))
-                            }),
-                            _ => false,
-                        }
-                    } else {
-                        false
+                    let mut is_default = false;
+
+                    if attr.path().is_ident("shipyard") {
+                        let _ = attr.parse_nested_meta(|meta| {
+                            is_default = is_default || meta.path.is_ident("default");
+
+                            Ok(())
+                        });
                     }
+
+                    is_default
                 })
             });
 
