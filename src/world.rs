@@ -1,6 +1,6 @@
 use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
 use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::Borrow;
+use crate::borrow::WorldBorrow;
 use crate::component::Unique;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -429,9 +429,10 @@ let (entities, mut usizes) = world
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
-    pub fn borrow<V: Borrow>(&self) -> Result<V::View<'_>, error::GetStorage> {
+    pub fn borrow<V: WorldBorrow>(&self) -> Result<V::WorldView<'_>, error::GetStorage> {
         let current = self.get_current();
-        V::borrow(self, None, current)
+
+        V::world_borrow(self, None, current)
     }
     #[doc = "Borrows the requested storages and runs the function.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.

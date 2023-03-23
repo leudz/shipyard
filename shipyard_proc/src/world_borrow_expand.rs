@@ -1,8 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use syn::{Error, Result};
+use syn::{parse_quote, Error, Result};
 
-pub(crate) fn expand_all_storages_borrow(
+pub(crate) fn expand_world_borrow(
     name: syn::Ident,
     generics: syn::Generics,
     data: syn::Data,
@@ -12,12 +12,21 @@ pub(crate) fn expand_all_storages_borrow(
         _ => {
             return Err(Error::new(
                 Span::call_site(),
-                "AllStoragesBorrow can only be implemented on structs",
+                "WorldBorrow can only be implemented on structs",
             ))
         }
     };
 
+    let mut gat_generics = generics.clone();
+    for generic in gat_generics.params.iter_mut() {
+        if let syn::GenericParam::Lifetime(lifetime) = generic {
+            lifetime.lifetime = parse_quote!('__view);
+            break;
+        }
+    }
+
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let (_, gat_ty_generics, _) = gat_generics.split_for_impl();
 
     match fields {
         syn::Fields::Named(fields) => {
@@ -51,14 +60,16 @@ pub(crate) fn expand_all_storages_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::AllStoragesBorrow>::all_borrow(all_storages, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::WorldBorrow>::world_borrow(world, last_run, current)?
                         )
                     }
                 });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::AllStoragesBorrow for #name #ty_generics #where_clause {
-                    fn all_borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                impl #impl_generics ::shipyard::WorldBorrow for #name #ty_generics #where_clause {
+                    type WorldView<'__view> = #name #gat_ty_generics;
+
+                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -67,25 +78,24 @@ pub(crate) fn expand_all_storages_borrow(
             ))
         }
         syn::Fields::Unnamed(fields) => {
-            let all_storages_borrow = fields
-                .unnamed
-                .iter()
-                .map(|field| {
-                    let field_type = &field.ty;
-                    quote!(<#field_type as ::shipyard::AllStoragesBorrow>::all_borrow(all_storages, last_run, current)?)
-                });
+            let world_borrow = fields.unnamed.iter().map(|field| {
+                let field_type = &field.ty;
+                quote!(<#field_type as ::shipyard::WorldBorrow>::world_borrow(world, last_run, current)?)
+            });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::AllStoragesBorrow for #name #ty_generics #where_clause {
-                    fn all_borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
-                        Ok(#name(#(#all_storages_borrow),*))
+                impl #impl_generics ::shipyard::WorldBorrow for #name #ty_generics #where_clause {
+                    type WorldView<'__view> = #name #gat_ty_generics;
+
+                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
+                        Ok(#name(#(#world_borrow),*))
                     }
                 }
             ))
         }
         syn::Fields::Unit => Err(Error::new(
             Span::call_site(),
-            "Unit struct cannot borrow from AllStorages",
+            "Unit struct cannot borrow from World",
         )),
     }
 }

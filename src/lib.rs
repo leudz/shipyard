@@ -84,7 +84,7 @@ pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRe
 pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
-pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, Mutability};
+pub use borrow::{Borrow, BorrowInfo, Mutability, WorldBorrow};
 pub use component::{Component, Unique};
 pub use contains::Contains;
 pub use delete::Delete;
@@ -103,7 +103,7 @@ pub use scheduler::{
     ScheduledWorkload, SystemModificator, Workload, WorkloadModificator, WorkloadSystem,
 };
 #[cfg(feature = "proc")]
-pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component, Unique};
+pub use shipyard_proc::{Borrow, BorrowInfo, Component, Unique, WorldBorrow};
 pub use sparse_set::{
     BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
     TupleRemove,

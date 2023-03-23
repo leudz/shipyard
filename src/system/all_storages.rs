@@ -1,6 +1,6 @@
 use super::Nothing;
 use crate::all_storages::AllStorages;
-use crate::borrow::{AllStoragesBorrow, Borrow};
+use crate::borrow::Borrow;
 use crate::error;
 
 /// Trait bound encompassing all functions that can be used as system.  
@@ -40,9 +40,6 @@ macro_rules! impl_all_system {
         where
             Func: FnOnce($($type),+) -> Return
                 + FnOnce($($type::View<'_>),+) -> Return,
-            $(
-                $type: AllStoragesBorrow,
-            )+
         {
             fn run(
                 self,
@@ -50,7 +47,7 @@ macro_rules! impl_all_system {
                 all_storages: &AllStorages,
             ) -> Result<Return, error::GetStorage> {
                 let current = all_storages.get_current();
-                Ok(self($($type::all_borrow(all_storages, None, current)?,)+))
+                Ok(self($($type::borrow(all_storages, None, None, current)?,)+))
             }
         }
 
@@ -58,9 +55,6 @@ macro_rules! impl_all_system {
         where
             Func: FnOnce(Data, $($type),+) -> Return
                 + FnOnce(Data, $($type::View<'_>),+) -> Return,
-            $(
-                $type: AllStoragesBorrow,
-            )+
         {
             fn run(
                 self,
@@ -68,7 +62,7 @@ macro_rules! impl_all_system {
                 all_storages: &AllStorages,
             ) -> Result<Return, error::GetStorage> {
                 let current = all_storages.get_current();
-                Ok(self(data, $($type::all_borrow(all_storages, None, current)?,)+))
+                Ok(self(data, $($type::borrow(all_storages, None, None, current)?,)+))
             }
         }
     }

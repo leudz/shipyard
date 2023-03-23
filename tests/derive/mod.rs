@@ -2,16 +2,24 @@ use shipyard::*;
 
 #[test]
 fn check_derive() {
-    #[derive(Component, Unique, Borrow, AllStoragesBorrow, BorrowInfo)]
+    #[derive(Component, Unique, Borrow, BorrowInfo)]
     struct A {
         _a: (),
     }
 
-    #[derive(Component, Unique, Borrow, AllStoragesBorrow, BorrowInfo)]
+    #[derive(Component, Unique, Borrow, BorrowInfo)]
     struct B(A);
 
+    #[derive(WorldBorrow)]
+    struct C {
+        _c: (),
+    }
+
+    #[derive(WorldBorrow)]
+    struct D(C);
+
     #[derive(Component, Unique)]
-    struct C;
+    struct E;
 }
 
 /// Verify that the "default" attribute compiles.

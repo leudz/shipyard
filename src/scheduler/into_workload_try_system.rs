@@ -1,5 +1,5 @@
 use crate::all_storages::AllStorages;
-use crate::borrow::{Borrow, BorrowInfo, Mutability};
+use crate::borrow::{BorrowInfo, Mutability, WorldBorrow};
 use crate::info::DedupedLabels;
 use crate::scheduler::into_workload_system::Nothing;
 use crate::scheduler::label::SystemLabel;
@@ -108,14 +108,14 @@ where
 
 macro_rules! impl_into_workload_try_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow + BorrowInfo,)+ R: 'static, Func> IntoWorkloadTrySystem<($($type,)+), R> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ R: 'static, Func> IntoWorkloadTrySystem<($($type,)+), R> for Func
         where
             Func: 'static
                 + Send
                 + Sync,
             for<'a, 'b> &'b Func:
                 Fn($($type),+) -> R
-                + Fn($($type::View<'a>),+) -> R
+                + Fn($($type::WorldView<'a>),+) -> R
         {
             #[cfg(feature = "std")]
             fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(self) -> Result<WorkloadSystem, error::InvalidSystem> where R: Into<Result<Ok, Err>> {
@@ -165,7 +165,7 @@ macro_rules! impl_into_workload_try_system {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
+                        Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),
@@ -236,7 +236,7 @@ macro_rules! impl_into_workload_try_system {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
+                        Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),

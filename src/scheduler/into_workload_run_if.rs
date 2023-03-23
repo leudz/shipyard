@@ -1,5 +1,5 @@
 use crate::all_storages::AllStorages;
-use crate::borrow::{Borrow, BorrowInfo, Mutability};
+use crate::borrow::{BorrowInfo, Mutability, WorldBorrow};
 use crate::error;
 use crate::scheduler::system::{RunIf, WorkloadRunIfFn};
 use crate::scheduler::TypeInfo;
@@ -35,14 +35,14 @@ impl IntoRunIf<RunIf> for RunIf {
 
 macro_rules! impl_into_workload_run_if {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow + BorrowInfo,)+ Func> IntoRunIf<($($type,)+)> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ Func> IntoRunIf<($($type,)+)> for Func
         where
             Func: 'static
                 + Send
                 + Sync,
             for<'a, 'b> &'b Func:
                 Fn($($type),+) -> bool
-                + Fn($($type::View<'a>),+) -> bool {
+                + Fn($($type::WorldView<'a>),+) -> bool {
 
             fn into_workload_run_if(self) -> Result<RunIf, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -84,7 +84,7 @@ macro_rules! impl_into_workload_run_if {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok((&&self)($($type::borrow(&world, Some(last_run), current)?),+))
+                        Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
                     }),
                 })
             }
@@ -119,7 +119,7 @@ where
 
 macro_rules! impl_into_workload_run_if {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow + BorrowInfo,)+ Func> IntoWorkloadRunIf<($($type,)+)> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ Func> IntoWorkloadRunIf<($($type,)+)> for Func
         where
             Func: 'static
                 + Send
@@ -127,7 +127,7 @@ macro_rules! impl_into_workload_run_if {
                 + Clone,
             for<'a, 'b> &'b Func:
                 Fn($($type),+) -> bool
-                + Fn($($type::View<'a>),+) -> bool {
+                + Fn($($type::WorldView<'a>),+) -> bool {
 
             fn into_workload_run_if(self) -> Result<Box<dyn WorkloadRunIfFn>, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -168,7 +168,7 @@ macro_rules! impl_into_workload_run_if {
                 Ok(Box::new(move |world: &World| {
                     let current = world.get_current();
                     let last_run = last_run.swap(current, Ordering::Acquire);
-                    Ok((&&self)($($type::borrow(&world, Some(last_run), current)?),+))
+                    Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
                 }))
             }
         }

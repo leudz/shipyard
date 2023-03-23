@@ -2,7 +2,7 @@ mod all_storages;
 
 pub use all_storages::AllSystem;
 
-use crate::borrow::Borrow;
+use crate::borrow::WorldBorrow;
 use crate::error;
 use crate::world::World;
 
@@ -41,25 +41,25 @@ where
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow,)+ Return, Func> System<(), ($($type,)+), Return> for Func
+        impl<$($type: WorldBorrow,)+ Return, Func> System<(), ($($type,)+), Return> for Func
         where
             Func: FnOnce($($type),+) -> Return
-                + FnOnce($($type::View<'_>),+) -> Return
+                + FnOnce($($type::WorldView<'_>),+) -> Return
         {
             fn run(self, _: (), world: &World) -> Result<Return, error::GetStorage> {
                 let current = world.get_current();
-                Ok((self)($($type::borrow(world, None, current)?,)+))
+                Ok((self)($($type::world_borrow(world, None, current)?,)+))
             }
         }
 
-        impl<Data, $($type: Borrow,)+ Return, Func> System<(Data,), ($($type,)+), Return> for Func
+        impl<Data, $($type: WorldBorrow,)+ Return, Func> System<(Data,), ($($type,)+), Return> for Func
         where
             Func: FnOnce(Data, $($type),+) -> Return
-                + FnOnce(Data, $($type::View<'_>),+) -> Return
+                + FnOnce(Data, $($type::WorldView<'_>),+) -> Return
         {
             fn run(self, (data,): (Data,), world: &World) -> Result<Return, error::GetStorage> {
                 let current = world.get_current();
-                Ok((self)(data, $($type::borrow(world, None, current)?,)+))
+                Ok((self)(data, $($type::world_borrow(world, None, current)?,)+))
             }
         }
     }
