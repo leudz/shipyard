@@ -60,7 +60,7 @@ pub(crate) fn expand_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?
                         )
                     }
                 });
@@ -83,7 +83,7 @@ pub(crate) fn expand_borrow(
                 .iter()
                 .map(|field| {
                     let field_type = &field.ty;
-                    quote!(<#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow, last_run, current)?)
+                    quote!(<#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?)
                 });
 
             Ok(quote!(

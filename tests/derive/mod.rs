@@ -5,6 +5,9 @@ fn check_derive() {
     #[derive(Component, Unique, Borrow, BorrowInfo)]
     struct A {
         _a: (),
+        _b: (),
+        _c: (),
+        _d: (),
     }
 
     #[derive(Component, Unique, Borrow, BorrowInfo)]
