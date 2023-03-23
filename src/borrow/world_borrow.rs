@@ -1,4 +1,4 @@
-use crate::atomic_refcell::Ref;
+use crate::atomic_refcell::ARef;
 use crate::borrow::Borrow;
 use crate::error;
 use crate::views::{AllStoragesView, AllStoragesViewMut};
@@ -26,7 +26,7 @@ impl<T: Borrow> WorldBorrow for T {
         current: u32,
     ) -> Result<Self::WorldView<'_>, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
-            Ref::destructure(
+            ARef::destructure(
                 world
                     .all_storages
                     .borrow()

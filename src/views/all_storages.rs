@@ -1,9 +1,9 @@
 use crate::all_storages::AllStorages;
-use crate::atomic_refcell::{Ref, RefMut};
+use crate::atomic_refcell::{ARef, ARefMut};
 use core::ops::{Deref, DerefMut};
 
 /// Shared view over `AllStorages`.
-pub struct AllStoragesView<'a>(pub(crate) Ref<'a, &'a AllStorages>);
+pub struct AllStoragesView<'a>(pub(crate) ARef<'a, &'a AllStorages>);
 
 impl Clone for AllStoragesView<'_> {
     #[inline]
@@ -29,7 +29,7 @@ impl AsRef<AllStorages> for AllStoragesView<'_> {
 }
 
 /// Exclusive view over `AllStorages`.
-pub struct AllStoragesViewMut<'a>(pub(crate) RefMut<'a, &'a mut AllStorages>);
+pub struct AllStoragesViewMut<'a>(pub(crate) ARefMut<'a, &'a mut AllStorages>);
 
 impl Deref for AllStoragesViewMut<'_> {
     type Target = AllStorages;

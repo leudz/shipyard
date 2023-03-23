@@ -17,7 +17,7 @@ pub use non_sync::NonSync;
 pub use world_borrow::WorldBorrow;
 
 use crate::all_storages::{AllStorages, CustomStorageAccess};
-use crate::atomic_refcell::{Ref, RefMut, SharedBorrow};
+use crate::atomic_refcell::{ARef, ARefMut, SharedBorrow};
 use crate::component::{Component, Unique};
 use crate::error;
 use crate::sparse_set::SparseSet;
@@ -112,7 +112,7 @@ impl Borrow for EntitiesView<'_> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let entities = all_storages.entities()?;
 
-        let (entities, borrow) = unsafe { Ref::destructure(entities) };
+        let (entities, borrow) = unsafe { ARef::destructure(entities) };
 
         Ok(EntitiesView {
             entities,
@@ -134,7 +134,7 @@ impl Borrow for EntitiesViewMut<'_> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let entities = all_storages.entities_mut()?;
 
-        let (entities, borrow) = unsafe { RefMut::destructure(entities) };
+        let (entities, borrow) = unsafe { ARefMut::destructure(entities) };
 
         Ok(EntitiesViewMut {
             entities,
@@ -159,7 +159,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -193,7 +193,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -226,7 +226,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -259,7 +259,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_sync(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { Ref::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -291,7 +291,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -325,7 +325,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_mut(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -358,7 +358,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync_mut(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -391,7 +391,7 @@ where
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_sync_mut(SparseSet::new)?;
 
-        let (sparse_set, borrow) = unsafe { RefMut::destructure(view) };
+        let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
         sparse_set.check_tracking::<Track<TRACK>>()?;
 
@@ -420,7 +420,7 @@ impl<T: Send + Sync + Unique> Borrow for UniqueView<'_, T> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
-        let (unique, borrow) = unsafe { Ref::destructure(view) };
+        let (unique, borrow) = unsafe { ARef::destructure(view) };
 
         Ok(UniqueView {
             unique,
@@ -446,7 +446,7 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueView<'_, T>> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
-        let (unique, borrow) = unsafe { Ref::destructure(view) };
+        let (unique, borrow) = unsafe { ARef::destructure(view) };
 
         Ok(NonSend(UniqueView {
             unique,
@@ -472,7 +472,7 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueView<'_, T>> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
-        let (unique, borrow) = unsafe { Ref::destructure(view) };
+        let (unique, borrow) = unsafe { ARef::destructure(view) };
 
         Ok(NonSync(UniqueView {
             unique,
@@ -498,7 +498,7 @@ impl<T: Unique> Borrow for NonSendSync<UniqueView<'_, T>> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
-        let (unique, borrow) = unsafe { Ref::destructure(view) };
+        let (unique, borrow) = unsafe { ARef::destructure(view) };
 
         Ok(NonSendSync(UniqueView {
             unique,
@@ -523,7 +523,7 @@ impl<T: Send + Sync + Unique> Borrow for UniqueViewMut<'_, T> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
-        let (unique, borrow) = unsafe { RefMut::destructure(view) };
+        let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
         Ok(UniqueViewMut {
             last_insertion: last_run.unwrap_or(unique.last_insert),
@@ -549,7 +549,7 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueViewMut<'_, T>> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
-        let (unique, borrow) = unsafe { RefMut::destructure(view) };
+        let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
         Ok(NonSend(UniqueViewMut {
             last_insertion: last_run.unwrap_or(unique.last_insert),
@@ -575,7 +575,7 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueViewMut<'_, T>> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
-        let (unique, borrow) = unsafe { RefMut::destructure(view) };
+        let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
         Ok(NonSync(UniqueViewMut {
             last_insertion: last_run.unwrap_or(unique.last_insert),
@@ -601,7 +601,7 @@ impl<T: Unique> Borrow for NonSendSync<UniqueViewMut<'_, T>> {
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
-        let (unique, borrow) = unsafe { RefMut::destructure(view) };
+        let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
         Ok(NonSendSync(UniqueViewMut {
             last_insertion: last_run.unwrap_or(unique.last_insert),

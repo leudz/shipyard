@@ -6,7 +6,7 @@ pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
 pub use retain::TupleRetain;
 
-use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
+use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
 use crate::component::Unique;
 use crate::entities::Entities;
@@ -859,7 +859,7 @@ let i = all_storages.run(sys1);
     pub fn delete_any<T: TupleDeleteAny>(&mut self) {
         T::delete_any(self);
     }
-    pub(crate) fn entities(&self) -> Result<Ref<'_, &'_ Entities>, error::GetStorage> {
+    pub(crate) fn entities(&self) -> Result<ARef<'_, &'_ Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();
 
         let storages = self.storages.read();
@@ -867,13 +867,13 @@ let i = all_storages.run(sys1);
         let storage = unsafe { &*storage.0 }.borrow();
         drop(storages);
         match storage {
-            Ok(storage) => Ok(Ref::map(storage, |storage| {
+            Ok(storage) => Ok(ARef::map(storage, |storage| {
                 storage.as_any().downcast_ref().unwrap()
             })),
             Err(err) => Err(error::GetStorage::Entities(err)),
         }
     }
-    pub(crate) fn entities_mut(&self) -> Result<RefMut<'_, &'_ mut Entities>, error::GetStorage> {
+    pub(crate) fn entities_mut(&self) -> Result<ARefMut<'_, &'_ mut Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();
 
         let storages = self.storages.read();
@@ -881,7 +881,7 @@ let i = all_storages.run(sys1);
         let storage = unsafe { &*storage.0 }.borrow_mut();
         drop(storages);
         match storage {
-            Ok(storage) => Ok(RefMut::map(storage, |storage| {
+            Ok(storage) => Ok(ARefMut::map(storage, |storage| {
                 storage.as_any_mut().downcast_mut().unwrap()
             })),
             Err(err) => Err(error::GetStorage::Entities(err)),

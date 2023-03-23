@@ -1,5 +1,5 @@
 use crate::all_storages::AllStorages;
-use crate::atomic_refcell::{Ref, SharedBorrow};
+use crate::atomic_refcell::{ARef, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -50,14 +50,14 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
     /// ```
     pub fn new_for_custom_storage(
         storage_id: StorageId,
-        all_storages: Ref<'a, &'a AllStorages>,
+        all_storages: ARef<'a, &'a AllStorages>,
     ) -> Result<Self, error::CustomStorageView> {
         use crate::all_storages::CustomStorageAccess;
 
-        let (all_storages, all_borrow) = unsafe { Ref::destructure(all_storages) };
+        let (all_storages, all_borrow) = unsafe { ARef::destructure(all_storages) };
 
         let storage = all_storages.custom_storage_by_id(storage_id)?;
-        let (storage, borrow) = unsafe { Ref::destructure(storage) };
+        let (storage, borrow) = unsafe { ARef::destructure(storage) };
 
         if let Some(sparse_set) = storage.as_any().downcast_ref() {
             Ok(View {

@@ -1,5 +1,5 @@
 use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
-use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
+use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
 use crate::component::Unique;
 use crate::entity_id::EntityId;
@@ -986,7 +986,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - `AllStorages` is already borrowed.
-    pub fn all_storages(&self) -> Result<Ref<'_, &'_ AllStorages>, error::Borrow> {
+    pub fn all_storages(&self) -> Result<ARef<'_, &'_ AllStorages>, error::Borrow> {
         self.all_storages.borrow()
     }
     /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.  
@@ -995,7 +995,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - `AllStorages` is already borrowed.
-    pub fn all_storages_mut(&self) -> Result<RefMut<'_, &'_ mut AllStorages>, error::Borrow> {
+    pub fn all_storages_mut(&self) -> Result<ARefMut<'_, &'_ mut AllStorages>, error::Borrow> {
         self.all_storages.borrow_mut()
     }
     /// Inserts a custom storage to the `World`.

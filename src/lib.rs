@@ -80,9 +80,9 @@ pub use add_component::AddComponent;
 pub use add_distinct_component::AddDistinctComponent;
 pub use add_entity::AddEntity;
 pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
+pub use atomic_refcell::{ARef, ARefMut};
 #[doc(hidden)]
 pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
-pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
 pub use borrow::{Borrow, BorrowInfo, Mutability, WorldBorrow};
 pub use component::{Component, Unique};
