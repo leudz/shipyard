@@ -607,7 +607,7 @@ let (entities, mut usizes) = all_storages
 
         V::borrow(self, None, None, current)
     }
-    #[doc = "Borrows the requested storages and runs the function.  
+    #[doc = "Borrows the requested storages, runs the function and evaluates to the function's return value.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
 
 You can use:
@@ -706,7 +706,7 @@ You can use:
             .map_err(error::Run::GetStorage)
             .unwrap()
     }
-    #[doc = "Borrows the requested storages and runs the function.
+    #[doc = "Borrows the requested storages, runs the function and evaluates to the function's return value.
 
 You can use:
 * [View]\\<T\\> for a shared access to `T` storage
