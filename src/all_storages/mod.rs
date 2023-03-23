@@ -1008,8 +1008,8 @@ let i = all_storages.run(sys1);
     ///
     /// let (i, j) = all_storages.get::<(&USIZE, &mut U32)>(entity).unwrap();
     ///
-    /// assert!(*i == USIZE(0));
-    /// assert!(*j == U32(1));
+    /// assert!(*i == &USIZE(0));
+    /// assert!(*j == &U32(1));
     pub fn get<T: GetComponent>(
         &self,
         entity: EntityId,
