@@ -19,7 +19,7 @@ use core::ops::Deref;
 pub struct View<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) borrow: Option<SharedBorrow<'a>>,
+    pub(crate) borrow: SharedBorrow<'a>,
     pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
@@ -63,7 +63,7 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
             Ok(View {
                 sparse_set,
                 all_borrow: Some(all_borrow),
-                borrow: Some(borrow),
+                borrow,
                 last_insertion: 0,
                 last_modification: 0,
                 last_removal_or_deletion: 0,

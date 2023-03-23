@@ -19,7 +19,7 @@ use core::ops::{Deref, DerefMut};
 pub struct ViewMut<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
+    pub(crate) _borrow: ExclusiveBorrow<'a>,
     pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
@@ -65,7 +65,7 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
             Ok(ViewMut {
                 sparse_set,
                 _all_borrow: Some(all_borrow),
-                _borrow: Some(borrow),
+                _borrow: borrow,
                 last_insertion: 0,
                 last_modification: 0,
                 last_removal_or_deletion: 0,

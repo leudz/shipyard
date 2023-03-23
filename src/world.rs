@@ -4,6 +4,7 @@ use crate::borrow::WorldBorrow;
 use crate::component::Unique;
 use crate::entity_id::EntityId;
 use crate::error;
+use crate::get_component::GetComponent;
 use crate::info::WorkloadsTypeUsage;
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
@@ -1370,6 +1371,85 @@ impl World {
     /// Enable insertion, deletion and removal tracking for the given components.
     pub fn track_all<T: TupleTrack>(&mut self) {
         self.all_storages.get_mut().track_all::<T>();
+    }
+
+    #[doc = "Retrieve components of `entity`.
+
+Multiple components can be queried at the same time using a tuple.
+
+You can use:
+* `&T` for a shared access to `T` component
+* `&mut T` for an exclusive access to `T` component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared) + storage (exclusive or shared)
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Entity does not have the component.
+
+### Example
+```
+use shipyard::{Component, World};
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct USIZE(usize);
+
+let mut world = World::new();
+
+let entity = world.add_entity((USIZE(0), U32(1)));
+
+let (i, j) = world.get::<(&USIZE, &mut U32)>(entity).unwrap();
+
+assert!(*i == USIZE(0));
+assert!(*j == U32(1));
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    pub fn get<T: GetComponent>(
+        &self,
+        entity: EntityId,
+    ) -> Result<T::Out<'_>, error::GetComponent> {
+        let (all_storages, all_borrow) = unsafe {
+            ARef::destructure(
+                self.all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
+        let current = self.get_current();
+
+        T::get(all_storages, Some(all_borrow), current, entity)
     }
 }
 

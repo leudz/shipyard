@@ -8,39 +8,26 @@ use core::any::type_name;
 ///
 /// Useful with custom storage or to define custom views.
 pub trait CustomStorageAccess {
-    /// Returns a [`Ref`] to the requested `S` storage.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
+    /// Returns a [`ARef`] to the requested `S` storage.
     fn custom_storage<S: 'static>(&self) -> Result<ARef<'_, &'_ S>, error::GetStorage>;
-    /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`].
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARef`] to the requested `S` storage using a [`StorageId`].
     fn custom_storage_by_id(
         &self,
         storage_id: StorageId,
     ) -> Result<ARef<'_, &'_ dyn Storage>, error::GetStorage>;
-    /// Returns a [`RefMut`] to the requested `S` storage.
+    /// Returns a [`ARefMut`] to the requested `S` storage.
     fn custom_storage_mut<S: 'static>(&self) -> Result<ARefMut<'_, &'_ mut S>, error::GetStorage>;
-    /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`].
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`].
     fn custom_storage_mut_by_id(
         &self,
         storage_id: StorageId,
     ) -> Result<ARefMut<'_, &'_ mut (dyn Storage + 'static)>, error::GetStorage>;
-    /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
+    /// Returns a [`ARef`] to the requested `S` storage and create it if it does not exist.
     fn custom_storage_or_insert<S, F>(&self, f: F) -> Result<ARef<'_, &'_ S>, error::GetStorage>
     where
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARef`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     fn custom_storage_or_insert_by_id<S, F>(
         &self,
         storage_id: StorageId,
@@ -49,9 +36,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
+    /// Returns a [`ARef`] to the requested `S` storage and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send<S, F>(
         &self,
@@ -60,10 +45,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARef`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_by_id<S, F>(
         &self,
@@ -73,9 +55,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
+    /// Returns a [`ARef`] to the requested `S` storage and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_sync<S, F>(
         &self,
@@ -84,10 +64,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARef`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_sync_by_id<S, F>(
         &self,
@@ -97,9 +74,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
+    /// Returns a [`ARef`] to the requested `S` storage and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_sync<S, F>(
         &self,
@@ -108,10 +83,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage,
         F: FnOnce() -> S;
-    /// Returns a [`Ref`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`Ref`]: crate::atomic_refcell::Ref
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARef`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_sync_by_id<S, F>(
         &self,
@@ -121,9 +93,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
+    /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
     fn custom_storage_or_insert_mut<S, F>(
         &self,
         f: F,
@@ -131,10 +101,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     fn custom_storage_or_insert_mut_by_id<S, F>(
         &self,
         storage_id: StorageId,
@@ -143,9 +110,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
+    /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_mut<S, F>(
         &self,
@@ -154,10 +119,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_mut_by_id<S, F>(
         &self,
@@ -167,9 +129,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
+    /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_sync_mut<S, F>(
         &self,
@@ -178,10 +138,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_sync_mut_by_id<S, F>(
         &self,
@@ -191,9 +148,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
+    /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_sync_mut<S, F>(
         &self,
@@ -202,10 +157,7 @@ pub trait CustomStorageAccess {
     where
         S: 'static + Storage,
         F: FnOnce() -> S;
-    /// Returns a [`RefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
-    ///
-    /// [`RefMut`]: crate::atomic_refcell::RefMut
-    /// [`StorageId`]: crate::storage::StorageId
+    /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_sync_mut_by_id<S, F>(
         &self,

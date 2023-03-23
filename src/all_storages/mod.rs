@@ -11,6 +11,7 @@ use crate::borrow::Borrow;
 use crate::component::Unique;
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
+use crate::get_component::GetComponent;
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::public_transport::ShipyardRwLock;
@@ -984,6 +985,38 @@ let i = all_storages.run(sys1);
     /// Enable insertion, deletion and removal tracking for the given components.
     pub fn track_all<T: TupleTrack>(&mut self) {
         T::track_all(self);
+    }
+
+    /// Retrieve components of `entity`.
+    ///
+    /// Multiple components can be queried at the same time using a tuple.
+    ///
+    /// ### Example:
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let entity = all_storages.add_entity((USIZE(0), U32(1)));
+    ///
+    /// let (i, j) = all_storages.get::<(&USIZE, &mut U32)>(entity).unwrap();
+    ///
+    /// assert!(*i == USIZE(0));
+    /// assert!(*j == U32(1));
+    pub fn get<T: GetComponent>(
+        &self,
+        entity: EntityId,
+    ) -> Result<T::Out<'_>, error::GetComponent> {
+        let current = self.get_current();
+
+        T::get(self, None, current, entity)
     }
 }
 

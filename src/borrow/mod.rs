@@ -70,6 +70,9 @@ pub enum Mutability {
 ///     }
 /// }
 /// ```
+///
+/// [`World::borrow`]: crate::World::borrow
+/// [`World::run`]: crate::World::run
 pub trait Borrow {
     #[allow(missing_docs)]
     type View<'a>;
@@ -170,7 +173,7 @@ where
                 .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            borrow: Some(borrow),
+            borrow,
             all_borrow,
             phantom: PhantomData,
         })
@@ -203,7 +206,7 @@ where
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            borrow: Some(borrow),
+            borrow,
             all_borrow,
             phantom: PhantomData,
         }))
@@ -236,7 +239,7 @@ where
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            borrow: Some(borrow),
+            borrow,
             all_borrow,
             phantom: PhantomData,
         }))
@@ -269,7 +272,7 @@ where
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            borrow: Some(borrow),
+            borrow,
             all_borrow,
             phantom: PhantomData,
         }))
@@ -302,7 +305,7 @@ where
                 .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            _borrow: Some(borrow),
+            _borrow: borrow,
             _all_borrow: all_borrow,
             phantom: PhantomData,
         })
@@ -335,7 +338,7 @@ where
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            _borrow: Some(borrow),
+            _borrow: borrow,
             _all_borrow: all_borrow,
             phantom: PhantomData,
         }))
@@ -368,7 +371,7 @@ where
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            _borrow: Some(borrow),
+            _borrow: borrow,
             _all_borrow: all_borrow,
             phantom: PhantomData,
         }))
@@ -401,7 +404,7 @@ where
             last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
             current,
             sparse_set,
-            _borrow: Some(borrow),
+            _borrow: borrow,
             _all_borrow: all_borrow,
             phantom: PhantomData,
         }))

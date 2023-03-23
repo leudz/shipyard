@@ -97,9 +97,7 @@ impl GetStorage {
 impl PartialEq for GetStorage {
     fn eq(&self, other: &GetStorage) -> bool {
         match (self, other) {
-            (GetStorage::AllStoragesBorrow(l_borrow), GetStorage::AllStoragesBorrow(r_borrow)) => {
-                l_borrow == r_borrow
-            }
+            (GetStorage::AllStoragesBorrow(l0), GetStorage::AllStoragesBorrow(r0)) => l0 == r0,
             (
                 GetStorage::StorageBorrow {
                     name: l_name,
@@ -112,9 +110,7 @@ impl PartialEq for GetStorage {
                     borrow: r_borrow,
                 },
             ) => l_name == r_name && l_id == r_id && l_borrow == r_borrow,
-            (GetStorage::Entities(l_borrow), GetStorage::Entities(r_borrow)) => {
-                l_borrow == r_borrow
-            }
+            (GetStorage::Entities(l0), GetStorage::Entities(r0)) => l0 == r0,
             (
                 GetStorage::MissingStorage {
                     name: l_name,
@@ -125,10 +121,24 @@ impl PartialEq for GetStorage {
                     id: r_id,
                 },
             ) => l_name == r_name && l_id == r_id,
+            (
+                GetStorage::TrackingNotEnabled {
+                    name: l_name,
+                    id: l_id,
+                    tracking: l_tracking,
+                },
+                GetStorage::TrackingNotEnabled {
+                    name: r_name,
+                    id: r_id,
+                    tracking: r_tracking,
+                },
+            ) => l_name == r_name && l_id == r_id && l_tracking == r_tracking,
             _ => false,
         }
     }
 }
+
+impl Eq for GetStorage {}
 
 #[cfg(feature = "std")]
 impl Error for GetStorage {}
@@ -801,6 +811,48 @@ impl Debug for ImpossibleRequirements {
 }
 
 impl Display for ImpossibleRequirements {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+/// Returned by [`World::get`] and [`AllStorages::get`].
+///
+/// [`World::get`]: crate::World::get
+/// [`AllStorages::get`]: crate::AllStorages::get
+#[derive(PartialEq)]
+pub enum GetComponent {
+    #[allow(missing_docs)]
+    StorageBorrow(GetStorage),
+    #[allow(missing_docs)]
+    MissingComponent(MissingComponent),
+}
+
+impl From<GetStorage> for GetComponent {
+    fn from(get_storage: GetStorage) -> GetComponent {
+        GetComponent::StorageBorrow(get_storage)
+    }
+}
+
+impl From<MissingComponent> for GetComponent {
+    fn from(missing_component: MissingComponent) -> GetComponent {
+        GetComponent::MissingComponent(missing_component)
+    }
+}
+
+#[cfg(feature = "std")]
+impl Error for GetComponent {}
+
+impl Debug for GetComponent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            GetComponent::StorageBorrow(err) => f.write_fmt(format_args!("{:?}", err)),
+            GetComponent::MissingComponent(err) => f.write_fmt(format_args!("{:?}", err)),
+        }
+    }
+}
+
+impl Display for GetComponent {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
         Debug::fmt(self, f)
     }
