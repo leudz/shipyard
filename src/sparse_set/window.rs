@@ -1,3 +1,4 @@
+use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::views::{View, ViewMut};
@@ -42,6 +43,42 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             current: view.current,
             _phantom: PhantomData,
         }
+    }
+    #[inline]
+    pub(crate) fn from_owned_view<TRACK>(
+        view: View<'_, T, TRACK>,
+    ) -> (Self, Option<SharedBorrow<'_>>, SharedBorrow<'_>) {
+        let View {
+            sparse_set,
+            all_borrow,
+            borrow,
+            last_insertion,
+            last_modification,
+            current,
+            ..
+        } = view;
+
+        let sparse_len = sparse_set.len();
+        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = sparse_set.sparse.as_ptr();
+        let sparse = sparse as *const *const EntityId;
+
+        (
+            FullRawWindow {
+                sparse,
+                sparse_len,
+                dense: sparse_set.dense.as_ptr(),
+                dense_len: sparse_set.dense.len(),
+                data: sparse_set.data.as_ptr(),
+                insertion_data: sparse_set.insertion_data.as_ptr(),
+                modification_data: sparse_set.modification_data.as_ptr(),
+                last_insertion,
+                last_modification,
+                current,
+                _phantom: PhantomData,
+            },
+            all_borrow,
+            borrow,
+        )
     }
     #[inline]
     pub(crate) fn from_view_mut<TRACK>(view: &ViewMut<'_, T, TRACK>) -> Self {
@@ -160,6 +197,44 @@ impl<'w, T: Component> FullRawWindowMut<'w, T> {
             is_tracking_modification: view.is_tracking_modification(),
             _phantom: PhantomData,
         }
+    }
+    #[inline]
+    pub(crate) fn new_owned<TRACK>(
+        view: ViewMut<'_, T, TRACK>,
+    ) -> (Self, Option<SharedBorrow<'_>>, ExclusiveBorrow<'_>) {
+        let ViewMut {
+            sparse_set,
+            _all_borrow: all_borrow,
+            _borrow: borrow,
+            last_insertion,
+            last_modification,
+            current,
+            ..
+        } = view;
+
+        let sparse_len = sparse_set.len();
+        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
+            sparse_set.sparse.as_mut_ptr();
+        let sparse = sparse as *mut *mut EntityId;
+
+        (
+            FullRawWindowMut {
+                sparse,
+                sparse_len,
+                dense: sparse_set.dense.as_mut_ptr(),
+                dense_len: sparse_set.dense.len(),
+                data: sparse_set.data.as_mut_ptr(),
+                insertion_data: sparse_set.insertion_data.as_ptr(),
+                modification_data: sparse_set.modification_data.as_mut_ptr(),
+                last_insertion,
+                last_modification,
+                current,
+                is_tracking_modification: sparse_set.is_tracking_modification(),
+                _phantom: PhantomData,
+            },
+            all_borrow,
+            borrow,
+        )
     }
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {

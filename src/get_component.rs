@@ -21,6 +21,7 @@ impl<'a, T> Ref<'a, T> {
     /// Makes a new [`Ref`].
     ///
     /// This is an associated function that needs to be used as `Ref::map(...)`. A method would interfere with methods of the same name used through Deref.
+    #[inline]
     pub fn map<U, F: FnOnce(T) -> U>(orig: Self, f: F) -> Ref<'a, U> {
         Ref {
             inner: f(orig.inner),
@@ -33,12 +34,14 @@ impl<'a, T> Ref<'a, T> {
 impl<'a, T> Deref for Ref<'a, T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
 impl<'a, T> AsRef<T> for Ref<'a, T> {
+    #[inline]
     fn as_ref(&self) -> &T {
         &self.inner
     }
@@ -57,6 +60,7 @@ impl<'a, T> RefMut<'a, T> {
     /// Makes a new [`RefMut`], the component will not be flagged if its modified inside `f`.
     ///
     /// This is an associated function that needs to be used as `RefMut::map(...)`. A method would interfere with methods of the same name used through Deref.
+    #[inline]
     pub fn map<U, F: FnOnce(T) -> U>(orig: Self, f: F) -> RefMut<'a, U> {
         RefMut {
             inner: f(orig.inner),
@@ -71,18 +75,21 @@ impl<'a, T> RefMut<'a, T> {
 impl<'a, T> Deref for RefMut<'a, T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
 impl<'a, T> AsRef<T> for RefMut<'a, T> {
+    #[inline]
     fn as_ref(&self) -> &T {
         &self.inner
     }
 }
 
 impl<'a, T> DerefMut for RefMut<'a, T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         if let Some(flag) = &mut self.flag {
             **flag = self.current;
@@ -93,6 +100,7 @@ impl<'a, T> DerefMut for RefMut<'a, T> {
 }
 
 impl<'a, T> AsMut<T> for RefMut<'a, T> {
+    #[inline]
     fn as_mut(&mut self) -> &mut T {
         if let Some(flag) = &mut self.flag {
             **flag = self.current;
@@ -121,6 +129,7 @@ pub trait GetComponent {
 impl<T: Component + Send + Sync> GetComponent for &'_ T {
     type Out<'a> = Ref<'a, &'a T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -148,6 +157,7 @@ impl<T: Component + Send + Sync> GetComponent for &'_ T {
 impl<T: Component + Sync> GetComponent for NonSend<&'_ T> {
     type Out<'a> = Ref<'a, &'a T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -175,6 +185,7 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ T> {
 impl<T: Component + Send> GetComponent for NonSync<&'_ T> {
     type Out<'a> = Ref<'a, &'a T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -202,6 +213,7 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ T> {
 impl<T: Component> GetComponent for NonSendSync<&'_ T> {
     type Out<'a> = Ref<'a, &'a T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -228,6 +240,7 @@ impl<T: Component> GetComponent for NonSendSync<&'_ T> {
 impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
     type Out<'a> = RefMut<'a, &'a mut T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -267,6 +280,7 @@ impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
 impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
     type Out<'a> = RefMut<'a, &'a mut T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -306,6 +320,7 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
 impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
     type Out<'a> = RefMut<'a, &'a mut T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -345,6 +360,7 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
 impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
     type Out<'a> = RefMut<'a, &'a mut T>;
 
+    #[inline]
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,

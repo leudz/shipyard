@@ -13,7 +13,7 @@ use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 #[allow(clippy::len_without_is_empty)]
 pub trait AbstractMut {
     type Out;
-    type Index;
+    type Index: Clone;
 
     #[doc(hidden)]
     unsafe fn get_data(&self, index: usize) -> Self::Out;

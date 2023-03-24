@@ -6,9 +6,9 @@ use rayon::iter::plumbing::Producer;
 
 #[allow(missing_docs)]
 pub struct Tight<Storage> {
-    pub(super) storage: Storage,
-    pub(super) current: usize,
-    pub(super) end: usize,
+    pub(crate) storage: Storage,
+    pub(crate) current: usize,
+    pub(crate) end: usize,
 }
 
 impl<Storage: AbstractMut> Iterator for Tight<Storage> {

@@ -6,6 +6,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
 use crate::info::WorkloadsTypeUsage;
+use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
 use crate::reserve::BulkEntityIter;
@@ -1435,6 +1436,7 @@ assert!(*j == &U32(1));
 [NonSync]: crate::NonSync
 [NonSendSync]: crate::NonSendSync"
     )]
+    #[inline]
     pub fn get<T: GetComponent>(
         &self,
         entity: EntityId,
@@ -1450,6 +1452,89 @@ assert!(*j == &U32(1));
         let current = self.get_current();
 
         T::get(all_storages, Some(all_borrow), current, entity)
+    }
+
+    #[doc = "Iterate components.
+
+Multiple components can be iterated at the same time using a tuple.
+
+You can use:
+* `&T` for a shared access to `T` component
+* `&mut T` for an exclusive access to `T` component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared)
+
+### Panics
+
+- [AllStorages] borrow failed.
+
+### Example
+```
+use shipyard::{Component, World};
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct USIZE(usize);
+
+let mut world = World::new();
+
+let entity = world.add_entity((USIZE(0), U32(1)));
+
+let mut iter = world.iter::<(&USIZE, &mut U32)>();
+
+for (i, j) in &mut iter {
+    // <-- SNIP -->
+}
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    #[inline]
+    #[track_caller]
+    pub fn iter<T: IterComponent>(&self) -> IntoIterRef<'_, T> {
+        let (all_storages, all_borrow) = unsafe {
+            ARef::destructure(
+                self.all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)
+                    .unwrap(),
+            )
+        };
+
+        let current = self.get_current();
+
+        IntoIterRef {
+            all_storages,
+            all_borrow: Some(all_borrow),
+            current,
+            phantom: core::marker::PhantomData,
+        }
     }
 }
 

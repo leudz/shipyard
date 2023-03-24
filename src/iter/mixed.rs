@@ -8,12 +8,12 @@ use rayon::iter::plumbing::UnindexedProducer;
 
 #[allow(missing_docs)]
 pub struct Mixed<Storage> {
-    pub(super) storage: Storage,
-    pub(super) indices: Iter<'static, EntityId>,
-    pub(super) count: usize,
-    pub(super) mask: u16,
-    pub(super) last_id: EntityId,
-    pub(super) rev_next_storage: Vec<Iter<'static, EntityId>>,
+    pub(crate) storage: Storage,
+    pub(crate) indices: Iter<'static, EntityId>,
+    pub(crate) count: usize,
+    pub(crate) mask: u16,
+    pub(crate) last_id: EntityId,
+    pub(crate) rev_next_storage: Vec<Iter<'static, EntityId>>,
 }
 
 unsafe impl<Storage: Send> Send for Mixed<Storage> {}
