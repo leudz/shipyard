@@ -79,3 +79,29 @@ fn update() {
         vec![(entity1, &USIZE(0))]
     );
 }
+
+#[test]
+fn on_deletion() {
+    use std::sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    };
+
+    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let entity = world.add_entity(());
+
+    let captured_entity = Arc::new(AtomicU64::new(123));
+    let captured_entity_clone = captured_entity.clone();
+
+    world.on_deletion(move |eid| {
+        captured_entity_clone.store(eid.inner(), Ordering::Relaxed);
+    });
+
+    world.delete_entity(entity);
+
+    assert_eq!(
+        captured_entity.load(Ordering::Relaxed),
+        EntityId::new_from_index_and_gen(0, 0).inner()
+    );
+}

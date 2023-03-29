@@ -16,6 +16,7 @@ use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemo
 use crate::storage::{Storage, StorageId};
 use crate::system::System;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
+use crate::views::EntitiesViewMut;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
@@ -1535,6 +1536,24 @@ for (i, j) in &mut iter {
             current,
             phantom: core::marker::PhantomData,
         }
+    }
+
+    /// Sets the on entity deletion callback.
+    ///
+    /// ### Borrows
+    ///
+    /// - AllStorages (shared)
+    /// - Entities (exclusive)
+    ///
+    /// ### Panics
+    ///
+    /// - AllStorages borrow failed.
+    /// - Entities borrow failed.
+    #[track_caller]
+    pub fn on_deletion(&self, f: impl FnMut(EntityId) + Send + Sync + 'static) {
+        let mut entities = self.borrow::<EntitiesViewMut<'_>>().unwrap();
+
+        entities.on_deletion(f);
     }
 }
 

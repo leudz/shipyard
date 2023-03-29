@@ -10,6 +10,7 @@ use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::reserve::{BulkEntityIter, BulkReserve};
 use crate::storage::Storage;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::iter::repeat_with;
 
@@ -34,6 +35,7 @@ use core::iter::repeat_with;
 pub struct Entities {
     pub(crate) data: Vec<EntityId>,
     list: Option<(usize, usize)>,
+    on_deletion: Option<Box<dyn FnMut(EntityId) + Send + Sync>>,
 }
 
 impl Entities {
@@ -42,6 +44,7 @@ impl Entities {
         Entities {
             data: Vec::new(),
             list: None,
+            on_deletion: None,
         }
     }
     /// Returns `true` if `entity` matches a living entity.
@@ -190,6 +193,10 @@ impl Entities {
                     };
                     self.list = Some((entity_id.uindex(), entity_id.uindex()));
                 }
+            }
+
+            if let Some(on_deletion) = &mut self.on_deletion {
+                (on_deletion)(entity_id)
             }
 
             true
@@ -366,6 +373,11 @@ impl Entities {
             true
         }
     }
+
+    /// Sets the on entity deletion callback.
+    pub fn on_deletion(&mut self, f: impl FnMut(EntityId) + Send + Sync + 'static) {
+        self.on_deletion = Some(Box::new(f));
+    }
 }
 
 impl Storage for Entities {
@@ -377,9 +389,14 @@ impl Storage for Entities {
         let mut last_alive = self.data.len() as u64 - 1;
         for (i, id) in self.data.iter_mut().enumerate().rev() {
             let target = last_alive;
+            let id_before_bump = *id;
 
             if id.bump_gen().is_ok() {
                 last_alive = i as u64;
+
+                if let Some(on_deletion) = &mut self.on_deletion {
+                    (on_deletion)(id_before_bump)
+                }
             }
 
             id.set_index(target);
