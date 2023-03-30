@@ -80,11 +80,11 @@ impl Entities {
     /// ```
     #[track_caller]
     #[inline]
-    pub fn add_component<S: AddComponent>(
+    pub fn add_component<C, S: AddComponent<C>>(
         &self,
         entity: EntityId,
         mut storages: S,
-        component: S::Component,
+        component: C,
     ) {
         if self.is_alive(entity) {
             storages.add_component_unchecked(entity, component);

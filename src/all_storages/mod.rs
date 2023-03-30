@@ -382,8 +382,10 @@ impl AllStorages {
     /// ```
     #[inline]
     pub fn add_entity<T: TupleAddComponent>(&mut self, component: T) -> EntityId {
+        let current = self.get_current();
+
         let entity = self.exclusive_storage_mut::<Entities>().unwrap().generate();
-        component.add_component(self, entity);
+        component.add_component(self, entity, current);
 
         entity
     }
@@ -442,12 +444,14 @@ impl AllStorages {
     #[track_caller]
     #[inline]
     pub fn add_component<T: TupleAddComponent>(&mut self, entity: EntityId, component: T) {
+        let current = self.get_current();
+
         if self
             .exclusive_storage_mut::<Entities>()
             .unwrap()
             .is_alive(entity)
         {
-            component.add_component(self, entity);
+            component.add_component(self, entity, current);
         } else {
             panic!("{:?}", error::AddComponent::EntityIsNotAlive);
         }

@@ -4,12 +4,12 @@ use shipyard::*;
 struct U32(u32);
 impl Component for U32 {}
 
+#[derive(PartialEq, Eq, Debug)]
+struct USIZE(usize);
+impl Component for USIZE {}
+
 #[test]
 fn no_pack() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {}
-
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
@@ -41,10 +41,6 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {}
-
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
@@ -89,10 +85,6 @@ fn update() {
 
 #[test]
 fn no_pack_unchecked() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {}
-
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
@@ -151,4 +143,18 @@ fn workload_add_and_remove() {
     world.run_default().unwrap();
     world.run_default().unwrap();
     world.run_default().unwrap();
+}
+
+#[test]
+fn move_between_worlds() {
+    let mut world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+
+    let entity1 = world1.add_entity((USIZE(1), U32(2)));
+
+    world2.spawn(entity1);
+    world2.add_component(entity1, world1.remove::<(USIZE, U32)>(entity1));
+
+    assert_eq!(*world2.get::<&USIZE>(entity1).unwrap(), &USIZE(1));
+    assert_eq!(*world2.get::<&U32>(entity1).unwrap(), &U32(2));
 }
