@@ -9,6 +9,11 @@ on:
       - master
   workflow_dispatch:
 
+env:
+  # web_sys_unstable_apis is required to enable the web_sys clipboard API which is used by the visualizer,
+  # https://rustwasm.github.io/wasm-bindgen/api/web_sys/struct.Clipboard.html
+  RUSTFLAGS: --cfg=web_sys_unstable_apis
+
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -194,8 +199,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
-      - run: export RUSTFLAGS=--cfg=web_sys_unstable_apis
-      - uses: jetli/trunk-action@v0.4.0
+      - uses: jetli/trunk-action@v1
         with:
           version: 'latest'
       # GH pages doesn't use the same url naming as trunk's default
