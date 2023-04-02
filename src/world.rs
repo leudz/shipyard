@@ -2,6 +2,7 @@ use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, Tupl
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
 use crate::component::Unique;
+use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
@@ -1554,6 +1555,71 @@ for (i, j) in &mut iter {
         let mut entities = self.borrow::<EntitiesViewMut<'_>>().unwrap();
 
         entities.on_deletion(f);
+    }
+
+    /// Returns true if entity matches a living entity.
+    pub fn is_entity_alive(&mut self, entity: EntityId) -> bool {
+        self.all_storages
+            .get_mut()
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(entity)
+    }
+
+    /// Moves an entity from a `World` to another.
+    ///
+    /// ```
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world1 = World::new();
+    /// let mut world2 = World::new();
+    ///
+    /// let entity = world1.add_entity(USIZE(1));
+    ///
+    /// world1.move_entity(&mut world2, entity);
+    ///
+    /// assert!(!world1.is_entity_alive(entity));
+    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn move_entity(&mut self, other: &mut World, entity: EntityId) {
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .get_mut()
+            .move_entity(other_all_storages, entity);
+    }
+
+    /// Moves all components from an entity to another in another `World`.
+    ///
+    /// ```
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world1 = World::new();
+    /// let mut world2 = World::new();
+    ///
+    /// let from = world1.add_entity(USIZE(1));
+    /// let to = world2.add_entity(());
+    ///
+    /// world1.move_components(&mut world2, from, to);
+    ///
+    /// assert!(world1.get::<&USIZE>(from).is_err());
+    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    #[inline]
+    pub fn move_components(&mut self, other: &mut World, from: EntityId, to: EntityId) {
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .get_mut()
+            .move_components(other_all_storages, from, to);
     }
 }
 

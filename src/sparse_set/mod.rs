@@ -15,6 +15,7 @@ pub use sparse_array::SparseArray;
 
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
+use crate::all_storages::AllStorages;
 #[cfg(feature = "thread_local")]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
@@ -653,6 +654,25 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
         self.removal_data
             .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
     }
+    #[inline]
+    #[track_caller]
+    fn move_component_from(
+        &mut self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
+        current: u32,
+        other_current: u32,
+    ) {
+        if let Some(component) = self.dyn_remove(from, current) {
+            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<SparseSet<T>>(),
+                SparseSet::<T>::new,
+            );
+
+            other_sparse_set.insert(to, component, other_current);
+        }
+    }
 }
 
 #[cfg(feature = "thread_local")]
@@ -702,6 +722,25 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
 
         self.removal_data
             .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+    }
+    #[inline]
+    #[track_caller]
+    fn move_component_from(
+        &mut self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
+        current: u32,
+        other_current: u32,
+    ) {
+        if let Some(component) = self.dyn_remove(from, current) {
+            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_send_mut(
+                StorageId::of::<NonSend<SparseSet<T>>>(),
+                || NonSend(SparseSet::<T>::new()),
+            );
+
+            other_sparse_set.insert(to, component, other_current);
+        }
     }
 }
 
@@ -753,6 +792,25 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
         self.removal_data
             .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
     }
+    #[inline]
+    #[track_caller]
+    fn move_component_from(
+        &mut self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
+        current: u32,
+        other_current: u32,
+    ) {
+        if let Some(component) = self.dyn_remove(from, current) {
+            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_sync_mut(
+                StorageId::of::<NonSync<SparseSet<T>>>(),
+                || NonSync(SparseSet::<T>::new()),
+            );
+
+            other_sparse_set.insert(to, component, other_current);
+        }
+    }
 }
 
 #[cfg(feature = "thread_local")]
@@ -802,6 +860,26 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
 
         self.removal_data
             .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+    }
+    #[inline]
+    #[track_caller]
+    fn move_component_from(
+        &mut self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
+        current: u32,
+        other_current: u32,
+    ) {
+        if let Some(component) = self.dyn_remove(from, current) {
+            let other_sparse_set = other_all_storages
+                .exclusive_storage_or_insert_non_send_sync_mut(
+                    StorageId::of::<NonSendSync<SparseSet<T>>>(),
+                    || NonSendSync(SparseSet::<T>::new()),
+                );
+
+            other_sparse_set.insert(to, component, other_current);
+        }
     }
 }
 

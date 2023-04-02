@@ -5,6 +5,7 @@ pub use storage_id::StorageId;
 
 pub(crate) use sbox::SBox;
 
+use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::sparse_set::SparseArray;
@@ -40,10 +41,12 @@ pub trait Storage: SizedAny {
     }
     /// Deletes an entity from this storage.
     #[inline]
-    fn delete(&mut self, _entity: EntityId, _current: u32) {}
+    #[allow(unused_variables)]
+    fn delete(&mut self, entity: EntityId, current: u32) {}
     /// Deletes all components of this storage.
     #[inline]
-    fn clear(&mut self, _current: u32) {}
+    #[allow(unused_variables)]
+    fn clear(&mut self, current: u32) {}
     /// Returns how much memory this storage uses.
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         None
@@ -69,6 +72,18 @@ pub trait Storage: SizedAny {
     fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         _timestamp: TrackingTimestamp,
+    ) {
+    }
+    /// Moves a component from a `World` to another.
+    #[inline]
+    #[allow(unused_variables)]
+    fn move_component_from(
+        &mut self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
+        current: u32,
+        other_current: u32,
     ) {
     }
 }

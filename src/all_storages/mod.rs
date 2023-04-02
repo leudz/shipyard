@@ -1233,6 +1233,138 @@ for (i, j) in &mut iter {
 
         entities.on_deletion(f);
     }
+
+    /// Returns true if entity matches a living entity.
+    pub fn is_entity_alive(&mut self, entity: EntityId) -> bool {
+        self.exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(entity)
+    }
+
+    /// Moves an entity from a `World` to another.
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let world1 = World::new();
+    /// let world2 = World::new();
+    ///
+    /// let mut all_storages1 = world1.borrow::<AllStoragesViewMut>().unwrap();
+    /// let mut all_storages2 = world2.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let entity = all_storages1.add_entity(USIZE(1));
+    ///
+    /// all_storages1.move_entity(&mut all_storages2, entity);
+    ///
+    /// assert!(!all_storages1.is_entity_alive(entity));
+    /// assert_eq!(all_storages2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// - `entity` is not alive
+    #[track_caller]
+    pub fn move_entity(&mut self, other: &mut AllStorages, entity: EntityId) {
+        let current = self.get_current();
+        let other_current = other.get_current();
+
+        if !self
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .delete_unchecked(entity)
+        {
+            panic!(
+                "Entity {:?} has to be alive to move it to another World.",
+                entity
+            );
+        };
+
+        assert!(
+            other
+                .exclusive_storage_mut::<Entities>()
+                .unwrap()
+                .spawn(entity),
+            "Other World already has an entity at {:?}'s index.",
+            entity
+        );
+
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }.get_mut().move_component_from(
+                other,
+                entity,
+                entity,
+                current,
+                other_current,
+            );
+        }
+    }
+
+    /// Moves all components from an entity to another in another `World`.
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let world1 = World::new();
+    /// let world2 = World::new();
+    ///
+    /// let mut all_storages1 = world1.borrow::<AllStoragesViewMut>().unwrap();
+    /// let mut all_storages2 = world2.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let from = all_storages1.add_entity(USIZE(1));
+    /// let to = all_storages2.add_entity(());
+    ///
+    /// all_storages1.move_components(&mut all_storages2, from, to);
+    ///
+    /// assert!(all_storages1.get::<&USIZE>(from).is_err());
+    /// assert_eq!(all_storages2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    /// # Panics
+    ///
+    /// - `from` is not alive
+    /// - `to` is not alive
+    #[track_caller]
+    pub fn move_components(&mut self, other: &mut AllStorages, from: EntityId, to: EntityId) {
+        let current = self.get_current();
+        let other_current = other.get_current();
+
+        if !self
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(from)
+        {
+            panic!(
+                "Entity {:?} has to be alive to move its components to another World.",
+                from
+            );
+        };
+
+        if !other
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(to)
+        {
+            panic!(
+                "Entity {:?} has to be alive to receive components from another World.",
+                to
+            );
+        };
+
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }.get_mut().move_component_from(
+                other,
+                from,
+                to,
+                current,
+                other_current,
+            );
+        }
+    }
 }
 
 impl core::fmt::Debug for AllStorages {

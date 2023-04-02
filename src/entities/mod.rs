@@ -428,6 +428,16 @@ impl Storage for Entities {
     fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
+    fn move_component_from(
+        &mut self,
+        _other_all_storages: &mut crate::AllStorages,
+        _from: EntityId,
+        _to: EntityId,
+        _current: u32,
+        _other_current: u32,
+    ) {
+        // Do nothing here so this function can be used to implement both move component and move entity.
+    }
 }
 
 #[test]
