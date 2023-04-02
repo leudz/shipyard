@@ -164,7 +164,7 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ T> {
         _current: u32,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_send(SparseSet::new)?;
+        let view = all_storages.custom_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -192,7 +192,7 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ T> {
         _current: u32,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_sync(SparseSet::new)?;
+        let view = all_storages.custom_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -220,7 +220,8 @@ impl<T: Component> GetComponent for NonSendSync<&'_ T> {
         _current: u32,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_send_sync(SparseSet::new)?;
+        let view = all_storages
+            .custom_storage_or_insert_non_send_sync(|| NonSendSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARef::destructure(view) };
 
@@ -287,7 +288,8 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
         current: u32,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_send_mut(SparseSet::new)?;
+        let view =
+            all_storages.custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -298,12 +300,12 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet {
+        let NonSend(SparseSet {
             data,
             modification_data,
             is_tracking_modification,
             ..
-        } = sparse_set;
+        }) = sparse_set;
 
         Ok(RefMut {
             inner: unsafe { data.get_unchecked_mut(index) },
@@ -327,7 +329,8 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
         current: u32,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_sync_mut(SparseSet::new)?;
+        let view =
+            all_storages.custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -338,12 +341,12 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet {
+        let NonSync(SparseSet {
             data,
             modification_data,
             is_tracking_modification,
             ..
-        } = sparse_set;
+        }) = sparse_set;
 
         Ok(RefMut {
             inner: unsafe { data.get_unchecked_mut(index) },
@@ -367,7 +370,8 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
         current: u32,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
-        let view = all_storages.custom_storage_or_insert_non_send_sync_mut(SparseSet::new)?;
+        let view = all_storages
+            .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::new()))?;
 
         let (sparse_set, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -378,12 +382,12 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
                 name: type_name::<T>(),
             })?;
 
-        let SparseSet {
+        let NonSendSync(SparseSet {
             data,
             modification_data,
             is_tracking_modification,
             ..
-        } = sparse_set;
+        }) = sparse_set;
 
         Ok(RefMut {
             inner: unsafe { data.get_unchecked_mut(index) },

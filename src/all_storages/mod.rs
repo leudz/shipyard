@@ -278,6 +278,7 @@ impl AllStorages {
     ///
     /// all_storages.strip(entity);
     /// ```
+    #[track_caller]
     pub fn strip(&mut self, entity: EntityId) {
         let current = self.get_current();
 
@@ -313,6 +314,7 @@ impl AllStorages {
     /// Deletes all components of an entity except the ones passed in `S`.  
     /// This is identical to `retain` but uses `StorageId` and not generics.  
     /// You should only use this method if you use a custom storage with a runtime id.
+    #[track_caller]
     pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         let current = self.get_current();
 
@@ -334,6 +336,7 @@ impl AllStorages {
     ///
     /// all_storages.clear();
     /// ```
+    #[track_caller]
     pub fn clear(&mut self) {
         let current = self.get_current();
 
@@ -342,6 +345,7 @@ impl AllStorages {
         }
     }
     /// Clear all deletion and removal tracking data.
+    #[track_caller]
     pub fn clear_all_removed_and_deleted(&mut self) {
         for storage in self.storages.get_mut().values_mut() {
             unsafe { &mut *storage.0 }
@@ -350,6 +354,7 @@ impl AllStorages {
         }
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
+    #[track_caller]
     pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         timestamp: TrackingTimestamp,
@@ -899,6 +904,7 @@ let i = all_storages.run(sys1);
     ) -> Result<&mut T, error::GetStorage> {
         self.exclusive_storage_mut_by_id(StorageId::of::<T>())
     }
+    #[track_caller]
     pub(crate) fn exclusive_storage_mut_by_id<T: 'static>(
         &mut self,
         storage_id: StorageId,
@@ -932,6 +938,77 @@ let i = all_storages.run(sys1);
             &mut *storages
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new(f()))
+                .0
+        }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut()
+        .unwrap()
+    }
+    #[cfg(feature = "thread_local")]
+    #[track_caller]
+    pub(crate) fn exclusive_storage_or_insert_non_send_mut<T, F>(
+        &mut self,
+        storage_id: StorageId,
+        f: F,
+    ) -> &mut T
+    where
+        T: 'static + Storage + Sync,
+        F: FnOnce() -> T,
+    {
+        let storages = self.storages.get_mut();
+
+        unsafe {
+            &mut *storages
+                .entry(storage_id)
+                .or_insert_with(|| SBox::new_non_send(f(), std::thread::current().id()))
+                .0
+        }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut()
+        .unwrap()
+    }
+    #[cfg(feature = "thread_local")]
+    pub(crate) fn exclusive_storage_or_insert_non_sync_mut<T, F>(
+        &mut self,
+        storage_id: StorageId,
+        f: F,
+    ) -> &mut T
+    where
+        T: 'static + Storage + Send,
+        F: FnOnce() -> T,
+    {
+        let storages = self.storages.get_mut();
+
+        unsafe {
+            &mut *storages
+                .entry(storage_id)
+                .or_insert_with(|| SBox::new_non_sync(f()))
+                .0
+        }
+        .get_mut()
+        .as_any_mut()
+        .downcast_mut()
+        .unwrap()
+    }
+    #[cfg(feature = "thread_local")]
+    #[track_caller]
+    pub(crate) fn exclusive_storage_or_insert_non_send_sync_mut<T, F>(
+        &mut self,
+        storage_id: StorageId,
+        f: F,
+    ) -> &mut T
+    where
+        T: 'static + Storage,
+        F: FnOnce() -> T,
+    {
+        let storages = self.storages.get_mut();
+
+        unsafe {
+            &mut *storages
+                .entry(storage_id)
+                .or_insert_with(|| SBox::new_non_send_sync(f(), std::thread::current().id()))
                 .0
         }
         .get_mut()

@@ -174,8 +174,8 @@ impl<T: ?Sized> AtomicRefCell<T> {
     pub(crate) fn borrow_mut(&self) -> Result<ARefMut<'_, &'_ mut T>, error::Borrow> {
         #[cfg(feature = "thread_local")]
         {
-            // if Sync - accessible from any thread, shared only if not world thread
-            // if !Sync - accessible from world thread only
+            // if Send - accessible from any thread, shared only if not world thread
+            // if !Send - accessible from world thread only
             if let Some(thread_id) = self.send {
                 if thread_id != std::thread::current().id() {
                     return Err(error::Borrow::WrongThread);
@@ -195,7 +195,19 @@ impl<T: ?Sized> AtomicRefCell<T> {
         }
     }
     #[inline]
+    #[track_caller]
     pub(crate) fn get_mut(&mut self) -> &'_ mut T {
+        #[cfg(feature = "thread_local")]
+        {
+            // if Send - accessible from any thread, shared only if not world thread
+            // if !Send - accessible from world thread only
+            if let Some(thread_id) = self.send {
+                if thread_id != std::thread::current().id() {
+                    panic!("{:?}", error::Borrow::WrongThread);
+                }
+            }
+        }
+
         self.inner.get_mut()
     }
 }

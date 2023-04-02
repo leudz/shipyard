@@ -169,7 +169,7 @@ where
     ) {
         enable_tracking_fn.push(|all_storages| {
             all_storages
-                .custom_storage_or_insert_non_send_mut(SparseSet::<T>::new)?
+                .custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::<T>::new()))?
                 .enable_tracking::<Track<TRACK>>();
 
             Ok(())
@@ -196,7 +196,7 @@ where
     ) {
         enable_tracking_fn.push(|all_storages| {
             all_storages
-                .custom_storage_or_insert_non_sync_mut(SparseSet::<T>::new)?
+                .custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::<T>::new()))?
                 .enable_tracking::<Track<TRACK>>();
 
             Ok(())
@@ -223,7 +223,7 @@ where
     ) {
         enable_tracking_fn.push(|all_storages| {
             all_storages
-                .custom_storage_or_insert_non_send_sync_mut(SparseSet::<T>::new)?
+                .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::<T>::new()))?
                 .enable_tracking::<Track<TRACK>>();
 
             Ok(())
@@ -275,7 +275,7 @@ where
     ) {
         enable_tracking_fn.push(|all_storages| {
             all_storages
-                .custom_storage_or_insert_non_send_mut(SparseSet::<T>::new)?
+                .custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::<T>::new()))?
                 .enable_tracking::<Track<TRACK>>();
 
             Ok(())
@@ -302,7 +302,7 @@ where
     ) {
         enable_tracking_fn.push(|all_storages| {
             all_storages
-                .custom_storage_or_insert_non_sync_mut(SparseSet::<T>::new)?
+                .custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::<T>::new()))?
                 .enable_tracking::<Track<TRACK>>();
 
             Ok(())
@@ -329,7 +329,7 @@ where
     ) {
         enable_tracking_fn.push(|all_storages| {
             all_storages
-                .custom_storage_or_insert_non_send_sync_mut(SparseSet::<T>::new)?
+                .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::<T>::new()))?
                 .enable_tracking::<Track<TRACK>>();
 
             Ok(())

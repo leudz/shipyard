@@ -15,6 +15,7 @@ pub trait TupleDeleteAny {
 
 impl<T: 'static + Storage + CustomDeleteAny> TupleDeleteAny for T {
     #[inline]
+    #[track_caller]
     fn delete_any(all_storages: &mut AllStorages) {
         let mut ids = HashSet::new();
 

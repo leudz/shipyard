@@ -150,8 +150,8 @@ fn non_send_storage_in_other_thread() {
             assert_eq!(
                 world.borrow::<NonSend<ViewMut<NotSend>>>().err(),
                 Some(error::GetStorage::StorageBorrow {
-                    name: Some(type_name::<SparseSet<NotSend>>()),
-                    id: StorageId::of::<SparseSet<NotSend>>(),
+                    name: Some(type_name::<NonSend<SparseSet<NotSend>>>()),
+                    id: StorageId::of::<NonSend<SparseSet<NotSend>>>(),
                     borrow: error::Borrow::WrongThread
                 })
             )
@@ -169,8 +169,8 @@ fn non_send_sync_storage_in_other_thread() {
             assert_eq!(
                 world.borrow::<NonSendSync<View<NotSendSync>>>().err(),
                 Some(error::GetStorage::StorageBorrow {
-                    name: Some(type_name::<SparseSet<NotSendSync>>()),
-                    id: StorageId::of::<SparseSet<NotSendSync>>(),
+                    name: Some(type_name::<NonSendSync<SparseSet<NotSendSync>>>()),
+                    id: StorageId::of::<NonSendSync<SparseSet<NotSendSync>>>(),
                     borrow: error::Borrow::WrongThread
                 })
             )

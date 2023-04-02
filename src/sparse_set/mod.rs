@@ -15,6 +15,8 @@ pub use sparse_array::SparseArray;
 
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
+#[cfg(feature = "thread_local")]
+use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
@@ -604,7 +606,7 @@ impl<T: Ord + Component> SparseSet<T> {
     }
 }
 
-impl<T: 'static + Component> Storage for SparseSet<T> {
+impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
     #[inline]
     fn delete(&mut self, entity: EntityId, current: u32) {
         self.dyn_delete(entity, current);
@@ -638,6 +640,156 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
     }
     fn is_empty(&self) -> bool {
         self.is_empty()
+    }
+    fn clear_all_removed_and_deleted(&mut self) {
+        self.deletion_data.clear();
+        self.removal_data.clear();
+    }
+    fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
+        self.deletion_data.retain(|(_, t, _)| {
+            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+
+        self.removal_data
+            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
+    #[inline]
+    fn delete(&mut self, entity: EntityId, current: u32) {
+        self.dyn_delete(entity, current);
+    }
+    #[inline]
+    fn clear(&mut self, current: u32) {
+        self.private_clear(current);
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(StorageMemoryUsage {
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: self.sparse.reserved_memory()
+                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
+                + (self.data.capacity() * core::mem::size_of::<T>())
+                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
+                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Self>(),
+            used_memory_bytes: self.sparse.used_memory()
+                + (self.dense.len() * core::mem::size_of::<EntityId>())
+                + (self.data.len() * core::mem::size_of::<T>())
+                + (self.insertion_data.len() * core::mem::size_of::<u32>())
+                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Self>(),
+            component_count: self.len(),
+        })
+    }
+    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+        Some(&self.sparse)
+    }
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    fn clear_all_removed_and_deleted(&mut self) {
+        self.deletion_data.clear();
+        self.removal_data.clear();
+    }
+    fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
+        self.deletion_data.retain(|(_, t, _)| {
+            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+
+        self.removal_data
+            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
+    #[inline]
+    fn delete(&mut self, entity: EntityId, current: u32) {
+        self.dyn_delete(entity, current);
+    }
+    #[inline]
+    fn clear(&mut self, current: u32) {
+        self.private_clear(current);
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(StorageMemoryUsage {
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: self.sparse.reserved_memory()
+                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
+                + (self.data.capacity() * core::mem::size_of::<T>())
+                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
+                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Self>(),
+            used_memory_bytes: self.sparse.used_memory()
+                + (self.dense.len() * core::mem::size_of::<EntityId>())
+                + (self.data.len() * core::mem::size_of::<T>())
+                + (self.insertion_data.len() * core::mem::size_of::<u32>())
+                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Self>(),
+            component_count: self.len(),
+        })
+    }
+    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+        Some(&self.sparse)
+    }
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    fn clear_all_removed_and_deleted(&mut self) {
+        self.deletion_data.clear();
+        self.removal_data.clear();
+    }
+    fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
+        self.deletion_data.retain(|(_, t, _)| {
+            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+        });
+
+        self.removal_data
+            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
+    #[inline]
+    fn delete(&mut self, entity: EntityId, current: u32) {
+        self.dyn_delete(entity, current);
+    }
+    #[inline]
+    fn clear(&mut self, current: u32) {
+        self.private_clear(current);
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(StorageMemoryUsage {
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: self.sparse.reserved_memory()
+                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
+                + (self.data.capacity() * core::mem::size_of::<T>())
+                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
+                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Self>(),
+            used_memory_bytes: self.sparse.used_memory()
+                + (self.dense.len() * core::mem::size_of::<EntityId>())
+                + (self.data.len() * core::mem::size_of::<T>())
+                + (self.insertion_data.len() * core::mem::size_of::<u32>())
+                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
+                + core::mem::size_of::<Self>(),
+            component_count: self.len(),
+        })
+    }
+    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+        Some(&self.sparse)
+    }
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
     fn clear_all_removed_and_deleted(&mut self) {
         self.deletion_data.clear();
