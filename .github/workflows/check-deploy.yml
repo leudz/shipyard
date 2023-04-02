@@ -21,7 +21,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       deploy: ${{ steps.filter.outputs.deploy }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
       id: filter
       with:
@@ -43,7 +43,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -54,7 +54,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
@@ -65,7 +65,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -78,7 +78,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - run: cargo test --all-features
@@ -87,7 +87,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
@@ -110,7 +110,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
@@ -133,7 +133,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
@@ -156,7 +156,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
@@ -179,7 +179,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
@@ -195,7 +195,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
