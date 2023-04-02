@@ -90,13 +90,15 @@ impl eframe::App for MyApp {
                         });
 
                         if ui.button("Or check out the example.").clicked() {
-                            ctx.input_mut().raw.dropped_files.push(egui::DroppedFile {
-                                path: Some("square_eater_workloads.json".into()),
-                                name: "square_eater_workloads.json".to_string(),
-                                last_modified: None,
-                                bytes: Some(
-                                    include_bytes!("square_eater_workloads.json")[..].into(),
-                                ),
+                            ctx.input_mut(|input_state| {
+                                input_state.raw.dropped_files.push(egui::DroppedFile {
+                                    path: Some("square_eater_workloads.json".into()),
+                                    name: "square_eater_workloads.json".to_string(),
+                                    last_modified: None,
+                                    bytes: Some(
+                                        include_bytes!("square_eater_workloads.json")[..].into(),
+                                    ),
+                                });
                             })
                         }
 
@@ -342,8 +344,8 @@ impl eframe::App for MyApp {
         });
 
         // Collect dropped files:
-        if !ctx.input().raw.dropped_files.is_empty() {
-            let dropped_files = &ctx.input().raw.dropped_files;
+        ctx.input(|input_state| {
+            let dropped_files = &input_state.raw.dropped_files;
 
             if let Some(dropped_file) = dropped_files.get(0) {
                 let mut bytes: Cow<'_, [u8]> = Cow::Borrowed(&[]);
@@ -364,7 +366,7 @@ impl eframe::App for MyApp {
                     self.selected_workload = None;
                 }
             }
-        }
+        })
     }
 }
 

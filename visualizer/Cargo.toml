@@ -13,17 +13,17 @@ path = "src/main.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-eframe = "0.20.1"
-egui = "0.20.1"
-enum-map = "2.1.0"
-serde_json = "1.0.81"
+eframe = "0.21.3"
+egui = "0.21.0"
+enum-map = "2.5.0"
+serde_json = "1.0.95"
 shipyard = { version = "0.6.1", features = ["serde1"] }
 syntect = { version = "5.0.0", default-features = false, features = [
     "default-fancy",
 ] }
-tracing = "0.1.34"
+tracing = "0.1.37"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.6"
-tracing-wasm = "0.2"
-wasm-bindgen-futures = "0.4.33"
+console_error_panic_hook = "0.1.7"
+tracing-wasm = "0.2.1"
+wasm-bindgen-futures = "0.4.34"

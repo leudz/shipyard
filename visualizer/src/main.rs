@@ -10,7 +10,8 @@ fn main() {
         "Visualizer",
         options,
         Box::new(|_cc| Box::new(MyApp::default())),
-    );
+    )
+    .unwrap();
 }
 
 #[cfg(target_arch = "wasm32")]

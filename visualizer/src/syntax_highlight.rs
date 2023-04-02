@@ -8,7 +8,7 @@ pub fn code_view_ui(ui: &mut egui::Ui, mut code: &str) {
     let mut layouter = |ui: &egui::Ui, string: &str, _wrap_width: f32| {
         let layout_job = highlight(ui.ctx(), &theme, string, language);
         // layout_job.wrap.max_width = wrap_width; // no wrapping
-        ui.fonts().layout_job(layout_job)
+        ui.fonts(|fonts| fonts.layout_job(layout_job))
     };
 
     let rows = code.lines().count();
@@ -31,9 +31,10 @@ pub fn highlight(ctx: &egui::Context, theme: &CodeTheme, code: &str, language: &
 
     type HighlightCache = egui::util::cache::FrameCache<LayoutJob, Highlighter>;
 
-    let mut memory = ctx.memory();
-    let highlight_cache = memory.caches.cache::<HighlightCache>();
-    highlight_cache.get((theme, code, language))
+    ctx.memory_mut(|memory| {
+        let highlight_cache = memory.caches.cache::<HighlightCache>();
+        highlight_cache.get((theme, code, language))
+    })
 }
 
 // ----------------------------------------------------------------------------
@@ -80,13 +81,17 @@ impl Default for CodeTheme {
 impl CodeTheme {
     pub fn from_memory(ctx: &egui::Context) -> Self {
         if ctx.style().visuals.dark_mode {
-            ctx.data()
-                .get_persisted(egui::Id::new("dark"))
-                .unwrap_or_else(CodeTheme::dark)
+            ctx.data_mut(|state| {
+                state
+                    .get_persisted(egui::Id::new("dark"))
+                    .unwrap_or_else(CodeTheme::dark)
+            })
         } else {
-            ctx.data()
-                .get_persisted(egui::Id::new("light"))
-                .unwrap_or_else(CodeTheme::light)
+            ctx.data_mut(|state| {
+                state
+                    .get_persisted(egui::Id::new("light"))
+                    .unwrap_or_else(CodeTheme::light)
+            })
         }
     }
 }
