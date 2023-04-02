@@ -194,6 +194,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
+      - run: export RUSTFLAGS=--cfg=web_sys_unstable_apis
       - uses: jetli/trunk-action@v0.4.0
         with:
           version: 'latest'
