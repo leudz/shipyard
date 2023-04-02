@@ -199,7 +199,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
-      - uses: jetli/trunk-action@v1
+      - uses: trunk-io/trunk-action@v1
         with:
           version: 'latest'
       # GH pages doesn't use the same url naming as trunk's default
