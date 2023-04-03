@@ -54,8 +54,11 @@ pub(crate) struct Graphics {
 pub(crate) async fn init_graphics(world: &World, window: &Window, context: Context) {
     let size = window.inner_size();
 
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
-    let surface = unsafe { instance.create_surface(window) };
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+    });
+    let surface = unsafe { instance.create_surface(window).unwrap() };
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -80,7 +83,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         .await
         .unwrap();
 
-    let supported_format = surface.get_supported_formats(&adapter)[0];
+    let supported_format = surface.get_capabilities(&adapter).formats[0];
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: supported_format,
@@ -88,6 +91,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
         alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![],
     };
     surface.configure(&device, &config);
 
@@ -140,6 +144,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         label: Some("diffuse_texture"),
+        view_formats: &[],
     });
 
     queue.write_texture(
