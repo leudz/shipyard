@@ -80,8 +80,8 @@ impl Component for WorkloadEditor {
                     pos.1 += y;
                 } else {
                     for batch in &mut self.batches {
-                        batch.pos.0 -= x;
-                        batch.pos.1 -= y;
+                        batch.pos.0 += x;
+                        batch.pos.1 += y;
                     }
                 }
 
@@ -190,7 +190,7 @@ impl Component for WorkloadEditor {
                                         + 1     // border
                                         + 2     // padding
                                         + 12    // half of the line
-                                        + 28    // line + padding
+                                        + 24    // line
                                         * prev_batch
                                             .info
                                             .systems
@@ -206,7 +206,7 @@ impl Component for WorkloadEditor {
                                         + 1     // border
                                         + 2     // padding
                                         + 12    // half of the line
-                                        + 28    // line + padding
+                                        + 24    // line
                                         * i as i32;
 
                                     let control_scale = ((dst_x - src_x) / 2).max(30);
@@ -233,7 +233,7 @@ impl Component for WorkloadEditor {
             })
             .collect::<Html>();
 
-        let before = self
+        let after = self
             .batches
             .iter()
             .flat_map(|batch| {
@@ -247,8 +247,8 @@ impl Component for WorkloadEditor {
                     .chain(&batch.info.systems.1)
                     .enumerate()
                     .flat_map(move |(i, system)| {
-                        system.before.iter().flat_map(move |before| {
-                            (self.batches).iter().map(move |other_batch| {
+                        system.after.iter().flat_map(move |before| {
+                            (self.batches).iter().filter_map(move |other_batch| {
                                 let (prev_x, prev_y) = other_batch.pos;
     
                                 let src_x = prev_x + other_batch.width;
@@ -258,15 +258,15 @@ impl Component for WorkloadEditor {
                                     + 1     // border
                                     + 2     // padding
                                     + 12    // half of the line
-                                    + 28    // line + padding
+                                    + 24    // line
                                     * other_batch
                                         .info
                                         .systems
                                         .0
                                         .iter()
                                         .chain(&other_batch.info.systems.1).enumerate().find_map(|(i, system)| {
-                                            (&system.name == before).then(|| i as i32)
-                                        }).unwrap();
+                                            (&system.name == before.strip_prefix("System(").unwrap_or(&before).strip_suffix(")").unwrap_or(&before)).then(|| i as i32)
+                                        })?;
                                 let dst_x = batch_x;
                                 let dst_y =
                                     batch_y
@@ -274,7 +274,7 @@ impl Component for WorkloadEditor {
                                     + 1     // border
                                     + 2     // padding
                                     + 12    // half of the line
-                                    + 28    // line + padding
+                                    + 24    // line
                                     * i as i32;
     
                                 let control_scale = ((dst_x - src_x) / 2).max(30);
@@ -290,9 +290,9 @@ impl Component for WorkloadEditor {
                                     {dst_x} {dst_y}"
                                 );
     
-                                html! {
+                                Some(html! {
                                     <path d={path} stroke="black" fill="transparent" stroke-width="1" />
-                                }
+                                })
                             })
                         })
                     })
@@ -324,7 +324,7 @@ impl Component for WorkloadEditor {
                 {batches}
                 <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
                     {conflicts}
-                    {before}
+                    {after}
                 </svg>
             </div>
         }
