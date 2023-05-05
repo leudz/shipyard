@@ -43,6 +43,10 @@ pub struct SystemInfo {
     pub borrow: Vec<TypeInfo>,
     /// Information explaining why this system could not be part of the previous batch.
     pub conflict: Option<Conflict>,
+    #[allow(missing_docs)]
+    pub before: Vec<String>,
+    #[allow(missing_docs)]
+    pub after: Vec<String>,
 }
 
 impl core::fmt::Debug for SystemInfo {
@@ -224,6 +228,10 @@ impl DedupedLabels {
 
     pub(crate) fn retain<F: FnMut(&Box<dyn Label>) -> bool>(&mut self, f: F) {
         self.0.retain(f);
+    }
+
+    pub(crate) fn to_string_vec(&self) -> Vec<String> {
+        self.0.iter().map(|label| format!("{:?}", label)).collect()
     }
 }
 

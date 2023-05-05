@@ -233,6 +233,72 @@ impl Component for WorkloadEditor {
             })
             .collect::<Html>();
 
+        let before = self
+            .batches
+            .iter()
+            .flat_map(|batch| {
+                let (batch_x, batch_y) = batch.pos;
+
+                batch
+                    .info
+                    .systems
+                    .0
+                    .iter()
+                    .chain(&batch.info.systems.1)
+                    .enumerate()
+                    .flat_map(move |(i, system)| {
+                        system.before.iter().flat_map(move |before| {
+                            (self.batches).iter().map(move |other_batch| {
+                                let (prev_x, prev_y) = other_batch.pos;
+    
+                                let src_x = prev_x + other_batch.width;
+                                let src_y =
+                                    prev_y
+                                    + 24    // title
+                                    + 1     // border
+                                    + 2     // padding
+                                    + 12    // half of the line
+                                    + 28    // line + padding
+                                    * other_batch
+                                        .info
+                                        .systems
+                                        .0
+                                        .iter()
+                                        .chain(&other_batch.info.systems.1).enumerate().find_map(|(i, system)| {
+                                            (&system.name == before).then(|| i as i32)
+                                        }).unwrap();
+                                let dst_x = batch_x;
+                                let dst_y =
+                                    batch_y
+                                    + 24    // title
+                                    + 1     // border
+                                    + 2     // padding
+                                    + 12    // half of the line
+                                    + 28    // line + padding
+                                    * i as i32;
+    
+                                let control_scale = ((dst_x - src_x) / 2).max(30);
+                                let src_control_x = src_x + control_scale;
+                                let src_control_y = src_y;
+                                let dst_control_x = dst_x - control_scale;
+                                let dst_control_y = dst_y;
+    
+                                let path = format!("
+                                    M {src_x} {src_y}
+                                    C {src_control_x} {src_control_y},
+                                    {dst_control_x} {dst_control_y},
+                                    {dst_x} {dst_y}"
+                                );
+    
+                                html! {
+                                    <path d={path} stroke="black" fill="transparent" stroke-width="1" />
+                                }
+                            })
+                        })
+                    })
+            })
+            .collect::<Html>();
+
         let link = ctx.link().clone();
         let on_mouse_move = move |event: MouseEvent| {
             // When left mouse button is pressed
@@ -258,6 +324,7 @@ impl Component for WorkloadEditor {
                 {batches}
                 <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
                     {conflicts}
+                    {before}
                 </svg>
             </div>
         }

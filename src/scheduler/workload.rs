@@ -653,6 +653,8 @@ fn create_workload(
                     type_id,
                     borrow: borrow_constraints,
                     conflict: None,
+                    before: Vec::new(),
+                    after: Vec::new(),
                 }),
                 Vec::new(),
             ),
@@ -1092,6 +1094,8 @@ fn insert_system(
                             },
                             other_type_info: other_system_info.borrow.last().unwrap().clone(),
                         }),
+                        before: Vec::new(),
+                        after: Vec::new(),
                     };
 
                     if valid < batches.parallel.len() {
@@ -1121,6 +1125,8 @@ fn insert_system(
             type_id,
             borrow: borrow_constraints,
             conflict: None,
+            before: Vec::new(),
+            after: Vec::new(),
         };
 
         if valid < batches.parallel.len() {
@@ -1157,6 +1163,8 @@ fn insert_system(
                         },
                         other_type_info: other_system_info.borrow.last().unwrap().clone(),
                     }),
+                    before: Vec::new(),
+                    after: Vec::new(),
                 };
 
                 if valid < batches.parallel.len() {
@@ -1199,6 +1207,8 @@ fn insert_system(
             type_id,
             borrow: borrow_constraints,
             conflict,
+            before: Vec::new(),
+            after: Vec::new(),
         };
 
         if valid < batches.parallel.len() {
@@ -1413,6 +1423,8 @@ fn insert_before_after_system(
         type_id,
         borrow: borrow_constraints,
         conflict,
+        before: memoize_before[&index].to_string_vec(),
+        after: memoize_after[&index].to_string_vec(),
     };
 
     if !can_go_in || system_info.conflict.is_some() {
