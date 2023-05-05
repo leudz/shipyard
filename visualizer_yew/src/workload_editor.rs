@@ -250,7 +250,7 @@ impl Component for WorkloadEditor {
                         system.after.iter().flat_map(move |before| {
                             (self.batches).iter().filter_map(move |other_batch| {
                                 let (prev_x, prev_y) = other_batch.pos;
-    
+
                                 let src_x = prev_x + other_batch.width;
                                 let src_y =
                                     prev_y
@@ -276,13 +276,13 @@ impl Component for WorkloadEditor {
                                     + 12    // half of the line
                                     + 24    // line
                                     * i as i32;
-    
+
                                 let control_scale = ((dst_x - src_x) / 2).max(30);
                                 let src_control_x = src_x + control_scale;
                                 let src_control_y = src_y;
                                 let dst_control_x = dst_x - control_scale;
                                 let dst_control_y = dst_y;
-    
+
                                 let path = format!("
                                     M {src_x} {src_y}
                                     C {src_control_x} {src_control_y},
