@@ -6,6 +6,7 @@ use crate::storage::StorageId;
 pub use crate::type_id::TypeId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
