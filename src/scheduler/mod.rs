@@ -21,6 +21,7 @@ pub use workload_modificator::WorkloadModificator;
 pub(crate) use info::TypeInfo;
 
 use crate::error;
+use crate::info::WorkloadInfo;
 use crate::scheduler::system::WorkloadRunIfFn;
 use crate::type_id::TypeId;
 use crate::World;
@@ -77,6 +78,7 @@ pub(crate) struct Scheduler {
     lookup_table: HashMap<TypeId, usize>,
     /// workload name to list of "batches"
     pub(crate) workloads: HashMap<Box<dyn Label>, Batches>,
+    pub(crate) workloads_info: HashMap<Box<dyn Label>, WorkloadInfo>,
     pub(crate) default: Box<dyn Label>,
 }
 
@@ -88,6 +90,7 @@ impl Default for Scheduler {
             system_generators: Vec::new(),
             lookup_table: HashMap::new(),
             workloads: HashMap::new(),
+            workloads_info: HashMap::new(),
             default: Box::new(""),
         }
     }

@@ -12,10 +12,11 @@ use alloc::vec::Vec;
 /// Contains information related to a workload.
 ///
 /// A workload is a collection of systems with parallelism calculated based on the types borrow by the systems.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorkloadInfo {
     #[allow(missing_docs)]
-    pub name: Box<dyn Label>,
+    pub name: String,
     #[allow(missing_docs)]
     pub batch_info: Vec<BatchInfo>,
 }
@@ -23,17 +24,19 @@ pub struct WorkloadInfo {
 /// Contains information related to a batch.
 ///
 /// A batch is a collection of system that can safely run in parallel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct BatchInfo {
     #[allow(missing_docs)]
     pub systems: (Option<SystemInfo>, Vec<SystemInfo>),
 }
 
 /// Contains information related to a system.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct SystemInfo {
     #[allow(missing_docs)]
-    pub name: Box<dyn Label>,
+    pub name: String,
     #[allow(missing_docs)]
     pub type_id: TypeId,
     #[allow(missing_docs)]
@@ -54,6 +57,7 @@ impl core::fmt::Debug for SystemInfo {
 
 /// Pinpoints the type and system that made a system unable to get into a batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum Conflict {
     /// Rust rules do not allow the type described by `type_info` to be borrowed at the same time as `other_type_info`.
     Borrow {
@@ -77,9 +81,10 @@ pub enum Conflict {
 
 /// Identify a system.
 #[derive(Clone, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct SystemId {
     #[allow(missing_docs)]
-    pub name: Box<dyn Label>,
+    pub name: String,
     #[allow(missing_docs)]
     pub type_id: TypeId,
 }
@@ -158,10 +163,16 @@ impl core::hash::Hash for TypeInfo {
 }
 
 /// Contains a list of workloads, their systems and which storages these systems borrow.
-#[allow(clippy::type_complexity)]
-#[derive(Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
-pub struct WorkloadsTypeUsage(pub hashbrown::HashMap<String, Vec<(String, Vec<TypeInfo>)>>);
+pub struct WorkloadsInfo(pub hashbrown::HashMap<String, WorkloadInfo>);
+
+impl WorkloadsInfo {
+    /// Creates an empty [`WorkloadsInfo`].
+    pub fn new() -> WorkloadsInfo {
+        WorkloadsInfo(hashbrown::HashMap::new())
+    }
+}
 
 /// List of before/after requirements for a system or workload.
 /// The list dedups items.

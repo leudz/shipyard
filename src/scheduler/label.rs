@@ -42,14 +42,36 @@ macro_rules! impl_label {
                     Box::new(self.clone())
                 }
                 fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
-                    Self::fmt(self, f)
+                    f.write_str(self)
                 }
             }
         )+
     };
 }
 
-impl_label![&'static str, String, Cow<'static, str>, TypeId];
+impl Label for TypeId {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn dyn_eq(&self, other: &dyn Label) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self == other
+        } else {
+            false
+        }
+    }
+    fn dyn_hash(&self, mut state: &mut dyn Hasher) {
+        Self::hash(self, &mut state);
+    }
+    fn dyn_clone(&self) -> Box<dyn Label> {
+        Box::new(*self)
+    }
+    fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        self.fmt(f)
+    }
+}
+
+impl_label![&'static str, String, Cow<'static, str>];
 
 impl Label for Box<dyn Label> {
     fn as_any(&self) -> &dyn Any {

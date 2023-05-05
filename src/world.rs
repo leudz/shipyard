@@ -6,7 +6,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
-use crate::info::WorkloadsTypeUsage;
+use crate::info::WorkloadsInfo;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
@@ -21,7 +21,6 @@ use crate::views::EntitiesViewMut;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::sync::atomic::AtomicU32;
 
 /// `World` contains all data this library will manipulate.
@@ -1311,7 +1310,7 @@ impl World {
     pub fn memory_usage(&self) -> WorldMemoryUsage<'_> {
         WorldMemoryUsage(self)
     }
-    /// Returns a list of workloads, their systems and which storages these systems borrow.
+    /// Returns a list of workloads and all information related to them.
     ///
     /// ### Borrows
     ///
@@ -1321,30 +1320,16 @@ impl World {
     ///
     /// - Scheduler borrow failed.
     #[track_caller]
-    pub fn workloads_type_usage(&self) -> WorkloadsTypeUsage {
-        let mut workload_type_info = hashbrown::HashMap::new();
-
+    pub fn workloads_info(&self) -> WorkloadsInfo {
         let scheduler = self.scheduler.borrow().unwrap();
 
-        for (workload_name, batches) in &scheduler.workloads {
-            workload_type_info.insert(
-                format!("{workload_name:?}"),
-                batches
-                    .sequential
-                    .iter()
-                    .map(|system_index| {
-                        let system_name = scheduler.system_names[*system_index].clone();
-                        let mut system_storage_borrowed = Vec::new();
-
-                        scheduler.system_generators[*system_index](&mut system_storage_borrowed);
-
-                        (format!("{:?}", system_name), system_storage_borrowed)
-                    })
-                    .collect(),
-            );
-        }
-
-        WorkloadsTypeUsage(workload_type_info)
+        WorkloadsInfo(
+            scheduler
+                .workloads_info
+                .iter()
+                .map(|(name, workload_info)| (format!("{:?}", name), workload_info.clone()))
+                .collect(),
+        )
     }
 
     /// Enable insertion tracking for the given components.

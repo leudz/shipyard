@@ -92,7 +92,7 @@ impl ScheduledWorkload {
 
 impl World {
     /// Creates a new workload and store it in the [`World`](crate::World).
-    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F) -> WorkloadInfo
+    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
     {
@@ -114,7 +114,7 @@ impl World {
             })
         };
 
-        w.add_to_world(self).unwrap()
+        w.add_to_world(self).unwrap();
     }
 }
 
@@ -423,13 +423,14 @@ impl Workload {
     /// - [`AllStorages`] borrow failed.
     /// - Storage borrow failed.
     #[allow(clippy::blocks_in_if_conditions)]
-    pub fn add_to_world(self, world: &World) -> Result<WorkloadInfo, error::AddWorkload> {
+    pub fn add_to_world(self, world: &World) -> Result<(), error::AddWorkload> {
         let Scheduler {
             systems,
             system_names,
             system_generators,
             lookup_table,
             workloads,
+            workloads_info,
             default,
         } = &mut *world
             .scheduler
@@ -437,6 +438,8 @@ impl Workload {
             .map_err(|_| error::AddWorkload::Borrow)?;
 
         let mut tracking_to_enable = Vec::new();
+
+        let name = self.name.dyn_clone();
 
         let workload_info = create_workload(
             self,
@@ -462,7 +465,9 @@ impl Workload {
             })?;
         }
 
-        Ok(workload_info)
+        workloads_info.insert(name, workload_info);
+
+        Ok(())
     }
     /// Returns the first [`Unique`] storage borrowed by this workload that is not present in `world`.\
     /// If the workload contains nested workloads they have to be present in the `World`.
@@ -644,7 +649,7 @@ fn create_workload(
         let batch_info = BatchInfo {
             systems: (
                 Some(SystemInfo {
-                    name: display_name,
+                    name: format!("{:?}", display_name),
                     type_id,
                     borrow: borrow_constraints,
                     conflict: None,
@@ -654,13 +659,13 @@ fn create_workload(
         };
 
         return Ok(WorkloadInfo {
-            name: builder.name,
+            name: format!("{:?}", builder.name),
             batch_info: vec![batch_info],
         });
     }
 
     let mut workload_info = WorkloadInfo {
-        name: builder.name,
+        name: format!("{:?}", builder.name),
         batch_info: vec![],
     };
 
@@ -1076,7 +1081,7 @@ fn insert_system(
                 | (None, Some(other_system_info))
                 | (Some(other_system_info), Some(_)) => {
                     let system_info = SystemInfo {
-                        name: display_name,
+                        name: format!("{:?}", display_name),
                         type_id,
                         borrow: borrow_constraints,
                         conflict: Some(Conflict::Borrow {
@@ -1112,7 +1117,7 @@ fn insert_system(
         }
 
         let system_info = SystemInfo {
-            name: display_name,
+            name: format!("{:?}", display_name),
             type_id,
             borrow: borrow_constraints,
             conflict: None,
@@ -1141,7 +1146,7 @@ fn insert_system(
                 (&non_send_sync, &batch_info.systems.0)
             {
                 let system_info = SystemInfo {
-                    name: display_name,
+                    name: format!("{:?}", display_name),
                     type_id,
                     borrow: borrow_constraints,
                     conflict: Some(Conflict::Borrow {
@@ -1190,7 +1195,7 @@ fn insert_system(
         }
 
         let system_info = SystemInfo {
-            name: display_name,
+            name: format!("{:?}", display_name),
             type_id,
             borrow: borrow_constraints,
             conflict,
@@ -1372,7 +1377,7 @@ fn insert_before_after_system(
             if let Some(other_system) = &workload_info.batch_info[parallel_position].systems.0 {
                 conflict = Some(Conflict::OtherNotSendSync {
                     system: SystemId {
-                        name: display_name.dyn_clone(),
+                        name: format!("{:?}", display_name),
                         type_id,
                     },
                     type_info: other_system.borrow[0].clone(),
@@ -1404,7 +1409,7 @@ fn insert_before_after_system(
     }
 
     let system_info = SystemInfo {
-        name: display_name.dyn_clone(),
+        name: format!("{:?}", display_name),
         type_id,
         borrow: borrow_constraints,
         conflict,
@@ -1971,7 +1976,7 @@ mod tests {
 
         let world = World::new();
 
-        let info = Workload::new("Test")
+        Workload::new("Test")
             .with_system(sys1)
             .with_system(sys1)
             .add_to_world(&world)
@@ -1992,7 +1997,9 @@ mod tests {
             })
         );
         assert_eq!(&scheduler.default, &label);
-        assert!(info.batch_info[0].systems.1[0].conflict.is_none());
+        assert!(scheduler.workloads_info[&label].batch_info[0].systems.1[0]
+            .conflict
+            .is_none());
 
         let world = World::new();
 
@@ -2042,7 +2049,7 @@ mod tests {
 
         let world = World::new();
 
-        let info = Workload::new("Test")
+        Workload::new("Test")
             .with_system(sys1)
             .with_system(sys3)
             .add_to_world(&world)
@@ -2062,7 +2069,9 @@ mod tests {
             })
         );
         assert_eq!(&scheduler.default, &label);
-        assert!(info.batch_info[0].systems.1[0].conflict.is_none());
+        assert!(scheduler.workloads_info[&label].batch_info[0].systems.1[0]
+            .conflict
+            .is_none());
 
         let world = World::new();
 
