@@ -87,7 +87,8 @@ impl Component for App {
         let change_selected_workload =
             move |workload| link.send_message(Msg::ChangeSelectedWorkload(workload));
 
-        let workloads = self.workloads.0.keys().cloned().collect::<Vec<_>>();
+        let mut workloads = self.workloads.0.keys().cloned().collect::<Vec<_>>();
+        workloads.sort_unstable();
 
         let selected_workload = self.selected_workload.clone();
 
