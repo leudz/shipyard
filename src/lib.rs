@@ -116,9 +116,9 @@ pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
 pub use tracking::{
-    DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking, TrackingTimestamp,
-    TupleTrack,
+    is_track_within_bounds, DeletionTracking, Inserted, InsertedOrModified, InsertionTracking,
+    ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
+    TrackingTimestamp, TupleTrack,
 };
 pub use unique::UniqueStorage;
 pub use views::{

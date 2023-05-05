@@ -224,8 +224,11 @@ pub trait RemovalOrDeletionTracking: Tracking {
     );
 }
 
+/// Returns `true` when the track timestamp is after the last time the system ran and before the current execution.
+///
+/// This method should only be necessary for custom storages that want to implement tracking.
 #[inline]
-pub(crate) fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
+pub fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
     let bounds = current.wrapping_sub(last);
     let track = current.wrapping_sub(timestamp);
 
