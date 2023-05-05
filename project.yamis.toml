@@ -62,3 +62,7 @@ serial = ["fmt", "test-all", "doc", "miri", "clippy", "clean"]
 program = "trunk"
 args = ["serve", "visualizer/index.html"]
 env = { "RUSTFLAGS" = "--cfg=web_sys_unstable_apis" }
+
+[tasks.visualizer_yew]
+program = "trunk"
+args = ["serve", "visualizer_yew/index.html"]
