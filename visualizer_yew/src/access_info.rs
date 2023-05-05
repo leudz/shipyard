@@ -211,20 +211,22 @@ impl Component for AccessInfo {
             .collect();
 
         html! {
-            <table style="width: 100%; table-layout: fixed; text-align: center; border-collapse: separate; border-spacing: 10px 3px;">
-                if {rows != html! {}} {
-                    <thead>
-                        <tr>
-                            <th>{"Systems"}</th>
-                            <th>{"Components"}</th>
-                        </tr>
-                    </thead>
-                }
+            <div style="overflow-y: auto;">
+                <table style="width: 100%; table-layout: fixed; text-align: center; border-collapse: separate; border-spacing: 10px 3px;">
+                    if {rows != html! {}} {
+                        <thead>
+                            <tr>
+                                <th>{"Systems"}</th>
+                                <th>{"Components"}</th>
+                            </tr>
+                        </thead>
+                    }
 
-                <tbody>
-                    {rows}
-                </tbody>
-            </table>
+                    <tbody>
+                        {rows}
+                    </tbody>
+                </table>
+            </div>
         }
     }
 }
