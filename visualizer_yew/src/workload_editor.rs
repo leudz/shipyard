@@ -170,7 +170,7 @@ impl Component for WorkloadEditor {
                     .chain(&batch.info.systems.1)
                     .enumerate()
                     .filter_map(move |(i, system)| {
-                        system.conflict.as_ref().map(|conflict| {
+                        system.conflict.as_ref().and_then(|conflict| {
                             match conflict {
                                 Conflict::Borrow {
                                     other_system,
@@ -180,7 +180,7 @@ impl Component for WorkloadEditor {
                                     system: other_system,
                                     ..
                                 } => {
-                                    let prev_batch = &self.batches[batch.index - 1];
+                                    let prev_batch = self.batches.get(batch.index.checked_sub(1)?)?;
                                     let (prev_x, prev_y) = prev_batch.pos;
 
                                     let src_x = prev_x + prev_batch.width;
@@ -198,7 +198,7 @@ impl Component for WorkloadEditor {
                                             .iter()
                                             .chain(&prev_batch.info.systems.1).enumerate().find_map(|(i, system)| {
                                                 (system.type_id == other_system.type_id).then(|| i as i32)
-                                            }).unwrap();
+                                            })?;
                                     let dst_x = batch_x;
                                     let dst_y =
                                         batch_y
@@ -222,9 +222,9 @@ impl Component for WorkloadEditor {
                                         {dst_x} {dst_y}"
                                     );
 
-                                    html! {
+                                    Some(html! {
                                         <path d={path} stroke="black" fill="transparent" stroke-width="1" />
-                                    }
+                                    })
                                 },
                                 Conflict::NotSendSync(_) => todo!(),
                             }
