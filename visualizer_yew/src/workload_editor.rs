@@ -289,7 +289,7 @@ impl Component for WorkloadEditor {
                                     {dst_control_x} {dst_control_y},
                                     {dst_x} {dst_y}"
                                 );
-    
+
                                 Some(html! {
                                     <path d={path} stroke="black" fill="transparent" stroke-width="1" />
                                 })
