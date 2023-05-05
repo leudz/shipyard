@@ -117,7 +117,9 @@ impl Component for WorkloadEditor {
                     .chain(&batch.info.systems.1)
                     .map(|system| {
                         html! {
-                            <span>{&system.name}</span>
+                            <>
+                                <span>{&system.name}</span><br/>
+                            </>
                         }
                     })
                     .collect();
