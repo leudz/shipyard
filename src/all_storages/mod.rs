@@ -8,21 +8,23 @@ pub use retain::TupleRetainStorage;
 
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
-use crate::component::Unique;
+use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::get_component::GetComponent;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::public_transport::ShipyardRwLock;
+use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
-use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
+use crate::sparse_set::{BulkAddEntity, SparseSet, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{SBox, Storage, StorageId};
 use crate::system::AllSystem;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
+use crate::unique::UniqueStorage;
 use crate::views::EntitiesViewMut;
-use crate::{error, UniqueStorage};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
@@ -365,6 +367,38 @@ impl AllStorages {
                 .clear_all_removed_and_deleted_older_than_timestamp(timestamp);
         }
     }
+
+    /// Deletes all components for which `f(id, &component)` returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// - Storage borrow failed.
+    #[track_caller]
+    pub fn retain<T: Component + Send + Sync>(&mut self, f: impl FnMut(EntityId, &T) -> bool) {
+        let current = self.get_current();
+
+        self.exclusive_storage_mut::<SparseSet<T>>()
+            .unwrap()
+            .private_retain(current, f);
+    }
+
+    /// Deletes all components for which `f(id, Mut<component>)` returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// - Storage borrow failed.
+    #[track_caller]
+    pub fn retain_mut<T: Component + Send + Sync>(
+        &mut self,
+        f: impl FnMut(EntityId, Mut<'_, T>) -> bool,
+    ) {
+        let current = self.get_current();
+
+        self.exclusive_storage_mut::<SparseSet<T>>()
+            .unwrap()
+            .private_retain_mut(current, f);
+    }
+
     /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
     /// `component` must always be a tuple, even for a single component.
     ///

@@ -1,7 +1,7 @@
 use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage};
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
-use crate::component::Unique;
+use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -10,6 +10,7 @@ use crate::info::WorkloadsInfo;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
 use crate::public_transport::ShipyardRwLock;
+use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::Label;
 use crate::scheduler::{AsLabel, Batches, Scheduler};
@@ -1306,6 +1307,28 @@ impl World {
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().spawn(entity)
     }
+
+    /// Deletes all components for which `f(id, &component)` returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// - Storage borrow failed.
+    pub fn retain<T: Component + Send + Sync>(&mut self, f: impl FnMut(EntityId, &T) -> bool) {
+        self.all_storages.get_mut().retain(f);
+    }
+
+    /// Deletes all components for which `f(id, Mut<component>)` returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// - Storage borrow failed.
+    pub fn retain_mut<T: Component + Send + Sync>(
+        &mut self,
+        f: impl FnMut(EntityId, Mut<'_, T>) -> bool,
+    ) {
+        self.all_storages.get_mut().retain_mut(f);
+    }
+
     /// Displays storages memory information.
     pub fn memory_usage(&self) -> WorldMemoryUsage<'_> {
         WorldMemoryUsage(self)

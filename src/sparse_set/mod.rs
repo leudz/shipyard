@@ -21,6 +21,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
+use crate::r#mut::Mut;
 use crate::storage::{Storage, StorageId};
 use crate::tracking::Tracking;
 use crate::tracking::{is_track_within_bounds, TrackingTimestamp};
@@ -596,6 +597,48 @@ impl<T: Component> SparseSet<T> {
             dense_ptr,
             dense_len,
             data: self.data.drain(..),
+        }
+    }
+
+    pub(crate) fn private_retain<F: FnMut(EntityId, &T) -> bool>(
+        &mut self,
+        current: u32,
+        mut f: F,
+    ) {
+        let mut removed = 0;
+        for i in 0..self.len() {
+            let i = i - removed;
+
+            let eid = unsafe { *self.dense.get_unchecked(i) };
+            let component = unsafe { self.data.get_unchecked(i) };
+
+            if !f(eid, component) {
+                self.dyn_delete(eid, current);
+                removed += 1;
+            }
+        }
+    }
+
+    pub(crate) fn private_retain_mut<F: FnMut(EntityId, Mut<'_, T>) -> bool>(
+        &mut self,
+        current: u32,
+        mut f: F,
+    ) {
+        let mut removed = 0;
+        for i in 0..self.len() {
+            let i = i - removed;
+
+            let eid = unsafe { *self.dense.get_unchecked(i) };
+            let component = Mut {
+                flag: self.modification_data.get_mut(i),
+                current,
+                data: unsafe { self.data.get_unchecked_mut(i) },
+            };
+
+            if !f(eid, component) {
+                self.dyn_delete(eid, current);
+                removed += 1;
+            }
         }
     }
 }
