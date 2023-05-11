@@ -50,32 +50,6 @@ impl Tracking for Track<InsertionAndDeletionAndRemoval> {
             *id == entity && is_track_within_bounds(*timestamp, last, current)
         })
     }
-
-    #[inline]
-    fn remove<T: Component>(
-        sparse_set: &mut SparseSet<T>,
-        entity: EntityId,
-        current: u32,
-    ) -> Option<T> {
-        let component = sparse_set.actual_remove(entity);
-
-        if component.is_some() {
-            sparse_set.removal_data.push((entity, current));
-        }
-
-        component
-    }
-
-    #[inline]
-    fn delete<T: Component>(sparse_set: &mut SparseSet<T>, entity: EntityId, current: u32) -> bool {
-        if let Some(component) = sparse_set.actual_remove(entity) {
-            sparse_set.deletion_data.push((entity, current, component));
-
-            true
-        } else {
-            false
-        }
-    }
 }
 
 impl InsertionTracking for Track<InsertionAndDeletionAndRemoval> {}

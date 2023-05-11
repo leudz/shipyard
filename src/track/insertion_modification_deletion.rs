@@ -55,17 +55,6 @@ impl Tracking for Track<InsertionAndModificationAndDeletion> {
             *id == entity && is_track_within_bounds(*timestamp, last, current)
         })
     }
-
-    #[inline]
-    fn delete<T: Component>(sparse_set: &mut SparseSet<T>, entity: EntityId, current: u32) -> bool {
-        if let Some(component) = sparse_set.actual_remove(entity) {
-            sparse_set.deletion_data.push((entity, current, component));
-
-            true
-        } else {
-            false
-        }
-    }
 }
 
 impl InsertionTracking for Track<InsertionAndModificationAndDeletion> {}

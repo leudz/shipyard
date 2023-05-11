@@ -25,21 +25,6 @@ impl Tracking for Track<Removal> {
             *id == entity && is_track_within_bounds(*timestamp, last, current)
         })
     }
-
-    #[inline]
-    fn remove<T: Component>(
-        sparse_set: &mut SparseSet<T>,
-        entity: EntityId,
-        current: u32,
-    ) -> Option<T> {
-        let component = sparse_set.actual_remove(entity);
-
-        if component.is_some() {
-            sparse_set.removal_data.push((entity, current));
-        }
-
-        component
-    }
 }
 
 impl RemovalTracking for Track<Removal> {}

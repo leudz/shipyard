@@ -1,6 +1,5 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::tracking::{Track, Tracking};
 use crate::views::ViewMut;
 
 /// Removes component from entities.
@@ -39,29 +38,23 @@ impl Remove for () {
     fn remove(&mut self, _: EntityId) -> Self::Out {}
 }
 
-impl<T: Component, TRACK> Remove for ViewMut<'_, T, TRACK>
-where
-    Track<TRACK>: Tracking,
-{
+impl<T: Component, TRACK> Remove for ViewMut<'_, T, TRACK> {
     type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
         let current = self.current;
-        Track::<TRACK>::remove(&mut *self, entity, current)
+        self.dyn_remove(entity, current)
     }
 }
 
-impl<T: Component, TRACK> Remove for &mut ViewMut<'_, T, TRACK>
-where
-    Track<TRACK>: Tracking,
-{
+impl<T: Component, TRACK> Remove for &mut ViewMut<'_, T, TRACK> {
     type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
         let current = self.current;
-        Track::<TRACK>::remove(*self, entity, current)
+        self.dyn_remove(entity, current)
     }
 }
 

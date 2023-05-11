@@ -171,26 +171,6 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     ) -> bool {
         false
     }
-
-    #[doc(hidden)]
-    #[inline]
-    fn remove<T: Component>(
-        sparse_set: &mut SparseSet<T>,
-        entity: EntityId,
-        _current: u32,
-    ) -> Option<T> {
-        sparse_set.actual_remove(entity)
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    fn delete<T: Component>(
-        sparse_set: &mut SparseSet<T>,
-        entity: EntityId,
-        _current: u32,
-    ) -> bool {
-        sparse_set.actual_remove(entity).is_some()
-    }
 }
 
 /// Bound for tracking insertion.
