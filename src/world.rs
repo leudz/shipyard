@@ -1,4 +1,4 @@
-use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
+use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage};
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
 use crate::component::Unique;
@@ -1257,19 +1257,19 @@ impl World {
     ///
     /// let entity = world.add_entity((U32(0), USIZE(1)));
     ///
-    /// world.retain::<SparseSet<U32>>(entity);
+    /// world.retain_storage::<SparseSet<U32>>(entity);
     /// ```
     #[inline]
-    pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {
-        self.all_storages.get_mut().retain::<S>(entity);
+    pub fn retain_storage<S: TupleRetainStorage>(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().retain_storage::<S>(entity);
     }
-    /// Same as `retain` but uses `StorageId` and not generics.  
+    /// Same as `retain_storage` but uses `StorageId` and not generics.  
     /// You should only use this method if you use a custom storage with a runtime id.
     #[inline]
-    pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+    pub fn retain_storage_by_id(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         self.all_storages
             .get_mut()
-            .retain_storage(entity, excluded_storage);
+            .retain_storage_by_id(entity, excluded_storage);
     }
     /// Deletes all entities and components in the `World`.
     ///

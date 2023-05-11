@@ -4,7 +4,7 @@ mod retain;
 
 pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
-pub use retain::TupleRetain;
+pub use retain::TupleRetainStorage;
 
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
@@ -306,16 +306,16 @@ impl AllStorages {
     ///
     /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
     ///
-    /// all_storages.retain::<SparseSet<U32>>(entity);
+    /// all_storages.retain_storage::<SparseSet<U32>>(entity);
     /// ```
-    pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {
+    pub fn retain_storage<S: TupleRetainStorage>(&mut self, entity: EntityId) {
         S::retain(self, entity);
     }
     /// Deletes all components of an entity except the ones passed in `S`.  
-    /// This is identical to `retain` but uses `StorageId` and not generics.  
+    /// This is identical to `retain_storage` but uses `StorageId` and not generics.  
     /// You should only use this method if you use a custom storage with a runtime id.
     #[track_caller]
-    pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+    pub fn retain_storage_by_id(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         let current = self.get_current();
 
         for (storage_id, storage) in self.storages.get_mut().iter_mut() {
