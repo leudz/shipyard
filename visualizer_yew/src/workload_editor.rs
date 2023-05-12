@@ -1,17 +1,23 @@
 use shipyard::info::{BatchInfo, Conflict, WorkloadInfo};
 use wasm_bindgen::JsCast;
-use web_sys::{window, HtmlDivElement};
+use web_sys::{window, HtmlDivElement, HtmlInputElement};
 use yew::prelude::*;
 
 pub(crate) struct WorkloadEditor {
     batches: Vec<BatchWindow>,
     dragged_batch: Option<usize>,
+    zoom: f32,
+    drag_ignore: bool,
 }
 
 pub(crate) enum Msg {
     Drag(i32, i32),
     BatchDragStart(usize),
     BatchDragEnd,
+    Zoom(f32),
+    ZoomDelta(f32),
+    DragIgnoreStart,
+    DragIgnoreEnd,
 }
 
 #[derive(Properties, PartialEq)]
@@ -63,6 +69,8 @@ impl Component for WorkloadEditor {
         WorkloadEditor {
             batches,
             dragged_batch: None,
+            zoom: 1.0,
+            drag_ignore: false,
         }
     }
 
@@ -73,15 +81,19 @@ impl Component for WorkloadEditor {
     fn update(&mut self, _ctx: &Context<WorkloadEditor>, msg: Msg) -> bool {
         match msg {
             Msg::Drag(x, y) => {
+                if self.drag_ignore {
+                    return false;
+                }
+
                 if let Some(batch) = self.dragged_batch {
                     let pos = &mut self.batches[batch].pos;
 
-                    pos.0 += x;
-                    pos.1 += y;
+                    pos.0 += (x as f32 / self.zoom) as i32;
+                    pos.1 += (y as f32 / self.zoom) as i32;
                 } else {
                     for batch in &mut self.batches {
-                        batch.pos.0 += x;
-                        batch.pos.1 += y;
+                        batch.pos.0 += (x as f32 / self.zoom) as i32;
+                        batch.pos.1 += (y as f32 / self.zoom) as i32;
                     }
                 }
 
@@ -94,6 +106,27 @@ impl Component for WorkloadEditor {
             }
             Msg::BatchDragEnd => {
                 self.dragged_batch = None;
+
+                false
+            }
+            Msg::Zoom(zoom) => {
+                self.zoom = 10.0f32.powf(zoom);
+
+                true
+            }
+            Msg::ZoomDelta(delta) => {
+                self.zoom -= delta / 1000.0;
+                self.zoom = self.zoom.clamp(0.1, 10.0);
+
+                true
+            }
+            Msg::DragIgnoreStart => {
+                self.drag_ignore = true;
+
+                false
+            }
+            Msg::DragIgnoreEnd => {
+                self.drag_ignore = false;
 
                 false
             }
@@ -148,7 +181,7 @@ impl Component for WorkloadEditor {
                             {format!("Batch {i}")}
                         </header>
 
-                        <div style="padding: 2px 8px;">
+                        <div>
                             {systems}
                         </div>
                     </div>
@@ -291,13 +324,43 @@ impl Component for WorkloadEditor {
                                 );
 
                                 Some(html! {
-                                    <path d={path} stroke="black" fill="transparent" stroke-width="1" />
+                                    <path d={path} stroke="black" fill="transparent" stroke-width="3" />
                                 })
                             })
                         })
                     })
             })
             .collect::<Html>();
+
+        let link = ctx.link().clone();
+        let on_input_slider = move |event: InputEvent| {
+            link.send_message(Msg::Zoom(
+                event
+                    .target()
+                    .unwrap()
+                    .dyn_ref::<HtmlInputElement>()
+                    .unwrap()
+                    .value()
+                    .parse::<f64>()
+                    .unwrap() as f32,
+            ));
+        };
+
+        let link = ctx.link().clone();
+        let zoom_slider = html! {
+            <input
+                type="range"
+                min="-1"
+                max="1"
+                step="0.01"
+                value={self.zoom.log10().to_string()}
+                oninput={on_input_slider}
+                onmousedown={move |_| {
+                    link.send_message(Msg::DragIgnoreStart);
+                }}
+                style="position: absolute; bottom: 0; right: 0; z-index: 1;"
+            />
+        };
 
         let link = ctx.link().clone();
         let on_mouse_move = move |event: MouseEvent| {
@@ -313,19 +376,33 @@ impl Component for WorkloadEditor {
         let link = ctx.link().clone();
         let on_mouse_up = move |_event: MouseEvent| {
             link.send_message(Msg::BatchDragEnd);
+            link.send_message(Msg::DragIgnoreEnd);
         };
+
+        let link = ctx.link().clone();
+        let on_mouse_wheel = move |event: WheelEvent| {
+            let delta = event.delta_y();
+
+            link.send_message(Msg::ZoomDelta(delta as f32));
+        };
+
+        let zoom = self.zoom;
 
         html! {
             <div
                 onmousemove={on_mouse_move}
                 onmouseup={on_mouse_up}
-                style="position: relative; width: 100%; height: 100%; overflow: hidden;"
+                onwheel={on_mouse_wheel}
+                style={format!("position: relative; width: 100%; height: 100%; overflow: hidden;")}
             >
-                {batches}
-                <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-                    {conflicts}
-                    {after}
-                </svg>
+                {zoom_slider}
+                <div style={format!("width: 100%; height: 100%; transform: scale({zoom}); overflow: visible;")}>
+                    {batches}
+                    <svg width="100%" height="100%" style="overflow: visible;" xmlns="http://www.w3.org/2000/svg">
+                        {conflicts}
+                        {after}
+                    </svg>
+                </div>
             </div>
         }
     }
@@ -342,7 +419,7 @@ fn text_width(text: &str) -> i32 {
     let document = window().unwrap().document().unwrap();
 
     let element = document.create_element("div").unwrap();
-    element.set_inner_html(text);
+    element.set_inner_html(&text.replace('<', "&lt;").replace(">", "&gt;"));
     element
         .set_attribute("style", "position: absolute;")
         .unwrap();
