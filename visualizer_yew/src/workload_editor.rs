@@ -324,7 +324,7 @@ impl Component for WorkloadEditor {
                                 );
 
                                 Some(html! {
-                                    <path d={path} stroke="black" fill="transparent" stroke-width="3" />
+                                    <path d={path} stroke="black" fill="transparent" stroke-width="1" />
                                 })
                             })
                         })
