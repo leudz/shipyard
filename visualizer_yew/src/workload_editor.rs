@@ -213,7 +213,7 @@ impl Component for WorkloadEditor {
                                     system: other_system,
                                     ..
                                 } => {
-                                    let prev_batch = self.batches.get(batch.index.checked_sub(1)?)?;
+                                    let prev_batch = self.batches.get(batch.index.checked_sub(1)?).unwrap();
                                     let (prev_x, prev_y) = prev_batch.pos;
 
                                     let src_x = prev_x + prev_batch.width;
@@ -259,7 +259,39 @@ impl Component for WorkloadEditor {
                                         <path d={path} stroke="black" fill="transparent" stroke-width="1" />
                                     })
                                 },
-                                Conflict::NotSendSync(_) => todo!(),
+                                Conflict::NotSendSync(_) => {
+                                    let prev_batch = self.batches.get(batch.index.checked_sub(1)?).unwrap();
+                                    let (prev_x, prev_y) = prev_batch.pos;
+
+                                    let src_x = prev_x + prev_batch.width;
+                                    let src_y = prev_y;
+                                    let dst_x = batch_x;
+                                    let dst_y =
+                                        batch_y
+                                        + 24    // title
+                                        + 1     // border
+                                        + 2     // padding
+                                        + 12    // half of the line
+                                        + 24    // line
+                                        * i as i32;
+
+                                    let control_scale = ((dst_x - src_x) / 2).max(30);
+                                    let src_control_x = src_x + control_scale;
+                                    let src_control_y = src_y;
+                                    let dst_control_x = dst_x - control_scale;
+                                    let dst_control_y = dst_y;
+
+                                    let path = format!("
+                                        M {src_x} {src_y}
+                                        C {src_control_x} {src_control_y},
+                                        {dst_control_x} {dst_control_y},
+                                        {dst_x} {dst_y}"
+                                    );
+
+                                    Some(html! {
+                                        <path d={path} stroke="black" fill="transparent" stroke-width="1" />
+                                    })
+                                },
                             }
                         })
                     })
