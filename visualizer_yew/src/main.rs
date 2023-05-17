@@ -48,9 +48,6 @@ impl Component for App {
                 }
 
                 self.page = page;
-                // if page == Page::AccessInfo {
-                //     window().unwrap().location().reload().unwrap();
-                // }
             }
             Msg::SetWorkloads(workloads) => {
                 self.selected_workload = None;
@@ -140,16 +137,11 @@ impl Component for App {
                     .batch_info
                     .iter()
                     .flat_map(|batch| {
-                        batch
-                            .systems
-                            .0
-                            .iter()
-                            .chain(&batch.systems.1)
-                            .map(|system| {
-                                let components = system.borrow.clone();
+                        batch.systems().map(|system| {
+                            let components = system.borrow.clone();
 
-                                (system.name.clone(), components)
-                            })
+                            (system.name.clone(), components)
+                        })
                     })
                     .collect()
             })
@@ -158,7 +150,7 @@ impl Component for App {
         let mut component_to_systems: HashMap<_, Vec<_>> = HashMap::new();
         if let Some(workload) = &self.selected_workload {
             for batch in &self.workloads.0[workload].batch_info {
-                for system in batch.systems.0.iter().chain(&batch.systems.1) {
+                for system in batch.systems() {
                     for component in &system.borrow {
                         component_to_systems
                             .entry(component.name.to_string())

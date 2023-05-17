@@ -8,6 +8,8 @@ pub(crate) struct WorkloadEditor {
     dragged_batch: Option<usize>,
     zoom: f32,
     drag_ignore: bool,
+    conflict: bool,
+    before_after: bool,
 }
 
 pub(crate) enum Msg {
@@ -18,6 +20,8 @@ pub(crate) enum Msg {
     ZoomDelta(f32),
     DragIgnoreStart,
     DragIgnoreEnd,
+    ToggleConflict,
+    ToggleBeforeAfter,
 }
 
 #[derive(Properties, PartialEq)]
@@ -44,10 +48,7 @@ impl Component for WorkloadEditor {
             .map(|(i, batch)| {
                 let width = text_width(
                     &batch
-                        .systems
-                        .0
-                        .iter()
-                        .chain(&batch.systems.1)
+                        .systems()
                         .max_by(|sys1, sys2| sys1.name.len().cmp(&sys2.name.len()))
                         .unwrap()
                         .name,
@@ -71,6 +72,8 @@ impl Component for WorkloadEditor {
             dragged_batch: None,
             zoom: 1.0,
             drag_ignore: false,
+            conflict: true,
+            before_after: true,
         }
     }
 
@@ -130,6 +133,16 @@ impl Component for WorkloadEditor {
 
                 false
             }
+            Msg::ToggleConflict => {
+                self.conflict = !self.conflict;
+
+                true
+            }
+            Msg::ToggleBeforeAfter => {
+                self.before_after = !self.before_after;
+
+                true
+            }
         }
     }
 
@@ -144,10 +157,7 @@ impl Component for WorkloadEditor {
 
                 let systems: Html = batch
                     .info
-                    .systems
-                    .0
-                    .iter()
-                    .chain(&batch.info.systems.1)
+                    .systems()
                     .map(|system| {
                         html! {
                             <>
@@ -189,34 +199,165 @@ impl Component for WorkloadEditor {
             })
             .collect();
 
-        let conflicts = self
-            .batches
-            .iter()
-            .flat_map(|batch| {
-                let (batch_x, batch_y) = batch.pos;
+        let conflicts = if !self.conflict {
+            html! {}
+        } else {
+            self
+                .batches
+                .iter()
+                .flat_map(|batch| {
+                    let (batch_x, batch_y) = batch.pos;
 
-                batch
-                    .info
-                    .systems
-                    .0
-                    .iter()
-                    .chain(&batch.info.systems.1)
-                    .enumerate()
-                    .filter_map(move |(i, system)| {
-                        system.conflict.as_ref().and_then(|conflict| {
-                            match conflict {
-                                Conflict::Borrow {
-                                    other_system,
-                                    ..
+                    batch
+                        .info
+                        .systems()
+                        .enumerate()
+                        .filter_map(move |(i, system)| {
+                            system.conflict.as_ref().and_then(|conflict| {
+                                match conflict {
+                                    Conflict::Borrow {
+                                        other_system,
+                                        ..
+                                    }
+                                    | Conflict::OtherNotSendSync {
+                                        system: other_system,
+                                        ..
+                                    } => {
+                                        let prev_batch = self.batches.get(batch.index.checked_sub(1)?).unwrap();
+                                        let (prev_x, prev_y) = prev_batch.pos;
+
+                                        let src_x;
+                                        let src_y;
+                                        let dst_x;
+                                        let dst_y;
+
+                                        if let Some(prev_i) = prev_batch
+                                        .info
+                                        .systems().enumerate().find_map(|(i, system)| {
+                                            (system.type_id == other_system.type_id).then(|| i as i32)
+                                        }) {
+                                            src_x = prev_x + prev_batch.width;
+                                            src_y =
+                                            prev_y
+                                            + 24    // title
+                                            + 1     // border
+                                            + 2     // padding
+                                            + 12    // half of the line
+                                            + 24    // line
+                                            * prev_i;
+                                        dst_x = batch_x;
+                                        dst_y =
+                                            batch_y
+                                            + 24    // title
+                                            + 1     // border
+                                            + 2     // padding
+                                            + 12    // half of the line
+                                            + 24    // line
+                                            * i as i32;
+                                        } else {
+                                            let next_batch = self.batches.get(batch.index + 1)?;
+                                            let (next_x, next_y) = next_batch.pos;
+
+                                            src_x = batch_x + batch.width;
+                                            src_y =
+                                                batch_y
+                                                + 24    // title
+                                                + 1     // border
+                                                + 2     // padding
+                                                + 12    // half of the line
+                                                + 24    // line
+                                                * i as i32;
+                                            dst_x = next_x;
+                                            dst_y =
+                                            next_y
+                                            + 24    // title
+                                            + 1     // border
+                                            + 2     // padding
+                                            + 12    // half of the line
+                                            + 24    // line
+                                            * next_batch
+                                            .info
+                                            .systems().enumerate().find_map(|(i, system)| {
+                                                (system.type_id == other_system.type_id).then(|| i as i32)
+                                            })?;
+                                        }
+
+                                        let control_scale = ((dst_x - src_x) / 2).max(30);
+                                        let src_control_x = src_x + control_scale;
+                                        let src_control_y = src_y;
+                                        let dst_control_x = dst_x - control_scale;
+                                        let dst_control_y = dst_y;
+
+                                        let path = format!("
+                                            M {src_x} {src_y}
+                                            C {src_control_x} {src_control_y},
+                                            {dst_control_x} {dst_control_y},
+                                            {dst_x} {dst_y}"
+                                        );
+
+                                        Some(html! {
+                                            <path d={path} stroke="black" fill="transparent" stroke-width="1" />
+                                        })
+                                    },
+                                    Conflict::NotSendSync(_) => {
+                                        let prev_batch = self.batches.get(batch.index.checked_sub(1)?).unwrap();
+                                        let (prev_x, prev_y) = prev_batch.pos;
+
+                                        let src_x = prev_x + prev_batch.width;
+                                        let src_y = prev_y;
+                                        let dst_x = batch_x;
+                                        let dst_y =
+                                            batch_y
+                                            + 24    // title
+                                            + 1     // border
+                                            + 2     // padding
+                                            + 12    // half of the line
+                                            + 24    // line
+                                            * i as i32;
+
+                                        let control_scale = ((dst_x - src_x) / 2).max(30);
+                                        let src_control_x = src_x + control_scale;
+                                        let src_control_y = src_y;
+                                        let dst_control_x = dst_x - control_scale;
+                                        let dst_control_y = dst_y;
+
+                                        let path = format!("
+                                            M {src_x} {src_y}
+                                            C {src_control_x} {src_control_y},
+                                            {dst_control_x} {dst_control_y},
+                                            {dst_x} {dst_y}"
+                                        );
+
+                                        Some(html! {
+                                            <path d={path} stroke="black" fill="transparent" stroke-width="1" />
+                                        })
+                                    },
                                 }
-                                | Conflict::OtherNotSendSync {
-                                    system: other_system,
-                                    ..
-                                } => {
-                                    let prev_batch = self.batches.get(batch.index.checked_sub(1)?).unwrap();
-                                    let (prev_x, prev_y) = prev_batch.pos;
+                            })
+                        })
+                })
+                .collect::<Html>()
+        };
 
-                                    let src_x = prev_x + prev_batch.width;
+        let after = if !self.before_after {
+            html! {}
+        } else {
+            self
+                .batches
+                .iter()
+                .flat_map(|batch| {
+                    let (batch_x, batch_y) = batch.pos;
+    
+                    batch
+                        .info
+                        .systems()
+                        .enumerate()
+                        .flat_map(move |(i, system)| {
+                            system.after.iter().flat_map(move |before| {
+                                (self.batches).iter().filter_map(move |other_batch| {
+                                    let (prev_x, prev_y) = other_batch.pos;
+    
+                                    let src_x = prev_x + other_batch.width;
                                     let src_y =
                                         prev_y
                                         + 24    // title
@@ -224,13 +365,11 @@ impl Component for WorkloadEditor {
                                         + 2     // padding
                                         + 12    // half of the line
                                         + 24    // line
-                                        * prev_batch
+                                        * other_batch
                                             .info
-                                            .systems
-                                            .0
-                                            .iter()
-                                            .chain(&prev_batch.info.systems.1).enumerate().find_map(|(i, system)| {
-                                                (system.type_id == other_system.type_id).then(|| i as i32)
+                                            .systems()
+                                            .enumerate().find_map(|(i, system)| {
+                                                (&system.name == before.strip_prefix("System(").unwrap_or(&before).strip_suffix(")").unwrap_or(&before)).then(|| i as i32)
                                             })?;
                                     let dst_x = batch_x;
                                     let dst_y =
@@ -241,128 +380,29 @@ impl Component for WorkloadEditor {
                                         + 12    // half of the line
                                         + 24    // line
                                         * i as i32;
-
+    
                                     let control_scale = ((dst_x - src_x) / 2).max(30);
                                     let src_control_x = src_x + control_scale;
                                     let src_control_y = src_y;
                                     let dst_control_x = dst_x - control_scale;
                                     let dst_control_y = dst_y;
-
+    
                                     let path = format!("
                                         M {src_x} {src_y}
                                         C {src_control_x} {src_control_y},
                                         {dst_control_x} {dst_control_y},
                                         {dst_x} {dst_y}"
                                     );
-
+    
                                     Some(html! {
                                         <path d={path} stroke="black" fill="transparent" stroke-width="1" />
                                     })
-                                },
-                                Conflict::NotSendSync(_) => {
-                                    let prev_batch = self.batches.get(batch.index.checked_sub(1)?).unwrap();
-                                    let (prev_x, prev_y) = prev_batch.pos;
-
-                                    let src_x = prev_x + prev_batch.width;
-                                    let src_y = prev_y;
-                                    let dst_x = batch_x;
-                                    let dst_y =
-                                        batch_y
-                                        + 24    // title
-                                        + 1     // border
-                                        + 2     // padding
-                                        + 12    // half of the line
-                                        + 24    // line
-                                        * i as i32;
-
-                                    let control_scale = ((dst_x - src_x) / 2).max(30);
-                                    let src_control_x = src_x + control_scale;
-                                    let src_control_y = src_y;
-                                    let dst_control_x = dst_x - control_scale;
-                                    let dst_control_y = dst_y;
-
-                                    let path = format!("
-                                        M {src_x} {src_y}
-                                        C {src_control_x} {src_control_y},
-                                        {dst_control_x} {dst_control_y},
-                                        {dst_x} {dst_y}"
-                                    );
-
-                                    Some(html! {
-                                        <path d={path} stroke="black" fill="transparent" stroke-width="1" />
-                                    })
-                                },
-                            }
-                        })
-                    })
-            })
-            .collect::<Html>();
-
-        let after = self
-            .batches
-            .iter()
-            .flat_map(|batch| {
-                let (batch_x, batch_y) = batch.pos;
-
-                batch
-                    .info
-                    .systems
-                    .0
-                    .iter()
-                    .chain(&batch.info.systems.1)
-                    .enumerate()
-                    .flat_map(move |(i, system)| {
-                        system.after.iter().flat_map(move |before| {
-                            (self.batches).iter().filter_map(move |other_batch| {
-                                let (prev_x, prev_y) = other_batch.pos;
-
-                                let src_x = prev_x + other_batch.width;
-                                let src_y =
-                                    prev_y
-                                    + 24    // title
-                                    + 1     // border
-                                    + 2     // padding
-                                    + 12    // half of the line
-                                    + 24    // line
-                                    * other_batch
-                                        .info
-                                        .systems
-                                        .0
-                                        .iter()
-                                        .chain(&other_batch.info.systems.1).enumerate().find_map(|(i, system)| {
-                                            (&system.name == before.strip_prefix("System(").unwrap_or(&before).strip_suffix(")").unwrap_or(&before)).then(|| i as i32)
-                                        })?;
-                                let dst_x = batch_x;
-                                let dst_y =
-                                    batch_y
-                                    + 24    // title
-                                    + 1     // border
-                                    + 2     // padding
-                                    + 12    // half of the line
-                                    + 24    // line
-                                    * i as i32;
-
-                                let control_scale = ((dst_x - src_x) / 2).max(30);
-                                let src_control_x = src_x + control_scale;
-                                let src_control_y = src_y;
-                                let dst_control_x = dst_x - control_scale;
-                                let dst_control_y = dst_y;
-
-                                let path = format!("
-                                    M {src_x} {src_y}
-                                    C {src_control_x} {src_control_y},
-                                    {dst_control_x} {dst_control_y},
-                                    {dst_x} {dst_y}"
-                                );
-
-                                Some(html! {
-                                    <path d={path} stroke="black" fill="transparent" stroke-width="1" />
                                 })
                             })
                         })
-                    })
-            })
-            .collect::<Html>();
+                })
+                .collect::<Html>()
+        };
 
         let link = ctx.link().clone();
         let on_input_slider = move |event: InputEvent| {
@@ -378,20 +418,45 @@ impl Component for WorkloadEditor {
             ));
         };
 
-        let link = ctx.link().clone();
-        let zoom_slider = html! {
-            <input
-                type="range"
-                min="-1"
-                max="1"
-                step="0.01"
-                value={self.zoom.log10().to_string()}
-                oninput={on_input_slider}
-                onmousedown={move |_| {
-                    link.send_message(Msg::DragIgnoreStart);
-                }}
-                style="position: absolute; bottom: 0; right: 0; z-index: 1;"
-            />
+        let link1 = ctx.link().clone();
+        let link2 = ctx.link().clone();
+        let link3 = ctx.link().clone();
+        let controls = html! {
+            <div style="position: absolute; bottom: 0; right: 0; z-index: 1;">
+                <div style="position: absolute; right: 0;">
+                    <label for="conflicts">{"Conflicts "}</label>
+                    <input
+                        type="checkbox"
+                        name="conflicts"
+                        checked={self.conflict}
+                        onchange={move |_| {
+                            link1.send_message(Msg::ToggleConflict);
+                        }}
+                    />
+                </div><br/>
+                <div style="position: absolute; right: 0;">
+                    <label for="before_after">{"Before/After "}</label>
+                    <input
+                        type="checkbox"
+                        name="before_after"
+                        checked={self.before_after}
+                        onchange={move |_| {
+                            link2.send_message(Msg::ToggleBeforeAfter);
+                        }}
+                    />
+                </div><br/>
+                <input
+                    type="range"
+                    min="-1"
+                    max="1"
+                    step="0.01"
+                    value={self.zoom.log10().to_string()}
+                    oninput={on_input_slider}
+                    onmousedown={move |_| {
+                        link3.send_message(Msg::DragIgnoreStart);
+                    }}
+                />
+            </div>
         };
 
         let link = ctx.link().clone();
@@ -427,7 +492,7 @@ impl Component for WorkloadEditor {
                 onwheel={on_mouse_wheel}
                 style={format!("position: relative; width: 100%; height: 100%; overflow: hidden;")}
             >
-                {zoom_slider}
+                {controls}
                 <div style={format!("width: 100%; height: 100%; transform: scale({zoom}); overflow: visible;")}>
                     {batches}
                     <svg width="100%" height="100%" style="overflow: visible;" xmlns="http://www.w3.org/2000/svg">
