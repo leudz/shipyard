@@ -188,7 +188,8 @@ impl Component for AccessInfo {
                     let link_clone = link.clone();
                     let component_clone = component.0.clone();
                     let on_click_comp = move |_| {
-                        // If there are more systems than components there are some padding components
+                        // If there are more systems than components
+                        // there are some padding components
                         if !component_clone.is_empty() {
                             link_clone
                                 .send_message(Msg::SetSelectedComponent(component_clone.clone()))
@@ -212,7 +213,15 @@ impl Component for AccessInfo {
 
         html! {
             <div style="overflow-y: auto;">
-                <table style="width: 100%; table-layout: fixed; text-align: center; border-collapse: separate; border-spacing: 10px 3px;">
+                <table
+                    style="
+                        width: 100%;
+                        table-layout: fixed;
+                        text-align: center;
+                        border-collapse: separate;
+                        border-spacing: 10px 3px;
+                    "
+                >
                     if {rows != html! {}} {
                         <thead>
                             <tr>

@@ -26,14 +26,29 @@ impl Component for Home {
         };
 
         html! {
-            <div style="position: absolute; top: 50%; left: 50%; transform: translateY(-50%) translateX(-50%);">
+            <div
+                style="
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform: translateY(-50%) translateX(-50%);
+                "
+            >
                 <span style="user-select: none;">{"Drop Json file of "}</span>
                 <code style="user-select: none;">{"shipyard::info::WorkloadsTypeUsage"}</code>
                 <span style="user-select: none;">{". "}</span><br/>
-                <a onclick={on_click_examples}  style="user-select: none;">{"Or check out the example."}</a><br/><br/>
+                <a
+                    onclick={on_click_examples}
+                    style="user-select: none;"
+                >
+                    {"Or check out the example."}
+                </a><br/><br/>
                 <span>{"std::fs::write("}</span><br/>
                 <span>{"\u{00a0}\u{00a0}\u{00a0}\u{00a0}\"drop_me.json\","}</span><br/>
-                <span>{"\u{00a0}\u{00a0}\u{00a0}\u{00a0}serde_json::to_string(&world.workloads_info()).unwrap(),"}</span><br/>
+                <span>
+                    {"\u{00a0}\u{00a0}\u{00a0}\u{00a0}
+                        serde_json::to_string(&world.workloads_info()).unwrap(),"}
+                </span><br/>
                 <span>{")"}</span><br/>
                 <span>{".unwrap();"}</span>
             </div>

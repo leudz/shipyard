@@ -68,10 +68,17 @@ impl Component for WorkloadSelector {
         html! {
             <div>
                 <span>{"Selected workload: "}</span>
-                <select onchange={on_change_workload} style="margin-right: 5px;">{workloads}</select>
+                <select
+                    onchange={on_change_workload}
+                    style="margin-right: 5px;"
+                >
+                    {workloads}
+                </select>
+
                 if ctx.props().page != Page::AccessInfo {
                     <button onclick={on_click_access_info} >{"Access Info"}</button>
                 }
+
                 if ctx.props().page != Page::WorkloadEditor {
                     <button onclick={on_click_editor}>{"Editor"}</button>
                 }

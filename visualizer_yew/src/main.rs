@@ -172,11 +172,33 @@ impl Component for App {
         html! {
             <>
                 <div style="display: flex; flex-direction: column; height: 100vh;">
-                    <header style="position: relative; min-height: 50px; border-bottom: 1px solid black;">
-                        <a onclick={on_click_title} style="position: absolute; top: 50%; left: 50%; transform: translateY(-50%) translateX(-50%); color: black;">{"Shipyard Visualizer"}</a>
+                    <header
+                        style="
+                            position: relative;
+                            min-height: 50px;
+                            border-bottom: 1px solid black;
+                        "
+                    >
+                        <a
+                            onclick={on_click_title}
+                            style="
+                                position: absolute;
+                                top: 50%;
+                                left: 50%;
+                                transform: translateY(-50%) translateX(-50%);
+                                color: black;
+                            "
+                        >
+                            {"Shipyard Visualizer"}
+                        </a>
                     </header>
 
-                    <div id="this div" style="display: flex; flex-direction: column; height: 100%;" ondrop={on_drop} ondragover={on_drag_over}>
+                    <div
+                        id="this div"
+                        style="display: flex; flex-direction: column; height: 100%;"
+                        ondrop={on_drop}
+                        ondragover={on_drag_over}
+                    >
                         if self.page == Page::Home {
                             <Home {set_workloads} />
                         }
