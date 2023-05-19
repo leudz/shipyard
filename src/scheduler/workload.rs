@@ -92,7 +92,7 @@ impl ScheduledWorkload {
 
 impl World {
     /// Creates a new workload and store it in the [`World`](crate::World).
-    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
+    pub fn add_workload<Views, R, W, F: FnOnce() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
     {
@@ -248,6 +248,11 @@ impl Workload {
         self.after_all.clear();
         self.require_before.clear();
         self.require_after.clear();
+    }
+    /// Propagates all information from `self` and `other` into their respective systems before merging their systems.  
+    /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
+    pub fn with_workload(self, other: Workload) -> Workload {
+        self.merge(other)
     }
     /// Adds a system to the workload being created.
     ///
@@ -2602,5 +2607,38 @@ mod tests {
     #[test]
     fn with_system_return_type() {
         Workload::new("").with_system(|| 0usize).build().unwrap();
+    }
+
+    #[test]
+    fn test() {
+        fn sys1(_: View<U32>) {
+            dbg!(2);
+        }
+        fn sys2(_: View<U32>) {
+            dbg!(3);
+        }
+        fn workload1() -> Workload {
+            (sys1.before_all(sys2), sys2).into_workload().tag(workload1)
+        }
+        fn workload2() -> Workload {
+            Workload::new("")
+        }
+        fn first_system(_: View<U32>) {
+            dbg!(1);
+        }
+        fn my_systems() -> Workload {
+            (
+                first_system.before_all(workload1).before_all(workload2),
+                workload1(),
+                workload2(),
+            )
+                .into_workload()
+        }
+
+        let world = World::new();
+
+        world.add_workload(my_systems);
+
+        world.run_workload(my_systems).unwrap();
     }
 }
