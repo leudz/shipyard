@@ -130,6 +130,51 @@ where
     }
 }
 
+impl<TRACK, T: Component + Default> ViewMut<'_, T, TRACK> {
+    /// Retrieve `entity` component.
+    ///
+    /// If the entity doesn't have the component, insert its `Default` value.
+    #[inline]
+    pub fn get_or_default(&mut self, entity: EntityId) -> Mut<'_, T> {
+        self.get_or_insert(entity, T::default())
+    }
+}
+
+impl<TRACK, T: Component> ViewMut<'_, T, TRACK> {
+    /// Retrieve `entity` component.
+    ///
+    /// If the entity doesn't have the component, insert `component`.
+    #[inline]
+    pub fn get_or_insert(&mut self, entity: EntityId, component: T) -> Mut<'_, T> {
+        if !self.sparse_set.contains(entity) {
+            self.sparse_set.insert(entity, component, self.current);
+        }
+
+        let index = self.index_of(entity).unwrap();
+
+        let SparseSet {
+            data,
+            modification_data,
+            is_tracking_modification,
+            ..
+        } = self.sparse_set;
+
+        Mut {
+            flag: is_tracking_modification
+                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+            current: self.current,
+            data: unsafe { data.get_unchecked_mut(index) },
+        }
+    }
+    /// Retrieve `entity` component.
+    ///
+    /// If the entity doesn't have the component, insert the result of `f`.
+    #[inline]
+    pub fn get_or_insert_with<F: FnOnce() -> T>(&mut self, entity: EntityId, f: F) -> Mut<'_, T> {
+        self.get_or_insert(entity, f())
+    }
+}
+
 impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
 where
     Track<TRACK>: InsertionTracking,
