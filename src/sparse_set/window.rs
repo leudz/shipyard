@@ -204,8 +204,8 @@ impl<'w, T: Component> FullRawWindowMut<'w, T> {
     ) -> (Self, Option<SharedBorrow<'_>>, ExclusiveBorrow<'_>) {
         let ViewMut {
             sparse_set,
-            _all_borrow: all_borrow,
-            _borrow: borrow,
+            all_borrow,
+            borrow,
             last_insertion,
             last_modification,
             current,

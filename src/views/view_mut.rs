@@ -12,6 +12,7 @@ use crate::tracking::{
     is_track_within_bounds, DeletionTracking, Inserted, InsertedOrModified, InsertionTracking,
     ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
 };
+use crate::views::view::View;
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
@@ -19,13 +20,32 @@ use core::ops::{Deref, DerefMut};
 /// Exclusive view over a component storage.
 pub struct ViewMut<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
-    pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) _borrow: ExclusiveBorrow<'a>,
+    pub(crate) all_borrow: Option<SharedBorrow<'a>>,
+    pub(crate) borrow: ExclusiveBorrow<'a>,
     pub(crate) last_insertion: u32,
     pub(crate) last_modification: u32,
     pub(crate) last_removal_or_deletion: u32,
     pub(crate) current: u32,
     pub(crate) phantom: PhantomData<TRACK>,
+}
+
+impl<'a, T: Component, TRACK> ViewMut<'a, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
+    /// Returns a `View` reborrowing from `ViewMut`.
+    pub fn as_view(&self) -> View<'_, T, TRACK> {
+        View {
+            sparse_set: self.sparse_set,
+            all_borrow: self.all_borrow.as_ref().cloned(),
+            borrow: self.borrow.shared_reborrow(),
+            last_insertion: self.last_insertion,
+            last_modification: self.last_modification,
+            last_removal_or_deletion: self.last_removal_or_deletion,
+            current: self.current,
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
@@ -65,8 +85,8 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
         if let Some(sparse_set) = storage.any_mut().downcast_mut() {
             Ok(ViewMut {
                 sparse_set,
-                _all_borrow: Some(all_borrow),
-                _borrow: borrow,
+                all_borrow: Some(all_borrow),
+                borrow,
                 last_insertion: 0,
                 last_modification: 0,
                 last_removal_or_deletion: 0,
