@@ -2608,37 +2608,4 @@ mod tests {
     fn with_system_return_type() {
         Workload::new("").with_system(|| 0usize).build().unwrap();
     }
-
-    #[test]
-    fn test() {
-        fn sys1(_: View<U32>) {
-            dbg!(2);
-        }
-        fn sys2(_: View<U32>) {
-            dbg!(3);
-        }
-        fn workload1() -> Workload {
-            (sys1.before_all(sys2), sys2).into_workload().tag(workload1)
-        }
-        fn workload2() -> Workload {
-            Workload::new("")
-        }
-        fn first_system(_: View<U32>) {
-            dbg!(1);
-        }
-        fn my_systems() -> Workload {
-            (
-                first_system.before_all(workload1).before_all(workload2),
-                workload1(),
-                workload2(),
-            )
-                .into_workload()
-        }
-
-        let world = World::new();
-
-        world.add_workload(my_systems);
-
-        world.run_workload(my_systems).unwrap();
-    }
 }
