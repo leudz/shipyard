@@ -34,6 +34,18 @@ pub trait Get {
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
 }
 
+impl<'a, T: Component> Get for &'a SparseSet<T> {
+    type Out = &'a T;
+
+    fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
+        self.private_get(entity)
+            .ok_or_else(|| error::MissingComponent {
+                id: entity,
+                name: type_name::<T>(),
+            })
+    }
+}
+
 impl<'a, 'b, T: Component, TRACK> Get for &'b View<'a, T, TRACK> {
     type Out = &'b T;
 
