@@ -9,58 +9,70 @@ use crate::error;
 /// `Data` is the external data passed to the system through `run_with_data`.
 /// `Borrow` are the storages borrowed.
 /// `Return` is the type returned by the system.
-pub trait AllSystem<Data, Borrow, Return> {
+pub trait AllSystem<Data, Borrow> {
+    /// The system return type
+    type Return;
+
     #[allow(missing_docs)]
-    fn run(self, data: Data, all_storages: &AllStorages) -> Result<Return, error::GetStorage>;
+    fn run(self, data: Data, all_storages: &AllStorages)
+        -> Result<Self::Return, error::GetStorage>;
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
-impl<Return, F> AllSystem<(), Nothing, Return> for F
+impl<R, F> AllSystem<(), Nothing> for F
 where
-    F: FnOnce() -> Return,
+    F: FnOnce() -> R,
 {
-    fn run(self, _: (), _: &AllStorages) -> Result<Return, error::GetStorage> {
+    type Return = R;
+
+    fn run(self, _: (), _: &AllStorages) -> Result<R, error::GetStorage> {
         Ok((self)())
     }
 }
 
 // Nothing has to be used and not () to not conflict where A = ()
-impl<Data, Return, F> AllSystem<(Data,), Nothing, Return> for F
+impl<Data, R, F> AllSystem<(Data,), Nothing> for F
 where
-    F: FnOnce(Data) -> Return,
+    F: FnOnce(Data) -> R,
 {
-    fn run(self, (data,): (Data,), _: &AllStorages) -> Result<Return, error::GetStorage> {
+    type Return = R;
+
+    fn run(self, (data,): (Data,), _: &AllStorages) -> Result<R, error::GetStorage> {
         Ok((self)(data))
     }
 }
 
 macro_rules! impl_all_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow,)+ Return, Func> AllSystem<(), ($($type,)+), Return> for Func
+        impl<$($type: Borrow,)+ R, Func> AllSystem<(), ($($type,)+)> for Func
         where
-            Func: FnOnce($($type),+) -> Return
-                + FnOnce($($type::View<'_>),+) -> Return,
+            Func: FnOnce($($type),+) -> R
+                + FnOnce($($type::View<'_>),+) -> R,
         {
+            type Return = R;
+
             fn run(
                 self,
                 _: (),
                 all_storages: &AllStorages,
-            ) -> Result<Return, error::GetStorage> {
+            ) -> Result<R, error::GetStorage> {
                 let current = all_storages.get_current();
                 Ok(self($($type::borrow(all_storages, None, None, current)?,)+))
             }
         }
 
-        impl<Data, $($type: Borrow,)+ Return, Func> AllSystem<(Data,), ($($type,)+), Return> for Func
+        impl<Data, $($type: Borrow,)+ R, Func> AllSystem<(Data,), ($($type,)+)> for Func
         where
-            Func: FnOnce(Data, $($type),+) -> Return
-                + FnOnce(Data, $($type::View<'_>),+) -> Return,
+            Func: FnOnce(Data, $($type),+) -> R
+                + FnOnce(Data, $($type::View<'_>),+) -> R,
         {
+            type Return = R;
+
             fn run(
                 self,
                 (data,): (Data,),
                 all_storages: &AllStorages,
-            ) -> Result<Return, error::GetStorage> {
+            ) -> Result<R, error::GetStorage> {
                 let current = all_storages.get_current();
                 Ok(self(data, $($type::borrow(all_storages, None, None, current)?,)+))
             }

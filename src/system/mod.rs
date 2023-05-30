@@ -14,50 +14,61 @@ pub struct Nothing;
 /// `Data` is the external data passed to the system through `run_with_data`.
 /// `Borrow` are the storages borrowed.
 /// `Return` is the type returned by the system.
-pub trait System<Data, Borrow, Return> {
+pub trait System<Data, Borrow> {
+    /// The system return type
+    type Return;
+
     #[allow(missing_docs)]
-    fn run(self, data: Data, world: &World) -> Result<Return, error::GetStorage>;
+    fn run(self, data: Data, world: &World) -> Result<Self::Return, error::GetStorage>;
 }
 
 // `Nothing` has to be used and not `()` to not conflict where `A = ()`
-impl<Return, F> System<(), Nothing, Return> for F
+impl<R, F> System<(), Nothing> for F
 where
-    F: FnOnce() -> Return,
+    F: FnOnce() -> R,
 {
-    fn run(self, _: (), _: &World) -> Result<Return, error::GetStorage> {
+    type Return = R;
+
+    fn run(self, _: (), _: &World) -> Result<R, error::GetStorage> {
         Ok((self)())
     }
 }
 
 // `Nothing` has to be used and not `()` to not conflict where `A = ()`
-impl<Data, Return, F> System<(Data,), Nothing, Return> for F
+impl<Data, R, F> System<(Data,), Nothing> for F
 where
-    F: FnOnce(Data) -> Return,
+    F: FnOnce(Data) -> R,
 {
-    fn run(self, (data,): (Data,), _: &World) -> Result<Return, error::GetStorage> {
+    type Return = R;
+
+    fn run(self, (data,): (Data,), _: &World) -> Result<R, error::GetStorage> {
         Ok((self)(data))
     }
 }
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: WorldBorrow,)+ Return, Func> System<(), ($($type,)+), Return> for Func
+        impl<$($type: WorldBorrow,)+ R, Func> System<(), ($($type,)+)> for Func
         where
-            Func: FnOnce($($type),+) -> Return
-                + FnOnce($($type::WorldView<'_>),+) -> Return
+            Func: FnOnce($($type),+) -> R
+                + FnOnce($($type::WorldView<'_>),+) -> R
         {
-            fn run(self, _: (), world: &World) -> Result<Return, error::GetStorage> {
+            type Return = R;
+
+            fn run(self, _: (), world: &World) -> Result<R, error::GetStorage> {
                 let current = world.get_current();
                 Ok((self)($($type::world_borrow(world, None, current)?,)+))
             }
         }
 
-        impl<Data, $($type: WorldBorrow,)+ Return, Func> System<(Data,), ($($type,)+), Return> for Func
+        impl<Data, $($type: WorldBorrow,)+ R, Func> System<(Data,), ($($type,)+)> for Func
         where
-            Func: FnOnce(Data, $($type),+) -> Return
-                + FnOnce(Data, $($type::WorldView<'_>),+) -> Return
+            Func: FnOnce(Data, $($type),+) -> R
+                + FnOnce(Data, $($type::WorldView<'_>),+) -> R
         {
-            fn run(self, (data,): (Data,), world: &World) -> Result<Return, error::GetStorage> {
+            type Return = R;
+
+            fn run(self, (data,): (Data,), world: &World) -> Result<R, error::GetStorage> {
                 let current = world.get_current();
                 Ok((self)(data, $($type::world_borrow(world, None, current)?,)+))
             }

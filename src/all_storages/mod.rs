@@ -736,11 +736,11 @@ You can use:
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run_with_data<Data, B, R, S: AllSystem<(Data,), B, R>>(
+    pub fn run_with_data<Data, B, S: AllSystem<(Data,), B>>(
         &self,
         system: S,
         data: Data,
-    ) -> R {
+    ) -> S::Return {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?type_name::<S>());
         #[cfg(feature = "tracing")]
@@ -861,7 +861,7 @@ let i = all_storages.run(sys1);
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run<B, R, S: AllSystem<(), B, R>>(&self, system: S) -> R {
+    pub fn run<B, S: AllSystem<(), B>>(&self, system: S) -> S::Return {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?type_name::<S>());
         #[cfg(feature = "tracing")]
