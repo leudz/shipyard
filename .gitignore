@@ -7,4 +7,3 @@ node_modules
 bunny_demo/public/wasm
 *.wasm
 visualizer/dist
-visualizer_yew/dist

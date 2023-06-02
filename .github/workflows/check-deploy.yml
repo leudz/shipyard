@@ -36,7 +36,6 @@ jobs:
             - 'guide/**'
             - 'square_eater/**'
             - 'visualizer/**'
-            - 'visualizer_yew/**'
             - '.github/**'
             - 'Cargo.toml'
   fmt:
@@ -209,27 +208,9 @@ jobs:
         with:
           name: visualizer
           path: visualizer/dist
-  visualizer_yew:
-    runs-on: ubuntu-latest
-    needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          target: wasm32-unknown-unknown
-      - uses: jetli/trunk-action@v0.4.0
-      # GH pages doesn't use the same url naming as trunk's default
-      # https://github.com/thedodd/trunk/issues/268
-      - run: trunk build --public-url "shipyard/visualizer_yew/" --release visualizer_yew/index.html
-      - name: save visualizer_yew
-        uses: actions/upload-artifact@v2
-        with:
-          name: visualizer_yew
-          path: visualizer_yew/dist
   deploy:
     runs-on: ubuntu-latest
-    needs: [changes, guide_master, guide_0_5_0, bunny_demo, square_eater, visualizer, visualizer_yew]
+    needs: [changes, guide_master, guide_0_5_0, bunny_demo, square_eater, visualizer]
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - name: load guide master
@@ -267,12 +248,6 @@ jobs:
         with:
           name: visualizer
           path: dist/visualizer
-
-      - name: load visualizer_yew
-        uses: actions/download-artifact@v2
-        with:
-          name: visualizer_yew
-          path: dist/visualizer_yew
 
       - name: deploy to gh pages
         uses: maxheld83/ghpages@master

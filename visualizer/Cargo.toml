@@ -1,29 +1,21 @@
 [package]
-edition = "2021"
-license = "MIT OR Apache-2.0"
-name = "visualizer_lib"
-publish = false
-version = "0.0.0"
-
-[[bin]]
 name = "visualizer"
-path = "src/main.rs"
-
-[lib]
-crate-type = ["cdylib", "rlib"]
+version = "0.1.0"
+edition = "2021"
 
 [dependencies]
-eframe = "0.21.3"
-egui = "0.21.0"
-enum-map = "2.5.0"
-serde_json = "1.0.95"
-shipyard = { version = "0.6.1", features = ["serde1"] }
-syntect = { version = "5.0.0", default-features = false, features = [
-    "default-fancy",
+console_error_panic_hook = "0.1"
+serde_json = "1.0.96"
+shipyard = { path = "..", features = ["serde1"] }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3.61", features = [
+    "DataTransfer",
+    "DragEvent",
+    "Element",
+    "FileReader",
+    "HtmlDivElement",
+    "HtmlSelectElement",
+    "Performance",
+    "ProgressEvent",
 ] }
-tracing = "0.1.37"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.7"
-tracing-wasm = "0.2.1"
-wasm-bindgen-futures = "0.4.34"
+yew = { version = "0.20.0", features = ["csr"] }
