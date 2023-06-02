@@ -31,14 +31,24 @@ impl Component for AccessInfo {
     fn create(ctx: &Context<AccessInfo>) -> AccessInfo {
         AccessInfo {
             systems: ctx.props().system_to_components.keys().cloned().collect(),
-            systems_mutability: Vec::new(),
+            systems_mutability: ctx
+                .props()
+                .system_to_components
+                .keys()
+                .map(|_| None)
+                .collect(),
             components: ctx
                 .props()
                 .component_to_systems
                 .keys()
                 .map(|component| (component.clone(), trim_component_name(component)))
                 .collect(),
-            components_mutability: Vec::new(),
+            components_mutability: ctx
+                .props()
+                .component_to_systems
+                .keys()
+                .map(|_| None)
+                .collect(),
             selected_system: None,
             selected_component: None,
         }
