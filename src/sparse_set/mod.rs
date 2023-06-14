@@ -26,6 +26,7 @@ use crate::storage::{Storage, StorageId};
 use crate::tracking::Tracking;
 use crate::tracking::{is_track_within_bounds, TrackingTimestamp};
 use crate::{error, track};
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::type_name;
 use core::{
@@ -58,6 +59,10 @@ pub struct SparseSet<T: Component> {
     pub(crate) is_tracking_modification: bool,
     pub(crate) is_tracking_deletion: bool,
     pub(crate) is_tracking_removal: bool,
+    #[allow(clippy::type_complexity)]
+    on_insertion: Option<Box<dyn FnMut(EntityId, &T) + Send + Sync>>,
+    #[allow(clippy::type_complexity)]
+    on_removal: Option<Box<dyn FnMut(EntityId, &T) + Send + Sync>>,
 }
 
 impl<T: fmt::Debug + Component> fmt::Debug for SparseSet<T> {
@@ -85,6 +90,8 @@ impl<T: Component> SparseSet<T> {
             is_tracking_modification: false,
             is_tracking_deletion: false,
             is_tracking_removal: false,
+            on_insertion: None,
+            on_removal: None,
         }
     }
     /// Returns a new [`SparseSet`] to be used in custom storage.
@@ -146,6 +153,17 @@ impl<T: Component> SparseSet<T> {
     pub fn id_at(&self, index: usize) -> Option<EntityId> {
         self.dense.get(index).copied()
     }
+
+    /// Sets the on insertion callback.
+    pub fn on_insertion(&mut self, f: impl FnMut(EntityId, &T) + Send + Sync + 'static) {
+        self.on_insertion = Some(Box::new(f));
+    }
+
+    /// Sets the on removal and deletion callback.
+    pub fn on_removal(&mut self, f: impl FnMut(EntityId, &T) + Send + Sync + 'static) {
+        self.on_removal = Some(Box::new(f));
+    }
+
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
         self.index_of(entity)
@@ -170,6 +188,10 @@ impl<T: Component> SparseSet<T> {
         let old_component;
 
         if sparse_entity.is_dead() {
+            if let Some(on_insertion) = &mut self.on_insertion {
+                on_insertion(entity, &value);
+            }
+
             *sparse_entity =
                 EntityId::new_from_index_and_gen(self.dense.len() as u64, entity.gen());
 
@@ -185,6 +207,10 @@ impl<T: Component> SparseSet<T> {
 
             old_component = None;
         } else if entity.gen() >= sparse_entity.gen() {
+            if let Some(on_insertion) = &mut self.on_insertion {
+                on_insertion(entity, &value);
+            }
+
             let old_data = unsafe {
                 core::mem::replace(self.data.get_unchecked_mut(sparse_entity.uindex()), value)
             };
@@ -272,6 +298,10 @@ impl<T: Component> SparseSet<T> {
             }
 
             if entity.gen() == sparse_entity.gen() {
+                if let Some(on_remove) = &mut self.on_removal {
+                    on_remove(entity, &component);
+                }
+
                 Some(component)
             } else {
                 None
