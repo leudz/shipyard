@@ -159,9 +159,23 @@ impl<T: Component> SparseSet<T> {
         self.on_insertion = Some(Box::new(f));
     }
 
+    /// Remove the on insertion callback.
+    pub fn take_on_insertion(
+        &mut self,
+    ) -> Option<Box<dyn FnMut(EntityId, &T) + Send + Sync + 'static>> {
+        self.on_insertion.take()
+    }
+
     /// Sets the on removal and deletion callback.
     pub fn on_removal(&mut self, f: impl FnMut(EntityId, &T) + Send + Sync + 'static) {
         self.on_removal = Some(Box::new(f));
+    }
+
+    /// Remove the on removal and deletion callback.
+    pub fn take_on_removal(
+        &mut self,
+    ) -> Option<Box<dyn FnMut(EntityId, &T) + Send + Sync + 'static>> {
+        self.on_removal.take()
     }
 
     #[inline]

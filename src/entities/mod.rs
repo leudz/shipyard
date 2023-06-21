@@ -378,6 +378,11 @@ impl Entities {
     pub fn on_deletion(&mut self, f: impl FnMut(EntityId) + Send + Sync + 'static) {
         self.on_deletion = Some(Box::new(f));
     }
+
+    /// Remove the on entity deletion callback.
+    pub fn take_on_deletion(&mut self) -> Option<Box<dyn FnMut(EntityId) + Send + Sync + 'static>> {
+        self.on_deletion.take()
+    }
 }
 
 impl Storage for Entities {
