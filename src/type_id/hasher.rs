@@ -15,6 +15,7 @@ impl Hasher for TypeIdHasher {
     }
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn hasher() {
     fn verify<T: 'static + ?Sized>() {

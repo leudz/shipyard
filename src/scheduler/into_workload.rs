@@ -169,7 +169,7 @@ where
             let unique_id = unique_id();
 
             let name = Box::new(WorkloadLabel {
-                type_id: TypeId(unique_id),
+                type_id: TypeId(unique_id as u128),
                 name: unique_id.to_string().as_label(),
             });
 
@@ -211,7 +211,7 @@ macro_rules! impl_into_workload {
                 let unique_id = unique_id();
 
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId(unique_id),
+                    type_id: TypeId(unique_id as u128),
                     name: unique_id.to_string().as_label(),
                 });
 
@@ -241,7 +241,7 @@ macro_rules! impl_into_workload {
                 let unique_id = unique_id();
 
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId(unique_id),
+                    type_id: TypeId(unique_id as u128),
                     name: unique_id.to_string().as_label(),
                 });
 

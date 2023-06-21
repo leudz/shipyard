@@ -8,7 +8,7 @@ use core::hash::{Hash, Hasher};
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 
-pub struct TypeId(pub(crate) u64);
+pub struct TypeId(pub(crate) u128);
 
 impl TypeId {
     pub(crate) fn of<T: ?Sized + 'static>() -> Self {
@@ -22,21 +22,30 @@ impl TypeId {
 
 impl From<core::any::TypeId> for TypeId {
     fn from(type_id: core::any::TypeId) -> Self {
-        let mut hasher = TypeIdHasher::default();
+        match core::mem::size_of::<core::any::TypeId>() {
+            8 => {
+                let mut hasher = TypeIdHasher::default();
 
-        type_id.hash(&mut hasher);
+                type_id.hash(&mut hasher);
 
-        TypeId(hasher.finish())
+                TypeId(hasher.finish() as u128)
+            }
+            16 => unsafe {
+                // This is technically unsound, core::any::TypeId has rust layout
+                // but there is no other way to get the full value anymore
+
+                let type_id_ptr: *const core::any::TypeId = &type_id;
+                let type_id_ptr = type_id_ptr as *const TypeId;
+                *type_id_ptr
+            },
+            _ => panic!("Compiler version not supported"),
+        }
     }
 }
 
 impl From<&core::any::TypeId> for TypeId {
     fn from(type_id: &core::any::TypeId) -> Self {
-        let mut hasher = TypeIdHasher::default();
-
-        type_id.hash(&mut hasher);
-
-        TypeId(hasher.finish())
+        type_id.into()
     }
 }
 
