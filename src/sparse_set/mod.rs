@@ -160,6 +160,7 @@ impl<T: Component> SparseSet<T> {
     }
 
     /// Remove the on insertion callback.
+    #[allow(clippy::type_complexity)]
     pub fn take_on_insertion(
         &mut self,
     ) -> Option<Box<dyn FnMut(EntityId, &T) + Send + Sync + 'static>> {
@@ -172,6 +173,7 @@ impl<T: Component> SparseSet<T> {
     }
 
     /// Remove the on removal and deletion callback.
+    #[allow(clippy::type_complexity)]
     pub fn take_on_removal(
         &mut self,
     ) -> Option<Box<dyn FnMut(EntityId, &T) + Send + Sync + 'static>> {
