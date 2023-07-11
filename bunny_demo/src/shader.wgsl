@@ -3,7 +3,7 @@
 var<uniform> screen_size: vec4<f32>;
 
 struct Vertex {
-    @location(0) position: vec2<f32>,
+    @location(0) vert_position: vec2<f32>,
     @location(1) tex_coords: vec2<f32>,
 };
 struct Instance {
@@ -24,7 +24,7 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coords = vertex.tex_coords;
 
-    var pos = vertex.position;
+    var pos = vertex.vert_position;
     pos += instance.position;
 
     pos.x *= 2.0;
