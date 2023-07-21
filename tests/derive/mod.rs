@@ -39,3 +39,6 @@ fn default() {
 
     world.borrow::<CustomView>().unwrap();
 }
+
+#[derive(Hash, Debug, PartialEq, Clone, Label)]
+struct MyLabel;

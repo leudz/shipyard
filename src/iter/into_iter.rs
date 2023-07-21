@@ -179,7 +179,6 @@ macro_rules! impl_into_iter {
             #[cfg(feature = "parallel")]
             type IntoParIter = ParIter<($type1::AbsView, $($type::AbsView,)+)>;
 
-            #[allow(clippy::drop_copy)]
             fn iter(self) -> Self::IntoIter {
                 let type_ids = [self.$index1.type_id(), $(self.$index.type_id()),+];
                 let mut smallest = core::usize::MAX;
@@ -227,7 +226,7 @@ macro_rules! impl_into_iter {
                     }
                 )+
 
-                drop(factored_len);
+                let _ = factored_len;
 
                 if smallest == core::usize::MAX {
                     Iter::Mixed(Mixed {
