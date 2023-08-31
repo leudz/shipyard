@@ -6,14 +6,14 @@ use crate::type_id::TypeId;
 use crate::{AsLabel, WorkloadModificator};
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 // macro not module
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::vec;
 
-static WORKLOAD_ID: AtomicU64 = AtomicU64::new(1);
-fn unique_id() -> u64 {
+static WORKLOAD_ID: AtomicU32 = AtomicU32::new(1);
+fn unique_id() -> u32 {
     WORKLOAD_ID.fetch_add(1, Ordering::Relaxed)
 }
 
