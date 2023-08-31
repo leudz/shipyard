@@ -55,7 +55,7 @@ pub struct WorkloadSystem {
 
 impl Extend<WorkloadSystem> for Workload {
     fn extend<T: IntoIterator<Item = WorkloadSystem>>(&mut self, iter: T) {
-        self.systems.extend(iter.into_iter());
+        self.systems.extend(iter);
     }
 }
 
