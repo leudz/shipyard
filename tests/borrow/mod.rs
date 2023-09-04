@@ -47,7 +47,7 @@ impl Unique for NotSendSync {}
 
 #[test]
 fn simple_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let u32s = world.borrow::<View<U32>>().unwrap();
     assert_eq!(u32s.len(), 0);
@@ -55,7 +55,7 @@ fn simple_borrow() {
 
 #[test]
 fn option_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let u32s = world.borrow::<Option<View<U32>>>().unwrap();
 
@@ -69,7 +69,7 @@ fn option_borrow() {
 
 #[test]
 fn all_storages_simple_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     let u32s = all_storages.borrow::<View<U32>>().unwrap();
@@ -78,7 +78,7 @@ fn all_storages_simple_borrow() {
 
 #[test]
 fn invalid_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let _u32s = world.borrow::<ViewMut<U32>>().unwrap();
     assert_eq!(
@@ -93,7 +93,7 @@ fn invalid_borrow() {
 
 #[test]
 fn all_storages_invalid_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     let _u32s = all_storages.borrow::<ViewMut<U32>>().unwrap();
@@ -109,7 +109,7 @@ fn all_storages_invalid_borrow() {
 
 #[test]
 fn double_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let u32s = world.borrow::<ViewMut<U32>>().unwrap();
     drop(u32s);
@@ -118,7 +118,7 @@ fn double_borrow() {
 
 #[test]
 fn all_storages_double_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     let u32s = all_storages.borrow::<ViewMut<U32>>().unwrap();
@@ -128,7 +128,7 @@ fn all_storages_double_borrow() {
 
 #[test]
 fn all_storages_option_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
     let u32s = all_storages.borrow::<Option<View<U32>>>().unwrap();
@@ -144,7 +144,7 @@ fn all_storages_option_borrow() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn non_send_storage_in_other_thread() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     rayon::join(
         || {
             assert_eq!(
@@ -163,7 +163,7 @@ fn non_send_storage_in_other_thread() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn non_send_sync_storage_in_other_thread() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     rayon::join(
         || {
             assert_eq!(
@@ -181,7 +181,7 @@ fn non_send_sync_storage_in_other_thread() {
 
 #[test]
 fn add_unique_while_borrowing() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.add_unique(U32(0));
     let _s = world.borrow::<UniqueView<'_, U32>>().unwrap();
     world.add_unique(USIZE(0));
@@ -189,7 +189,7 @@ fn add_unique_while_borrowing() {
 
 #[test]
 fn sparse_set_and_unique() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.add_unique(U32(0));
     world
         .borrow::<(UniqueViewMut<U32>, ViewMut<U32>)>()
@@ -199,7 +199,7 @@ fn sparse_set_and_unique() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn exhaustive_list() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let _ = world.borrow::<(
         NonSend<View<NotSend>>,
@@ -225,7 +225,7 @@ fn exhaustive_list() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn unique_exhaustive_list() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_unique_non_send(NotSend(&()));
     world.add_unique_non_sync(NotSync(&()));

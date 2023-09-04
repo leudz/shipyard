@@ -11,7 +11,6 @@ use crate::borrow::Borrow;
 use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
-use crate::error;
 use crate::get_component::GetComponent;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::AllStoragesMemoryUsage;
@@ -20,16 +19,130 @@ use crate::public_transport::ShipyardRwLock;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{BulkAddEntity, SparseSet, TupleAddComponent, TupleDelete, TupleRemove};
+#[cfg(feature = "std")]
+use crate::std_thread_id_generator;
 use crate::storage::{SBox, Storage, StorageId};
 use crate::system::AllSystem;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
 use crate::unique::UniqueStorage;
 use crate::views::EntitiesViewMut;
+use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
+use core::hash::BuildHasherDefault;
+use core::marker::PhantomData;
 use core::sync::atomic::AtomicU32;
-use hashbrown::hash_map::{Entry, HashMap};
+use hashbrown::hash_map::Entry;
+
+#[allow(missing_docs)]
+pub struct MissingLock;
+#[allow(missing_docs)]
+pub struct LockPresent;
+#[allow(missing_docs)]
+pub struct MissingThreadId;
+#[allow(missing_docs)]
+pub struct ThreadIdPresent;
+
+pub(crate) struct AllStoragesBuilder<Lock, ThreadId> {
+    custom_lock: Option<Box<dyn ShipyardRwLock + Send + Sync>>,
+    custom_thread_id: Option<Arc<dyn Fn() -> u64 + Send + Sync>>,
+    _phantom: PhantomData<(Lock, ThreadId)>,
+}
+
+impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
+    #[cfg(feature = "std")]
+    pub(crate) fn new() -> AllStoragesBuilder<LockPresent, ThreadIdPresent> {
+        AllStoragesBuilder {
+            custom_lock: None,
+            custom_thread_id: Some(Arc::new(std_thread_id_generator)),
+            _phantom: PhantomData,
+        }
+    }
+
+    #[cfg(all(not(feature = "std"), not(feature = "thread_local")))]
+    pub(crate) fn new() -> AllStoragesBuilder<MissingLock, ThreadIdPresent> {
+        AllStoragesBuilder {
+            custom_lock: None,
+            custom_thread_id: None,
+            _phantom: PhantomData,
+        }
+    }
+
+    #[cfg(all(not(feature = "std"), feature = "thread_local"))]
+    pub(crate) fn new() -> AllStoragesBuilder<MissingLock, MissingThreadId> {
+        AllStoragesBuilder {
+            custom_lock: None,
+            custom_thread_id: None,
+            _phantom: PhantomData,
+        }
+    }
+
+    pub(crate) fn with_custom_lock<L: ShipyardRwLock + Send + Sync>(
+        self,
+    ) -> AllStoragesBuilder<LockPresent, ThreadId> {
+        AllStoragesBuilder {
+            custom_lock: Some(L::new()),
+            custom_thread_id: self.custom_thread_id,
+            _phantom: PhantomData,
+        }
+    }
+
+    #[cfg(feature = "thread_local")]
+    pub(crate) fn with_custom_thread_id(
+        self,
+        thread_id: impl Fn() -> u64 + Send + Sync + 'static,
+    ) -> AllStoragesBuilder<Lock, ThreadIdPresent> {
+        AllStoragesBuilder {
+            custom_lock: self.custom_lock,
+            custom_thread_id: Some(Arc::new(thread_id)),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
+    pub(crate) fn build(self, counter: Arc<AtomicU32>) -> AtomicRefCell<AllStorages> {
+        let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
+
+        storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
+
+        let storages = if let Some(custom_lock) = self.custom_lock {
+            RwLock::new_custom(custom_lock, storages)
+        } else {
+            #[cfg(feature = "std")]
+            {
+                RwLock::new_std(storages)
+            }
+            #[cfg(not(feature = "std"))]
+            {
+                unreachable!()
+            }
+        };
+
+        #[cfg(feature = "thread_local")]
+        let thread_id_generator = self.custom_thread_id.unwrap();
+        #[cfg(feature = "thread_local")]
+        let main_thread_id = (thread_id_generator)();
+
+        #[cfg(feature = "thread_local")]
+        {
+            AtomicRefCell::new_non_send(
+                AllStorages {
+                    storages,
+                    main_thread_id,
+                    thread_id_generator: thread_id_generator.clone(),
+                    counter,
+                },
+                thread_id_generator,
+            )
+        }
+        #[cfg(not(feature = "thread_local"))]
+        {
+            AtomicRefCell::new(AllStorages { storages, counter })
+        }
+    }
+}
 
 /// Contains all storages present in the `World`.
 // The lock is held very briefly:
@@ -40,9 +153,11 @@ use hashbrown::hash_map::{Entry, HashMap};
 // so any access to storages are valid as long as the World exists
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
-    pub(crate) storages: RwLock<HashMap<StorageId, SBox>>,
+    pub(crate) storages: RwLock<ShipHashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
-    thread_id: std::thread::ThreadId,
+    main_thread_id: u64,
+    #[cfg(feature = "thread_local")]
+    thread_id_generator: Arc<dyn Fn() -> u64 + Send + Sync>,
     counter: Arc<AtomicU32>,
 }
 
@@ -54,26 +169,16 @@ unsafe impl Sync for AllStorages {}
 impl AllStorages {
     #[cfg(feature = "std")]
     pub(crate) fn new(counter: Arc<AtomicU32>) -> Self {
-        let mut storages = HashMap::new();
+        let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
 
         AllStorages {
             storages: RwLock::new_std(storages),
             #[cfg(feature = "thread_local")]
-            thread_id: std::thread::current().id(),
-            counter,
-        }
-    }
-    pub(crate) fn new_with_lock<L: ShipyardRwLock + Send + Sync>(counter: Arc<AtomicU32>) -> Self {
-        let mut storages = HashMap::new();
-
-        storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
-
-        AllStorages {
-            storages: RwLock::new_custom::<L>(storages),
+            main_thread_id: (std_thread_id_generator)(),
             #[cfg(feature = "thread_local")]
-            thread_id: std::thread::current().id(),
+            thread_id_generator: Arc::new(std_thread_id_generator),
             counter,
         }
     }
@@ -116,13 +221,13 @@ impl AllStorages {
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
     pub fn add_unique_non_send<T: Sync + Unique>(&self, component: T) {
-        if std::thread::current().id() == self.thread_id {
+        if (self.thread_id_generator)() == self.main_thread_id {
             let storage_id = StorageId::of::<UniqueStorage<T>>();
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send(
                     UniqueStorage::new(component, self.get_tracking_timestamp().0),
-                    self.thread_id,
+                    self.thread_id_generator.clone(),
                 )
             });
         }
@@ -154,13 +259,13 @@ impl AllStorages {
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
     pub fn add_unique_non_send_sync<T: Unique>(&self, component: T) {
-        if std::thread::current().id() == self.thread_id {
+        if (self.thread_id_generator)() == self.main_thread_id {
             let storage_id = StorageId::of::<UniqueStorage<T>>();
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send_sync(
                     UniqueStorage::new(component, self.get_tracking_timestamp().0),
-                    self.thread_id,
+                    self.thread_id_generator.clone(),
                 )
             });
         }
@@ -995,7 +1100,7 @@ let i = all_storages.run(sys1);
         unsafe {
             &mut *storages
                 .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_send(f(), std::thread::current().id()))
+                .or_insert_with(|| SBox::new_non_send(f(), self.thread_id_generator.clone()))
                 .0
         }
         .get_mut()
@@ -1042,7 +1147,7 @@ let i = all_storages.run(sys1);
         unsafe {
             &mut *storages
                 .entry(storage_id)
-                .or_insert_with(|| SBox::new_non_send_sync(f(), std::thread::current().id()))
+                .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id_generator.clone()))
                 .0
         }
         .get_mut()
@@ -1248,7 +1353,7 @@ for (i, j) in &mut iter {
             all_storages: self,
             all_borrow: None,
             current,
-            phantom: core::marker::PhantomData,
+            phantom: PhantomData,
         }
     }
 

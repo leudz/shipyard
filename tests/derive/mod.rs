@@ -35,7 +35,7 @@ fn default() {
         _vec: Vec<usize>,
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.borrow::<CustomView>().unwrap();
 }

@@ -20,14 +20,14 @@ pub use workload_modificator::WorkloadModificator;
 
 pub(crate) use info::TypeInfo;
 
-use crate::error;
 use crate::info::WorkloadInfo;
 use crate::scheduler::system::WorkloadRunIfFn;
 use crate::type_id::TypeId;
 use crate::World;
+use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use hashbrown::HashMap;
+use core::hash::BuildHasherDefault;
 
 /// List of indexes into both systems and system_names
 #[derive(Default)]
@@ -75,10 +75,10 @@ pub(crate) struct Scheduler {
     pub(crate) system_generators:
         Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     // system's `TypeId` to an index into both systems and system_names
-    lookup_table: HashMap<TypeId, usize>,
+    lookup_table: ShipHashMap<TypeId, usize>,
     /// workload name to list of "batches"
-    pub(crate) workloads: HashMap<Box<dyn Label>, Batches>,
-    pub(crate) workloads_info: HashMap<Box<dyn Label>, WorkloadInfo>,
+    pub(crate) workloads: ShipHashMap<Box<dyn Label>, Batches>,
+    pub(crate) workloads_info: ShipHashMap<Box<dyn Label>, WorkloadInfo>,
     pub(crate) default: Box<dyn Label>,
 }
 
@@ -88,9 +88,9 @@ impl Default for Scheduler {
             systems: Vec::new(),
             system_names: Vec::new(),
             system_generators: Vec::new(),
-            lookup_table: HashMap::new(),
-            workloads: HashMap::new(),
-            workloads_info: HashMap::new(),
+            lookup_table: ShipHashMap::with_hasher(BuildHasherDefault::default()),
+            workloads: ShipHashMap::with_hasher(BuildHasherDefault::default()),
+            workloads_info: ShipHashMap::with_hasher(BuildHasherDefault::default()),
             default: Box::new(""),
         }
     }

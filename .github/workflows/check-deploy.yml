@@ -54,7 +54,7 @@ jobs:
         with:
           components: miri
 
-      - run: cargo miri test --tests --lib --no-default-features
+      - run: cargo miri test --tests --lib --no-default-features --features=std
   clippy:
     runs-on: ubuntu-latest
     needs: changes

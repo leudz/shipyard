@@ -14,7 +14,7 @@ impl Component for I16 {}
 
 #[test]
 fn basic() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<U32>();
 
     world.run(
@@ -198,7 +198,7 @@ fn basic() {
 
 #[test]
 fn not_inserted() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<U32>();
 
     let (mut entities, mut u32s, mut i16s) = world
@@ -229,7 +229,7 @@ fn not_inserted() {
 
 #[test]
 fn not_modified() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<U32>();
 
     let (mut entities, mut u32s, mut i16s) = world
@@ -261,7 +261,7 @@ fn not_modified() {
 
 #[test]
 fn not_inserted_or_modified() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<U32>();
 
     let (mut entities, mut u32s, mut i16s) = world

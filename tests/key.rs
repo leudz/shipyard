@@ -8,7 +8,7 @@ impl Component for U32 {}
 
 #[test]
 fn key_equality() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     //create 3 entities
     let (e0, e1, e2) = world.run(

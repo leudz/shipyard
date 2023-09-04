@@ -10,7 +10,7 @@ fn type_check() {
     struct Energy(f32);
     impl Component for Energy {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
     let mut vm_life = world.borrow::<ViewMut<Life>>().unwrap();
@@ -36,7 +36,7 @@ fn non_packed() {
     struct I16(i16);
     impl Component for I16 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
@@ -76,7 +76,7 @@ fn update() {
     struct I16(i16);
     impl Component for I16 {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<(U32, I16)>();
 
     let (mut entities, mut u32s, mut i16s) = world
@@ -112,7 +112,7 @@ fn old_id() {
     struct U32(u32);
     impl Component for U32 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
         let entity = entities.add_entity(&mut u32s, U32(0));

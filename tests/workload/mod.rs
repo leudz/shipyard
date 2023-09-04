@@ -14,7 +14,7 @@ use shipyard::*;
 
 #[test]
 fn duplicate_name() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     Workload::new("")
         .with_system(|| {})
@@ -34,7 +34,7 @@ fn rename() {
         i.0 += 1;
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_unique(U32(0));
 
@@ -61,7 +61,7 @@ fn rename() {
 
 #[test]
 fn are_all_uniques_present_in_world() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_unique(U32(0));
 
@@ -101,8 +101,8 @@ fn are_all_uniques_present_in_world() {
 
 #[test]
 fn run_one_with_world() {
-    let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world1 = World::new();
+    let world2 = World::new();
 
     let builder = Workload::new("").with_system(|| {
         dbg!(1);
@@ -123,8 +123,8 @@ fn run_one_with_world() {
 
 #[test]
 fn run_with_world() {
-    let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world1 = World::new();
+    let world2 = World::new();
 
     let builder = Workload::new("")
         .with_system(|| {
@@ -153,7 +153,7 @@ fn run_with_world() {
 
 #[test]
 fn enable_tracking() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity(U32(0));
 
@@ -172,7 +172,7 @@ fn enable_tracking() {
 fn check_nested_workloads_run_if() {
     fn sys() {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_workload(|| {
         (sys.run_if(|| panic!()).into_workload().run_if(|| false),).into_workload()
@@ -189,7 +189,7 @@ fn check_run_if_error() {
 
     fn sys() {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_workload(|| (|| {}, sys.run_if(|_: UniqueView<USIZE>| true)).into_workload());
 
@@ -211,7 +211,7 @@ fn tracking_enabled() {
             .into_workload()
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_workload(w);
 

@@ -10,7 +10,7 @@ fn no_pack() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity(());
     let entity1 = world.add_entity((USIZE(0), U32(1)));
@@ -25,7 +25,7 @@ fn update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
@@ -42,7 +42,7 @@ fn cleared_update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
@@ -71,7 +71,7 @@ fn modified_update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
 
     let entity1 = world.add_entity((USIZE(1),));
@@ -95,7 +95,7 @@ fn bulk_single() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entities = world
         .bulk_add_entity((0..5).map(|i| (U32(i),)))
@@ -125,7 +125,7 @@ fn bulk() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entities = world
         .bulk_add_entity((0..5).map(|i| (U32(i), USIZE(i as usize))))

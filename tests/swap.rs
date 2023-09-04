@@ -6,7 +6,7 @@ fn no_pack() {
     struct U32(u32);
     impl Component for U32 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
         let entity0 = entities.add_entity(&mut u32s, U32(0));
@@ -25,7 +25,7 @@ fn update() {
     struct U32(u32);
     impl Component for U32 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.borrow::<ViewMut<U32>>().unwrap().track_all();
 

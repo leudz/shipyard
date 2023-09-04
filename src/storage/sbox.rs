@@ -2,7 +2,7 @@ use crate::atomic_refcell::AtomicRefCell;
 use crate::storage::Storage;
 use alloc::boxed::Box;
 #[cfg(feature = "thread_local")]
-use std::thread::ThreadId;
+use alloc::sync::Arc;
 
 /// Abstract away `T` from `AtomicRefCell<T>` to be able to store
 /// different types in a `HashMap<TypeId, Storage>`.
@@ -30,7 +30,10 @@ impl SBox {
     }
     #[cfg(feature = "thread_local")]
     #[inline]
-    pub(crate) fn new_non_send<T: Storage + Sync + 'static>(value: T, thread_id: ThreadId) -> Self {
+    pub(crate) fn new_non_send<T: Storage + Sync + 'static>(
+        value: T,
+        thread_id: Arc<dyn Fn() -> u64 + Send + Sync>,
+    ) -> Self {
         SBox(Box::into_raw(Box::new(AtomicRefCell::new_non_send(
             value, thread_id,
         ))))
@@ -42,7 +45,10 @@ impl SBox {
     }
     #[cfg(feature = "thread_local")]
     #[inline]
-    pub(crate) fn new_non_send_sync<T: Storage + 'static>(value: T, thread_id: ThreadId) -> Self {
+    pub(crate) fn new_non_send_sync<T: Storage + 'static>(
+        value: T,
+        thread_id: Arc<dyn Fn() -> u64 + Send + Sync>,
+    ) -> Self {
         SBox(Box::into_raw(Box::new(AtomicRefCell::new_non_send_sync(
             value, thread_id,
         ))))

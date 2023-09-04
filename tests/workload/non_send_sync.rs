@@ -52,7 +52,7 @@ fn tracking_enabled() {
             .into_workload()
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_workload(w);
 

@@ -10,7 +10,7 @@ impl Component for USIZE {}
 
 #[test]
 fn no_pack() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
         .unwrap();
@@ -41,7 +41,7 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
@@ -85,7 +85,7 @@ fn update() {
 
 #[test]
 fn no_pack_unchecked() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
         .unwrap();
@@ -98,7 +98,7 @@ fn no_pack_unchecked() {
 
 #[test]
 fn workload_add() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let eid = world.add_entity(());
 
@@ -121,7 +121,7 @@ fn workload_add() {
 
 #[test]
 fn workload_add_and_remove() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let eid = world.add_entity(());
 
@@ -147,8 +147,8 @@ fn workload_add_and_remove() {
 
 #[test]
 fn move_between_worlds() {
-    let mut world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let mut world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world1 = World::new();
+    let mut world2 = World::new();
 
     let entity1 = world1.add_entity((USIZE(1), U32(2)));
 

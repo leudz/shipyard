@@ -12,7 +12,7 @@ fn no_pack() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
         .unwrap();
@@ -39,7 +39,7 @@ fn update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
@@ -75,7 +75,7 @@ fn old_key() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let entity = world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -102,7 +102,7 @@ fn newer_key() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -128,7 +128,7 @@ fn track_reset_with_timestamp() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 

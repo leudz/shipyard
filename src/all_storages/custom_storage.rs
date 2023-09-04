@@ -352,7 +352,7 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            if std::thread::current().id() != self.thread_id {
+            if (self.thread_id_generator)() != self.main_thread_id {
                 return Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -366,7 +366,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| SBox::new_non_send(f(), self.thread_id))
+                    .or_insert_with(|| SBox::new_non_send(f(), self.thread_id_generator.clone()))
                     .0
             }
             .borrow()
@@ -478,7 +478,7 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            if std::thread::current().id() != self.thread_id {
+            if (self.thread_id_generator)() != self.main_thread_id {
                 return Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -492,7 +492,9 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id))
+                    .or_insert_with(|| {
+                        SBox::new_non_send_sync(f(), self.thread_id_generator.clone())
+                    })
                     .0
             }
             .borrow()
@@ -602,7 +604,7 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            if std::thread::current().id() != self.thread_id {
+            if (self.thread_id_generator)() != self.main_thread_id {
                 return Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -616,7 +618,7 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| SBox::new_non_send(f(), self.thread_id))
+                    .or_insert_with(|| SBox::new_non_send(f(), self.thread_id_generator.clone()))
                     .0
             }
             .borrow_mut()
@@ -728,7 +730,7 @@ impl CustomStorageAccess for AllStorages {
                 }),
             }
         } else {
-            if std::thread::current().id() != self.thread_id {
+            if (self.thread_id_generator)() != self.main_thread_id {
                 return Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -742,7 +744,9 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe {
                 &*storages
                     .entry(storage_id)
-                    .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id))
+                    .or_insert_with(|| {
+                        SBox::new_non_send_sync(f(), self.thread_id_generator.clone())
+                    })
                     .0
             }
             .borrow_mut()

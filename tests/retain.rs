@@ -6,7 +6,7 @@ impl Component for U32 {}
 
 #[test]
 fn no_pack() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let eid0 = world.add_entity(U32(0));
     let eid1 = world.add_entity(U32(1));
@@ -23,7 +23,7 @@ fn no_pack() {
 
 #[test]
 fn track() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<U32>();
 
     let eid0 = world.add_entity(U32(0));

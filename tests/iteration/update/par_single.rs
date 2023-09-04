@@ -7,7 +7,9 @@ impl Component for U32 {}
 
 #[test]
 fn filter() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::builder()
+        .with_custom_lock::<parking_lot::RawRwLock>()
+        .build();
     world.track_all::<U32>();
     let (mut entities, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32, track::All>)>()

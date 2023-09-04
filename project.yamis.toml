@@ -11,7 +11,15 @@ serial = ["clean", "_miri"]
 
 [tasks._miri]
 program = "cargo"
-args = ["+nightly", "miri", "test", "--tests", "--lib", "--no-default-features"]
+args = [
+    "+nightly",
+    "miri",
+    "test",
+    "--tests",
+    "--lib",
+    "--no-default-features",
+    "--features=std",
+]
 private = true
 
 [tasks.clean]

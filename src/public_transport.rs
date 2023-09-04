@@ -94,9 +94,9 @@ impl<T> Drop for WriteGuard<'_, T> {
 }
 
 impl<T> RwLock<T> {
-    pub(crate) fn new_custom<L: ShipyardRwLock + Send + Sync>(value: T) -> Self {
+    pub(crate) fn new_custom(lock: Box<dyn ShipyardRwLock + Send + Sync>, value: T) -> Self {
         RwLock::Custom {
-            lock: L::new(),
+            lock,
             value: core::cell::UnsafeCell::new(value),
         }
     }

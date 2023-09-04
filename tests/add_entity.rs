@@ -10,7 +10,7 @@ fn no_pack() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.run(|mut entities: EntitiesViewMut| {
         entities.add_entity((), ());
     });
@@ -28,7 +28,7 @@ fn update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
@@ -45,7 +45,7 @@ fn cleared_update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
@@ -68,7 +68,7 @@ fn modified_update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
     let (mut entities, mut usizes) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
@@ -90,7 +90,7 @@ fn bulk() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
@@ -126,7 +126,7 @@ fn bulk_unequal_length() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity((U32(0),));
 
@@ -140,7 +140,7 @@ fn bulk_unequal_length() {
 
 #[test]
 fn workload() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_workload(|| {
         (

@@ -28,7 +28,7 @@ impl Component for U32 {}
 
 #[test]
 fn run() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
             entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
@@ -73,7 +73,7 @@ fn system() {
         });
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -110,7 +110,7 @@ fn systems() {
         });
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -140,7 +140,7 @@ fn systems() {
 fn simple_parallel_sum() {
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -161,7 +161,7 @@ fn simple_parallel_sum() {
 fn parallel_iterator() {
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -194,7 +194,7 @@ fn two_workloads() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
@@ -217,7 +217,7 @@ fn two_bad_workloads() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
@@ -232,7 +232,7 @@ fn two_bad_workloads() {
 #[test]
 #[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn add_component_with_old_key() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let entity = {
         let (mut entities, mut usizes, mut u32s) = world
@@ -273,7 +273,7 @@ fn par_update_pack() {
 
     use rayon::prelude::*;
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
 
     world.run(
@@ -318,7 +318,7 @@ fn par_multiple_update_pack() {
 
     use rayon::prelude::*;
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<U32>();
 
     world.run(
@@ -389,7 +389,7 @@ fn par_update_filter() {
 
     use rayon::prelude::*;
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.track_all::<USIZE>();
 
     world.run(
@@ -426,7 +426,7 @@ fn par_update_filter() {
 
 #[test]
 fn contains() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |mut entities: EntitiesViewMut, mut usizes: ViewMut<USIZE>, mut u32s: ViewMut<U32>| {
@@ -446,7 +446,7 @@ fn contains() {
 
 #[test]
 fn debug() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity((USIZE(0),));
     world.add_entity((USIZE(1),));

@@ -12,7 +12,7 @@ fn no_pack() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entity1 = world.add_entity((USIZE(0), U32(1u32)));
     let entity2 = world.add_entity((USIZE(2), U32(3u32)));
@@ -39,7 +39,7 @@ fn update() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
@@ -76,7 +76,7 @@ fn old_key() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entity = world.add_entity((USIZE(0), U32(1)));
     world.delete_entity(entity);
@@ -93,7 +93,7 @@ fn newer_key() {
     struct USIZE(usize);
     impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entity = world.add_entity((USIZE(0), U32(1)));
 

@@ -8,7 +8,7 @@ impl Unique for USIZE {}
 
 #[test]
 fn unique_storage() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.add_unique(USIZE(0));
 
     world.run(|mut x: UniqueViewMut<USIZE>| {
@@ -35,7 +35,7 @@ fn unique_storage() {
 
 #[test]
 fn not_unique_storage() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     match world.borrow::<UniqueView<USIZE>>().err() {
         Some(get_storage) => assert_eq!(
@@ -142,9 +142,7 @@ fn non_send_sync() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn non_send_remove() {
-    let world: &'static World = Box::leak(Box::new(World::new_with_custom_lock::<
-        parking_lot::RawRwLock,
-    >()));
+    let world: &'static World = Box::leak(Box::new(World::new()));
 
     world.add_unique_non_send(USIZE(0));
 

@@ -81,7 +81,10 @@ pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_distinct_component::AddDistinctComponent;
 pub use add_entity::AddEntity;
-pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage};
+pub use all_storages::{
+    AllStorages, CustomStorageAccess, LockPresent, MissingLock, MissingThreadId, ThreadIdPresent,
+    TupleDeleteAny, TupleRetainStorage,
+};
 pub use atomic_refcell::{ARef, ARefMut};
 #[doc(hidden)]
 pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
@@ -126,3 +129,26 @@ pub use views::{
     View, ViewMut,
 };
 pub use world::World;
+
+#[cfg(not(feature = "std"))]
+type ShipHashMap<K, V> =
+    hashbrown::HashMap<K, V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
+#[cfg(feature = "std")]
+type ShipHashMap<K, V> = hashbrown::HashMap<K, V>;
+
+#[cfg(not(feature = "std"))]
+type ShipHashSet<V> =
+    hashbrown::HashSet<V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
+#[cfg(feature = "std")]
+type ShipHashSet<V> = hashbrown::HashSet<V>;
+
+#[cfg(feature = "std")]
+fn std_thread_id_generator() -> u64 {
+    use std::thread::ThreadId;
+
+    let thread_id = std::thread::current().id();
+    let thread_id: *const ThreadId = &thread_id;
+    let thread_id: *const u64 = thread_id as _;
+
+    unsafe { *thread_id }
+}

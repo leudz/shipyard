@@ -4,11 +4,13 @@ use crate::borrow::Mutability;
 use crate::scheduler::{AsLabel, Label};
 use crate::storage::StorageId;
 pub use crate::type_id::TypeId;
+use crate::ShipHashMap;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::hash::BuildHasherDefault;
 
 /// Contains information related to a workload.
 ///
@@ -177,12 +179,12 @@ impl core::hash::Hash for TypeInfo {
 /// Contains a list of workloads, their systems and which storages these systems borrow.
 #[derive(Default, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
-pub struct WorkloadsInfo(pub hashbrown::HashMap<String, WorkloadInfo>);
+pub struct WorkloadsInfo(pub ShipHashMap<String, WorkloadInfo>);
 
 impl WorkloadsInfo {
     /// Creates an empty [`WorkloadsInfo`].
     pub fn new() -> WorkloadsInfo {
-        WorkloadsInfo(hashbrown::HashMap::new())
+        WorkloadsInfo(ShipHashMap::with_hasher(BuildHasherDefault::default()))
     }
 }
 

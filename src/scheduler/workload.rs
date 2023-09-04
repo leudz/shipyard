@@ -11,7 +11,7 @@ use crate::storage::StorageId;
 use crate::type_id::TypeId;
 use crate::unique::UniqueStorage;
 use crate::world::World;
-use crate::{error, IntoWorkload, IntoWorkloadSystem};
+use crate::{error, IntoWorkload, IntoWorkloadSystem, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::format;
 // macro not module
@@ -20,7 +20,7 @@ use alloc::vec::Vec;
 use core::any::type_name;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
-use hashbrown::HashMap;
+use core::hash::BuildHasherDefault;
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -40,10 +40,10 @@ pub struct ScheduledWorkload {
     system_generators: Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     // system's `TypeId` to an index into both systems and system_names
     #[allow(unused)]
-    lookup_table: HashMap<TypeId, usize>,
+    lookup_table: ShipHashMap<TypeId, usize>,
     tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     /// workload name to list of "batches"
-    workloads: HashMap<Box<dyn Label>, Batches>,
+    workloads: ShipHashMap<Box<dyn Label>, Batches>,
 }
 
 impl ScheduledWorkload {
@@ -515,9 +515,9 @@ impl Workload {
             systems: Vec::new(),
             system_names: Vec::new(),
             system_generators: Vec::new(),
-            lookup_table: HashMap::new(),
+            lookup_table: ShipHashMap::with_hasher(BuildHasherDefault::default()),
             tracking_to_enable: Vec::new(),
-            workloads: HashMap::new(),
+            workloads: ShipHashMap::with_hasher(BuildHasherDefault::default()),
         };
 
         let mut default: Box<dyn Label> = Box::new("");
@@ -546,7 +546,7 @@ impl Workload {
 fn check_uniques_in_systems(
     system: &WorkloadSystem,
     unique_name: &str,
-    storages: &HashMap<StorageId, crate::storage::SBox>,
+    storages: &ShipHashMap<StorageId, crate::storage::SBox>,
 ) -> Option<Result<(), error::UniquePresence>> {
     let WorkloadSystem {
         borrow_constraints, ..
@@ -568,9 +568,9 @@ fn create_workload(
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
     system_names: &mut Vec<Box<dyn Label>>,
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
-    lookup_table: &mut HashMap<TypeId, usize>,
+    lookup_table: &mut ShipHashMap<TypeId, usize>,
     tracking_to_enable: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
-    workloads: &mut HashMap<Box<dyn Label>, Batches>,
+    workloads: &mut ShipHashMap<Box<dyn Label>, Batches>,
     default: &mut Box<dyn Label>,
 ) -> Result<WorkloadInfo, error::AddWorkload> {
     if workloads.contains_key(&*builder.name) {
@@ -705,8 +705,8 @@ fn create_workload(
     // a before c
     // b after a
     // c after b
-    let mut memoize_before = HashMap::new();
-    let mut memoize_after = HashMap::new();
+    let mut memoize_before = ShipHashMap::with_hasher(BuildHasherDefault::default());
+    let mut memoize_after = ShipHashMap::with_hasher(BuildHasherDefault::default());
     let mut collected_tags = Vec::new();
     let mut collected_require_in_workload = Vec::new();
     let mut collected_before = Vec::new();
@@ -1016,7 +1016,7 @@ fn create_workload(
 fn dependencies(
     index: usize,
     collected_tags: &[Vec<Box<dyn Label>>],
-    memoize: &mut HashMap<usize, DedupedLabels>,
+    memoize: &mut ShipHashMap<usize, DedupedLabels>,
     new_requirements: &mut bool,
 ) -> Result<(), error::ImpossibleRequirements> {
     let mut new = memoize.get(&index).unwrap().clone();
@@ -1335,8 +1335,8 @@ fn insert_before_after_system(
     display_name: &dyn Label,
     borrow_constraints: Vec<TypeInfo>,
     run_if: Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>,
-    memoize_before: &HashMap<usize, DedupedLabels>,
-    memoize_after: &HashMap<usize, DedupedLabels>,
+    memoize_before: &ShipHashMap<usize, DedupedLabels>,
+    memoize_after: &ShipHashMap<usize, DedupedLabels>,
     seq_system_index_map: &mut Vec<usize>,
     par_system_index_map: &mut Vec<(Option<usize>, Vec<usize>)>,
 ) -> Result<(), error::AddWorkload> {
@@ -1490,8 +1490,8 @@ fn insert_before_after_system(
 
 fn valid_sequential(
     index: usize,
-    memoize_before: &HashMap<usize, DedupedLabels>,
-    memoize_after: &HashMap<usize, DedupedLabels>,
+    memoize_before: &ShipHashMap<usize, DedupedLabels>,
+    memoize_after: &ShipHashMap<usize, DedupedLabels>,
     sequential_len: usize,
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[usize],
@@ -1535,8 +1535,8 @@ fn valid_sequential(
 
 fn valid_parallel(
     index: usize,
-    memoize_before: &HashMap<usize, DedupedLabels>,
-    memoize_after: &HashMap<usize, DedupedLabels>,
+    memoize_before: &ShipHashMap<usize, DedupedLabels>,
+    memoize_after: &ShipHashMap<usize, DedupedLabels>,
     parallel: &[(Option<usize>, Vec<usize>)],
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[(Option<usize>, Vec<usize>)],
@@ -1619,7 +1619,7 @@ fn valid_parallel(
 fn insert_system_in_scheduler(
     mut system: WorkloadSystem,
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync>>,
-    lookup_table: &mut HashMap<TypeId, usize>,
+    lookup_table: &mut ShipHashMap<TypeId, usize>,
     collected_systems: &mut Vec<(usize, WorkloadSystem)>,
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync>>,
     system_names: &mut Vec<Box<dyn Label>>,
@@ -2559,7 +2559,9 @@ mod tests {
         fn w() -> Workload {
             (|| {}).into_workload()
         }
-        let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+        let world = World::builder()
+            .with_custom_lock::<parking_lot::RawRwLock>()
+            .build();
         world.add_workload(w);
         assert!(world.contains_workload(WorkloadLabel {
             type_id: TypeId::of_val(&w),
