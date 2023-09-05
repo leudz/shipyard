@@ -128,7 +128,7 @@ pub use views::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
 };
-pub use world::World;
+pub use world::{World, WorldBuilder};
 
 #[cfg(not(feature = "std"))]
 type ShipHashMap<K, V> =
