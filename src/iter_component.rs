@@ -23,6 +23,7 @@ const ACCESS_FACTOR: usize = 3;
 /// Trait used as bound for [`World::iter`] and [`AllStorages::iter`].
 ///
 /// [`World::get`]: crate::World::get
+/// [`World::iter`]: crate::World::iter
 pub trait IterComponent {
     #[allow(missing_docs)]
     type Storage<'a>: AbstractMut;

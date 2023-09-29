@@ -1,7 +1,8 @@
-use crate::all_storages::{
-    AllStorages, AllStoragesBuilder, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage,
-};
-use crate::all_storages::{LockPresent, ThreadIdPresent};
+mod builder;
+
+pub use builder::WorldBuilder;
+
+use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage};
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
 use crate::component::{Component, Unique};
@@ -12,7 +13,6 @@ use crate::get_component::GetComponent;
 use crate::info::WorkloadsInfo;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
-use crate::public_transport::ShipyardRwLock;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::Label;
@@ -26,107 +26,6 @@ use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
 use core::sync::atomic::AtomicU32;
-
-pub struct WorldBuilder<Lock, ThreadId> {
-    all_storages_builder: AllStoragesBuilder<Lock, ThreadId>,
-    #[cfg(feature = "parallel")]
-    thread_pool: Option<rayon::ThreadPool>,
-}
-
-impl World {
-    /// Builder for [`World`] when one wants custom lock, custom thread pool
-    /// or custom thread id provider function.
-    #[cfg(feature = "std")]
-    pub fn builder() -> WorldBuilder<LockPresent, ThreadIdPresent> {
-        WorldBuilder {
-            all_storages_builder: AllStoragesBuilder::<LockPresent, ThreadIdPresent>::new(),
-            #[cfg(feature = "parallel")]
-            thread_pool: None,
-        }
-    }
-
-    /// Builder for [`World`] when one wants custom lock, custom thread pool
-    /// or custom thread id provider function.
-    #[cfg(all(not(feature = "std"), not(feature = "thread_local")))]
-    pub fn builder() -> WorldBuilder<crate::all_storages::MissingLock, ThreadIdPresent> {
-        WorldBuilder {
-            all_storages_builder: AllStoragesBuilder::<
-                crate::all_storages::MissingLock,
-                ThreadIdPresent,
-            >::new(),
-        }
-    }
-
-    /// Builder for [`World`] when one wants custom lock, custom thread pool
-    /// or custom thread id provider function.
-    #[cfg(all(not(feature = "std"), feature = "thread_local"))]
-    pub fn builder(
-    ) -> WorldBuilder<crate::all_storages::MissingLock, crate::all_storages::MissingThreadId> {
-        WorldBuilder {
-            all_storages_builder: AllStoragesBuilder::<
-                crate::all_storages::MissingLock,
-                crate::all_storages::MissingThreadId,
-            >::new(),
-        }
-    }
-}
-
-impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
-    /// Use a custom `RwLock` for [`AllStorages`].
-    pub fn with_custom_lock<L: ShipyardRwLock + Send + Sync>(
-        self,
-    ) -> WorldBuilder<LockPresent, ThreadId> {
-        WorldBuilder {
-            all_storages_builder: self.all_storages_builder.with_custom_lock::<L>(),
-            #[cfg(feature = "parallel")]
-            thread_pool: self.thread_pool,
-        }
-    }
-
-    /// Use a custom function to provide the current thread id.
-    #[cfg(feature = "thread_local")]
-    pub fn with_custom_thread_id(
-        self,
-        thread_id: impl Fn() -> u64 + Send + Sync + 'static,
-    ) -> WorldBuilder<Lock, ThreadIdPresent> {
-        WorldBuilder {
-            all_storages_builder: self.all_storages_builder.with_custom_thread_id(thread_id),
-            #[cfg(feature = "parallel")]
-            thread_pool: self.thread_pool,
-        }
-    }
-
-    /// Use a local [`ThreadPool`](rayon::ThreadPool).
-    ///
-    /// This is useful when you have multiple [`Worlds`](World) or something else using [`rayon`] and want them to stay isolated.\
-    /// For example with a single [`ThreadPool`](rayon::ThreadPool), a panic would take down all [`Worlds`](World).\
-    /// With a [`ThreadPool`](rayon::ThreadPool) per [`World`] we can keep the panic confined to a single [`World`].
-    #[cfg(feature = "parallel")]
-    pub fn with_local_thread_pool(
-        mut self,
-        thread_pool: rayon::ThreadPool,
-    ) -> WorldBuilder<Lock, ThreadId> {
-        self.thread_pool = Some(thread_pool);
-
-        self
-    }
-}
-
-impl WorldBuilder<LockPresent, ThreadIdPresent> {
-    pub fn build(self) -> World {
-        let counter = Arc::new(AtomicU32::new(1));
-
-        let all_storages = self.all_storages_builder.build(counter.clone());
-
-        World {
-            all_storages,
-            scheduler: AtomicRefCell::new(Default::default()),
-            counter,
-            #[cfg(feature = "parallel")]
-            thread_pool: self.thread_pool,
-        }
-    }
-}
 
 /// `World` contains all data this library will manipulate.
 pub struct World {

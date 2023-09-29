@@ -87,7 +87,7 @@ where
     }
 
     /// Inside a workload returns `true` if `entity`'s component was inserted since the last run of this system.\
-    /// Outside workloads returns `true` if `entity`'s component was inserted since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
+    /// Outside workloads returns `true` if `entity`'s component was inserted since the last call to [`clear_all_inserted`](crate::ViewMut::clear_all_inserted).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
@@ -106,7 +106,7 @@ where
     }
 
     /// Inside a workload returns `true` if `entity`'s component was modified since the last run of this system.\
-    /// Outside workloads returns `true` if `entity`'s component was modified since the last call to [`clear_all_modified`](ViewMut::clear_all_modified).\
+    /// Outside workloads returns `true` if `entity`'s component was modified since the last call to [`clear_all_modified`](crate::ViewMut::clear_all_modified).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
@@ -130,7 +130,7 @@ where
     }
 
     /// Inside a workload returns `true` if `entity`'s component was inserted or modified since the last run of this system.\
-    /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
+    /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last call to [`clear_all_inserted`](crate::ViewMut::clear_all_inserted).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {

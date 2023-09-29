@@ -34,14 +34,14 @@ impl<T: Unique> UniqueView<'_, T> {
 impl<T: Unique> UniqueView<'_, T> {
     /// Returns `true` if the component was inserted before the last [`clear_inserted`] call.  
     ///
-    /// [`clear_inserted`]: UniqueViewMut::clear_inserted
+    /// [`clear_inserted`]: crate::UniqueViewMut::clear_inserted
     #[inline]
     pub fn is_inserted(&self) -> bool {
         is_track_within_bounds(self.unique.insert, self.last_insertion, self.current)
     }
     /// Returns `true` is the component was modified since the last [`clear_modified`] call.
     ///
-    /// [`clear_modified`]: UniqueViewMut::clear_modified
+    /// [`clear_modified`]: crate::UniqueViewMut::clear_modified
     #[inline]
     pub fn is_modified(&self) -> bool {
         is_track_within_bounds(
@@ -52,8 +52,8 @@ impl<T: Unique> UniqueView<'_, T> {
     }
     /// Returns `true` if the component was inserted or modified since the last [`clear_inserted`] or [`clear_modified`] call.  
     ///
-    /// [`clear_inserted`]: UniqueViewMut::clear_inserted
-    /// [`clear_modified`]: UniqueViewMut::clear_modified
+    /// [`clear_inserted`]: crate::UniqueViewMut::clear_inserted
+    /// [`clear_modified`]: crate::UniqueViewMut::clear_modified
     #[inline]
     pub fn is_inserted_or_modified(&self) -> bool {
         self.is_inserted() || self.is_modified()
