@@ -2610,4 +2610,28 @@ mod tests {
     fn with_system_return_type() {
         Workload::new("").with_system(|| 0usize).build().unwrap();
     }
+
+    #[test]
+    fn try_system_run_if() {
+        fn try_sys() -> Result<(), error::MissingComponent> {
+            Err(error::MissingComponent {
+                id: crate::EntityId::dead(),
+                name: "",
+            })
+        }
+
+        let (workload, _) = Workload::new("")
+            .with_try_system(try_sys.into_workload_try_system().unwrap().run_if(|| true))
+            .build()
+            .unwrap();
+
+        let world = World::new();
+
+        assert!(workload
+            .run_with_world(&world)
+            .err()
+            .unwrap()
+            .custom_error()
+            .is_some());
+    }
 }

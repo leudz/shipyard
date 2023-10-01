@@ -107,6 +107,26 @@ where
     }
 }
 
+// The `Result` type is not actually used and the error type can be anything
+impl IntoWorkloadTrySystem<WorkloadSystem, Result<(), error::InvalidSystem>> for WorkloadSystem {
+    /// Wraps a fallible function in a struct containing all information required by a workload.  
+    /// The workload will stop if an error is returned.
+    #[cfg(feature = "std")]
+    fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
+        self,
+    ) -> Result<WorkloadSystem, error::InvalidSystem> {
+        Ok(self)
+    }
+    /// Wraps a fallible function in a struct containing all information required by a workload.  
+    /// The workload will stop if an error is returned.
+    #[cfg(not(feature = "std"))]
+    fn into_workload_try_system<Ok, Err: 'static + Send + Any>(
+        self,
+    ) -> Result<WorkloadSystem, error::InvalidSystem> {
+        Ok(self)
+    }
+}
+
 macro_rules! impl_into_workload_try_system {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: WorldBorrow + BorrowInfo,)+ R: 'static, Func> IntoWorkloadTrySystem<($($type,)+), R> for Func
