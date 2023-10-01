@@ -1,6 +1,7 @@
 use crate::atomic_refcell::ARef;
 use crate::borrow::Borrow;
 use crate::error;
+use crate::tracking::TrackingTimestamp;
 use crate::views::{AllStoragesView, AllStoragesViewMut};
 use crate::world::World;
 
@@ -12,8 +13,8 @@ pub trait WorldBorrow {
     /// This function is where the actual borrowing happens.
     fn world_borrow(
         world: &World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::WorldView<'_>, error::GetStorage>;
 }
 
@@ -22,8 +23,8 @@ impl<T: Borrow> WorldBorrow for T {
 
     fn world_borrow(
         world: &World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::WorldView<'_>, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             ARef::destructure(
@@ -43,8 +44,8 @@ impl WorldBorrow for AllStoragesView<'_> {
 
     fn world_borrow(
         world: &World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<TrackingTimestamp>,
+        _current: TrackingTimestamp,
     ) -> Result<Self::WorldView<'_>, error::GetStorage> {
         world
             .all_storages
@@ -60,8 +61,8 @@ impl WorldBorrow for AllStoragesViewMut<'_> {
     #[inline]
     fn world_borrow(
         world: &World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<TrackingTimestamp>,
+        _current: TrackingTimestamp,
     ) -> Result<Self::WorldView<'_>, error::GetStorage> {
         world
             .all_storages

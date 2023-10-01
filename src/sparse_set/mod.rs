@@ -23,8 +23,7 @@ use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::r#mut::Mut;
 use crate::storage::{Storage, StorageId};
-use crate::tracking::Tracking;
-use crate::tracking::{is_track_within_bounds, TrackingTimestamp};
+use crate::tracking::{Tracking, TrackingTimestamp};
 use crate::{error, track};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -49,12 +48,12 @@ pub struct SparseSet<T: Component> {
     pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modified: u32,
-    pub(crate) insertion_data: Vec<u32>,
-    pub(crate) modification_data: Vec<u32>,
-    pub(crate) deletion_data: Vec<(EntityId, u32, T)>,
-    pub(crate) removal_data: Vec<(EntityId, u32)>,
+    pub(crate) last_insert: TrackingTimestamp,
+    pub(crate) last_modified: TrackingTimestamp,
+    pub(crate) insertion_data: Vec<TrackingTimestamp>,
+    pub(crate) modification_data: Vec<TrackingTimestamp>,
+    pub(crate) deletion_data: Vec<(EntityId, TrackingTimestamp, T)>,
+    pub(crate) removal_data: Vec<(EntityId, TrackingTimestamp)>,
     pub(crate) is_tracking_insertion: bool,
     pub(crate) is_tracking_modification: bool,
     pub(crate) is_tracking_deletion: bool,
@@ -80,8 +79,8 @@ impl<T: Component> SparseSet<T> {
             sparse: SparseArray::new(),
             dense: Vec::new(),
             data: Vec::new(),
-            last_insert: 0,
-            last_modified: 0,
+            last_insert: TrackingTimestamp::new(0),
+            last_modified: TrackingTimestamp::new(0),
             insertion_data: Vec::new(),
             modification_data: Vec::new(),
             deletion_data: Vec::new(),
@@ -195,7 +194,12 @@ impl<T: Component> SparseSet<T> {
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
     #[track_caller]
-    pub(crate) fn insert(&mut self, entity: EntityId, value: T, current: u32) -> Option<T> {
+    pub(crate) fn insert(
+        &mut self,
+        entity: EntityId,
+        value: T,
+        current: TrackingTimestamp,
+    ) -> Option<T> {
         self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
@@ -215,7 +219,9 @@ impl<T: Component> SparseSet<T> {
                 self.insertion_data.push(current);
             }
             if self.is_tracking_modification {
-                self.modification_data.push(0);
+                self.modification_data.push(TrackingTimestamp::new(
+                    self.last_modified.get().wrapping_sub(1),
+                ));
             }
 
             self.dense.push(entity);
@@ -261,7 +267,7 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Same as `delete` but checks tracking at runtime.
     #[inline]
-    pub(crate) fn dyn_delete(&mut self, entity: EntityId, current: u32) -> bool {
+    pub(crate) fn dyn_delete(&mut self, entity: EntityId, current: TrackingTimestamp) -> bool {
         if let Some(component) = self.actual_remove(entity) {
             if self.is_tracking_deletion() {
                 self.deletion_data.push((entity, current, component));
@@ -275,7 +281,7 @@ impl<T: Component> SparseSet<T> {
 
     /// Same as `remove` but checks tracking at runtime.
     #[inline]
-    pub(crate) fn dyn_remove(&mut self, entity: EntityId, current: u32) -> Option<T> {
+    pub(crate) fn dyn_remove(&mut self, entity: EntityId, current: TrackingTimestamp) -> Option<T> {
         let component = self.actual_remove(entity);
 
         if component.is_some() && self.is_tracking_removal() {
@@ -330,15 +336,15 @@ impl<T: Component> SparseSet<T> {
 
 impl<T: Component> SparseSet<T> {
     /// Removes the *inserted* flag on all components of this storage.
-    pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted(&mut self, current: TrackingTimestamp) {
         self.last_insert = current;
     }
     /// Removes the *modified* flag on all components of this storage.
-    pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_modified(&mut self, current: TrackingTimestamp) {
         self.last_modified = current;
     }
     /// Removes the *inserted* and *modified* flags on all components of this storage.
-    pub(crate) fn private_clear_all_inserted_and_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted_and_modified(&mut self, current: TrackingTimestamp) {
         self.last_insert = current;
         self.last_modified = current;
     }
@@ -348,9 +354,8 @@ impl<T: Component> SparseSet<T> {
     }
     /// Clear all deletion tracking data older than some timestamp.
     pub fn clear_all_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
-        self.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        self.deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
     }
     /// Clear all removal tracking data.
     pub fn clear_all_removed(&mut self) {
@@ -359,7 +364,7 @@ impl<T: Component> SparseSet<T> {
     /// Clear all removal tracking data older than some timestamp.
     pub fn clear_all_removed_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
         self.removal_data
-            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
     /// Clear all deletion and removal tracking data.
     pub fn clear_all_removed_and_deleted(&mut self) {
@@ -370,11 +375,10 @@ impl<T: Component> SparseSet<T> {
         &mut self,
         timestamp: TrackingTimestamp,
     ) {
-        self.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        self.deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
         self.removal_data
-            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
 }
 
@@ -385,7 +389,7 @@ impl<T: Component> SparseSet<T> {
             self.is_tracking_insertion = true;
 
             self.insertion_data
-                .extend(core::iter::repeat(0).take(self.dense.len()));
+                .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
         }
 
         self
@@ -396,7 +400,7 @@ impl<T: Component> SparseSet<T> {
             self.is_tracking_modification = true;
 
             self.modification_data
-                .extend(core::iter::repeat(0).take(self.dense.len()));
+                .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
         }
 
         self
@@ -523,7 +527,7 @@ impl<T: Component> SparseSet<T> {
         a: EntityId,
         b: EntityId,
         f: F,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> R {
         let a_index = self.index_of(a).unwrap_or_else(move || {
             panic!(
@@ -565,7 +569,7 @@ impl<T: Component> SparseSet<T> {
         a: EntityId,
         b: EntityId,
         f: F,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> R {
         let a_index = self.index_of(a).unwrap_or_else(move || {
             panic!(
@@ -596,7 +600,7 @@ impl<T: Component> SparseSet<T> {
     }
 
     /// Deletes all components in this storage.
-    pub(crate) fn private_clear(&mut self, current: u32) {
+    pub(crate) fn private_clear(&mut self, current: TrackingTimestamp) {
         for &id in &self.dense {
             unsafe {
                 *self.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -619,7 +623,7 @@ impl<T: Component> SparseSet<T> {
     }
 
     /// Creates a draining iterator that empties the storage and yields the removed items.
-    pub(crate) fn private_drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
+    pub(crate) fn private_drain(&mut self, current: TrackingTimestamp) -> SparseSetDrain<'_, T> {
         if self.is_tracking_removal {
             self.removal_data
                 .extend(self.dense.iter().map(|&entity| (entity, current)));
@@ -648,7 +652,7 @@ impl<T: Component> SparseSet<T> {
 
     pub(crate) fn private_retain<F: FnMut(EntityId, &T) -> bool>(
         &mut self,
-        current: u32,
+        current: TrackingTimestamp,
         mut f: F,
     ) {
         let mut removed = 0;
@@ -667,7 +671,7 @@ impl<T: Component> SparseSet<T> {
 
     pub(crate) fn private_retain_mut<F: FnMut(EntityId, Mut<'_, T>) -> bool>(
         &mut self,
-        current: u32,
+        current: TrackingTimestamp,
         mut f: F,
     ) {
         let mut removed = 0;
@@ -698,11 +702,11 @@ impl<T: Ord + Component> SparseSet<T> {
 
 impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
     #[inline]
-    fn delete(&mut self, entity: EntityId, current: u32) {
+    fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
         self.dyn_delete(entity, current);
     }
     #[inline]
-    fn clear(&mut self, current: u32) {
+    fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -711,14 +715,16 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
             allocated_memory_bytes: self.sparse.reserved_memory()
                 + (self.dense.capacity() * core::mem::size_of::<EntityId>())
                 + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
+                + (self.insertion_data.capacity() * core::mem::size_of::<TrackingTimestamp>())
+                + (self.modification_data.capacity() * core::mem::size_of::<TrackingTimestamp>())
                 + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
                 + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
                 + core::mem::size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
                 + (self.dense.len() * core::mem::size_of::<EntityId>())
                 + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
+                + (self.insertion_data.len() * core::mem::size_of::<TrackingTimestamp>())
+                + (self.modification_data.len() * core::mem::size_of::<TrackingTimestamp>())
                 + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
                 + (self.removal_data.len() * core::mem::size_of::<EntityId>())
                 + core::mem::size_of::<Self>(),
@@ -736,12 +742,11 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
         self.removal_data.clear();
     }
     fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
-        self.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        self.deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
 
         self.removal_data
-            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
     #[inline]
     #[track_caller]
@@ -750,8 +755,8 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
         other_all_storages: &mut AllStorages,
         from: EntityId,
         to: EntityId,
-        current: u32,
-        other_current: u32,
+        current: TrackingTimestamp,
+        other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
             let other_sparse_set = other_all_storages.exclusive_storage_or_insert_mut(
@@ -767,11 +772,11 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
 #[cfg(feature = "thread_local")]
 impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
     #[inline]
-    fn delete(&mut self, entity: EntityId, current: u32) {
+    fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
         self.dyn_delete(entity, current);
     }
     #[inline]
-    fn clear(&mut self, current: u32) {
+    fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -805,12 +810,11 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
         self.removal_data.clear();
     }
     fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
-        self.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        self.deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
 
         self.removal_data
-            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
     #[inline]
     #[track_caller]
@@ -819,8 +823,8 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
         other_all_storages: &mut AllStorages,
         from: EntityId,
         to: EntityId,
-        current: u32,
-        other_current: u32,
+        current: TrackingTimestamp,
+        other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
             let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_send_mut(
@@ -836,11 +840,11 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
 #[cfg(feature = "thread_local")]
 impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
     #[inline]
-    fn delete(&mut self, entity: EntityId, current: u32) {
+    fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
         self.dyn_delete(entity, current);
     }
     #[inline]
-    fn clear(&mut self, current: u32) {
+    fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -874,12 +878,11 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
         self.removal_data.clear();
     }
     fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
-        self.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        self.deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
 
         self.removal_data
-            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
     #[inline]
     #[track_caller]
@@ -888,8 +891,8 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
         other_all_storages: &mut AllStorages,
         from: EntityId,
         to: EntityId,
-        current: u32,
-        other_current: u32,
+        current: TrackingTimestamp,
+        other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
             let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_sync_mut(
@@ -905,11 +908,11 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
 #[cfg(feature = "thread_local")]
 impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
     #[inline]
-    fn delete(&mut self, entity: EntityId, current: u32) {
+    fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {
         self.dyn_delete(entity, current);
     }
     #[inline]
-    fn clear(&mut self, current: u32) {
+    fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -943,12 +946,11 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
         self.removal_data.clear();
     }
     fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
-        self.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        self.deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
 
         self.removal_data
-            .retain(|(_, t)| is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t));
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
     #[inline]
     #[track_caller]
@@ -957,8 +959,8 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
         other_all_storages: &mut AllStorages,
         from: EntityId,
         to: EntityId,
-        current: u32,
-        other_current: u32,
+        current: TrackingTimestamp,
+        other_current: TrackingTimestamp,
     ) {
         if let Some(component) = self.dyn_remove(from, current) {
             let other_sparse_set = other_all_storages
@@ -992,7 +994,11 @@ mod tests {
         let mut array = SparseSet::new();
 
         assert!(array
-            .insert(EntityId::new_from_parts(0, 0), STR("0"), 0)
+            .insert(
+                EntityId::new_from_parts(0, 0),
+                STR("0"),
+                TrackingTimestamp::new(0)
+            )
             .is_none());
         assert_eq!(array.dense, &[EntityId::new_from_parts(0, 0)]);
         assert_eq!(array.data, &[STR("0")]);
@@ -1002,7 +1008,11 @@ mod tests {
         );
 
         assert!(array
-            .insert(EntityId::new_from_parts(1, 0), STR("1"), 0)
+            .insert(
+                EntityId::new_from_parts(1, 0),
+                STR("1"),
+                TrackingTimestamp::new(0)
+            )
             .is_none());
         assert_eq!(
             array.dense,
@@ -1022,7 +1032,11 @@ mod tests {
         );
 
         assert!(array
-            .insert(EntityId::new_from_parts(5, 0), STR("5"), 0)
+            .insert(
+                EntityId::new_from_parts(5, 0),
+                STR("5"),
+                TrackingTimestamp::new(0)
+            )
             .is_none());
         assert_eq!(
             array.dense,
@@ -1044,12 +1058,24 @@ mod tests {
     #[test]
     fn remove() {
         let mut array = SparseSet::new();
-        array.insert(EntityId::new_from_parts(0, 0), STR("0"), 0);
-        array.insert(EntityId::new_from_parts(5, 0), STR("5"), 0);
-        array.insert(EntityId::new_from_parts(10, 0), STR("10"), 0);
+        array.insert(
+            EntityId::new_from_parts(0, 0),
+            STR("0"),
+            TrackingTimestamp::new(0),
+        );
+        array.insert(
+            EntityId::new_from_parts(5, 0),
+            STR("5"),
+            TrackingTimestamp::new(0),
+        );
+        array.insert(
+            EntityId::new_from_parts(10, 0),
+            STR("10"),
+            TrackingTimestamp::new(0),
+        );
 
         assert_eq!(
-            array.dyn_remove(EntityId::new_from_parts(0, 0), 0),
+            array.dyn_remove(EntityId::new_from_parts(0, 0), TrackingTimestamp::new(0)),
             Some(STR("0")),
         );
         assert_eq!(
@@ -1070,8 +1096,16 @@ mod tests {
             Some(&STR("10"))
         );
 
-        array.insert(EntityId::new_from_parts(3, 0), STR("3"), 0);
-        array.insert(EntityId::new_from_parts(100, 0), STR("100"), 0);
+        array.insert(
+            EntityId::new_from_parts(3, 0),
+            STR("3"),
+            TrackingTimestamp::new(0),
+        );
+        array.insert(
+            EntityId::new_from_parts(100, 0),
+            STR("100"),
+            TrackingTimestamp::new(0),
+        );
         assert_eq!(
             array.dense,
             &[
@@ -1101,7 +1135,7 @@ mod tests {
         );
 
         assert_eq!(
-            array.dyn_remove(EntityId::new_from_parts(3, 0), 0),
+            array.dyn_remove(EntityId::new_from_parts(3, 0), TrackingTimestamp::new(0)),
             Some(STR("3")),
         );
         assert_eq!(
@@ -1129,7 +1163,7 @@ mod tests {
         );
 
         assert_eq!(
-            array.dyn_remove(EntityId::new_from_parts(100, 0), 0),
+            array.dyn_remove(EntityId::new_from_parts(100, 0), TrackingTimestamp::new(0)),
             Some(STR("100"))
         );
         assert_eq!(
@@ -1157,10 +1191,10 @@ mod tests {
     fn drain() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), I32(0), 0);
-        sparse_set.insert(EntityId::new(1), I32(1), 0);
+        sparse_set.insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0));
+        sparse_set.insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0));
 
-        let mut drain = sparse_set.private_drain(0);
+        let mut drain = sparse_set.private_drain(TrackingTimestamp::new(0));
 
         assert_eq!(drain.next(), Some(I32(0)));
         assert_eq!(drain.next(), Some(I32(1)));
@@ -1176,10 +1210,12 @@ mod tests {
     fn drain_with_id() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), I32(0), 0);
-        sparse_set.insert(EntityId::new(1), I32(1), 0);
+        sparse_set.insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0));
+        sparse_set.insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0));
 
-        let mut drain = sparse_set.private_drain(0).with_id();
+        let mut drain = sparse_set
+            .private_drain(TrackingTimestamp::new(0))
+            .with_id();
 
         assert_eq!(drain.next(), Some((EntityId::new(0), I32(0))));
         assert_eq!(drain.next(), Some((EntityId::new(1), I32(1))));
@@ -1195,8 +1231,17 @@ mod tests {
     fn drain_empty() {
         let mut sparse_set = SparseSet::<I32>::new();
 
-        assert_eq!(sparse_set.private_drain(0).next(), None);
-        assert_eq!(sparse_set.private_drain(0).with_id().next(), None);
+        assert_eq!(
+            sparse_set.private_drain(TrackingTimestamp::new(0)).next(),
+            None
+        );
+        assert_eq!(
+            sparse_set
+                .private_drain(TrackingTimestamp::new(0))
+                .with_id()
+                .next(),
+            None
+        );
 
         assert_eq!(sparse_set.len(), 0);
     }
@@ -1208,7 +1253,7 @@ mod tests {
         for i in (0..100).rev() {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i);
-            array.insert(entity_id, I32(i as i32), 0);
+            array.insert(entity_id, I32(i as i32), TrackingTimestamp::new(0));
         }
 
         array.sort_unstable();
@@ -1230,12 +1275,16 @@ mod tests {
         for i in 0..20 {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(i);
-            assert!(array.insert(entity_id, I32(i as i32), 0).is_none());
+            assert!(array
+                .insert(entity_id, I32(i as i32), TrackingTimestamp::new(0))
+                .is_none());
         }
         for i in (20..100).rev() {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i + 20);
-            assert!(array.insert(entity_id, I32(i as i32), 0).is_none());
+            assert!(array
+                .insert(entity_id, I32(i as i32), TrackingTimestamp::new(0))
+                .is_none());
         }
 
         array.sort_unstable();
@@ -1259,9 +1308,9 @@ mod tests {
     fn debug() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), STR("0"), 0);
-        sparse_set.insert(EntityId::new(5), STR("5"), 0);
-        sparse_set.insert(EntityId::new(10), STR("10"), 0);
+        sparse_set.insert(EntityId::new(0), STR("0"), TrackingTimestamp::new(0));
+        sparse_set.insert(EntityId::new(5), STR("5"), TrackingTimestamp::new(0));
+        sparse_set.insert(EntityId::new(10), STR("10"), TrackingTimestamp::new(0));
 
         println!("{:#?}", sparse_set);
     }
@@ -1270,7 +1319,11 @@ mod tests {
     fn multiple_enable_tracking() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new_from_parts(0, 0), I32(0), 0);
+        sparse_set.insert(
+            EntityId::new_from_parts(0, 0),
+            I32(0),
+            TrackingTimestamp::new(0),
+        );
 
         sparse_set.track_all();
         sparse_set.track_all();

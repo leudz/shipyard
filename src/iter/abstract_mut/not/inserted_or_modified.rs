@@ -4,7 +4,7 @@ use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::tracking::{is_track_within_bounds, InsertedOrModified};
+use crate::tracking::InsertedOrModified;
 
 impl<'tmp, T: Component> AbstractMut for Not<InsertedOrModified<FullRawWindow<'tmp, T>>> {
     type Out = &'tmp T;
@@ -20,16 +20,13 @@ impl<'tmp, T: Component> AbstractMut for Not<InsertedOrModified<FullRawWindow<'t
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
-            !is_track_within_bounds(
-                *(self.0).0.insertion_data.add(index),
-                (self.0).0.last_insertion,
-                (self.0).0.current,
-            ) && !is_track_within_bounds(
-                *(self.0).0.modification_data.add(index),
-                (self.0).0.last_modification,
-                (self.0).0.current,
-            )
+        (self.0).0.index_of(entity_id).filter(|&index| {
+            let within_bounds = unsafe { *(self.0).0.insertion_data.add(index) }
+                .is_within((self.0).0.last_insertion, (self.0).0.current)
+                || unsafe { *(self.0).0.modification_data.add(index) }
+                    .is_within((self.0).0.last_modification, (self.0).0.current);
+
+            !within_bounds
         })
     }
     #[inline]
@@ -65,16 +62,13 @@ impl<'tmp, T: Component> AbstractMut for Not<InsertedOrModified<FullRawWindowMut
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
-            !is_track_within_bounds(
-                *(self.0).0.insertion_data.add(index),
-                (self.0).0.last_insertion,
-                (self.0).0.current,
-            ) && !is_track_within_bounds(
-                *(self.0).0.modification_data.add(index),
-                (self.0).0.last_modification,
-                (self.0).0.current,
-            )
+        (self.0).0.index_of(entity_id).filter(|&index| {
+            let within_bounds = unsafe { *(self.0).0.insertion_data.add(index) }
+                .is_within((self.0).0.last_insertion, (self.0).0.current)
+                || unsafe { *(self.0).0.modification_data.add(index) }
+                    .is_within((self.0).0.last_modification, (self.0).0.current);
+
+            !within_bounds
         })
     }
     #[inline]

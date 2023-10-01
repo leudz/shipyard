@@ -209,7 +209,7 @@ impl AllStorages {
             .entry(storage_id)
             .insert(SBox::new(UniqueStorage::new(
                 component,
-                self.get_tracking_timestamp().0,
+                self.get_tracking_timestamp(),
             )));
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -226,7 +226,7 @@ impl AllStorages {
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send(
-                    UniqueStorage::new(component, self.get_tracking_timestamp().0),
+                    UniqueStorage::new(component, self.get_tracking_timestamp()),
                     self.thread_id_generator.clone(),
                 )
             });
@@ -244,10 +244,7 @@ impl AllStorages {
         let storage_id = StorageId::of::<UniqueStorage<T>>();
 
         self.storages.write().entry(storage_id).or_insert_with(|| {
-            SBox::new_non_sync(UniqueStorage::new(
-                component,
-                self.get_tracking_timestamp().0,
-            ))
+            SBox::new_non_sync(UniqueStorage::new(component, self.get_tracking_timestamp()))
         });
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -264,7 +261,7 @@ impl AllStorages {
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send_sync(
-                    UniqueStorage::new(component, self.get_tracking_timestamp().0),
+                    UniqueStorage::new(component, self.get_tracking_timestamp()),
                     self.thread_id_generator.clone(),
                 )
             });
@@ -1170,14 +1167,16 @@ let i = all_storages.run(sys1);
     }
 
     #[inline]
-    pub(crate) fn get_current(&self) -> u32 {
-        self.counter
-            .fetch_add(1, core::sync::atomic::Ordering::Acquire)
+    pub(crate) fn get_current(&self) -> TrackingTimestamp {
+        TrackingTimestamp::new(
+            self.counter
+                .fetch_add(1, core::sync::atomic::Ordering::Acquire),
+        )
     }
 
     /// Returns a timestamp used to clear tracking information.
     pub fn get_tracking_timestamp(&self) -> TrackingTimestamp {
-        TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
+        TrackingTimestamp::new(self.counter.load(core::sync::atomic::Ordering::Acquire))
     }
 
     /// Enable insertion tracking for the given components.

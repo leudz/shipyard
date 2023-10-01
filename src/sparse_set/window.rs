@@ -1,6 +1,7 @@
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::tracking::TrackingTimestamp;
 use crate::views::{View, ViewMut};
 use alloc::boxed::Box;
 use core::hint::unreachable_unchecked;
@@ -13,11 +14,11 @@ pub struct FullRawWindow<'a, T> {
     pub(crate) dense: *const EntityId,
     pub(crate) dense_len: usize,
     pub(crate) data: *const T,
-    pub(crate) insertion_data: *const u32,
-    pub(crate) modification_data: *const u32,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
+    pub(crate) insertion_data: *const TrackingTimestamp,
+    pub(crate) modification_data: *const TrackingTimestamp,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
     _phantom: PhantomData<&'a T>,
 }
 
@@ -165,11 +166,11 @@ pub struct FullRawWindowMut<'a, T> {
     pub(crate) dense: *mut EntityId,
     pub(crate) dense_len: usize,
     pub(crate) data: *mut T,
-    pub(crate) insertion_data: *const u32,
-    pub(crate) modification_data: *mut u32,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
+    pub(crate) insertion_data: *const TrackingTimestamp,
+    pub(crate) modification_data: *mut TrackingTimestamp,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
     pub(crate) is_tracking_modification: bool,
     _phantom: PhantomData<&'a mut T>,
 }

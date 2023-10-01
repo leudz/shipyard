@@ -4,6 +4,7 @@ use crate::error;
 use crate::scheduler::system::{RunIf, WorkloadRunIfFn};
 use crate::scheduler::TypeInfo;
 use crate::storage::StorageId;
+use crate::tracking::TrackingTimestamp;
 use crate::World;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -83,7 +84,7 @@ macro_rules! impl_into_workload_run_if {
                 Ok(RunIf {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
                         Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
                     }),
                 })
@@ -167,7 +168,7 @@ macro_rules! impl_into_workload_run_if {
                 let last_run = Arc::new(AtomicU32::new(0));
                 Ok(Box::new(move |world: &World| {
                     let current = world.get_current();
-                    let last_run = last_run.swap(current, Ordering::Acquire);
+                    let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
                     Ok((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+))
                 }))
             }

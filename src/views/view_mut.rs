@@ -2,17 +2,17 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, ARefMut, ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::error;
 use crate::get::Get;
 use crate::r#mut::Mut;
 use crate::sparse_set::{SparseSet, SparseSetDrain};
 use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
-    is_track_within_bounds, DeletionTracking, Inserted, InsertedOrModified, InsertionTracking,
-    ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
+    DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
 };
 use crate::views::view::View;
+use crate::{error, TrackingTimestamp};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
@@ -22,10 +22,10 @@ pub struct ViewMut<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: ExclusiveBorrow<'a>,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) last_removal_or_deletion: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) last_removal_or_deletion: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
     pub(crate) phantom: PhantomData<TRACK>,
 }
 
@@ -87,10 +87,10 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
                 sparse_set,
                 all_borrow: Some(all_borrow),
                 borrow,
-                last_insertion: 0,
-                last_modification: 0,
-                last_removal_or_deletion: 0,
-                current: 0,
+                last_insertion: TrackingTimestamp::new(0),
+                last_modification: TrackingTimestamp::new(0),
+                last_removal_or_deletion: TrackingTimestamp::new(0),
+                current: TrackingTimestamp::new(0),
                 phantom: PhantomData,
             })
         } else {
@@ -302,7 +302,7 @@ where
             .deletion_data
             .iter()
             .filter_map(move |(entity, timestamp, component)| {
-                if is_track_within_bounds(*timestamp, self.last_removal_or_deletion, self.current) {
+                if timestamp.is_within(self.last_removal_or_deletion, self.current) {
                     Some((*entity, component))
                 } else {
                     None
@@ -328,7 +328,7 @@ where
             .removal_data
             .iter()
             .filter_map(move |(entity, timestamp)| {
-                if is_track_within_bounds(*timestamp, self.last_removal_or_deletion, self.current) {
+                if timestamp.is_within(self.last_removal_or_deletion, self.current) {
                     Some(*entity)
                 } else {
                     None
@@ -352,7 +352,7 @@ where
     /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
         Track::removed_or_deleted(self.sparse_set).filter_map(move |(entity, timestamp)| {
-            if is_track_within_bounds(timestamp, self.last_removal_or_deletion, self.current) {
+            if timestamp.is_within(self.last_removal_or_deletion, self.current) {
                 Some(entity)
             } else {
                 None

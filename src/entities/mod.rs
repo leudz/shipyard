@@ -10,6 +10,7 @@ use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::reserve::{BulkEntityIter, BulkReserve};
 use crate::storage::Storage;
+use crate::tracking::TrackingTimestamp;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::iter::repeat_with;
@@ -386,7 +387,7 @@ impl Entities {
 }
 
 impl Storage for Entities {
-    fn clear(&mut self, _current: u32) {
+    fn clear(&mut self, _current: TrackingTimestamp) {
         if self.data.is_empty() {
             return;
         }
@@ -438,8 +439,8 @@ impl Storage for Entities {
         _other_all_storages: &mut crate::AllStorages,
         _from: EntityId,
         _to: EntityId,
-        _current: u32,
-        _other_current: u32,
+        _current: TrackingTimestamp,
+        _other_current: TrackingTimestamp,
     ) {
         // Do nothing here so this function can be used to implement both move component and move entity.
     }

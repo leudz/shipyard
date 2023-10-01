@@ -960,15 +960,18 @@ let i = world.run(sys1);
         Ok(())
     }
 
+    /// Increments the current tracking cycle and returns the previous value.
     #[inline]
-    pub(crate) fn get_current(&self) -> u32 {
-        self.counter
-            .fetch_add(1, core::sync::atomic::Ordering::Acquire)
+    pub(crate) fn get_current(&self) -> TrackingTimestamp {
+        TrackingTimestamp::new(
+            self.counter
+                .fetch_add(1, core::sync::atomic::Ordering::Acquire),
+        )
     }
 
     /// Returns a timestamp used to clear tracking information.
     pub fn get_tracking_timestamp(&self) -> TrackingTimestamp {
-        TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
+        TrackingTimestamp::new(self.counter.load(core::sync::atomic::Ordering::Acquire))
     }
 }
 

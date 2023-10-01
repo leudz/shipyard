@@ -1,6 +1,6 @@
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Unique;
-use crate::tracking::is_track_within_bounds;
+use crate::tracking::TrackingTimestamp;
 use crate::unique::UniqueStorage;
 use core::fmt;
 use core::ops::{Deref, DerefMut};
@@ -10,9 +10,9 @@ pub struct UniqueViewMut<'a, T: Unique> {
     pub(crate) unique: &'a mut UniqueStorage<T>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
 }
 
 impl<T: Unique> UniqueViewMut<'_, T> {
@@ -21,18 +21,18 @@ impl<T: Unique> UniqueViewMut<'_, T> {
     /// [`clear_inserted`]: Self::clear_inserted
     #[inline]
     pub fn is_inserted(&self) -> bool {
-        is_track_within_bounds(self.unique.insert, self.last_insertion, self.current)
+        self.unique
+            .insert
+            .is_within(self.last_insertion, self.current)
     }
     /// Returns `true` if the component was modified since the last [`clear_modified`] call.  
     ///
     /// [`clear_modified`]: Self::clear_modified
     #[inline]
     pub fn is_modified(&self) -> bool {
-        is_track_within_bounds(
-            self.unique.modification,
-            self.last_modification,
-            self.current,
-        )
+        self.unique
+            .modification
+            .is_within(self.last_modification, self.current)
     }
     /// Returns `true` if the component was inserted or modified since the last [`clear_inserted`] or [`clear_modified`] call.  
     ///

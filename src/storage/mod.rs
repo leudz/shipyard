@@ -42,11 +42,11 @@ pub trait Storage: SizedAny {
     /// Deletes an entity from this storage.
     #[inline]
     #[allow(unused_variables)]
-    fn delete(&mut self, entity: EntityId, current: u32) {}
+    fn delete(&mut self, entity: EntityId, current: TrackingTimestamp) {}
     /// Deletes all components of this storage.
     #[inline]
     #[allow(unused_variables)]
-    fn clear(&mut self, current: u32) {}
+    fn clear(&mut self, current: TrackingTimestamp) {}
     /// Returns how much memory this storage uses.
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         None
@@ -82,8 +82,8 @@ pub trait Storage: SizedAny {
         other_all_storages: &mut AllStorages,
         from: EntityId,
         to: EntityId,
-        current: u32,
-        other_current: u32,
+        current: TrackingTimestamp,
+        other_current: TrackingTimestamp,
     ) {
     }
 }

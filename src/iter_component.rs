@@ -13,6 +13,7 @@ use crate::error;
 use crate::iter::{AbstractMut, Iter, Mixed, Tight};
 use crate::sparse_set::SparseSet;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
+use crate::tracking::TrackingTimestamp;
 use crate::views::{View, ViewMut};
 use alloc::vec::Vec;
 use core::any::TypeId;
@@ -35,7 +36,7 @@ pub trait IterComponent {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -55,7 +56,7 @@ pub trait IterComponent {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage>
     where
         Self: Sized;
@@ -68,7 +69,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ T {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -93,7 +94,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ T {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -122,7 +123,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -147,7 +148,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -176,7 +177,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -201,7 +202,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -230,7 +231,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -255,7 +256,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -283,7 +284,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -308,7 +309,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -337,7 +338,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -362,7 +363,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -391,7 +392,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -416,7 +417,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -445,7 +446,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<
         (
             Self::Storage<'a>,
@@ -470,7 +471,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<IterRef<'a, Self>, error::GetStorage> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
@@ -500,7 +501,7 @@ macro_rules! impl_iter_component {
             fn into_abtract_mut<'a>(
                 all_storages: &'a AllStorages,
                 all_borrow: Option<SharedBorrow<'a>>,
-                current: u32,
+                current: TrackingTimestamp,
             ) -> Result<
                 (
                     Self::Storage<'a>,
@@ -528,7 +529,7 @@ macro_rules! impl_iter_component {
             fn into_iter<'a>(
                 all_storages: &'a AllStorages,
                 all_borrow: Option<SharedBorrow<'a>>,
-                current: u32,
+                current: TrackingTimestamp,
             ) -> Result<IterRef<'a, Self>, error::GetStorage> {
                 let (raw_window, all_borrow, borrow) =
                     Self::into_abtract_mut(all_storages, all_borrow, current)?;

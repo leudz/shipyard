@@ -3,7 +3,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::tracking::{is_track_within_bounds, Inserted};
+use crate::tracking::Inserted;
 
 impl<'tmp, T: Component> AbstractMut for Inserted<FullRawWindow<'tmp, T>> {
     type Out = &'tmp T;
@@ -19,12 +19,9 @@ impl<'tmp, T: Component> AbstractMut for Inserted<FullRawWindow<'tmp, T>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        self.0.index_of(entity_id).filter(|&index| unsafe {
-            is_track_within_bounds(
-                *self.0.insertion_data.add(index),
-                self.0.last_insertion,
-                self.0.current,
-            )
+        self.0.index_of(entity_id).filter(|&index| {
+            unsafe { *self.0.insertion_data.add(index) }
+                .is_within(self.0.last_insertion, self.0.current)
         })
     }
     #[inline]
@@ -60,12 +57,9 @@ impl<'tmp, T: Component> AbstractMut for Inserted<FullRawWindowMut<'tmp, T>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        self.0.index_of(entity_id).filter(|&index| unsafe {
-            is_track_within_bounds(
-                *self.0.insertion_data.add(index),
-                self.0.last_insertion,
-                self.0.current,
-            )
+        self.0.index_of(entity_id).filter(|&index| {
+            unsafe { *self.0.insertion_data.add(index) }
+                .is_within(self.0.last_insertion, self.0.current)
         })
     }
     #[inline]

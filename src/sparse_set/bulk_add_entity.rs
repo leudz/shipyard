@@ -4,6 +4,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::SparseSet;
+use crate::tracking::TrackingTimestamp;
 #[cfg(doc)]
 use crate::world::World;
 use core::iter::IntoIterator;
@@ -90,7 +91,7 @@ impl<T: Send + Sync + Component> BulkInsert for T {
         if sparse_set.is_tracking_modification() {
             sparse_set
                 .modification_data
-                .extend(new_entities.iter().map(|_| 0));
+                .extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
         }
 
         let SparseSet { sparse, dense, .. } = &mut *sparse_set;
@@ -158,17 +159,17 @@ macro_rules! impl_bulk_insert {
                 )*
 
                 if $sparse_set1.is_tracking_insertion() {
-                    $sparse_set1.insertion_data.extend(new_entities.iter().map(|_| 0));
+                    $sparse_set1.insertion_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                 }
                 if $sparse_set1.is_tracking_modification() {
-                    $sparse_set1.modification_data.extend(new_entities.iter().map(|_| 0));
+                    $sparse_set1.modification_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                 }
                 $(
                     if $sparse_set.is_tracking_insertion() {
-                        $sparse_set.insertion_data.extend(new_entities.iter().map(|_| 0));
+                        $sparse_set.insertion_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                     }
                     if $sparse_set.is_tracking_modification() {
-                        $sparse_set.modification_data.extend(new_entities.iter().map(|_| 0));
+                        $sparse_set.modification_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                     }
                 )*
 

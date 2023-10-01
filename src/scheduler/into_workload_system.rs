@@ -4,6 +4,7 @@ use crate::info::DedupedLabels;
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
+use crate::tracking::TrackingTimestamp;
 use crate::type_id::TypeId;
 use crate::{error, AsLabel, Workload};
 use crate::{Label, World};
@@ -150,7 +151,7 @@ macro_rules! impl_into_workload_system {
                     tracking_to_enable,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
                         Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+)))
                     }),
                     type_id: TypeId::of::<Func>(),

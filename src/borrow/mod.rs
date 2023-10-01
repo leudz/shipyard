@@ -21,7 +21,7 @@ use crate::atomic_refcell::{ARef, ARefMut, SharedBorrow};
 use crate::component::{Component, Unique};
 use crate::error;
 use crate::sparse_set::SparseSet;
-use crate::tracking::{Track, Tracking};
+use crate::tracking::{Track, Tracking, TrackingTimestamp};
 use crate::unique::UniqueStorage;
 use crate::views::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
 use core::marker::PhantomData;
@@ -42,7 +42,7 @@ pub enum Mutability {
 ///
 /// ### Example of manual implementation:
 /// ```rust
-/// use shipyard::{AllStorages, Borrow, SharedBorrow, View, UniqueView};
+/// use shipyard::{AllStorages, Borrow, SharedBorrow, TrackingTimestamp, View, UniqueView};
 ///
 /// # struct Camera {}
 /// # impl shipyard::Unique for Camera {}
@@ -60,8 +60,8 @@ pub enum Mutability {
 ///     fn borrow<'a>(
 ///         all_storages: &'a AllStorages,
 ///         all_borrow: Option<SharedBorrow<'a>>,
-///         last_run: Option<u32>,
-///         current: u32,
+///         last_run: Option<TrackingTimestamp>,
+///         current: TrackingTimestamp,
 ///     ) -> Result<Self::View<'a>, shipyard::error::GetStorage> {
 ///         Ok(CameraView {
 ///             camera: UniqueView::<Camera>::borrow(all_storages, all_borrow.clone(), last_run, current)?,
@@ -81,8 +81,8 @@ pub trait Borrow {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage>;
 }
 
@@ -93,8 +93,8 @@ impl Borrow for () {
     fn borrow<'a>(
         _all_storages: &'a AllStorages,
         _all_borrow: Option<SharedBorrow<'a>>,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<TrackingTimestamp>,
+        _current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage>
     where
         Self: Sized,
@@ -110,8 +110,8 @@ impl Borrow for EntitiesView<'_> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<TrackingTimestamp>,
+        _current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let entities = all_storages.entities()?;
 
@@ -132,8 +132,8 @@ impl Borrow for EntitiesViewMut<'_> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<TrackingTimestamp>,
+        _current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let entities = all_storages.entities_mut()?;
 
@@ -157,8 +157,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
 
@@ -169,8 +169,7 @@ where
         Ok(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run
-                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow,
@@ -191,8 +190,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
 
@@ -203,7 +202,7 @@ where
         Ok(NonSend(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow,
@@ -224,8 +223,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
 
@@ -236,7 +235,7 @@ where
         Ok(NonSync(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow,
@@ -257,8 +256,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages
             .custom_storage_or_insert_non_send_sync(|| NonSendSync(SparseSet::new()))?;
@@ -270,7 +269,7 @@ where
         Ok(NonSendSync(View {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow,
@@ -290,8 +289,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
 
@@ -302,8 +301,7 @@ where
         Ok(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run
-                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow,
@@ -324,8 +322,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view =
             all_storages.custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::new()))?;
@@ -337,7 +335,7 @@ where
         Ok(NonSend(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow: borrow,
@@ -358,8 +356,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view =
             all_storages.custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::new()))?;
@@ -371,7 +369,7 @@ where
         Ok(NonSync(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow: borrow,
@@ -392,8 +390,8 @@ where
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages
             .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::new()))?;
@@ -405,7 +403,7 @@ where
         Ok(NonSendSync(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current),
             current,
             sparse_set,
             borrow: borrow,
@@ -422,8 +420,8 @@ impl<T: Send + Sync + Unique> Borrow for UniqueView<'_, T> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -448,8 +446,8 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueView<'_, T>> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -474,8 +472,8 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueView<'_, T>> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -500,8 +498,8 @@ impl<T: Unique> Borrow for NonSendSync<UniqueView<'_, T>> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -525,8 +523,8 @@ impl<T: Send + Sync + Unique> Borrow for UniqueViewMut<'_, T> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -551,8 +549,8 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueViewMut<'_, T>> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -577,8 +575,8 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueViewMut<'_, T>> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -603,8 +601,8 @@ impl<T: Unique> Borrow for NonSendSync<UniqueViewMut<'_, T>> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -628,8 +626,8 @@ impl<T: Borrow> Borrow for Option<T> {
     fn borrow<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
         Ok(T::borrow(all_storages, all_borrow, last_run, current).ok())
     }
@@ -644,8 +642,8 @@ macro_rules! impl_borrow {
             fn borrow<'a>(
                 all_storages: &'a AllStorages,
                 all_borrow: Option<SharedBorrow<'a>>,
-                last_run: Option<u32>,
-                current: u32
+                last_run: Option<TrackingTimestamp>,
+                current: TrackingTimestamp
             ) -> Result<Self::View<'a>, error::GetStorage> {
                 Ok(($($type::borrow(all_storages, all_borrow.clone(), last_run, current)?,)+))
             }

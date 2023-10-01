@@ -129,7 +129,7 @@ impl<'v> shipyard::Borrow<'v> for RenderGraphicsViewMut {
     fn borrow(
         world: &'v shipyard::World,
         last_run: Option<u32>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<Self::View, shipyard::error::GetStorage> {
         // Even if we don't use tracking for Graphics, it's good to build an habit of using last_run and current when creating custom views
         let graphics = <UniqueView<Graphics> as shipyard::IntoBorrow>::Borrow::borrow(
@@ -191,7 +191,7 @@ impl<'v> shipyard::Borrow<'v> for RenderGraphicsBorrower {
     fn borrow(
         world: &'v shipyard::World,
         last_run: Option<u32>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<Self::View, shipyard::error::GetStorage> {
         let graphics = <UniqueView<Graphics> as shipyard::IntoBorrow>::Borrow::borrow(
             world, last_run, current,
@@ -255,7 +255,7 @@ impl<'v> shipyard::AllStoragesBorrow<'v> for RenderGraphicsBorrower {
     fn all_borrow(
         all_storages: &'v shipyard::AllStorages,
         last_run: Option<u32>,
-        current: u32,
+        current: TrackingTimestamp,
     ) -> Result<Self::View, shipyard::error::GetStorage> {
         let graphics = <UniqueView<Graphics> as shipyard::IntoBorrow>::Borrow::all_borrow(
             all_storages,

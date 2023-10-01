@@ -7,6 +7,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::tracking::TrackingTimestamp;
 use core::any::type_name;
 use core::ops::{Deref, DerefMut};
 
@@ -50,8 +51,8 @@ impl<'a, T> AsRef<T> for Ref<'a, T> {
 /// Exclusive reference to a component.
 pub struct RefMut<'a, T> {
     inner: T,
-    flag: Option<&'a mut u32>,
-    current: u32,
+    flag: Option<&'a mut TrackingTimestamp>,
+    current: TrackingTimestamp,
     all_borrow: Option<SharedBorrow<'a>>,
     borrow: ExclusiveBorrow<'a>,
 }
@@ -121,7 +122,7 @@ pub trait GetComponent {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent>;
 }
@@ -133,7 +134,7 @@ impl<T: Component + Send + Sync> GetComponent for &'_ T {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        _current: u32,
+        _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
@@ -161,7 +162,7 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ T> {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        _current: u32,
+        _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages.custom_storage_or_insert_non_send(|| NonSend(SparseSet::new()))?;
@@ -189,7 +190,7 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ T> {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        _current: u32,
+        _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages.custom_storage_or_insert_non_sync(|| NonSync(SparseSet::new()))?;
@@ -217,7 +218,7 @@ impl<T: Component> GetComponent for NonSendSync<&'_ T> {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        _current: u32,
+        _current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages
@@ -245,7 +246,7 @@ impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
@@ -285,7 +286,7 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view =
@@ -326,7 +327,7 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view =
@@ -367,7 +368,7 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
     fn get<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
-        current: u32,
+        current: TrackingTimestamp,
         entity: EntityId,
     ) -> Result<Self::Out<'a>, error::GetComponent> {
         let view = all_storages
@@ -408,7 +409,7 @@ macro_rules! impl_get_component {
             fn get<'a>(
                 all_storages: &'a AllStorages,
                 all_borrow: Option<SharedBorrow<'a>>,
-                current: u32,
+                current: TrackingTimestamp,
                 entity: EntityId,
             ) -> Result<Self::Out<'a>, error::GetComponent> {
                 Ok(($($type::get(all_storages, all_borrow.clone(), current, entity)?,)+))

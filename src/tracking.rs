@@ -133,8 +133,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_inserted<T: Component>(
         _sparse_set: &SparseSet<T>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: TrackingTimestamp,
+        _current: TrackingTimestamp,
     ) -> bool {
         false
     }
@@ -144,8 +144,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_modified<T: Component>(
         _sparse_set: &SparseSet<T>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: TrackingTimestamp,
+        _current: TrackingTimestamp,
     ) -> bool {
         false
     }
@@ -155,8 +155,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_deleted<T: Component>(
         _sparse_set: &SparseSet<T>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: TrackingTimestamp,
+        _current: TrackingTimestamp,
     ) -> bool {
         false
     }
@@ -166,8 +166,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_removed<T: Component>(
         _sparse_set: &SparseSet<T>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: TrackingTimestamp,
+        _current: TrackingTimestamp,
     ) -> bool {
         false
     }
@@ -189,10 +189,10 @@ pub trait RemovalOrDeletionTracking: Tracking {
         sparse_set: &SparseSet<T>,
     ) -> core::iter::Chain<
         core::iter::Map<
-            core::slice::Iter<'_, (EntityId, u32, T)>,
-            fn(&(EntityId, u32, T)) -> (EntityId, u32),
+            core::slice::Iter<'_, (EntityId, TrackingTimestamp, T)>,
+            fn(&(EntityId, TrackingTimestamp, T)) -> (EntityId, TrackingTimestamp),
         >,
-        core::iter::Copied<core::slice::Iter<'_, (EntityId, u32)>>,
+        core::iter::Copied<core::slice::Iter<'_, (EntityId, TrackingTimestamp)>>,
     >;
 
     #[doc(hidden)]
@@ -204,24 +204,102 @@ pub trait RemovalOrDeletionTracking: Tracking {
     );
 }
 
-/// Returns `true` when the track timestamp is after the last time the system ran and before the current execution.
-///
-/// This method should only be necessary for custom storages that want to implement tracking.
-#[inline]
-pub fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
-    let bounds = current.wrapping_sub(last);
-    let track = current.wrapping_sub(timestamp);
-
-    track < bounds
-}
-
 #[inline]
 pub(crate) fn map_deletion_data<T>(
-    &(entity_id, timestamp, _): &(EntityId, u32, T),
-) -> (EntityId, u32) {
+    &(entity_id, timestamp, _): &(EntityId, TrackingTimestamp, T),
+) -> (EntityId, TrackingTimestamp) {
     (entity_id, timestamp)
 }
 
 /// Timestamp used to clear tracking information.
-#[derive(Clone, Copy)]
-pub struct TrackingTimestamp(pub(crate) u32);
+#[derive(Clone, Copy, Debug)]
+pub struct TrackingTimestamp(u32);
+
+impl TrackingTimestamp {
+    pub(crate) fn new(now: u32) -> TrackingTimestamp {
+        TrackingTimestamp(now)
+    }
+
+    pub(crate) fn get(self) -> u32 {
+        self.0
+    }
+
+    /// Returns `true` when the track timestamp is after the last time the system ran and before the current execution.
+    ///
+    /// This method should only be necessary for custom storages that want to implement tracking.
+    #[inline]
+    pub fn is_within(self, last: TrackingTimestamp, current: TrackingTimestamp) -> bool {
+        let bounds = current.0.wrapping_sub(last.0.wrapping_add(1));
+        let track = current.0.wrapping_sub(self.0);
+
+        track <= bounds
+    }
+
+    /// Returns `true` when the track timestamp is within `u32::MAX / 2` cycles of `other`.
+    ///
+    /// This method should only be necessary for custom storages that want to implement tracking.
+    pub fn is_older_than(self, other: TrackingTimestamp) -> bool {
+        other.0.wrapping_sub(1).wrapping_sub(self.0) < u32::MAX / 2
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_within_bounds() {
+        let tests = [
+            (0, 0, 0, true),
+            (5, 0, 10, true),
+            (11, 0, 10, false),
+            // check wrapping true
+            (u32::MAX, u32::MAX - 1, 0, true),
+            // check wrapping false
+            (u32::MAX - 1, u32::MAX, 0, false),
+            (1, 2, 0, false),
+            // timestamp is equal to last
+            (1, 1, 0, false),
+            // timestamp is equal to now
+            (1, 0, 1, true),
+        ];
+
+        for (timestamp, last, current, expected) in tests {
+            assert_eq!(
+                TrackingTimestamp::new(timestamp).is_within(
+                    TrackingTimestamp::new(last),
+                    TrackingTimestamp::new(current)
+                ),
+                expected,
+                "t: {timestamp}, l: {last}, c: {current}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_older() {
+        let tests = [
+            (0, 0, false),
+            (5, 10, true),
+            (11, 10, false),
+            // check wrapping true
+            (u32::MAX, 0, true),
+            // check wrapping false
+            (0, u32::MAX, false),
+            // barely within limit
+            (0, u32::MAX / 2, true),
+            // barely outside limit
+            (0, u32::MAX / 2 + 1, false),
+            // timestamp is equal to other
+            (1, 1, false),
+        ];
+
+        for (timestamp, other, expected) in tests {
+            assert_eq!(
+                TrackingTimestamp::new(timestamp).is_older_than(TrackingTimestamp::new(other)),
+                expected,
+                "t: {timestamp}, o: {other}"
+            );
+        }
+    }
+}

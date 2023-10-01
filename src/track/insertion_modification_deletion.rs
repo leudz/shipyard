@@ -6,8 +6,8 @@ use crate::track::{
     DeletionConst, InsertionAndModificationAndDeletion, InsertionConst, ModificationConst,
 };
 use crate::tracking::{
-    is_track_within_bounds, map_deletion_data, DeletionTracking, InsertionTracking,
-    ModificationTracking, RemovalOrDeletionTracking, Track, Tracking, TrackingTimestamp,
+    map_deletion_data, DeletionTracking, InsertionTracking, ModificationTracking,
+    RemovalOrDeletionTracking, Track, Tracking, TrackingTimestamp,
 };
 
 impl Sealed for Track<InsertionAndModificationAndDeletion> {}
@@ -21,11 +21,11 @@ impl Tracking for Track<InsertionAndModificationAndDeletion> {
     fn is_inserted<T: Component>(
         sparse_set: &SparseSet<T>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: TrackingTimestamp,
+        current: TrackingTimestamp,
     ) -> bool {
         if let Some(dense) = sparse_set.index_of(entity) {
-            is_track_within_bounds(sparse_set.insertion_data[dense], last, current)
+            sparse_set.insertion_data[dense].is_within(last, current)
         } else {
             false
         }
@@ -35,11 +35,11 @@ impl Tracking for Track<InsertionAndModificationAndDeletion> {
     fn is_modified<T: Component>(
         sparse_set: &SparseSet<T>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: TrackingTimestamp,
+        current: TrackingTimestamp,
     ) -> bool {
         if let Some(dense) = sparse_set.index_of(entity) {
-            is_track_within_bounds(sparse_set.modification_data[dense], last, current)
+            sparse_set.modification_data[dense].is_within(last, current)
         } else {
             false
         }
@@ -48,12 +48,13 @@ impl Tracking for Track<InsertionAndModificationAndDeletion> {
     fn is_deleted<T: Component>(
         sparse_set: &SparseSet<T>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: TrackingTimestamp,
+        current: TrackingTimestamp,
     ) -> bool {
-        sparse_set.deletion_data.iter().any(|(id, timestamp, _)| {
-            *id == entity && is_track_within_bounds(*timestamp, last, current)
-        })
+        sparse_set
+            .deletion_data
+            .iter()
+            .any(|(id, timestamp, _)| *id == entity && timestamp.is_within(last, current))
     }
 }
 
@@ -66,10 +67,10 @@ impl RemovalOrDeletionTracking for Track<InsertionAndModificationAndDeletion> {
         sparse_set: &SparseSet<T>,
     ) -> core::iter::Chain<
         core::iter::Map<
-            core::slice::Iter<'_, (EntityId, u32, T)>,
-            for<'r> fn(&'r (EntityId, u32, T)) -> (EntityId, u32),
+            core::slice::Iter<'_, (EntityId, TrackingTimestamp, T)>,
+            for<'r> fn(&'r (EntityId, TrackingTimestamp, T)) -> (EntityId, TrackingTimestamp),
         >,
-        core::iter::Copied<core::slice::Iter<'_, (EntityId, u32)>>,
+        core::iter::Copied<core::slice::Iter<'_, (EntityId, TrackingTimestamp)>>,
     > {
         sparse_set
             .deletion_data
@@ -86,8 +87,8 @@ impl RemovalOrDeletionTracking for Track<InsertionAndModificationAndDeletion> {
         sparse_set: &mut SparseSet<T>,
         timestamp: TrackingTimestamp,
     ) {
-        sparse_set.deletion_data.retain(|(_, t, _)| {
-            is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+        sparse_set
+            .deletion_data
+            .retain(|(_, t, _)| timestamp.is_older_than(*t));
     }
 }

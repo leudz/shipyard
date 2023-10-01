@@ -2,15 +2,15 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::error;
 use crate::get::Get;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
-    is_track_within_bounds, DeletionTracking, Inserted, InsertedOrModified, InsertionTracking,
-    ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
+    DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
 };
+use crate::{error, TrackingTimestamp};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -20,10 +20,10 @@ pub struct View<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) sparse_set: &'a SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: SharedBorrow<'a>,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) last_removal_or_deletion: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) last_removal_or_deletion: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
     pub(crate) phantom: PhantomData<TRACK>,
 }
 
@@ -64,10 +64,10 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
                 sparse_set,
                 all_borrow: Some(all_borrow),
                 borrow,
-                last_insertion: 0,
-                last_modification: 0,
-                last_removal_or_deletion: 0,
-                current: 0,
+                last_insertion: TrackingTimestamp::new(0),
+                last_modification: TrackingTimestamp::new(0),
+                last_removal_or_deletion: TrackingTimestamp::new(0),
+                current: TrackingTimestamp::new(0),
                 phantom: PhantomData,
             })
         } else {
@@ -154,7 +154,7 @@ where
             .deletion_data
             .iter()
             .filter_map(move |(entity, timestamp, component)| {
-                if is_track_within_bounds(*timestamp, self.last_removal_or_deletion, self.current) {
+                if timestamp.is_within(self.last_removal_or_deletion, self.current) {
                     Some((*entity, component))
                 } else {
                     None
@@ -181,7 +181,7 @@ where
             .removal_data
             .iter()
             .filter_map(move |(entity, timestamp)| {
-                if is_track_within_bounds(*timestamp, self.last_removal_or_deletion, self.current) {
+                if timestamp.is_within(self.last_removal_or_deletion, self.current) {
                     Some(*entity)
                 } else {
                     None
@@ -206,7 +206,7 @@ where
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
         Track::<TRACK>::removed_or_deleted(self.sparse_set).filter_map(
             move |(entity, timestamp)| {
-                if is_track_within_bounds(timestamp, self.last_removal_or_deletion, self.current) {
+                if timestamp.is_within(self.last_removal_or_deletion, self.current) {
                     Some(entity)
                 } else {
                     None

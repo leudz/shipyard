@@ -4,7 +4,7 @@ use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::tracking::{is_track_within_bounds, Modified};
+use crate::tracking::Modified;
 
 impl<'tmp, T: Component> AbstractMut for Not<Modified<FullRawWindow<'tmp, T>>> {
     type Out = &'tmp T;
@@ -20,12 +20,11 @@ impl<'tmp, T: Component> AbstractMut for Not<Modified<FullRawWindow<'tmp, T>>> {
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
-            !is_track_within_bounds(
-                *(self.0).0.modification_data.add(index),
-                (self.0).0.last_modification,
-                (self.0).0.current,
-            )
+        (self.0).0.index_of(entity_id).filter(|&index| {
+            let within_bounds = unsafe { *(self.0).0.modification_data.add(index) }
+                .is_within((self.0).0.last_modification, (self.0).0.current);
+
+            !within_bounds
         })
     }
     #[inline]
@@ -61,12 +60,11 @@ impl<'tmp, T: Component> AbstractMut for Not<Modified<FullRawWindowMut<'tmp, T>>
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        (self.0).0.index_of(entity_id).filter(|&index| unsafe {
-            !is_track_within_bounds(
-                *(self.0).0.modification_data.add(index),
-                (self.0).0.last_modification,
-                (self.0).0.current,
-            )
+        (self.0).0.index_of(entity_id).filter(|&index| {
+            let within_bounds = unsafe { *(self.0).0.modification_data.add(index) }
+                .is_within((self.0).0.last_modification, (self.0).0.current);
+
+            !within_bounds
         })
     }
     #[inline]

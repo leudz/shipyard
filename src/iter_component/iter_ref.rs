@@ -4,6 +4,7 @@ use crate::entity_id::EntityId;
 use crate::iter::LastId;
 use crate::iter::{AbstractMut, Iter};
 use crate::iter_component::IterComponent;
+use crate::tracking::TrackingTimestamp;
 use core::marker::PhantomData;
 
 #[allow(missing_docs)]
@@ -37,7 +38,7 @@ impl<'a, T: IterComponent> LastId for IterRef<'a, T> {
 pub struct IntoIterRef<'a, T: IterComponent> {
     pub(crate) all_storages: &'a AllStorages,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) current: u32,
+    pub(crate) current: TrackingTimestamp,
     pub(crate) phantom: PhantomData<T>,
 }
 
