@@ -31,9 +31,9 @@ impl<T: Unique> UniqueStorage<T> {
         UniqueStorage {
             value,
             insert: current,
-            modification: TrackingTimestamp::new(current.get().wrapping_sub(u32::MAX / 2)),
-            last_insert: TrackingTimestamp::new(current.get().wrapping_sub(u32::MAX / 2)),
-            last_modification: TrackingTimestamp::new(current.get().wrapping_sub(u32::MAX / 2)),
+            modification: current.furthest_from(),
+            last_insert: current.furthest_from(),
+            last_modification: current.furthest_from(),
         }
     }
 }

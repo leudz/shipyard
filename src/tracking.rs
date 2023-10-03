@@ -216,10 +216,13 @@ pub(crate) fn map_deletion_data<T>(
 pub struct TrackingTimestamp(u32);
 
 impl TrackingTimestamp {
-    pub(crate) fn new(now: u32) -> TrackingTimestamp {
+    /// Returns a new [`TrackingTimestamp`] at the given tracking cycle.
+    #[inline]
+    pub fn new(now: u32) -> TrackingTimestamp {
         TrackingTimestamp(now)
     }
 
+    #[inline]
     pub(crate) fn get(self) -> u32 {
         self.0
     }
@@ -238,8 +241,15 @@ impl TrackingTimestamp {
     /// Returns `true` when the track timestamp is within `u32::MAX / 2` cycles of `other`.
     ///
     /// This method should only be necessary for custom storages that want to implement tracking.
+    #[inline]
     pub fn is_older_than(self, other: TrackingTimestamp) -> bool {
         other.0.wrapping_sub(1).wrapping_sub(self.0) < u32::MAX / 2
+    }
+
+    /// Returns the timesptamp the furthest from the given one.
+    #[inline]
+    pub fn furthest_from(self) -> TrackingTimestamp {
+        TrackingTimestamp(self.0.wrapping_add(u32::MAX / 2))
     }
 }
 

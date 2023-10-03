@@ -219,9 +219,7 @@ impl<T: Component> SparseSet<T> {
                 self.insertion_data.push(current);
             }
             if self.is_tracking_modification {
-                self.modification_data.push(TrackingTimestamp::new(
-                    self.last_modified.get().wrapping_sub(1),
-                ));
+                self.modification_data.push(current.furthest_from());
             }
 
             self.dense.push(entity);
