@@ -58,7 +58,7 @@ macro_rules! impl_delete_component {
             fn delete(&mut self, entity: EntityId) -> bool {
                 $(
                     self.$index.delete(entity)
-                )||+
+                )|+
             }
         }
     }
