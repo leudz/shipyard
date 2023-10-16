@@ -185,3 +185,21 @@ fn track() {
     world.run_default().unwrap();
     world.run_default().unwrap();
 }
+
+#[test]
+fn delete_multiple() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {}
+
+    let mut world = World::new();
+
+    let entity = world.add_entity((USIZE(0), U32(0)));
+
+    world.run(|mut usizes: ViewMut<USIZE>, mut u32s: ViewMut<U32>| {
+        (&mut usizes, &mut u32s).delete(entity);
+
+        assert_eq!(usizes.len(), 0, "First component was not deleted.");
+        assert_eq!(u32s.len(), 0, "Second component was not deleted.");
+    });
+}
