@@ -2512,22 +2512,17 @@ mod tests {
         fn sys0() {}
         fn sys1() {}
         fn sys2() {}
-        fn sys3() {}
         fn workload1() -> Workload {
-            (sys0, sys1).into_workload()
+            (sys0, sys1, sys2).into_sequential_workload()
         }
 
-        let (workload, _) = (workload1.before_all(sys2), sys2, sys3)
-            .into_sequential_workload()
-            .rename("")
-            .build()
-            .unwrap();
+        let (workload, _) = workload1().rename("").build().unwrap();
 
         let batches = &workload.workloads[&"".as_label()];
-        assert_eq!(batches.sequential, &[0, 1, 2, 3]);
+        assert_eq!(batches.sequential, &[0, 1, 2]);
         assert_eq!(
             batches.parallel,
-            &[(None, vec![0, 1]), (None, vec![2]), (None, vec![3])]
+            &[(None, vec![0]), (None, vec![1]), (None, vec![2])]
         );
     }
 
