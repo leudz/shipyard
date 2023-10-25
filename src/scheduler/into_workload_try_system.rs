@@ -256,7 +256,7 @@ macro_rules! impl_into_workload_try_system {
                     tracking_to_enable,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
                         Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
