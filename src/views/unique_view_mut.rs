@@ -58,6 +58,46 @@ impl<T: Unique> UniqueViewMut<'_, T> {
         self.unique.last_insert = self.current;
         self.unique.last_modification = self.current;
     }
+
+    /// Replaces the timestamp starting the tracking time window for insertions.
+    ///
+    /// Tracking works based on a time window. From the last time the system ran (in workloads)
+    /// or since the last clear.
+    ///
+    /// Sometimes this automatic time window isn't what you need.
+    /// This can happen when you want to keep the same tracking information for multiple runs
+    /// of the same system.
+    ///
+    /// For example if you interpolate movement between frames, you might run an interpolation workload
+    /// multiple times but not change the [`World`](crate::World) during its execution.\
+    /// In this case you want the same tracking information for all runs of this workload
+    /// which would have disappeared using the automatic window.
+    pub fn override_last_insertion(
+        &mut self,
+        new_timestamp: TrackingTimestamp,
+    ) -> TrackingTimestamp {
+        core::mem::replace(&mut self.last_insertion, new_timestamp)
+    }
+
+    /// Replaces the timestamp starting the tracking time window for modifications.
+    ///
+    /// Tracking works based on a time window. From the last time the system ran (in workloads)
+    /// or since the last clear.
+    ///
+    /// Sometimes this automatic time window isn't what you need.
+    /// This can happen when you want to keep the same tracking information for multiple runs
+    /// of the same system.
+    ///
+    /// For example if you interpolate movement between frames, you might run an interpolation workload
+    /// multiple times but not change the [`World`](crate::World) during its execution.\
+    /// In this case you want the same tracking information for all runs of this workload
+    /// which would have disappeared using the automatic window.
+    pub fn override_last_modification(
+        &mut self,
+        new_timestamp: TrackingTimestamp,
+    ) -> TrackingTimestamp {
+        core::mem::replace(&mut self.last_modification, new_timestamp)
+    }
 }
 
 impl<T: Unique> Deref for UniqueViewMut<'_, T> {

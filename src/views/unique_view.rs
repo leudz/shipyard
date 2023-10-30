@@ -17,6 +17,8 @@ pub struct UniqueView<'a, T: Unique> {
 
 impl<T: Unique> UniqueView<'_, T> {
     /// Duplicates the [`UniqueView`].
+    ///
+    /// [`Clone`] is not implemented to not conflict with `T::clone`.
     #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn clone(unique: &Self) -> Self {
@@ -28,6 +30,46 @@ impl<T: Unique> UniqueView<'_, T> {
             last_modification: unique.last_modification,
             current: unique.current,
         }
+    }
+
+    /// Replaces the timestamp starting the tracking time window for insertions.
+    ///
+    /// Tracking works based on a time window. From the last time the system ran (in workloads)
+    /// or since the last clear.
+    ///
+    /// Sometimes this automatic time window isn't what you need.
+    /// This can happen when you want to keep the same tracking information for multiple runs
+    /// of the same system.
+    ///
+    /// For example if you interpolate movement between frames, you might run an interpolation workload
+    /// multiple times but not change the [`World`](crate::World) during its execution.\
+    /// In this case you want the same tracking information for all runs of this workload
+    /// which would have disappeared using the automatic window.
+    pub fn override_last_insertion(
+        &mut self,
+        new_timestamp: TrackingTimestamp,
+    ) -> TrackingTimestamp {
+        core::mem::replace(&mut self.last_insertion, new_timestamp)
+    }
+
+    /// Replaces the timestamp starting the tracking time window for modifications.
+    ///
+    /// Tracking works based on a time window. From the last time the system ran (in workloads)
+    /// or since the last clear.
+    ///
+    /// Sometimes this automatic time window isn't what you need.
+    /// This can happen when you want to keep the same tracking information for multiple runs
+    /// of the same system.
+    ///
+    /// For example if you interpolate movement between frames, you might run an interpolation workload
+    /// multiple times but not change the [`World`](crate::World) during its execution.\
+    /// In this case you want the same tracking information for all runs of this workload
+    /// which would have disappeared using the automatic window.
+    pub fn override_last_modification(
+        &mut self,
+        new_timestamp: TrackingTimestamp,
+    ) -> TrackingTimestamp {
+        core::mem::replace(&mut self.last_modification, new_timestamp)
     }
 }
 
