@@ -1,9 +1,7 @@
 use shipyard::*;
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn entity_id_serde() {

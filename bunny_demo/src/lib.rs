@@ -79,7 +79,7 @@ pub async fn run() {
             window_id,
         } if window_id == window.id() => {
             if world.run(|graphics: UniqueViewMut<graphics::Graphics>| {
-                state.on_event(&graphics.context, &event)
+                state.on_event(&graphics.context, &event).consumed
             }) {
                 return;
             }

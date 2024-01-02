@@ -25,22 +25,22 @@ pub(crate) fn expand_borrow_info(
 
             let field_is_default = fields.named.iter().map(|field| {
                 field.attrs.iter().any(|attr| {
-                    if attr.path.is_ident("shipyard") {
-                        match attr.parse_meta() {
-                            Ok(syn::Meta::List(list)) => list.nested.into_iter().any(|meta| {
-                                matches!(meta, syn::NestedMeta::Meta(syn::Meta::Path(path)) if path.is_ident("default"))
-                            }),
-                            _ => false,
-                        }
-                    } else {
-                        false
+                    let mut is_default = false;
+
+                    if attr.path().is_ident("shipyard") {
+                        let _ = attr.parse_nested_meta(|meta| {
+                            is_default = is_default || meta.path.is_ident("default");
+
+                            Ok(())
+                        });
                     }
+
+                    is_default
                 })
             });
 
-            let field = field_type
-                .zip(field_is_default)
-                .map(|(field_type, field_is_default)| {
+            let field_info = field_type.clone().zip(field_is_default.clone()).map(
+                |(field_type, field_is_default)| {
                     if field_is_default {
                         quote!(();)
                     } else {
@@ -48,23 +48,47 @@ pub(crate) fn expand_borrow_info(
                             <#field_type>::borrow_info(info);
                         )
                     }
-                });
+                },
+            );
+            let field_tracking =
+                field_type
+                    .zip(field_is_default)
+                    .map(|(field_type, field_is_default)| {
+                        if field_is_default {
+                            quote!(();)
+                        } else {
+                            quote!(
+                                <#field_type>::enable_tracking(enable_tracking_fn);
+                            )
+                        }
+                    });
 
             Ok(quote!(
                 unsafe impl #impl_generics ::shipyard::BorrowInfo for #name #ty_generics #where_clause {
                     fn borrow_info(info: &mut Vec<::shipyard::info::TypeInfo>) {
-                        #(#field)*
+                        #(#field_info)*
+                    }
+                    fn enable_tracking(
+                        enable_tracking_fn: &mut Vec<fn(&::shipyard::AllStorages) -> Result<(), ::shipyard::error::GetStorage>>,
+                    ) {
+                        #(#field_tracking)*
                     }
                 }
             ))
         }
         syn::Fields::Unnamed(fields) => {
             let field_type = fields.unnamed.iter().map(|field| &field.ty);
+            let field_type_clone = field_type.clone();
 
             Ok(quote!(
                 unsafe impl #impl_generics ::shipyard::BorrowInfo for #name #ty_generics #where_clause {
                     fn borrow_info(info: &mut Vec<::shipyard::info::TypeInfo>) {
-                        #(<#field_type>::borrow_info(info);)*
+                        #(<#field_type_clone>::borrow_info(info);)*
+                    }
+                    fn enable_tracking(
+                        enable_tracking_fn: &mut Vec<fn(&::shipyard::AllStorages) -> Result<(), ::shipyard::error::GetStorage>>,
+                    ) {
+                        #(<#field_type>::enable_tracking(enable_tracking_fn);)*
                     }
                 }
             ))

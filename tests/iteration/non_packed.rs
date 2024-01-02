@@ -2,25 +2,19 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct I16(i16);
-impl Component for I16 {
-    type Tracking = track::Untracked;
-}
+impl Component for I16 {}
 
 #[test]
 fn basic() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
@@ -137,7 +131,7 @@ fn basic() {
 
 #[test]
 fn with_id() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
@@ -218,7 +212,7 @@ fn with_id() {
 
 #[test]
 fn empty() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (usizes, u32s) = world.borrow::<(ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
 
@@ -232,7 +226,7 @@ fn empty() {
 
 #[test]
 fn not() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
@@ -255,7 +249,7 @@ fn not() {
 
 #[test]
 fn iter_by() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut u32s, mut i16s) = world
         .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
@@ -295,7 +289,7 @@ fn iter_by() {
 
 #[test]
 fn or() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity((U32(0), I16(10)));
     world.add_entity((U32(1),));
@@ -321,7 +315,7 @@ fn or() {
 
 // #[test]
 // fn chunk() {
-//     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+//     let mut world = World::new();
 
 //     world.bulk_add_entity((0..100).map(|_| (1u32,)));
 

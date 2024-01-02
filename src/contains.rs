@@ -1,7 +1,7 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
-use crate::view::{View, ViewMut};
+use crate::views::{View, ViewMut};
 
 /// Checks if an entity has some components.
 pub trait Contains {
@@ -9,19 +9,19 @@ pub trait Contains {
     fn contains(&self, entity: EntityId) -> bool;
 }
 
-impl<'a: 'b, 'b, T: Component> Contains for &'b View<'a, T> {
+impl<'a: 'b, 'b, T: Component, TRACK> Contains for &'b View<'a, T, TRACK> {
     fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(self, entity)
     }
 }
 
-impl<'a: 'b, 'b, T: Component> Contains for &'b ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: Component, TRACK> Contains for &'b ViewMut<'a, T, TRACK> {
     fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(&**self, entity)
     }
 }
 
-impl<'a: 'b, 'b, T: Component> Contains for &'b mut ViewMut<'a, T> {
+impl<'a: 'b, 'b, T: Component, TRACK> Contains for &'b mut ViewMut<'a, T, TRACK> {
     fn contains(&self, entity: EntityId) -> bool {
         SparseSet::contains(&**self, entity)
     }

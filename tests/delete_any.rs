@@ -1,18 +1,14 @@
 use shipyard::*;
 
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn simple() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(|mut all_storages: AllStoragesViewMut| {
         let (entity0, entity1, entity2, entity3) = all_storages.run(

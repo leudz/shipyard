@@ -35,16 +35,17 @@ pub(crate) fn expand_borrow(
 
             let field_is_default = fields.named.iter().map(|field| {
                 field.attrs.iter().any(|attr| {
-                    if attr.path.is_ident("shipyard") {
-                        match attr.parse_meta() {
-                            Ok(syn::Meta::List(list)) => list.nested.into_iter().any(|meta| {
-                                matches!(meta, syn::NestedMeta::Meta(syn::Meta::Path(path)) if path.is_ident("default"))
-                            }),
-                            _ => false,
-                        }
-                    } else {
-                        false
+                    let mut is_default = false;
+
+                    if attr.path().is_ident("shipyard") {
+                        let _ = attr.parse_nested_meta(|meta| {
+                            is_default = is_default || meta.path.is_ident("default");
+
+                            Ok(())
+                        });
                     }
+
+                    is_default
                 })
             });
 
@@ -59,7 +60,7 @@ pub(crate) fn expand_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::Borrow>::borrow(world, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?
                         )
                     }
                 });
@@ -68,7 +69,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View<'__w>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp,) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -77,24 +78,27 @@ pub(crate) fn expand_borrow(
             ))
         }
         syn::Fields::Unnamed(fields) => {
-            let world_borrow = fields.unnamed.iter().map(|field| {
-                let field_type = &field.ty;
-                quote!(<#field_type as ::shipyard::Borrow>::borrow(world, last_run, current)?)
-            });
+            let borrow = fields
+                .unnamed
+                .iter()
+                .map(|field| {
+                    let field_type = &field.ty;
+                    quote!(<#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?)
+                });
 
             Ok(quote!(
                 impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View<'__w>, ::shipyard::error::GetStorage> {
-                        Ok(#name(#(#world_borrow),*))
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                        Ok(#name(#(#borrow),*))
                     }
                 }
             ))
         }
         syn::Fields::Unit => Err(Error::new(
             Span::call_site(),
-            "Unit struct cannot borrow from World",
+            "Unit struct cannot borrow from AllStorages",
         )),
     }
 }

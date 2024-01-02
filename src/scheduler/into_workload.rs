@@ -6,14 +6,14 @@ use crate::type_id::TypeId;
 use crate::{AsLabel, WorkloadModificator};
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 // macro not module
 use alloc::boxed::Box;
 use alloc::string::ToString;
 use alloc::vec;
 
-static WORKLOAD_ID: AtomicU64 = AtomicU64::new(1);
-fn unique_id() -> u64 {
+static WORKLOAD_ID: AtomicU32 = AtomicU32::new(1);
+fn unique_id() -> u32 {
     WORKLOAD_ID.fetch_add(1, Ordering::Relaxed)
 }
 
@@ -60,13 +60,13 @@ pub trait IntoWorkload<Views, R> {
     /// }
     ///
     /// fn meal(mut fats: ViewMut<Fat>) {
-    ///     for fat in (&mut fats).iter() {
+    ///     for mut fat in (&mut fats).iter() {
     ///         fat.0 += 3.0;
     ///     }
     /// }
     ///
     /// fn age(mut healths: ViewMut<Health>) {
-    ///     (&mut healths).iter().for_each(|health| {
+    ///     (&mut healths).iter().for_each(|mut health| {
     ///         health.0 -= 4.0;
     ///     });
     /// }
@@ -169,7 +169,7 @@ where
             let unique_id = unique_id();
 
             let name = Box::new(WorkloadLabel {
-                type_id: TypeId(unique_id),
+                type_id: TypeId(unique_id as u128),
                 name: unique_id.to_string().as_label(),
             });
 
@@ -183,6 +183,7 @@ where
                 overwritten_name: false,
                 require_before: DedupedLabels::new(),
                 require_after: DedupedLabels::new(),
+                barriers: Vec::new(),
             }
         }
     }
@@ -210,7 +211,7 @@ macro_rules! impl_into_workload {
                 let unique_id = unique_id();
 
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId(unique_id),
+                    type_id: TypeId(unique_id as u128),
                     name: unique_id.to_string().as_label(),
                 });
 
@@ -224,11 +225,12 @@ macro_rules! impl_into_workload {
                     overwritten_name: false,
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),
+                    barriers: Vec::new(),
                 };
 
                 $(
-                    let mut w = self.$index.into_workload();
-                    workload = workload.merge(&mut w);
+                    let w = self.$index.into_workload();
+                    workload = workload.merge(w);
                 )+
 
                 workload
@@ -239,7 +241,7 @@ macro_rules! impl_into_workload {
                 let unique_id = unique_id();
 
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId(unique_id),
+                    type_id: TypeId(unique_id as u128),
                     name: unique_id.to_string().as_label(),
                 });
 
@@ -253,6 +255,7 @@ macro_rules! impl_into_workload {
                     overwritten_name: false,
                     require_before: DedupedLabels::new(),
                     require_after: DedupedLabels::new(),
+                    barriers: Vec::new(),
                 };
 
                 let mut sequential_tags = Vec::new();
@@ -273,7 +276,7 @@ macro_rules! impl_into_workload {
                         workloads.$index = workloads.$index.before_all(sequential_tag.clone());
                     }
 
-                    workload = workload.merge(&mut workloads.$index);
+                    workload = workload.merge(workloads.$index);
                 )+
 
                 let mut system_names = DedupedLabels::with_capacity(workload.systems.len());

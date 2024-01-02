@@ -1,10 +1,11 @@
 use crate::all_storages::AllStorages;
-use crate::borrow::{Borrow, BorrowInfo, Mutability};
+use crate::borrow::{BorrowInfo, Mutability, WorldBorrow};
 use crate::info::DedupedLabels;
 use crate::scheduler::into_workload_system::Nothing;
 use crate::scheduler::label::SystemLabel;
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
+use crate::tracking::TrackingTimestamp;
 use crate::type_id::TypeId;
 use crate::World;
 use crate::{error, AsLabel};
@@ -53,6 +54,7 @@ where
 
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
+            tracking_to_enable: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)().into().map_err(error::Run::from_custom)?;
                 Ok(())
@@ -83,6 +85,7 @@ where
 
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
+            tracking_to_enable: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)().into().map_err(error::Run::from_custom)?;
                 Ok(())
@@ -104,16 +107,36 @@ where
     }
 }
 
+// The `Result` type is not actually used and the error type can be anything
+impl IntoWorkloadTrySystem<WorkloadSystem, Result<(), error::InvalidSystem>> for WorkloadSystem {
+    /// Wraps a fallible function in a struct containing all information required by a workload.  
+    /// The workload will stop if an error is returned.
+    #[cfg(feature = "std")]
+    fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(
+        self,
+    ) -> Result<WorkloadSystem, error::InvalidSystem> {
+        Ok(self)
+    }
+    /// Wraps a fallible function in a struct containing all information required by a workload.  
+    /// The workload will stop if an error is returned.
+    #[cfg(not(feature = "std"))]
+    fn into_workload_try_system<Ok, Err: 'static + Send + Any>(
+        self,
+    ) -> Result<WorkloadSystem, error::InvalidSystem> {
+        Ok(self)
+    }
+}
+
 macro_rules! impl_into_workload_try_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow + BorrowInfo,)+ R: 'static, Func> IntoWorkloadTrySystem<($($type,)+), R> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ R: 'static, Func> IntoWorkloadTrySystem<($($type,)+), R> for Func
         where
             Func: 'static
                 + Send
                 + Sync,
             for<'a, 'b> &'b Func:
                 Fn($($type),+) -> R
-                + Fn($($type::View<'a>),+) -> R
+                + Fn($($type::WorldView<'a>),+) -> R
         {
             #[cfg(feature = "std")]
             fn into_workload_try_system<Ok, Err: Into<Box<dyn Error + Send + Sync>>>(self) -> Result<WorkloadSystem, error::InvalidSystem> where R: Into<Result<Ok, Err>> {
@@ -151,13 +174,19 @@ macro_rules! impl_into_workload_try_system {
                     }
                 }
 
+                let mut tracking_to_enable = Vec::new();
+                $(
+                    $type::enable_tracking(&mut tracking_to_enable);
+                )+
+
                 let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
+                    tracking_to_enable,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
+                        Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),
@@ -216,13 +245,19 @@ macro_rules! impl_into_workload_try_system {
                     }
                 }
 
+                let mut tracking_to_enable = Vec::new();
+                $(
+                    $type::enable_tracking(&mut tracking_to_enable);
+                )+
+
                 let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
+                    tracking_to_enable,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
+                        Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),

@@ -1,70 +1,103 @@
+use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
-use crate::view::{View, ViewMut};
-use crate::EntityId;
+use crate::entity_id::EntityId;
+use crate::tracking::TrackingTimestamp;
+use crate::views::{View, ViewMut};
 use alloc::boxed::Box;
 use core::hint::unreachable_unchecked;
 use core::marker::PhantomData;
 use core::ptr;
 
-pub struct FullRawWindow<'a, T, Tracking> {
+pub struct FullRawWindow<'a, T> {
     sparse: *const *const EntityId,
     sparse_len: usize,
     pub(crate) dense: *const EntityId,
     pub(crate) dense_len: usize,
     pub(crate) data: *const T,
-    pub(crate) insertion_data: *const u32,
-    pub(crate) modification_data: *const u32,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
-    pub(crate) is_tracking_modification: bool,
-    _phantom: PhantomData<(&'a T, Tracking)>,
+    pub(crate) insertion_data: *const TrackingTimestamp,
+    pub(crate) modification_data: *const TrackingTimestamp,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
+    _phantom: PhantomData<&'a T>,
 }
 
-unsafe impl<T: Send + Component> Send for FullRawWindow<'_, T, T::Tracking> {}
+unsafe impl<T: Send + Component> Send for FullRawWindow<'_, T> {}
 
-impl<'w, T: Component> FullRawWindow<'w, T, T::Tracking> {
+impl<'w, T: Component> FullRawWindow<'w, T> {
     #[inline]
-    pub(crate) fn from_view(sparse_set: &View<'_, T, T::Tracking>) -> Self {
-        let sparse_len = sparse_set.sparse.len();
-        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = sparse_set.sparse.as_ptr();
+    pub(crate) fn from_view<TRACK>(view: &View<'_, T, TRACK>) -> Self {
+        let sparse_len = view.sparse.len();
+        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
-        let is_tracking_modification = sparse_set.is_tracking_modification();
 
         FullRawWindow {
             sparse,
             sparse_len,
-            dense: sparse_set.dense.as_ptr(),
-            dense_len: sparse_set.dense.len(),
-            data: sparse_set.data.as_ptr(),
-            insertion_data: sparse_set.insertion_data.as_ptr(),
-            modification_data: sparse_set.modification_data.as_ptr(),
-            last_insertion: sparse_set.last_insert,
-            last_modification: sparse_set.last_modification,
-            current: sparse_set.current,
-            is_tracking_modification,
+            dense: view.dense.as_ptr(),
+            dense_len: view.dense.len(),
+            data: view.data.as_ptr(),
+            insertion_data: view.insertion_data.as_ptr(),
+            modification_data: view.modification_data.as_ptr(),
+            last_insertion: view.last_insertion,
+            last_modification: view.last_modification,
+            current: view.current,
             _phantom: PhantomData,
         }
     }
     #[inline]
-    pub(crate) fn from_view_mut(sparse_set: &ViewMut<'_, T, T::Tracking>) -> Self {
-        let sparse_len = sparse_set.sparse.len();
+    pub(crate) fn from_owned_view<TRACK>(
+        view: View<'_, T, TRACK>,
+    ) -> (Self, Option<SharedBorrow<'_>>, SharedBorrow<'_>) {
+        let View {
+            sparse_set,
+            all_borrow,
+            borrow,
+            last_insertion,
+            last_modification,
+            current,
+            ..
+        } = view;
+
+        let sparse_len = sparse_set.len();
         let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = sparse_set.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
-        let is_tracking_modification = sparse_set.is_tracking_modification();
+
+        (
+            FullRawWindow {
+                sparse,
+                sparse_len,
+                dense: sparse_set.dense.as_ptr(),
+                dense_len: sparse_set.dense.len(),
+                data: sparse_set.data.as_ptr(),
+                insertion_data: sparse_set.insertion_data.as_ptr(),
+                modification_data: sparse_set.modification_data.as_ptr(),
+                last_insertion,
+                last_modification,
+                current,
+                _phantom: PhantomData,
+            },
+            all_borrow,
+            borrow,
+        )
+    }
+    #[inline]
+    pub(crate) fn from_view_mut<TRACK>(view: &ViewMut<'_, T, TRACK>) -> Self {
+        let sparse_len = view.sparse.len();
+        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
+        let sparse = sparse as *const *const EntityId;
 
         FullRawWindow {
             sparse,
             sparse_len,
-            dense: sparse_set.dense.as_ptr(),
-            dense_len: sparse_set.dense.len(),
-            data: sparse_set.data.as_ptr(),
-            insertion_data: sparse_set.insertion_data.as_ptr(),
-            modification_data: sparse_set.modification_data.as_ptr(),
-            last_insertion: sparse_set.last_insert,
-            last_modification: sparse_set.last_modification,
-            current: sparse_set.current,
-            is_tracking_modification,
+            dense: view.dense.as_ptr(),
+            dense_len: view.dense.len(),
+            data: view.data.as_ptr(),
+            insertion_data: view.insertion_data.as_ptr(),
+            modification_data: view.modification_data.as_ptr(),
+            last_insertion: view.last_insertion,
+            last_modification: view.last_modification,
+            current: view.current,
             _phantom: PhantomData,
         }
     }
@@ -108,7 +141,7 @@ impl<'w, T: Component> FullRawWindow<'w, T, T::Tracking> {
     }
 }
 
-impl<T: Component> Clone for FullRawWindow<'_, T, T::Tracking> {
+impl<T: Component> Clone for FullRawWindow<'_, T> {
     #[inline]
     fn clone(&self) -> Self {
         FullRawWindow {
@@ -122,52 +155,87 @@ impl<T: Component> Clone for FullRawWindow<'_, T, T::Tracking> {
             last_insertion: self.last_insertion,
             last_modification: self.last_modification,
             current: self.current,
-            is_tracking_modification: self.is_tracking_modification,
             _phantom: PhantomData,
         }
     }
 }
 
-pub struct FullRawWindowMut<'a, T, Tracking> {
+pub struct FullRawWindowMut<'a, T> {
     sparse: *mut *mut EntityId,
     sparse_len: usize,
     pub(crate) dense: *mut EntityId,
     pub(crate) dense_len: usize,
     pub(crate) data: *mut T,
-    pub(crate) insertion_data: *const u32,
-    pub(crate) modification_data: *mut u32,
-    pub(crate) last_insertion: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
+    pub(crate) insertion_data: *const TrackingTimestamp,
+    pub(crate) modification_data: *mut TrackingTimestamp,
+    pub(crate) last_insertion: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
+    pub(crate) current: TrackingTimestamp,
     pub(crate) is_tracking_modification: bool,
-    _phantom: PhantomData<(&'a mut T, Tracking)>,
+    _phantom: PhantomData<&'a mut T>,
 }
 
-unsafe impl<T: Send + Component> Send for FullRawWindowMut<'_, T, T::Tracking> {}
+unsafe impl<T: Send + Component> Send for FullRawWindowMut<'_, T> {}
 
-impl<'w, T: Component> FullRawWindowMut<'w, T, T::Tracking> {
+impl<'w, T: Component> FullRawWindowMut<'w, T> {
     #[inline]
-    pub(crate) fn new(sparse_set: &mut ViewMut<'_, T, T::Tracking>) -> Self {
-        let sparse_len = sparse_set.sparse.len();
-        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
-            sparse_set.sparse.as_mut_ptr();
+    pub(crate) fn new<TRACK>(view: &mut ViewMut<'_, T, TRACK>) -> Self {
+        let sparse_len = view.sparse.len();
+        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
-        let is_tracking_modification = sparse_set.is_tracking_modification();
 
         FullRawWindowMut {
             sparse,
             sparse_len,
-            dense: sparse_set.dense.as_mut_ptr(),
-            dense_len: sparse_set.dense.len(),
-            data: sparse_set.data.as_mut_ptr(),
-            insertion_data: sparse_set.insertion_data.as_ptr(),
-            modification_data: sparse_set.modification_data.as_mut_ptr(),
-            last_insertion: sparse_set.last_insert,
-            last_modification: sparse_set.last_modification,
-            current: sparse_set.current,
-            is_tracking_modification,
+            dense: view.dense.as_mut_ptr(),
+            dense_len: view.dense.len(),
+            data: view.data.as_mut_ptr(),
+            insertion_data: view.insertion_data.as_ptr(),
+            modification_data: view.modification_data.as_mut_ptr(),
+            last_insertion: view.last_insertion,
+            last_modification: view.last_modification,
+            current: view.current,
+            is_tracking_modification: view.is_tracking_modification(),
             _phantom: PhantomData,
         }
+    }
+    #[inline]
+    pub(crate) fn new_owned<TRACK>(
+        view: ViewMut<'_, T, TRACK>,
+    ) -> (Self, Option<SharedBorrow<'_>>, ExclusiveBorrow<'_>) {
+        let ViewMut {
+            sparse_set,
+            all_borrow,
+            borrow,
+            last_insertion,
+            last_modification,
+            current,
+            ..
+        } = view;
+
+        let sparse_len = sparse_set.len();
+        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
+            sparse_set.sparse.as_mut_ptr();
+        let sparse = sparse as *mut *mut EntityId;
+
+        (
+            FullRawWindowMut {
+                sparse,
+                sparse_len,
+                dense: sparse_set.dense.as_mut_ptr(),
+                dense_len: sparse_set.dense.len(),
+                data: sparse_set.data.as_mut_ptr(),
+                insertion_data: sparse_set.insertion_data.as_ptr(),
+                modification_data: sparse_set.modification_data.as_mut_ptr(),
+                last_insertion,
+                last_modification,
+                current,
+                is_tracking_modification: sparse_set.is_tracking_modification(),
+                _phantom: PhantomData,
+            },
+            all_borrow,
+            borrow,
+        )
     }
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
@@ -209,7 +277,7 @@ impl<'w, T: Component> FullRawWindowMut<'w, T, T::Tracking> {
     }
 }
 
-impl<T: Component> Clone for FullRawWindowMut<'_, T, T::Tracking> {
+impl<T: Component> Clone for FullRawWindowMut<'_, T> {
     #[inline]
     fn clone(&self) -> Self {
         FullRawWindowMut {

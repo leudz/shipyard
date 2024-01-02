@@ -13,12 +13,9 @@ use core::ptr;
 const ACCESS_FACTOR: usize = 3;
 
 /// Trait used to create iterators.  
-/// Yields [`Mut`] for mutable components.
 ///
 /// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
 /// This trait serves as substitute.
-///
-/// [`Mut`]: crate::Mut
 pub trait IntoIter {
     #[allow(missing_docs)]
     type IntoIter: Iterator;
@@ -27,9 +24,6 @@ pub trait IntoIter {
     type IntoParIter;
 
     /// Returns an iterator over `SparseSet`.
-    ///
-    /// Yields [`Mut`] for tracked mutable components.  
-    /// It `deref`s to the component and will flag mutation.  
     ///
     /// ### Example
     /// ```
@@ -52,19 +46,10 @@ pub trait IntoIter {
     ///     x.0 += y.0 as usize;
     /// });
     /// ```
-    /// [`Mut`]: crate::Mut
     fn iter(self) -> Self::IntoIter;
     /// Returns an iterator over `SparseSet`, its order is based on `D`.
-    ///
-    /// Returns [`Mut`] when yielding tracked mutable components.  
-    /// It `deref`s to the component and will flag mutation.  
-    ///
-    /// [`Mut`]: crate::Mut
     fn iter_by<D: 'static>(self) -> Self::IntoIter;
     /// Returns a parallel iterator over `SparseSet`.
-    ///
-    /// Yields [`Mut`] for tracked mutable components.  
-    /// It `deref`s to the component and will flag mutation.  
     ///
     /// ### Example
     /// ```
@@ -88,7 +73,6 @@ pub trait IntoIter {
     ///     x.0 += y.0 as usize;
     /// });
     /// ```
-    /// [`Mut`]: crate::Mut
     #[cfg(feature = "parallel")]
     #[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
     fn par_iter(self) -> Self::IntoParIter;
@@ -195,7 +179,6 @@ macro_rules! impl_into_iter {
             #[cfg(feature = "parallel")]
             type IntoParIter = ParIter<($type1::AbsView, $($type::AbsView,)+)>;
 
-            #[allow(clippy::drop_copy)]
             fn iter(self) -> Self::IntoIter {
                 let type_ids = [self.$index1.type_id(), $(self.$index.type_id()),+];
                 let mut smallest = core::usize::MAX;
@@ -243,7 +226,7 @@ macro_rules! impl_into_iter {
                     }
                 )+
 
-                drop(factored_len);
+                let _ = factored_len;
 
                 if smallest == core::usize::MAX {
                     Iter::Mixed(Mixed {

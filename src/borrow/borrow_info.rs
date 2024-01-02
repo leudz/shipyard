@@ -5,14 +5,16 @@ use super::non_send_sync::NonSendSync;
 #[cfg(feature = "thread_local")]
 use super::non_sync::NonSync;
 use super::Mutability;
-use crate::all_storages::AllStorages;
+use crate::all_storages::{AllStorages, CustomStorageAccess};
 use crate::component::{Component, Unique};
 use crate::entities::Entities;
+use crate::error;
 use crate::scheduler::TypeInfo;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
+use crate::tracking::{Track, Tracking};
 use crate::unique::UniqueStorage;
-use crate::view::{
+use crate::views::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
 };
@@ -30,13 +32,9 @@ use core::any::type_name;
 /// use shipyard::{BorrowInfo, info::TypeInfo, View, UniqueView};
 ///
 /// # struct Camera {}
-/// # impl shipyard::Unique for Camera {
-/// #     type Tracking = shipyard::track::Untracked;
-/// # }
+/// # impl shipyard::Unique for Camera {}
 /// # struct Position {}
-/// # impl shipyard::Component for Position {
-/// #     type Tracking = shipyard::track::Untracked;
-/// # }
+/// # impl shipyard::Component for Position {}
 /// #
 /// struct CameraView<'v> {
 ///     camera: UniqueView<'v, Camera>,
@@ -49,6 +47,11 @@ use core::any::type_name;
 ///         <UniqueView<'_, Camera>>::borrow_info(info);
 ///         <View<'_, Position>>::borrow_info(info);
 ///     }
+///     fn enable_tracking(
+///         _: &mut Vec<
+///             for<'a> fn(&'a shipyard::AllStorages) -> Result<(), shipyard::error::GetStorage>,
+///         >,
+///     ) {}
 /// }
 /// ```
 pub unsafe trait BorrowInfo {
@@ -56,10 +59,16 @@ pub unsafe trait BorrowInfo {
     ///
     /// A borrow error might happen if the information is not correct.
     fn borrow_info(info: &mut Vec<TypeInfo>);
+    /// Enable tracking on the `World` where this storage is borrowed.
+    #[allow(clippy::type_complexity)]
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    );
 }
 
 unsafe impl BorrowInfo for () {
     fn borrow_info(_: &mut Vec<TypeInfo>) {}
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl<'a> BorrowInfo for AllStoragesView<'a> {
@@ -74,6 +83,7 @@ unsafe impl<'a> BorrowInfo for AllStoragesView<'a> {
             thread_safe: false,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl<'a> BorrowInfo for AllStoragesViewMut<'a> {
@@ -88,6 +98,7 @@ unsafe impl<'a> BorrowInfo for AllStoragesViewMut<'a> {
             thread_safe: false,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl<'a> BorrowInfo for EntitiesView<'a> {
@@ -99,6 +110,7 @@ unsafe impl<'a> BorrowInfo for EntitiesView<'a> {
             thread_safe: true,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl<'a> BorrowInfo for EntitiesViewMut<'a> {
@@ -110,99 +122,218 @@ unsafe impl<'a> BorrowInfo for EntitiesViewMut<'a> {
             thread_safe: true,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
-unsafe impl<'a, T: Send + Sync + Component> BorrowInfo for View<'a, T> {
+unsafe impl<'a, T: Send + Sync + Component, TRACK> BorrowInfo for View<'a, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
+            name: type_name::<SparseSet<T>>().into(),
             mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
+            storage_id: StorageId::of::<SparseSet<T>>(),
             thread_safe: true,
         });
     }
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_mut(SparseSet::<T>::new)?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
+    }
 }
 
 #[cfg(feature = "thread_local")]
-unsafe impl<'a, T: Sync + Component> BorrowInfo for NonSend<View<'a, T>> {
+unsafe impl<'a, T: Sync + Component, TRACK> BorrowInfo for NonSend<View<'a, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
+            name: type_name::<SparseSet<T>>().into(),
             mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
+            storage_id: StorageId::of::<SparseSet<T>>(),
             thread_safe: true,
         });
     }
-}
 
-#[cfg(feature = "thread_local")]
-unsafe impl<'a, T: Send + Component> BorrowInfo for NonSync<View<'a, T>> {
-    fn borrow_info(info: &mut Vec<TypeInfo>) {
-        info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
-            mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            thread_safe: false,
-        });
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::<T>::new()))?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
     }
 }
 
 #[cfg(feature = "thread_local")]
-unsafe impl<'a, T: Component> BorrowInfo for NonSendSync<View<'a, T>> {
+unsafe impl<'a, T: Send + Component, TRACK> BorrowInfo for NonSync<View<'a, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
+            name: type_name::<SparseSet<T>>().into(),
             mutability: Mutability::Shared,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
+            storage_id: StorageId::of::<SparseSet<T>>(),
             thread_safe: false,
         });
     }
+
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::<T>::new()))?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
+    }
 }
 
-unsafe impl<'a, T: Send + Sync + Component> BorrowInfo for ViewMut<'a, T> {
+#[cfg(feature = "thread_local")]
+unsafe impl<'a, T: Component, TRACK> BorrowInfo for NonSendSync<View<'a, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
+            name: type_name::<SparseSet<T>>().into(),
+            mutability: Mutability::Shared,
+            storage_id: StorageId::of::<SparseSet<T>>(),
+            thread_safe: false,
+        });
+    }
+
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::<T>::new()))?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
+    }
+}
+
+unsafe impl<'a, T: Send + Sync + Component, TRACK> BorrowInfo for ViewMut<'a, T, TRACK>
+where
+    Track<TRACK>: Tracking,
+{
+    fn borrow_info(info: &mut Vec<TypeInfo>) {
+        info.push(TypeInfo {
+            name: type_name::<SparseSet<T>>().into(),
             mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
+            storage_id: StorageId::of::<SparseSet<T>>(),
             thread_safe: true,
         });
     }
-}
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_mut(SparseSet::<T>::new)?
+                .enable_tracking::<Track<TRACK>>();
 
-#[cfg(feature = "thread_local")]
-unsafe impl<'a, T: Sync + Component> BorrowInfo for NonSend<ViewMut<'a, T>> {
-    fn borrow_info(info: &mut Vec<TypeInfo>) {
-        info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
-            mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
-            thread_safe: false,
-        });
+            Ok(())
+        })
     }
 }
 
 #[cfg(feature = "thread_local")]
-unsafe impl<'a, T: Send + Component> BorrowInfo for NonSync<ViewMut<'a, T>> {
+unsafe impl<'a, T: Sync + Component, TRACK> BorrowInfo for NonSend<ViewMut<'a, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
+            name: type_name::<SparseSet<T>>().into(),
             mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
+            storage_id: StorageId::of::<SparseSet<T>>(),
+            thread_safe: false,
+        });
+    }
+
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_non_send_mut(|| NonSend(SparseSet::<T>::new()))?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
+    }
+}
+
+#[cfg(feature = "thread_local")]
+unsafe impl<'a, T: Send + Component, TRACK> BorrowInfo for NonSync<ViewMut<'a, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
+    fn borrow_info(info: &mut Vec<TypeInfo>) {
+        info.push(TypeInfo {
+            name: type_name::<SparseSet<T>>().into(),
+            mutability: Mutability::Exclusive,
+            storage_id: StorageId::of::<SparseSet<T>>(),
             thread_safe: true,
         });
     }
+
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_non_sync_mut(|| NonSync(SparseSet::<T>::new()))?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
+    }
 }
 
 #[cfg(feature = "thread_local")]
-unsafe impl<'a, T: Component> BorrowInfo for NonSendSync<ViewMut<'a, T>> {
+unsafe impl<'a, T: Component, TRACK> BorrowInfo for NonSendSync<ViewMut<'a, T, TRACK>>
+where
+    Track<TRACK>: Tracking,
+{
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         info.push(TypeInfo {
-            name: type_name::<SparseSet<T, T::Tracking>>().into(),
+            name: type_name::<SparseSet<T>>().into(),
             mutability: Mutability::Exclusive,
-            storage_id: StorageId::of::<SparseSet<T, T::Tracking>>(),
+            storage_id: StorageId::of::<SparseSet<T>>(),
             thread_safe: false,
         });
+    }
+
+    fn enable_tracking(
+        enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        enable_tracking_fn.push(|all_storages| {
+            all_storages
+                .custom_storage_or_insert_non_send_sync_mut(|| NonSendSync(SparseSet::<T>::new()))?
+                .enable_tracking::<Track<TRACK>>();
+
+            Ok(())
+        })
     }
 }
 
@@ -215,6 +346,7 @@ unsafe impl<'a, T: Send + Sync + Unique> BorrowInfo for UniqueView<'a, T> {
             thread_safe: true,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 #[cfg(feature = "thread_local")]
@@ -227,6 +359,7 @@ unsafe impl<'a, T: Sync + Unique> BorrowInfo for NonSend<UniqueView<'a, T>> {
             thread_safe: true,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 #[cfg(feature = "thread_local")]
@@ -239,6 +372,7 @@ unsafe impl<'a, T: Send + Unique> BorrowInfo for NonSync<UniqueView<'a, T>> {
             thread_safe: false,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 #[cfg(feature = "thread_local")]
@@ -251,6 +385,7 @@ unsafe impl<'a, T: Unique> BorrowInfo for NonSendSync<UniqueView<'a, T>> {
             thread_safe: false,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl<'a, T: Send + Sync + Unique> BorrowInfo for UniqueViewMut<'a, T> {
@@ -262,6 +397,7 @@ unsafe impl<'a, T: Send + Sync + Unique> BorrowInfo for UniqueViewMut<'a, T> {
             thread_safe: true,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 #[cfg(feature = "thread_local")]
@@ -274,6 +410,7 @@ unsafe impl<'a, T: Sync + Unique> BorrowInfo for NonSend<UniqueViewMut<'a, T>> {
             thread_safe: false,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 #[cfg(feature = "thread_local")]
@@ -286,6 +423,7 @@ unsafe impl<'a, T: Send + Unique> BorrowInfo for NonSync<UniqueViewMut<'a, T>> {
             thread_safe: true,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 #[cfg(feature = "thread_local")]
@@ -298,11 +436,17 @@ unsafe impl<'a, T: Unique> BorrowInfo for NonSendSync<UniqueViewMut<'a, T>> {
             thread_safe: false,
         });
     }
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl<T: BorrowInfo> BorrowInfo for Option<T> {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         T::borrow_info(info);
+    }
+    fn enable_tracking(
+        enable_tracking: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    ) {
+        T::enable_tracking(enable_tracking);
     }
 }
 
@@ -312,6 +456,11 @@ macro_rules! impl_borrow_info {
             fn borrow_info(info: &mut Vec<TypeInfo>) {
                 $(
                     $type::borrow_info(info);
+                )+
+            }
+            fn enable_tracking(enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {
+                $(
+                    $type::enable_tracking(enable_tracking_fn);
                 )+
             }
         }

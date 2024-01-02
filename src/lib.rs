@@ -25,6 +25,7 @@
 #![warn(clippy::items_after_statements)]
 #![warn(clippy::print_stdout)]
 #![warn(clippy::maybe_infinite_iter)]
+#![allow(clippy::uninlined_format_args)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
@@ -45,7 +46,9 @@ mod entities;
 mod entity_id;
 pub mod error;
 mod get;
+mod get_component;
 pub mod iter;
+mod iter_component;
 mod memory_usage;
 mod r#mut;
 mod not;
@@ -58,13 +61,12 @@ mod seal;
 mod sparse_set;
 mod storage;
 mod system;
-mod timestamp;
 /// module related to storage tracking, like insertion or modification.
 pub mod track;
 mod tracking;
 mod type_id;
 mod unique;
-mod view;
+mod views;
 mod world;
 
 #[cfg(feature = "thread_local")]
@@ -79,19 +81,24 @@ pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_distinct_component::AddDistinctComponent;
 pub use add_entity::AddEntity;
-pub use all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
+pub use all_storages::{
+    AllStorages, CustomStorageAccess, LockPresent, MissingLock, MissingThreadId, ThreadIdPresent,
+    TupleDeleteAny, TupleRetainStorage,
+};
+pub use atomic_refcell::{ARef, ARefMut};
 #[doc(hidden)]
 pub use atomic_refcell::{ExclusiveBorrow, SharedBorrow};
-pub use atomic_refcell::{Ref, RefMut};
 #[doc(inline)]
-pub use borrow::{AllStoragesBorrow, Borrow, BorrowInfo, Mutability};
+pub use borrow::{Borrow, BorrowInfo, Mutability, WorldBorrow};
 pub use component::{Component, Unique};
 pub use contains::Contains;
 pub use delete::Delete;
 pub use entities::Entities;
 pub use entity_id::EntityId;
 pub use get::Get;
+pub use get_component::{GetComponent, Ref, RefMut};
 pub use iter::{IntoIter, IntoWithId};
+pub use iter_component::{IntoIterRef, IterComponent, IterRef};
 pub use memory_usage::StorageMemoryUsage;
 pub use not::Not;
 pub use or::{OneOfTwo, Or};
@@ -103,7 +110,7 @@ pub use scheduler::{
     ScheduledWorkload, SystemModificator, Workload, WorkloadModificator, WorkloadSystem,
 };
 #[cfg(feature = "proc")]
-pub use shipyard_proc::{AllStoragesBorrow, Borrow, BorrowInfo, Component, Unique};
+pub use shipyard_proc::{Borrow, BorrowInfo, Component, Label, Unique, WorldBorrow};
 pub use sparse_set::{
     BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
     TupleRemove,
@@ -111,11 +118,37 @@ pub use sparse_set::{
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]
 pub use system::{AllSystem, Nothing, System};
-pub use timestamp::TrackingTimestamp;
-pub use tracking::{Inserted, InsertedOrModified, Modified};
+pub use tracking::{
+    DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking, TrackingTimestamp,
+    TupleTrack,
+};
 pub use unique::UniqueStorage;
-pub use view::{
+pub use views::{
     AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
     View, ViewMut,
 };
-pub use world::World;
+pub use world::{World, WorldBuilder};
+
+#[cfg(not(feature = "std"))]
+type ShipHashMap<K, V> =
+    hashbrown::HashMap<K, V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
+#[cfg(feature = "std")]
+type ShipHashMap<K, V> = hashbrown::HashMap<K, V>;
+
+#[cfg(not(feature = "std"))]
+type ShipHashSet<V> =
+    hashbrown::HashSet<V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
+#[cfg(feature = "std")]
+type ShipHashSet<V> = hashbrown::HashSet<V>;
+
+#[cfg(feature = "std")]
+fn std_thread_id_generator() -> u64 {
+    use std::thread::ThreadId;
+
+    let thread_id = std::thread::current().id();
+    let thread_id: *const ThreadId = &thread_id;
+    let thread_id: *const u64 = thread_id as _;
+
+    unsafe { *thread_id }
+}

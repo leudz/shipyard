@@ -1,7 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::sparse_set::SparseSet;
-use crate::view::ViewMut;
+use crate::views::ViewMut;
 
 /// Deletes component from entities.
 pub trait Delete {
@@ -36,19 +35,19 @@ impl Delete for () {
     }
 }
 
-impl<T: Component> Delete for ViewMut<'_, T> {
+impl<T: Component, TRACK> Delete for ViewMut<'_, T, TRACK> {
     #[inline]
     fn delete(&mut self, entity: EntityId) -> bool {
         let current = self.current;
-        SparseSet::delete(&mut *self, entity, current)
+        self.dyn_delete(entity, current)
     }
 }
 
-impl<T: Component> Delete for &mut ViewMut<'_, T> {
+impl<T: Component, TRACK> Delete for &mut ViewMut<'_, T, TRACK> {
     #[inline]
     fn delete(&mut self, entity: EntityId) -> bool {
         let current = self.current;
-        SparseSet::delete(*self, entity, current)
+        self.dyn_delete(entity, current)
     }
 }
 
@@ -59,7 +58,7 @@ macro_rules! impl_delete_component {
             fn delete(&mut self, entity: EntityId) -> bool {
                 $(
                     self.$index.delete(entity)
-                )||+
+                )|+
             }
         }
     }

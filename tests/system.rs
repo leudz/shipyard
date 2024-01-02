@@ -1,9 +1,7 @@
 use shipyard::*;
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 fn two_views(_: View<U32>, _: ViewMut<U32>) {}
 fn two_views_mut(_: ViewMut<U32>, _: ViewMut<U32>) {}

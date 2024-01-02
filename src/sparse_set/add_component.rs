@@ -3,50 +3,65 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
+use crate::tracking::TrackingTimestamp;
 #[cfg(doc)]
 use crate::world::World;
 
 /// Trait used as bound for [`World::add_entity`], [`World::add_component`], [`AllStorages::add_entity`] and [`AllStorages::add_component`].
 pub trait TupleAddComponent {
     /// See [`World::add_entity`], [`World::add_component`], [`AllStorages::add_entity`] and [`AllStorages::add_component`].
-    fn add_component(self, all_storages: &mut AllStorages, entity: EntityId);
+    fn add_component(
+        self,
+        all_storages: &mut AllStorages,
+        entity: EntityId,
+        current: TrackingTimestamp,
+    );
 }
 
 impl TupleAddComponent for () {
     #[inline]
-    fn add_component(self, _: &mut AllStorages, _: EntityId) {}
+    fn add_component(self, _: &mut AllStorages, _: EntityId, _: TrackingTimestamp) {}
 }
 
-impl<T: Send + Sync + Component> TupleAddComponent for T
-where
-    T::Tracking: Send + Sync,
-{
+impl<T: Send + Sync + Component> TupleAddComponent for T {
     #[inline]
     #[track_caller]
-    fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
-        let current = all_storages.get_current();
+    fn add_component(
+        self,
+        all_storages: &mut AllStorages,
+        entity: EntityId,
+        current: TrackingTimestamp,
+    ) {
         all_storages
-            .exclusive_storage_or_insert_mut(
-                StorageId::of::<SparseSet<T, T::Tracking>>(),
-                SparseSet::new,
-            )
+            .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
             .insert(entity, self, current);
+    }
+}
+
+impl<T: Send + Sync + Component> TupleAddComponent for Option<T> {
+    #[inline]
+    #[track_caller]
+    fn add_component(
+        self,
+        all_storages: &mut AllStorages,
+        entity: EntityId,
+        current: TrackingTimestamp,
+    ) {
+        if let Some(component) = self {
+            all_storages
+                .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
+                .insert(entity, component, current);
+        }
     }
 }
 
 macro_rules! impl_add_component {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Send + Sync + Component,)+> TupleAddComponent for ($($type,)+)
-        where
-            $($type::Tracking: Send + Sync),+
-        {
+        impl<$($type: TupleAddComponent,)+> TupleAddComponent for ($($type,)+) {
             #[track_caller]
-            fn add_component(self, all_storages: &mut AllStorages, entity: EntityId) {
-                let current = all_storages.get_current();
+            fn add_component(self, all_storages: &mut AllStorages, entity: EntityId, current: TrackingTimestamp) {
                 $(
-                    all_storages
-                        .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<$type, $type::Tracking>>(), SparseSet::new)
-                        .insert(entity, self.$index, current);
+                    self.$index.add_component(all_storages, entity, current);
                 )+
             }
         }

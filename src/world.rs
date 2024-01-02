@@ -1,23 +1,30 @@
-use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetain};
-use crate::atomic_refcell::{AtomicRefCell, Ref, RefMut};
-use crate::borrow::Borrow;
-use crate::component::Unique;
+mod builder;
+
+pub use builder::WorldBuilder;
+
+use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage};
+use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
+use crate::borrow::WorldBorrow;
+use crate::component::{Component, Unique};
+use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
-use crate::info::WorkloadsTypeUsage;
+use crate::get_component::GetComponent;
+use crate::info::WorkloadsInfo;
+use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
-use crate::public_transport::ShipyardRwLock;
+use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
 use crate::scheduler::Label;
 use crate::scheduler::{AsLabel, Batches, Scheduler};
 use crate::sparse_set::{BulkAddEntity, TupleAddComponent, TupleDelete, TupleRemove};
 use crate::storage::{Storage, StorageId};
 use crate::system::System;
-use alloc::borrow::Cow;
+use crate::tracking::{TrackingTimestamp, TupleTrack};
+use crate::views::EntitiesViewMut;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::sync::atomic::AtomicU32;
 
 /// `World` contains all data this library will manipulate.
@@ -40,7 +47,7 @@ impl Default for World {
             #[cfg(feature = "thread_local")]
             all_storages: AtomicRefCell::new_non_send(
                 AllStorages::new(counter.clone()),
-                std::thread::current().id(),
+                Arc::new(crate::std_thread_id_generator),
             ),
             scheduler: AtomicRefCell::new(Default::default()),
             counter,
@@ -53,75 +60,8 @@ impl Default for World {
 impl World {
     /// Creates an empty `World`.
     #[cfg(feature = "std")]
-    pub fn new() -> Self {
+    pub fn new() -> World {
         Default::default()
-    }
-    #[cfg(all(test, not(feature = "std")))]
-    pub fn new() -> Self {
-        Self::new_with_custom_lock::<parking_lot::RawRwLock>()
-    }
-    /// Creates an empty `World` with a custom `RwLock` for `AllStorages`.
-    pub fn new_with_custom_lock<L: ShipyardRwLock + Send + Sync>() -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
-        World {
-            #[cfg(not(feature = "thread_local"))]
-            all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>(counter.clone())),
-            #[cfg(feature = "thread_local")]
-            all_storages: AtomicRefCell::new_non_send(
-                AllStorages::new_with_lock::<L>(counter.clone()),
-                std::thread::current().id(),
-            ),
-            scheduler: AtomicRefCell::new(Default::default()),
-            counter,
-            #[cfg(feature = "parallel")]
-            thread_pool: None,
-        }
-    }
-    /// Creates an empty [`World`] with a local [`ThreadPool`](rayon::ThreadPool).
-    ///
-    /// This is useful when you have multiple [`Worlds`](World) or something else using [`rayon`] and want them to stay isolated.\
-    /// For example with a single [`ThreadPool`](rayon::ThreadPool), a panic would take down all [`Worlds`](World).\
-    /// With a [`ThreadPool`](rayon::ThreadPool) per [`World`] we can keep the panic confined to a single [`World`].
-    #[cfg(feature = "parallel")]
-    pub fn new_with_local_thread_pool(thread_pool: rayon::ThreadPool) -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
-        World {
-            #[cfg(not(feature = "thread_local"))]
-            all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
-            #[cfg(feature = "thread_local")]
-            all_storages: AtomicRefCell::new_non_send(
-                AllStorages::new(counter.clone()),
-                std::thread::current().id(),
-            ),
-            scheduler: AtomicRefCell::new(Default::default()),
-            counter,
-            #[cfg(feature = "parallel")]
-            thread_pool: Some(thread_pool),
-        }
-    }
-    /// Creates an empty [`World`] with a custom `RwLock` for [`AllStorages`] and a local [`ThreadPool`](rayon::ThreadPool).
-    ///
-    /// The local [`ThreadPool`](rayon::ThreadPool) is useful when you have multiple [`Worlds`](World) or something else using [`rayon`] and want them to stay isolated.\
-    /// For example with a single [`ThreadPool`](rayon::ThreadPool), a panic would take down all [`Worlds`](World).\
-    /// With a [`ThreadPool`](rayon::ThreadPool) per [`World`] we can keep the panic confined to a single [`World`].
-    #[cfg(feature = "parallel")]
-    pub fn new_with_custom_lock_and_local_thread_pool<L: ShipyardRwLock + Send + Sync>(
-        thread_pool: rayon::ThreadPool,
-    ) -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
-        World {
-            #[cfg(not(feature = "thread_local"))]
-            all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>(counter.clone())),
-            #[cfg(feature = "thread_local")]
-            all_storages: AtomicRefCell::new_non_send(
-                AllStorages::new_with_lock::<L>(counter.clone()),
-                std::thread::current().id(),
-            ),
-            scheduler: AtomicRefCell::new(Default::default()),
-            counter,
-            #[cfg(feature = "parallel")]
-            thread_pool: Some(thread_pool),
-        }
     }
     /// Removes the local [`ThreadPool`](rayon::ThreadPool).
     #[cfg(feature = "parallel")]
@@ -429,11 +369,12 @@ let (entities, mut usizes) = world
     #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
-    pub fn borrow<V: Borrow>(&self) -> Result<V::View<'_>, error::GetStorage> {
+    pub fn borrow<V: WorldBorrow>(&self) -> Result<V::WorldView<'_>, error::GetStorage> {
         let current = self.get_current();
-        V::borrow(self, None, current)
+
+        V::world_borrow(self, None, current)
     }
-    #[doc = "Borrows the requested storages and runs the function.  
+    #[doc = "Borrows the requested storages, runs the function and evaluates to the function's return value.  
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
 
 You can use:
@@ -540,7 +481,11 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run_with_data<Data, B, R, S: System<(Data,), B, R>>(&self, system: S, data: Data) -> R {
+    pub fn run_with_data<Data, B, S: System<(Data,), B>>(
+        &self,
+        system: S,
+        data: Data,
+    ) -> S::Return {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
         #[cfg(feature = "tracing")]
@@ -551,7 +496,7 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
             .map_err(error::Run::GetStorage)
             .unwrap()
     }
-    #[doc = "Borrows the requested storages and runs the function.
+    #[doc = "Borrows the requested storages, runs the function and evaluates to the function's return value.
 
 You can use:
 * [View]\\<T\\> for a shared access to `T` storage
@@ -666,7 +611,7 @@ let i = world.run(sys1);
     #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
     #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
     #[track_caller]
-    pub fn run<B, R, S: System<(), B, R>>(&self, system: S) -> R {
+    pub fn run<B, S: System<(), B>>(&self, system: S) -> S::Return {
         #[cfg(feature = "tracing")]
         let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
         #[cfg(feature = "tracing")]
@@ -687,14 +632,14 @@ let i = world.run(sys1);
     ///
     /// - Scheduler borrow failed.
     /// - Workload did not exist.
-    pub fn set_default_workload(
+    pub fn set_default_workload<T>(
         &self,
-        name: impl Into<Cow<'static, str>>,
+        name: impl AsLabel<T>,
     ) -> Result<(), error::SetDefaultWorkload> {
         self.scheduler
             .borrow_mut()
             .map_err(|_| error::SetDefaultWorkload::Borrow)?
-            .set_default(name.into())
+            .set_default(name.as_label())
     }
     /// Changes the name of a workload if it exists.
     ///
@@ -780,7 +725,6 @@ let i = world.run(sys1);
         workload_name: &dyn Label,
     ) -> Result<(), error::RunWorkload> {
         if let Some(run_if) = &batches.run_if {
-            // If impossible to check, let the workload run and fail later
             if !run_if
                 .run(self)
                 .map_err(|err| error::RunWorkload::Run((workload_name.dyn_clone(), err)))?
@@ -789,118 +733,81 @@ let i = world.run(sys1);
             }
         }
 
+        #[cfg(feature = "parallel")]
+        {
+            self.run_batches_parallel(systems, system_names, batches, workload_name)
+        }
+
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.run_batches_sequential(systems, system_names, batches, workload_name)
+        }
+    }
+    #[cfg(feature = "parallel")]
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_batches_parallel(
+        &self,
+        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
+        system_names: &[Box<dyn Label>],
+        batches: &Batches,
+        #[cfg_attr(not(feature = "tracing"), allow(unused))] workload_name: &dyn Label,
+    ) -> Result<(), error::RunWorkload> {
         #[cfg(feature = "tracing")]
         let parent_span = tracing::info_span!("workload", name = ?workload_name);
         #[cfg(feature = "tracing")]
         let _parent_span = parent_span.enter();
 
-        #[cfg(feature = "parallel")]
-        {
-            let run_batch = || -> Result<(), error::RunWorkload> {
-                for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if)
-                {
-                    let mut result = Ok(());
-                    let run_if = (
-                        if let Some(run_if_index) = batches_run_if.0 {
-                            if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
-                                (run_if)(self).map_err(|err| {
-                                    error::RunWorkload::Run((
-                                        system_names[batch.0.unwrap()].clone(),
-                                        err,
-                                    ))
-                                })?
-                            } else {
-                                true
-                            }
-                        } else {
-                            true
-                        },
-                        batches_run_if
-                            .1
-                            .iter()
-                            .map(|run_if_index| {
-                                if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
-                                    Ok((run_if)(self)?)
-                                } else {
-                                    Ok(true)
-                                }
-                            })
-                            .collect::<Result<Vec<_>, error::Run>>()
-                            .map_err(|err| {
+        let run_batch = || -> Result<(), error::RunWorkload> {
+            for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
+                let mut result = Ok(());
+                let run_if = (
+                    if let Some(run_if_index) = batches_run_if.0 {
+                        if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
+                            (run_if)(self).map_err(|err| {
                                 error::RunWorkload::Run((
                                     system_names[batch.0.unwrap()].clone(),
                                     err,
                                 ))
-                            })?,
-                    );
-
-                    rayon::in_place_scope(|scope| {
-                        if let Some(index) = batch.0 {
-                            scope.spawn(|_| {
-                                if batch.1.len() == 1 {
-                                    if !run_if.1[0] {
-                                        return;
-                                    }
-
-                                    let system_name = system_names[batch.1[0]].clone();
-
-                                    #[cfg(feature = "tracing")]
-                                    let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                    #[cfg(feature = "tracing")]
-                                    let _system_span = system_span.enter();
-
-                                    result = systems[batch.1[0]](self).map_err(|err| {
-                                        error::RunWorkload::Run((system_name, err))
-                                    });
-                                } else {
-                                    use rayon::prelude::*;
-
-                                    result = batch.1.par_iter().zip(run_if.1).try_for_each(|(&index, should_run)| {
-                                        if !should_run {
-                                            return Ok(());
-                                        }
-
-                                        let system_name = system_names[index].clone();
-
-                                        #[cfg(feature = "tracing")]
-                                        let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                        #[cfg(feature = "tracing")]
-                                        let _system_span = system_span.enter();
-
-                                        (systems[index])(self).map_err(|err| {
-                                            error::RunWorkload::Run((system_name, err))
-                                        })
-                                    });
-                                }
-                            });
-
-                            if !run_if.0 {
-                                return Ok(());
+                            })?
+                        } else {
+                            true
+                        }
+                    } else {
+                        true
+                    },
+                    batches_run_if
+                        .1
+                        .iter()
+                        .map(|run_if_index| {
+                            if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
+                                (run_if)(self).map_err(|err| {
+                                    error::RunWorkload::Run((
+                                        system_names[batches.sequential[*run_if_index]].clone(),
+                                        err,
+                                    ))
+                                })
+                            } else {
+                                Ok(true)
                             }
+                        })
+                        .collect::<Result<Vec<_>, error::RunWorkload>>()?,
+                );
 
-                            let system_name = system_names[index].clone();
-
-                            #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
-
-                            systems[index](self)
-                                .map_err(|err| error::RunWorkload::Run((system_name, err)))?;
-                        } else if batch.1.len() == 1 {
+                rayon::in_place_scope(|scope| {
+                    scope.spawn(|_| {
+                        if batch.1.len() == 1 {
                             if !run_if.1[0] {
-                                return Ok(());
+                                return;
                             }
 
-                            let system_name = system_names[batch.1[0]].clone();
-
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[batch.1[0]]);
                             #[cfg(feature = "tracing")]
                             let _system_span = system_span.enter();
 
-                            result = systems[batch.1[0]](self)
-                                .map_err(|err| error::RunWorkload::Run((system_name, err)));
+                            result = systems[batch.1[0]](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[batch.1[0]].clone(), err))
+                            });
                         } else {
                             use rayon::prelude::*;
 
@@ -909,47 +816,74 @@ let i = world.run(sys1);
                                     return Ok(());
                                 }
 
-                                let system_name = system_names[index].clone();
-
                                 #[cfg(feature = "tracing")]
-                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
+                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
                                 #[cfg(feature = "tracing")]
                                 let _system_span = system_span.enter();
 
                                 (systems[index])(self).map_err(|err| {
-                                    error::RunWorkload::Run((system_name, err))
+                                    error::RunWorkload::Run((system_names[index].clone(), err))
                                 })
                             });
                         }
+                    });
 
-                        Ok(())
+                    if let Some(index) = batch.0 {
+                        if run_if.0 {
+                            #[cfg(feature = "tracing")]
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
+                            #[cfg(feature = "tracing")]
+                            let _system_span = system_span.enter();
+
+                            systems[index](self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[index].clone(), err))
+                            })?;
+                        }
+                    }
+
+                    Ok(())
+                })?;
+
+                result?;
+            }
+
+            Ok(())
+        };
+
+        if let Some(thread_pool) = &self.thread_pool {
+            thread_pool.scope(|_| run_batch())
+        } else {
+            // Use non local ThreadPool
+            run_batch()
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn run_batches_sequential(
+        &self,
+        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
+        system_names: &[Box<dyn Label>],
+        batches: &Batches,
+        #[cfg_attr(not(feature = "tracing"), allow(unused))] workload_name: &dyn Label,
+    ) -> Result<(), error::RunWorkload> {
+        #[cfg(feature = "tracing")]
+        let parent_span = tracing::info_span!("workload", name = ?workload_name);
+        #[cfg(feature = "tracing")]
+        let _parent_span = parent_span.enter();
+
+        batches
+            .sequential
+            .iter()
+            .zip(&batches.sequential_run_if)
+            .try_for_each(|(&index, run_if)| {
+                if let Some(run_if) = run_if.as_ref() {
+                    let should_run = (run_if)(self).map_err(|err| {
+                        error::RunWorkload::Run((system_names[index].clone(), err))
                     })?;
 
-                    result?;
-                }
-
-                Ok(())
-            };
-
-            if let Some(thread_pool) = &self.thread_pool {
-                let mut result = Ok(());
-                thread_pool.scope(|_| {
-                    result = run_batch();
-                });
-
-                result
-            } else {
-                // Use non local ThreadPool
-                run_batch()
-            }
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            batches.sequential.iter().zip(&batches.sequential_run_if).try_for_each(|(&index, run_if)| {
-                let system_name = &system_names[index];
-
-                if !run_if.as_ref().map(|run_if| (run_if)(self)).unwrap_or(Ok(true)).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))? {
-                    return Ok(());
+                    if !should_run {
+                        return Ok(());
+                    }
                 }
 
                 #[cfg(feature = "tracing")]
@@ -958,9 +892,9 @@ let i = world.run(sys1);
                 #[cfg(feature = "tracing")]
                 let _system_span = system_span.enter();
 
-                (systems[index])(self).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))
+                (systems[index])(self)
+                    .map_err(|err| error::RunWorkload::Run((system_names[index].clone(), err)))
             })
-        }
     }
     /// Run the default workload if there is one.
     ///
@@ -996,7 +930,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - `AllStorages` is already borrowed.
-    pub fn all_storages(&self) -> Result<Ref<'_, &'_ AllStorages>, error::Borrow> {
+    pub fn all_storages(&self) -> Result<ARef<'_, &'_ AllStorages>, error::Borrow> {
         self.all_storages.borrow()
     }
     /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.  
@@ -1005,7 +939,7 @@ let i = world.run(sys1);
     /// ### Errors
     ///
     /// - `AllStorages` is already borrowed.
-    pub fn all_storages_mut(&self) -> Result<RefMut<'_, &'_ mut AllStorages>, error::Borrow> {
+    pub fn all_storages_mut(&self) -> Result<ARefMut<'_, &'_ mut AllStorages>, error::Borrow> {
         self.all_storages.borrow_mut()
     }
     /// Inserts a custom storage to the `World`.
@@ -1026,15 +960,18 @@ let i = world.run(sys1);
         Ok(())
     }
 
+    /// Increments the current tracking cycle and returns the previous value.
     #[inline]
-    pub(crate) fn get_current(&self) -> u32 {
-        self.counter
-            .fetch_add(1, core::sync::atomic::Ordering::Acquire)
+    pub(crate) fn get_current(&self) -> TrackingTimestamp {
+        TrackingTimestamp::new(
+            self.counter
+                .fetch_add(1, core::sync::atomic::Ordering::Acquire),
+        )
     }
 
     /// Returns a timestamp used to clear tracking information.
-    pub fn get_tracking_timestamp(&self) -> crate::TrackingTimestamp {
-        crate::TrackingTimestamp(self.counter.load(core::sync::atomic::Ordering::Acquire))
+    pub fn get_tracking_timestamp(&self) -> TrackingTimestamp {
+        TrackingTimestamp::new(self.counter.load(core::sync::atomic::Ordering::Acquire))
     }
 }
 
@@ -1264,19 +1201,19 @@ impl World {
     ///
     /// let entity = world.add_entity((U32(0), USIZE(1)));
     ///
-    /// world.retain::<SparseSet<U32>>(entity);
+    /// world.retain_storage::<SparseSet<U32>>(entity);
     /// ```
     #[inline]
-    pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {
-        self.all_storages.get_mut().retain::<S>(entity);
+    pub fn retain_storage<S: TupleRetainStorage>(&mut self, entity: EntityId) {
+        self.all_storages.get_mut().retain_storage::<S>(entity);
     }
-    /// Same as `retain` but uses `StorageId` and not generics.  
+    /// Same as `retain_storage` but uses `StorageId` and not generics.  
     /// You should only use this method if you use a custom storage with a runtime id.
     #[inline]
-    pub fn retain_storage(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
+    pub fn retain_storage_by_id(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         self.all_storages
             .get_mut()
-            .retain_storage(entity, excluded_storage);
+            .retain_storage_by_id(entity, excluded_storage);
     }
     /// Deletes all entities and components in the `World`.
     ///
@@ -1300,7 +1237,7 @@ impl World {
     /// Clear all deletion and removal tracking data older than some timestamp.
     pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
-        timestamp: crate::TrackingTimestamp,
+        timestamp: TrackingTimestamp,
     ) {
         self.all_storages
             .get_mut()
@@ -1313,11 +1250,33 @@ impl World {
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().spawn(entity)
     }
+
+    /// Deletes all components for which `f(id, &component)` returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// - Storage borrow failed.
+    pub fn retain<T: Component + Send + Sync>(&mut self, f: impl FnMut(EntityId, &T) -> bool) {
+        self.all_storages.get_mut().retain(f);
+    }
+
+    /// Deletes all components for which `f(id, Mut<component>)` returns `false`.
+    ///
+    /// # Panics
+    ///
+    /// - Storage borrow failed.
+    pub fn retain_mut<T: Component + Send + Sync>(
+        &mut self,
+        f: impl FnMut(EntityId, Mut<'_, T>) -> bool,
+    ) {
+        self.all_storages.get_mut().retain_mut(f);
+    }
+
     /// Displays storages memory information.
     pub fn memory_usage(&self) -> WorldMemoryUsage<'_> {
         WorldMemoryUsage(self)
     }
-    /// Returns a list of workloads, their systems and which storages these systems borrow.
+    /// Returns a list of workloads and all information related to them.
     ///
     /// ### Borrows
     ///
@@ -1327,30 +1286,291 @@ impl World {
     ///
     /// - Scheduler borrow failed.
     #[track_caller]
-    pub fn workloads_type_usage(&self) -> WorkloadsTypeUsage {
-        let mut workload_type_info = hashbrown::HashMap::new();
-
+    pub fn workloads_info(&self) -> WorkloadsInfo {
         let scheduler = self.scheduler.borrow().unwrap();
 
-        for (workload_name, batches) in &scheduler.workloads {
-            workload_type_info.insert(
-                format!("{workload_name:?}"),
-                batches
-                    .sequential
-                    .iter()
-                    .map(|system_index| {
-                        let system_name = scheduler.system_names[*system_index].clone();
-                        let mut system_storage_borrowed = Vec::new();
+        WorkloadsInfo(
+            scheduler
+                .workloads_info
+                .iter()
+                .map(|(name, workload_info)| (format!("{:?}", name), workload_info.clone()))
+                .collect(),
+        )
+    }
 
-                        scheduler.system_generators[*system_index](&mut system_storage_borrowed);
+    /// Enable insertion tracking for the given components.
+    pub fn track_insertion<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_insertion::<T>();
+        self
+    }
 
-                        (format!("{:?}", system_name), system_storage_borrowed)
-                    })
-                    .collect(),
-            );
+    /// Enable modification tracking for the given components.
+    pub fn track_modification<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_modification::<T>();
+        self
+    }
+
+    /// Enable deletion tracking for the given components.
+    pub fn track_deletion<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_deletion::<T>();
+        self
+    }
+
+    /// Enable removal tracking for the given components.
+    pub fn track_removal<T: TupleTrack>(&mut self) -> &mut World {
+        self.all_storages.get_mut().track_removal::<T>();
+        self
+    }
+
+    /// Enable insertion, deletion and removal tracking for the given components.
+    pub fn track_all<T: TupleTrack>(&mut self) {
+        self.all_storages.get_mut().track_all::<T>();
+    }
+
+    #[doc = "Retrieve components of `entity`.
+
+Multiple components can be queried at the same time using a tuple.
+
+You can use:
+* `&T` for a shared access to `T` component
+* `&mut T` for an exclusive access to `T` component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared) + storage (exclusive or shared)
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+- Entity does not have the component.
+
+### Example
+```
+use shipyard::{Component, World};
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct USIZE(usize);
+
+let mut world = World::new();
+
+let entity = world.add_entity((USIZE(0), U32(1)));
+
+let (i, j) = world.get::<(&USIZE, &mut U32)>(entity).unwrap();
+
+assert!(*i == &USIZE(0));
+assert!(*j == &U32(1));
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    #[inline]
+    pub fn get<T: GetComponent>(
+        &self,
+        entity: EntityId,
+    ) -> Result<T::Out<'_>, error::GetComponent> {
+        let (all_storages, all_borrow) = unsafe {
+            ARef::destructure(
+                self.all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
+        let current = self.get_current();
+
+        T::get(all_storages, Some(all_borrow), current, entity)
+    }
+
+    #[doc = "Iterate components.
+
+Multiple components can be iterated at the same time using a tuple.
+
+You can use:
+* `&T` for a shared access to `T` component
+* `&mut T` for an exclusive access to `T` component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared)
+
+### Panics
+
+- [AllStorages] borrow failed.
+
+### Example
+```
+use shipyard::{Component, World};
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+#[derive(Component, Debug, PartialEq, Eq)]
+struct USIZE(usize);
+
+let mut world = World::new();
+
+let entity = world.add_entity((USIZE(0), U32(1)));
+
+let mut iter = world.iter::<(&USIZE, &mut U32)>();
+
+for (i, j) in &mut iter {
+    // <-- SNIP -->
+}
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    #[inline]
+    #[track_caller]
+    pub fn iter<T: IterComponent>(&self) -> IntoIterRef<'_, T> {
+        let (all_storages, all_borrow) = unsafe {
+            ARef::destructure(
+                self.all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)
+                    .unwrap(),
+            )
+        };
+
+        let current = self.get_current();
+
+        IntoIterRef {
+            all_storages,
+            all_borrow: Some(all_borrow),
+            current,
+            phantom: core::marker::PhantomData,
         }
+    }
 
-        WorkloadsTypeUsage(workload_type_info)
+    /// Sets the on entity deletion callback.
+    ///
+    /// ### Borrows
+    ///
+    /// - AllStorages (shared)
+    /// - Entities (exclusive)
+    ///
+    /// ### Panics
+    ///
+    /// - AllStorages borrow failed.
+    /// - Entities borrow failed.
+    #[track_caller]
+    pub fn on_deletion(&self, f: impl FnMut(EntityId) + Send + Sync + 'static) {
+        let mut entities = self.borrow::<EntitiesViewMut<'_>>().unwrap();
+
+        entities.on_deletion(f);
+    }
+
+    /// Returns true if entity matches a living entity.
+    pub fn is_entity_alive(&mut self, entity: EntityId) -> bool {
+        self.all_storages
+            .get_mut()
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(entity)
+    }
+
+    /// Moves an entity from a `World` to another.
+    ///
+    /// ```
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world1 = World::new();
+    /// let mut world2 = World::new();
+    ///
+    /// let entity = world1.add_entity(USIZE(1));
+    ///
+    /// world1.move_entity(&mut world2, entity);
+    ///
+    /// assert!(!world1.is_entity_alive(entity));
+    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn move_entity(&mut self, other: &mut World, entity: EntityId) {
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .get_mut()
+            .move_entity(other_all_storages, entity);
+    }
+
+    /// Moves all components from an entity to another in another `World`.
+    ///
+    /// ```
+    /// use shipyard::{Component, World};
+    ///
+    /// #[derive(Component, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world1 = World::new();
+    /// let mut world2 = World::new();
+    ///
+    /// let from = world1.add_entity(USIZE(1));
+    /// let to = world2.add_entity(());
+    ///
+    /// world1.move_components(&mut world2, from, to);
+    ///
+    /// assert!(world1.get::<&USIZE>(from).is_err());
+    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    #[inline]
+    pub fn move_components(&mut self, other: &mut World, from: EntityId, to: EntityId) {
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .get_mut()
+            .move_components(other_all_storages, from, to);
     }
 }
 

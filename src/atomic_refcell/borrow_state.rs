@@ -19,12 +19,20 @@ impl Drop for SharedBorrow<'_> {
 impl Clone for SharedBorrow<'_> {
     #[inline]
     fn clone(&self) -> Self {
-        self.0.read().unwrap()
+        self.0.read_reborrow()
     }
 }
 
 /// Unlocks an exclusive borrow on drop.
 pub struct ExclusiveBorrow<'a>(&'a BorrowState);
+
+impl ExclusiveBorrow<'_> {
+    pub(crate) fn shared_reborrow(&self) -> SharedBorrow<'_> {
+        self.0.read_reborrow();
+
+        SharedBorrow(self.0)
+    }
+}
 
 impl Drop for ExclusiveBorrow<'_> {
     #[inline]
@@ -38,11 +46,12 @@ impl BorrowState {
     pub(super) fn new() -> Self {
         BorrowState(AtomicUsize::new(0))
     }
+
     #[inline]
     pub(super) fn read(&self) -> Result<SharedBorrow<'_>, error::Borrow> {
         let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
         if new & HIGH_BIT != 0 {
-            self.check_overflow(new);
+            self.cold_check_overflow(new);
 
             Err(error::Borrow::Unique)
         } else {
@@ -71,6 +80,15 @@ impl BorrowState {
     }
 
     #[inline]
+    pub(super) fn read_reborrow(&self) -> SharedBorrow<'_> {
+        let new = self.0.fetch_add(1, Ordering::Acquire) + 1;
+
+        self.check_overflow(new);
+
+        SharedBorrow(self)
+    }
+
+    #[inline]
     pub(super) fn write(&self) -> Result<ExclusiveBorrow<'_>, error::Borrow> {
         let old = match self
             .0
@@ -89,8 +107,6 @@ impl BorrowState {
         }
     }
 
-    #[cold]
-    #[inline(never)]
     fn check_overflow(&self, new: usize) {
         if new == HIGH_BIT {
             self.0.fetch_sub(1, Ordering::Release);
@@ -106,5 +122,11 @@ impl BorrowState {
             let _abort = ForceAbort;
             panic!("Too many failed borrows");
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn cold_check_overflow(&self, new: usize) {
+        self.check_overflow(new)
     }
 }

@@ -1,6 +1,8 @@
 #[cfg(all(feature = "std", feature = "proc"))]
 mod book;
 mod borrow;
+#[cfg(feature = "proc")]
+mod derive;
 mod iteration;
 #[cfg(feature = "serde1")]
 mod serde;
@@ -12,9 +14,7 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
 
 impl Sum for USIZE {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -24,13 +24,11 @@ impl Sum for USIZE {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn run() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
             entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
@@ -75,7 +73,7 @@ fn system() {
         });
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -112,7 +110,7 @@ fn systems() {
         });
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -142,7 +140,7 @@ fn systems() {
 fn simple_parallel_sum() {
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -163,7 +161,7 @@ fn simple_parallel_sum() {
 fn parallel_iterator() {
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
@@ -196,7 +194,7 @@ fn two_workloads() {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
@@ -212,14 +210,14 @@ fn two_workloads() {
 #[cfg_attr(miri, ignore)]
 #[test]
 #[should_panic(
-    expected = "called `Result::unwrap()` on an `Err` value: System \"lib::two_bad_workloads::system1\" failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<lib::USIZE, shipyard::track::Untracked> storage while it\'s already borrowed."
+    expected = "called `Result::unwrap()` on an `Err` value: System lib::two_bad_workloads::system1 failed: Cannot mutably borrow shipyard::sparse_set::SparseSet<lib::USIZE> storage while it\'s already borrowed."
 )]
 fn two_bad_workloads() {
     fn system1(_: ViewMut<USIZE>) {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     Workload::new("")
         .with_system(system1)
         .add_to_world(&world)
@@ -234,7 +232,7 @@ fn two_bad_workloads() {
 #[test]
 #[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn add_component_with_old_key() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let entity = {
         let (mut entities, mut usizes, mut u32s) = world
@@ -260,9 +258,7 @@ fn add_component_with_old_key() {
 fn par_update_pack() {
     #[derive(PartialEq, Eq, Debug, Clone, Copy)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
     impl Sum for USIZE {
         fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -277,10 +273,11 @@ fn par_update_pack() {
 
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+    world.track_all::<USIZE>();
 
     world.run(
-        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE>)| {
+        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE, track::All>)| {
             entities.add_entity(&mut usizes, USIZE(0));
             entities.add_entity(&mut usizes, USIZE(1));
             entities.add_entity(&mut usizes, USIZE(2));
@@ -290,7 +287,7 @@ fn par_update_pack() {
         },
     );
 
-    world.run(|mut usizes: ViewMut<USIZE>| {
+    world.run(|mut usizes: ViewMut<USIZE, track::All>| {
         (&usizes).par_iter().sum::<USIZE>();
 
         assert_eq!(usizes.modified().iter().count(), 0);
@@ -317,16 +314,19 @@ fn par_update_pack() {
 fn par_multiple_update_pack() {
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct U32(u32);
-    impl Component for U32 {
-        type Tracking = track::All;
-    }
+    impl Component for U32 {}
 
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+    world.track_all::<U32>();
 
     world.run(
-        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
+        |(mut entities, mut usizes, mut u32s): (
+            EntitiesViewMut,
+            ViewMut<USIZE>,
+            ViewMut<U32, track::All>,
+        )| {
             entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
             entities.add_entity(&mut usizes, USIZE(2));
             entities.add_entity((&mut usizes, &mut u32s), (USIZE(4), U32(5)));
@@ -338,43 +338,45 @@ fn par_multiple_update_pack() {
         },
     );
 
-    world.run(|(mut usizes, mut u32s): (ViewMut<USIZE>, ViewMut<U32>)| {
-        if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
-            iter.for_each(|_| {});
-        } else {
-            panic!("not packed");
-        }
+    world.run(
+        |(mut usizes, mut u32s): (ViewMut<USIZE>, ViewMut<U32, track::All>)| {
+            if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
+                iter.for_each(|_| {});
+            } else {
+                panic!("not packed");
+            }
 
-        assert_eq!(u32s.modified().iter().count(), 0);
+            assert_eq!(u32s.modified().iter().count(), 0);
 
-        if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
-            iter.for_each(|(mut x, y)| {
-                x.0 += y.0 as usize;
-                x.0 -= y.0 as usize;
-            });
-        } else {
-            panic!("not packed");
-        }
+            if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
+                iter.for_each(|(mut x, y)| {
+                    x.0 += y.0 as usize;
+                    x.0 -= y.0 as usize;
+                });
+            } else {
+                panic!("not packed");
+            }
 
-        assert_eq!(u32s.modified().iter().count(), 0);
+            assert_eq!(u32s.modified().iter().count(), 0);
 
-        if let iter::ParIter::Mixed(iter) = (&usizes, &mut u32s).par_iter() {
-            iter.for_each(|(x, mut y)| {
-                y.0 += x.0 as u32;
-                y.0 -= x.0 as u32;
-            });
-        } else {
-            panic!("not packed");
-        }
+            if let iter::ParIter::Mixed(iter) = (&usizes, &mut u32s).par_iter() {
+                iter.for_each(|(x, mut y)| {
+                    y.0 += x.0 as u32;
+                    y.0 -= x.0 as u32;
+                });
+            } else {
+                panic!("not packed");
+            }
 
-        let mut modified: Vec<_> = u32s.modified().iter().collect();
-        modified.sort_unstable();
-        assert_eq!(modified, vec![&U32(1), &U32(5), &U32(9)]);
+            let mut modified: Vec<_> = u32s.modified().iter().collect();
+            modified.sort_unstable();
+            assert_eq!(modified, vec![&U32(1), &U32(5), &U32(9)]);
 
-        let mut iter: Vec<_> = (&u32s).iter().collect();
-        iter.sort_unstable();
-        assert_eq!(iter, vec![&U32(1), &U32(5), &U32(7), &U32(9)]);
-    });
+            let mut iter: Vec<_> = (&u32s).iter().collect();
+            iter.sort_unstable();
+            assert_eq!(iter, vec![&U32(1), &U32(5), &U32(7), &U32(9)]);
+        },
+    );
 }
 
 #[cfg(feature = "parallel")]
@@ -383,16 +385,15 @@ fn par_multiple_update_pack() {
 fn par_update_filter() {
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
     use rayon::prelude::*;
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+    world.track_all::<USIZE>();
 
     world.run(
-        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE>)| {
+        |(mut entities, mut usizes): (EntitiesViewMut, ViewMut<USIZE, track::All>)| {
             entities.add_entity(&mut usizes, USIZE(0));
             entities.add_entity(&mut usizes, USIZE(1));
             entities.add_entity(&mut usizes, USIZE(2));
@@ -402,7 +403,7 @@ fn par_update_filter() {
         },
     );
 
-    world.run(|mut usizes: ViewMut<USIZE>| {
+    world.run(|mut usizes: ViewMut<USIZE, track::All>| {
         (&mut usizes)
             .par_iter()
             .filter(|x| x.0 % 2 == 0)
@@ -425,7 +426,7 @@ fn par_update_filter() {
 
 #[test]
 fn contains() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(
         |mut entities: EntitiesViewMut, mut usizes: ViewMut<USIZE>, mut u32s: ViewMut<U32>| {
@@ -445,7 +446,7 @@ fn contains() {
 
 #[test]
 fn debug() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity((USIZE(0),));
     world.add_entity((USIZE(1),));

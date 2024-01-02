@@ -2,26 +2,19 @@
 mod non_send_sync;
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
-impl Unique for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
+impl Unique for U32 {}
 
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
-impl Unique for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
+impl Unique for USIZE {}
 
+use core::any::type_name;
 use shipyard::*;
 
 #[test]
 fn duplicate_name() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     Workload::new("")
         .with_system(|| {})
@@ -41,7 +34,7 @@ fn rename() {
         i.0 += 1;
     }
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_unique(U32(0));
 
@@ -68,7 +61,7 @@ fn rename() {
 
 #[test]
 fn are_all_uniques_present_in_world() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_unique(U32(0));
 
@@ -108,8 +101,8 @@ fn are_all_uniques_present_in_world() {
 
 #[test]
 fn run_one_with_world() {
-    let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world1 = World::new();
+    let world2 = World::new();
 
     let builder = Workload::new("").with_system(|| {
         dbg!(1);
@@ -130,8 +123,8 @@ fn run_one_with_world() {
 
 #[test]
 fn run_with_world() {
-    let world1 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let world2 = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world1 = World::new();
+    let world2 = World::new();
 
     let builder = Workload::new("")
         .with_system(|| {
@@ -156,4 +149,71 @@ fn run_with_world() {
 
     workload2.run_with_world(&world1).unwrap();
     workload2.run_with_world(&world2).unwrap();
+}
+
+#[test]
+fn enable_tracking() {
+    let mut world = World::new();
+
+    world.add_entity(U32(0));
+
+    world.add_workload(|| {
+        (|v_u32: View<U32, track::InsertionAndModification>| {
+            for _ in v_u32.inserted_or_modified().iter() {}
+        })
+        .into_workload()
+    });
+
+    world.run_default().unwrap();
+}
+
+/// System run_if should not run if a workload run_if returns `false`
+#[test]
+fn check_nested_workloads_run_if() {
+    fn sys() {}
+
+    let world = World::new();
+
+    world.add_workload(|| {
+        (sys.run_if(|| panic!()).into_workload().run_if(|| false),).into_workload()
+    });
+
+    world.run_default().unwrap();
+}
+
+#[test]
+fn check_run_if_error() {
+    fn type_name_of<F: FnOnce() + 'static>(_: F) -> &'static str {
+        type_name::<F>()
+    }
+
+    fn sys() {}
+
+    let world = World::new();
+
+    world.add_workload(|| (|| {}, sys.run_if(|_: UniqueView<USIZE>| true)).into_workload());
+
+    match world.run_default() {
+        Err(error::RunWorkload::Run((label, _))) => {
+            assert!(label.dyn_eq(&*type_name_of(sys).as_label()));
+        }
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn tracking_enabled() {
+    fn w() -> Workload {
+        (
+            |_: View<USIZE, track::All>| {},
+            |_: ViewMut<USIZE, track::All>| {},
+        )
+            .into_workload()
+    }
+
+    let world = World::new();
+
+    world.add_workload(w);
+
+    world.run_workload(w).unwrap();
 }

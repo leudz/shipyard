@@ -1,7 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::sparse_set::SparseSet;
-use crate::view::ViewMut;
+use crate::views::ViewMut;
 
 /// Removes component from entities.
 pub trait Remove {
@@ -39,23 +38,23 @@ impl Remove for () {
     fn remove(&mut self, _: EntityId) -> Self::Out {}
 }
 
-impl<T: Component> Remove for ViewMut<'_, T> {
+impl<T: Component, TRACK> Remove for ViewMut<'_, T, TRACK> {
     type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
         let current = self.current;
-        SparseSet::remove(&mut *self, entity, current)
+        self.dyn_remove(entity, current)
     }
 }
 
-impl<T: Component> Remove for &mut ViewMut<'_, T> {
+impl<T: Component, TRACK> Remove for &mut ViewMut<'_, T, TRACK> {
     type Out = Option<T>;
 
     #[inline]
     fn remove(&mut self, entity: EntityId) -> Self::Out {
         let current = self.current;
-        SparseSet::remove(*self, entity, current)
+        self.dyn_remove(entity, current)
     }
 }
 

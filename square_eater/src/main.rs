@@ -1,7 +1,8 @@
 use macroquad::prelude::*;
 use shipyard::{
     AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
+    IntoWorkload, IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View,
+    ViewMut, Workload, World,
 };
 
 const WIDTH: i32 = 640;
@@ -83,6 +84,20 @@ fn init_world(world: &mut World) {
     world.bulk_add_entity((0..7).map(|_| new_square()));
 }
 
+fn main_loop() -> Workload {
+    (
+        counters,
+        move_player,
+        move_square,
+        grow_square,
+        new_squares,
+        collision,
+        clean_up.into_workload_try_system().unwrap(),
+        render,
+    )
+        .into_workload()
+}
+
 // Entry point of the program
 #[macroquad::main(window_conf)]
 async fn main() {
@@ -93,18 +108,7 @@ async fn main() {
     // seed the random number generator with a random value
     rand::srand(macroquad::miniquad::date::now() as u64);
 
-    world.add_workload(|| {
-        (
-            counters,
-            move_player,
-            move_square,
-            grow_square,
-            new_squares,
-            collision,
-            clean_up.into_workload_try_system().unwrap(),
-            render,
-        )
-    });
+    world.add_workload(main_loop);
 
     let mut is_started = false;
     loop {
@@ -219,7 +223,7 @@ fn move_square(
         }
     }
 
-    for (rect, dir) in (&mut rects).iter().zip(dirs) {
+    for (mut rect, dir) in (&mut rects).iter().zip(dirs) {
         if dir != Vec2::ZERO {
             rect.0.move_to(dir);
         }

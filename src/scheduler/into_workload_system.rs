@@ -1,9 +1,10 @@
 use crate::all_storages::AllStorages;
-use crate::borrow::{Borrow, BorrowInfo, Mutability};
+use crate::borrow::{BorrowInfo, Mutability, WorldBorrow};
 use crate::info::DedupedLabels;
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::{TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
+use crate::tracking::TrackingTimestamp;
 use crate::type_id::TypeId;
 use crate::{error, AsLabel, Workload};
 use crate::{Label, World};
@@ -39,6 +40,7 @@ where
 
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
+            tracking_to_enable: Vec::new(),
             system_fn: Box::new(move |_: &World| {
                 (self)();
                 Ok(())
@@ -93,7 +95,7 @@ impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
 
 macro_rules! impl_into_workload_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func
         where
             R: 'static,
             Func: 'static
@@ -101,7 +103,7 @@ macro_rules! impl_into_workload_system {
                 + Sync,
             for<'a, 'b> &'b Func:
                 Fn($($type),+) -> R
-                + Fn($($type::View<'a>),+) -> R {
+                + Fn($($type::WorldView<'a>),+) -> R {
 
             fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -138,13 +140,19 @@ macro_rules! impl_into_workload_system {
                     }
                 }
 
+                let mut tracking_to_enable = Vec::new();
+                $(
+                    $type::enable_tracking(&mut tracking_to_enable);
+                )+
+
                 let last_run = AtomicU32::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
+                    tracking_to_enable,
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
-                        let last_run = last_run.swap(current, Ordering::Acquire);
-                        Ok(drop((&&self)($($type::borrow(&world, Some(last_run), current)?),+)))
+                        let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
+                        Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+)))
                     }),
                     type_id: TypeId::of::<Func>(),
                     display_name: Box::new(type_name::<Func>()),

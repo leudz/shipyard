@@ -3,18 +3,14 @@ use shipyard::error;
 use shipyard::*;
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn no_pack() {
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
 
@@ -43,12 +39,11 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
+    usizes.track_all();
 
     let entity1 = entities.add_entity(&mut usizes, USIZE(0));
     let entity2 = entities.add_entity(&mut usizes, USIZE(2));
@@ -58,7 +53,7 @@ fn update() {
     all_storages.clear();
     drop(all_storages);
 
-    let usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
     assert_eq!(
         (&usizes).get(entity1),
         Err(error::MissingComponent {
@@ -84,11 +79,9 @@ fn update() {
 fn inserted() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE>) {
+    fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE, track::All>) {
         usizes.clear();
 
         for id in u32s.iter().ids() {
@@ -98,7 +91,9 @@ fn inserted() {
         assert_eq!(usizes.inserted().iter().count(), 1);
     }
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+
+    world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
     world.add_entity((U32(0),));
 

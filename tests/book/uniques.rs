@@ -16,10 +16,7 @@ fn unique_declare_manual() {
 // ANCHOR: unique_declare_manual
 // By manually implementing the trait
 struct Camera;
-impl Unique for Camera {
-    // We'll come back to this in a later chapter
-    type Tracking = track::Untracked;
-}
+impl Unique for Camera {}
 // ANCHOR_END: unique_declare_manual
 }
 

@@ -1,12 +1,15 @@
-use crate::{component::Unique, memory_usage::StorageMemoryUsage, storage::Storage};
+use crate::component::Unique;
+use crate::memory_usage::StorageMemoryUsage;
+use crate::storage::Storage;
+use crate::tracking::TrackingTimestamp;
 
 /// Unique storage.
 pub struct UniqueStorage<T: Unique> {
     pub(crate) value: T,
-    pub(crate) insert: u32,
-    pub(crate) modification: u32,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modification: u32,
+    pub(crate) insert: TrackingTimestamp,
+    pub(crate) modification: TrackingTimestamp,
+    pub(crate) last_insert: TrackingTimestamp,
+    pub(crate) last_modification: TrackingTimestamp,
 }
 
 impl<T: Unique> Storage for UniqueStorage<T> {
@@ -24,13 +27,13 @@ impl<T: Unique> Storage for UniqueStorage<T> {
 }
 
 impl<T: Unique> UniqueStorage<T> {
-    pub(crate) fn new(value: T, current: u32) -> Self {
+    pub(crate) fn new(value: T, current: TrackingTimestamp) -> Self {
         UniqueStorage {
             value,
             insert: current,
-            modification: 0,
-            last_insert: 0,
-            last_modification: 0,
+            modification: current.furthest_from(),
+            last_insert: current.furthest_from(),
+            last_modification: current.furthest_from(),
         }
     }
 }

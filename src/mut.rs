@@ -1,7 +1,9 @@
+use crate::tracking::TrackingTimestamp;
+
 /// Tracks component modification.
 pub struct Mut<'a, T: ?Sized> {
-    pub(crate) flag: Option<&'a mut u32>,
-    pub(crate) current: u32,
+    pub(crate) flag: Option<&'a mut TrackingTimestamp>,
+    pub(crate) current: TrackingTimestamp,
     pub(crate) data: &'a mut T,
 }
 

@@ -2,19 +2,15 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
+
+#[derive(PartialEq, Eq, Debug)]
+struct USIZE(usize);
+impl Component for USIZE {}
 
 #[test]
 fn no_pack() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
-
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
         .unwrap();
@@ -45,14 +41,11 @@ fn no_pack() {
 
 #[test]
 fn update() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
-
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
+    let mut world = World::new();
+    world.track_all::<USIZE>();
+    let (mut entities, mut usizes) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE, track::All>)>()
+        .unwrap();
 
     let entity = entities.add_entity((), ());
 
@@ -69,7 +62,7 @@ fn update() {
     assert_eq!(iter.next(), None);
 
     usizes.clear_all_inserted();
-    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
 
     usizes[entity] = USIZE(3);
 
@@ -81,7 +74,7 @@ fn update() {
 
     usizes.clear_all_modified();
 
-    let mut usizes = world.borrow::<ViewMut<USIZE>>().unwrap();
+    let mut usizes = world.borrow::<ViewMut<USIZE, track::All>>().unwrap();
 
     entities.add_component(entity, &mut usizes, USIZE(5));
 
@@ -92,13 +85,7 @@ fn update() {
 
 #[test]
 fn no_pack_unchecked() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
-
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
         .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
         .unwrap();
@@ -107,4 +94,67 @@ fn no_pack_unchecked() {
     (&mut usizes, &mut u32s).add_component_unchecked(entity1, (USIZE(0), U32(1)));
     (&mut u32s, &mut usizes).add_component_unchecked(entity1, (U32(3), USIZE(2)));
     assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&USIZE(2), &U32(3)));
+}
+
+#[test]
+fn workload_add() {
+    let mut world = World::new();
+
+    let eid = world.add_entity(());
+
+    world.add_workload(move || {
+        (
+            move |mut vm_u32: ViewMut<U32>| {
+                vm_u32.add_component_unchecked(eid, U32(0));
+            },
+            |v_u32: View<U32, track::InsertionAndModification>| {
+                assert_eq!(v_u32.inserted_or_modified().iter().count(), 1)
+            },
+        )
+            .into_workload()
+    });
+
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+}
+
+#[test]
+fn workload_add_and_remove() {
+    let mut world = World::new();
+
+    let eid = world.add_entity(());
+
+    world.add_workload(move || {
+        (
+            move |mut vm_u32: ViewMut<U32>| {
+                vm_u32.add_component_unchecked(eid, U32(0));
+            },
+            |v_u32: View<U32, track::InsertionAndModification>| {
+                assert_eq!(v_u32.inserted().iter().count(), 1)
+            },
+            move |mut vm_u32: ViewMut<U32>| {
+                vm_u32.remove(eid);
+            },
+        )
+            .into_workload()
+    });
+
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+    world.run_default().unwrap();
+}
+
+#[test]
+fn move_between_worlds() {
+    let mut world1 = World::new();
+    let mut world2 = World::new();
+
+    let entity1 = world1.add_entity((USIZE(1), U32(2)));
+
+    world2.spawn(entity1);
+    world2.add_component(entity1, world1.remove::<(USIZE, U32)>(entity1));
+
+    assert_eq!(*world2.get::<&USIZE>(entity1).unwrap(), &USIZE(1));
+    assert_eq!(*world2.get::<&U32>(entity1).unwrap(), &U32(2));
 }

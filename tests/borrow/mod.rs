@@ -3,27 +3,17 @@ use shipyard::error;
 use shipyard::*;
 
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
-impl Unique for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
+impl Unique for USIZE {}
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
-impl Unique for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
+impl Unique for U32 {}
 
 #[derive(PartialEq, Eq, Debug)]
 struct I32(i32);
-impl Component for I32 {
-    type Tracking = track::Untracked;
-}
+impl Component for I32 {}
 
 #[cfg(feature = "thread_local")]
 struct NotSend(*const ());
@@ -32,13 +22,9 @@ struct NotSend(*const ());
 unsafe impl Sync for NotSend {}
 
 #[cfg(feature = "thread_local")]
-impl Component for NotSend {
-    type Tracking = track::Untracked;
-}
+impl Component for NotSend {}
 #[cfg(feature = "thread_local")]
-impl Unique for NotSend {
-    type Tracking = track::Untracked;
-}
+impl Unique for NotSend {}
 
 #[cfg(feature = "thread_local")]
 struct NotSync(*const ());
@@ -47,29 +33,21 @@ struct NotSync(*const ());
 unsafe impl Send for NotSync {}
 
 #[cfg(feature = "thread_local")]
-impl Component for NotSync {
-    type Tracking = track::Untracked;
-}
+impl Component for NotSync {}
 #[cfg(feature = "thread_local")]
-impl Unique for NotSync {
-    type Tracking = track::Untracked;
-}
+impl Unique for NotSync {}
 
 #[cfg(feature = "thread_local")]
 struct NotSendSync(*const ());
 
 #[cfg(feature = "thread_local")]
-impl Component for NotSendSync {
-    type Tracking = track::Untracked;
-}
+impl Component for NotSendSync {}
 #[cfg(feature = "thread_local")]
-impl Unique for NotSendSync {
-    type Tracking = track::Untracked;
-}
+impl Unique for NotSendSync {}
 
 #[test]
 fn simple_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let u32s = world.borrow::<View<U32>>().unwrap();
     assert_eq!(u32s.len(), 0);
@@ -77,7 +55,7 @@ fn simple_borrow() {
 
 #[test]
 fn option_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let u32s = world.borrow::<Option<View<U32>>>().unwrap();
 
@@ -91,7 +69,7 @@ fn option_borrow() {
 
 #[test]
 fn all_storages_simple_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     let u32s = all_storages.borrow::<View<U32>>().unwrap();
@@ -100,7 +78,7 @@ fn all_storages_simple_borrow() {
 
 #[test]
 fn invalid_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let _u32s = world.borrow::<ViewMut<U32>>().unwrap();
     assert_eq!(
@@ -115,7 +93,7 @@ fn invalid_borrow() {
 
 #[test]
 fn all_storages_invalid_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     let _u32s = all_storages.borrow::<ViewMut<U32>>().unwrap();
@@ -131,7 +109,7 @@ fn all_storages_invalid_borrow() {
 
 #[test]
 fn double_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let u32s = world.borrow::<ViewMut<U32>>().unwrap();
     drop(u32s);
@@ -140,7 +118,7 @@ fn double_borrow() {
 
 #[test]
 fn all_storages_double_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     let u32s = all_storages.borrow::<ViewMut<U32>>().unwrap();
@@ -150,7 +128,7 @@ fn all_storages_double_borrow() {
 
 #[test]
 fn all_storages_option_borrow() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
     let u32s = all_storages.borrow::<Option<View<U32>>>().unwrap();
@@ -166,14 +144,14 @@ fn all_storages_option_borrow() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn non_send_storage_in_other_thread() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     rayon::join(
         || {
             assert_eq!(
                 world.borrow::<NonSend<ViewMut<NotSend>>>().err(),
                 Some(error::GetStorage::StorageBorrow {
-                    name: Some(type_name::<SparseSet<NotSend>>()),
-                    id: StorageId::of::<SparseSet<NotSend>>(),
+                    name: Some(type_name::<NonSend<SparseSet<NotSend>>>()),
+                    id: StorageId::of::<NonSend<SparseSet<NotSend>>>(),
                     borrow: error::Borrow::WrongThread
                 })
             )
@@ -185,14 +163,14 @@ fn non_send_storage_in_other_thread() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn non_send_sync_storage_in_other_thread() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     rayon::join(
         || {
             assert_eq!(
                 world.borrow::<NonSendSync<View<NotSendSync>>>().err(),
                 Some(error::GetStorage::StorageBorrow {
-                    name: Some(type_name::<SparseSet<NotSendSync>>()),
-                    id: StorageId::of::<SparseSet<NotSendSync>>(),
+                    name: Some(type_name::<NonSendSync<SparseSet<NotSendSync>>>()),
+                    id: StorageId::of::<NonSendSync<SparseSet<NotSendSync>>>(),
                     borrow: error::Borrow::WrongThread
                 })
             )
@@ -203,7 +181,7 @@ fn non_send_sync_storage_in_other_thread() {
 
 #[test]
 fn add_unique_while_borrowing() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.add_unique(U32(0));
     let _s = world.borrow::<UniqueView<'_, U32>>().unwrap();
     world.add_unique(USIZE(0));
@@ -211,7 +189,7 @@ fn add_unique_while_borrowing() {
 
 #[test]
 fn sparse_set_and_unique() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     world.add_unique(U32(0));
     world
         .borrow::<(UniqueViewMut<U32>, ViewMut<U32>)>()
@@ -221,7 +199,7 @@ fn sparse_set_and_unique() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn exhaustive_list() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     let _ = world.borrow::<(
         NonSend<View<NotSend>>,
@@ -247,7 +225,7 @@ fn exhaustive_list() {
 #[test]
 #[cfg(feature = "thread_local")]
 fn unique_exhaustive_list() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.add_unique_non_send(NotSend(&()));
     world.add_unique_non_sync(NotSync(&()));

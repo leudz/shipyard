@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::view::ViewMut;
+use crate::views::ViewMut;
 
 /// Trait describing how to add a new entity to a storage.
 pub trait AddEntity {
@@ -18,7 +18,7 @@ impl AddEntity for () {
     fn add_entity(_: &mut Self, _: EntityId, _: Self::Component) {}
 }
 
-impl<T: Component> AddEntity for ViewMut<'_, T> {
+impl<T: Component, TRACK> AddEntity for ViewMut<'_, T, TRACK> {
     type Component = T;
 
     #[inline]
@@ -27,7 +27,7 @@ impl<T: Component> AddEntity for ViewMut<'_, T> {
     }
 }
 
-impl<T: Component> AddEntity for &mut ViewMut<'_, T> {
+impl<T: Component, TRACK> AddEntity for &mut ViewMut<'_, T, TRACK> {
     type Component = T;
 
     #[inline]

@@ -4,18 +4,22 @@ use crate::borrow::Mutability;
 use crate::scheduler::{AsLabel, Label};
 use crate::storage::StorageId;
 pub use crate::type_id::TypeId;
+use crate::ShipHashMap;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
+use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::hash::BuildHasherDefault;
 
 /// Contains information related to a workload.
 ///
 /// A workload is a collection of systems with parallelism calculated based on the types borrow by the systems.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorkloadInfo {
     #[allow(missing_docs)]
-    pub name: Box<dyn Label>,
+    pub name: String,
     #[allow(missing_docs)]
     pub batch_info: Vec<BatchInfo>,
 }
@@ -23,28 +27,41 @@ pub struct WorkloadInfo {
 /// Contains information related to a batch.
 ///
 /// A batch is a collection of system that can safely run in parallel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct BatchInfo {
     #[allow(missing_docs)]
     pub systems: (Option<SystemInfo>, Vec<SystemInfo>),
 }
 
+impl BatchInfo {
+    /// Returns an iterator of all systems in this batch
+    pub fn systems(&self) -> impl Iterator<Item = &'_ SystemInfo> {
+        self.systems.0.iter().chain(&self.systems.1)
+    }
+}
+
 /// Contains information related to a system.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct SystemInfo {
     #[allow(missing_docs)]
-    pub name: Box<dyn Label>,
+    pub name: String,
     #[allow(missing_docs)]
     pub type_id: TypeId,
     #[allow(missing_docs)]
     pub borrow: Vec<TypeInfo>,
     /// Information explaining why this system could not be part of the previous batch.
     pub conflict: Option<Conflict>,
+    #[allow(missing_docs)]
+    pub before: Vec<String>,
+    #[allow(missing_docs)]
+    pub after: Vec<String>,
 }
 
 impl core::fmt::Debug for SystemInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("StorageInfo")
+        f.debug_struct("SystemInfo")
             .field("name", &self.name)
             .field("borrow", &self.borrow)
             .field("conflict", &self.conflict)
@@ -54,6 +71,7 @@ impl core::fmt::Debug for SystemInfo {
 
 /// Pinpoints the type and system that made a system unable to get into a batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum Conflict {
     /// Rust rules do not allow the type described by `type_info` to be borrowed at the same time as `other_type_info`.
     Borrow {
@@ -77,9 +95,10 @@ pub enum Conflict {
 
 /// Identify a system.
 #[derive(Clone, Eq)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct SystemId {
     #[allow(missing_docs)]
-    pub name: Box<dyn Label>,
+    pub name: String,
     #[allow(missing_docs)]
     pub type_id: TypeId,
 }
@@ -158,10 +177,16 @@ impl core::hash::Hash for TypeInfo {
 }
 
 /// Contains a list of workloads, their systems and which storages these systems borrow.
-#[allow(clippy::type_complexity)]
-#[derive(Debug)]
+#[derive(Default, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
-pub struct WorkloadsTypeUsage(pub hashbrown::HashMap<String, Vec<(String, Vec<TypeInfo>)>>);
+pub struct WorkloadsInfo(pub ShipHashMap<String, WorkloadInfo>);
+
+impl WorkloadsInfo {
+    /// Creates an empty [`WorkloadsInfo`].
+    pub fn new() -> WorkloadsInfo {
+        WorkloadsInfo(ShipHashMap::with_hasher(BuildHasherDefault::default()))
+    }
+}
 
 /// List of before/after requirements for a system or workload.
 /// The list dedups items.
@@ -213,6 +238,10 @@ impl DedupedLabels {
 
     pub(crate) fn retain<F: FnMut(&Box<dyn Label>) -> bool>(&mut self, f: F) {
         self.0.retain(f);
+    }
+
+    pub(crate) fn to_string_vec(&self) -> Vec<String> {
+        self.0.iter().map(|label| format!("{:?}", label)).collect()
     }
 }
 

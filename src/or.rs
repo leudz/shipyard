@@ -1,8 +1,8 @@
 use crate::{
     component::Component,
     iter::IntoAbstract,
-    view::{View, ViewMut},
-    Inserted, InsertedOrModified, Modified,
+    tracking::Inserted,
+    views::{View, ViewMut},
 };
 use core::ops::BitOr;
 
@@ -11,25 +11,25 @@ use core::ops::BitOr;
 /// # Example
 ///
 /// ```rust
-/// use shipyard::{Component, IntoIter, OneOfTwo, View, ViewMut, World};
+/// use shipyard::{track, Component, IntoIter, OneOfTwo, View, ViewMut, World};
 ///
 /// #[derive(Component, PartialEq, Eq, Debug)]
-/// #[track(All)]
 /// struct A(u32);
 ///
 /// #[derive(Component, PartialEq, Eq, Debug)]
-/// #[track(All)]
 /// struct B(u32);
 ///
 /// let mut world = World::new();
 ///
+/// world.track_all::<(A, B)>();
+///
 /// world.add_entity((A(0),));
 /// world.add_entity((A(1), B(10)));
-/// world.borrow::<ViewMut<A>>().unwrap().clear_all_inserted();
+/// world.borrow::<ViewMut<A, track::All>>().unwrap().clear_all_inserted();
 /// world.add_entity((B(20),));
 /// world.add_entity((A(3),));
 ///
-/// let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+/// let (a, b) = world.borrow::<(View<A, track::All>, View<B, track::All>)>().unwrap();
 ///
 /// assert_eq!(
 ///     (a.inserted() | b.inserted()).iter().collect::<Vec<_>>(),
@@ -43,7 +43,7 @@ use core::ops::BitOr;
 #[derive(Copy, Clone)]
 pub struct Or<T>(pub(crate) T);
 
-impl<'a, T: Component, U: IntoAbstract> BitOr<U> for &'a View<'a, T> {
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a View<'a, T, TRACK> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -51,7 +51,7 @@ impl<'a, T: Component, U: IntoAbstract> BitOr<U> for &'a View<'a, T> {
     }
 }
 
-impl<'a, T: Component, U: IntoAbstract> BitOr<U> for Inserted<&'a View<'a, T>> {
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for Inserted<&'a View<'a, T, TRACK>> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -59,7 +59,7 @@ impl<'a, T: Component, U: IntoAbstract> BitOr<U> for Inserted<&'a View<'a, T>> {
     }
 }
 
-impl<'a, T: Component, U: IntoAbstract> BitOr<U> for Modified<&'a View<'a, T>> {
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T, TRACK> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -67,23 +67,7 @@ impl<'a, T: Component, U: IntoAbstract> BitOr<U> for Modified<&'a View<'a, T>> {
     }
 }
 
-impl<'a, T: Component, U: IntoAbstract> BitOr<U> for InsertedOrModified<&'a View<'a, T>> {
-    type Output = Or<(Self, U)>;
-
-    fn bitor(self, rhs: U) -> Self::Output {
-        Or((self, rhs))
-    }
-}
-
-impl<'a, T: Component, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T> {
-    type Output = Or<(Self, U)>;
-
-    fn bitor(self, rhs: U) -> Self::Output {
-        Or((self, rhs))
-    }
-}
-
-impl<'a, T: Component, U: IntoAbstract> BitOr<U> for &'a mut ViewMut<'a, T> {
+impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a mut ViewMut<'a, T, TRACK> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {

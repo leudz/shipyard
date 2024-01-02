@@ -1,190 +1,60 @@
+use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
-use crate::track::{
-    map_deletion_data, Removal, RemovalOrDeletionTracking, RemovalTracking, Tracking,
+use crate::sparse_set::SparseSet;
+use crate::track::{Removal, RemovalConst};
+use crate::tracking::{
+    map_deletion_data, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
+    TrackingTimestamp,
 };
-use crate::view::ViewMut;
-use crate::{Component, SparseSet, SparseSetDrain};
 
-impl Sealed for Removal {}
+impl Sealed for Track<Removal> {}
 
-impl Tracking for Removal {
-    #[inline]
-    fn track_removal() -> bool {
-        true
+impl Tracking for Track<Removal> {
+    fn as_const() -> u32 {
+        RemovalConst
     }
 
-    fn is_removed<T: Component<Tracking = Self>>(
-        sparse_set: &SparseSet<T, Self>,
+    fn is_removed<T: Component>(
+        sparse_set: &SparseSet<T>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: TrackingTimestamp,
+        current: TrackingTimestamp,
     ) -> bool {
-        sparse_set.removal_data.iter().any(|(id, timestamp)| {
-            *id == entity && super::is_track_within_bounds(*timestamp, last, current)
-        })
-    }
-
-    #[inline]
-    fn remove<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-        entity: EntityId,
-        current: u32,
-    ) -> Option<T> {
-        let component = sparse_set.actual_remove(entity);
-
-        if component.is_some() {
-            sparse_set.removal_data.push((entity, current));
-        }
-
-        component
-    }
-
-    #[inline]
-    fn delete<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-        entity: EntityId,
-        _current: u32,
-    ) -> bool {
-        sparse_set.actual_remove(entity).is_some()
-    }
-
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32) {
-        for &id in &sparse_set.dense {
-            unsafe {
-                *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
-            }
-        }
-
-        sparse_set.deletion_data.extend(
-            sparse_set
-                .dense
-                .drain(..)
-                .zip(sparse_set.data.drain(..))
-                .map(|(entity, component)| (entity, current, component)),
-        );
-    }
-
-    #[track_caller]
-    #[inline]
-    fn apply<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &T) -> R>(
-        sparse_set: &mut ViewMut<'_, T, Self>,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> R {
-        let a_index = sparse_set.index_of(a).unwrap_or_else(move || {
-            panic!(
-                "Entity {:?} does not have any component in this storage.",
-                a
-            )
-        });
-        let b_index = sparse_set.index_of(b).unwrap_or_else(move || {
-            panic!(
-                "Entity {:?} does not have any component in this storage.",
-                b
-            )
-        });
-
-        if a_index != b_index {
-            let a = unsafe { &mut *sparse_set.data.as_mut_ptr().add(a_index) };
-            let b = unsafe { &*sparse_set.data.as_mut_ptr().add(b_index) };
-
-            f(a, b)
-        } else {
-            panic!("Cannot use apply with identical components.");
-        }
-    }
-
-    #[track_caller]
-    #[inline]
-    fn apply_mut<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &mut T) -> R>(
-        sparse_set: &mut ViewMut<'_, T, Self>,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> R {
-        let a_index = sparse_set.index_of(a).unwrap_or_else(move || {
-            panic!(
-                "Entity {:?} does not have any component in this storage.",
-                a
-            )
-        });
-        let b_index = sparse_set.index_of(b).unwrap_or_else(move || {
-            panic!(
-                "Entity {:?} does not have any component in this storage.",
-                b
-            )
-        });
-
-        if a_index != b_index {
-            let a = unsafe { &mut *sparse_set.data.as_mut_ptr().add(a_index) };
-            let b = unsafe { &mut *sparse_set.data.as_mut_ptr().add(b_index) };
-
-            f(a, b)
-        } else {
-            panic!("Cannot use apply with identical components.");
-        }
-    }
-
-    fn drain<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-        current: u32,
-    ) -> SparseSetDrain<'_, T> {
         sparse_set
             .removal_data
-            .extend(sparse_set.dense.drain(..).map(|entity| (entity, current)));
-
-        for id in &sparse_set.dense {
-            // SAFE ids from sparse_set.dense are always valid
-            unsafe {
-                *sparse_set.sparse.get_mut_unchecked(*id) = EntityId::dead();
-            }
-        }
-
-        let dense_ptr = sparse_set.dense.as_ptr();
-        let dense_len = sparse_set.dense.len();
-
-        unsafe {
-            sparse_set.dense.set_len(0);
-        }
-
-        SparseSetDrain {
-            dense_ptr,
-            dense_len,
-            data: sparse_set.data.drain(..),
-        }
-    }
-
-    fn clear_all_removed_and_deleted<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-    ) {
-        sparse_set.removal_data.clear();
-    }
-    fn clear_all_removed_and_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-        timestamp: crate::TrackingTimestamp,
-    ) {
-        sparse_set.removal_data.retain(|(_, t)| {
-            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
-        });
+            .iter()
+            .any(|(id, timestamp)| *id == entity && timestamp.is_within(last, current))
     }
 }
 
-impl RemovalTracking for Removal {}
-impl RemovalOrDeletionTracking for Removal {
+impl RemovalTracking for Track<Removal> {}
+impl RemovalOrDeletionTracking for Track<Removal> {
     #[allow(trivial_casts)]
-    fn removed_or_deleted<T: Component<Tracking = Self>>(
-        sparse_set: &SparseSet<T, Self>,
+    fn removed_or_deleted<T: Component>(
+        sparse_set: &SparseSet<T>,
     ) -> core::iter::Chain<
         core::iter::Map<
-            core::slice::Iter<'_, (EntityId, u32, T)>,
-            for<'r> fn(&'r (EntityId, u32, T)) -> (EntityId, u32),
+            core::slice::Iter<'_, (EntityId, TrackingTimestamp, T)>,
+            for<'r> fn(&'r (EntityId, TrackingTimestamp, T)) -> (EntityId, TrackingTimestamp),
         >,
-        core::iter::Copied<core::slice::Iter<'_, (EntityId, u32)>>,
+        core::iter::Copied<core::slice::Iter<'_, (EntityId, TrackingTimestamp)>>,
     > {
         [].iter()
             .map(map_deletion_data as _)
             .chain(sparse_set.removal_data.iter().copied())
+    }
+
+    fn clear_all_removed_and_deleted<T: Component>(sparse_set: &mut SparseSet<T>) {
+        sparse_set.removal_data.clear();
+    }
+
+    fn clear_all_removed_and_deleted_older_than_timestamp<T: Component>(
+        sparse_set: &mut SparseSet<T>,
+        timestamp: TrackingTimestamp,
+    ) {
+        sparse_set
+            .removal_data
+            .retain(|(_, t)| timestamp.is_older_than(*t));
     }
 }

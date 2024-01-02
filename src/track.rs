@@ -1,187 +1,62 @@
 mod all;
 mod deletion;
+mod deletion_removal;
 mod insertion;
+mod insertion_deletion;
+mod insertion_deletion_removal;
+mod insertion_modification;
+mod insertion_modification_deletion;
+mod insertion_modification_removal;
+mod insertion_removal;
 mod modification;
+mod modification_deletion;
+mod modification_deletion_removal;
+mod modification_removal;
 mod nothing;
 mod removal;
 
-use crate::component::Component;
-use crate::entity_id::EntityId;
-use crate::seal::Sealed;
-use crate::sparse_set::SparseSet;
-use crate::view::ViewMut;
-use crate::SparseSetDrain;
-
 #[allow(missing_docs)]
-pub struct Untracked(());
+pub struct Untracked;
 #[allow(missing_docs)]
-pub struct Insertion(());
+pub struct Insertion;
 #[allow(missing_docs)]
-pub struct Modification(());
+pub struct InsertionAndModification;
 #[allow(missing_docs)]
-pub struct Deletion(());
+pub struct InsertionAndModificationAndDeletion;
 #[allow(missing_docs)]
-pub struct Removal(());
+pub struct InsertionAndModificationAndRemoval;
 #[allow(missing_docs)]
-pub struct All(());
+pub struct InsertionAndDeletion;
+#[allow(missing_docs)]
+pub struct InsertionAndRemoval;
+#[allow(missing_docs)]
+pub struct InsertionAndDeletionAndRemoval;
+#[allow(missing_docs)]
+pub struct Modification;
+#[allow(missing_docs)]
+pub struct ModificationAndDeletion;
+#[allow(missing_docs)]
+pub struct ModificationAndRemoval;
+#[allow(missing_docs)]
+pub struct ModificationAndDeletionAndRemoval;
+#[allow(missing_docs)]
+pub struct Deletion;
+#[allow(missing_docs)]
+pub struct DeletionAndRemoval;
+#[allow(missing_docs)]
+pub struct Removal;
+#[allow(missing_docs)]
+pub struct All;
 
-/// Trait implemented by all trackings.
-pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
-    #[doc(hidden)]
-    #[inline]
-    fn track_insertion() -> bool {
-        false
-    }
-    #[doc(hidden)]
-    #[inline]
-    fn track_modification() -> bool {
-        false
-    }
-    #[doc(hidden)]
-    #[inline]
-    fn track_deletion() -> bool {
-        false
-    }
-    #[doc(hidden)]
-    #[inline]
-    fn track_removal() -> bool {
-        false
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    fn is_inserted<T: Component<Tracking = Self>>(
-        _sparse_set: &SparseSet<T, Self>,
-        _entity: EntityId,
-        _last: u32,
-        _current: u32,
-    ) -> bool {
-        false
-    }
-    #[doc(hidden)]
-    #[inline]
-    fn is_modified<T: Component<Tracking = Self>>(
-        _sparse_set: &SparseSet<T, Self>,
-        _entity: EntityId,
-        _last: u32,
-        _current: u32,
-    ) -> bool {
-        false
-    }
-    #[doc(hidden)]
-    #[inline]
-    fn is_deleted<T: Component<Tracking = Self>>(
-        _sparse_set: &SparseSet<T, Self>,
-        _entity: EntityId,
-        _last: u32,
-        _current: u32,
-    ) -> bool {
-        false
-    }
-    #[doc(hidden)]
-    #[inline]
-    fn is_removed<T: Component<Tracking = Self>>(
-        _sparse_set: &SparseSet<T, Self>,
-        _entity: EntityId,
-        _last: u32,
-        _current: u32,
-    ) -> bool {
-        false
-    }
-
-    #[doc(hidden)]
-    fn remove<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-        entity: EntityId,
-        current: u32,
-    ) -> Option<T>;
-
-    #[doc(hidden)]
-    fn delete<T: Component<Tracking = Self>>(
-        sparse_set: &mut SparseSet<T, Self>,
-        entity: EntityId,
-        current: u32,
-    ) -> bool;
-
-    #[doc(hidden)]
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32);
-
-    #[doc(hidden)]
-    fn apply<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &T) -> R>(
-        sparse_set: &mut ViewMut<'_, T, Self>,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> R;
-
-    #[doc(hidden)]
-    fn apply_mut<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &mut T) -> R>(
-        sparse_set: &mut ViewMut<'_, T, Self>,
-        a: EntityId,
-        b: EntityId,
-        f: F,
-    ) -> R;
-
-    #[doc(hidden)]
-    fn drain<T: Component<Tracking = Self>>(
-        sparse_set: &'_ mut SparseSet<T, Self>,
-        current: u32,
-    ) -> SparseSetDrain<'_, T>;
-
-    #[doc(hidden)]
-    fn clear_all_removed_and_deleted<T: Component<Tracking = Self>>(
-        _sparse_set: &mut SparseSet<T, Self>,
-    ) {
-    }
-    #[doc(hidden)]
-    fn clear_all_removed_and_deleted_older_than_timestamp<T: Component<Tracking = Self>>(
-        _sparse_set: &mut SparseSet<T, Self>,
-        _timestamp: crate::TrackingTimestamp,
-    ) {
-    }
-}
-
-/// Bound for tracking insertion.
-pub trait InsertionTracking: Tracking + InsertionOrModificationTracking {}
-/// Bound for tracking modification.
-pub trait ModificationTracking: Tracking + InsertionOrModificationTracking {}
-/// Bound for tracking insertion or modification.
-pub trait InsertionOrModificationTracking: Tracking {}
-/// Bound for tracking removal.
-pub trait RemovalTracking: Tracking + RemovalOrDeletionTracking {}
-/// Bound for tracking deletion.
-pub trait DeletionTracking: Tracking + RemovalOrDeletionTracking {}
-/// Bound for tracking removal or deletion.
-pub trait RemovalOrDeletionTracking: Tracking {
-    #[doc(hidden)]
-    #[allow(clippy::type_complexity)]
-    fn removed_or_deleted<T: Component<Tracking = Self>>(
-        sparse_set: &SparseSet<T, Self>,
-    ) -> core::iter::Chain<
-        core::iter::Map<
-            core::slice::Iter<'_, (EntityId, u32, T)>,
-            fn(&(EntityId, u32, T)) -> (EntityId, u32),
-        >,
-        core::iter::Copied<core::slice::Iter<'_, (EntityId, u32)>>,
-    >;
-}
-
-#[inline]
-pub(crate) fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
-    let more_than_last = if timestamp < last {
-        u32::MAX - last + timestamp
-    } else {
-        timestamp - last
-    };
-    let less_than_current = if current < timestamp {
-        u32::MAX - timestamp + current
-    } else {
-        current - timestamp
-    };
-
-    more_than_last < u32::MAX / 2 && more_than_last > 0 && less_than_current < u32::MAX / 2
-}
-
-fn map_deletion_data<T>(&(entity_id, timestamp, _): &(EntityId, u32, T)) -> (EntityId, u32) {
-    (entity_id, timestamp)
-}
+#[allow(missing_docs, non_upper_case_globals)]
+pub(crate) const UntrackedConst: u32 = 0b0000;
+#[allow(missing_docs, non_upper_case_globals)]
+pub(crate) const InsertionConst: u32 = 0b0001;
+#[allow(missing_docs, non_upper_case_globals)]
+pub(crate) const ModificationConst: u32 = 0b0010;
+#[allow(missing_docs, non_upper_case_globals)]
+pub(crate) const DeletionConst: u32 = 0b0100;
+#[allow(missing_docs, non_upper_case_globals)]
+pub(crate) const RemovalConst: u32 = 0b1000;
+#[allow(missing_docs, non_upper_case_globals)]
+pub(crate) const AllConst: u32 = InsertionConst + ModificationConst + DeletionConst + RemovalConst;

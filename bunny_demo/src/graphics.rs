@@ -3,7 +3,7 @@ use egui::{ClippedPrimitive, Context};
 use egui_wgpu::renderer::ScreenDescriptor;
 use image::GenericImageView;
 use shipyard::{Unique, UniqueView, UniqueViewMut, View, World};
-use wgpu::{include_wgsl, util::DeviceExt};
+use wgpu::{include_wgsl, util::DeviceExt, CommandEncoderDescriptor};
 use winit::window::Window;
 
 #[repr(C)]
@@ -48,14 +48,17 @@ pub(crate) struct Graphics {
     pub(crate) bunny_diffuse_bind_group: wgpu::BindGroup,
     pub(crate) context: egui::Context,
     pub(crate) input: egui::RawInput,
-    pub(crate) egui_render_pass: egui_wgpu::renderer::RenderPass,
+    pub(crate) egui_render_pass: egui_wgpu::Renderer,
 }
 
 pub(crate) async fn init_graphics(world: &World, window: &Window, context: Context) {
     let size = window.inner_size();
 
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
-    let surface = unsafe { instance.create_surface(window) };
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        dx12_shader_compiler: wgpu::Dx12Compiler::default(),
+    });
+    let surface = unsafe { instance.create_surface(window).unwrap() };
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
@@ -80,13 +83,15 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         .await
         .unwrap();
 
-    let supported_format = surface.get_supported_formats(&adapter)[0];
+    let supported_format = surface.get_capabilities(&adapter).formats[0];
     let config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: supported_format,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![],
     };
     surface.configure(&device, &config);
 
@@ -139,6 +144,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         label: Some("diffuse_texture"),
+        view_formats: &[],
     });
 
     queue.write_texture(
@@ -270,7 +276,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
 
     context.set_pixels_per_point(window.scale_factor() as f32);
 
-    let egui_render_pass = egui_wgpu::renderer::RenderPass::new(&device, supported_format, 1);
+    let egui_render_pass = egui_wgpu::Renderer::new(&device, supported_format, None, 1);
 
     world.add_unique(Graphics {
         surface,
@@ -371,11 +377,9 @@ pub(crate) fn render(
         render_pass.set_vertex_buffer(1, graphics.instance_buffer.slice(..));
         render_pass.draw(0..6, 0..graphics.vertex_count);
 
-        graphics.egui_render_pass.execute_with_renderpass(
-            &mut render_pass,
-            &paint_jobs,
-            &screen_descriptor,
-        );
+        graphics
+            .egui_render_pass
+            .render(&mut render_pass, &paint_jobs, &screen_descriptor);
     }
 
     graphics.queue.submit(std::iter::once(encoder.finish()));
@@ -443,9 +447,17 @@ fn update_egui_render_pass(
     for id in &egui_output.textures_delta.free {
         graphics.egui_render_pass.free_texture(id);
     }
+
+    let mut command_encoder = graphics
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("egui"),
+        });
+
     graphics.egui_render_pass.update_buffers(
         &graphics.device,
         &graphics.queue,
+        &mut command_encoder,
         &paint_jobs,
         &screen_descriptor,
     );

@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   changes:
@@ -15,7 +16,7 @@ jobs:
       code: ${{ steps.filter.outputs.code }}
       deploy: ${{ steps.filter.outputs.deploy }}
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
       id: filter
       with:
@@ -24,17 +25,20 @@ jobs:
             - 'src/**'
             - 'tests/**'
             - 'Cargo.toml'
+            - '.github/**'
           deploy:
             - 'bunny_demo/**'
             - 'guide/**'
             - 'square_eater/**'
             - 'visualizer/**'
+            - '.github/**'
+            - 'Cargo.toml'
   fmt:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -45,18 +49,18 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
 
-      - run: cargo miri test --tests --lib --no-default-features
+      - run: cargo miri test --tests --lib --no-default-features --features=std
   clippy:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -69,7 +73,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - run: cargo test --all-features
@@ -78,7 +82,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
@@ -101,7 +105,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
@@ -124,7 +128,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
 
       - name: download mdbook
@@ -147,13 +151,14 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
 
       - name: install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        # https://github.com/rustwasm/wasm-pack/issues/823#issuecomment-1242611318
+        run: cargo install --git https://github.com/frewsxcv/wasm-pack.git --branch patch-2
 
       - run: wasm-pack build bunny_demo --target web --release --out-dir public/wasm
 
@@ -169,7 +174,7 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
@@ -185,20 +190,19 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           target: wasm32-unknown-unknown
-      - run: cargo build --lib --release --package visualizer --target wasm32-unknown-unknown --manifest-path=visualizer/Cargo.toml
-      - uses: jetli/wasm-bindgen-action@v0.1.0
-        with:
-          version: 'latest'
-      - run: wasm-bindgen target/wasm32-unknown-unknown/release/visualizer.wasm --out-dir visualizer/out --no-modules --no-typescript
+      - uses: jetli/trunk-action@v0.4.0
+      # GH pages doesn't use the same url naming as trunk's default
+      # https://github.com/thedodd/trunk/issues/268
+      - run: trunk build --public-url "shipyard/visualizer/" --release visualizer/index.html
       - name: save visualizer
         uses: actions/upload-artifact@v2
         with:
           name: visualizer
-          path: visualizer/out
+          path: visualizer/dist
   deploy:
     runs-on: ubuntu-latest
     needs: [changes, guide_master, guide_0_5_0, bunny_demo, square_eater, visualizer]

@@ -1,18 +1,14 @@
 use shipyard::*;
 
 struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
+impl Component for USIZE {}
 
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn alive() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.add_entity((U32(0),));
     let entity = world.add_entity((U32(1),));
     world.add_entity((U32(2),));
@@ -26,7 +22,7 @@ fn alive() {
 
 #[test]
 fn single_dead() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     world.add_entity((U32(0),));
     let entity = world.add_entity((U32(1),));
     world.add_entity((U32(2),));
@@ -43,7 +39,7 @@ fn single_dead() {
 #[cfg(feature = "serde1")]
 #[test]
 fn multiple_dead_first() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     let entity0 = world.add_entity((U32(0),));
     let entity1 = world.add_entity((U32(1),));
     let entity2 = world.add_entity((U32(2),));
@@ -77,7 +73,7 @@ fn multiple_dead_first() {
 #[cfg(feature = "serde1")]
 #[test]
 fn multiple_dead_middle() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     let entity0 = world.add_entity((U32(0),));
     let entity1 = world.add_entity((U32(1),));
     let entity2 = world.add_entity((U32(2),));
@@ -111,7 +107,7 @@ fn multiple_dead_middle() {
 #[cfg(feature = "serde1")]
 #[test]
 fn multiple_dead_last() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     let entity0 = world.add_entity((U32(0),));
     let entity1 = world.add_entity((U32(1),));
     let entity2 = world.add_entity((U32(2),));
@@ -145,7 +141,7 @@ fn multiple_dead_last() {
 #[cfg(feature = "serde1")]
 #[test]
 fn new_world_empty() {
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
     let entity = EntityId::new_from_index_and_gen(3, 0);
 
     let mut entities = world.borrow::<EntitiesViewMut>().unwrap();
@@ -175,7 +171,7 @@ fn new_world_empty() {
 #[cfg(feature = "serde1")]
 #[test]
 fn new_world() {
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
     let entity = EntityId::new_from_index_and_gen(5, 0);
 
     let entity0 = world.add_entity((U32(0),));

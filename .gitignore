@@ -6,4 +6,4 @@ tutorial/output
 node_modules
 bunny_demo/public/wasm
 *.wasm
-visualizer/out/visualizer.js
+visualizer/dist

@@ -3,19 +3,21 @@ mod borrow_state;
 pub use borrow_state::{ExclusiveBorrow, SharedBorrow};
 
 use crate::error;
+#[cfg(feature = "thread_local")]
+use alloc::sync::Arc;
 use borrow_state::BorrowState;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-#[cfg(feature = "thread_local")]
-use std::thread::ThreadId;
 
 /// Threadsafe `RefCell`-like container.
 #[doc(hidden)]
 pub struct AtomicRefCell<T: ?Sized> {
     borrow_state: BorrowState,
     #[cfg(feature = "thread_local")]
-    send: Option<ThreadId>,
+    thread_id: Arc<dyn Fn() -> u64 + Send + Sync>,
+    #[cfg(feature = "thread_local")]
+    send: Option<u64>,
     #[cfg(feature = "thread_local")]
     is_sync: bool,
     _non_send_sync: PhantomData<*const ()>,
@@ -36,6 +38,8 @@ impl<T: Send + Sync> AtomicRefCell<T> {
         AtomicRefCell {
             borrow_state: BorrowState::new(),
             #[cfg(feature = "thread_local")]
+            thread_id: Arc::new(|| unreachable!()),
+            #[cfg(feature = "thread_local")]
             send: None,
             #[cfg(feature = "thread_local")]
             is_sync: true,
@@ -49,11 +53,13 @@ impl<T: Send + Sync> AtomicRefCell<T> {
 impl<T: Sync> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
     #[inline]
-    pub(crate) fn new_non_send(value: T, world_thread_id: ThreadId) -> Self {
+    pub(crate) fn new_non_send(value: T, thread_id: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
+        let send = Some(thread_id());
+
         AtomicRefCell {
             borrow_state: BorrowState::new(),
-            send: Some(world_thread_id),
-            #[cfg(feature = "thread_local")]
+            thread_id,
+            send,
             is_sync: true,
             _non_send_sync: PhantomData,
             inner: UnsafeCell::new(value),
@@ -68,7 +74,7 @@ impl<T: Send> AtomicRefCell<T> {
     pub(crate) fn new_non_sync(value: T) -> Self {
         AtomicRefCell {
             borrow_state: BorrowState::new(),
-            #[cfg(feature = "thread_local")]
+            thread_id: Arc::new(|| unreachable!()),
             send: None,
             is_sync: false,
             _non_send_sync: PhantomData,
@@ -81,10 +87,16 @@ impl<T: Send> AtomicRefCell<T> {
 impl<T> AtomicRefCell<T> {
     /// Creates a new `AtomicRefCell` containing `value`.
     #[inline]
-    pub(crate) fn new_non_send_sync(value: T, world_thread_id: ThreadId) -> Self {
+    pub(crate) fn new_non_send_sync(
+        value: T,
+        thread_id: Arc<dyn Fn() -> u64 + Send + Sync>,
+    ) -> Self {
+        let send = Some(thread_id());
+
         AtomicRefCell {
             borrow_state: BorrowState::new(),
-            send: Some(world_thread_id),
+            thread_id,
+            send,
             is_sync: false,
             _non_send_sync: PhantomData,
             inner: UnsafeCell::new(value),
@@ -106,13 +118,13 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `Ref` exits scope. Multiple shared borrows can be
     /// taken out at the same time.
     #[inline]
-    pub(crate) fn borrow(&self) -> Result<Ref<'_, &'_ T>, error::Borrow> {
+    pub(crate) fn borrow(&self) -> Result<ARef<'_, &'_ T>, error::Borrow> {
         #[cfg(not(feature = "thread_local"))]
         {
             // if Send - accessible from any thread, shared xor unique
             // if !Send - accessible from any thread, shared only if not world's thread
             match self.borrow_state.read() {
-                Ok(borrow) => Ok(Ref {
+                Ok(borrow) => Ok(ARef {
                     inner: unsafe { &*self.inner.get() },
                     borrow,
                 }),
@@ -126,7 +138,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
                     // if Send - accessible from any thread, shared xor unique
                     // if !Send - accessible from any thread, shared only if not world's thread
                     match self.borrow_state.read() {
-                        Ok(borrow) => Ok(Ref {
+                        Ok(borrow) => Ok(ARef {
                             inner: unsafe { &*self.inner.get() },
                             borrow,
                         }),
@@ -137,7 +149,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
                     // accessible from one thread at a time
                     match self.borrow_state.exclusive_read() {
                         Ok(borrow) => {
-                            Ok(Ref {
+                            Ok(ARef {
                                 // SAFE we locked
                                 inner: unsafe { &*self.inner.get() },
                                 borrow,
@@ -148,13 +160,13 @@ impl<T: ?Sized> AtomicRefCell<T> {
                 }
                 (Some(thread_id), false) => {
                     // accessible from world's thread only
-                    if thread_id != std::thread::current().id() {
+                    if thread_id != (self.thread_id)() {
                         return Err(error::Borrow::WrongThread);
                     }
 
                     match self.borrow_state.read() {
                         Ok(borrow) => {
-                            Ok(Ref {
+                            Ok(ARef {
                                 // SAFE we locked
                                 inner: unsafe { &*self.inner.get() },
                                 borrow,
@@ -171,13 +183,13 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `RefMut` exits scope. The value cannot be borrowed while this borrow is
     /// active.
     #[inline]
-    pub(crate) fn borrow_mut(&self) -> Result<RefMut<'_, &'_ mut T>, error::Borrow> {
+    pub(crate) fn borrow_mut(&self) -> Result<ARefMut<'_, &'_ mut T>, error::Borrow> {
         #[cfg(feature = "thread_local")]
         {
-            // if Sync - accessible from any thread, shared only if not world thread
-            // if !Sync - accessible from world thread only
+            // if Send - accessible from any thread, shared only if not world thread
+            // if !Send - accessible from world thread only
             if let Some(thread_id) = self.send {
-                if thread_id != std::thread::current().id() {
+                if thread_id != (self.thread_id)() {
                     return Err(error::Borrow::WrongThread);
                 }
             }
@@ -185,7 +197,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
 
         match self.borrow_state.write() {
             Ok(borrow) => {
-                Ok(RefMut {
+                Ok(ARefMut {
                     // SAFE we locked
                     inner: unsafe { &mut *self.inner.get() },
                     borrow,
@@ -195,18 +207,30 @@ impl<T: ?Sized> AtomicRefCell<T> {
         }
     }
     #[inline]
+    #[track_caller]
     pub(crate) fn get_mut(&mut self) -> &'_ mut T {
+        #[cfg(feature = "thread_local")]
+        {
+            // if Send - accessible from any thread, shared only if not world thread
+            // if !Send - accessible from world thread only
+            if let Some(thread_id) = self.send {
+                if thread_id != (self.thread_id)() {
+                    panic!("{:?}", error::Borrow::WrongThread);
+                }
+            }
+        }
+
         self.inner.get_mut()
     }
 }
 
 /// Wraps an `AtomicRefcell`'s shared borrow.
-pub struct Ref<'a, T> {
+pub struct ARef<'a, T> {
     inner: T,
     borrow: SharedBorrow<'a>,
 }
 
-impl<'a, T> Ref<'a, T> {
+impl<'a, T> ARef<'a, T> {
     /// Returns the inner parts of the `Ref`.
     ///
     /// # Safety
@@ -218,17 +242,17 @@ impl<'a, T> Ref<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> Ref<'a, &'a T> {
+impl<'a, T: ?Sized> ARef<'a, &'a T> {
     #[inline]
-    pub(crate) fn map<U, F: FnOnce(&T) -> &U>(this: Self, f: F) -> Ref<'a, &'a U> {
-        Ref {
+    pub(crate) fn map<U, F: FnOnce(&T) -> &U>(this: Self, f: F) -> ARef<'a, &'a U> {
+        ARef {
             inner: f(this.inner),
             borrow: this.borrow,
         }
     }
 }
 
-impl<'a, T: Deref> Deref for Ref<'a, T> {
+impl<'a, T: Deref> Deref for ARef<'a, T> {
     type Target = T::Target;
 
     #[inline]
@@ -237,10 +261,10 @@ impl<'a, T: Deref> Deref for Ref<'a, T> {
     }
 }
 
-impl<T: Clone> Clone for Ref<'_, T> {
+impl<T: Clone> Clone for ARef<'_, T> {
     #[inline]
     fn clone(&self) -> Self {
-        Ref {
+        ARef {
             inner: self.inner.clone(),
             borrow: self.borrow.clone(),
         }
@@ -248,12 +272,12 @@ impl<T: Clone> Clone for Ref<'_, T> {
 }
 
 /// Wraps an `AtomicRefcell`'s exclusive borrow.
-pub struct RefMut<'a, T> {
+pub struct ARefMut<'a, T> {
     inner: T,
     borrow: ExclusiveBorrow<'a>,
 }
 
-impl<'a, T> RefMut<'a, T> {
+impl<'a, T> ARefMut<'a, T> {
     /// Returns the inner parts of the `RefMut`.
     ///
     /// # Safety
@@ -265,17 +289,17 @@ impl<'a, T> RefMut<'a, T> {
     }
 }
 
-impl<'a, T: ?Sized> RefMut<'a, &'a mut T> {
+impl<'a, T: ?Sized> ARefMut<'a, &'a mut T> {
     #[inline]
-    pub(crate) fn map<U, F: FnOnce(&mut T) -> &mut U>(this: Self, f: F) -> RefMut<'a, &'a mut U> {
-        RefMut {
+    pub(crate) fn map<U, F: FnOnce(&mut T) -> &mut U>(this: Self, f: F) -> ARefMut<'a, &'a mut U> {
+        ARefMut {
             inner: f(this.inner),
             borrow: this.borrow,
         }
     }
 }
 
-impl<'a, T: Deref> Deref for RefMut<'a, T> {
+impl<'a, T: Deref> Deref for ARefMut<'a, T> {
     type Target = T::Target;
 
     #[inline]
@@ -284,7 +308,7 @@ impl<'a, T: Deref> Deref for RefMut<'a, T> {
     }
 }
 
-impl<'a, T: DerefMut> DerefMut for RefMut<'a, T> {
+impl<'a, T: DerefMut> DerefMut for ARefMut<'a, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
@@ -365,7 +389,9 @@ fn exclusive_thread() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn non_send() {
-    let refcell = AtomicRefCell::new_non_send(0u32, std::thread::current().id());
+    use crate::std_thread_id_generator;
+
+    let refcell = AtomicRefCell::new_non_send(0u32, Arc::new(std_thread_id_generator));
     let refcell_ptr: *const _ = &refcell;
     let refcell_ptr = refcell_ptr as usize;
 
@@ -413,7 +439,9 @@ fn non_sync() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn non_send_sync() {
-    let refcell = AtomicRefCell::new_non_send_sync(0u32, std::thread::current().id());
+    use crate::std_thread_id_generator;
+
+    let refcell = AtomicRefCell::new_non_send_sync(0u32, Arc::new(std_thread_id_generator));
     let refcell_ptr: *const _ = &refcell;
     let refcell_ptr = refcell_ptr as usize;
 

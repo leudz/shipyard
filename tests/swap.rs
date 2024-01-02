@@ -4,11 +4,9 @@ use shipyard::*;
 fn no_pack() {
     #[derive(PartialEq, Eq, Debug)]
     struct U32(u32);
-    impl Component for U32 {
-        type Tracking = track::Untracked;
-    }
+    impl Component for U32 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
     world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
         let entity0 = entities.add_entity(&mut u32s, U32(0));
@@ -25,35 +23,39 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct U32(u32);
-    impl Component for U32 {
-        type Tracking = track::All;
-    }
+    impl Component for U32 {}
 
-    let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let world = World::new();
 
-    let entity0 = world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
-        let entity0 = entities.add_entity(&mut u32s, U32(0));
+    world.borrow::<ViewMut<U32>>().unwrap().track_all();
 
-        u32s.clear_all_inserted();
+    let entity0 = world.run(
+        |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32, track::All>| {
+            let entity0 = entities.add_entity(&mut u32s, U32(0));
 
-        entity0
-    });
+            u32s.clear_all_inserted();
 
-    world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
-        let entity1 = entities.add_entity(&mut u32s, U32(1));
+            entity0
+        },
+    );
 
-        u32s.apply_mut(entity0, entity1, core::mem::swap);
+    world.run(
+        |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32, track::All>| {
+            let entity1 = entities.add_entity(&mut u32s, U32(1));
 
-        assert_eq!(u32s[entity0], U32(1));
-        assert_eq!(u32s[entity1], U32(0));
+            u32s.apply_mut(entity0, entity1, core::mem::swap);
 
-        let mut inserted = u32s.inserted().iter();
-        assert_eq!(inserted.next(), Some(&U32(0)));
-        assert_eq!(inserted.next(), None);
+            assert_eq!(u32s[entity0], U32(1));
+            assert_eq!(u32s[entity1], U32(0));
 
-        let mut modified = u32s.modified().iter();
-        assert_eq!(modified.next(), Some(&U32(1)));
-        assert_eq!(modified.next(), Some(&U32(0)));
-        assert_eq!(modified.next(), None);
-    });
+            let mut inserted = u32s.inserted().iter();
+            assert_eq!(inserted.next(), Some(&U32(0)));
+            assert_eq!(inserted.next(), None);
+
+            let mut modified = u32s.modified().iter();
+            assert_eq!(modified.next(), Some(&U32(1)));
+            assert_eq!(modified.next(), Some(&U32(0)));
+            assert_eq!(modified.next(), None);
+        },
+    );
 }

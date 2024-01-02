@@ -2,19 +2,15 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {
-    type Tracking = track::Untracked;
-}
+impl Component for U32 {}
 
 #[test]
 fn no_pack() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     world.add_entity(());
     let entity1 = world.add_entity((USIZE(0), U32(1)));
@@ -27,15 +23,15 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+
+    world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
     let entity = world.add_entity((USIZE(0),));
 
-    let usizes = world.borrow::<View<USIZE>>().unwrap();
+    let usizes = world.borrow::<View<USIZE, track::All>>().unwrap();
     assert_eq!(usizes.inserted().iter().count(), 1);
     assert_eq!(usizes[entity], USIZE(0));
 }
@@ -44,25 +40,25 @@ fn update() {
 fn cleared_update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+
+    world.borrow::<ViewMut<USIZE>>().unwrap().track_all();
 
     let entity1 = world.add_entity((USIZE(1usize),));
 
-    world.run(|usizes: ViewMut<USIZE>| {
-        usizes.clear_all_inserted_and_modified();
+    world.run(|usizes: ViewMut<USIZE, track::All>| {
+        usizes.clear_all_inserted();
     });
 
-    world.run(|usizes: View<USIZE>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         assert_eq!(usizes.inserted().iter().count(), 0);
     });
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
-    world.run(|usizes: View<USIZE>| {
+    world.run(|usizes: View<USIZE, track::All>| {
         assert_eq!(usizes.inserted().iter().count(), 1);
         assert_eq!(*usizes.get(entity1).unwrap(), USIZE(1));
         assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
@@ -73,37 +69,33 @@ fn cleared_update() {
 fn modified_update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::All;
-    }
+    impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
+    world.track_all::<USIZE>();
 
     let entity1 = world.add_entity((USIZE(1),));
 
-    world.run(|usizes: ViewMut<USIZE>| {
+    world.run(|usizes: ViewMut<USIZE, track::All>| {
         usizes.clear_all_inserted_and_modified();
     });
 
     let entity2 = world.add_entity((USIZE(2usize),));
 
-    world.run(|mut usizes: ViewMut<USIZE>| {
+    world.run(|mut usizes: ViewMut<USIZE, track::All>| {
         usizes[entity1] = USIZE(3);
         assert_eq!(usizes.inserted().iter().count(), 1);
         assert_eq!(*usizes.get(entity1).unwrap(), USIZE(3));
         assert_eq!(*usizes.get(entity2).unwrap(), USIZE(2));
     });
 }
-
 #[test]
 fn bulk_single() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entities = world
         .bulk_add_entity((0..5).map(|i| (U32(i),)))
@@ -131,11 +123,9 @@ fn bulk_single() {
 fn bulk() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
+    impl Component for USIZE {}
 
-    let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+    let mut world = World::new();
 
     let entities = world
         .bulk_add_entity((0..5).map(|i| (U32(i), USIZE(i as usize))))

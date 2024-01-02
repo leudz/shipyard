@@ -15,18 +15,31 @@ impl Hasher for TypeIdHasher {
     }
 }
 
+#[cfg(feature = "std")]
 #[test]
 fn hasher() {
     fn verify<T: 'static + ?Sized>() {
         use core::any::TypeId;
         use core::hash::Hash;
 
-        let mut hasher = TypeIdHasher::default();
         let type_id = TypeId::of::<T>();
-        type_id.hash(&mut hasher);
-        assert_eq!(hasher.finish(), unsafe {
-            core::mem::transmute::<TypeId, u64>(type_id)
-        });
+
+        match core::mem::size_of::<TypeId>() {
+            8 => {
+                let mut hasher = TypeIdHasher::default();
+                type_id.hash(&mut hasher);
+
+                let type_id: *const _ = &type_id;
+                let type_id = type_id as *const u64;
+                let type_id = unsafe { *type_id };
+
+                assert_eq!(hasher.finish(), type_id);
+            }
+            16 => {
+                // TypeIdHasher is not used in this case
+            }
+            _ => panic!("Compiler version not supported"),
+        }
     }
 
     verify::<usize>();

@@ -1,24 +1,26 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
+use crate::component::{Component, Unique};
 use crate::scheduler::info::{
     BatchInfo, Conflict, DedupedLabels, SystemId, SystemInfo, TypeInfo, WorkloadInfo,
 };
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
 use crate::scheduler::{AsLabel, Batches, IntoWorkloadTrySystem, Label, Scheduler, WorkloadSystem};
-use crate::type_id::TypeId;
-use crate::world::World;
-use crate::{error, track, Component, IntoWorkload, IntoWorkloadSystem, Unique, UniqueStorage};
-// this is the macro, not the module
 use crate::storage::StorageId;
+use crate::type_id::TypeId;
+use crate::unique::UniqueStorage;
+use crate::world::World;
+use crate::{error, IntoWorkload, IntoWorkloadSystem, ShipHashMap};
 use alloc::boxed::Box;
+use alloc::format;
 // macro not module
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
-use hashbrown::HashMap;
+use core::hash::BuildHasherDefault;
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -38,9 +40,10 @@ pub struct ScheduledWorkload {
     system_generators: Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
     // system's `TypeId` to an index into both systems and system_names
     #[allow(unused)]
-    lookup_table: HashMap<TypeId, usize>,
+    lookup_table: ShipHashMap<TypeId, usize>,
+    tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     /// workload name to list of "batches"
-    workloads: HashMap<Box<dyn Label>, Batches>,
+    workloads: ShipHashMap<Box<dyn Label>, Batches>,
 }
 
 impl ScheduledWorkload {
@@ -62,11 +65,34 @@ impl ScheduledWorkload {
             &self.name,
         )
     }
+
+    /// Apply tracking to all storages using it during this workload.
+    ///
+    /// ### Borrows
+    ///
+    /// - [`AllStorages`] (shared)
+    /// - Systems' storage (exclusive) to enable tracking
+    ///
+    /// ### Errors
+    ///
+    /// - [`AllStorages`] borrow failed.
+    /// - Storage borrow failed.
+    pub fn apply_tracking(&self, world: &World) -> Result<(), error::GetStorage> {
+        let all_storages = world
+            .all_storages()
+            .map_err(error::GetStorage::AllStoragesBorrow)?;
+
+        for enable_tracking_fn in &self.tracking_to_enable {
+            (enable_tracking_fn)(&all_storages)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl World {
     /// Creates a new workload and store it in the [`World`](crate::World).
-    pub fn add_workload<Views, R, W, F: Fn() -> W + 'static>(&self, workload: F)
+    pub fn add_workload<Views, R, W, F: FnOnce() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
     {
@@ -107,6 +133,7 @@ pub struct Workload {
     pub(super) overwritten_name: bool,
     pub(super) require_before: DedupedLabels,
     pub(super) require_after: DedupedLabels,
+    pub(super) barriers: Vec<usize>,
 }
 
 impl Workload {
@@ -164,6 +191,7 @@ impl Workload {
             overwritten_name: false,
             require_before: DedupedLabels::new(),
             require_after: DedupedLabels::new(),
+            barriers: Vec::new(),
         }
     }
     /// Moves all systems of `other` into `Self`, leaving `other` empty.  
@@ -175,11 +203,19 @@ impl Workload {
     }
     /// Propagates all information from `self` and `other` into their respective systems before merging their systems.  
     /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
-    pub fn merge(mut self, other: &mut Workload) -> Workload {
+    pub fn merge(mut self, mut other: Workload) -> Workload {
         self.propagate();
         other.propagate();
 
-        self.append(other)
+        let systems_len = self.systems.len();
+        self.barriers.extend(
+            other
+                .barriers
+                .drain(..)
+                .map(|barrier| barrier + systems_len),
+        );
+
+        self.append(&mut other)
     }
     /// Propagates all information into the systems.  
     /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
@@ -190,7 +226,7 @@ impl Workload {
                 (None, Some(run_if)) => Some(run_if.to_non_clone()),
                 (Some(run_if), None) => Some(run_if),
                 (Some(system_run_if), Some(workload_run_if)) => Some(Box::new(move |world| {
-                    Ok((system_run_if)(world)? && workload_run_if.clone().run(world)?)
+                    Ok(workload_run_if.clone().run(world)? && (system_run_if)(world)?)
                 })),
             };
 
@@ -212,6 +248,11 @@ impl Workload {
         self.after_all.clear();
         self.require_before.clear();
         self.require_after.clear();
+    }
+    /// Propagates all information from `self` and `other` into their respective systems before merging their systems.  
+    /// This includes `run_if`/`skip_if`, `tags`, `before`/`after` requirements.
+    pub fn with_workload(self, other: Workload) -> Workload {
+        self.merge(other)
     }
     /// Adds a system to the workload being created.
     ///
@@ -253,7 +294,7 @@ impl Workload {
     /// world.run_default();
     /// ```
     #[track_caller]
-    pub fn with_system<B, S: IntoWorkloadSystem<B, ()>>(mut self, system: S) -> Workload {
+    pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(mut self, system: S) -> Workload {
         self.systems.push(system.into_workload_system().unwrap());
 
         self
@@ -376,37 +417,62 @@ impl Workload {
     /// ### Borrows
     ///
     /// - Scheduler (exclusive)
+    /// - [`AllStorages`] (shared)
+    /// - Systems' storage (exclusive) to enable tracking
     ///
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
     /// - Workload with an identical name already present.
     /// - Nested workload is not present in `world`.
-    ///
-    /// [`World`]: crate::World
+    /// - [`AllStorages`] borrow failed.
+    /// - Storage borrow failed.
     #[allow(clippy::blocks_in_if_conditions)]
-    pub fn add_to_world(self, world: &World) -> Result<WorkloadInfo, error::AddWorkload> {
+    pub fn add_to_world(self, world: &World) -> Result<(), error::AddWorkload> {
         let Scheduler {
             systems,
             system_names,
             system_generators,
             lookup_table,
             workloads,
+            workloads_info,
             default,
         } = &mut *world
             .scheduler
             .borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
-        create_workload(
+        let mut tracking_to_enable = Vec::new();
+
+        let name = self.name.dyn_clone();
+
+        let workload_info = create_workload(
             self,
             systems,
             system_names,
             system_generators,
             lookup_table,
+            &mut tracking_to_enable,
             workloads,
             default,
-        )
+        )?;
+
+        let all_storages = world
+            .all_storages()
+            .map_err(|_| error::AddWorkload::TrackingAllStoragesBorrow)?;
+
+        for enable_tracking_fn in &tracking_to_enable {
+            (enable_tracking_fn)(&all_storages).map_err(|err| match err {
+                error::GetStorage::StorageBorrow { name, id, borrow } => {
+                    error::AddWorkload::TrackingStorageBorrow { name, id, borrow }
+                }
+                _ => unreachable!(),
+            })?;
+        }
+
+        workloads_info.insert(name, workload_info);
+
+        Ok(())
     }
     /// Returns the first [`Unique`] storage borrowed by this workload that is not present in `world`.\
     /// If the workload contains nested workloads they have to be present in the `World`.
@@ -420,12 +486,8 @@ impl Workload {
     ) -> Result<(), error::UniquePresence> {
         struct ComponentType;
 
-        impl Component for ComponentType {
-            type Tracking = track::Untracked;
-        }
-        impl Unique for ComponentType {
-            type Tracking = track::Untracked;
-        }
+        impl Component for ComponentType {}
+        impl Unique for ComponentType {}
 
         let all_storages = world
             .all_storages
@@ -453,8 +515,9 @@ impl Workload {
             systems: Vec::new(),
             system_names: Vec::new(),
             system_generators: Vec::new(),
-            lookup_table: HashMap::new(),
-            workloads: HashMap::new(),
+            lookup_table: ShipHashMap::with_hasher(BuildHasherDefault::default()),
+            tracking_to_enable: Vec::new(),
+            workloads: ShipHashMap::with_hasher(BuildHasherDefault::default()),
         };
 
         let mut default: Box<dyn Label> = Box::new("");
@@ -465,18 +528,25 @@ impl Workload {
             &mut workload.system_names,
             &mut workload.system_generators,
             &mut workload.lookup_table,
+            &mut workload.tracking_to_enable,
             &mut workload.workloads,
             &mut default,
         )?;
 
         Ok((workload, workload_info))
     }
+    /// Stop parallelism between systems before and after the barrier.
+    pub fn with_barrier(mut self) -> Self {
+        self.barriers.push(self.systems.len());
+
+        self
+    }
 }
 
 fn check_uniques_in_systems(
     system: &WorkloadSystem,
     unique_name: &str,
-    storages: &HashMap<StorageId, crate::storage::SBox>,
+    storages: &ShipHashMap<StorageId, crate::storage::SBox>,
 ) -> Option<Result<(), error::UniquePresence>> {
     let WorkloadSystem {
         borrow_constraints, ..
@@ -498,18 +568,35 @@ fn create_workload(
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>>,
     system_names: &mut Vec<Box<dyn Label>>,
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>>,
-    lookup_table: &mut HashMap<TypeId, usize>,
-    workloads: &mut HashMap<Box<dyn Label>, Batches>,
+    lookup_table: &mut ShipHashMap<TypeId, usize>,
+    tracking_to_enable: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    workloads: &mut ShipHashMap<Box<dyn Label>, Batches>,
     default: &mut Box<dyn Label>,
 ) -> Result<WorkloadInfo, error::AddWorkload> {
     if workloads.contains_key(&*builder.name) {
         return Err(error::AddWorkload::AlreadyExists);
     }
 
+    for index in builder.barriers.drain(..) {
+        let tag = format!("__barrier__{}", index);
+
+        for system in &mut builder.systems[..index] {
+            system.tags.push(Box::new(tag.clone()));
+        }
+
+        for system in &mut builder.systems[index..] {
+            system.after_all.add(tag.clone());
+        }
+    }
+
     let mut collected_systems: Vec<(usize, WorkloadSystem)> =
         Vec::with_capacity(builder.systems.len());
 
-    for system in builder.systems.drain(..) {
+    for mut system in builder.systems.drain(..) {
+        for tracking_to_enable_fn in system.tracking_to_enable.drain(..) {
+            tracking_to_enable.push(tracking_to_enable_fn);
+        }
+
         insert_system_in_scheduler(
             system,
             systems,
@@ -567,23 +654,25 @@ fn create_workload(
         let batch_info = BatchInfo {
             systems: (
                 Some(SystemInfo {
-                    name: display_name,
+                    name: format!("{:?}", display_name),
                     type_id,
                     borrow: borrow_constraints,
                     conflict: None,
+                    before: Vec::new(),
+                    after: Vec::new(),
                 }),
                 Vec::new(),
             ),
         };
 
         return Ok(WorkloadInfo {
-            name: builder.name,
+            name: format!("{:?}", builder.name),
             batch_info: vec![batch_info],
         });
     }
 
     let mut workload_info = WorkloadInfo {
-        name: builder.name,
+        name: format!("{:?}", builder.name),
         batch_info: vec![],
     };
 
@@ -616,8 +705,8 @@ fn create_workload(
     // a before c
     // b after a
     // c after b
-    let mut memoize_before = HashMap::new();
-    let mut memoize_after = HashMap::new();
+    let mut memoize_before = ShipHashMap::with_hasher(BuildHasherDefault::default());
+    let mut memoize_after = ShipHashMap::with_hasher(BuildHasherDefault::default());
     let mut collected_tags = Vec::new();
     let mut collected_require_in_workload = Vec::new();
     let mut collected_before = Vec::new();
@@ -927,7 +1016,7 @@ fn create_workload(
 fn dependencies(
     index: usize,
     collected_tags: &[Vec<Box<dyn Label>>],
-    memoize: &mut HashMap<usize, DedupedLabels>,
+    memoize: &mut ShipHashMap<usize, DedupedLabels>,
     new_requirements: &mut bool,
 ) -> Result<(), error::ImpossibleRequirements> {
     let mut new = memoize.get(&index).unwrap().clone();
@@ -999,7 +1088,7 @@ fn insert_system(
                 | (None, Some(other_system_info))
                 | (Some(other_system_info), Some(_)) => {
                     let system_info = SystemInfo {
-                        name: display_name,
+                        name: format!("{:?}", display_name),
                         type_id,
                         borrow: borrow_constraints,
                         conflict: Some(Conflict::Borrow {
@@ -1010,6 +1099,8 @@ fn insert_system(
                             },
                             other_type_info: other_system_info.borrow.last().unwrap().clone(),
                         }),
+                        before: Vec::new(),
+                        after: Vec::new(),
                     };
 
                     if valid < batches.parallel.len() {
@@ -1035,10 +1126,12 @@ fn insert_system(
         }
 
         let system_info = SystemInfo {
-            name: display_name,
+            name: format!("{:?}", display_name),
             type_id,
             borrow: borrow_constraints,
             conflict: None,
+            before: Vec::new(),
+            after: Vec::new(),
         };
 
         if valid < batches.parallel.len() {
@@ -1064,7 +1157,7 @@ fn insert_system(
                 (&non_send_sync, &batch_info.systems.0)
             {
                 let system_info = SystemInfo {
-                    name: display_name,
+                    name: format!("{:?}", display_name),
                     type_id,
                     borrow: borrow_constraints,
                     conflict: Some(Conflict::Borrow {
@@ -1075,6 +1168,8 @@ fn insert_system(
                         },
                         other_type_info: other_system_info.borrow.last().unwrap().clone(),
                     }),
+                    before: Vec::new(),
+                    after: Vec::new(),
                 };
 
                 if valid < batches.parallel.len() {
@@ -1113,10 +1208,12 @@ fn insert_system(
         }
 
         let system_info = SystemInfo {
-            name: display_name,
+            name: format!("{:?}", display_name),
             type_id,
             borrow: borrow_constraints,
             conflict,
+            before: Vec::new(),
+            after: Vec::new(),
         };
 
         if valid < batches.parallel.len() {
@@ -1238,8 +1335,8 @@ fn insert_before_after_system(
     display_name: &dyn Label,
     borrow_constraints: Vec<TypeInfo>,
     run_if: Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>,
-    memoize_before: &HashMap<usize, DedupedLabels>,
-    memoize_after: &HashMap<usize, DedupedLabels>,
+    memoize_before: &ShipHashMap<usize, DedupedLabels>,
+    memoize_after: &ShipHashMap<usize, DedupedLabels>,
     seq_system_index_map: &mut Vec<usize>,
     par_system_index_map: &mut Vec<(Option<usize>, Vec<usize>)>,
 ) -> Result<(), error::AddWorkload> {
@@ -1295,7 +1392,7 @@ fn insert_before_after_system(
             if let Some(other_system) = &workload_info.batch_info[parallel_position].systems.0 {
                 conflict = Some(Conflict::OtherNotSendSync {
                     system: SystemId {
-                        name: display_name.dyn_clone(),
+                        name: format!("{:?}", display_name),
                         type_id,
                     },
                     type_info: other_system.borrow[0].clone(),
@@ -1310,7 +1407,13 @@ fn insert_before_after_system(
                 }
             }
         } else {
-            for other_system in &workload_info.batch_info[parallel_position].systems.1 {
+            for other_system in workload_info.batch_info[parallel_position]
+                .systems
+                .0
+                .as_ref()
+                .into_iter()
+                .chain(&workload_info.batch_info[parallel_position].systems.1)
+            {
                 check_conflict(other_system, &borrow_constraints, &mut conflict);
 
                 if conflict.is_some() {
@@ -1321,10 +1424,12 @@ fn insert_before_after_system(
     }
 
     let system_info = SystemInfo {
-        name: display_name.dyn_clone(),
+        name: format!("{:?}", display_name),
         type_id,
         borrow: borrow_constraints,
         conflict,
+        before: memoize_before[&index].to_string_vec(),
+        after: memoize_after[&index].to_string_vec(),
     };
 
     if !can_go_in || system_info.conflict.is_some() {
@@ -1385,8 +1490,8 @@ fn insert_before_after_system(
 
 fn valid_sequential(
     index: usize,
-    memoize_before: &HashMap<usize, DedupedLabels>,
-    memoize_after: &HashMap<usize, DedupedLabels>,
+    memoize_before: &ShipHashMap<usize, DedupedLabels>,
+    memoize_after: &ShipHashMap<usize, DedupedLabels>,
     sequential_len: usize,
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[usize],
@@ -1430,8 +1535,8 @@ fn valid_sequential(
 
 fn valid_parallel(
     index: usize,
-    memoize_before: &HashMap<usize, DedupedLabels>,
-    memoize_after: &HashMap<usize, DedupedLabels>,
+    memoize_before: &ShipHashMap<usize, DedupedLabels>,
+    memoize_after: &ShipHashMap<usize, DedupedLabels>,
     parallel: &[(Option<usize>, Vec<usize>)],
     collected_tags: &[Vec<Box<dyn Label>>],
     system_index_map: &[(Option<usize>, Vec<usize>)],
@@ -1514,7 +1619,7 @@ fn valid_parallel(
 fn insert_system_in_scheduler(
     mut system: WorkloadSystem,
     systems: &mut Vec<Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync>>,
-    lookup_table: &mut HashMap<TypeId, usize>,
+    lookup_table: &mut ShipHashMap<TypeId, usize>,
     collected_systems: &mut Vec<(usize, WorkloadSystem)>,
     system_generators: &mut Vec<Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync>>,
     system_names: &mut Vec<Box<dyn Label>>,
@@ -1537,32 +1642,20 @@ mod tests {
     use super::*;
     use crate::component::{Component, Unique};
     use crate::{
-        track, AllStoragesViewMut, IntoWorkload, SystemModificator, UniqueView, UniqueViewMut,
-        View, WorkloadModificator,
+        AllStoragesViewMut, IntoWorkload, SystemModificator, UniqueView, UniqueViewMut, View,
+        WorkloadModificator,
     };
 
     struct Usize(usize);
     struct U32(u32);
     struct U16(u16);
 
-    impl Component for Usize {
-        type Tracking = track::Untracked;
-    }
-    impl Component for U32 {
-        type Tracking = track::Untracked;
-    }
-    impl Component for U16 {
-        type Tracking = track::Untracked;
-    }
-    impl Unique for Usize {
-        type Tracking = track::Untracked;
-    }
-    impl Unique for U32 {
-        type Tracking = track::Untracked;
-    }
-    impl Unique for U16 {
-        type Tracking = track::Untracked;
-    }
+    impl Component for Usize {}
+    impl Component for U32 {}
+    impl Component for U16 {}
+    impl Unique for Usize {}
+    impl Unique for U32 {}
+    impl Unique for U16 {}
 
     #[test]
     fn single_immutable() {
@@ -1891,9 +1984,7 @@ mod tests {
 
         struct NotSend(*const ());
         unsafe impl Sync for NotSend {}
-        impl Component for NotSend {
-            type Tracking = track::Untracked;
-        }
+        impl Component for NotSend {}
 
         fn sys1(_: NonSend<View<'_, NotSend>>) {}
         fn sys2(_: NonSend<ViewMut<'_, NotSend>>) {}
@@ -1902,7 +1993,7 @@ mod tests {
 
         let world = World::new();
 
-        let info = Workload::new("Test")
+        Workload::new("Test")
             .with_system(sys1)
             .with_system(sys1)
             .add_to_world(&world)
@@ -1923,7 +2014,9 @@ mod tests {
             })
         );
         assert_eq!(&scheduler.default, &label);
-        assert!(info.batch_info[0].systems.1[0].conflict.is_none());
+        assert!(scheduler.workloads_info[&label].batch_info[0].systems.1[0]
+            .conflict
+            .is_none());
 
         let world = World::new();
 
@@ -1973,7 +2066,7 @@ mod tests {
 
         let world = World::new();
 
-        let info = Workload::new("Test")
+        Workload::new("Test")
             .with_system(sys1)
             .with_system(sys3)
             .add_to_world(&world)
@@ -1993,7 +2086,9 @@ mod tests {
             })
         );
         assert_eq!(&scheduler.default, &label);
-        assert!(info.batch_info[0].systems.1[0].conflict.is_none());
+        assert!(scheduler.workloads_info[&label].batch_info[0].systems.1[0]
+            .conflict
+            .is_none());
 
         let world = World::new();
 
@@ -2390,26 +2485,44 @@ mod tests {
     }
 
     #[test]
-    fn sequential_workload() {
-        fn sys0() {}
-        fn sys1() {}
-        fn sys2() {}
-        fn sys3() {}
-        fn workload1() -> Workload {
-            (sys0, sys1).into_workload()
-        }
-
-        let (workload, _) = (workload1.before_all(sys2), sys2, sys3)
-            .into_sequential_workload()
-            .rename("")
+    fn after_all_single_system() {
+        let (workload, _) = Workload::new("")
+            .with_system((|| {}).tag("this"))
+            .with_system((|_: AllStoragesViewMut<'_>| {}).after_all("this"))
+            .with_system((|_: View<'_, Usize>| {}).after_all("this"))
             .build()
             .unwrap();
 
         let batches = &workload.workloads[&"".as_label()];
-        assert_eq!(batches.sequential, &[0, 1, 2, 3]);
+
+        assert_eq!(
+            batches,
+            &Batches {
+                parallel: vec![(None, vec![0]), (None, vec![2]), (Some(1), vec![])],
+                parallel_run_if: Vec::new(),
+                sequential: vec![0, 1, 2],
+                sequential_run_if: Vec::new(),
+                run_if: None,
+            }
+        );
+    }
+
+    #[test]
+    fn sequential_workload() {
+        fn sys0() {}
+        fn sys1() {}
+        fn sys2() {}
+        fn workload1() -> Workload {
+            (sys0, sys1, sys2).into_sequential_workload()
+        }
+
+        let (workload, _) = workload1().rename("").build().unwrap();
+
+        let batches = &workload.workloads[&"".as_label()];
+        assert_eq!(batches.sequential, &[0, 1, 2]);
         assert_eq!(
             batches.parallel,
-            &[(None, vec![0, 1]), (None, vec![2]), (None, vec![3])]
+            &[(None, vec![0]), (None, vec![1]), (None, vec![2])]
         );
     }
 
@@ -2441,7 +2554,9 @@ mod tests {
         fn w() -> Workload {
             (|| {}).into_workload()
         }
-        let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
+        let world = World::builder()
+            .with_custom_lock::<parking_lot::RawRwLock>()
+            .build();
         world.add_workload(w);
         assert!(world.contains_workload(WorkloadLabel {
             type_id: TypeId::of_val(&w),
@@ -2449,5 +2564,69 @@ mod tests {
         }));
         assert!(world.contains_workload(w));
         world.run_workload(w).unwrap();
+    }
+
+    #[test]
+    fn barrier() {
+        let workload = Workload::new("")
+            .with_system(|| {})
+            .with_system(|| {})
+            .with_barrier()
+            .with_system(|| {})
+            .with_system(|| {})
+            .with_barrier()
+            .with_system(|| {})
+            .with_system(|| {})
+            .build()
+            .unwrap();
+
+        assert_eq!(workload.1.batch_info.len(), 3);
+
+        let workload = Workload::new("")
+            .with_barrier()
+            .with_system(|| {})
+            .with_system(|| {})
+            .build()
+            .unwrap();
+
+        assert_eq!(workload.1.batch_info.len(), 1);
+
+        let workload = Workload::new("")
+            .with_system(|| {})
+            .with_system(|| {})
+            .with_barrier()
+            .build()
+            .unwrap();
+
+        assert_eq!(workload.1.batch_info.len(), 1);
+    }
+
+    #[test]
+    fn with_system_return_type() {
+        Workload::new("").with_system(|| 0usize).build().unwrap();
+    }
+
+    #[test]
+    fn try_system_run_if() {
+        fn try_sys() -> Result<(), error::MissingComponent> {
+            Err(error::MissingComponent {
+                id: crate::EntityId::dead(),
+                name: "",
+            })
+        }
+
+        let (workload, _) = Workload::new("")
+            .with_try_system(try_sys.into_workload_try_system().unwrap().run_if(|| true))
+            .build()
+            .unwrap();
+
+        let world = World::new();
+
+        assert!(workload
+            .run_with_world(&world)
+            .err()
+            .unwrap()
+            .custom_error()
+            .is_some());
     }
 }
