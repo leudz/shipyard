@@ -301,4 +301,6 @@ macro_rules! into_workload {
 }
 
 into_workload![(A, ViewsA, Ra, 0); (B, ViewsB, Rb, 1) (C, ViewsC, Rc, 2) (D, ViewsD, Rd, 3) (E, ViewsE, Re, 4) (F, ViewsF, Rf, 5) (G, ViewsG, Rg, 6) (H, ViewsH, Rh, 7) (I, ViewsI, Ri, 8) (J, ViewsJ, Rj, 9)
-        (K, ViewsK, Rk, 10) (L, ViewsL, Rl, 11) (M, ViewsM, Rm, 12) (N, ViewsN, Rn, 13) (O, ViewsO, Ro, 14) (P, ViewsP, Rp, 15) (Q, ViewsQ, Rq, 16) (R, ViewsR, Rr, 17) (S, ViewsS, Rs, 18) (T, ViewsT, Rt, 19)];
+        (K, ViewsK, Rk, 10) (L, ViewsL, Rl, 11) (M, ViewsM, Rm, 12) (N, ViewsN, Rn, 13) (O, ViewsO, Ro, 14) (P, ViewsP, Rp, 15) (Q, ViewsQ, Rq, 16) (R, ViewsR, Rr, 17) (S, ViewsS, Rs, 18) (T, ViewsT, Rt, 19)
+        (V, ViewsV, Rv, 20) (W, ViewsW, Rw, 21) (X, ViewsX, Rx, 22) (Y, ViewsY, Ry, 23) (Z, ViewsZ, Rz, 24) (Aa, ViewsAa, Raa, 25) (Ab, ViewsAb, Rab, 26) (Ac, ViewsAc, Rac, 27) (Ad, ViewsAd, Rad, 28) (Ae, ViewsAe, Rae, 29)
+        (Af, ViewsAf, Raf, 30) (Ag, ViewsAg, Rag, 31) (Ah, ViewsAh, Rah, 32) (Ai, ViewsAi, Rai, 33) (Aj, ViewsAj, Raj, 34) (Ak, ViewsAk, Rak, 35) (Al, ViewsAl, Ral, 36) (Am, ViewsAm, Ram, 37) (An, ViewsAn, Ran, 38) (Ao, ViewsAo, Rao, 39)];
