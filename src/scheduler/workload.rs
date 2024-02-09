@@ -427,7 +427,7 @@ impl Workload {
     /// - Nested workload is not present in `world`.
     /// - [`AllStorages`] borrow failed.
     /// - Storage borrow failed.
-    #[allow(clippy::blocks_in_if_conditions)]
+    #[allow(clippy::blocks_in_conditions)]
     pub fn add_to_world(self, world: &World) -> Result<(), error::AddWorkload> {
         let Scheduler {
             systems,
