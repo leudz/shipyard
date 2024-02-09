@@ -69,7 +69,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp,) -> std::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp,) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -90,7 +90,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp) -> std::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#borrow),*))
                     }
                 }

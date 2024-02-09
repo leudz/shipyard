@@ -69,7 +69,7 @@ pub(crate) fn expand_world_borrow(
                 impl #impl_generics ::shipyard::WorldBorrow for #name #ty_generics #where_clause {
                     type WorldView<'__view> = #name #gat_ty_generics;
 
-                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<TrackingTimestamp>, current: TrackingTimestamp) -> std::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
+                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<TrackingTimestamp>, current: TrackingTimestamp) -> core::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -87,7 +87,7 @@ pub(crate) fn expand_world_borrow(
                 impl #impl_generics ::shipyard::WorldBorrow for #name #ty_generics #where_clause {
                     type WorldView<'__view> = #name #gat_ty_generics;
 
-                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<TrackingTimestamp>, current: TrackingTimestamp) -> std::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
+                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<TrackingTimestamp>, current: TrackingTimestamp) -> core::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#world_borrow),*))
                     }
                 }
