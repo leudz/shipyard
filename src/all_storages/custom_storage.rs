@@ -2,6 +2,7 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, ARefMut};
 use crate::error;
 use crate::storage::{SBox, Storage, StorageId};
+use alloc::vec::Vec;
 use core::any::type_name;
 
 /// Low level access to storage.
