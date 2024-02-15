@@ -199,6 +199,10 @@ impl<T: Component> SparseSet<T> {
             dense_entity.copy_index_gen(entity);
         } else {
             old_component = None;
+            panic!(
+                "[SparseSet] Component insertion failed. Entity: {:#?}, SparseEntity: {:#?}, Current: {}",
+                entity, sparse_entity, current
+            );
         }
 
         old_component
