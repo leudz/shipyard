@@ -3,12 +3,12 @@ use std::rc::Rc;
 
 // ANCHOR: non_send_sync
 #[derive(Unique)]
-struct RcU32(Rc<u32>);
+struct RcU64(Rc<u64>);
 #[derive(Component)]
 struct RcUSIZE(Rc<usize>);
 
 #[allow(unused)]
-fn run(rcs_usize: NonSendSync<View<RcUSIZE>>, rc_u32: NonSendSync<UniqueView<RcU32>>) {}
+fn run(rcs_usize: NonSendSync<View<RcUSIZE>>, rc_u64: NonSendSync<UniqueView<RcU64>>) {}
 // ANCHOR_END: non_send_sync
 
 #[test]

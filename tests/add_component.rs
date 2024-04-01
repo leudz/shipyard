@@ -1,8 +1,8 @@
 use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -15,31 +15,31 @@ fn no_pack() {
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes, mut u32s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
+    let (mut entities, mut usizes, mut u64s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>()
         .unwrap();
 
     let entity0 = entities.add_entity(&mut usizes, USIZE(0));
-    let entity1 = entities.add_entity(&mut u32s, U32(1));
+    let entity1 = entities.add_entity(&mut u64s, U64(1));
 
     let entity10 = entities.add_entity((), ());
     let entity20 = entities.add_entity((), ());
-    entities.add_component(entity10, (&mut usizes, &mut u32s), (USIZE(10), U32(30)));
+    entities.add_component(entity10, (&mut usizes, &mut u64s), (USIZE(10), U64(30)));
     entities.add_component(entity20, &mut usizes, USIZE(20));
-    entities.add_component(entity20, &mut u32s, U32(50));
+    entities.add_component(entity20, &mut u64s, U64(50));
     assert_eq!(usizes.get(entity0).unwrap(), &USIZE(0));
-    assert_eq!(u32s.get(entity1).unwrap(), &U32(1));
+    assert_eq!(u64s.get(entity1).unwrap(), &U64(1));
     assert_eq!(
-        (&usizes, &u32s).get(entity10).unwrap(),
-        (&USIZE(10), &U32(30))
+        (&usizes, &u64s).get(entity10).unwrap(),
+        (&USIZE(10), &U64(30))
     );
     assert_eq!(
-        (&usizes, &u32s).get(entity20).unwrap(),
-        (&USIZE(20), &U32(50))
+        (&usizes, &u64s).get(entity20).unwrap(),
+        (&USIZE(20), &U64(50))
     );
-    let mut iter = (&usizes, &u32s).iter();
-    assert_eq!(iter.next(), Some((&USIZE(10), &U32(30))));
-    assert_eq!(iter.next(), Some((&USIZE(20), &U32(50))));
+    let mut iter = (&usizes, &u64s).iter();
+    assert_eq!(iter.next(), Some((&USIZE(10), &U64(30))));
+    assert_eq!(iter.next(), Some((&USIZE(20), &U64(50))));
     assert_eq!(iter.next(), None);
 }
 
@@ -99,12 +99,12 @@ fn no_pack_unchecked() {
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes, mut u32s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
+    let (mut entities, mut usizes, mut u64s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>()
         .unwrap();
 
     let entity1 = entities.add_entity((), ());
-    (&mut usizes, &mut u32s).add_component_unchecked(entity1, (USIZE(0), U32(1)));
-    (&mut u32s, &mut usizes).add_component_unchecked(entity1, (U32(3), USIZE(2)));
-    assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&USIZE(2), &U32(3)));
+    (&mut usizes, &mut u64s).add_component_unchecked(entity1, (USIZE(0), U64(1)));
+    (&mut u64s, &mut usizes).add_component_unchecked(entity1, (U64(3), USIZE(2)));
+    assert_eq!((&usizes, &u64s).get(entity1).unwrap(), (&USIZE(2), &U64(3)));
 }

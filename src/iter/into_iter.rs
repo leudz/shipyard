@@ -36,19 +36,19 @@ pub trait IntoIter {
     /// use shipyard::{Component, EntitiesViewMut, IntoIter, ViewMut, World};
     ///
     /// #[derive(Component, Clone, Copy)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
+    /// let (mut entities, mut usizes, mut u64s) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>().unwrap();
     ///
-    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
-    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
+    /// entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)));
+    /// entities.add_entity((&mut usizes, &mut u64s), (USIZE(2), U64(3)));
     ///
-    /// (&mut usizes, &u32s).iter().for_each(|(mut x, &y)| {
+    /// (&mut usizes, &u64s).iter().for_each(|(mut x, &y)| {
     ///     x.0 += y.0 as usize;
     /// });
     /// ```
@@ -72,19 +72,19 @@ pub trait IntoIter {
     /// use shipyard::{Component, EntitiesViewMut, IntoIter, ViewMut, World};
     ///
     /// #[derive(Component, Clone, Copy)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
+    /// let (mut entities, mut usizes, mut u64s) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>().unwrap();
     ///
-    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
-    /// entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
+    /// entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)));
+    /// entities.add_entity((&mut usizes, &mut u64s), (USIZE(2), U64(3)));
     ///
-    /// (&mut usizes, &u32s).par_iter().for_each(|(mut x, &y)| {
+    /// (&mut usizes, &u64s).par_iter().for_each(|(mut x, &y)| {
     ///     x.0 += y.0 as usize;
     /// });
     /// ```

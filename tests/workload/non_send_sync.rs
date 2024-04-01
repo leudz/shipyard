@@ -2,7 +2,7 @@ use shipyard::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-struct MyRc(Rc<RefCell<Vec<u32>>>);
+struct MyRc(Rc<RefCell<Vec<u64>>>);
 impl Component for MyRc {
     type Tracking = track::Untracked;
 }

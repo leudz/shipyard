@@ -5,16 +5,16 @@ To access or update components you can use [`Get::get`](https://docs.rs/shipyard
 ```rust, noplaypen
 let mut world = World::new();
 
-let id = world.add_entity((0u32, 1usize));
+let id = world.add_entity((0u64, 1usize));
 
-let (mut u32s, mut usizes) = world.borrow::<(ViewMut<u32>, ViewMut<usize>)>().unwrap();
+let (mut u64s, mut usizes) = world.borrow::<(ViewMut<u64>, ViewMut<usize>)>().unwrap();
 
 *(&mut usizes).get(id).unwrap() += 1;
 
-let (mut i, j) = (&mut u32s, &usizes).get(id).unwrap();
-*i += *j as u32;
+let (mut i, j) = (&mut u64s, &usizes).get(id).unwrap();
+*i += *j as u64;
 
-u32s[id] += 1;
+u64s[id] += 1;
 ```
 
 When using a single view, if you are certain an entity has the desired component, you can access it via index.

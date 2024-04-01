@@ -33,8 +33,8 @@ fn type_check() {
 #[test]
 fn non_packed() {
     #[derive(PartialEq, Eq, Debug)]
-    struct U32(u32);
-    impl Component for U32 {
+    struct U64(u64);
+    impl Component for U64 {
         type Tracking = track::Untracked;
     }
 
@@ -46,20 +46,20 @@ fn non_packed() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut u32s, mut i16s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
+    let (mut entities, mut u64s, mut i16s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<U64>, ViewMut<I16>)>()
         .unwrap();
-    let entity0 = entities.add_entity((&mut u32s, &mut i16s), (U32(0), I16(10)));
-    let entity1 = entities.add_entity(&mut u32s, U32(1));
-    let entity2 = entities.add_entity((&mut u32s, &mut i16s), (U32(2), I16(12)));
+    let entity0 = entities.add_entity((&mut u64s, &mut i16s), (U64(0), I16(10)));
+    let entity1 = entities.add_entity(&mut u64s, U64(1));
+    let entity2 = entities.add_entity((&mut u64s, &mut i16s), (U64(2), I16(12)));
     let entity3 = entities.add_entity(&mut i16s, I16(13));
-    let entity4 = entities.add_entity((&mut u32s, &mut i16s), (U32(4), I16(14)));
+    let entity4 = entities.add_entity((&mut u64s, &mut i16s), (U64(4), I16(14)));
 
-    assert_eq!(u32s.get(entity0), Ok(&U32(0)));
-    assert_eq!(u32s.get(entity1), Ok(&U32(1)));
-    assert_eq!(u32s.get(entity2), Ok(&U32(2)));
-    assert!(u32s.get(entity3).is_err());
-    assert_eq!(u32s.get(entity4), Ok(&U32(4)));
+    assert_eq!(u64s.get(entity0), Ok(&U64(0)));
+    assert_eq!(u64s.get(entity1), Ok(&U64(1)));
+    assert_eq!(u64s.get(entity2), Ok(&U64(2)));
+    assert!(u64s.get(entity3).is_err());
+    assert_eq!(u64s.get(entity4), Ok(&U64(4)));
 
     assert_eq!(i16s.get(entity0), Ok(&I16(10)));
     assert!(i16s.get(entity1).is_err());
@@ -67,18 +67,18 @@ fn non_packed() {
     assert_eq!(i16s.get(entity3), Ok(&I16(13)));
     assert_eq!(i16s.get(entity4), Ok(&I16(14)));
 
-    assert_eq!((&u32s, &i16s).get(entity0), Ok((&U32(0), &I16(10))));
-    assert!((&u32s, &i16s).get(entity1).is_err());
-    assert_eq!((&u32s, &i16s).get(entity2), Ok((&U32(2), &I16(12))));
-    assert!((&u32s, &i16s).get(entity3).is_err());
-    assert_eq!((&u32s, &i16s).get(entity4), Ok((&U32(4), &I16(14))));
+    assert_eq!((&u64s, &i16s).get(entity0), Ok((&U64(0), &I16(10))));
+    assert!((&u64s, &i16s).get(entity1).is_err());
+    assert_eq!((&u64s, &i16s).get(entity2), Ok((&U64(2), &I16(12))));
+    assert!((&u64s, &i16s).get(entity3).is_err());
+    assert_eq!((&u64s, &i16s).get(entity4), Ok((&U64(4), &I16(14))));
 }
 
 #[test]
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
-    struct U32(u32);
-    impl Component for U32 {
+    struct U64(u64);
+    impl Component for U64 {
         type Tracking = track::All;
     }
 
@@ -90,21 +90,21 @@ fn update() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut u32s, mut i16s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<U32>, ViewMut<I16>)>()
+    let (mut entities, mut u64s, mut i16s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<U64>, ViewMut<I16>)>()
         .unwrap();
 
-    let entity0 = entities.add_entity((&mut u32s, &mut i16s), (U32(0), I16(10)));
-    let entity1 = entities.add_entity(&mut u32s, U32(1));
-    let entity2 = entities.add_entity((&mut u32s, &mut i16s), (U32(2), I16(12)));
+    let entity0 = entities.add_entity((&mut u64s, &mut i16s), (U64(0), I16(10)));
+    let entity1 = entities.add_entity(&mut u64s, U64(1));
+    let entity2 = entities.add_entity((&mut u64s, &mut i16s), (U64(2), I16(12)));
     let entity3 = entities.add_entity(&mut i16s, I16(13));
-    let entity4 = entities.add_entity((&mut u32s, &mut i16s), (U32(4), I16(14)));
+    let entity4 = entities.add_entity((&mut u64s, &mut i16s), (U64(4), I16(14)));
 
-    assert_eq!(u32s.get(entity0), Ok(&U32(0)));
-    assert_eq!(u32s.get(entity1), Ok(&U32(1)));
-    assert_eq!(u32s.get(entity2), Ok(&U32(2)));
-    assert!(u32s.get(entity3).is_err());
-    assert_eq!(u32s.get(entity4), Ok(&U32(4)));
+    assert_eq!(u64s.get(entity0), Ok(&U64(0)));
+    assert_eq!(u64s.get(entity1), Ok(&U64(1)));
+    assert_eq!(u64s.get(entity2), Ok(&U64(2)));
+    assert!(u64s.get(entity3).is_err());
+    assert_eq!(u64s.get(entity4), Ok(&U64(4)));
 
     assert_eq!(i16s.get(entity0), Ok(&I16(10)));
     assert!(i16s.get(entity1).is_err());
@@ -112,29 +112,29 @@ fn update() {
     assert_eq!(i16s.get(entity3), Ok(&I16(13)));
     assert_eq!(i16s.get(entity4), Ok(&I16(14)));
 
-    assert_eq!((&u32s, &i16s).get(entity0), Ok((&U32(0), &I16(10))));
-    assert!((&u32s, &i16s).get(entity1).is_err());
-    assert_eq!((&u32s, &i16s).get(entity2), Ok((&U32(2), &I16(12))));
-    assert!((&u32s, &i16s).get(entity3).is_err());
-    assert_eq!((&u32s, &i16s).get(entity4), Ok((&U32(4), &I16(14))));
+    assert_eq!((&u64s, &i16s).get(entity0), Ok((&U64(0), &I16(10))));
+    assert!((&u64s, &i16s).get(entity1).is_err());
+    assert_eq!((&u64s, &i16s).get(entity2), Ok((&U64(2), &I16(12))));
+    assert!((&u64s, &i16s).get(entity3).is_err());
+    assert_eq!((&u64s, &i16s).get(entity4), Ok((&U64(4), &I16(14))));
 }
 
 #[test]
 fn old_id() {
-    struct U32(u32);
-    impl Component for U32 {
+    struct U64(u64);
+    impl Component for U64 {
         type Tracking = track::All;
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.run(|mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>| {
-        let entity = entities.add_entity(&mut u32s, U32(0));
+    world.run(|mut entities: EntitiesViewMut, mut u64s: ViewMut<U64>| {
+        let entity = entities.add_entity(&mut u64s, U64(0));
 
         entities.delete_unchecked(entity);
 
         let entity1 = entities.add_entity((), ());
 
-        assert!(u32s.get(entity1).is_err());
+        assert!(u64s.get(entity1).is_err());
     });
 }

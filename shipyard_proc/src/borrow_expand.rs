@@ -124,7 +124,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
                     type View = #name #ty_generics;
 
-                    fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                    fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u64>, current: u64) -> Result<Self::View, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -151,7 +151,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
                     type View = #name #ty_generics;
 
-                    fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                    fn borrow(world: & #view_lifetime ::shipyard::World, last_run: Option<u64>, current: u64) -> Result<Self::View, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#world_borrow),*))
                     }
                 }

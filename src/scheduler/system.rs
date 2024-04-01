@@ -15,12 +15,12 @@ use alloc::vec::Vec;
 /// use shipyard::{Component, IntoWorkloadSystem, View, Workload, WorkloadSystem, World};
 ///
 /// #[derive(Component)]
-/// struct U32(u32);
+/// struct U64(u64);
 ///
 /// #[derive(Component)]
 /// struct USIZE(usize);
 ///
-/// fn sys1(u32s: View<U32>) {}
+/// fn sys1(u64s: View<U64>) {}
 /// fn sys2(usizes: View<USIZE>) {}
 ///
 /// let workload_sys1: WorkloadSystem = sys1.into_workload_system().unwrap();

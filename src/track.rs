@@ -53,8 +53,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_inserted<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: u64,
+        _current: u64,
     ) -> bool {
         false
     }
@@ -63,8 +63,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_modified<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: u64,
+        _current: u64,
     ) -> bool {
         false
     }
@@ -73,8 +73,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_deleted<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: u64,
+        _current: u64,
     ) -> bool {
         false
     }
@@ -83,8 +83,8 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn is_removed<T: Component<Tracking = Self>>(
         _sparse_set: &SparseSet<T, Self>,
         _entity: EntityId,
-        _last: u32,
-        _current: u32,
+        _last: u64,
+        _current: u64,
     ) -> bool {
         false
     }
@@ -93,18 +93,18 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     fn remove<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        current: u32,
+        current: u64,
     ) -> Option<T>;
 
     #[doc(hidden)]
     fn delete<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        current: u32,
+        current: u64,
     ) -> bool;
 
     #[doc(hidden)]
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32);
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u64);
 
     #[doc(hidden)]
     fn apply<T: Component<Tracking = Self>, R, F: FnOnce(&mut T, &T) -> R>(
@@ -125,7 +125,7 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     #[doc(hidden)]
     fn drain<T: Component<Tracking = Self>>(
         sparse_set: &'_ mut SparseSet<T, Self>,
-        current: u32,
+        current: u64,
     ) -> SparseSetDrain<'_, T>;
 
     #[doc(hidden)]
@@ -142,17 +142,17 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
 }
 
 #[inline]
-pub(crate) fn is_track_within_bounds(timestamp: u32, last: u32, current: u32) -> bool {
+pub(crate) fn is_track_within_bounds(timestamp: u64, last: u64, current: u64) -> bool {
     let more_than_last = if timestamp < last {
-        u32::MAX - last + timestamp
+        u64::MAX - last + timestamp
     } else {
         timestamp - last
     };
     let less_than_current = if current < timestamp {
-        u32::MAX - timestamp + current
+        u64::MAX - timestamp + current
     } else {
         current - timestamp
     };
 
-    more_than_last < u32::MAX / 2 && more_than_last > 0 && less_than_current < u32::MAX / 2
+    more_than_last < u64::MAX / 2 && more_than_last > 0 && less_than_current < u64::MAX / 2
 }

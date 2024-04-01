@@ -119,13 +119,13 @@ impl Workload {
     /// use shipyard::{Component, IntoIter, View, ViewMut, Workload, World};
     ///
     /// #[derive(Component, Clone, Copy)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
-    /// fn add(mut usizes: ViewMut<USIZE>, u32s: View<U32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    /// fn add(mut usizes: ViewMut<USIZE>, u64s: View<U64>) {
+    ///     for (mut x, &y) in (&mut usizes, &u64s).iter() {
     ///         x.0 += y.0 as usize;
     ///     }
     /// }
@@ -139,9 +139,9 @@ impl Workload {
     ///
     /// let mut world = World::new();
     ///
-    /// world.add_entity((USIZE(0), U32(1)));
-    /// world.add_entity((USIZE(2), U32(3)));
-    /// world.add_entity((USIZE(4), U32(5)));
+    /// world.add_entity((USIZE(0), U64(1)));
+    /// world.add_entity((USIZE(2), U64(3)));
+    /// world.add_entity((USIZE(4), U64(5)));
     ///
     /// Workload::new("Add & Check")
     ///     .with_system(add)
@@ -220,13 +220,13 @@ impl Workload {
     /// use shipyard::{Component, EntitiesViewMut, IntoIter, View, ViewMut, Workload, World};
     ///
     /// #[derive(Component, Clone, Copy)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
-    /// fn add(mut usizes: ViewMut<USIZE>, u32s: View<U32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    /// fn add(mut usizes: ViewMut<USIZE>, u64s: View<U64>) {
+    ///     for (mut x, &y) in (&mut usizes, &u64s).iter() {
     ///         x.0 += y.0 as usize;
     ///     }
     /// }
@@ -240,9 +240,9 @@ impl Workload {
     ///
     /// let mut world = World::new();
     ///
-    /// world.add_entity((USIZE(0), U32(1)));
-    /// world.add_entity((USIZE(2), U32(3)));
-    /// world.add_entity((USIZE(4), U32(5)));
+    /// world.add_entity((USIZE(0), U64(1)));
+    /// world.add_entity((USIZE(2), U64(3)));
+    /// world.add_entity((USIZE(4), U64(5)));
     ///
     /// Workload::new("Add & Check")
     ///     .with_system(add)
@@ -267,13 +267,13 @@ impl Workload {
     /// use shipyard::error::MissingComponent;
     ///
     /// #[derive(Component, Clone, Copy)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
-    /// fn add(mut usizes: ViewMut<USIZE>, u32s: View<U32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    /// fn add(mut usizes: ViewMut<USIZE>, u64s: View<U64>) {
+    ///     for (mut x, &y) in (&mut usizes, &u64s).iter() {
     ///         x.0 += y.0 as usize;
     ///     }
     /// }
@@ -288,9 +288,9 @@ impl Workload {
     ///
     /// let mut world = World::new();
     ///
-    /// world.add_entity((USIZE(0), U32(1)));
-    /// world.add_entity((USIZE(2), U32(3)));
-    /// world.add_entity((USIZE(4), U32(5)));
+    /// world.add_entity((USIZE(0), U64(1)));
+    /// world.add_entity((USIZE(2), U64(3)));
+    /// world.add_entity((USIZE(4), U64(5)));
     ///
     /// Workload::new("Add & Check")
     ///     .with_system(add)
@@ -325,8 +325,8 @@ impl Workload {
     /// use shipyard::{EntitiesViewMut, Get, IntoIter, IntoWithId, View, ViewMut, Workload, World};
     /// use shipyard::error::MissingComponent;
     ///
-    /// fn add(mut usizes: ViewMut<usize>, u32s: View<u32>) {
-    ///     for (mut x, &y) in (&mut usizes, &u32s).iter() {
+    /// fn add(mut usizes: ViewMut<usize>, u64s: View<u64>) {
+    ///     for (mut x, &y) in (&mut usizes, &u64s).iter() {
     ///         *x += y as usize;
     ///     }
     /// }
@@ -341,9 +341,9 @@ impl Workload {
     ///
     /// let mut world = World::new();
     ///
-    /// world.add_entity((0usize, 1u32));
-    /// world.add_entity((2usize, 3u32));
-    /// world.add_entity((4usize, 5u32));
+    /// world.add_entity((0usize, 1u64));
+    /// world.add_entity((2usize, 3u64));
+    /// world.add_entity((4usize, 5u64));
     ///
     /// Workload::new("Add & Check")
     ///     .with_system(add)
@@ -1542,13 +1542,13 @@ mod tests {
     };
 
     struct Usize(usize);
-    struct U32(u32);
+    struct U64(u64);
     struct U16(u16);
 
     impl Component for Usize {
         type Tracking = track::Untracked;
     }
-    impl Component for U32 {
+    impl Component for U64 {
         type Tracking = track::Untracked;
     }
     impl Component for U16 {
@@ -1557,7 +1557,7 @@ mod tests {
     impl Unique for Usize {
         type Tracking = track::Untracked;
     }
-    impl Unique for U32 {
+    impl Unique for U64 {
         type Tracking = track::Untracked;
     }
     impl Unique for U16 {
@@ -1748,8 +1748,8 @@ mod tests {
     fn append_optimizes_batches() {
         use crate::{View, ViewMut, World};
 
-        fn system_a1(_: View<'_, Usize>, _: ViewMut<'_, U32>) {}
-        fn system_a2(_: View<'_, Usize>, _: ViewMut<'_, U32>) {}
+        fn system_a1(_: View<'_, Usize>, _: ViewMut<'_, U64>) {}
+        fn system_a2(_: View<'_, Usize>, _: ViewMut<'_, U64>) {}
         fn system_b1(_: View<'_, Usize>) {}
 
         let world = World::new();
@@ -2080,8 +2080,8 @@ mod tests {
     fn append_ensures_multiple_batches_can_be_optimized_over() {
         use crate::{View, ViewMut, World};
 
-        fn sys_a1(_: ViewMut<'_, Usize>, _: ViewMut<'_, U32>) {}
-        fn sys_a2(_: View<'_, Usize>, _: ViewMut<'_, U32>) {}
+        fn sys_a1(_: ViewMut<'_, Usize>, _: ViewMut<'_, U64>) {}
+        fn sys_a2(_: View<'_, Usize>, _: ViewMut<'_, U64>) {}
         fn sys_b1(_: View<'_, Usize>) {}
         fn sys_c1(_: View<'_, U16>) {}
 
@@ -2217,7 +2217,7 @@ mod tests {
             (
                 (|| -> () { panic!() })
                     .into_workload()
-                    .skip_if_missing_unique::<U32>(),
+                    .skip_if_missing_unique::<U64>(),
                 (|mut u: UniqueViewMut<'_, Usize>| u.0 += 1).into_workload(),
             )
         });
@@ -2415,7 +2415,7 @@ mod tests {
 
     #[test]
     fn before_after_borrow_conflict() {
-        fn sys0(_: View<'_, U32>) {}
+        fn sys0(_: View<'_, U64>) {}
         fn sys1(_: AllStoragesViewMut<'_>) {}
 
         let (workload, _) = (sys0, sys1.before_all("not present"), sys0)

@@ -127,10 +127,10 @@ pub struct View<'a, T: Component, Tracking: track::Tracking = <T as Component>::
     pub(crate) sparse_set: &'a SparseSet<T, Tracking>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) last_removal_or_deletion: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insert: u64,
+    pub(crate) last_modification: u64,
+    pub(crate) last_removal_or_deletion: u64,
+    pub(crate) current: u64,
 }
 
 impl<'a, T: Component> View<'a, T> {
@@ -466,10 +466,10 @@ pub struct ViewMut<'a, T: Component, Tracking: track::Tracking = <T as Component
     pub(crate) sparse_set: &'a mut SparseSet<T, Tracking>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) last_removal_or_deletion: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insert: u64,
+    pub(crate) last_modification: u64,
+    pub(crate) last_removal_or_deletion: u64,
+    pub(crate) current: u64,
 }
 
 impl<'a, T: Component<Tracking = track::Untracked>> ViewMut<'a, T, track::Untracked> {
@@ -996,9 +996,9 @@ pub struct UniqueView<'a, T: Unique> {
     pub(crate) unique: &'a UniqueStorage<T>,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insert: u64,
+    pub(crate) last_modification: u64,
+    pub(crate) current: u64,
 }
 
 impl<T: Unique> UniqueView<'_, T> {
@@ -1073,9 +1073,9 @@ pub struct UniqueViewMut<'a, T: Unique> {
     pub(crate) unique: &'a mut UniqueStorage<T>,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) current: u32,
+    pub(crate) last_insert: u64,
+    pub(crate) last_modification: u64,
+    pub(crate) current: u64,
 }
 
 impl<T: Unique> UniqueViewMut<'_, T> {

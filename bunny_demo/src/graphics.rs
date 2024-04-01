@@ -37,10 +37,10 @@ pub(crate) struct Graphics {
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
     pub(crate) config: wgpu::SurfaceConfiguration,
-    pub(crate) size: winit::dpi::PhysicalSize<u32>,
+    pub(crate) size: winit::dpi::PhysicalSize<u64>,
     pub(crate) render_pipeline: wgpu::RenderPipeline,
     pub(crate) vertex_buffer: wgpu::Buffer,
-    pub(crate) vertex_count: u32,
+    pub(crate) vertex_count: u64,
     pub(crate) instance_buffer: wgpu::Buffer,
     pub(crate) scale_factor: f32,
     pub(crate) screen_size_buffer: wgpu::Buffer,
@@ -151,8 +151,8 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
         &diffuse_rgba,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: std::num::NonZeroU32::new(4 * dimensions.0),
-            rows_per_image: std::num::NonZeroU32::new(dimensions.1),
+            bytes_per_row: std::num::NonZeroU64::new(4 * dimensions.0),
+            rows_per_image: std::num::NonZeroU64::new(dimensions.1),
         },
         texture_size,
     );
@@ -293,7 +293,7 @@ pub(crate) async fn init_graphics(world: &World, window: &Window, context: Conte
 }
 
 pub(crate) fn resize_window(
-    (new_size, scale_factor): (winit::dpi::PhysicalSize<u32>, Option<f32>),
+    (new_size, scale_factor): (winit::dpi::PhysicalSize<u64>, Option<f32>),
     mut graphics: UniqueViewMut<Graphics>,
 ) {
     if new_size.width > 0 && new_size.height > 0 {
@@ -391,7 +391,7 @@ fn update_egui_render_pass(
     graphics: &mut Graphics,
     bunny_count: usize,
     frame_time: f32,
-    bunnies_per_click: &mut u32,
+    bunnies_per_click: &mut u64,
 ) -> (Vec<ClippedPrimitive>, ScreenDescriptor) {
     let input = graphics.input.clone();
     graphics.context.begin_frame(input);

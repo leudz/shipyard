@@ -14,8 +14,8 @@ impl Tracking for Deletion {
     fn is_deleted<T: Component<Tracking = Self>>(
         sparse_set: &SparseSet<T, Self>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: u64,
+        current: u64,
     ) -> bool {
         sparse_set.deletion_data.iter().any(|(id, timestamp, _)| {
             *id == entity && super::is_track_within_bounds(*timestamp, last, current)
@@ -26,7 +26,7 @@ impl Tracking for Deletion {
     fn remove<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        _current: u32,
+        _current: u64,
     ) -> Option<T> {
         sparse_set.actual_remove(entity)
     }
@@ -35,7 +35,7 @@ impl Tracking for Deletion {
     fn delete<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        current: u32,
+        current: u64,
     ) -> bool {
         if let Some(component) = sparse_set.actual_remove(entity) {
             sparse_set.deletion_data.push((entity, current, component));
@@ -46,7 +46,7 @@ impl Tracking for Deletion {
         }
     }
 
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32) {
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u64) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -127,7 +127,7 @@ impl Tracking for Deletion {
     #[inline]
     fn drain<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
-        _current: u32,
+        _current: u64,
     ) -> SparseSetDrain<'_, T> {
         for id in &sparse_set.dense {
             // SAFE ids from sparse_set.dense are always valid
@@ -160,7 +160,7 @@ impl Tracking for Deletion {
         timestamp: crate::TrackingTimestamp,
     ) {
         sparse_set.deletion_data.retain(|(_, t, _)| {
-            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
 }

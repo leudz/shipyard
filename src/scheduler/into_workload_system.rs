@@ -11,7 +11,7 @@ use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::any::type_name;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 /// Trait used to add systems to a workload.
 ///
@@ -138,7 +138,7 @@ macro_rules! impl_into_workload_system {
                     }
                 }
 
-                let last_run = AtomicU32::new(0);
+                let last_run = AtomicU64::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
                     system_fn: Box::new(move |world: &World| {

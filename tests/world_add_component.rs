@@ -1,8 +1,8 @@
 use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -17,31 +17,31 @@ fn no_pack() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity0 = world.add_entity((USIZE(0usize),));
-    let entity1 = world.add_entity((U32(1),));
+    let entity1 = world.add_entity((U64(1),));
 
     let entity10 = world.add_entity(());
     let entity20 = world.add_entity(());
 
-    world.add_component(entity10, (USIZE(10), U32(30)));
+    world.add_component(entity10, (USIZE(10), U64(30)));
     world.add_component(entity20, (USIZE(20),));
-    world.add_component(entity20, (U32(50),));
+    world.add_component(entity20, (U64(50),));
 
-    let (usizes, u32s) = world.borrow::<(View<USIZE>, View<U32>)>().unwrap();
+    let (usizes, u64s) = world.borrow::<(View<USIZE>, View<U64>)>().unwrap();
 
     assert_eq!(usizes.get(entity0).unwrap(), &USIZE(0));
-    assert_eq!(u32s.get(entity1).unwrap(), &U32(1));
+    assert_eq!(u64s.get(entity1).unwrap(), &U64(1));
     assert_eq!(
-        (&usizes, &u32s).get(entity10).unwrap(),
-        (&USIZE(10), &U32(30))
+        (&usizes, &u64s).get(entity10).unwrap(),
+        (&USIZE(10), &U64(30))
     );
     assert_eq!(
-        (&usizes, &u32s).get(entity20).unwrap(),
-        (&USIZE(20), &U32(50))
+        (&usizes, &u64s).get(entity20).unwrap(),
+        (&USIZE(20), &U64(50))
     );
 
-    let mut iter = (&usizes, &u32s).iter();
-    assert_eq!(iter.next(), Some((&USIZE(10), &U32(30))));
-    assert_eq!(iter.next(), Some((&USIZE(20), &U32(50))));
+    let mut iter = (&usizes, &u64s).iter();
+    assert_eq!(iter.next(), Some((&USIZE(10), &U64(30))));
+    assert_eq!(iter.next(), Some((&USIZE(20), &U64(50))));
     assert_eq!(iter.next(), None);
 }
 
@@ -107,8 +107,8 @@ fn dead_entity() {
 
     let entity = world.add_entity(());
     world.delete_entity(entity);
-    world.add_component(entity, (U32(1u32),));
+    world.add_component(entity, (U64(1u64),));
 
-    let u32s = world.borrow::<View<U32>>().unwrap();
-    assert!(u32s.get(entity).is_err());
+    let u64s = world.borrow::<View<U64>>().unwrap();
+    assert!(u64s.get(entity).is_err());
 }
