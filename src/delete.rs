@@ -13,18 +13,18 @@ pub trait Delete {
     /// use shipyard::{Component, Delete, ViewMut, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((USIZE(0), U32(1)));
+    /// let entity = world.add_entity((USIZE(0), U64(1)));
     ///
-    /// let (mut usizes, mut u32s) = world.borrow::<(ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
+    /// let (mut usizes, mut u64s) = world.borrow::<(ViewMut<USIZE>, ViewMut<U64>)>().unwrap();
     ///
-    /// assert!((&mut usizes, &mut u32s).delete(entity));
+    /// assert!((&mut usizes, &mut u64s).delete(entity));
     /// ```
     fn delete(&mut self, entity: EntityId) -> bool;
 }

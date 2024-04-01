@@ -6,10 +6,10 @@ use shipyard::*;
 fn insertion() {
 // ANCHOR: insertion
 #[derive(Component)]
-struct FirstComponent(pub u32);
+struct FirstComponent(pub u64);
 
 #[derive(Component)]
-struct SecondComponent(pub u32);
+struct SecondComponent(pub u64);
 
 let mut world = World::new();
 

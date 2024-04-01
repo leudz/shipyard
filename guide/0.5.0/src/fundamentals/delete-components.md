@@ -7,10 +7,10 @@ Deleting a component will erase it from the storage but will not return it.
 ```rust, noplaypen
 let mut world = World::new();
 
-let id = world.add_entity((0u32, 1usize));
+let id = world.add_entity((0u64, 1usize));
 
-world.delete_component::<(u32,)>(id);
-world.delete_component::<(u32, usize)>(id);
+world.delete_component::<(u64,)>(id);
+world.delete_component::<(u64, usize)>(id);
 ```
 
 ⚠️ We have to use a single element tuple `(T,)` to delete a single component entity.
@@ -20,7 +20,7 @@ world.delete_component::<(u32, usize)>(id);
 ```rust, noplaypen
 let mut world = World::new();
 
-let id = world.add_entity((0u32, 1usize));
+let id = world.add_entity((0u64, 1usize));
 
 world.strip(id);
 ```
@@ -32,14 +32,14 @@ We have to import the [`Delete`](https://docs.rs/shipyard/0.5.0/shipyard/trait.D
 ```rust, noplaypen
 let world = World::new();
 
-let (mut entities, mut u32s, mut usizes) = world
-    .borrow::<(EntitiesViewMut, ViewMut<u32>, ViewMut<usize>)>()
+let (mut entities, mut u64s, mut usizes) = world
+    .borrow::<(EntitiesViewMut, ViewMut<u64>, ViewMut<usize>)>()
     .unwrap();
 
-let id = entities.add_entity((&mut u32s, &mut usizes), (0, 1));
+let id = entities.add_entity((&mut u64s, &mut usizes), (0, 1));
 
-u32s.delete(id);
-(&mut u32s, &mut usizes).delete(id);
+u64s.delete(id);
+(&mut u64s, &mut usizes).delete(id);
 ```
 
 #### All Components
@@ -49,7 +49,7 @@ let world = World::new();
 
 let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
-let id = all_storages.add_entity((0u32, 1usize));
+let id = all_storages.add_entity((0u64, 1usize));
 
 all_storages.strip(id);
 ```

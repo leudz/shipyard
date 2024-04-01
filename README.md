@@ -20,7 +20,7 @@ If you have any question or want to follow the development more closely <sub>[![
 use shipyard::{Component, IntoIter, View, ViewMut, World};
 
 #[derive(Component)]
-struct Health(u32);
+struct Health(u64);
 #[derive(Component)]
 struct Position {
     x: f32,

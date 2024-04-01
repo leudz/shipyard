@@ -39,10 +39,10 @@ pub trait Storage: SizedAny {
     }
     /// Deletes an entity from this storage.
     #[inline]
-    fn delete(&mut self, _entity: EntityId, _current: u32) {}
+    fn delete(&mut self, _entity: EntityId, _current: u64) {}
     /// Deletes all components of this storage.
     #[inline]
-    fn clear(&mut self, _current: u32) {}
+    fn clear(&mut self, _current: u64) {}
     /// Returns how much memory this storage uses.
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         None

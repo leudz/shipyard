@@ -3,8 +3,8 @@ use shipyard::error;
 use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -17,12 +17,12 @@ fn no_pack() {
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
-    let (mut entities, mut usizes, mut u32s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
+    let (mut entities, mut usizes, mut u64s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>()
         .unwrap();
 
-    let entity1 = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
-    let entity2 = entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
+    let entity1 = entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)));
+    let entity2 = entities.add_entity((&mut usizes, &mut u64s), (USIZE(2), U64(3)));
     assert!(usizes.delete(entity1));
     assert_eq!(
         (&mut usizes).get(entity1).err(),
@@ -31,9 +31,9 @@ fn no_pack() {
             name: type_name::<USIZE>(),
         })
     );
-    assert_eq!(*(&mut u32s).get(entity1).unwrap(), U32(1));
+    assert_eq!(*(&mut u64s).get(entity1).unwrap(), U64(1));
     assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
-    assert_eq!(u32s.get(entity2), Ok(&U32(3)));
+    assert_eq!(u64s.get(entity2), Ok(&U64(3)));
 }
 
 #[test]
@@ -82,8 +82,8 @@ fn old_key() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entity = world.run(
-        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
-            entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)))
+        |(mut entities, mut usizes, mut u64s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)| {
+            entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)))
         },
     );
 
@@ -92,9 +92,9 @@ fn old_key() {
     });
 
     world.run(
-        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
-            entities.add_entity((&mut usizes, &mut u32s), (USIZE(2), U32(3)));
-            assert!(!(&mut usizes, &mut u32s).delete(entity));
+        |(mut entities, mut usizes, mut u64s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)| {
+            entities.add_entity((&mut usizes, &mut u64s), (USIZE(2), U64(3)));
+            assert!(!(&mut usizes, &mut u64s).delete(entity));
         },
     );
 }
@@ -110,17 +110,17 @@ fn newer_key() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.run(
-        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
-            let entity = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+        |(mut entities, mut usizes, mut u64s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)| {
+            let entity = entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)));
 
             entities.delete_unchecked(entity);
             assert_eq!(usizes.len(), 1);
-            assert_eq!(u32s.len(), 1);
+            assert_eq!(u64s.len(), 1);
             let new_entity = entities.add_entity((), ());
-            assert!(!(&mut usizes, &mut u32s).delete(new_entity));
+            assert!(!(&mut usizes, &mut u64s).delete(new_entity));
 
             assert_eq!(usizes.len(), 0);
-            assert_eq!(u32s.len(), 0);
+            assert_eq!(u64s.len(), 0);
         },
     );
 }

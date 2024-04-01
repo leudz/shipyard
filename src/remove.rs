@@ -15,19 +15,19 @@ pub trait Remove {
     /// use shipyard::{Component, Remove, ViewMut, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((USIZE(0), U32(1)));
+    /// let entity = world.add_entity((USIZE(0), U64(1)));
     ///
-    /// let (mut usizes, mut u32s) = world.borrow::<(ViewMut<USIZE>, ViewMut<U32>)>().unwrap();
+    /// let (mut usizes, mut u64s) = world.borrow::<(ViewMut<USIZE>, ViewMut<U64>)>().unwrap();
     ///
-    /// let old = (&mut usizes, &mut u32s).remove(entity);
-    /// assert_eq!(old, (Some(USIZE(0)), Some(U32(1))));
+    /// let old = (&mut usizes, &mut u64s).remove(entity);
+    /// assert_eq!(old, (Some(USIZE(0)), Some(U64(1))));
     /// ```
     fn remove(&mut self, entity: EntityId) -> Self::Out;
 }

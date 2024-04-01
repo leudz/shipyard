@@ -1,13 +1,13 @@
 use shipyard::*;
 
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
-fn two_views(_: View<U32>, _: ViewMut<U32>) {}
-fn two_views_mut(_: ViewMut<U32>, _: ViewMut<U32>) {}
-fn two_views_mut_mid(_: ViewMut<U32>, _: ViewMut<U32>, _: EntitiesView, _: EntitiesView) {}
+fn two_views(_: View<U64>, _: ViewMut<U64>) {}
+fn two_views_mut(_: ViewMut<U64>, _: ViewMut<U64>) {}
+fn two_views_mut_mid(_: ViewMut<U64>, _: ViewMut<U64>, _: EntitiesView, _: EntitiesView) {}
 fn all_storages(_: AllStoragesViewMut, _: EntitiesView) {}
 
 #[test]

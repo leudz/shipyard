@@ -365,16 +365,16 @@ fn exclusive_thread() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn non_send() {
-    let refcell = AtomicRefCell::new_non_send(0u32, std::thread::current().id());
+    let refcell = AtomicRefCell::new_non_send(0u64, std::thread::current().id());
     let refcell_ptr: *const _ = &refcell;
     let refcell_ptr = refcell_ptr as usize;
 
     std::thread::spawn(move || unsafe {
-        (&*(refcell_ptr as *const AtomicRefCell<u32>))
+        (&*(refcell_ptr as *const AtomicRefCell<u64>))
             .borrow()
             .unwrap();
         assert_eq!(
-            (&*(refcell_ptr as *const AtomicRefCell<u32>))
+            (&*(refcell_ptr as *const AtomicRefCell<u64>))
                 .borrow_mut()
                 .err(),
             Some(error::Borrow::WrongThread)
@@ -396,10 +396,10 @@ fn non_sync() {
     let refcell_ptr = refcell_ptr as usize;
 
     std::thread::spawn(move || unsafe {
-        (&*(refcell_ptr as *const AtomicRefCell<u32>))
+        (&*(refcell_ptr as *const AtomicRefCell<u64>))
             .borrow()
             .unwrap();
-        (&*(refcell_ptr as *const AtomicRefCell<u32>))
+        (&*(refcell_ptr as *const AtomicRefCell<u64>))
             .borrow_mut()
             .unwrap();
     })
@@ -413,19 +413,19 @@ fn non_sync() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn non_send_sync() {
-    let refcell = AtomicRefCell::new_non_send_sync(0u32, std::thread::current().id());
+    let refcell = AtomicRefCell::new_non_send_sync(0u64, std::thread::current().id());
     let refcell_ptr: *const _ = &refcell;
     let refcell_ptr = refcell_ptr as usize;
 
     std::thread::spawn(move || unsafe {
         assert_eq!(
-            (&*(refcell_ptr as *const AtomicRefCell<u32>))
+            (&*(refcell_ptr as *const AtomicRefCell<u64>))
                 .borrow()
                 .err(),
             Some(error::Borrow::WrongThread)
         );
         assert_eq!(
-            (&*(refcell_ptr as *const AtomicRefCell<u32>))
+            (&*(refcell_ptr as *const AtomicRefCell<u64>))
                 .borrow_mut()
                 .err(),
             Some(error::Borrow::WrongThread)

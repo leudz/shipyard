@@ -17,13 +17,13 @@ use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU64;
 
 /// `World` contains all data this library will manipulate.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
     pub(crate) scheduler: AtomicRefCell<Scheduler>,
-    counter: Arc<AtomicU32>,
+    counter: Arc<AtomicU64>,
     #[cfg(feature = "parallel")]
     thread_pool: Option<rayon::ThreadPool>,
 }
@@ -32,7 +32,7 @@ pub struct World {
 impl Default for World {
     /// Creates an empty `World`.
     fn default() -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
+        let counter = Arc::new(AtomicU64::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
             all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
@@ -61,7 +61,7 @@ impl World {
     }
     /// Creates an empty `World` with a custom `RwLock` for `AllStorages`.
     pub fn new_with_custom_lock<L: ShipyardRwLock + Send + Sync>() -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
+        let counter = Arc::new(AtomicU64::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
             all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>(counter.clone())),
@@ -83,7 +83,7 @@ impl World {
     /// With a [`ThreadPool`](rayon::ThreadPool) per [`World`] we can keep the panic confined to a single [`World`].
     #[cfg(feature = "parallel")]
     pub fn new_with_local_thread_pool(thread_pool: rayon::ThreadPool) -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
+        let counter = Arc::new(AtomicU64::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
             all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
@@ -107,7 +107,7 @@ impl World {
     pub fn new_with_custom_lock_and_local_thread_pool<L: ShipyardRwLock + Send + Sync>(
         thread_pool: rayon::ThreadPool,
     ) -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
+        let counter = Arc::new(AtomicU64::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
             all_storages: AtomicRefCell::new(AllStorages::new_with_lock::<L>(counter.clone())),
@@ -145,13 +145,13 @@ impl World {
     /// use shipyard::{Unique, UniqueView, World};
     ///
     /// #[derive(Unique)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let world = World::new();
     ///
-    /// world.add_unique(U32(0));
+    /// world.add_unique(U64(0));
     ///
-    /// let i = world.borrow::<UniqueView<U32>>().unwrap();
+    /// let i = world.borrow::<UniqueView<U64>>().unwrap();
     /// assert_eq!(i.0, 0);
     /// ```
     ///
@@ -180,14 +180,14 @@ impl World {
     /// use shipyard::{NonSend, Unique, UniqueView, World};
     ///
     /// #[derive(Unique)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let world = World::new();
     ///
-    /// // I'm using `u32` here but imagine it's a `!Send` type
-    /// world.add_unique_non_send(U32(0));
+    /// // I'm using `u64` here but imagine it's a `!Send` type
+    /// world.add_unique_non_send(U64(0));
     ///
-    /// let i = world.borrow::<NonSend<UniqueView<U32>>>().unwrap();
+    /// let i = world.borrow::<NonSend<UniqueView<U64>>>().unwrap();
     /// assert_eq!(i.0, 0);
     /// ```
     ///
@@ -222,14 +222,14 @@ impl World {
     /// use shipyard::{NonSync, Unique, UniqueView, World};
     ///
     /// #[derive(Unique)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let world = World::new();
     ///
-    /// // I'm using `u32` here but imagine it's a `!Sync` type
-    /// world.add_unique_non_sync(U32(0));
+    /// // I'm using `u64` here but imagine it's a `!Sync` type
+    /// world.add_unique_non_sync(U64(0));
     ///
-    /// let i = world.borrow::<NonSync<UniqueView<U32>>>().unwrap();
+    /// let i = world.borrow::<NonSync<UniqueView<U64>>>().unwrap();
     /// assert_eq!(i.0, 0);
     /// ```
     ///
@@ -266,12 +266,12 @@ impl World {
     /// let world = World::new();
     ///
     /// #[derive(Unique)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
-    /// // I'm using `u32` here but imagine it's a `!Send + !Sync` type
-    /// world.add_unique_non_send_sync(U32(0));
+    /// // I'm using `u64` here but imagine it's a `!Send + !Sync` type
+    /// world.add_unique_non_send_sync(U64(0));
     ///
-    /// let i = world.borrow::<NonSendSync<UniqueView<U32>>>().unwrap();
+    /// let i = world.borrow::<NonSendSync<UniqueView<U64>>>().unwrap();
     /// assert_eq!(i.0, 0);
     /// ```
     ///
@@ -307,13 +307,13 @@ impl World {
     /// use shipyard::{Unique, UniqueView, World};
     ///
     /// #[derive(Unique, Debug)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let world = World::new();
     ///
-    /// world.add_unique(U32(0));
+    /// world.add_unique(U64(0));
     ///
-    /// let i = world.remove_unique::<U32>().unwrap();
+    /// let i = world.remove_unique::<U64>().unwrap();
     /// assert_eq!(i.0, 0);
     /// ```
     ///
@@ -405,14 +405,14 @@ You can use:
 use shipyard::{Component, EntitiesView, View, ViewMut, World};
 
 #[derive(Component)]
-struct U32(u32);
+struct U64(u64);
 
 #[derive(Component)]
 struct USIZE(usize);
 
 let world = World::new();
 
-let u32s = world.borrow::<View<U32>>().unwrap();
+let u64s = world.borrow::<View<U64>>().unwrap();
 let (entities, mut usizes) = world
     .borrow::<(EntitiesView, ViewMut<USIZE>)>()
     .unwrap();
@@ -645,7 +645,7 @@ struct I32(i32);
 struct USIZE(usize);
 
 #[derive(Component)]
-struct U32(u32);
+struct U64(u64);
 
 fn sys1(i32s: View<I32>) -> i32 {
     0
@@ -654,7 +654,7 @@ fn sys1(i32s: View<I32>) -> i32 {
 let world = World::new();
 
 world
-    .run(|usizes: View<USIZE>, mut u32s: ViewMut<U32>| {
+    .run(|usizes: View<USIZE>, mut u64s: ViewMut<U64>| {
         // -- snip --
     });
 
@@ -1034,7 +1034,7 @@ let i = world.run(sys1);
     }
 
     #[inline]
-    pub(crate) fn get_current(&self) -> u32 {
+    pub(crate) fn get_current(&self) -> u64 {
         self.counter
             .fetch_add(1, core::sync::atomic::Ordering::Acquire)
     }
@@ -1055,15 +1055,15 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity0 = world.add_entity((U32(0),));
-    /// let entity1 = world.add_entity((U32(1), USIZE(11)));
+    /// let entity0 = world.add_entity((U64(0),));
+    /// let entity1 = world.add_entity((U64(1), USIZE(11)));
     /// ```
     #[inline]
     pub fn add_entity<C: TupleAddComponent>(&mut self, component: C) -> EntityId {
@@ -1078,14 +1078,14 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let new_entities = world.bulk_add_entity((10..20).map(|i| (U32(i as u32), USIZE(i))));
+    /// let new_entities = world.bulk_add_entity((10..20).map(|i| (U64(i as u64), USIZE(i))));
     /// ```
     #[inline]
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
@@ -1105,7 +1105,7 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -1115,9 +1115,9 @@ impl World {
     /// // make an empty entity
     /// let entity = world.add_entity(());
     ///
-    /// world.add_component(entity, (U32(0),));
-    /// // entity already had a `U32` component so it will be replaced
-    /// world.add_component(entity, (U32(1), USIZE(11)));
+    /// world.add_component(entity, (U64(0),));
+    /// // entity already had a `U64` component so it will be replaced
+    /// world.add_component(entity, (U64(1), USIZE(11)));
     /// ```
     #[track_caller]
     #[inline]
@@ -1133,16 +1133,16 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((U32(0), USIZE(1)));
+    /// let entity = world.add_entity((U64(0), USIZE(1)));
     ///
-    /// world.delete_component::<(U32,)>(entity);
+    /// world.delete_component::<(U64,)>(entity);
     /// ```
     #[inline]
     pub fn delete_component<C: TupleDelete>(&mut self, entity: EntityId) {
@@ -1157,17 +1157,17 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((U32(0), USIZE(1)));
+    /// let entity = world.add_entity((U64(0), USIZE(1)));
     ///
-    /// let (i,) = world.remove::<(U32,)>(entity);
-    /// assert_eq!(i, Some(U32(0)));
+    /// let (i,) = world.remove::<(U64,)>(entity);
+    /// assert_eq!(i, Some(U64(0)));
     /// ```
     #[inline]
     pub fn remove<C: TupleRemove>(&mut self, entity: EntityId) -> C::Out {
@@ -1181,14 +1181,14 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((U32(0), USIZE(1)));
+    /// let entity = world.add_entity((U64(0), USIZE(1)));
     ///
     /// assert!(world.delete_entity(entity));
     /// ```
@@ -1204,14 +1204,14 @@ impl World {
     /// use shipyard::{Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((U32(0), USIZE(1)));
+    /// let entity = world.add_entity((U64(0), USIZE(1)));
     ///
     /// world.strip(entity);
     /// ```
@@ -1229,7 +1229,7 @@ impl World {
     /// use shipyard::{Component, SparseSet, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -1239,14 +1239,14 @@ impl World {
     ///
     /// let mut world = World::new();
     ///
-    /// let entity0 = world.add_entity((U32(0),));
+    /// let entity0 = world.add_entity((U64(0),));
     /// let entity1 = world.add_entity((USIZE(1),));
     /// let entity2 = world.add_entity((STR("2"),));
     ///
     /// // deletes `entity2`
     /// world.delete_any::<SparseSet<STR>>();
     /// // deletes `entity0` and `entity1`
-    /// world.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
+    /// world.delete_any::<(SparseSet<U64>, SparseSet<USIZE>)>();
     /// ```
     #[inline]
     pub fn delete_any<S: TupleDeleteAny>(&mut self) {
@@ -1262,16 +1262,16 @@ impl World {
     /// use shipyard::{Component, SparseSet, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((U32(0), USIZE(1)));
+    /// let entity = world.add_entity((U64(0), USIZE(1)));
     ///
-    /// world.retain::<SparseSet<U32>>(entity);
+    /// world.retain::<SparseSet<U64>>(entity);
     /// ```
     #[inline]
     pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {

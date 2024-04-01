@@ -10,5 +10,5 @@
 These storages are accessed with [`NonSend`](https://docs.rs/shipyard/0.5.0/shipyard/struct.NonSend.html), [`NonSync`](https://docs.rs/shipyard/0.5.0/shipyard/struct.NonSync.html) and [`NonSendSync`](https://docs.rs/shipyard/0.5.0/shipyard/struct.NonSendSync.html), for example:
 
 ```rust, noplaypen
-fn run(rcs_usize: NonSendSync<View<Rc<usize>>>, rc_u32: NonSendSync<UniqueView<Rc<u32>>>) {}
+fn run(rcs_usize: NonSendSync<View<Rc<usize>>>, rc_u64: NonSendSync<UniqueView<Rc<u64>>>) {}
 ```

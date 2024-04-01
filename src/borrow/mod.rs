@@ -71,8 +71,8 @@ pub enum Mutability {
 /// #
 /// #     fn borrow(
 /// #         world: &'v shipyard::World,
-/// #         last_run: Option<u32>,
-/// #         current: u32,
+/// #         last_run: Option<u64>,
+/// #         current: u64,
 /// #     ) -> Result<Self::View, shipyard::error::GetStorage> {
 /// #         Ok(CameraView {
 /// #             camera: <UniqueView<'v, Camera> as IntoBorrow>::Borrow::borrow(world, last_run, current)?,
@@ -114,8 +114,8 @@ pub trait IntoBorrow {
 ///
 ///     fn borrow(
 ///         world: &'v World,
-///         last_run: Option<u32>,
-///         current: u32,
+///         last_run: Option<u64>,
+///         current: u64,
 ///     ) -> Result<Self::View, shipyard::error::GetStorage> {
 ///         Ok(CameraView {
 ///             camera: <UniqueView<'v, Camera> as IntoBorrow>::Borrow::borrow(world, last_run, current)?,
@@ -131,8 +131,8 @@ pub trait Borrow<'a> {
     /// This function is where the actual borrowing happens.
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage>;
 }
 
@@ -148,8 +148,8 @@ impl<'a> Borrow<'a> for AllStoragesBorrower {
 
     fn borrow(
         world: &'a World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         world
             .all_storages
@@ -172,8 +172,8 @@ impl<'a> Borrow<'a> for AllStoragesMutBorrower {
     #[inline]
     fn borrow(
         world: &'a World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         world
             .all_storages
@@ -196,8 +196,8 @@ impl<'a> Borrow<'a> for UnitBorrower {
     #[inline]
     fn borrow(
         _: &'a World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage>
     where
         Self: Sized,
@@ -219,8 +219,8 @@ impl<'a> Borrow<'a> for EntitiesBorrower {
     #[inline]
     fn borrow(
         world: &'a World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -256,8 +256,8 @@ impl<'a> Borrow<'a> for EntitiesMutBorrower {
     #[inline]
     fn borrow(
         world: &'a World,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -299,8 +299,8 @@ where
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -319,7 +319,7 @@ where
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
             last_removal_or_deletion: last_run
-                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
+                .unwrap_or_else(|| current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -346,8 +346,8 @@ where
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -365,7 +365,7 @@ where
         Ok(NonSend(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -392,8 +392,8 @@ where
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -411,7 +411,7 @@ where
         Ok(NonSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -432,8 +432,8 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -451,7 +451,7 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<ViewBorrower<T>> {
         Ok(NonSendSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -479,8 +479,8 @@ where
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -499,7 +499,7 @@ where
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
             last_removal_or_deletion: last_run
-                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
+                .unwrap_or_else(|| current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -526,8 +526,8 @@ where
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -545,7 +545,7 @@ where
         Ok(NonSend(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -572,8 +572,8 @@ where
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -591,7 +591,7 @@ where
         Ok(NonSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -612,8 +612,8 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -631,7 +631,7 @@ impl<'a, T: Component> Borrow<'a> for NonSendSync<ViewMutBorrower<T>> {
         Ok(NonSendSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -653,8 +653,8 @@ impl<'a, T: Send + Sync + Unique> Borrow<'a> for UniqueViewBorrower<T> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -692,8 +692,8 @@ impl<'a, T: Sync + Unique> Borrow<'a> for NonSend<UniqueViewBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -731,8 +731,8 @@ impl<'a, T: Send + Unique> Borrow<'a> for NonSync<UniqueViewBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -770,8 +770,8 @@ impl<'a, T: Unique> Borrow<'a> for NonSendSync<UniqueViewBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -810,8 +810,8 @@ impl<'a, T: Send + Sync + Unique> Borrow<'a> for UniqueViewMutBorrower<T> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -849,8 +849,8 @@ impl<'a, T: Sync + Unique> Borrow<'a> for NonSend<UniqueViewMutBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -888,8 +888,8 @@ impl<'a, T: Send + Unique> Borrow<'a> for NonSync<UniqueViewMutBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -927,8 +927,8 @@ impl<'a, T: Unique> Borrow<'a> for NonSendSync<UniqueViewMutBorrower<T>> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
             Ref::destructure(
@@ -964,8 +964,8 @@ impl<'a, T: Borrow<'a>> Borrow<'a> for Option<T> {
     #[inline]
     fn borrow(
         world: &'a World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         Ok(T::borrow(world, last_run, current).ok())
     }
@@ -981,7 +981,7 @@ macro_rules! impl_world_borrow {
             type View = ($($type::View,)+);
 
             #[inline]
-            fn borrow(world: &'a World, last_run: Option<u32>, current: u32) -> Result<Self::View, error::GetStorage> {
+            fn borrow(world: &'a World, last_run: Option<u64>, current: u64) -> Result<Self::View, error::GetStorage> {
                 Ok(($($type::borrow(world, last_run, current)?,)+))
             }
         }
