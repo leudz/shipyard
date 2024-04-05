@@ -696,9 +696,7 @@ You can use:
         data: Data,
     ) -> R {
         #[cfg(feature = "tracing")]
-        let system_span = tracing::info_span!("system", name = ?type_name::<S>());
-        #[cfg(feature = "tracing")]
-        let _system_span = system_span.enter();
+        let _system_span = tracing::info_span!("system", name = ?type_name::<S>()).entered();
 
         system
             .run((data,), self)
@@ -817,9 +815,7 @@ let i = all_storages.run(sys1);
     #[track_caller]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, system: S) -> R {
         #[cfg(feature = "tracing")]
-        let system_span = tracing::info_span!("system", name = ?type_name::<S>());
-        #[cfg(feature = "tracing")]
-        let _system_span = system_span.enter();
+        let _system_span = tracing::info_span!("system", name = ?type_name::<S>()).entered();
 
         system
             .run((), self)
