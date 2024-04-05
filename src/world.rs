@@ -549,9 +549,7 @@ world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
         data: Data,
     ) -> R {
         #[cfg(feature = "tracing")]
-        let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
-        #[cfg(feature = "tracing")]
-        let _system_span = system_span.enter();
+        let _system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>()).entered();
 
         system
             .run((data,), self)
@@ -675,9 +673,7 @@ let i = world.run(sys1);
     #[track_caller]
     pub fn run<'s, B, R, S: crate::system::System<'s, (), B, R>>(&'s self, system: S) -> R {
         #[cfg(feature = "tracing")]
-        let system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>());
-        #[cfg(feature = "tracing")]
-        let _system_span = system_span.enter();
+        let _system_span = tracing::info_span!("system", name = ?core::any::type_name::<S>()).entered();
 
         system
             .run((), self)
@@ -796,11 +792,6 @@ let i = world.run(sys1);
             }
         }
 
-        #[cfg(feature = "tracing")]
-        let parent_span = tracing::info_span!("workload", name = ?workload_name);
-        #[cfg(feature = "tracing")]
-        let _parent_span = parent_span.enter();
-
         #[cfg(feature = "parallel")]
         {
             let run_batch = || -> Result<(), error::RunWorkload> {
@@ -852,9 +843,7 @@ let i = world.run(sys1);
                                     let system_name = system_names[batch.1[0]].clone();
 
                                     #[cfg(feature = "tracing")]
-                                    let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                    #[cfg(feature = "tracing")]
-                                    let _system_span = system_span.enter();
+                                    let _system_span = tracing::info_span!("system", name = ?system_name).entered();
 
                                     result = systems[batch.1[0]](self).map_err(|err| {
                                         error::RunWorkload::Run((system_name, err))
@@ -870,9 +859,7 @@ let i = world.run(sys1);
                                         let system_name = system_names[index].clone();
 
                                         #[cfg(feature = "tracing")]
-                                        let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                        #[cfg(feature = "tracing")]
-                                        let _system_span = system_span.enter();
+                                        let _system_span = tracing::info_span!("system", name = ?system_name).entered();
 
                                         (systems[index])(self).map_err(|err| {
                                             error::RunWorkload::Run((system_name, err))
@@ -888,9 +875,7 @@ let i = world.run(sys1);
                             let system_name = system_names[index].clone();
 
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
+                            let _system_span = tracing::info_span!("system", name = ?system_name).entered();
 
                             systems[index](self)
                                 .map_err(|err| error::RunWorkload::Run((system_name, err)))?;
@@ -902,9 +887,7 @@ let i = world.run(sys1);
                             let system_name = system_names[batch.1[0]].clone();
 
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
+                            let _system_span = tracing::info_span!("system", name = ?system_name).entered();
 
                             result = systems[batch.1[0]](self)
                                 .map_err(|err| error::RunWorkload::Run((system_name, err)));
@@ -919,9 +902,7 @@ let i = world.run(sys1);
                                 let system_name = system_names[index].clone();
 
                                 #[cfg(feature = "tracing")]
-                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                                #[cfg(feature = "tracing")]
-                                let _system_span = system_span.enter();
+                                let _system_span = tracing::info_span!("system", name = ?system_name).entered();
 
                                 (systems[index])(self).map_err(|err| {
                                     error::RunWorkload::Run((system_name, err))
@@ -960,10 +941,7 @@ let i = world.run(sys1);
                 }
 
                 #[cfg(feature = "tracing")]
-                let system_span =
-                    tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                #[cfg(feature = "tracing")]
-                let _system_span = system_span.enter();
+                let _system_span = tracing::info_span!("system", name = ?system_name).entered();
 
                 (systems[index])(self).map_err(|err| error::RunWorkload::Run((system_name.clone(), err)))
             })
