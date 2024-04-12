@@ -44,12 +44,12 @@ pub struct SparseSet<T: Component, Track: Tracking = <T as Component>::Tracking>
     pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
-    pub(crate) last_insert: u32,
-    pub(crate) last_modification: u32,
-    pub(crate) insertion_data: Vec<u32>,
-    pub(crate) modification_data: Vec<u32>,
-    pub(crate) deletion_data: Vec<(EntityId, u32, T)>,
-    pub(crate) removal_data: Vec<(EntityId, u32)>,
+    pub(crate) last_insert: u64,
+    pub(crate) last_modification: u64,
+    pub(crate) insertion_data: Vec<u64>,
+    pub(crate) modification_data: Vec<u64>,
+    pub(crate) deletion_data: Vec<(EntityId, u64, T)>,
+    pub(crate) removal_data: Vec<(EntityId, u64)>,
     track: PhantomData<Track>,
 }
 
@@ -150,7 +150,7 @@ impl<T: Component> SparseSet<T> {
     ///
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
-    pub(crate) fn insert(&mut self, entity: EntityId, value: T, current: u32) -> Option<T> {
+    pub(crate) fn insert(&mut self, entity: EntityId, value: T, current: u64) -> Option<T> {
         self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
@@ -212,12 +212,12 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Removes `entity`'s component from this storage.
     #[inline]
-    pub(crate) fn remove(&mut self, entity: EntityId, current: u32) -> Option<T> {
+    pub(crate) fn remove(&mut self, entity: EntityId, current: u64) -> Option<T> {
         T::Tracking::remove(self, entity, current)
     }
     /// Deletes `entity`'s component from this storage.
     #[inline]
-    pub(crate) fn delete(&mut self, entity: EntityId, current: u32) -> bool {
+    pub(crate) fn delete(&mut self, entity: EntityId, current: u64) -> bool {
         T::Tracking::delete(self, entity, current)
     }
     #[inline]
@@ -263,14 +263,14 @@ impl<T: Component> SparseSet<T> {
 
 impl<T: Component<Tracking = track::Insertion>> SparseSet<T, track::Insertion> {
     /// Removes the *inserted* flag on all components of this storage.
-    pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted(&mut self, current: u64) {
         self.last_insert = current;
     }
 }
 
 impl<T: Component<Tracking = track::Modification>> SparseSet<T, track::Modification> {
     /// Removes the *modified* flag on all components of this storage.
-    pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_modified(&mut self, current: u64) {
         self.last_modification = current;
     }
 }
@@ -283,7 +283,7 @@ impl<T: Component<Tracking = track::Deletion>> SparseSet<T, track::Deletion> {
     /// Clear all deletion tracking data older than some timestamp.
     pub fn clear_all_deleted_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
         self.deletion_data.retain(|(_, t, _)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
     /// Clear all deletion and removal tracking data.
@@ -296,7 +296,7 @@ impl<T: Component<Tracking = track::Deletion>> SparseSet<T, track::Deletion> {
         timestamp: crate::TrackingTimestamp,
     ) {
         self.deletion_data.retain(|(_, t, _)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
 }
@@ -309,7 +309,7 @@ impl<T: Component<Tracking = track::Removal>> SparseSet<T, track::Removal> {
     /// Clear all removal tracking data older than some timestamp.
     pub fn clear_all_removed_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
         self.removal_data.retain(|(_, t)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
     /// Clear all deletion and removal tracking data.
@@ -322,22 +322,22 @@ impl<T: Component<Tracking = track::Removal>> SparseSet<T, track::Removal> {
         timestamp: crate::TrackingTimestamp,
     ) {
         self.removal_data.retain(|(_, t)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
 }
 
 impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
     /// Removes the *inserted* flag on all components of this storage.
-    pub(crate) fn private_clear_all_inserted(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted(&mut self, current: u64) {
         self.last_insert = current;
     }
     /// Removes the *modified* flag on all components of this storage.
-    pub(crate) fn private_clear_all_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_modified(&mut self, current: u64) {
         self.last_modification = current;
     }
     /// Removes the *inserted* and *modified* flags on all components of this storage.
-    pub(crate) fn private_clear_all_inserted_and_modified(&mut self, current: u32) {
+    pub(crate) fn private_clear_all_inserted_and_modified(&mut self, current: u64) {
         self.last_insert = current;
         self.last_modification = current;
     }
@@ -348,7 +348,7 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
     /// Clear all deletion tracking data older than some timestamp.
     pub fn clear_all_deleted_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
         self.deletion_data.retain(|(_, t, _)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
     /// Clear all removal tracking data.
@@ -358,7 +358,7 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
     /// Clear all removal tracking data older than some timestamp.
     pub fn clear_all_removed_older_than_timestamp(&mut self, timestamp: crate::TrackingTimestamp) {
         self.removal_data.retain(|(_, t)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
     /// Clear all deletion and removal tracking data.
@@ -372,10 +372,10 @@ impl<T: Component<Tracking = track::All>> SparseSet<T, track::All> {
         timestamp: crate::TrackingTimestamp,
     ) {
         self.deletion_data.retain(|(_, t, _)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
         self.removal_data.retain(|(_, t)| {
-            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            track::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
 }
@@ -414,12 +414,12 @@ impl<T: Component> SparseSet<T> {
         self.data.reserve(additional);
     }
     /// Deletes all components in this storage.
-    pub(crate) fn private_clear(&mut self, current: u32) {
+    pub(crate) fn private_clear(&mut self, current: u64) {
         T::Tracking::clear(self, current);
     }
     /// Creates a draining iterator that empties the storage and yields the removed items.
     #[cfg(test)]
-    pub(crate) fn drain(&mut self, current: u32) -> SparseSetDrain<'_, T> {
+    pub(crate) fn drain(&mut self, current: u64) -> SparseSetDrain<'_, T> {
         T::Tracking::drain(self, current)
     }
     /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
@@ -462,11 +462,11 @@ impl<T: Ord + Component> SparseSet<T> {
 
 impl<T: 'static + Component> Storage for SparseSet<T> {
     #[inline]
-    fn delete(&mut self, entity: EntityId, current: u32) {
+    fn delete(&mut self, entity: EntityId, current: u64) {
         SparseSet::delete(self, entity, current);
     }
     #[inline]
-    fn clear(&mut self, current: u32) {
+    fn clear(&mut self, current: u64) {
         <Self>::private_clear(self, current);
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -475,16 +475,16 @@ impl<T: 'static + Component> Storage for SparseSet<T> {
             allocated_memory_bytes: self.sparse.reserved_memory()
                 + (self.dense.capacity() * core::mem::size_of::<EntityId>())
                 + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.modification_data.capacity() * core::mem::size_of::<u32>())
+                + (self.insertion_data.capacity() * core::mem::size_of::<u64>())
+                + (self.modification_data.capacity() * core::mem::size_of::<u64>())
                 + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
                 + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
                 + core::mem::size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
                 + (self.dense.len() * core::mem::size_of::<EntityId>())
                 + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.modification_data.len() * core::mem::size_of::<u32>())
+                + (self.insertion_data.len() * core::mem::size_of::<u64>())
+                + (self.modification_data.len() * core::mem::size_of::<u64>())
                 + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
                 + (self.removal_data.len() * core::mem::size_of::<EntityId>())
                 + core::mem::size_of::<Self>(),

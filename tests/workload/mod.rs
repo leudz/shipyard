@@ -1,11 +1,11 @@
 #[cfg(feature = "thread_local")]
 mod non_send_sync;
 
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
-impl Unique for U32 {
+impl Unique for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -37,13 +37,13 @@ fn duplicate_name() {
 
 #[test]
 fn rename() {
-    fn increment(mut i: UniqueViewMut<U32>) {
+    fn increment(mut i: UniqueViewMut<U64>) {
         i.0 += 1;
     }
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_unique(U32(0));
+    world.add_unique(U64(0));
 
     Workload::new("Empty")
         .with_system(increment)
@@ -63,21 +63,21 @@ fn rename() {
 
     world.run_workload("New Empty").unwrap();
 
-    assert_eq!(world.borrow::<UniqueView<U32>>().unwrap().0, 1);
+    assert_eq!(world.borrow::<UniqueView<U64>>().unwrap().0, 1);
 }
 
 #[test]
 fn are_all_uniques_present_in_world() {
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_unique(U32(0));
+    world.add_unique(U64(0));
 
     Workload::new("")
         .are_all_uniques_present_in_world(&world)
         .unwrap();
 
     Workload::new("")
-        .with_system(|_: UniqueView<U32>| {})
+        .with_system(|_: UniqueView<U64>| {})
         .are_all_uniques_present_in_world(&world)
         .unwrap();
 

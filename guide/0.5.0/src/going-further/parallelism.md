@@ -28,8 +28,8 @@ Example:
 ```rust, noplaypen
 use rayon::prelude::*;
 
-fn many_u32s(mut u32s: ViewMut<u32>) {
-    u32s.par_iter().for_each(|i| {
+fn many_u64s(mut u64s: ViewMut<u64>) {
+    u64s.par_iter().for_each(|i| {
         // -- snip --
     });
 }

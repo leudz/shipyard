@@ -15,14 +15,14 @@ pub trait AddComponent {
     /// use shipyard::{AddComponent, Component, EntitiesViewMut, ViewMut, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+    /// let (mut entities, mut u64s) = world.borrow::<(EntitiesViewMut, ViewMut<U64>)>().unwrap();
     /// let entity = entities.add_entity((), ());
     ///
-    /// u32s.add_component_unchecked(entity, U32(0));
+    /// u64s.add_component_unchecked(entity, U64(0));
     /// ```
     ///
     /// [`Entities::add_component`]: crate::Entities::add_component()

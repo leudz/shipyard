@@ -11,8 +11,8 @@ const MAX_SIZE: f32 = 25.;
 const GROWTH_RATE: f32 = 0.15;
 const SPEED: f32 = 1.5;
 const ACCELERATION_RATE: f32 = 0.01;
-const SQUARE_SPAWN_RATE: u32 = 25;
-const SQUAGUM_SPAWN_RATE: u32 = 150;
+const SQUARE_SPAWN_RATE: u64 = 25;
+const SQUAGUM_SPAWN_RATE: u64 = 150;
 
 #[derive(Component)]
 struct MyRect(macroquad::prelude::Rect);
@@ -20,9 +20,9 @@ struct MyRect(macroquad::prelude::Rect);
 #[derive(Unique)]
 struct Player {
     is_invincible: bool,
-    i_counter: u32,
+    i_counter: u64,
     squagum: bool,
-    squagum_counter: u32,
+    squagum_counter: u64,
     rect: Rect,
 }
 

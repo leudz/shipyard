@@ -102,7 +102,7 @@ pub(crate) fn expand_all_storages_borrow(
 
             Ok(quote!(
                 impl #impl_generics ::shipyard::AllStoragesBorrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u32>, current: u32,) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u64>, current: u64,) -> Result<Self::View, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -121,7 +121,7 @@ pub(crate) fn expand_all_storages_borrow(
 
             Ok(quote!(
                 impl #impl_generics ::shipyard::AllStoragesBorrow<#view_lifetime> for #borrower #borrower_ty_generics #where_clause {
-                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u32>, current: u32) -> Result<Self::View, ::shipyard::error::GetStorage> {
+                    fn all_borrow(all_storages: & #view_lifetime ::shipyard::AllStorages, last_run: Option<u64>, current: u64) -> Result<Self::View, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#all_storages_borrow),*))
                     }
                 }

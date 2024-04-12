@@ -15,11 +15,11 @@ use core::ops::BitOr;
 ///
 /// #[derive(Component, PartialEq, Eq, Debug)]
 /// #[track(All)]
-/// struct A(u32);
+/// struct A(u64);
 ///
 /// #[derive(Component, PartialEq, Eq, Debug)]
 /// #[track(All)]
-/// struct B(u32);
+/// struct B(u64);
 ///
 /// let mut world = World::new();
 ///

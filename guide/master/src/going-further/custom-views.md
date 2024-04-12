@@ -38,7 +38,7 @@ struct Graphics {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
+    size: winit::dpi::PhysicalSize<u64>,
 }
 
 fn render(graphics: UniqueView<Graphics>) -> Result<(), wgpu::SurfaceError> {
@@ -128,8 +128,8 @@ impl<'v> shipyard::Borrow<'v> for RenderGraphicsViewMut {
 
     fn borrow(
         world: &'v shipyard::World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, shipyard::error::GetStorage> {
         // Even if we don't use tracking for Graphics, it's good to build an habit of using last_run and current when creating custom views
         let graphics = <UniqueView<Graphics> as shipyard::IntoBorrow>::Borrow::borrow(
@@ -190,8 +190,8 @@ impl<'v> shipyard::Borrow<'v> for RenderGraphicsBorrower {
 
     fn borrow(
         world: &'v shipyard::World,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, shipyard::error::GetStorage> {
         let graphics = <UniqueView<Graphics> as shipyard::IntoBorrow>::Borrow::borrow(
             world, last_run, current,
@@ -254,8 +254,8 @@ unsafe impl shipyard::BorrowInfo for RenderGraphicsViewMut<'_> {
 impl<'v> shipyard::AllStoragesBorrow<'v> for RenderGraphicsBorrower {
     fn all_borrow(
         all_storages: &'v shipyard::AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, shipyard::error::GetStorage> {
         let graphics = <UniqueView<Graphics> as shipyard::IntoBorrow>::Borrow::all_borrow(
             all_storages,

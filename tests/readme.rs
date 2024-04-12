@@ -4,7 +4,7 @@ fn example() {
     use shipyard::{Component, IntoIter, View, ViewMut, World};
 
     #[derive(Component)]
-    struct Health(u32);
+    struct Health(u64);
     #[derive(Component)]
     struct Position {
         _x: f32,

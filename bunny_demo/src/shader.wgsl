@@ -17,7 +17,7 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-    @builtin(vertex_index) in_vertex_index: u32,
+    @builtin(vertex_index) in_vertex_index: u64,
     vertex: Vertex,
     instance: Instance,
 ) -> VertexOutput {

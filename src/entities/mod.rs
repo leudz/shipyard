@@ -65,15 +65,15 @@ impl Entities {
     /// use shipyard::{Component, EntitiesView, ViewMut, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let mut world = World::new();
     ///
     /// let entity = world.add_entity(());
     ///
-    /// let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<U32>)>().unwrap();
+    /// let (entities, mut u64s) = world.borrow::<(EntitiesView, ViewMut<U64>)>().unwrap();
     ///
-    /// entities.add_component(entity, &mut u32s, U32(0));
+    /// entities.add_component(entity, &mut u64s, U64(0));
     /// ```
     #[track_caller]
     #[inline]
@@ -104,16 +104,16 @@ impl Entities {
     /// use shipyard::{Component, EntitiesView, ViewMut, World};
     ///
     /// #[derive(Component, PartialEq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// let mut world = World::new();
     ///
     /// let entity = world.add_entity(());
     ///
-    /// let (entities, mut u32s) = world.borrow::<(EntitiesView, ViewMut<U32>)>().unwrap();
+    /// let (entities, mut u64s) = world.borrow::<(EntitiesView, ViewMut<U64>)>().unwrap();
     ///
-    /// assert!(entities.add_distinct_component(entity, &mut u32s, U32(0)));
-    /// assert!(!entities.add_distinct_component(entity, &mut u32s, U32(0)));
+    /// assert!(entities.add_distinct_component(entity, &mut u64s, U64(0)));
+    /// assert!(!entities.add_distinct_component(entity, &mut u64s, U64(0)));
     /// ```
     #[track_caller]
     #[inline]
@@ -205,20 +205,20 @@ impl Entities {
     /// use shipyard::{Component, EntitiesViewMut, ViewMut, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world
-    ///     .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
+    /// let (mut entities, mut usizes, mut u64s) = world
+    ///     .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>()
     ///     .unwrap();
     ///
-    /// let entity = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
+    /// let entity = entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)));
     /// assert_eq!(usizes[entity], USIZE(0));
-    /// assert_eq!(u32s[entity], U32(1));
+    /// assert_eq!(u64s[entity], U64(1));
     /// ```
     ///
     /// [`EntityId`]: crate::entity_id::EntityId
@@ -241,19 +241,19 @@ impl Entities {
     /// use shipyard::{Component, EntitiesViewMut, ViewMut, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
     ///
     /// let world = World::new();
     ///
-    /// let (mut entities, mut usizes, mut u32s) = world
-    ///     .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
+    /// let (mut entities, mut usizes, mut u64s) = world
+    ///     .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>()
     ///     .unwrap();
     ///
     /// let new_entities =
-    ///     entities.bulk_add_entity((&mut u32s, &mut usizes), (10..20).map(|i| (U32(i as u32), USIZE(i))));
+    ///     entities.bulk_add_entity((&mut u64s, &mut usizes), (10..20).map(|i| (U64(i as u64), USIZE(i))));
     /// ```
     ///
     /// [`EntityId`]: crate::entity_id::EntityId
@@ -369,7 +369,7 @@ impl Entities {
 }
 
 impl Storage for Entities {
-    fn clear(&mut self, _current: u32) {
+    fn clear(&mut self, _current: u64) {
         if self.data.is_empty() {
             return;
         }

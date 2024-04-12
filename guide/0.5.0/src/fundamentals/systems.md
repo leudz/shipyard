@@ -6,7 +6,7 @@ A function with views as arguments is all you need.
 Here's an example:
 
 ```rust, noplaypen
-fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>) {
+fn create_ints(mut entities: EntitiesViewMut, mut u64s: ViewMut<u64>) {
     // -- snip --
 }
 ```
@@ -60,11 +60,11 @@ world
 A workload is a named group of systems.
 
 ```rust, noplaypen
-fn create_ints(mut entities: EntitiesViewMut, mut u32s: ViewMut<u32>) {
+fn create_ints(mut entities: EntitiesViewMut, mut u64s: ViewMut<u64>) {
     // -- snip --
 }
 
-fn delete_ints(mut u32s: ViewMut<u32>) {
+fn delete_ints(mut u64s: ViewMut<u64>) {
     // -- snip --
 }
 
@@ -91,35 +91,35 @@ You can also add a workload to another and build your execution logic brick by b
 ```rust, noplaypen
 struct Dead<T>(core::marker::PhantomData<T>);
 
-fn increment(mut u32s: ViewMut<u32>) {
-    for mut i in (&mut u32s).iter() {
+fn increment(mut u64s: ViewMut<u64>) {
+    for mut i in (&mut u64s).iter() {
         *i += 1;
     }
 }
 
-fn flag_deleted_u32s(u32s: View<u32>, mut deads: ViewMut<Dead<u32>>) {
-    for (id, i) in u32s.iter().with_id() {
+fn flag_deleted_u64s(u64s: View<u64>, mut deads: ViewMut<Dead<u64>>) {
+    for (id, i) in u64s.iter().with_id() {
         if *i > 100 {
             deads.add_component_unchecked(id, Dead(core::marker::PhantomData));
         }
     }
 }
 
-fn clear_deleted_u32s(mut all_storages: AllStoragesViewMut) {
-    all_storages.delete_any::<SparseSet<Dead<u32>>>();
+fn clear_deleted_u64s(mut all_storages: AllStoragesViewMut) {
+    all_storages.delete_any::<SparseSet<Dead<u64>>>();
 }
 
 let world = World::new();
 
-Workload::builder("Filter u32")
-    .with_system(&flag_deleted_u32s)
-    .with_system(&clear_deleted_u32s)
+Workload::builder("Filter u64")
+    .with_system(&flag_deleted_u64s)
+    .with_system(&clear_deleted_u64s)
     .add_to_world(&world)
     .unwrap();
 
 Workload::builder("Loop")
     .with_system(&increment)
-    .with_workload("Filter u32")
+    .with_workload("Filter u64")
     .add_to_world(&world)
     .unwrap();
 

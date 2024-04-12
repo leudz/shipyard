@@ -5,8 +5,8 @@ impl Component for USIZE {
     type Tracking = track::Untracked;
 }
 
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -16,17 +16,17 @@ fn simple() {
 
     world.run(|mut all_storages: AllStoragesViewMut| {
         let (entity0, entity1, entity2, entity3) = all_storages.run(
-            |mut entities: EntitiesViewMut, mut u32s: ViewMut<U32>, mut usizes: ViewMut<USIZE>| {
+            |mut entities: EntitiesViewMut, mut u64s: ViewMut<U64>, mut usizes: ViewMut<USIZE>| {
                 (
-                    entities.add_entity(&mut u32s, U32(0)),
+                    entities.add_entity(&mut u64s, U64(0)),
                     entities.add_entity((), ()),
                     entities.add_entity(&mut usizes, USIZE(1)),
-                    entities.add_entity((&mut u32s, &mut usizes), (U32(2), USIZE(3))),
+                    entities.add_entity((&mut u64s, &mut usizes), (U64(2), USIZE(3))),
                 )
             },
         );
 
-        all_storages.delete_any::<SparseSet<U32>>();
+        all_storages.delete_any::<SparseSet<U64>>();
 
         all_storages.run(|entities: EntitiesView| {
             assert!(!entities.is_alive(entity0));

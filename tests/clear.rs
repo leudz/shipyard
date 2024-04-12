@@ -2,8 +2,8 @@ use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -16,22 +16,22 @@ fn no_pack() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+    let (mut entities, mut u64s) = world.borrow::<(EntitiesViewMut, ViewMut<U64>)>().unwrap();
 
-    entities.add_entity(&mut u32s, U32(0));
-    entities.add_entity(&mut u32s, U32(1));
-    entities.add_entity(&mut u32s, U32(2));
+    entities.add_entity(&mut u64s, U64(0));
+    entities.add_entity(&mut u64s, U64(1));
+    entities.add_entity(&mut u64s, U64(2));
 
-    drop((entities, u32s));
+    drop((entities, u64s));
     world.borrow::<AllStoragesViewMut>().unwrap().clear();
 
-    let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+    let (mut entities, mut u64s) = world.borrow::<(EntitiesViewMut, ViewMut<U64>)>().unwrap();
 
-    assert_eq!(u32s.len(), 0);
-    let entity0 = entities.add_entity(&mut u32s, U32(3));
-    let entity1 = entities.add_entity(&mut u32s, U32(4));
-    let entity2 = entities.add_entity(&mut u32s, U32(5));
-    let entity3 = entities.add_entity(&mut u32s, U32(5));
+    assert_eq!(u64s.len(), 0);
+    let entity0 = entities.add_entity(&mut u64s, U64(3));
+    let entity1 = entities.add_entity(&mut u64s, U64(4));
+    let entity2 = entities.add_entity(&mut u64s, U64(5));
+    let entity3 = entities.add_entity(&mut u64s, U64(5));
 
     assert_eq!("EId(0.1)", format!("{:?}", entity0));
     assert_eq!("EId(1.1)", format!("{:?}", entity1));
@@ -88,10 +88,10 @@ fn inserted() {
         type Tracking = track::All;
     }
 
-    fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE>) {
+    fn system(u64s: View<U64>, mut usizes: ViewMut<USIZE>) {
         usizes.clear();
 
-        for id in u32s.iter().ids() {
+        for id in u64s.iter().ids() {
             usizes.add_component_unchecked(id, USIZE(0));
         }
 
@@ -100,7 +100,7 @@ fn inserted() {
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_entity((U32(0),));
+    world.add_entity((U64(0),));
 
     Workload::new("")
         .with_system(system)

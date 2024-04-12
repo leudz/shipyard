@@ -7,14 +7,14 @@ In Shipyard this is achieved using [`IntoIter::iter`](https://docs.rs/shipyard/0
 ```rust, noplaypen
 let world = World::new();
 
-let (mut u32s, usizes) = world.borrow::<(ViewMut<u32>, View<usize>)>().unwrap();
+let (mut u64s, usizes) = world.borrow::<(ViewMut<u64>, View<usize>)>().unwrap();
 
-for i in u32s.iter() {
+for i in u64s.iter() {
     dbg!(i);
 }
 
-for (mut i, j) in (&mut u32s, &usizes).iter() {
-    *i += *j as u32;
+for (mut i, j) in (&mut u64s, &usizes).iter() {
+    *i += *j as u64;
 }
 ```
 
@@ -28,9 +28,9 @@ You can ask an iterator to tell you which entity owns each component by using [`
 ```rust, noplaypen
 let world = World::new();
 
-let u32s = world.borrow::<View<u32>>().unwrap();
+let u64s = world.borrow::<View<u64>>().unwrap();
 
-for (id, i) in u32s.iter().with_id() {
+for (id, i) in u64s.iter().with_id() {
     println!("{} belongs to entity {:?}", i, id);
 }
 ```
@@ -42,9 +42,9 @@ It's possible to filter entities that don't have a certain component using [`Not
 ```rust, noplaypen
 let world = World::new();
 
-let (u32s, usizes) = world.borrow::<(View<u32>, View<usize>)>().unwrap();
+let (u64s, usizes) = world.borrow::<(View<u64>, View<usize>)>().unwrap();
 
-for (i, _) in (&u32s, !&usizes).iter() {
+for (i, _) in (&u64s, !&usizes).iter() {
     dbg!(i);
 }
 ```

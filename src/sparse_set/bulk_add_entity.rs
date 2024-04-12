@@ -95,7 +95,7 @@ where
             sparse_set.insertion_data.extend(
                 new_entities
                     .iter()
-                    .map(|_| current.wrapping_add(u32::MAX / 2)),
+                    .map(|_| current.wrapping_add(u64::MAX / 2)),
             );
         }
 

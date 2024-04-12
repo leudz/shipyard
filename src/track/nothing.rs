@@ -9,7 +9,7 @@ impl Tracking for Untracked {
     fn remove<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        _current: u32,
+        _current: u64,
     ) -> Option<T> {
         sparse_set.actual_remove(entity)
     }
@@ -18,12 +18,12 @@ impl Tracking for Untracked {
     fn delete<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        _current: u32,
+        _current: u64,
     ) -> bool {
         sparse_set.actual_remove(entity).is_some()
     }
 
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, _current: u32) {
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, _current: u64) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -98,7 +98,7 @@ impl Tracking for Untracked {
 
     fn drain<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
-        _current: u32,
+        _current: u64,
     ) -> SparseSetDrain<'_, T> {
         for id in &sparse_set.dense {
             // SAFE ids from sparse_set.dense are always valid
