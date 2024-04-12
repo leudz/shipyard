@@ -5,8 +5,8 @@ impl Component for USIZE {
     type Tracking = track::Untracked;
 }
 
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -27,8 +27,8 @@ fn key_equality() {
 
     //add a component to e1
     world.run(
-        |(ref mut entities, ref mut u32s): (EntitiesViewMut, ViewMut<U32>)| {
-            entities.add_component(e1, u32s, U32(42));
+        |(ref mut entities, ref mut u64s): (EntitiesViewMut, ViewMut<U64>)| {
+            entities.add_component(e1, u64s, U64(42));
         },
     );
 
@@ -50,13 +50,13 @@ fn key_equality() {
         assert_eq!(keys, vec![e0, e1, e2]);
     });
 
-    //confirm that the entity id for (USIZE) is the same as (USIZE, U32)
+    //confirm that the entity id for (USIZE) is the same as (USIZE, U64)
     //in other words that the entity itself did not somehow change from adding a component
-    world.run(|(usizes, u32s): (View<USIZE>, View<U32>)| {
+    world.run(|(usizes, u64s): (View<USIZE>, View<U64>)| {
         //sanity check
-        assert_eq!((&usizes, &u32s).iter().with_id().count(), 1);
+        assert_eq!((&usizes, &u64s).iter().with_id().count(), 1);
 
-        let (entity, (_, _)) = (&usizes, &u32s).iter().with_id().find(|_| true).unwrap();
+        let (entity, (_, _)) = (&usizes, &u64s).iter().with_id().find(|_| true).unwrap();
         assert_eq!(entity, e1);
     });
 }

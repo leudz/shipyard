@@ -1,8 +1,8 @@
 use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -17,10 +17,10 @@ fn no_pack() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     world.add_entity(());
-    let entity1 = world.add_entity((USIZE(0), U32(1)));
+    let entity1 = world.add_entity((USIZE(0), U64(1)));
 
-    let (usizes, u32s) = world.borrow::<(View<USIZE>, View<U32>)>().unwrap();
-    assert_eq!((&usizes, &u32s).get(entity1), Ok((&USIZE(0), &U32(1))));
+    let (usizes, u64s) = world.borrow::<(View<USIZE>, View<U64>)>().unwrap();
+    assert_eq!((&usizes, &u64s).get(entity1), Ok((&USIZE(0), &U64(1))));
 }
 
 #[test]
@@ -106,19 +106,19 @@ fn bulk_single() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entities = world
-        .bulk_add_entity((0..5).map(|i| (U32(i),)))
+        .bulk_add_entity((0..5).map(|i| (U64(i),)))
         .collect::<Vec<_>>();
 
-    let u32s = world.borrow::<View<U32>>().unwrap();
-    let mut iter = u32s.iter();
-    assert_eq!(iter.next(), Some(&U32(0)));
-    assert_eq!(iter.next(), Some(&U32(1)));
-    assert_eq!(iter.next(), Some(&U32(2)));
-    assert_eq!(iter.next(), Some(&U32(3)));
-    assert_eq!(iter.next(), Some(&U32(4)));
+    let u64s = world.borrow::<View<U64>>().unwrap();
+    let mut iter = u64s.iter();
+    assert_eq!(iter.next(), Some(&U64(0)));
+    assert_eq!(iter.next(), Some(&U64(1)));
+    assert_eq!(iter.next(), Some(&U64(2)));
+    assert_eq!(iter.next(), Some(&U64(3)));
+    assert_eq!(iter.next(), Some(&U64(4)));
     assert_eq!(iter.next(), None);
 
-    let mut iter = u32s.iter().ids().zip(entities);
+    let mut iter = u64s.iter().ids().zip(entities);
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
@@ -138,19 +138,19 @@ fn bulk() {
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
     let entities = world
-        .bulk_add_entity((0..5).map(|i| (U32(i), USIZE(i as usize))))
+        .bulk_add_entity((0..5).map(|i| (U64(i), USIZE(i as usize))))
         .collect::<Vec<_>>();
 
-    let (u32s, usizes) = world.borrow::<(View<U32>, View<USIZE>)>().unwrap();
-    let mut iter = (&u32s, &usizes).iter();
-    assert_eq!(iter.next(), Some((&U32(0), &USIZE(0))));
-    assert_eq!(iter.next(), Some((&U32(1), &USIZE(1))));
-    assert_eq!(iter.next(), Some((&U32(2), &USIZE(2))));
-    assert_eq!(iter.next(), Some((&U32(3), &USIZE(3))));
-    assert_eq!(iter.next(), Some((&U32(4), &USIZE(4))));
+    let (u64s, usizes) = world.borrow::<(View<U64>, View<USIZE>)>().unwrap();
+    let mut iter = (&u64s, &usizes).iter();
+    assert_eq!(iter.next(), Some((&U64(0), &USIZE(0))));
+    assert_eq!(iter.next(), Some((&U64(1), &USIZE(1))));
+    assert_eq!(iter.next(), Some((&U64(2), &USIZE(2))));
+    assert_eq!(iter.next(), Some((&U64(3), &USIZE(3))));
+    assert_eq!(iter.next(), Some((&U64(4), &USIZE(4))));
     assert_eq!(iter.next(), None);
 
-    let mut iter = u32s.iter().ids().zip(entities.clone());
+    let mut iter = u64s.iter().ids().zip(entities.clone());
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
@@ -166,11 +166,11 @@ fn bulk() {
     assert_eq!(iter.next().map(|(left, right)| left == right), Some(true));
     assert_eq!(iter.next(), None);
 
-    drop((u32s, usizes));
+    drop((u64s, usizes));
 
-    world.bulk_add_entity((0..5).map(|i| (U32(i), USIZE(i as usize))));
+    world.bulk_add_entity((0..5).map(|i| (U64(i), USIZE(i as usize))));
 
-    let (u32s, usizes) = world.borrow::<(View<U32>, View<USIZE>)>().unwrap();
-    assert_eq!(u32s.len(), 10);
+    let (u64s, usizes) = world.borrow::<(View<U64>, View<USIZE>)>().unwrap();
+    assert_eq!(u64s.len(), 10);
     assert_eq!(usizes.len(), 10);
 }

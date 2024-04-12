@@ -175,12 +175,12 @@ struct Graphics {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    size: winit::dpi::PhysicalSize<u32>,
+    size: winit::dpi::PhysicalSize<u64>,
 }
 
 impl Graphics {
     fn resize(
-        new_size: winit::dpi::PhysicalSize<u32>,
+        new_size: winit::dpi::PhysicalSize<u64>,
         mut this: UniqueViewMut<Graphics>,
         mut camera_bundle: UniqueViewMut<Camera>,
     ) {

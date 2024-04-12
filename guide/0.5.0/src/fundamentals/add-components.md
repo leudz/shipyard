@@ -10,8 +10,8 @@ let mut world = World::new();
 
 let id = world.add_entity(());
 
-world.add_component(id, (0u32,));
-world.add_component(id, (0u32, 1usize));
+world.add_component(id, (0u64,));
+world.add_component(id, (0u64, 1usize));
 ```
 
 ⚠️ We have to use a single element tuple `(T,)` to add a single component.
@@ -32,11 +32,11 @@ let id = world
     .unwrap()
     .add_entity((), ());
 
-let (entities, mut u32s, mut usizes) = world
-    .borrow::<(EntitiesView, ViewMut<u32>, ViewMut<usize>)>()
+let (entities, mut u64s, mut usizes) = world
+    .borrow::<(EntitiesView, ViewMut<u64>, ViewMut<usize>)>()
     .unwrap();
 
-entities.add_component(id, &mut u32s, 0);
-entities.add_component(id, (&mut u32s, &mut usizes), (0, 1));
-u32s.add_component_unchecked(id, 0);
+entities.add_component(id, &mut u64s, 0);
+entities.add_component(id, (&mut u64s, &mut usizes), (0, 1));
+u64s.add_component_unchecked(id, 0);
 ```

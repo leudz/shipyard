@@ -19,17 +19,17 @@ pub trait Get {
     /// use shipyard::{Component, Get, View, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
     ///
     /// let mut world = World::new();
     ///
-    /// let entity = world.add_entity((USIZE(0), U32(1)));
+    /// let entity = world.add_entity((USIZE(0), U64(1)));
     ///
-    /// let (usizes, u32s) = world.borrow::<(View<USIZE>, View<U32>)>().unwrap();
-    /// assert_eq!((&usizes, &u32s).get(entity), Ok((&USIZE(0), &U32(1))));
+    /// let (usizes, u64s) = world.borrow::<(View<USIZE>, View<U64>)>().unwrap();
+    /// assert_eq!((&usizes, &u64s).get(entity), Ok((&USIZE(0), &U64(1))));
     /// ```
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent>;
 }

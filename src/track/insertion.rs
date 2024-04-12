@@ -13,8 +13,8 @@ impl Tracking for Insertion {
     fn is_inserted<T: Component<Tracking = Self>>(
         sparse_set: &SparseSet<T, Self>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: u64,
+        current: u64,
     ) -> bool {
         if let Some(dense) = sparse_set.index_of(entity) {
             super::is_track_within_bounds(sparse_set.insertion_data[dense], last, current)
@@ -27,7 +27,7 @@ impl Tracking for Insertion {
     fn remove<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        _current: u32,
+        _current: u64,
     ) -> Option<T> {
         sparse_set.actual_remove(entity)
     }
@@ -36,12 +36,12 @@ impl Tracking for Insertion {
     fn delete<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        _current: u32,
+        _current: u64,
     ) -> bool {
         sparse_set.actual_remove(entity).is_some()
     }
 
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, _current: u32) {
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, _current: u64) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -117,7 +117,7 @@ impl Tracking for Insertion {
 
     fn drain<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
-        _current: u32,
+        _current: u64,
     ) -> SparseSetDrain<'_, T> {
         for id in &sparse_set.dense {
             // SAFE ids from sparse_set.dense are always valid

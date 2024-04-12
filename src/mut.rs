@@ -1,7 +1,7 @@
 /// Tracks component modification.
 pub struct Mut<'a, T: ?Sized> {
-    pub(crate) flag: Option<&'a mut u32>,
-    pub(crate) current: u32,
+    pub(crate) flag: Option<&'a mut u64>,
+    pub(crate) current: u64,
     pub(crate) data: &'a mut T,
 }
 

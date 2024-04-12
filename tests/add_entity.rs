@@ -1,8 +1,8 @@
 use shipyard::*;
 
 #[derive(Debug, PartialEq, Eq)]
-struct U32(u32);
-impl Component for U32 {
+struct U64(u64);
+impl Component for U64 {
     type Tracking = track::Untracked;
 }
 
@@ -19,9 +19,9 @@ fn no_pack() {
         entities.add_entity((), ());
     });
     world.run(
-        |(mut entities, mut usizes, mut u32s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)| {
-            let entity1 = entities.add_entity((&mut usizes, &mut u32s), (USIZE(0), U32(1)));
-            assert_eq!((&usizes, &u32s).get(entity1).unwrap(), (&USIZE(0), &U32(1)));
+        |(mut entities, mut usizes, mut u64s): (EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)| {
+            let entity1 = entities.add_entity((&mut usizes, &mut u64s), (USIZE(0), U64(1)));
+            assert_eq!((&usizes, &u64s).get(entity1).unwrap(), (&USIZE(0), &U64(1)));
         },
     );
 }
@@ -96,28 +96,28 @@ fn bulk() {
 
     let world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    let (mut entities, mut usizes, mut u32s) = world
-        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U32>)>()
+    let (mut entities, mut usizes, mut u64s) = world
+        .borrow::<(EntitiesViewMut, ViewMut<USIZE>, ViewMut<U64>)>()
         .unwrap();
 
     entities.bulk_add_entity((), (0..1).map(|_| {}));
     let mut new_entities = entities
         .bulk_add_entity(
-            (&mut usizes, &mut u32s),
-            (0..2).map(|i| (USIZE(i as usize), U32(i))),
+            (&mut usizes, &mut u64s),
+            (0..2).map(|i| (USIZE(i as usize), U64(i))),
         )
         .collect::<Vec<_>>()
         .into_iter();
 
-    let mut iter = (&usizes, &u32s).iter().ids();
+    let mut iter = (&usizes, &u64s).iter().ids();
     assert_eq!(new_entities.next(), iter.next());
     assert_eq!(new_entities.next(), iter.next());
     assert_eq!(new_entities.next(), None);
 
     entities
         .bulk_add_entity(
-            (&mut usizes, &mut u32s),
-            (0..2).map(|i| (USIZE(i as usize), U32(i))),
+            (&mut usizes, &mut u64s),
+            (0..2).map(|i| (USIZE(i as usize), U64(i))),
         )
         .collect::<Vec<_>>()
         .into_iter();
@@ -134,10 +134,10 @@ fn bulk_unequal_length() {
 
     let mut world = World::new_with_custom_lock::<parking_lot::RawRwLock>();
 
-    world.add_entity((U32(0),));
+    world.add_entity((U64(0),));
 
     let entity = world
-        .bulk_add_entity((0..1).map(|_| (U32(1), USIZE(2))))
+        .bulk_add_entity((0..1).map(|_| (U64(1), USIZE(2))))
         .next()
         .unwrap();
 

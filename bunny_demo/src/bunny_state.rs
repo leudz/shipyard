@@ -6,11 +6,11 @@ use shipyard::{
 };
 use wgpu::util::DeviceExt;
 
-const IMG_SIZE: [u32; 2] = [25, 32];
+const IMG_SIZE: [u64; 2] = [25, 32];
 
 #[derive(Unique)]
 pub(crate) struct BunnyState {
-    pub(crate) bunnies_per_click: u32,
+    pub(crate) bunnies_per_click: u64,
 }
 
 #[repr(transparent)]
@@ -131,7 +131,7 @@ pub(crate) fn update_bunnies_gpu(
                 });
 
         graphics.instance_buffer = instance_buffer;
-        graphics.vertex_count = position.len() as u32;
+        graphics.vertex_count = position.len() as u64;
     } else {
         graphics.queue.write_buffer(
             &graphics.instance_buffer,

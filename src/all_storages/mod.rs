@@ -21,7 +21,7 @@ use crate::{error, UniqueStorage};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
-use core::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::{Entry, HashMap};
 
 /// Contains all storages present in the `World`.
@@ -36,7 +36,7 @@ pub struct AllStorages {
     pub(crate) storages: RwLock<HashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
     thread_id: std::thread::ThreadId,
-    counter: Arc<AtomicU32>,
+    counter: Arc<AtomicU64>,
 }
 
 #[cfg(not(feature = "thread_local"))]
@@ -46,7 +46,7 @@ unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     #[cfg(feature = "std")]
-    pub(crate) fn new(counter: Arc<AtomicU32>) -> Self {
+    pub(crate) fn new(counter: Arc<AtomicU64>) -> Self {
         let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -58,7 +58,7 @@ impl AllStorages {
             counter,
         }
     }
-    pub(crate) fn new_with_lock<L: ShipyardRwLock + Send + Sync>(counter: Arc<AtomicU32>) -> Self {
+    pub(crate) fn new_with_lock<L: ShipyardRwLock + Send + Sync>(counter: Arc<AtomicU64>) -> Self {
         let mut storages = HashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -219,7 +219,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, Get, View, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
     /// struct USIZE(usize);
@@ -227,16 +227,16 @@ impl AllStorages {
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity1 = all_storages.add_entity((USIZE(0), U32(1)));
-    /// let entity2 = all_storages.add_entity((USIZE(2), U32(3)));
+    /// let entity1 = all_storages.add_entity((USIZE(0), U64(1)));
+    /// let entity2 = all_storages.add_entity((USIZE(2), U64(3)));
     ///
     /// all_storages.delete_entity(entity1);
     ///
-    /// all_storages.run(|usizes: View<USIZE>, u32s: View<U32>| {
+    /// all_storages.run(|usizes: View<USIZE>, u64s: View<U64>| {
     ///     assert!((&usizes).get(entity1).is_err());
-    ///     assert!((&u32s).get(entity1).is_err());
+    ///     assert!((&u64s).get(entity1).is_err());
     ///     assert_eq!(usizes.get(entity2), Ok(&USIZE(2)));
-    ///     assert_eq!(u32s.get(entity2), Ok(&U32(3)));
+    ///     assert_eq!(u64s.get(entity2), Ok(&U64(3)));
     /// });
     /// ```
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
@@ -261,7 +261,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -269,7 +269,7 @@ impl AllStorages {
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
+    /// let entity = all_storages.add_entity((U64(0), USIZE(1)));
     ///
     /// all_storages.strip(entity);
     /// ```
@@ -290,7 +290,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, SparseSet, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -298,9 +298,9 @@ impl AllStorages {
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
+    /// let entity = all_storages.add_entity((U64(0), USIZE(1)));
     ///
-    /// all_storages.retain::<SparseSet<U32>>(entity);
+    /// all_storages.retain::<SparseSet<U64>>(entity);
     /// ```
     pub fn retain<S: TupleRetain>(&mut self, entity: EntityId) {
         S::retain(self, entity);
@@ -364,7 +364,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -372,8 +372,8 @@ impl AllStorages {
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity0 = all_storages.add_entity((U32(0),));
-    /// let entity1 = all_storages.add_entity((U32(1), USIZE(11)));
+    /// let entity0 = all_storages.add_entity((U64(0),));
+    /// let entity1 = all_storages.add_entity((U64(1), USIZE(11)));
     /// ```
     #[inline]
     pub fn add_entity<T: TupleAddComponent>(&mut self, component: T) -> EntityId {
@@ -391,7 +391,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -399,7 +399,7 @@ impl AllStorages {
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let new_entities = all_storages.bulk_add_entity((10..20).map(|i| (U32(i as u32), USIZE(i))));
+    /// let new_entities = all_storages.bulk_add_entity((10..20).map(|i| (U64(i as u64), USIZE(i))));
     /// ```
     #[inline]
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
@@ -419,7 +419,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -430,9 +430,9 @@ impl AllStorages {
     /// // make an empty entity
     /// let entity = all_storages.add_entity(());
     ///
-    /// all_storages.add_component(entity, (U32(0),));
-    /// // entity already had a `u32` component so it will be replaced
-    /// all_storages.add_component(entity, (U32(1), USIZE(11)));
+    /// all_storages.add_component(entity, (U64(0),));
+    /// // entity already had a `u64` component so it will be replaced
+    /// all_storages.add_component(entity, (U64(1), USIZE(11)));
     /// ```
     #[track_caller]
     #[inline]
@@ -456,7 +456,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -464,9 +464,9 @@ impl AllStorages {
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
+    /// let entity = all_storages.add_entity((U64(0), USIZE(1)));
     ///
-    /// all_storages.delete_component::<(U32,)>(entity);
+    /// all_storages.delete_component::<(U64,)>(entity);
     /// ```
     #[inline]
     pub fn delete_component<C: TupleDelete>(&mut self, entity: EntityId) {
@@ -481,7 +481,7 @@ impl AllStorages {
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
     /// #[derive(Component, Debug, PartialEq, Eq)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -489,10 +489,10 @@ impl AllStorages {
     /// let mut world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity = all_storages.add_entity((U32(0), USIZE(1)));
+    /// let entity = all_storages.add_entity((U64(0), USIZE(1)));
     ///
-    /// let (i,) = all_storages.remove::<(U32,)>(entity);
-    /// assert_eq!(i, Some(U32(0)));
+    /// let (i,) = all_storages.remove::<(U64,)>(entity);
+    /// assert_eq!(i, Some(U64(0)));
     /// ```
     #[inline]
     pub fn remove<C: TupleRemove>(&mut self, entity: EntityId) -> C::Out {
@@ -576,7 +576,7 @@ You can use:
 use shipyard::{AllStoragesViewMut, Component, EntitiesView, View, ViewMut, World};
 
 #[derive(Component)]
-struct U32(u32);
+struct U64(u64);
 
 #[derive(Component)]
 struct USIZE(usize);
@@ -585,7 +585,7 @@ let world = World::new();
 
 let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
-let u32s = all_storages.borrow::<View<U32>>().unwrap();
+let u64s = all_storages.borrow::<View<U64>>().unwrap();
 let (entities, mut usizes) = all_storages
     .borrow::<(EntitiesView, ViewMut<USIZE>)>()
     .unwrap();
@@ -696,9 +696,7 @@ You can use:
         data: Data,
     ) -> R {
         #[cfg(feature = "tracing")]
-        let system_span = tracing::info_span!("system", name = ?type_name::<S>());
-        #[cfg(feature = "tracing")]
-        let _system_span = system_span.enter();
+        let _system_span = tracing::info_span!("system", name = ?type_name::<S>()).entered();
 
         system
             .run((data,), self)
@@ -785,7 +783,7 @@ use shipyard::{AllStoragesViewMut, Component, View, ViewMut, World};
 struct I32(i32);
 
 #[derive(Component)]
-struct U32(u32);
+struct U64(u64);
 
 #[derive(Component)]
 struct USIZE(usize);
@@ -799,7 +797,7 @@ let world = World::new();
 let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
 
 all_storages
-    .run(|usizes: View<USIZE>, mut u32s: ViewMut<U32>| {
+    .run(|usizes: View<USIZE>, mut u64s: ViewMut<U64>| {
         // -- snip --
     });
 
@@ -817,9 +815,7 @@ let i = all_storages.run(sys1);
     #[track_caller]
     pub fn run<'s, B, R, S: crate::system::AllSystem<'s, (), B, R>>(&'s self, system: S) -> R {
         #[cfg(feature = "tracing")]
-        let system_span = tracing::info_span!("system", name = ?type_name::<S>());
-        #[cfg(feature = "tracing")]
-        let _system_span = system_span.enter();
+        let _system_span = tracing::info_span!("system", name = ?type_name::<S>()).entered();
 
         system
             .run((), self)
@@ -836,7 +832,7 @@ let i = all_storages.run(sys1);
     /// use shipyard::{AllStoragesViewMut, Component, SparseSet, World};
     ///
     /// #[derive(Component)]
-    /// struct U32(u32);
+    /// struct U64(u64);
     ///
     /// #[derive(Component)]
     /// struct USIZE(usize);
@@ -847,14 +843,14 @@ let i = all_storages.run(sys1);
     /// let world = World::new();
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
-    /// let entity0 = all_storages.add_entity((U32(0),));
+    /// let entity0 = all_storages.add_entity((U64(0),));
     /// let entity1 = all_storages.add_entity((USIZE(1),));
     /// let entity2 = all_storages.add_entity((STR("2"),));
     ///
     /// // deletes `entity2`
     /// all_storages.delete_any::<SparseSet<STR>>();
     /// // deletes `entity0` and `entity1`
-    /// all_storages.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
+    /// all_storages.delete_any::<(SparseSet<U64>, SparseSet<USIZE>)>();
     /// ```
     pub fn delete_any<T: TupleDeleteAny>(&mut self) {
         T::delete_any(self);
@@ -947,7 +943,7 @@ let i = all_storages.run(sys1);
     }
 
     #[inline]
-    pub(crate) fn get_current(&self) -> u32 {
+    pub(crate) fn get_current(&self) -> u64 {
         self.counter
             .fetch_add(1, core::sync::atomic::Ordering::Acquire)
     }

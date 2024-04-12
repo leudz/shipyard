@@ -22,8 +22,8 @@ pub trait AllStoragesBorrow<'a>: Borrow<'a> {
     /// This function is where the actual borrowing happens.
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage>;
 }
 
@@ -31,8 +31,8 @@ impl<'a> AllStoragesBorrow<'a> for UnitBorrower {
     #[inline]
     fn all_borrow(
         _: &'a AllStorages,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage>
     where
         Self: Sized,
@@ -45,8 +45,8 @@ impl<'a> AllStoragesBorrow<'a> for EntitiesBorrower {
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let entities = all_storages.entities()?;
 
@@ -64,8 +64,8 @@ impl<'a> AllStoragesBorrow<'a> for EntitiesMutBorrower {
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        _last_run: Option<u32>,
-        _current: u32,
+        _last_run: Option<u64>,
+        _current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let entities = all_storages.entities_mut()?;
 
@@ -86,8 +86,8 @@ where
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert(SparseSet::new)?;
 
@@ -97,7 +97,7 @@ where
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
             last_removal_or_deletion: last_run
-                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
+                .unwrap_or_else(|| current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -114,8 +114,8 @@ where
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send(SparseSet::new)?;
 
@@ -124,7 +124,7 @@ where
         Ok(NonSend(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -141,8 +141,8 @@ where
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync(SparseSet::new)?;
 
@@ -151,7 +151,7 @@ where
         Ok(NonSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -165,8 +165,8 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewBorrower<T>> {
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_sync(SparseSet::new)?;
 
@@ -175,7 +175,7 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewBorrower<T>> {
         Ok(NonSendSync(View {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             borrow: Some(borrow),
@@ -191,8 +191,8 @@ where
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_mut(SparseSet::new)?;
 
@@ -202,7 +202,7 @@ where
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
             last_removal_or_deletion: last_run
-                .unwrap_or_else(|| current.wrapping_sub(u32::MAX / 2)),
+                .unwrap_or_else(|| current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -219,8 +219,8 @@ where
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_mut(SparseSet::new)?;
 
@@ -229,7 +229,7 @@ where
         Ok(NonSend(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -246,8 +246,8 @@ where
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_sync_mut(SparseSet::new)?;
 
@@ -256,7 +256,7 @@ where
         Ok(NonSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -270,8 +270,8 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewMutBorrower<T>>
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_or_insert_non_send_sync_mut(SparseSet::new)?;
 
@@ -280,7 +280,7 @@ impl<'a, T: Component> AllStoragesBorrow<'a> for NonSendSync<ViewMutBorrower<T>>
         Ok(NonSendSync(ViewMut {
             last_insert: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modification),
-            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u32::MAX / 2)),
+            last_removal_or_deletion: last_run.unwrap_or(current.wrapping_sub(u64::MAX / 2)),
             current,
             sparse_set,
             _borrow: Some(borrow),
@@ -293,8 +293,8 @@ impl<'a, T: Send + Sync + Unique> AllStoragesBorrow<'a> for UniqueViewBorrower<T
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -316,8 +316,8 @@ impl<'a, T: Sync + Unique> AllStoragesBorrow<'a> for NonSend<UniqueViewBorrower<
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -339,8 +339,8 @@ impl<'a, T: Send + Unique> AllStoragesBorrow<'a> for NonSync<UniqueViewBorrower<
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -362,8 +362,8 @@ impl<'a, T: Unique> AllStoragesBorrow<'a> for NonSendSync<UniqueViewBorrower<T>>
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage()?;
 
@@ -384,8 +384,8 @@ impl<'a, T: Send + Sync + Unique> AllStoragesBorrow<'a> for UniqueViewMutBorrowe
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -407,8 +407,8 @@ impl<'a, T: Sync + Unique> AllStoragesBorrow<'a> for NonSend<UniqueViewMutBorrow
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -430,8 +430,8 @@ impl<'a, T: Send + Unique> AllStoragesBorrow<'a> for NonSync<UniqueViewMutBorrow
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -453,8 +453,8 @@ impl<'a, T: Unique> AllStoragesBorrow<'a> for NonSendSync<UniqueViewMutBorrower<
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
 
@@ -475,8 +475,8 @@ impl<'a, T: AllStoragesBorrow<'a>> AllStoragesBorrow<'a> for Option<T> {
     #[inline]
     fn all_borrow(
         all_storages: &'a AllStorages,
-        last_run: Option<u32>,
-        current: u32,
+        last_run: Option<u64>,
+        current: u64,
     ) -> Result<Self::View, error::GetStorage> {
         Ok(T::all_borrow(all_storages, last_run, current).ok())
     }
@@ -488,8 +488,8 @@ macro_rules! impl_all_storages_borrow {
             #[inline]
             fn all_borrow(
                 all_storages: &'a AllStorages,
-                last_run: Option<u32>,
-                current: u32
+                last_run: Option<u64>,
+                current: u64
             ) -> Result<Self::View, error::GetStorage> {
                 Ok(($($type::all_borrow(all_storages, last_run, current)?,)+))
             }

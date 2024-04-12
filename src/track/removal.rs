@@ -15,8 +15,8 @@ impl Tracking for Removal {
     fn is_removed<T: Component<Tracking = Self>>(
         sparse_set: &SparseSet<T, Self>,
         entity: EntityId,
-        last: u32,
-        current: u32,
+        last: u64,
+        current: u64,
     ) -> bool {
         sparse_set.removal_data.iter().any(|(id, timestamp)| {
             *id == entity && super::is_track_within_bounds(*timestamp, last, current)
@@ -27,7 +27,7 @@ impl Tracking for Removal {
     fn remove<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        current: u32,
+        current: u64,
     ) -> Option<T> {
         let component = sparse_set.actual_remove(entity);
 
@@ -42,12 +42,12 @@ impl Tracking for Removal {
     fn delete<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
         entity: EntityId,
-        _current: u32,
+        _current: u64,
     ) -> bool {
         sparse_set.actual_remove(entity).is_some()
     }
 
-    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u32) {
+    fn clear<T: Component<Tracking = Self>>(sparse_set: &mut SparseSet<T, Self>, current: u64) {
         for &id in &sparse_set.dense {
             unsafe {
                 *sparse_set.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -127,7 +127,7 @@ impl Tracking for Removal {
 
     fn drain<T: Component<Tracking = Self>>(
         sparse_set: &mut SparseSet<T, Self>,
-        current: u32,
+        current: u64,
     ) -> SparseSetDrain<'_, T> {
         sparse_set
             .removal_data
@@ -164,7 +164,7 @@ impl Tracking for Removal {
         timestamp: crate::TrackingTimestamp,
     ) {
         sparse_set.removal_data.retain(|(_, t)| {
-            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u32::MAX / 2), *t)
+            super::is_track_within_bounds(timestamp.0, t.wrapping_sub(u64::MAX / 2), *t)
         });
     }
 }
