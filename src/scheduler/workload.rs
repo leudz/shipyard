@@ -21,6 +21,8 @@ use core::any::Any;
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::error::Error;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 /// Used to create a [`Workload`].
 ///
@@ -408,6 +410,121 @@ impl Workload {
             default,
         )
     }
+
+    pub fn print_workload(&self) {
+        Self::check_cycle(self, &self.systems, |e| &e.after_all, "after_all", " <- ");
+        Self::check_cycle(self, &self.systems, |e| &e.before_all, "before_all", " -> ");
+    }
+
+    fn check_cycle(
+        &self,
+        workload_systems: &Vec<WorkloadSystem>,
+        dependency_selector: impl Fn(&WorkloadSystem) -> &DedupedLabels,
+        dependency_name: &str,
+        dependency_direction: &str,
+    ) {
+        let mut dependent_tags = BTreeMap::new();
+        let mut systems = BTreeMap::new();
+        for system in workload_systems {
+            let system_name = Label::as_any(&system.display_name).downcast_ref::<&str>().unwrap();
+            let system_name = system_name.split("::").last().unwrap();
+
+            for tag in &system.tags {
+                let tag = Label::as_any(tag).downcast_ref::<&str>();
+                if tag.is_none() {
+                    continue;
+                }
+                let tag = *tag.unwrap();
+
+                for dependent in dependency_selector(system) {
+                    let dependent = Label::as_any(dependent).downcast_ref::<&str>();
+                    if dependent.is_none() {
+                        continue;
+                    }
+                    let dependent = *dependent.unwrap();
+
+                    dependent_tags
+                        .entry(tag)
+                        .or_insert_with(BTreeSet::new)
+                        .insert(dependent);
+
+                    systems
+                        .entry((tag, dependent))
+                        .or_insert_with(BTreeSet::new)
+                        .insert(system_name);
+                }
+            }
+        }
+
+        let mut visited = BTreeSet::new();
+        for (tag, dependents) in &dependent_tags {
+            visited = find_cycle(
+                tag,
+                tag,
+                dependents,
+                &dependent_tags,
+                &systems,
+                "",
+                &visited,
+                dependency_name,
+                dependency_direction,
+            );
+        }
+
+        fn find_cycle<'a>(
+            start_tag: &'a str,
+            tag: &'a str,
+            dependents: &BTreeSet<&'a str>,
+            dependent_tags: &BTreeMap<&'a str, BTreeSet<&'a str>>,
+            systems: &BTreeMap<(&'a str, &'a str), BTreeSet<&'a str>>,
+            log: &'a str,
+            visited: &BTreeSet<&'a str>,
+            dependency_name: &str,
+            dependency_direction: &str,
+        ) -> BTreeSet<&'a str> {
+            let dependents = dependent_tags.get(tag);
+            if dependents.is_none() {
+                return visited.clone();
+            }
+
+            let mut visited = visited.clone();
+            if !visited.insert(tag) {
+                return visited;
+            }
+
+            for &dependent in dependents.unwrap() {
+                let system = systems.get(&(tag, dependent));
+                if system.is_none() {
+                    continue;
+                }
+                let system = system.unwrap();
+                let log = format!("{log}\n  {tag}{dependency_direction}{dependent} in {system:?}");
+                if start_tag == dependent {
+                    println!("circular {dependency_name}({}):{log}", log.bytes().filter(|&b| b == b'\n').count());
+                    continue;
+                }
+                let next_dependents = dependent_tags.get(dependent);
+                if next_dependents.is_none() {
+                    continue;
+                }
+                let next_dependents = next_dependents.unwrap();
+                find_cycle(
+                    start_tag,
+                    dependent,
+                    next_dependents,
+                    dependent_tags,
+                    systems,
+                    &log,
+                    &visited,
+                    dependency_name,
+                    dependency_direction,
+                );
+            }
+
+            return visited;
+        }
+    }
+
     /// Returns the first [`Unique`] storage borrowed by this workload that is not present in `world`.\
     /// If the workload contains nested workloads they have to be present in the `World`.
     ///
