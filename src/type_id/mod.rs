@@ -34,11 +34,23 @@ impl From<core::any::TypeId> for TypeId {
                 // This is technically unsound, core::any::TypeId has rust layout
                 // but there is no other way to get the full value anymore
 
-                let type_id_ptr: *const core::any::TypeId = &type_id;
-                let type_id_ptr = type_id_ptr as *const TypeId;
-                *type_id_ptr
+                match core::mem::align_of::<core::any::TypeId>() {
+                    8 => {
+                        let type_id_ptr: *const core::any::TypeId = &type_id;
+                        let type_id_ptr = type_id_ptr as *const (u64, u64);
+                        let type_id = *type_id_ptr;
+                        let type_id = ((type_id.0 as u128) << 64) | type_id.1 as u128;
+                        TypeId(type_id)
+                    }
+                    16 => {
+                        let type_id_ptr: *const core::any::TypeId = &type_id;
+                        let type_id_ptr = type_id_ptr as *const TypeId;
+                        *type_id_ptr
+                    }
+                    _ => panic!("Compiler version not supported, please report it to https://github.com/leudz/shipyard/issues or Zulip"),
+                }
             },
-            _ => panic!("Compiler version not supported"),
+            _ => panic!("Compiler version not supported, please report it to https://github.com/leudz/shipyard/issues or Zulip"),
         }
     }
 }
