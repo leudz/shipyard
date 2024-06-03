@@ -97,7 +97,7 @@ impl<T> RwLock<T> {
     pub(crate) fn new_custom(lock: Box<dyn ShipyardRwLock + Send + Sync>, value: T) -> Self {
         RwLock::Custom {
             lock,
-            value: core::cell::UnsafeCell::new(value),
+            value: UnsafeCell::new(value),
         }
     }
     #[cfg(feature = "std")]
