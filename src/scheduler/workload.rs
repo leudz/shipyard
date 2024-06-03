@@ -188,7 +188,7 @@ impl Workload {
             tags: vec![label],
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
-            overwritten_name: false,
+            overwritten_name: true,
             require_before: DedupedLabels::new(),
             require_after: DedupedLabels::new(),
             barriers: Vec::new(),
