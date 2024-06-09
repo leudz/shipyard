@@ -11,7 +11,8 @@ use core::hash::{Hash, Hasher};
 pub struct TypeId(pub(crate) u128);
 
 impl TypeId {
-    pub(crate) fn of<T: ?Sized + 'static>() -> Self {
+    /// Returns the `TypeId` of the type this generic function has been instantiated with.
+    pub fn of<T: ?Sized + 'static>() -> Self {
         core::any::TypeId::of::<T>().into()
     }
     #[cfg(test)]

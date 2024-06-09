@@ -35,22 +35,32 @@ use alloc::vec::Vec;
 /// [`Workload`]: crate::Workload
 #[allow(clippy::type_complexity)]
 pub struct WorkloadSystem {
-    #[doc(hidden)]
-    pub(crate) type_id: TypeId,
-    pub(crate) display_name: Box<dyn Label>,
-    pub(crate) system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
+    #[allow(missing_docs)]
+    pub type_id: TypeId,
+    #[allow(missing_docs)]
+    pub display_name: Box<dyn Label>,
+    #[allow(missing_docs)]
+    pub system_fn: Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>,
     /// access information
-    pub(crate) borrow_constraints: Vec<TypeInfo>,
-    pub(crate) tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
-    pub(crate) generator: Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>,
-    pub(crate) run_if:
-        Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>>,
-    pub(crate) tags: Vec<Box<dyn Label>>,
-    pub(crate) before_all: DedupedLabels,
-    pub(crate) after_all: DedupedLabels,
-    pub(crate) require_in_workload: DedupedLabels,
-    pub(crate) require_before: DedupedLabels,
-    pub(crate) require_after: DedupedLabels,
+    pub borrow_constraints: Vec<TypeInfo>,
+    /// Generates the tracking to enable for this system's views
+    pub tracking_to_enable: Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
+    /// Generates constraints and system type id
+    pub generator: Box<dyn Fn(&mut Vec<TypeInfo>) -> TypeId + Send + Sync + 'static>,
+    #[allow(missing_docs)]
+    pub run_if: Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync + 'static>>,
+    #[allow(missing_docs)]
+    pub tags: Vec<Box<dyn Label>>,
+    #[allow(missing_docs)]
+    pub before_all: DedupedLabels,
+    #[allow(missing_docs)]
+    pub after_all: DedupedLabels,
+    #[allow(missing_docs)]
+    pub require_in_workload: DedupedLabels,
+    #[allow(missing_docs)]
+    pub require_before: DedupedLabels,
+    #[allow(missing_docs)]
+    pub require_after: DedupedLabels,
 }
 
 impl Extend<WorkloadSystem> for Workload {

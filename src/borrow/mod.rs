@@ -21,6 +21,7 @@ use crate::atomic_refcell::{ARef, ARefMut, SharedBorrow};
 use crate::component::{Component, Unique};
 use crate::error;
 use crate::sparse_set::SparseSet;
+use crate::system::Nothing;
 use crate::tracking::{Track, Tracking, TrackingTimestamp};
 use crate::unique::UniqueStorage;
 use crate::views::{EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
@@ -84,6 +85,20 @@ pub trait Borrow {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage>;
+}
+
+// this is needed for downstream crate to impl System
+impl Borrow for Nothing {
+    type View<'a> = ();
+
+    fn borrow<'a>(
+        _all_storages: &'a AllStorages,
+        _all_borrow: Option<SharedBorrow<'a>>,
+        _last_run: Option<TrackingTimestamp>,
+        _current: TrackingTimestamp,
+    ) -> Result<Self::View<'a>, error::GetStorage> {
+        Ok(())
+    }
 }
 
 impl Borrow for () {

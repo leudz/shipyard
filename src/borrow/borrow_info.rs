@@ -12,6 +12,7 @@ use crate::error;
 use crate::scheduler::TypeInfo;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
+use crate::system::Nothing;
 use crate::tracking::{Track, Tracking};
 use crate::unique::UniqueStorage;
 use crate::views::{
@@ -64,6 +65,12 @@ pub unsafe trait BorrowInfo {
     fn enable_tracking(
         enable_tracking_fn: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>,
     );
+}
+
+// this is needed for downstream crates to impl IntoWorkloadSystem
+unsafe impl BorrowInfo for Nothing {
+    fn borrow_info(_: &mut Vec<TypeInfo>) {}
+    fn enable_tracking(_: &mut Vec<fn(&AllStorages) -> Result<(), error::GetStorage>>) {}
 }
 
 unsafe impl BorrowInfo for () {
