@@ -2,13 +2,13 @@ use super::IntoAbstract;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
-use crate::tracking::{Inserted, InsertionTracking, Track};
+use crate::tracking::{Inserted, InsertionTracking};
 use crate::type_id::TypeId;
 use crate::views::{View, ViewMut};
 
-impl<'tmp, 'v, T: Component, TRACK> IntoAbstract for Inserted<&'tmp View<'v, T, TRACK>>
+impl<'tmp, 'v, T: Component, Track> IntoAbstract for Inserted<&'tmp View<'v, T, Track>>
 where
-    Track<TRACK>: InsertionTracking,
+    Track: InsertionTracking,
 {
     type AbsView = Inserted<FullRawWindow<'tmp, T>>;
 
@@ -33,9 +33,9 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for Inserted<&'b ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for Inserted<&'b ViewMut<'a, T, Track>>
 where
-    Track<TRACK>: InsertionTracking,
+    Track: InsertionTracking,
 {
     type AbsView = Inserted<FullRawWindow<'b, T>>;
 
@@ -60,9 +60,9 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for Inserted<&'b mut ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for Inserted<&'b mut ViewMut<'a, T, Track>>
 where
-    Track<TRACK>: InsertionTracking,
+    Track: InsertionTracking,
 {
     type AbsView = Inserted<FullRawWindowMut<'b, T>>;
 

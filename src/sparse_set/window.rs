@@ -1,7 +1,7 @@
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::tracking::TrackingTimestamp;
+use crate::tracking::{Tracking, TrackingTimestamp};
 use crate::views::{View, ViewMut};
 use alloc::boxed::Box;
 use core::hint::unreachable_unchecked;
@@ -26,7 +26,7 @@ unsafe impl<T: Send + Component> Send for FullRawWindow<'_, T> {}
 
 impl<'w, T: Component> FullRawWindow<'w, T> {
     #[inline]
-    pub(crate) fn from_view<TRACK>(view: &View<'_, T, TRACK>) -> Self {
+    pub(crate) fn from_view<Track: Tracking>(view: &View<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
@@ -46,8 +46,8 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         }
     }
     #[inline]
-    pub(crate) fn from_owned_view<TRACK>(
-        view: View<'_, T, TRACK>,
+    pub(crate) fn from_owned_view<Track: Tracking>(
+        view: View<'_, T, Track>,
     ) -> (Self, Option<SharedBorrow<'_>>, SharedBorrow<'_>) {
         let View {
             sparse_set,
@@ -82,7 +82,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         )
     }
     #[inline]
-    pub(crate) fn from_view_mut<TRACK>(view: &ViewMut<'_, T, TRACK>) -> Self {
+    pub(crate) fn from_view_mut<Track: Tracking>(view: &ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;

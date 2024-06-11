@@ -14,7 +14,9 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);
-impl Component for USIZE {}
+impl Component for USIZE {
+    type Tracking = track::Untracked;
+}
 
 impl Sum for USIZE {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -24,7 +26,9 @@ impl Sum for USIZE {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn run() {
@@ -258,7 +262,9 @@ fn add_component_with_old_key() {
 fn par_update_pack() {
     #[derive(PartialEq, Eq, Debug, Clone, Copy)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     impl Sum for USIZE {
         fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -314,7 +320,9 @@ fn par_update_pack() {
 fn par_multiple_update_pack() {
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct U32(u32);
-    impl Component for U32 {}
+    impl Component for U32 {
+        type Tracking = track::Untracked;
+    }
 
     use rayon::prelude::*;
 
@@ -385,7 +393,9 @@ fn par_multiple_update_pack() {
 fn par_update_filter() {
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     use rayon::prelude::*;
 

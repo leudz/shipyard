@@ -4,13 +4,17 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn no_pack() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
@@ -37,7 +41,9 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
     world.track_all::<USIZE>();
@@ -73,7 +79,9 @@ fn update() {
 fn old_key() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 
@@ -100,7 +108,9 @@ fn old_key() {
 fn newer_key() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 
@@ -126,7 +136,9 @@ fn newer_key() {
 fn track_reset_with_timestamp() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
 

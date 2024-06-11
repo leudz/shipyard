@@ -2,17 +2,18 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::{Removal, RemovalConst};
+use crate::track::Removal;
 use crate::tracking::{
-    map_deletion_data, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
-    TrackingTimestamp,
+    map_deletion_data, RemovalOrDeletionTracking, RemovalTracking, Tracking, TrackingTimestamp,
 };
 
-impl Sealed for Track<Removal> {}
+impl Sealed for Removal {}
 
-impl Tracking for Track<Removal> {
-    fn as_const() -> u32 {
-        RemovalConst
+impl Tracking for Removal {
+    const VALUE: u32 = 0b1000;
+
+    fn name() -> &'static str {
+        "Removal"
     }
 
     fn is_removed<T: Component>(
@@ -28,8 +29,8 @@ impl Tracking for Track<Removal> {
     }
 }
 
-impl RemovalTracking for Track<Removal> {}
-impl RemovalOrDeletionTracking for Track<Removal> {
+impl RemovalTracking for Removal {}
+impl RemovalOrDeletionTracking for Removal {
     #[allow(trivial_casts)]
     fn removed_or_deleted<T: Component>(
         sparse_set: &SparseSet<T>,

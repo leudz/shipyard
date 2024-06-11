@@ -3,6 +3,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::r#mut::Mut;
 use crate::sparse_set::SparseSet;
+use crate::tracking::Tracking;
 use crate::views::{View, ViewMut};
 use core::any::type_name;
 
@@ -46,7 +47,7 @@ impl<'a, T: Component> Get for &'a SparseSet<T> {
     }
 }
 
-impl<'a, 'b, T: Component, TRACK> Get for &'b View<'a, T, TRACK> {
+impl<'a, 'b, T: Component, Track: Tracking> Get for &'b View<'a, T, Track> {
     type Out = &'b T;
 
     #[inline]
@@ -60,7 +61,7 @@ impl<'a, 'b, T: Component, TRACK> Get for &'b View<'a, T, TRACK> {
     }
 }
 
-impl<'a, 'b, T: Component, TRACK> Get for &'b ViewMut<'a, T, TRACK> {
+impl<'a, 'b, T: Component, Track: Tracking> Get for &'b ViewMut<'a, T, Track> {
     type Out = &'b T;
 
     #[inline]
@@ -74,7 +75,7 @@ impl<'a, 'b, T: Component, TRACK> Get for &'b ViewMut<'a, T, TRACK> {
     }
 }
 
-impl<'a, 'b, T: Component, TRACK> Get for &'b mut ViewMut<'a, T, TRACK> {
+impl<'a, 'b, T: Component, Track: Tracking> Get for &'b mut ViewMut<'a, T, Track> {
     type Out = Mut<'b, T>;
 
     #[inline]

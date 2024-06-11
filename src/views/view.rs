@@ -8,7 +8,7 @@ use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
     DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
+    Modified, RemovalTracking, Tracking,
 };
 use crate::{error, TrackingTimestamp};
 use core::fmt;
@@ -16,7 +16,7 @@ use core::marker::PhantomData;
 use core::ops::Deref;
 
 /// Shared view over a component storage.
-pub struct View<'a, T: Component, TRACK = track::Untracked> {
+pub struct View<'a, T: Component, Track: Tracking = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: SharedBorrow<'a>,
@@ -24,12 +24,59 @@ pub struct View<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) last_modification: TrackingTimestamp,
     pub(crate) last_removal_or_deletion: TrackingTimestamp,
     pub(crate) current: TrackingTimestamp,
-    pub(crate) phantom: PhantomData<TRACK>,
+    pub(crate) phantom: PhantomData<Track>,
 }
 
-impl<'a, T: Component, TRACK> View<'a, T, TRACK>
+impl<'a, T: Component, Track: Tracking> View<'a, T, Track> {
+    /// Check that the view tracks insertion if the component is tracking it.
+    pub const ASSERT_VIEW_TRACKING_INSERTION: () = assert!(
+        Track::VALUE & 0b0001 >= <T::Tracking as Tracking>::VALUE & 0b0001,
+        "Component is tracking insertion but View isn't"
+    );
+    /// Check that the view tracks modification if the component is tracking it.
+    pub const ASSERT_VIEW_TRACKING_MODIFICATION: () = assert!(
+        Track::VALUE & 0b0010 >= <T::Tracking as Tracking>::VALUE & 0b0010,
+        "Component is tracking modification but View isn't"
+    );
+    /// Check that the view tracks deletion if the component is tracking it.
+    pub const ASSERT_VIEW_TRACKING_DELETION: () = assert!(
+        Track::VALUE & 0b0100 >= <T::Tracking as Tracking>::VALUE & 0b0100,
+        "Component is tracking deletion but View isn't"
+    );
+    /// Check that the view tracks removal if the component is tracking it.
+    pub const ASSERT_VIEW_TRACKING_REMOVAL: () = assert!(
+        Track::VALUE & 0b1000 >= <T::Tracking as Tracking>::VALUE & 0b1000,
+        "Component is tracking removal but View isn't"
+    );
+
+    pub(crate) fn new(
+        sparse_set: &'a SparseSet<T>,
+        borrow: SharedBorrow<'a>,
+        all_borrow: Option<SharedBorrow<'a>>,
+        last_run: Option<TrackingTimestamp>,
+        current: TrackingTimestamp,
+    ) -> Self {
+        let _: () = Self::ASSERT_VIEW_TRACKING_INSERTION;
+        let _: () = Self::ASSERT_VIEW_TRACKING_MODIFICATION;
+        let _: () = Self::ASSERT_VIEW_TRACKING_DELETION;
+        let _: () = Self::ASSERT_VIEW_TRACKING_REMOVAL;
+
+        Self {
+            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
+            last_modification: last_run.unwrap_or(sparse_set.last_modified),
+            last_removal_or_deletion: last_run.unwrap_or(current),
+            current,
+            sparse_set,
+            borrow,
+            all_borrow,
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'a, T: Component, Track> View<'a, T, Track>
 where
-    Track<TRACK>: Tracking,
+    Track: Tracking,
 {
     /// Replaces the timestamp starting the tracking time window for insertions.
     ///
@@ -99,7 +146,9 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
     /// use shipyard::{track, Component, SparseSet, StorageId, View, World};
     ///
     /// struct ScriptingComponent(Vec<u8>);
-    /// impl Component for ScriptingComponent {}
+    /// impl Component for ScriptingComponent {
+    ///     type Tracking = track::Untracked;
+    /// }
     ///
     /// let world = World::new();
     ///
@@ -125,6 +174,11 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
         let (storage, borrow) = unsafe { ARef::destructure(storage) };
 
         if let Some(sparse_set) = storage.as_any().downcast_ref() {
+            let _: () = Self::ASSERT_VIEW_TRACKING_INSERTION;
+            let _: () = Self::ASSERT_VIEW_TRACKING_MODIFICATION;
+            let _: () = Self::ASSERT_VIEW_TRACKING_DELETION;
+            let _: () = Self::ASSERT_VIEW_TRACKING_REMOVAL;
+
             Ok(View {
                 sparse_set,
                 all_borrow: Some(all_borrow),
@@ -141,9 +195,9 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
     }
 }
 
-impl<TRACK, T: Component> View<'_, T, TRACK>
+impl<Track, T: Component> View<'_, T, Track>
 where
-    Track<TRACK>: InsertionTracking,
+    Track: InsertionTracking,
 {
     /// Wraps this view to be able to iterate *inserted* components.
     #[inline]
@@ -156,13 +210,13 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
+        Track::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
     }
 }
 
-impl<TRACK, T: Component> View<'_, T, TRACK>
+impl<Track, T: Component> View<'_, T, Track>
 where
-    Track<TRACK>: ModificationTracking,
+    Track: ModificationTracking,
 {
     /// Wraps this view to be able to iterate *modified* components.
     #[inline]
@@ -175,7 +229,7 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_modified(
+        Track::is_modified(
             self.sparse_set,
             entity,
             self.last_modification,
@@ -184,9 +238,9 @@ where
     }
 }
 
-impl<TRACK, T: Component> View<'_, T, TRACK>
+impl<Track, T: Component> View<'_, T, Track>
 where
-    Track<TRACK>: InsertionTracking + ModificationTracking,
+    Track: InsertionTracking + ModificationTracking,
 {
     /// Wraps this view to be able to iterate *inserted* and *modified* components.
     #[inline]
@@ -199,8 +253,8 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
-            || Track::<TRACK>::is_modified(
+        Track::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
+            || Track::is_modified(
                 self.sparse_set,
                 entity,
                 self.last_modification,
@@ -209,9 +263,9 @@ where
     }
 }
 
-impl<TRACK, T: Component> View<'_, T, TRACK>
+impl<Track, T: Component> View<'_, T, Track>
 where
-    Track<TRACK>: DeletionTracking,
+    Track: DeletionTracking,
 {
     /// Returns the *deleted* components of a storage tracking deletion.
     pub fn deleted(&self) -> impl Iterator<Item = (EntityId, &T)> + '_ {
@@ -232,13 +286,13 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_deleted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
+        Track::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
     }
 }
 
-impl<TRACK, T: Component> View<'_, T, TRACK>
+impl<Track, T: Component> View<'_, T, Track>
 where
-    Track<TRACK>: RemovalTracking,
+    Track: RemovalTracking,
 {
     /// Returns the ids of *removed* components of a storage tracking removal.
     pub fn removed(&self) -> impl Iterator<Item = EntityId> + '_ {
@@ -259,25 +313,23 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_removed(self, entity, self.last_removal_or_deletion, self.current)
+        Track::is_removed(self, entity, self.last_removal_or_deletion, self.current)
     }
 }
 
-impl<TRACK, T: Component> View<'_, T, TRACK>
+impl<Track, T: Component> View<'_, T, Track>
 where
-    Track<TRACK>: RemovalTracking + DeletionTracking,
+    Track: RemovalTracking + DeletionTracking,
 {
     /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
-        Track::<TRACK>::removed_or_deleted(self.sparse_set).filter_map(
-            move |(entity, timestamp)| {
-                if timestamp.is_within(self.last_removal_or_deletion, self.current) {
-                    Some(entity)
-                } else {
-                    None
-                }
-            },
-        )
+        Track::removed_or_deleted(self.sparse_set).filter_map(move |(entity, timestamp)| {
+            if timestamp.is_within(self.last_removal_or_deletion, self.current) {
+                Some(entity)
+            } else {
+                None
+            }
+        })
     }
 
     /// Inside a workload returns `true` if `entity`'s component was deleted or removed since the last run of this system.\
@@ -285,12 +337,12 @@ where
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed_or_deleted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
-            || Track::<TRACK>::is_removed(self, entity, self.last_removal_or_deletion, self.current)
+        Track::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
+            || Track::is_removed(self, entity, self.last_removal_or_deletion, self.current)
     }
 }
 
-impl<'a, T: Component, TRACK> Deref for View<'a, T, TRACK> {
+impl<'a, T: Component, Track: Tracking> Deref for View<'a, T, Track> {
     type Target = SparseSet<T>;
 
     #[inline]
@@ -299,14 +351,14 @@ impl<'a, T: Component, TRACK> Deref for View<'a, T, TRACK> {
     }
 }
 
-impl<'a, T: Component, TRACK> AsRef<SparseSet<T>> for View<'a, T, TRACK> {
+impl<'a, T: Component, Track: Tracking> AsRef<SparseSet<T>> for View<'a, T, Track> {
     #[inline]
     fn as_ref(&self) -> &SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, TRACK> Clone for View<'a, T, TRACK> {
+impl<'a, T: Component, Track: Tracking> Clone for View<'a, T, Track> {
     #[inline]
     fn clone(&self) -> Self {
         View {
@@ -322,13 +374,13 @@ impl<'a, T: Component, TRACK> Clone for View<'a, T, TRACK> {
     }
 }
 
-impl<T: fmt::Debug + Component, TRACK> fmt::Debug for View<'_, T, TRACK> {
+impl<T: fmt::Debug + Component, Track: Tracking> fmt::Debug for View<'_, T, Track> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.sparse_set.fmt(f)
     }
 }
 
-impl<T: Component, TRACK> core::ops::Index<EntityId> for View<'_, T, TRACK> {
+impl<T: Component, Track: Tracking> core::ops::Index<EntityId> for View<'_, T, Track> {
     type Output = T;
     #[track_caller]
     #[inline]

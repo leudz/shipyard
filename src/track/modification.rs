@@ -2,14 +2,16 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::{Modification, ModificationConst};
-use crate::tracking::{ModificationTracking, Track, Tracking, TrackingTimestamp};
+use crate::track::Modification;
+use crate::tracking::{ModificationTracking, Tracking, TrackingTimestamp};
 
-impl Sealed for Track<Modification> {}
+impl Sealed for Modification {}
 
-impl Tracking for Track<Modification> {
-    fn as_const() -> u32 {
-        ModificationConst
+impl Tracking for Modification {
+    const VALUE: u32 = 0b0010;
+
+    fn name() -> &'static str {
+        "Modification"
     }
 
     fn is_modified<T: Component>(
@@ -26,4 +28,4 @@ impl Tracking for Track<Modification> {
     }
 }
 
-impl ModificationTracking for Track<Modification> {}
+impl ModificationTracking for Modification {}

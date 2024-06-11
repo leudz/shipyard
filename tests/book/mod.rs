@@ -1,4 +1,4 @@
-use shipyard::Component;
+use shipyard::{track, Component};
 
 mod add_components;
 mod add_entity;
@@ -24,11 +24,14 @@ mod world;
 struct Pos(f32, f32);
 impl Component for Pos {
     // We'll come back to this in a later chapter
+    type Tracking = track::Untracked;
 }
 
 #[derive(Debug)]
 struct Vel(f32, f32);
-impl Component for Vel {}
+impl Component for Vel {
+    type Tracking = track::Untracked;
+}
 // ANCHOR_END: component_manual
 
 impl Pos {

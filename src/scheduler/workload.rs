@@ -486,7 +486,9 @@ impl Workload {
     ) -> Result<(), error::UniquePresence> {
         struct ComponentType;
 
-        impl Component for ComponentType {}
+        impl Component for ComponentType {
+            type Tracking = crate::track::Untracked;
+        }
         impl Unique for ComponentType {}
 
         let all_storages = world
@@ -1650,9 +1652,15 @@ mod tests {
     struct U32(u32);
     struct U16(u16);
 
-    impl Component for Usize {}
-    impl Component for U32 {}
-    impl Component for U16 {}
+    impl Component for Usize {
+        type Tracking = crate::track::Untracked;
+    }
+    impl Component for U32 {
+        type Tracking = crate::track::Untracked;
+    }
+    impl Component for U16 {
+        type Tracking = crate::track::Untracked;
+    }
     impl Unique for Usize {}
     impl Unique for U32 {}
     impl Unique for U16 {}
@@ -1980,11 +1988,13 @@ mod tests {
     #[cfg(feature = "thread_local")]
     #[test]
     fn non_send() {
-        use crate::{NonSend, View, ViewMut, World};
+        use crate::{track, NonSend, View, ViewMut, World};
 
         struct NotSend(*const ());
         unsafe impl Sync for NotSend {}
-        impl Component for NotSend {}
+        impl Component for NotSend {
+            type Tracking = track::Untracked;
+        }
 
         fn sys1(_: NonSend<View<'_, NotSend>>) {}
         fn sys2(_: NonSend<ViewMut<'_, NotSend>>) {}

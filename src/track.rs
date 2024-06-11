@@ -47,16 +47,3 @@ pub struct DeletionAndRemoval;
 pub struct Removal;
 #[allow(missing_docs)]
 pub struct All;
-
-#[allow(missing_docs, non_upper_case_globals)]
-pub(crate) const UntrackedConst: u32 = 0b0000;
-#[allow(missing_docs, non_upper_case_globals)]
-pub(crate) const InsertionConst: u32 = 0b0001;
-#[allow(missing_docs, non_upper_case_globals)]
-pub(crate) const ModificationConst: u32 = 0b0010;
-#[allow(missing_docs, non_upper_case_globals)]
-pub(crate) const DeletionConst: u32 = 0b0100;
-#[allow(missing_docs, non_upper_case_globals)]
-pub(crate) const RemovalConst: u32 = 0b1000;
-#[allow(missing_docs, non_upper_case_globals)]
-pub(crate) const AllConst: u32 = InsertionConst + ModificationConst + DeletionConst + RemovalConst;

@@ -20,11 +20,11 @@ use crate::all_storages::AllStorages;
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::r#mut::Mut;
 use crate::storage::{Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
-use crate::{error, track};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::type_name;
@@ -85,10 +85,10 @@ impl<T: Component> SparseSet<T> {
             modification_data: Vec::new(),
             deletion_data: Vec::new(),
             removal_data: Vec::new(),
-            is_tracking_insertion: false,
-            is_tracking_modification: false,
-            is_tracking_deletion: false,
-            is_tracking_removal: false,
+            is_tracking_insertion: T::Tracking::track_insertion(),
+            is_tracking_modification: T::Tracking::track_modification(),
+            is_tracking_deletion: T::Tracking::track_deletion(),
+            is_tracking_removal: T::Tracking::track_removal(),
             on_insertion: None,
             on_removal: None,
         }
@@ -383,23 +383,27 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Make this storage track insertions.
     pub fn track_insertion(&mut self) -> &mut SparseSet<T> {
-        if !self.is_tracking_insertion() {
-            self.is_tracking_insertion = true;
-
-            self.insertion_data
-                .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
+        if self.is_tracking_insertion() {
+            return self;
         }
+
+        self.is_tracking_insertion = true;
+
+        self.insertion_data
+            .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
 
         self
     }
     /// Make this storage track modification.
     pub fn track_modification(&mut self) -> &mut SparseSet<T> {
-        if !self.is_tracking_modification() {
-            self.is_tracking_modification = true;
-
-            self.modification_data
-                .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
+        if self.is_tracking_modification() {
+            return self;
         }
+
+        self.is_tracking_modification = true;
+
+        self.modification_data
+            .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
 
         self
     }
@@ -443,33 +447,32 @@ impl<T: Component> SparseSet<T> {
             || self.is_tracking_deletion()
             || self.is_tracking_removal()
     }
-    pub(crate) fn check_tracking<TRACK: Tracking>(&self) -> Result<(), error::GetStorage> {
-        if (TRACK::as_const() & track::InsertionConst != 0 && !self.is_tracking_insertion())
-            || (TRACK::as_const() & track::ModificationConst != 0
-                && !self.is_tracking_modification())
-            || (TRACK::as_const() & track::DeletionConst != 0 && !self.is_tracking_deletion())
-            || (TRACK::as_const() & track::RemovalConst != 0 && !self.is_tracking_removal())
+    pub(crate) fn check_tracking<Track: Tracking>(&self) -> Result<(), error::GetStorage> {
+        if (Track::track_insertion() && !self.is_tracking_insertion())
+            || (Track::track_modification() && !self.is_tracking_modification())
+            || (Track::track_deletion() && !self.is_tracking_deletion())
+            || (Track::track_removal() && !self.is_tracking_removal())
         {
             return Err(error::GetStorage::TrackingNotEnabled {
                 name: Some(type_name::<SparseSet<T>>()),
                 id: StorageId::of::<SparseSet<T>>(),
-                tracking: TRACK::as_const(),
+                tracking: Track::name(),
             });
         }
 
         Ok(())
     }
-    pub(crate) fn enable_tracking<TRACK: Tracking>(&mut self) {
-        if TRACK::as_const() & track::InsertionConst != 0 {
+    pub(crate) fn enable_tracking<Track: Tracking>(&mut self) {
+        if Track::track_insertion() {
             self.track_insertion();
         }
-        if TRACK::as_const() & track::ModificationConst != 0 {
+        if Track::track_modification() {
             self.track_modification();
         }
-        if TRACK::as_const() & track::DeletionConst != 0 {
+        if Track::track_deletion() {
             self.track_deletion();
         }
-        if TRACK::as_const() & track::RemovalConst != 0 {
+        if Track::track_removal() {
             self.track_removal();
         }
     }
@@ -980,12 +983,16 @@ mod tests {
     #[derive(PartialEq, Eq, Debug)]
     struct STR(&'static str);
 
-    impl Component for STR {}
+    impl Component for STR {
+        type Tracking = crate::track::Untracked;
+    }
 
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct I32(i32);
 
-    impl Component for I32 {}
+    impl Component for I32 {
+        type Tracking = crate::track::Untracked;
+    }
 
     #[test]
     fn insert() {
@@ -1260,7 +1267,7 @@ mod tests {
             assert!(window[0] < window[1]);
         }
         for i in 0..100 {
-            let mut entity_id = crate::entity_id::EntityId::zero();
+            let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }
@@ -1291,12 +1298,12 @@ mod tests {
             assert!(window[0] < window[1]);
         }
         for i in 0..20 {
-            let mut entity_id = crate::entity_id::EntityId::zero();
+            let mut entity_id = EntityId::zero();
             entity_id.set_index(i);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }
         for i in 20..100 {
-            let mut entity_id = crate::entity_id::EntityId::zero();
+            let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i + 20);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }

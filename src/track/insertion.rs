@@ -2,14 +2,16 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::{Insertion, InsertionConst};
-use crate::tracking::{InsertionTracking, Track, Tracking, TrackingTimestamp};
+use crate::track::Insertion;
+use crate::tracking::{InsertionTracking, Tracking, TrackingTimestamp};
 
-impl Sealed for Track<Insertion> {}
+impl Sealed for Insertion {}
 
-impl Tracking for Track<Insertion> {
-    fn as_const() -> u32 {
-        InsertionConst
+impl Tracking for Insertion {
+    const VALUE: u32 = 0b0001;
+
+    fn name() -> &'static str {
+        "Insertion"
     }
 
     #[inline]
@@ -27,4 +29,4 @@ impl Tracking for Track<Insertion> {
     }
 }
 
-impl InsertionTracking for Track<Insertion> {}
+impl InsertionTracking for Insertion {}

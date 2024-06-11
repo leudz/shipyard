@@ -8,125 +8,94 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::{
-    All, Deletion, DeletionAndRemoval, Insertion, InsertionAndDeletion,
-    InsertionAndDeletionAndRemoval, InsertionAndModification, InsertionAndModificationAndDeletion,
-    InsertionAndModificationAndRemoval, InsertionAndRemoval, Modification, ModificationAndDeletion,
-    ModificationAndDeletionAndRemoval, ModificationAndRemoval, Removal, Untracked,
-};
-use core::fmt;
-
-/// When tracking will be a const generic it will not be possible to implement traits directly on them.
-/// This type will be the way to implement traits on tracking constants.
-pub struct Track<T>(T);
-
-impl fmt::Debug for Track<Untracked> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Untracked")
-    }
-}
-impl fmt::Debug for Track<Insertion> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion")
-    }
-}
-impl fmt::Debug for Track<InsertionAndModification> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion and Modification")
-    }
-}
-impl fmt::Debug for Track<InsertionAndModificationAndDeletion> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion, Modification and Deletion")
-    }
-}
-impl fmt::Debug for Track<InsertionAndModificationAndRemoval> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion, Modification and Removal")
-    }
-}
-impl fmt::Debug for Track<InsertionAndDeletion> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion and Deletion")
-    }
-}
-impl fmt::Debug for Track<InsertionAndRemoval> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion and Removal")
-    }
-}
-impl fmt::Debug for Track<InsertionAndDeletionAndRemoval> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Insertion, Deletion and Removal")
-    }
-}
-impl fmt::Debug for Track<Modification> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Modification")
-    }
-}
-impl fmt::Debug for Track<ModificationAndDeletion> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Modification and Deletion")
-    }
-}
-impl fmt::Debug for Track<ModificationAndRemoval> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Modification and Removal")
-    }
-}
-impl fmt::Debug for Track<ModificationAndDeletionAndRemoval> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Modification, Deletion and Removal")
-    }
-}
-impl fmt::Debug for Track<Deletion> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Deletion")
-    }
-}
-impl fmt::Debug for Track<DeletionAndRemoval> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Deletion and Removal")
-    }
-}
-impl fmt::Debug for Track<Removal> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Removal")
-    }
-}
-impl fmt::Debug for Track<All> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("All")
-    }
-}
-
-pub(crate) fn tracking_fmt(tracking: u32) -> &'static str {
-    match tracking {
-        0b0000 => "Untracked",
-        0b0001 => "Insertion",
-        0b0010 => "Modification",
-        0b0100 => "Deletion",
-        0b1000 => "Removal",
-        0b0011 => "Insertion and Modification",
-        0b0101 => "Insertion and Deletion",
-        0b1001 => "Insertion and Removal",
-        0b0110 => "Modification and Deletion",
-        0b1010 => "Modification and Removal",
-        0b1100 => "Deletion and Removal",
-        0b0111 => "Insertion, Modification and Deletion",
-        0b1011 => "Insertion, Modification and Removal",
-        0b1101 => "Insertion, Deletion and Removal",
-        0b1110 => "Modification, Deletion and Removal",
-        0b1111 => "All",
-        _ => unreachable!(),
-    }
-}
 
 /// Trait implemented by all trackings.
 pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
+    /// Associated numerical value that can be used to OR or AND trackings.
+    const VALUE: u32;
+
+    /// Makes sure we cannot borrow with less tracking than what was set in the Component impl
+    /// this has to be in a doc test since it's a compile error
+    ///
+    /// ```compile_fail
+    /// # use shipyard::{Component, track, View, World};
+    /// #
+    /// # struct Unit;
+    /// # impl Component for Unit {
+    /// #    type Tracking = track::Insertion;
+    /// # }
+    /// #
+    /// # let mut world = World::new();
+    /// #
+    /// # world.borrow::<View<Unit, track::Modification>>();
+    /// ```
     #[doc(hidden)]
-    fn as_const() -> u32;
+    fn track_insertion() -> bool {
+        Self::VALUE & 0b0001 != 0
+    }
+
+    /// Makes sure we cannot borrow with less tracking than what was set in the Component impl
+    /// this has to be in a doc test since it's a compile error
+    ///
+    /// ```compile_fail
+    /// # use shipyard::{Component, track, View, World};
+    /// #
+    /// # struct Unit;
+    /// # impl Component for Unit {
+    /// #    type Tracking = track::Modification;
+    /// # }
+    /// #
+    /// # let mut world = World::new();
+    /// #
+    /// # world.borrow::<View<Unit, track::Insertion>>();
+    /// ```
+    #[doc(hidden)]
+    fn track_modification() -> bool {
+        Self::VALUE & 0b0010 != 0
+    }
+
+    /// Makes sure we cannot borrow with less tracking than what was set in the Component impl
+    /// this has to be in a doc test since it's a compile error
+    ///
+    /// ```compile_fail
+    /// # use shipyard::{Component, track, View, World};
+    /// #
+    /// # struct Unit;
+    /// # impl Component for Unit {
+    /// #    type Tracking = track::Deletion;
+    /// # }
+    /// #
+    /// # let mut world = World::new();
+    /// #
+    /// # world.borrow::<View<Unit, track::Modification>>();
+    /// ```
+    #[doc(hidden)]
+    fn track_deletion() -> bool {
+        Self::VALUE & 0b0100 != 0
+    }
+
+    /// Makes sure we cannot borrow with less tracking than what was set in the Component impl
+    /// this has to be in a doc test since it's a compile error
+    ///
+    /// ```compile_fail
+    /// # use shipyard::{Component, track, View, World};
+    /// #
+    /// # struct Unit;
+    /// # impl Component for Unit {
+    /// #    type Tracking = track::Removal;
+    /// # }
+    /// #
+    /// # let mut world = World::new();
+    /// #
+    /// # world.borrow::<View<Unit, track::Modification>>();
+    /// ```
+    #[doc(hidden)]
+    fn track_removal() -> bool {
+        Self::VALUE & 0b1000 != 0
+    }
+
+    #[doc(hidden)]
+    fn name() -> &'static str;
 
     #[doc(hidden)]
     #[inline]

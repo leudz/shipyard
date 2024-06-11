@@ -2,13 +2,17 @@ use shipyard::*;
 
 #[derive(Debug, PartialEq, Eq)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn no_pack() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
     world.run(|mut entities: EntitiesViewMut| {
@@ -26,7 +30,9 @@ fn no_pack() {
 fn update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
     world.track_all::<USIZE>();
@@ -43,7 +49,9 @@ fn update() {
 fn cleared_update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
     world.track_all::<USIZE>();
@@ -66,7 +74,9 @@ fn cleared_update() {
 fn modified_update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
     world.track_all::<USIZE>();
@@ -88,7 +98,9 @@ fn modified_update() {
 fn bulk() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 
@@ -124,7 +136,9 @@ fn bulk() {
 #[test]
 fn bulk_unequal_length() {
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
 

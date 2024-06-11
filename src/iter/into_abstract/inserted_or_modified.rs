@@ -2,13 +2,13 @@ use super::IntoAbstract;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
-use crate::tracking::{InsertedOrModified, InsertionTracking, ModificationTracking, Track};
+use crate::tracking::{InsertedOrModified, InsertionTracking, ModificationTracking};
 use crate::type_id::TypeId;
 use crate::views::{View, ViewMut};
 
-impl<'tmp, 'v, T: Component, TRACK> IntoAbstract for InsertedOrModified<&'tmp View<'v, T, TRACK>>
+impl<'tmp, 'v, T: Component, Track> IntoAbstract for InsertedOrModified<&'tmp View<'v, T, Track>>
 where
-    Track<TRACK>: InsertionTracking + ModificationTracking,
+    Track: InsertionTracking + ModificationTracking,
 {
     type AbsView = InsertedOrModified<FullRawWindow<'tmp, T>>;
 
@@ -33,9 +33,9 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for InsertedOrModified<&'b ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for InsertedOrModified<&'b ViewMut<'a, T, Track>>
 where
-    Track<TRACK>: InsertionTracking + ModificationTracking,
+    Track: InsertionTracking + ModificationTracking,
 {
     type AbsView = InsertedOrModified<FullRawWindow<'b, T>>;
 
@@ -60,10 +60,10 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract
-    for InsertedOrModified<&'b mut ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract
+    for InsertedOrModified<&'b mut ViewMut<'a, T, Track>>
 where
-    Track<TRACK>: InsertionTracking + ModificationTracking,
+    Track: InsertionTracking + ModificationTracking,
 {
     type AbsView = InsertedOrModified<FullRawWindowMut<'b, T>>;
 
