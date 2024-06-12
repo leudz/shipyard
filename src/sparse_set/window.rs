@@ -160,7 +160,7 @@ impl<T: Component> Clone for FullRawWindow<'_, T> {
     }
 }
 
-pub struct FullRawWindowMut<'a, T> {
+pub struct FullRawWindowMut<'a, T, Track> {
     sparse: *mut *mut EntityId,
     sparse_len: usize,
     pub(crate) dense: *mut EntityId,
@@ -172,14 +172,14 @@ pub struct FullRawWindowMut<'a, T> {
     pub(crate) last_modification: TrackingTimestamp,
     pub(crate) current: TrackingTimestamp,
     pub(crate) is_tracking_modification: bool,
-    _phantom: PhantomData<&'a mut T>,
+    _phantom: PhantomData<(&'a mut T, Track)>,
 }
 
-unsafe impl<T: Send + Component> Send for FullRawWindowMut<'_, T> {}
+unsafe impl<T: Send + Component, Track> Send for FullRawWindowMut<'_, T, Track> {}
 
-impl<'w, T: Component> FullRawWindowMut<'w, T> {
+impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
     #[inline]
-    pub(crate) fn new<TRACK>(view: &mut ViewMut<'_, T, TRACK>) -> Self {
+    pub(crate) fn new(view: &mut ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
@@ -277,7 +277,7 @@ impl<'w, T: Component> FullRawWindowMut<'w, T> {
     }
 }
 
-impl<T: Component> Clone for FullRawWindowMut<'_, T> {
+impl<T: Component, Track> Clone for FullRawWindowMut<'_, T, Track> {
     #[inline]
     fn clone(&self) -> Self {
         FullRawWindowMut {

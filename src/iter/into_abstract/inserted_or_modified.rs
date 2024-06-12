@@ -65,7 +65,7 @@ impl<'a: 'b, 'b, T: Component, Track> IntoAbstract
 where
     Track: InsertionTracking + ModificationTracking,
 {
-    type AbsView = InsertedOrModified<FullRawWindowMut<'b, T>>;
+    type AbsView = InsertedOrModified<FullRawWindowMut<'b, T, Track>>;
 
     fn into_abstract(self) -> Self::AbsView {
         InsertedOrModified(self.0.into_abstract())

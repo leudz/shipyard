@@ -12,7 +12,7 @@ world.run(|mut vm_pos: ViewMut<Pos>, v_vel: View<Vel>| {
         dbg!(i);
     }
     
-    for (mut i, j) in (&mut vm_pos, &v_vel).iter() {
+    for (i, j) in (&mut vm_pos, &v_vel).iter() {
         i.0 += j.0;
     }
 });

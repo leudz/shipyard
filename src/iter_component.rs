@@ -27,7 +27,7 @@ const ACCESS_FACTOR: usize = 3;
 /// [`World::iter`]: crate::World::iter
 pub trait IterComponent {
     #[allow(missing_docs)]
-    type Storage<'a>: AbstractMut;
+    type Storage<'a>;
     #[allow(missing_docs)]
     type Borrow<'a>;
 
@@ -278,7 +278,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
 }
 
 impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
     fn into_abtract_mut<'a>(
@@ -314,7 +314,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -332,7 +332,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
     fn into_abtract_mut<'a>(
@@ -368,7 +368,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -386,7 +386,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
     fn into_abtract_mut<'a>(
@@ -422,7 +422,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -440,7 +440,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
     fn into_abtract_mut<'a>(
@@ -476,7 +476,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -494,7 +494,11 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
 
 macro_rules! impl_iter_component {
     ($(($type: ident, $raw_window: ident, $borrow: ident, $index: tt))+) => {
-        impl<$($type: IterComponent),+> IterComponent for ($($type,)+) where $(for<'a> <$type::Storage<'a> as AbstractMut>::Index: From<usize>),+  {
+        impl<$($type: IterComponent),+> IterComponent for ($($type,)+)
+        where
+            $(for<'a> $type::Storage<'a>: AbstractMut),+,
+            $(for<'a> <$type::Storage<'a> as AbstractMut>::Index: From<usize>),+
+        {
             type Storage<'a> = ($($type::Storage<'a>,)+);
             type Borrow<'a> = ($($type::Borrow<'a>,)+);
 

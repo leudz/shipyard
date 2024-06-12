@@ -38,7 +38,7 @@ impl<'w, T: Component> AbstractMut for Not<FullRawWindow<'w, T>> {
     }
 }
 
-impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T>> {
+impl<'w, T: Component, Track> AbstractMut for Not<FullRawWindowMut<'w, T, Track>> {
     type Out = ();
     type Index = usize;
 

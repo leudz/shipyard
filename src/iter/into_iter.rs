@@ -80,6 +80,7 @@ pub trait IntoIter {
 
 impl<T: IntoAbstract> IntoIter for T
 where
+    T::AbsView: AbstractMut,
     <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<T::AbsView>;
@@ -127,6 +128,7 @@ where
 
 impl<T: IntoAbstract> IntoIter for (T,)
 where
+    T::AbsView: AbstractMut,
     <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<(T::AbsView,)>;
@@ -174,7 +176,11 @@ where
 
 macro_rules! impl_into_iter {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))+) => {
-        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+) where <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
+        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+)
+        where
+            $type1::AbsView: AbstractMut, $($type::AbsView: AbstractMut),+,
+            <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
+
             type IntoIter = Iter<($type1::AbsView, $($type::AbsView,)+)>;
             #[cfg(feature = "parallel")]
             type IntoParIter = ParIter<($type1::AbsView, $($type::AbsView,)+)>;

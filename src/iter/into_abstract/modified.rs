@@ -64,7 +64,7 @@ impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for Modified<&'b mut ViewMut<
 where
     Track: ModificationTracking,
 {
-    type AbsView = Modified<FullRawWindowMut<'b, T>>;
+    type AbsView = Modified<FullRawWindowMut<'b, T, Track>>;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0.into_abstract())

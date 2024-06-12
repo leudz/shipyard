@@ -2,7 +2,6 @@ use super::AbstractMut;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
-use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::tracking::Inserted;
 
@@ -46,17 +45,20 @@ impl<'tmp, T: Component> AbstractMut for Not<Inserted<FullRawWindow<'tmp, T>>> {
     }
 }
 
-impl<'tmp, T: Component> AbstractMut for Not<Inserted<FullRawWindowMut<'tmp, T>>> {
-    type Out = Mut<'tmp, T>;
+impl<'tmp, T: Component, Track> AbstractMut for Not<Inserted<FullRawWindowMut<'tmp, T, Track>>>
+where
+    FullRawWindowMut<'tmp, T, Track>: AbstractMut<Index = usize>,
+{
+    type Out = <FullRawWindowMut<'tmp, T, Track> as AbstractMut>::Out;
     type Index = usize;
 
     #[inline]
     unsafe fn get_data(&self, index: usize) -> Self::Out {
-        self.0.get_data(index)
+        (self.0).0.get_data(index)
     }
     #[inline]
     unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
-        self.0.get_datas(index)
+        (self.0).0.get_datas(index)
     }
     #[inline]
     fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {

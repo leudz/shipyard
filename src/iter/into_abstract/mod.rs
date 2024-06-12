@@ -4,7 +4,6 @@ mod modified;
 mod not;
 mod or;
 
-use super::abstract_mut::AbstractMut;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
@@ -19,7 +18,7 @@ use alloc::vec::Vec;
 #[allow(missing_docs)]
 #[allow(clippy::len_without_is_empty)]
 pub trait IntoAbstract {
-    type AbsView: AbstractMut;
+    type AbsView;
 
     #[doc(hidden)]
     fn into_abstract(self) -> Self::AbsView;
@@ -104,8 +103,8 @@ impl<'a: 'b, 'b, T: Component, Track: Tracking> IntoAbstract for &'b ViewMut<'a,
     }
 }
 
-impl<'a: 'b, 'b, T: Component, Track: Tracking> IntoAbstract for &'b mut ViewMut<'a, T, Track> {
-    type AbsView = FullRawWindowMut<'b, T>;
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for &'b mut ViewMut<'a, T, Track> {
+    type AbsView = FullRawWindowMut<'b, T, Track>;
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {

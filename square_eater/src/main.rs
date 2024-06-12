@@ -184,7 +184,7 @@ fn move_square(
     mut rects: ViewMut<MyRect>,
     mut accelerations: ViewMut<Acceleration>,
 ) {
-    for mut acceleration in (&mut accelerations).iter() {
+    for acceleration in (&mut accelerations).iter() {
         acceleration.0 += ACCELERATION_RATE;
     }
 
@@ -223,7 +223,7 @@ fn move_square(
         }
     }
 
-    for (mut rect, dir) in (&mut rects).iter().zip(dirs) {
+    for (rect, dir) in (&mut rects).iter().zip(dirs) {
         if dir != Vec2::ZERO {
             rect.0.move_to(dir);
         }
@@ -231,7 +231,7 @@ fn move_square(
 }
 
 fn grow_square(mut rects: ViewMut<MyRect>) {
-    for mut rect in (&mut rects).iter() {
+    for rect in (&mut rects).iter() {
         rect.0.w = (rect.0.w + GROWTH_RATE).min(MAX_SIZE);
         rect.0.h = (rect.0.h + GROWTH_RATE).min(MAX_SIZE);
     }

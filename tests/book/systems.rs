@@ -62,7 +62,7 @@ fn workload_nesting() {
 struct Dead<T: 'static + Send + Sync>(core::marker::PhantomData<T>);
 
 fn increment(mut vm_vel: ViewMut<Vel>) {
-    for mut i in (&mut vm_vel).iter() {
+    for i in (&mut vm_vel).iter() {
         i.0 += 1.0;
     }
 }

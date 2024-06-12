@@ -72,7 +72,7 @@ fn run() {
 #[test]
 fn system() {
     fn system1((mut usizes, u32s): (ViewMut<USIZE>, View<U32>)) {
-        (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
+        (&mut usizes, &u32s).iter().for_each(|(x, y)| {
             x.0 += y.0 as usize;
         });
     }
@@ -103,13 +103,13 @@ fn system() {
 #[test]
 fn systems() {
     fn system1((mut usizes, u32s): (ViewMut<USIZE>, View<U32>)) {
-        (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
+        (&mut usizes, &u32s).iter().for_each(|(x, y)| {
             x.0 += y.0 as usize;
         });
     }
 
     fn system2(mut usizes: ViewMut<USIZE>) {
-        (&mut usizes,).iter().for_each(|(mut x,)| {
+        (&mut usizes,).iter().for_each(|(x,)| {
             x.0 += 1;
         });
     }
@@ -177,7 +177,7 @@ fn parallel_iterator() {
     world.run(|(mut usizes, u32s): (ViewMut<USIZE>, View<U32>)| {
         let counter = std::sync::atomic::AtomicUsize::new(0);
 
-        (&mut usizes, &u32s).par_iter().for_each(|(mut x, y)| {
+        (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
             counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             x.0 += y.0 as usize;
         });
@@ -357,7 +357,7 @@ fn par_multiple_update_pack() {
             assert_eq!(u32s.modified().iter().count(), 0);
 
             if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(mut x, y)| {
+                iter.for_each(|(x, y)| {
                     x.0 += y.0 as usize;
                     x.0 -= y.0 as usize;
                 });
