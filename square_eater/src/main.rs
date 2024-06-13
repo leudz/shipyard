@@ -116,7 +116,7 @@ async fn main() {
             clear_background(WHITE);
 
             if let Err(Some(err)) = world
-                .run_default()
+                .run_default_workload()
                 .map_err(shipyard::error::RunWorkload::custom_error)
             {
                 match err.downcast_ref::<GameOver>().unwrap() {

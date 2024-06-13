@@ -110,7 +110,7 @@ fn workload_enable_runtime_insertion_tracking() {
     let world = World::new();
 
     world.add_workload(|| |_: View<Unit, track::Insertion>| {});
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 
     assert!(world.borrow::<View<Unit, track::Insertion>>().is_ok());
     assert!(world.borrow::<ViewMut<Unit, track::Insertion>>().is_ok());
@@ -121,7 +121,7 @@ fn workload_enable_runtime_modification_tracking() {
     let world = World::new();
 
     world.add_workload(|| |_: View<Unit, track::Modification>| {});
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 
     assert!(world.borrow::<View<Unit, track::Modification>>().is_ok());
     assert!(world.borrow::<ViewMut<Unit, track::Modification>>().is_ok());
@@ -132,7 +132,7 @@ fn workload_enable_runtime_deletion_tracking() {
     let world = World::new();
 
     world.add_workload(|| |_: View<Unit, track::Deletion>| {});
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 
     assert!(world.borrow::<View<Unit, track::Deletion>>().is_ok());
     assert!(world.borrow::<ViewMut<Unit, track::Deletion>>().is_ok());
@@ -143,7 +143,7 @@ fn workload_enable_runtime_removal_tracking() {
     let world = World::new();
 
     world.add_workload(|| |_: View<Unit, track::Removal>| {});
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 
     assert!(world.borrow::<View<Unit, track::Removal>>().is_ok());
     assert!(world.borrow::<ViewMut<Unit, track::Removal>>().is_ok());

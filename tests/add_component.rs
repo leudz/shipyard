@@ -118,9 +118,9 @@ fn workload_add() {
             .into_workload()
     });
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 #[test]
@@ -144,9 +144,9 @@ fn workload_add_and_remove() {
             .into_workload()
     });
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 #[test]

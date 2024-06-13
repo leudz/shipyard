@@ -37,7 +37,7 @@ fn basic() {
         .with_system(push)
         .add_to_world(&world)
         .unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 
     world.run(|vecs: NonSendSync<ViewMut<MyRc>>| {
         assert_eq!(&**vecs.iter().next().unwrap().0.borrow(), &[0][..]);

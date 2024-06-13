@@ -166,7 +166,7 @@ fn workload() {
             .into_workload()
     });
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }

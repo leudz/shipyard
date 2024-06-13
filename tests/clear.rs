@@ -110,7 +110,7 @@ fn inserted() {
         .add_to_world(&world)
         .unwrap();
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }

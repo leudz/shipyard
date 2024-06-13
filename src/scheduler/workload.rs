@@ -176,7 +176,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     pub fn new<T>(label: impl AsLabel<T>) -> Self {
         let label = label.as_label();
@@ -291,7 +291,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     #[track_caller]
     pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(mut self, system: S) -> Workload {
@@ -339,7 +339,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     #[track_caller]
     #[cfg(feature = "std")]
@@ -392,7 +392,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     #[track_caller]
     #[cfg(not(feature = "std"))]
@@ -2241,7 +2241,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2261,7 +2261,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2286,7 +2286,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2309,7 +2309,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2327,7 +2327,7 @@ mod tests {
             )
         });
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
 
         assert_eq!(world.borrow::<UniqueView<'_, Usize>>().unwrap().0, 1);
     }

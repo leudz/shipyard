@@ -168,7 +168,7 @@ fn enable_tracking() {
         .into_workload()
     });
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 /// System run_if should not run if a workload run_if returns `false`
@@ -182,7 +182,7 @@ fn check_nested_workloads_run_if() {
         (sys.run_if(|| panic!()).into_workload().run_if(|| false),).into_workload()
     });
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn check_run_if_error() {
 
     world.add_workload(|| (|| {}, sys.run_if(|_: UniqueView<USIZE>| true)).into_workload());
 
-    match world.run_default() {
+    match world.run_default_workload() {
         Err(error::RunWorkload::Run((label, _))) => {
             assert!(label.dyn_eq(&*type_name_of(sys).as_label()));
         }

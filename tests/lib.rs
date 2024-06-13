@@ -91,7 +91,7 @@ fn system() {
         .add_to_world(&world)
         .unwrap();
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
     world.run(|usizes: View<USIZE>| {
         let mut iter = usizes.iter();
         assert_eq!(iter.next(), Some(&USIZE(1)));
@@ -129,7 +129,7 @@ fn systems() {
         .add_to_world(&world)
         .unwrap();
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
     world.run(|usizes: View<USIZE>| {
         let mut iter = usizes.iter();
         assert_eq!(iter.next(), Some(&USIZE(2)));
@@ -205,8 +205,8 @@ fn two_workloads() {
         .unwrap();
 
     rayon::scope(|s| {
-        s.spawn(|_| world.run_default().unwrap());
-        s.spawn(|_| world.run_default().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
     });
 }
 
@@ -228,8 +228,8 @@ fn two_bad_workloads() {
         .unwrap();
 
     rayon::scope(|s| {
-        s.spawn(|_| world.run_default().unwrap());
-        s.spawn(|_| world.run_default().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
     });
 }
 

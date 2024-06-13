@@ -84,7 +84,7 @@ pub trait IntoWorkload<Views, R> {
     ///     if day % 6 == 0 {
     ///         world.run(reproduction);
     ///     }
-    ///     world.run_default().unwrap();
+    ///     world.run_default_workload().unwrap();
     /// }
     ///
     /// // we've got some new pigs

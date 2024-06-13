@@ -908,7 +908,7 @@ let i = world.run(sys1);
     /// - Scheduler borrow failed.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn run_default(&self) -> Result<(), error::RunWorkload> {
+    pub fn run_default_workload(&self) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .borrow()
