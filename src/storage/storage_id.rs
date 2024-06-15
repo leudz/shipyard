@@ -58,7 +58,7 @@ impl PartialOrd<TypeId> for StorageId {
 
 impl Default for StorageId {
     fn default() -> Self {
-        StorageId::Custom(core::u64::MAX)
+        StorageId::Custom(u64::MAX)
     }
 }
 

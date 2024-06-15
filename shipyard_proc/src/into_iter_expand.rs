@@ -64,12 +64,10 @@ pub(crate) fn expand_into_iter(
 
                         if segment_ident == "View" {
                             let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => {
-                                    args.args.iter().filter(|arg| match arg {
-                                        syn::GenericArgument::Type(_) => true,
-                                        _ => false,
-                                    })
-                                }
+                                syn::PathArguments::AngleBracketed(args) => args
+                                    .args
+                                    .iter()
+                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
                                 _ => todo!(),
                             };
 
@@ -113,12 +111,10 @@ pub(crate) fn expand_into_iter(
                             continue 'field;
                         } else if segment_ident == "ViewMut" {
                             let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => {
-                                    args.args.iter().filter(|arg| match arg {
-                                        syn::GenericArgument::Type(_) => true,
-                                        _ => false,
-                                    })
-                                }
+                                syn::PathArguments::AngleBracketed(args) => args
+                                    .args
+                                    .iter()
+                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
                                 _ => todo!(),
                             };
 
@@ -287,12 +283,10 @@ pub(crate) fn expand_into_iter(
 
                         if segment_ident == "View" {
                             let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => {
-                                    args.args.iter().filter(|arg| match arg {
-                                        syn::GenericArgument::Type(_) => true,
-                                        _ => false,
-                                    })
-                                }
+                                syn::PathArguments::AngleBracketed(args) => args
+                                    .args
+                                    .iter()
+                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
                                 _ => todo!(),
                             };
 
@@ -328,12 +322,10 @@ pub(crate) fn expand_into_iter(
                             continue 'field;
                         } else if segment_ident == "ViewMut" {
                             let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => {
-                                    args.args.iter().filter(|arg| match arg {
-                                        syn::GenericArgument::Type(_) => true,
-                                        _ => false,
-                                    })
-                                }
+                                syn::PathArguments::AngleBracketed(args) => args
+                                    .args
+                                    .iter()
+                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
                                 _ => todo!(),
                             };
 

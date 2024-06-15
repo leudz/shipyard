@@ -58,7 +58,7 @@ impl From<core::any::TypeId> for TypeId {
 
 impl From<&core::any::TypeId> for TypeId {
     fn from(type_id: &core::any::TypeId) -> Self {
-        type_id.into()
+        (*type_id).into()
     }
 }
 

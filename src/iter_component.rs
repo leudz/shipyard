@@ -801,10 +801,10 @@ macro_rules! impl_iter_component {
                     Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
                     let type_ids = [$($type::type_id()),+];
-                    let mut smallest = core::usize::MAX;
+                    let mut smallest = usize::MAX;
                     let mut smallest_dense = ptr::null();
                     let mut mask: u16 = 0;
-                    let mut factored_len = core::usize::MAX;
+                    let mut factored_len = usize::MAX;
 
                     $(
                         let len = raw_window.$index.len();
@@ -820,7 +820,7 @@ macro_rules! impl_iter_component {
 
                     let _ = factored_len;
 
-                    let iter = if smallest == core::usize::MAX {
+                    let iter = if smallest == usize::MAX {
                         Iter::Mixed(Mixed {
                             count: 0,
                             mask,
