@@ -18,11 +18,8 @@ pub(crate) fn expand_borrow(
     };
 
     let mut gat_generics = generics.clone();
-    for generic in gat_generics.params.iter_mut() {
-        if let syn::GenericParam::Lifetime(lifetime) = generic {
-            lifetime.lifetime = parse_quote!('__view);
-            break;
-        }
+    if let Some(lifetime) = gat_generics.lifetimes_mut().next() {
+        lifetime.lifetime = parse_quote!('__view);
     }
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();

@@ -23,6 +23,17 @@ fn check_derive() {
 
     #[derive(Component, Unique)]
     struct E;
+
+    #[derive(IntoIter)]
+    struct CustomView<'a> {
+        comp_a: shipyard::View<'a, A>,
+        v_comp_aa: shipyard::View<'a, A>,
+        comp_b: shipyard::ViewMut<'a, B>,
+        vm_comp_bb: shipyard::ViewMut<'a, B>,
+    }
+
+    #[derive(IntoIter)]
+    struct CustomView2<'a>(shipyard::View<'a, A>, shipyard::ViewMut<'a, B>);
 }
 
 /// Verify that the "default" attribute compiles.

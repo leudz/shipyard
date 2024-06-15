@@ -110,7 +110,7 @@ pub use scheduler::{
     ScheduledWorkload, SystemModificator, Workload, WorkloadModificator, WorkloadSystem,
 };
 #[cfg(feature = "proc")]
-pub use shipyard_proc::{Borrow, BorrowInfo, Component, Label, Unique, WorldBorrow};
+pub use shipyard_proc::{Borrow, BorrowInfo, Component, IntoIter, Label, Unique, WorldBorrow};
 pub use sparse_set::{
     BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
     TupleRemove,

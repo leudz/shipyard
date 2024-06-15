@@ -26,5 +26,12 @@ pub use par_iter::ParIter;
 pub use par_mixed::ParMixed;
 #[cfg(feature = "parallel")]
 pub use par_tight::ParTight;
+// used by proc macros
+#[cfg(feature = "parallel")]
+#[doc(hidden)]
+pub use rayon::iter::{
+    plumbing::UnindexedConsumer as __UnindexedConsumer,
+    IndexedParallelIterator as __IndexedParallelIterator, ParallelIterator as __ParallelIterator,
+};
 pub use tight::Tight;
 pub use with_id::{IntoWithId, LastId, WithId};

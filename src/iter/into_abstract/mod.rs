@@ -53,8 +53,8 @@ pub trait IntoAbstract {
     }
 }
 
-impl<'a, T: Component, Track: Tracking> IntoAbstract for &'a View<'a, T, Track> {
-    type AbsView = FullRawWindow<'a, T>;
+impl<'a: 'b, 'b, T: Component, Track: Tracking> IntoAbstract for &'b View<'a, T, Track> {
+    type AbsView = FullRawWindow<'b, T>;
 
     #[inline]
     fn into_abstract(self) -> Self::AbsView {
