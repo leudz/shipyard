@@ -61,13 +61,17 @@ fn into_iter_rename() {
 
     #[derive(Borrow, IntoIter)]
     #[shipyard(item_name = "OtherName")]
-    struct AView<'a>(View<'a, A>);
+    struct AView<'a> {
+        #[shipyard(item_field_name = "some_name")]
+        a: View<'a, A>,
+    }
 
     let world = World::new();
 
     world.run(|mut custom: AView| {
         for a in custom.iter() {
             let _: OtherName = a;
+            a.some_name;
         }
     });
 }
