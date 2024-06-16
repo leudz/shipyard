@@ -64,6 +64,8 @@ fn into_iter_rename() {
     struct AView<'a> {
         #[shipyard(item_field_name = "some_name")]
         a: View<'a, A>,
+        #[shipyard(item_field_name = "some_other_name")]
+        vm_a: ViewMut<'a, A>,
     }
 
     let world = World::new();
@@ -72,6 +74,7 @@ fn into_iter_rename() {
         for a in custom.iter() {
             let _: OtherName = a;
             a.some_name;
+            a.some_other_name;
         }
     });
 }
