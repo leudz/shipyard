@@ -85,6 +85,39 @@ pub(crate) fn expand_into_iter(
             let mut iter_fields_variable = Punctuated::<Ident, Comma>::new();
             'field: for field in fields.named.iter() {
                 if let syn::Type::Path(path) = &field.ty {
+                    let field_attrs = field
+                        .attrs
+                        .iter()
+                        .find(|attr| attr.path().is_ident("shipyard"));
+
+                    let mut ignore = false;
+                    let mut field_name_override = None;
+                    field_attrs
+                        .map(|attr| {
+                            attr.parse_nested_meta(|meta| {
+                                if meta.path.is_ident("item_field_skip") {
+                                    ignore = true;
+
+                                    Ok(())
+                                } else if meta.path.is_ident("item_field_name") {
+                                    let value = meta.value()?;
+                                    let s: LitStr = value.parse()?;
+                                    field_name_override = Some(Ident::new(&s.value(), field.ident.span()));
+
+                                    Ok(())
+                                } else {
+                                    Err(Error::new(
+                                        meta.path.span(),
+                                        "Unknown attribute. Possible attribute: item_field_skip, item_field_name",
+                                    ))
+                                }
+                            })
+                        }).transpose()?;
+
+                    if ignore {
+                        continue;
+                    }
+
                     for segment in path.path.segments.iter() {
                         let segment_ident = segment.ident.to_string();
 
@@ -109,43 +142,20 @@ pub(crate) fn expand_into_iter(
                             let tracking_ty = tys.next();
 
                             let field_name = field.ident.clone().unwrap();
-                            let trimmed_field_name = field
-                                .attrs
-                                .iter()
-                                .find(|attr| attr.path().is_ident("shipyard"))
-                                .map::<Result<Ident>, _>(|attr| {
-                                    let mut item_name = String::new();
-                                    attr.parse_nested_meta(|meta| {
-                                        if meta.path.is_ident("item_field_name") {
-                                            let value = meta.value()?;
-                                            let s: LitStr = value.parse()?;
-                                            item_name = s.value();
+                            let trimmed_field_name = field_name_override.unwrap_or_else(|| {
+                                let field_name = field.ident.as_ref().unwrap();
+                                let field_name_string = field_name.to_string();
+                                let trimmed = field_name_string.trim_start_matches("v_");
 
-                                            Ok(())
-                                        } else {
-                                            Err(Error::new(
-                                                meta.path.span(),
-                                                "Unknown attribute. Possible attribute: item_field_name",
-                                            ))
-                                        }
-                                    })?;
-
-                                    Ok(Ident::new(&item_name, field_name.span()))
-                                })
-                                .unwrap_or_else(|| {
-                                    let field_name = field.ident.as_ref().unwrap();
-                                    let field_name_string = field_name.to_string();
-                                    let trimmed = field_name_string.trim_start_matches("v_");
-
-                                    Ok(Ident::new(
-                                        if trimmed.len() < field_name_string.len() {
-                                            trimmed
-                                        } else {
-                                            field_name_string.as_str()
-                                        },
-                                        field_name.span(),
-                                    ))
-                                })?;
+                                Ident::new(
+                                    if trimmed.len() < field_name_string.len() {
+                                        trimmed
+                                    } else {
+                                        field_name_string.as_str()
+                                    },
+                                    field_name.span(),
+                                )
+                            });
                             let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView as shipyard::iter::AbstractMut>::Out);
                             item_fields.push(item_ty);
 
@@ -184,43 +194,20 @@ pub(crate) fn expand_into_iter(
                             let tracking_ty = tys.next();
 
                             let field_name = field.ident.clone().unwrap();
-                            let trimmed_field_name = field
-                                .attrs
-                                .iter()
-                                .find(|attr| attr.path().is_ident("shipyard"))
-                                .map::<Result<Ident>, _>(|attr| {
-                                    let mut item_name = String::new();
-                                    attr.parse_nested_meta(|meta| {
-                                        if meta.path.is_ident("item_field_name") {
-                                            let value = meta.value()?;
-                                            let s: LitStr = value.parse()?;
-                                            item_name = s.value();
+                            let trimmed_field_name = field_name_override.unwrap_or_else(|| {
+                                let field_name = field.ident.as_ref().unwrap();
+                                let field_name_string = field_name.to_string();
+                                let trimmed = field_name_string.trim_start_matches("vm_");
 
-                                            Ok(())
-                                        } else {
-                                            Err(Error::new(
-                                                meta.path.span(),
-                                                "Unknown attribute. Possible attribute: item_field_name",
-                                            ))
-                                        }
-                                    })?;
-
-                                    Ok(Ident::new(&item_name, field_name.span()))
-                                })
-                                .unwrap_or_else(|| {
-                                    let field_name = field.ident.as_ref().unwrap();
-                                    let field_name_string = field_name.to_string();
-                                    let trimmed = field_name_string.trim_start_matches("vm_");
-
-                                    Ok(Ident::new(
-                                        if trimmed.len() < field_name_string.len() {
-                                            trimmed
-                                        } else {
-                                            field_name_string.as_str()
-                                        },
-                                        field_name.span(),
-                                    ))
-                                })?;
+                                Ident::new(
+                                    if trimmed.len() < field_name_string.len() {
+                                        trimmed
+                                    } else {
+                                        field_name_string.as_str()
+                                    },
+                                    field_name.span(),
+                                )
+                            });
                             let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView as shipyard::iter::AbstractMut>::Out);
                             item_fields.push(item_ty);
 
