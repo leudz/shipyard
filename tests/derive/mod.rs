@@ -53,3 +53,21 @@ fn default() {
 
 #[derive(Hash, Debug, PartialEq, Clone, Label)]
 struct MyLabel;
+
+#[test]
+fn into_iter_rename() {
+    #[derive(Component)]
+    struct A;
+
+    #[derive(Borrow, IntoIter)]
+    #[shipyard(item_name = "OtherName")]
+    struct AView<'a>(View<'a, A>);
+
+    let world = World::new();
+
+    world.run(|mut custom: AView| {
+        for a in custom.iter() {
+            let _: OtherName = a;
+        }
+    });
+}

@@ -2,13 +2,14 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     parse_quote, punctuated::Punctuated, spanned::Spanned, token::Comma, Error, ExprReference,
-    Field, Ident, Index, Result,
+    Field, Ident, Index, LitStr, Result,
 };
 
 pub(crate) fn expand_into_iter(
     name: syn::Ident,
     mut generics: syn::Generics,
     data: syn::Data,
+    attrs: Vec<syn::Attribute>,
 ) -> Result<TokenStream> {
     let fields = match data {
         syn::Data::Struct(data_struct) => data_struct.fields,
@@ -21,10 +22,35 @@ pub(crate) fn expand_into_iter(
     };
 
     let name_string = name.to_string();
-    let mut iter_item_name = name_string.trim_end_matches("View").to_string();
-    if iter_item_name.len() == name_string.len() {
-        iter_item_name += "Item";
-    }
+    let iter_item_name = attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("shipyard"))
+        .map::<Result<String>, _>(|attr| {
+            let mut item_name = String::new();
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("item_name") {
+                    let value = meta.value()?;
+                    let s: LitStr = value.parse()?;
+                    item_name = s.value();
+
+                    Ok(())
+                } else {
+                    Err(Error::new(
+                        meta.path.span(),
+                        "Unknown attribute. Possible attribute: item_name",
+                    ))
+                }
+            })?;
+
+            Ok(item_name)
+        })
+        .unwrap_or_else(|| {
+            let mut iter_item_name = name_string.trim_end_matches("View").to_string();
+            if iter_item_name.len() == name_string.len() {
+                iter_item_name += "Item";
+            }
+            Ok(iter_item_name)
+        })?;
 
     let item_name = Ident::new(&iter_item_name, name_string.span());
     let iter_name = Ident::new(&format!("{}Iter", name_string), name_string.span());
@@ -68,7 +94,12 @@ pub(crate) fn expand_into_iter(
                                     .args
                                     .iter()
                                     .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => todo!(),
+                                _ => {
+                                    return Err(Error::new(
+                                        segment.arguments.span(),
+                                        "Unexpected syntax",
+                                    ));
+                                }
                             };
 
                             let comp_ty = tys
@@ -115,7 +146,12 @@ pub(crate) fn expand_into_iter(
                                     .args
                                     .iter()
                                     .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => todo!(),
+                                _ => {
+                                    return Err(Error::new(
+                                        segment.arguments.span(),
+                                        "Unexpected syntax",
+                                    ))
+                                }
                             };
 
                             let comp_ty = tys
@@ -287,7 +323,12 @@ pub(crate) fn expand_into_iter(
                                     .args
                                     .iter()
                                     .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => todo!(),
+                                _ => {
+                                    return Err(Error::new(
+                                        segment.arguments.span(),
+                                        "Unexpected syntax",
+                                    ))
+                                }
                             };
 
                             let comp_ty = tys
@@ -326,7 +367,12 @@ pub(crate) fn expand_into_iter(
                                     .args
                                     .iter()
                                     .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => todo!(),
+                                _ => {
+                                    return Err(Error::new(
+                                        segment.arguments.span(),
+                                        "Unexpected syntax",
+                                    ))
+                                }
                             };
 
                             let comp_ty = tys
