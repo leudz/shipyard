@@ -1,4 +1,4 @@
-use macroquad::prelude::*;
+use macroquad::{input::show_mouse, prelude::*};
 use shipyard::{
     AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
     IntoWorkload, IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View,
@@ -132,9 +132,7 @@ async fn main() {
             if is_mouse_button_pressed(MouseButton::Left) {
                 is_started = true;
 
-                unsafe {
-                    get_internal_gl().quad_context.show_mouse(false);
-                }
+                show_mouse(false);
             }
 
             clear_background(BLACK);
