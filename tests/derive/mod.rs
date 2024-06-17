@@ -58,6 +58,10 @@ struct MyLabel;
 fn into_iter_rename() {
     #[derive(Component)]
     struct A;
+    #[derive(Component)]
+    struct B;
+    #[derive(Component)]
+    struct C;
 
     #[derive(Borrow, IntoIter)]
     #[shipyard(item_name = "OtherName")]
@@ -65,12 +69,12 @@ fn into_iter_rename() {
         #[shipyard(item_field_name = "some_name")]
         a: View<'a, A>,
         #[shipyard(item_field_name = "some_other_name")]
-        vm_a: ViewMut<'a, A>,
+        vm_b: ViewMut<'a, B>,
 
         #[shipyard(item_field_skip)]
         _aa: View<'a, A>,
         #[shipyard(item_field_skip)]
-        _vm_aa: ViewMut<'a, A>,
+        _vm_c: ViewMut<'a, C>,
     }
 
     let world = World::new();
