@@ -7,6 +7,7 @@ View bundles only contain other views while wild views can contain other types.
 
 Example of a View Bundle:
 ```rust, noplaypen
+#[derive(Borrow, BorrowInfo)]
 struct Hierarchy<'v> {
     entities: EntitiesViewMut<'v>,
     parents: ViewMut<'v, Parent>,
@@ -19,7 +20,17 @@ Example of a Wild View:
 struct RandomNumber(u64);
 ```
 
-### Concrete example
+### Iteration
+
+View bundles can be iterated directly by deriving the `IntoIter` trait.
+
+```rust, noplaypen
+{{#include ../../../../tests/book/custom_view.rs:into_iter}}
+```
+
+All attributes are optional.
+
+## Concrete example
 
 When creating a frame with any low level api there is always some boilerplate. We'll look at how custom views can help for `wgpu`.
 
