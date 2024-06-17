@@ -2,13 +2,23 @@
 
 Iteration is one of the most important features of an ECS.
 
-In Shipyard this is achieved using [`IntoIter::iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter) on views.
+## World
+
+```rust, noplaypen
+{{#include ../../../../tests/book/iterators.rs:world}}
+```
+
+THe "extra" `&mut` is unfortunate but necessary.
+
+## Views
+
+Iteration on views is achieved using [`IntoIter::iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter).
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/iterators.rs:iter}}
 ```
 
-You can use views in any order. However, using the same combination of views in different positions might yield components in a different order.  
+You can use views in any order. However, using the same combination of views in different positions may yield components in a different order.  
 You shouldn't expect specific ordering from Shipyard's iterators in general.
 
 #### With Id
