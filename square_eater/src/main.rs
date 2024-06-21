@@ -2,23 +2,23 @@ use crate::rand::gen_range;
 use macroquad::{
     input::show_mouse,
     prelude::*,
-    ui::{root_ui, widgets::Button},
+    ui::{root_ui, widgets::Button, Ui},
 };
 use shipyard::{
-    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkload, IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View,
-    ViewMut, Workload, World,
+    AddComponent, AllStorages, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter,
+    IntoWithId, IntoWorkload, IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut,
+    View, ViewMut, Workload, World,
 };
 
-const WIDTH: i32 = 640;
-const HEIGHT: i32 = 360;
-const INIT_SIZE: f32 = 5.;
+const WIDTH: f32 = 640.0;
+const HEIGHT: f32 = 360.0;
+const BASE_INIT_SIZE: f32 = 5.;
 const MAX_SIZE: f32 = 25.;
-const GROWTH_RATE: f32 = 0.15;
-const SPEED: f32 = 1.5;
+const BASE_GROWTH_RATE: f32 = 0.15;
+const BASE_SPEED: f32 = 1.5;
 const ACCELERATION_RATE: f32 = 0.002;
-const SQUARE_SPAWN_RATE: u32 = 25;
-const SQUAGUM_SPAWN_RATE: u32 = 150;
+const BASE_SQUARE_SPAWN_RATE: u32 = 25;
+const BASE_SQUAGUM_SPAWN_RATE: u32 = 150;
 
 #[derive(Component)]
 struct Square {
@@ -108,15 +108,65 @@ impl PowerUps {
             square_spawn_rate: 0,
         }
     }
+
+    fn player_start_size(&self) -> f32 {
+        self.player_start_size as f32 * 0.5
+    }
+
+    fn player_boost_duration(&self) -> u32 {
+        self.player_boost_duration * 10
+    }
+
+    fn player_boost_spawn_rate(&self) -> u32 {
+        self.player_boost_spawn_rate * 10
+    }
+
+    fn player_size_on_eat(&self) -> f32 {
+        self.player_size_on_eat as f32 * 0.5
+    }
+
+    fn player_defense(&self) -> f32 {
+        self.player_defense as f32 * 0.4
+    }
+
+    fn square_start_size(&self) -> f32 {
+        self.square_start_size as f32 * 0.5
+    }
+
+    fn square_growth_rate(&self) -> f32 {
+        self.square_growth_rate as f32 * 0.05
+    }
+
+    fn square_speed(&self) -> f32 {
+        self.square_speed as f32 * 0.1
+    }
+
+    fn square_number(&self) -> u32 {
+        self.square_number * 3
+    }
+
+    fn square_spawn_rate(&self) -> u32 {
+        self.square_spawn_rate * 4
+    }
+
+    fn iter_player_power_ups(&mut self) -> impl IntoIterator<Item = (&'static str, &mut u32)> {
+        [
+            ("Start size", &mut self.player_start_size),
+            ("Boost duration", &mut self.player_boost_duration),
+            ("Boost spawn rate", &mut self.player_boost_spawn_rate),
+            ("Size on eat", &mut self.player_size_on_eat),
+            ("Defense", &mut self.player_defense),
+        ]
+    }
 }
 
 /// generates a new random square.
-fn new_square(init_size_boost: u32) -> (Square, Acceleration) {
+fn new_square(init_size_boost: f32) -> (Square, Acceleration) {
     (
         Square {
-            x: rand::gen_range(0.0, WIDTH as f32 - INIT_SIZE),
-            y: rand::gen_range(0.0, HEIGHT as f32 - INIT_SIZE),
-            size: INIT_SIZE + init_size_boost as f32 * 0.5,
+            x: gen_range(0.0, WIDTH - BASE_INIT_SIZE),
+            y: gen_range(0.0, HEIGHT - BASE_INIT_SIZE),
+            size: BASE_INIT_SIZE + init_size_boost,
         },
         Acceleration(0.),
     )
@@ -125,15 +175,15 @@ fn new_square(init_size_boost: u32) -> (Square, Acceleration) {
 fn window_conf() -> Conf {
     Conf {
         window_title: "Square Eater".to_owned(),
-        window_width: WIDTH,
-        window_height: HEIGHT,
+        window_width: WIDTH as i32,
+        window_height: HEIGHT as i32,
         ..Default::default()
     }
 }
 
-fn clear_floor(world: &mut World) {
-    world.delete_any::<SparseSet<Square>>();
-    world.delete_any::<SparseSet<Squagum>>();
+fn clear_floor(all_storages: &mut AllStorages) {
+    all_storages.delete_any::<SparseSet<Square>>();
+    all_storages.delete_any::<SparseSet<Squagum>>();
 }
 
 fn init_floor(
@@ -151,18 +201,49 @@ fn init_floor(
         squagum: false,
         squagum_counter: 0,
         square: Square {
-            x: WIDTH as f32 / 2.0 - INIT_SIZE * 1.5,
-            y: HEIGHT as f32 / 2.0 - INIT_SIZE * 1.5,
-            size: INIT_SIZE * 3.0 + power_ups.player_start_size as f32 * 0.5,
+            x: WIDTH / 2.0 - BASE_INIT_SIZE * 1.5,
+            y: HEIGHT / 2.0 - BASE_INIT_SIZE * 1.5,
+            size: BASE_INIT_SIZE * 3.0 + power_ups.player_start_size(),
         },
     };
 
     entities.bulk_add_entity(
         (&mut squares, &mut accelerations),
-        (0..floor_counter.0).map(|_| new_square(power_ups.square_start_size)),
+        (0..floor_counter.0).map(|_| new_square(power_ups.square_start_size())),
     );
 
     spawned_on_floor.0 = floor_counter.0;
+}
+
+fn place_buttons(world: &World) {
+    let mut root_ui = root_ui();
+    let mut should_transition = false;
+
+    world.run(|mut power_ups: UniqueViewMut<PowerUps>| {
+        for (i, (text, power_up)) in power_ups.iter_player_power_ups().into_iter().enumerate() {
+            let height_offset = i as f32 * 25.0;
+
+            let text_dimensions = measure_text(text, None, 20, 1.0);
+            draw_text(text, WIDTH / 8.0, HEIGHT / 4.0 + height_offset, 20.0, BLACK);
+
+            if Button::new("+")
+                .position(vec2(
+                    WIDTH / 8.0 + text_dimensions.width + 5.0,
+                    HEIGHT / 4.0 - text_dimensions.height + height_offset,
+                ))
+                .size(vec2(15.0, 15.0))
+                .ui(&mut *root_ui)
+            {
+                *power_up += 1;
+                should_transition = true;
+                return;
+            }
+        }
+    });
+
+    if should_transition {
+        world.run_with_data(transition_screen, Screen::Floor);
+    }
 }
 
 fn floor_loop() -> Workload {
@@ -180,16 +261,40 @@ fn floor_loop() -> Workload {
         .into_workload()
 }
 
+#[derive(Unique, Clone, Copy)]
 enum Screen {
     Start,
     Floor,
     Shop,
 }
 
+fn transition_screen(new_screen: Screen, mut all_storages: AllStoragesViewMut) {
+    match new_screen {
+        Screen::Start => {
+            show_mouse(true);
+            set_cursor_grab(false);
+        }
+        Screen::Floor => {
+            show_mouse(false);
+            set_cursor_grab(true);
+            all_storages.run(init_floor);
+        }
+        Screen::Shop => {
+            show_mouse(true);
+            set_cursor_grab(false);
+            clear_floor(&mut all_storages);
+        }
+    }
+
+    all_storages.run(|mut screen: UniqueViewMut<Screen>| {
+        *screen = new_screen;
+    });
+}
+
 // Entry point of the program
 #[macroquad::main(window_conf)]
 async fn main() {
-    let mut world = World::new();
+    let world = World::new();
 
     world.add_unique(FloorCounter(1));
     world.add_unique(SpawnedOnFloor(0));
@@ -206,6 +311,7 @@ async fn main() {
     });
     world.add_unique(PowerUps::new());
     world.add_unique(MaxFloor(1));
+    world.add_unique(Screen::Start);
     world.run(init_floor);
 
     // seed the random number generator with a random value
@@ -213,25 +319,23 @@ async fn main() {
 
     world.add_workload(floor_loop);
 
-    let mut screen = Screen::Start;
     loop {
+        let screen = *world.borrow::<UniqueView<Screen>>().unwrap();
+
         match screen {
             Screen::Start => {
                 if is_mouse_button_pressed(MouseButton::Left) {
-                    screen = Screen::Floor;
+                    world.run_with_data(transition_screen, Screen::Floor);
                     continue;
                 }
 
                 clear_background(BLACK);
 
-                show_mouse(true);
-                set_cursor_grab(false);
-
                 let text_dimensions = measure_text("Click to start", None, 40, 1.);
                 draw_text(
                     "Click to start",
-                    WIDTH as f32 / 2. - text_dimensions.width / 2.,
-                    HEIGHT as f32 / 2. - text_dimensions.height / 2.,
+                    WIDTH / 2. - text_dimensions.width / 2.,
+                    HEIGHT / 2. - text_dimensions.height / 2.,
                     40.,
                     WHITE,
                 );
@@ -239,29 +343,31 @@ async fn main() {
             Screen::Floor => {
                 clear_background(WHITE);
 
-                show_mouse(false);
-                set_cursor_grab(true);
-
                 if let Err(Some(err)) = world
                     .run_workload(floor_loop)
                     .map_err(shipyard::error::RunWorkload::custom_error)
                 {
                     match err.downcast_ref::<FloorResult>().unwrap() {
                         FloorResult::Loose => {
-                            debug!("GameOver");
+                            debug!("Loose");
                             world.run(|mut floor_counter: UniqueViewMut<FloorCounter>| {
                                 floor_counter.0 -= 1;
                                 floor_counter.0 = floor_counter.0.max(1);
                             });
                         }
                         FloorResult::Win => {
-                            debug!("Victory");
+                            debug!("Win");
                             world.run(|mut floor_counter: UniqueViewMut<FloorCounter>, mut max_floor: UniqueViewMut<MaxFloor>, mut power_ups: UniqueViewMut<PowerUps>| {
                                 floor_counter.0 += 1;
                                 max_floor.0 = max_floor.0.max(floor_counter.0);
 
                                 if floor_counter.0 == max_floor.0 {
-                                    match gen_range(0, 5) {
+                                    let power = if power_ups.square_spawn_rate < 5 {
+                                        gen_range(0, 5)
+                                    } else {
+                                        gen_range(0, 4)
+                                    };
+                                    match power {
                                         0 => {
                                             power_ups.square_start_size += 1;
                                         }
@@ -284,143 +390,29 @@ async fn main() {
                         }
                     }
 
-                    screen = Screen::Shop;
-                    clear_floor(&mut world);
+                    world.run_with_data(transition_screen, Screen::Shop);
                 }
             }
             Screen::Shop => {
                 clear_background(WHITE);
 
-                show_mouse(true);
-                set_cursor_grab(false);
+                place_buttons(&world);
 
                 let mut root_ui = root_ui();
-                world.run(|mut power_ups: UniqueViewMut<PowerUps>| {
-                    let text_dimensions = measure_text("Start size", None, 20, 1.0);
-                    draw_text(
-                        &format!("Start size"),
-                        WIDTH as f32 / 8.0,
-                        HEIGHT as f32 / 4.0,
-                        20.0,
-                        BLACK,
-                    );
-                    if Button::new("+")
-                        .position(vec2(
-                            WIDTH as f32 / 8.0 + text_dimensions.width + 5.0,
-                            HEIGHT as f32 / 4.0 - text_dimensions.height,
-                        ))
-                        .size(vec2(15.0, 15.0))
-                        .ui(&mut root_ui)
-                    {
-                        power_ups.player_start_size += 1;
-                        screen = Screen::Floor;
-                        drop(power_ups);
-                        world.run(init_floor);
-                        return;
-                    }
-                    let text_dimensions = measure_text("Boost duration", None, 20, 1.0);
-                    draw_text(
-                        &format!("Boost duration"),
-                        WIDTH as f32 / 8.0,
-                        HEIGHT as f32 / 4.0 + 25.0,
-                        20.0,
-                        BLACK,
-                    );
-                    if Button::new("+")
-                        .position(vec2(
-                            WIDTH as f32 / 8.0 + text_dimensions.width + 5.0,
-                            HEIGHT as f32 / 4.0 + 25.0 - text_dimensions.height,
-                        ))
-                        .size(vec2(15.0, 15.0))
-                        .ui(&mut root_ui)
-                    {
-                        power_ups.player_boost_duration += 1;
-                        screen = Screen::Floor;
-                        drop(power_ups);
-                        world.run(init_floor);
-                        return;
-                    }
-                    let text_dimensions = measure_text("Boost spawn rate", None, 20, 1.0);
-                    draw_text(
-                        &format!("Boost spawn rate"),
-                        WIDTH as f32 / 8.0,
-                        HEIGHT as f32 / 4.0 + 50.0,
-                        20.0,
-                        BLACK,
-                    );
-                    if Button::new("+")
-                        .position(vec2(
-                            WIDTH as f32 / 8.0 + text_dimensions.width + 5.0,
-                            HEIGHT as f32 / 4.0 + 50.0 - text_dimensions.height,
-                        ))
-                        .size(vec2(15.0, 15.0))
-                        .ui(&mut root_ui)
-                    {
-                        power_ups.player_boost_spawn_rate += 1;
-                        screen = Screen::Floor;
-                        drop(power_ups);
-                        world.run(init_floor);
-                        return;
-                    }
-                    let text_dimensions = measure_text("Size on eat", None, 20, 1.0);
-                    draw_text(
-                        &format!("Size on eat"),
-                        WIDTH as f32 / 8.0,
-                        HEIGHT as f32 / 4.0 + 75.0,
-                        20.0,
-                        BLACK,
-                    );
-                    if Button::new("+")
-                        .position(vec2(
-                            WIDTH as f32 / 8.0 + text_dimensions.width + 5.0,
-                            HEIGHT as f32 / 4.0 + 75.0 - text_dimensions.height,
-                        ))
-                        .size(vec2(15.0, 15.0))
-                        .ui(&mut root_ui)
-                    {
-                        power_ups.player_size_on_eat += 1;
-                        screen = Screen::Floor;
-                        drop(power_ups);
-                        world.run(init_floor);
-                        return;
-                    }
-                    let text_dimensions = measure_text("Defense", None, 20, 1.0);
-                    draw_text(
-                        &format!("Defense"),
-                        WIDTH as f32 / 8.0,
-                        HEIGHT as f32 / 4.0 + 100.0,
-                        20.0,
-                        BLACK,
-                    );
-                    if Button::new("+")
-                        .position(vec2(
-                            WIDTH as f32 / 8.0 + text_dimensions.width + 5.0,
-                            HEIGHT as f32 / 4.0 + 100.0 - text_dimensions.height,
-                        ))
-                        .size(vec2(15.0, 15.0))
-                        .ui(&mut root_ui)
-                    {
-                        power_ups.player_defense += 1;
-                        screen = Screen::Floor;
-                        drop(power_ups);
-                        world.run(init_floor);
-                        return;
-                    }
-                });
-
                 let text_dimensions = measure_text("Skip", None, 30, 1.0);
+
                 if Button::new("Skip")
                     .size(vec2(
                         text_dimensions.width + 10.0,
                         text_dimensions.height + 10.0,
                     ))
                     .position(vec2(
-                        WIDTH as f32 / 2.0 - (text_dimensions.width + 10.0) / 2.0,
-                        HEIGHT as f32 * 3.0 / 4.0,
+                        WIDTH / 2.0 - (text_dimensions.width + 10.0) / 2.0,
+                        HEIGHT * 3.0 / 4.0,
                     ))
                     .ui(&mut root_ui)
                 {
-                    screen = Screen::Floor;
+                    world.run_with_data(transition_screen, Screen::Floor);
                     world.run(init_floor);
                 }
             }
@@ -443,7 +435,7 @@ fn counters(mut player: UniqueViewMut<Player>, power_ups: UniqueView<PowerUps>) 
     if player.squagum {
         player.squagum_counter += 1;
 
-        if player.squagum_counter >= 120 + power_ups.player_boost_duration * 10 {
+        if player.squagum_counter >= 120 + power_ups.player_boost_duration() {
             player.squagum = false;
             player.squagum_counter = 0;
         }
@@ -452,8 +444,8 @@ fn counters(mut player: UniqueViewMut<Player>, power_ups: UniqueView<PowerUps>) 
 
 fn move_player(mut player: UniqueViewMut<Player>) {
     let (x, y) = mouse_position();
-    player.square.x = x.clamp(0.0, WIDTH as f32 - player.square.size);
-    player.square.y = y.clamp(0.0, HEIGHT as f32 - player.square.size);
+    player.square.x = x.clamp(0.0, WIDTH - player.square.size);
+    player.square.y = y.clamp(0.0, HEIGHT - player.square.size);
 }
 
 fn move_square(
@@ -488,9 +480,9 @@ fn move_square(
             }
 
             if square.size == MAX_SIZE {
-                *dir *= SPEED + power_ups.square_speed as f32 * 0.1 + acceleration.0;
+                *dir *= BASE_SPEED + power_ups.square_speed() + acceleration.0;
             } else {
-                *dir *= SPEED + power_ups.square_speed as f32 * 0.1;
+                *dir *= BASE_SPEED + power_ups.square_speed();
             }
 
             *dir += neighbourg_dir * 0.05;
@@ -499,15 +491,15 @@ fn move_square(
 
     for (square, dir) in (&mut squares).iter().zip(dirs) {
         if dir != Vec2::ZERO {
-            square.x = (square.x + dir.x).clamp(0.0, WIDTH as f32 - square.size);
-            square.y = (square.y + dir.y).clamp(0.0, HEIGHT as f32 - square.size);
+            square.x = (square.x + dir.x).clamp(0.0, WIDTH - square.size);
+            square.y = (square.y + dir.y).clamp(0.0, HEIGHT - square.size);
         }
     }
 }
 
 fn grow_square(power_ups: UniqueView<PowerUps>, mut squares: ViewMut<Square>) {
     for rect in (&mut squares).iter() {
-        let delta_size = (rect.size + GROWTH_RATE + power_ups.square_growth_rate as f32 * 0.05)
+        let delta_size = (rect.size + BASE_GROWTH_RATE + power_ups.square_growth_rate())
             .min(MAX_SIZE)
             - rect.size;
         rect.size = rect.size + delta_size;
@@ -525,30 +517,27 @@ fn spawn(
     mut squagums: ViewMut<Squagum>,
     mut squares: ViewMut<Square>,
 ) {
-    let should_spawn = spawned_on_floor.0 < (floor_counter.0 + 1) * 2 + power_ups.square_number * 3;
+    let should_spawn = spawned_on_floor.0 < (floor_counter.0 + 1) * 2 + power_ups.square_number();
     if should_spawn
-        && rand::gen_range(
-            0,
-            SQUARE_SPAWN_RATE - (power_ups.square_spawn_rate * 4).min(20),
-        ) == 0
+        && rand::gen_range(0, BASE_SQUARE_SPAWN_RATE - power_ups.square_spawn_rate()) == 0
     {
         entities.add_entity(
             (&mut squares, &mut accelerations),
-            new_square(power_ups.square_start_size),
+            new_square(power_ups.square_start_size()),
         );
         spawned_on_floor.0 += 1;
     }
 
     if rand::gen_range(
         0,
-        SQUAGUM_SPAWN_RATE - power_ups.player_boost_spawn_rate.min(10) * 10,
+        BASE_SQUAGUM_SPAWN_RATE - power_ups.player_boost_spawn_rate(),
     ) == 0
     {
         entities.add_entity(
             &mut squagums,
             Squagum(Vec2::new(
-                rand::gen_range(0.0, WIDTH as f32 - INIT_SIZE * 2.0),
-                rand::gen_range(0.0, HEIGHT as f32 - INIT_SIZE * 2.0),
+                rand::gen_range(0.0, WIDTH - BASE_INIT_SIZE * 2.0),
+                rand::gen_range(0.0, HEIGHT - BASE_INIT_SIZE * 2.0),
             )),
         );
     }
@@ -565,7 +554,7 @@ fn collision(
         if player.square.collide(&Square {
             x: squagum.0.x,
             y: squagum.0.y,
-            size: INIT_SIZE,
+            size: BASE_INIT_SIZE,
         }) {
             player.squagum = true;
             player.squagum_counter = 0;
@@ -576,21 +565,20 @@ fn collision(
     for (id, square) in squares.iter().with_id() {
         if square.size == MAX_SIZE && square.collide(&player.square) {
             if player.squagum {
-                player.square.size = (player.square.size
-                    + INIT_SIZE / 4.
-                    + power_ups.player_size_on_eat as f32 * 0.5)
-                    .min(MAX_SIZE - 0.01);
+                player.square.size =
+                    (player.square.size + BASE_INIT_SIZE / 4. + power_ups.player_size_on_eat())
+                        .min(MAX_SIZE - 0.01);
                 to_delete.add_component_unchecked(id, ToDelete);
             }
 
             if !player.is_invincible {
                 player.is_invincible = true;
-                player.square.size -= INIT_SIZE / 2.;
-                player.square.size += (power_ups.player_defense as f32 * 0.4).min(2.0);
+                player.square.size -= BASE_INIT_SIZE / 2.;
+                player.square.size += power_ups.player_defense();
             }
         } else if player.square.size >= square.size && player.square.collide(&square) {
             player.square.size =
-                (player.square.size + INIT_SIZE / 2. + power_ups.player_size_on_eat as f32 * 0.5)
+                (player.square.size + BASE_INIT_SIZE / 2. + power_ups.player_size_on_eat())
                     .min(MAX_SIZE - 0.01);
             to_delete.add_component_unchecked(id, ToDelete)
         }
@@ -608,9 +596,9 @@ fn check_end_floor(
     spawned_on_floor: UniqueView<SpawnedOnFloor>,
     squares: ViewMut<Square>,
 ) -> Result<(), FloorResult> {
-    if player.square.size < INIT_SIZE {
+    if player.square.size < BASE_INIT_SIZE {
         Err(FloorResult::Loose)
-    } else if spawned_on_floor.0 == (floor_counter.0 + 1) * 2 + power_ups.square_number * 3
+    } else if spawned_on_floor.0 == (floor_counter.0 + 1) * 2 + power_ups.square_number()
         && squares.is_empty()
     {
         Err(FloorResult::Win)
@@ -645,8 +633,8 @@ fn render(
         draw_rectangle(
             squagum.0.x,
             squagum.0.y,
-            INIT_SIZE * 2.0,
-            INIT_SIZE * 2.0,
+            BASE_INIT_SIZE * 2.0,
+            BASE_INIT_SIZE * 2.0,
             YELLOW,
         );
     }
@@ -663,7 +651,7 @@ fn render(
     let text_dimensions = measure_text(&floor_number, None, 35, 1.);
     draw_text(
         &floor_number,
-        WIDTH as f32 - text_dimensions.width,
+        WIDTH - text_dimensions.width,
         18.,
         35.,
         BLACK,
