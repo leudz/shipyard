@@ -185,6 +185,33 @@ impl<'a: 'b, 'b, T: Component<Tracking = track::Modification>> IntoAbstract
     }
 }
 
+impl<'a: 'b, 'b, T: Component<Tracking = track::Deletion>> IntoAbstract
+    for &'b mut ViewMut<'a, T, track::Deletion>
+{
+    type AbsView = FullRawWindowMut<'b, T, track::Deletion>;
+
+    #[inline]
+    fn into_abstract(self) -> Self::AbsView {
+        FullRawWindowMut::new(self)
+    }
+    #[inline]
+    fn len(&self) -> Option<usize> {
+        Some((**self).len())
+    }
+    #[inline]
+    fn type_id(&self) -> TypeId {
+        TypeId::of::<SparseSet<T, T::Tracking>>()
+    }
+    #[inline]
+    fn inner_type_id(&self) -> TypeId {
+        TypeId::of::<T>()
+    }
+    #[inline]
+    fn dense(&self) -> *const EntityId {
+        self.dense.as_ptr()
+    }
+}
+
 impl<'a: 'b, 'b, T: Component<Tracking = track::Removal>> IntoAbstract
     for &'b mut ViewMut<'a, T, track::Removal>
 {

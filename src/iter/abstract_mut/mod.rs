@@ -139,6 +139,38 @@ impl<'tmp, T: Component<Tracking = track::Insertion>> AbstractMut
     }
 }
 
+impl<'tmp, T: Component<Tracking = track::Deletion>> AbstractMut
+    for FullRawWindowMut<'tmp, T, track::Deletion>
+{
+    type Out = &'tmp mut T;
+    type Index = usize;
+
+    #[inline]
+    unsafe fn get_data(&self, index: usize) -> Self::Out {
+        &mut *self.data.add(index)
+    }
+    #[inline]
+    unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
+        &mut *self.data.add(index)
+    }
+    #[inline]
+    fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
+        self.index_of(entity_id)
+    }
+    #[inline]
+    unsafe fn indices_of_unchecked(&self, entity_id: EntityId, _: usize, _: u16) -> Self::Index {
+        self.index_of_unchecked(entity_id)
+    }
+    #[inline]
+    unsafe fn get_id(&self, index: usize) -> EntityId {
+        *self.dense.add(index)
+    }
+    #[inline]
+    fn len(&self) -> usize {
+        self.dense_len
+    }
+}
+
 impl<'tmp, T: Component<Tracking = track::Removal>> AbstractMut
     for FullRawWindowMut<'tmp, T, track::Removal>
 {
