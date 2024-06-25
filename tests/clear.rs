@@ -18,14 +18,22 @@ fn no_pack() {
 
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
 
-    entities.add_entity(&mut u32s, U32(0));
-    entities.add_entity(&mut u32s, U32(1));
-    entities.add_entity(&mut u32s, U32(2));
+    let e0 = entities.add_entity(&mut u32s, U32(0));
+    let e1 = entities.add_entity(&mut u32s, U32(1));
+    let e2 = entities.add_entity(&mut u32s, U32(2));
 
     drop((entities, u32s));
     world.borrow::<AllStoragesViewMut>().unwrap().clear();
 
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+
+    assert!(u32s.get(e0).is_err());
+    assert!(u32s.get(e1).is_err());
+    assert!(u32s.get(e2).is_err());
+    assert!(!entities.is_alive(e0));
+    assert!(!entities.is_alive(e1));
+    assert!(!entities.is_alive(e2));
+    assert_eq!(entities.iter().count(), 0);
 
     assert_eq!(u32s.len(), 0);
     let entity0 = entities.add_entity(&mut u32s, U32(3));

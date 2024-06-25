@@ -392,7 +392,13 @@ impl Storage for Entities {
             return;
         }
 
-        let mut last_alive = self.data.len() as u64 - 1;
+        // the first value can be anything but self.data.len() - 1
+        // otherwise we would set data[len - 1].index to len - 1 and not delete it
+        let mut last_alive = if self.data.len() as u64 == EntityId::max_index() {
+            0
+        } else {
+            EntityId::max_index()
+        };
         for (i, id) in self.data.iter_mut().enumerate().rev() {
             let target = last_alive;
             let id_before_bump = *id;
