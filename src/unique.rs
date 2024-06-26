@@ -2,6 +2,8 @@ use crate::component::Unique;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::storage::Storage;
 use crate::tracking::TrackingTimestamp;
+use core::any::type_name;
+use core::mem::size_of;
 
 /// Unique storage.
 pub struct UniqueStorage<T: Unique> {
@@ -15,9 +17,9 @@ pub struct UniqueStorage<T: Unique> {
 impl<T: Unique> Storage for UniqueStorage<T> {
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
-            storage_name: core::any::type_name::<Self>().into(),
-            allocated_memory_bytes: core::mem::size_of::<Self>(),
-            used_memory_bytes: core::mem::size_of::<Self>(),
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: size_of::<Self>(),
+            used_memory_bytes: size_of::<Self>(),
             component_count: 1,
         })
     }

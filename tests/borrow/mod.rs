@@ -2,6 +2,7 @@ use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
+#[allow(unused)]
 struct USIZE(usize);
 impl Component for USIZE {
     type Tracking = track::Untracked;
@@ -21,6 +22,7 @@ impl Component for I32 {
     type Tracking = track::Untracked;
 }
 
+#[allow(unused)]
 #[cfg(feature = "thread_local")]
 struct NotSend(*const ());
 
@@ -34,6 +36,7 @@ impl Component for NotSend {
 #[cfg(feature = "thread_local")]
 impl Unique for NotSend {}
 
+#[allow(unused)]
 #[cfg(feature = "thread_local")]
 struct NotSync(*const ());
 
@@ -47,6 +50,7 @@ impl Component for NotSync {
 #[cfg(feature = "thread_local")]
 impl Unique for NotSync {}
 
+#[allow(unused)]
 #[cfg(feature = "thread_local")]
 struct NotSendSync(*const ());
 

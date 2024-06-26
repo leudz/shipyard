@@ -101,12 +101,6 @@ fn modified_update() {
 }
 #[test]
 fn bulk_single() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
-
     let mut world = World::new();
 
     let entities = world

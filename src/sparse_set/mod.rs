@@ -28,12 +28,13 @@ use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::type_name;
+use core::mem::size_of;
 use core::{
     cmp::{Ord, Ordering},
     fmt,
 };
 
-pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
+pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 
 /// Default component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
@@ -714,21 +715,21 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.modification_data.capacity() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>())
+                + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.modification_data.len() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<TrackingTimestamp>())
+                + (self.modification_data.len() * size_of::<TrackingTimestamp>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -784,19 +785,19 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<u32>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<u32>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -852,19 +853,19 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<u32>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<u32>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -920,19 +921,19 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<u32>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<u32>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }

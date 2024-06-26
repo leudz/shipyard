@@ -21,6 +21,7 @@ fn check_derive() {
     #[derive(WorldBorrow)]
     struct D(C);
 
+    #[allow(unused)]
     #[derive(Component, Unique)]
     struct E;
 
@@ -51,6 +52,7 @@ fn default() {
     world.borrow::<CustomView>().unwrap();
 }
 
+#[allow(unused)]
 #[derive(Hash, Debug, PartialEq, Clone, Label)]
 struct MyLabel;
 

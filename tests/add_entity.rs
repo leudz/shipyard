@@ -135,6 +135,7 @@ fn bulk() {
 
 #[test]
 fn bulk_unequal_length() {
+    #[allow(unused)]
     struct USIZE(usize);
     impl Component for USIZE {
         type Tracking = track::Untracked;

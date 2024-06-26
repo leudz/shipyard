@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use shipyard::{track, Component};
 
 mod add_components;

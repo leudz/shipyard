@@ -2,7 +2,10 @@ mod hasher;
 
 pub(crate) use hasher::TypeIdHasher;
 
-use core::hash::{Hash, Hasher};
+use core::{
+    hash::{Hash, Hasher},
+    mem::{align_of, size_of},
+};
 
 /// Custom `TypeId` to be able to deserialize it.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
@@ -23,7 +26,7 @@ impl TypeId {
 
 impl From<core::any::TypeId> for TypeId {
     fn from(type_id: core::any::TypeId) -> Self {
-        match core::mem::size_of::<core::any::TypeId>() {
+        match size_of::<core::any::TypeId>() {
             8 => {
                 let mut hasher = TypeIdHasher::default();
 
@@ -35,7 +38,7 @@ impl From<core::any::TypeId> for TypeId {
                 // This is technically unsound, core::any::TypeId has rust layout
                 // but there is no other way to get the full value anymore
 
-                match core::mem::align_of::<core::any::TypeId>() {
+                match align_of::<core::any::TypeId>() {
                     8 => {
                         let type_id_ptr: *const core::any::TypeId = &type_id;
                         let type_id_ptr = type_id_ptr as *const (u64, u64);

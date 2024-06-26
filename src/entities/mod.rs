@@ -13,7 +13,9 @@ use crate::storage::Storage;
 use crate::tracking::TrackingTimestamp;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::type_name;
 use core::iter::repeat_with;
+use core::mem::size_of;
 
 /// Entities holds the EntityIds to all entities: living, removed and dead.
 ///
@@ -429,11 +431,10 @@ impl Storage for Entities {
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
-            storage_name: core::any::type_name::<Self>().into(),
-            allocated_memory_bytes: (self.data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Entities>(),
-            used_memory_bytes: (self.data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Entities>(),
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: (self.data.capacity() * size_of::<EntityId>())
+                + size_of::<Entities>(),
+            used_memory_bytes: (self.data.len() * size_of::<EntityId>()) + size_of::<Entities>(),
             component_count: self.data.len(),
         })
     }

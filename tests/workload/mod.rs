@@ -7,6 +7,7 @@ impl Component for U32 {
 }
 impl Unique for U32 {}
 
+#[allow(unused)]
 struct USIZE(usize);
 impl Component for USIZE {
     type Tracking = track::Untracked;

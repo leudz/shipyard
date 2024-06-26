@@ -21,10 +21,11 @@ fn hasher() {
     fn verify<T: 'static + ?Sized>() {
         use core::any::TypeId;
         use core::hash::Hash;
+        use core::mem::size_of;
 
         let type_id = TypeId::of::<T>();
 
-        match core::mem::size_of::<TypeId>() {
+        match size_of::<TypeId>() {
             8 => {
                 let mut hasher = TypeIdHasher::default();
                 type_id.hash(&mut hasher);

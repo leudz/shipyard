@@ -99,12 +99,6 @@ fn update() {
 #[test]
 #[should_panic(expected = "Entity has to be alive to add component to it.")]
 fn dead_entity() {
-    #[derive(PartialEq, Eq, Debug)]
-    struct USIZE(usize);
-    impl Component for USIZE {
-        type Tracking = track::Untracked;
-    }
-
     let mut world = World::new();
 
     let entity = world.add_entity(());

@@ -1649,7 +1649,9 @@ mod tests {
     };
 
     struct Usize(usize);
+    #[allow(unused)]
     struct U32(u32);
+    #[allow(unused)]
     struct U16(u16);
 
     impl Component for Usize {
@@ -1990,6 +1992,7 @@ mod tests {
     fn non_send() {
         use crate::{track, NonSend, View, ViewMut, World};
 
+        #[allow(unused)]
         struct NotSend(*const ());
         unsafe impl Sync for NotSend {}
         impl Component for NotSend {

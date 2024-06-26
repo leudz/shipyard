@@ -1,10 +1,6 @@
 use shipyard::*;
 
-struct USIZE(usize);
-impl Component for USIZE {
-    type Tracking = track::Untracked;
-}
-
+#[allow(unused)]
 struct U32(u32);
 impl Component for U32 {
     type Tracking = track::Untracked;

@@ -2,7 +2,7 @@ use crate::rand::gen_range;
 use macroquad::{
     input::show_mouse,
     prelude::*,
-    ui::{root_ui, widgets::Button, Ui},
+    ui::{root_ui, widgets::Button},
 };
 use shipyard::{
     AddComponent, AllStorages, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter,

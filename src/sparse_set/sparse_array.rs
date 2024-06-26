@@ -4,6 +4,7 @@ use alloc::boxed::Box;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
+use core::mem::size_of;
 
 /// Internal part of a [`SparseSet`].
 ///
@@ -28,20 +29,20 @@ impl<T, const N: usize> SparseArray<T, N> {
         self.0.as_mut_ptr()
     }
     pub(super) fn used_memory(&self) -> usize {
-        self.0.len() * core::mem::size_of::<Option<Box<T>>>()
+        self.0.len() * size_of::<Option<Box<T>>>()
             + self.0.iter().fold(0, |count, array| {
                 if array.is_some() {
-                    count + core::mem::size_of::<[T; N]>()
+                    count + size_of::<[T; N]>()
                 } else {
                     count
                 }
             })
     }
     pub(super) fn reserved_memory(&self) -> usize {
-        self.0.capacity() * core::mem::size_of::<Option<Box<T>>>()
+        self.0.capacity() * size_of::<Option<Box<T>>>()
             + self.0.iter().fold(0, |count, array| {
                 if array.is_some() {
-                    count + core::mem::size_of::<[T; N]>()
+                    count + size_of::<[T; N]>()
                 } else {
                     count
                 }

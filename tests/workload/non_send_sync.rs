@@ -7,12 +7,14 @@ impl Component for MyRc {
     type Tracking = track::Untracked;
 }
 
+#[allow(unused)]
 struct NotSend(*const ());
 impl Component for NotSend {
     type Tracking = track::Untracked;
 }
 unsafe impl Sync for NotSend {}
 
+#[allow(unused)]
 struct NotSync(*const ());
 impl Component for NotSync {
     type Tracking = track::Untracked;
