@@ -20,7 +20,6 @@
     - [Performance Tips](./going-further/performance-tips.md)
     - [More Resources](./going-further/more-resources.md)
 - [Going Deeper](./going-deeper.md)
-    - [Workload creation](./going-deeper/workload-creation.md)
     - [Sparse Set](./going-deeper/sparse-set.md)
 - [Recipes](./recipes.md)
     - [Hierarchy](./recipes/hierarchy.md)
