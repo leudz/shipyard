@@ -16,16 +16,8 @@ Components can be deleted or removed but whole entities can only be deleted (at 
 Tracking is set with the `Component` trait. You can set it to any single operation or use `All` to track everything.
 
 ```rs
-struct Life(f32);
-impl Component for Life {
-    type Tracking = track::Modification;
-}
-
-// or with the proc macro
-
-#[derive(Component)]
-#[track(Modification)]
-struct Life(f32);
+{{#include ../../../../tests/book/tracking.rs:component}}
+{{#include ../../../../tests/book/tracking.rs:component_proc}}
 ```
 
 ## Usage
@@ -38,13 +30,7 @@ Outside workloads you'll get information since the last call to `clear_*`.
 You can query *inserted* and *modified* components when iterating by calling `inserted`, `modified` or `inserted_or_modified` on a view before making the iterator. (*_mut versions also exist).
 
 ```rs
-fn run(life: View<Life>, mut is_dead: ViewMut<IsDead>) {
-    for (entity, life) in life.modified().iter().with_id() {
-        if life.0 <= 0.0 {
-            is_dead.add_component_unchecked(entity, IsDead);
-        }
-    }
-}
+{{#include ../../../../tests/book/tracking.rs:run}}
 ```
 
 #### *Removed* or *Deleted*
