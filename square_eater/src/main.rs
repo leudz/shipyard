@@ -110,7 +110,7 @@ impl PowerUps {
     }
 
     fn player_start_size(&self) -> f32 {
-        self.player_start_size as f32 * 0.5
+        self.player_start_size as f32 * 3.0
     }
 
     fn player_boost_duration(&self) -> u32 {
@@ -149,13 +149,13 @@ impl PowerUps {
         self.square_spawn_rate * 4
     }
 
-    fn iter_player_power_ups(&mut self) -> impl IntoIterator<Item = (&'static str, &mut u32)> {
+    fn iter_player_power_ups(&mut self) -> impl IntoIterator<Item = (&'static str, u32, &mut u32)> {
         [
-            ("Start size", &mut self.player_start_size),
-            ("Boost duration", &mut self.player_boost_duration),
-            ("Boost spawn rate", &mut self.player_boost_spawn_rate),
-            ("Size on eat", &mut self.player_size_on_eat),
-            ("Defense", &mut self.player_defense),
+            ("Start size", 3, &mut self.player_start_size),
+            ("Boost duration", 10, &mut self.player_boost_duration),
+            ("Boost spawn rate", 10, &mut self.player_boost_spawn_rate),
+            ("Size on eat", 10, &mut self.player_size_on_eat),
+            ("Defense", 5, &mut self.player_defense),
         ]
     }
 }
@@ -220,19 +220,22 @@ fn place_buttons(world: &World) {
     let mut should_transition = false;
 
     world.run(|mut power_ups: UniqueViewMut<PowerUps>| {
-        for (i, (text, power_up)) in power_ups.iter_player_power_ups().into_iter().enumerate() {
+        for (i, (text, max_power_level, power_up)) in
+            power_ups.iter_player_power_ups().into_iter().enumerate()
+        {
             let height_offset = i as f32 * 25.0;
 
             let text_dimensions = measure_text(text, None, 20, 1.0);
             draw_text(text, WIDTH / 8.0, HEIGHT / 4.0 + height_offset, 20.0, BLACK);
 
-            if Button::new("+")
-                .position(vec2(
-                    WIDTH / 8.0 + text_dimensions.width + 5.0,
-                    HEIGHT / 4.0 - text_dimensions.height + height_offset,
-                ))
-                .size(vec2(15.0, 15.0))
-                .ui(&mut *root_ui)
+            if *power_up < max_power_level
+                && Button::new("+")
+                    .position(vec2(
+                        WIDTH / 8.0 + text_dimensions.width + 5.0,
+                        HEIGHT / 4.0 - text_dimensions.height + height_offset,
+                    ))
+                    .size(vec2(15.0, 15.0))
+                    .ui(&mut *root_ui)
             {
                 *power_up += 1;
                 should_transition = true;
