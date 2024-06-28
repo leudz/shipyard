@@ -271,17 +271,26 @@ enum Screen {
 fn transition_screen(new_screen: Screen, mut all_storages: AllStoragesViewMut) {
     match new_screen {
         Screen::Start => {
-            show_mouse(true);
-            set_cursor_grab(false);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                show_mouse(true);
+                set_cursor_grab(false);
+            }
         }
         Screen::Floor => {
-            show_mouse(false);
-            set_cursor_grab(true);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                show_mouse(false);
+                set_cursor_grab(true);
+            }
             all_storages.run(init_floor);
         }
         Screen::Shop => {
-            show_mouse(true);
-            set_cursor_grab(false);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                show_mouse(true);
+                set_cursor_grab(false);
+            }
             clear_floor(&mut all_storages);
         }
     }
