@@ -10,6 +10,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
+use crate::get_unique::GetUnique;
 use crate::info::WorkloadsInfo;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
@@ -1405,6 +1406,74 @@ assert!(*j == &U32(1));
         let current = self.get_current();
 
         T::get(all_storages, Some(all_borrow), current, entity)
+    }
+
+    #[doc = "Retrieve a unique component.
+
+You can use:
+* `&T` for a shared access to `T` unique component
+* `&mut T` for an exclusive access to `T` unique component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` unique component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` unique component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` unique component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared) + storage (exclusive or shared)
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+
+### Example
+```
+use shipyard::{Unique, World};
+
+#[derive(Unique, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+let mut world = World::new();
+
+world.add_unique(U32(0));
+
+let i = world.get_unique::<&U32>().unwrap();
+
+assert!(*i == U32(0));
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    #[inline]
+    pub fn get_unique<T: GetUnique>(&self) -> Result<T::Out<'_>, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            ARef::destructure(
+                self.all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
+        T::get_unique(all_storages, Some(all_borrow))
     }
 
     #[doc = "Iterate components.
