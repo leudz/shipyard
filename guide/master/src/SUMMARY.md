@@ -1,6 +1,13 @@
 # Summary
 
 [Welcome](./welcome.md)
+- [Learn by example](./learn-by-example.md)
+    - [A lone square](./learn-by-example/a-lone-square.md)
+    - [Friends](./learn-by-example/friends.md)
+    - [Spark](./learn-by-example/spark.md)
+    - [Breather](./learn-by-example/breather.md)
+    - [Reign](./learn-by-example/reign.md)
+    - [True Viectory](./learn-by-example/true-victory.md)
 - [Fundamentals](./fundamentals.md)
     - [World](./fundamentals/world.md)
     - [Add Entity](./fundamentals/add-entity.md)
