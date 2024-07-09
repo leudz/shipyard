@@ -41,6 +41,14 @@ fn entity_id_serde() {
     );
 }
 
+#[test]
+fn dead_entity() {
+    check_roundtrip(
+        EntityId::dead(),
+        &format!("{{\"index\":281474976710654,\"gen\":{}}}", !0u16,),
+    );
+}
+
 fn check_roundtrip(entity_id: EntityId, expected: &str) {
     assert_eq!(expected, serde_json::to_string(&entity_id).unwrap());
     let new_entity_id: EntityId = serde_json::from_str(expected).unwrap();
