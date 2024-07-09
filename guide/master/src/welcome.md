@@ -22,8 +22,8 @@ Systems do the heavy lifting: updating components, running side-effects, and int
 
 # Learn
 
-You can either build a small game with shipyard's concepts showed as you encounter them.
+You can either build a small game with shipyard's concepts showed as you encounter them.\
 Or go through a more packed format.
 
-[I want to build a small game](./learn-by-example.md)
+[I want to build a small game](./learn-by-example.md)\
 [I prefer a packed format](./fundamentals.md)
