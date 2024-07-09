@@ -889,7 +889,7 @@ let i = world.run(sys1);
 
                 #[cfg(feature = "tracing")]
                 let system_span =
-                    tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
+                    tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
                 #[cfg(feature = "tracing")]
                 let _system_span = system_span.enter();
 
