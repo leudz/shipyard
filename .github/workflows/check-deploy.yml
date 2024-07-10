@@ -88,7 +88,7 @@ jobs:
       - name: download mdbook
         uses: peaceiris/actions-mdbook@v1
         with:
-          mdbook-version: "latest"
+          mdbook-version: "0.4.34"
 
       - run: cargo install mdbook-linkcheck
 
@@ -111,7 +111,7 @@ jobs:
       - name: download mdbook
         uses: peaceiris/actions-mdbook@v1
         with:
-          mdbook-version: "latest"
+          mdbook-version: "0.4.34"
 
       - run: cargo install mdbook-linkcheck
 
@@ -134,7 +134,7 @@ jobs:
       - name: download mdbook
         uses: peaceiris/actions-mdbook@v1
         with:
-          mdbook-version: "latest"
+          mdbook-version: "0.4.34"
 
       - run: cargo install mdbook-linkcheck
 
