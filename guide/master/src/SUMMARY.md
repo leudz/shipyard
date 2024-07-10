@@ -7,7 +7,7 @@
     - [Spark](./learn-by-example/spark.md)
     - [Breather](./learn-by-example/breather.md)
     - [Reign](./learn-by-example/reign.md)
-    - [True Viectory](./learn-by-example/true-victory.md)
+    - [True Victory](./learn-by-example/true-victory.md)
 - [Fundamentals](./fundamentals.md)
     - [World](./fundamentals/world.md)
     - [Add Entity](./fundamentals/add-entity.md)
