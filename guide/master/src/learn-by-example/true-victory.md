@@ -47,6 +47,17 @@ Let's give the `Player` a little bit of help and a way to win again.
 In many games whenever the player is hit they'll turn invincible for a few frames.
 
 ```rust,noplaypen
+async fn main() {
+    // -- SNIP --
+
+    let player = Player {
+        // -- SNIP --
+        i_counter: 0,
+    };
+
+    // -- SNIP --
+}
+
 struct Player {
     // -- SNIP --
     i_counter: u32,
@@ -64,7 +75,6 @@ impl Player {
     }
 }
 
-
 fn collision(
     entities: EntitiesView,
     mut player: UniqueViewMut<Player>,
@@ -72,8 +82,10 @@ fn collision(
     v_power_pellets: View<PowerPellet>,
     mut vm_to_delete: ViewMut<ToDelete>,
 ) -> Result<(), GameOver> {
-            // -- SNIP --
+        // -- SNIP --
 
+            if player.powered_up() {
+                // -- SNIP --
             } else if player.is_invincible() {
                 continue;
             }
@@ -101,6 +113,10 @@ use shipyard::{
 
 async fn main() {
     // -- SNIP --
+
+    for _ in 0..5 {
+        let _entity_id = world.add_entity(Friend::new());
+    }
 
     world.add_workload(main_loop);
 

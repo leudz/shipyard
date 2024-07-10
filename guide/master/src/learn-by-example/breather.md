@@ -50,7 +50,6 @@ fn collision(mut player: UniqueViewMut<Player>, v_friend: View<Friend>) {
 We can also handle the game over a little cleaner.
 
 ```rust,noplaypen
-
 enum GameOver {
     Defeat,
 }

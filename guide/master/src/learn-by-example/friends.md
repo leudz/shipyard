@@ -21,7 +21,10 @@ use shipyard::{Component, World};
 
 #[macroquad::main("Square Eater")]
 async fn main() {
+    rand::srand(macroquad::miniquad::date::now() as u64);
+
     // -- SNIP --
+
     let mut world = World::new();
 
     for _ in 0..5 {
@@ -48,8 +51,6 @@ fn render(player: &Player, world: &World) {
 
 impl Friend {
     fn new() -> Friend {
-        rand::srand(macroquad::miniquad::date::now() as u64);
-
         let width = screen_width();
         let height = screen_height();
 
@@ -115,7 +116,7 @@ fn render(world: &World) {
         friend.0.render(GREEN);
     }
 
-    let player = world.get_unique::<Player>().unwrap();
+    let player = world.get_unique::<&Player>().unwrap();
 
     player.square.render(BLUE);
 }
@@ -124,7 +125,7 @@ fn move_player(world: &World) {
     let width = screen_width();
     let height = screen_height();
     let (x, y) = mouse_position();
-    let mut player = world.get_unique_mut::<Player>().unwrap();
+    let mut player = world.get_unique::<&mut Player>().unwrap();
 
     player.square.x = x.clamp(0.0, width - player.square.size);
     player.square.y = y.clamp(0.0, height - player.square.size);

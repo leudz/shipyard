@@ -5,6 +5,9 @@ Let's infuse a bit of life into our friends.
 ```rust,noplaypen
 use shipyard::{Component, IntoIter, Unique, UniqueView, UniqueViewMut, View, ViewMut, World};
 
+const GROWTH_RATE: f32 = 0.15;
+const MAX_SIZE: f32 = 25.0;
+
 async fn main() {
     // -- SNIP --
 
@@ -31,6 +34,8 @@ fn grow(mut vm_friend: ViewMut<Friend>) {
 It appears our `Friend`s want to come close to the `Player`, likely to give them a hug.
 
 ```rust,noplaypen
+const SPEED: f32 = 1.5;
+
 async fn main() {
     // -- SNIP --
 
@@ -104,7 +109,7 @@ async fn main() {
         world.run(move_player);
         world.run(move_friends);
         world.run(grow);
-        world.run(collide);
+        world.run(collision);
         world.run(render);
 
     // -- SNIP --
