@@ -10,7 +10,7 @@ We'll only use two dependencies, let's add them to `Cargo.toml`.
 
 ```toml
 macroquad = "0.4.8"
-shipyard = { git = "https://github.com/leudz/shipyard", default-features = false, features = [
+shipyard = { version = "0.7", default-features = false, features = [
     "proc",
     "std",
 ] }
