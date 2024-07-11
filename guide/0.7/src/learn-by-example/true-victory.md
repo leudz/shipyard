@@ -223,3 +223,27 @@ After some type juggling we can get our result back.
 This concludes the example guide.\
 You've encountered the main ways you can interact with entities, components and systems.\
 The following reference guide goes deeper into details and is a good place to come back to once you start your own project.
+
+---
+
+You may be wondering where are the floors, the shop,...\
+Your mission, should you choose to accept it is to build the rest of the game.
+
+Each new floor reached the `Friend`s gain one of these bonus:
+- start size +0.5
+- growth rate +0.05
+- speed +0.1
+- number +3
+- spawn rate +4
+
+Each floor, new or not, the `Player` chooses between:
+- start size +3.0 (capped at 3)
+- power up duration +10 (capped at 10)
+- power up spawn rate +10 (capped at 10)
+- size on eat +0.5 (capped at 10)
+- defense +0.4 (capped at 5)
+
+The game alternates between floor and shop.\
+Each floor a total of `(floor_number + 1) * 2` `Friend`s spawn.\
+If the `Player` is able to eat all `Friend`s they move to the next floor.\
+If not, they stay on the same floor but with a visit to the shop.
