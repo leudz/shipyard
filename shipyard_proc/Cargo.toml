@@ -11,6 +11,10 @@ repository = "https://github.com/leudz/shipyard"
 [lib]
 proc-macro = true
 
+[features]
+default = []
+parallel = []
+
 [dependencies]
 proc-macro2 = "1"
 quote = "1"

@@ -83,6 +83,7 @@ pub(crate) fn expand_into_iter(
             let mut iter_fields = Punctuated::<Field, Comma>::new();
             let mut iter_fields_access = Punctuated::<ExprReference, Comma>::new();
             let mut iter_fields_variable = Punctuated::<Ident, Comma>::new();
+            let mut contains_view_mut = false;
             'field: for field in fields.named.iter() {
                 if let syn::Type::Path(path) = &field.ty {
                     let field_attrs = field
@@ -187,6 +188,8 @@ pub(crate) fn expand_into_iter(
                                 }
                             };
 
+                            contains_view_mut = true;
+
                             let comp_ty = tys
                                 .next()
                                 .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
@@ -234,6 +237,85 @@ pub(crate) fn expand_into_iter(
                 }
             }
 
+            let par_iter_struct: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(quote!(struct #par_iter_name #iter_generics (
+                        shipyard::iter::ParIter<(
+                            #iter_fields
+                        )>
+                    );))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let into_par_iter: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(quote!(type IntoParIter = #par_iter_name #iter_ty_generics;))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let par_iter: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(quote!(fn par_iter(self) -> Self::IntoParIter {
+                        #par_iter_name((#iter_fields_access).par_iter())
+                    }))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let parallel_iter: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(
+                        quote!(impl #iter_impl_generics shipyard::iter::__ParallelIterator for #par_iter_name #iter_ty_generics #iter_where_clause {
+                            type Item = #item_name #iter_ty_generics;
+
+                            #[inline]
+                            fn drive_unindexed<__C>(self, consumer: __C) -> __C::Result
+                            where
+                                __C: shipyard::iter::__UnindexedConsumer<Self::Item>,
+                            {
+                                shipyard::iter::__ParallelIterator::drive_unindexed(
+                                    shipyard::iter::__ParallelIterator::map(
+                                        self.0,
+                                        |(#iter_fields_variable)| #item_name { #iter_fields_variable }
+                                    ),
+                                    consumer
+                                )
+                            }
+
+                            #[inline]
+                            fn opt_len(&self) -> core::option::Option<usize> {
+                                shipyard::iter::__ParallelIterator::opt_len(&self.0)
+                            }
+                        }),
+                    )
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let r#mut = if contains_view_mut {
+                Some(quote!(mut))
+            } else {
+                None
+            };
+
             Ok(quote!(
                 struct #item_name #iter_generics {
                     #item_fields
@@ -245,15 +327,11 @@ pub(crate) fn expand_into_iter(
                     )>
                 );
 
-                struct #par_iter_name #iter_generics (
-                    shipyard::iter::ParIter<(
-                        #iter_fields
-                    )>
-                );
+                #par_iter_struct
 
-                impl #iter_impl_generics shipyard::iter::IntoIter for &'__tmp mut #name #ty_generics #where_clause {
+                impl #iter_impl_generics shipyard::iter::IntoIter for &'__tmp #r#mut #name #ty_generics #where_clause {
                     type IntoIter = #iter_name #iter_ty_generics;
-                    type IntoParIter = #par_iter_name #iter_ty_generics;
+                    #into_par_iter
 
                     fn iter(self) -> Self::IntoIter {
                         #iter_name((#iter_fields_access).iter())
@@ -263,9 +341,7 @@ pub(crate) fn expand_into_iter(
                         #iter_name((#iter_fields_access).iter_by::<__D>())
                     }
 
-                    fn par_iter(self) -> Self::IntoParIter {
-                        #par_iter_name((#iter_fields_access).par_iter())
-                    }
+                    #par_iter
                 }
 
                 impl #iter_impl_generics core::iter::Iterator for #iter_name #iter_ty_generics #iter_where_clause {
@@ -309,28 +385,7 @@ pub(crate) fn expand_into_iter(
                     }
                 }
 
-                impl #iter_impl_generics shipyard::iter::__ParallelIterator for #par_iter_name #iter_ty_generics #iter_where_clause {
-                    type Item = #item_name #iter_ty_generics;
-
-                    #[inline]
-                    fn drive_unindexed<__C>(self, consumer: __C) -> __C::Result
-                    where
-                        __C: shipyard::iter::__UnindexedConsumer<Self::Item>,
-                    {
-                        shipyard::iter::__ParallelIterator::drive_unindexed(
-                            shipyard::iter::__ParallelIterator::map(
-                                self.0,
-                                |(#iter_fields_variable)| #item_name { #iter_fields_variable }
-                            ),
-                            consumer
-                        )
-                    }
-
-                    #[inline]
-                    fn opt_len(&self) -> core::option::Option<usize> {
-                        shipyard::iter::__ParallelIterator::opt_len(&self.0)
-                    }
-                }
+                #parallel_iter
             ))
         }
         syn::Fields::Unnamed(fields) => {
@@ -345,6 +400,7 @@ pub(crate) fn expand_into_iter(
             let mut iter_fields = Punctuated::<Field, Comma>::new();
             let mut iter_fields_access = Punctuated::<ExprReference, Comma>::new();
             let mut iter_fields_variable = Punctuated::<Ident, Comma>::new();
+            let mut contains_view_mut = false;
             'field: for (field_index, field) in fields.unnamed.iter().enumerate() {
                 if let syn::Type::Path(path) = &field.ty {
                     for segment in path.path.segments.iter() {
@@ -408,6 +464,8 @@ pub(crate) fn expand_into_iter(
                                 }
                             };
 
+                            contains_view_mut = true;
+
                             let comp_ty = tys
                                 .next()
                                 .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
@@ -447,6 +505,85 @@ pub(crate) fn expand_into_iter(
                 }
             }
 
+            let par_iter_struct: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(quote!(struct #par_iter_name #iter_generics (
+                        shipyard::iter::ParIter<(
+                            #iter_fields
+                        )>
+                    );))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let par_iter: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(quote!(fn par_iter(self) -> Self::IntoParIter {
+                        #par_iter_name((#iter_fields_access).par_iter())
+                    }))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let into_par_iter: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(quote!(type IntoParIter = #par_iter_name #iter_ty_generics;))
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let parallel_iter: Option<TokenStream> = {
+                #[cfg(feature = "parallel")]
+                {
+                    Some(
+                        quote!(impl #iter_impl_generics shipyard::iter::__ParallelIterator for #par_iter_name #iter_ty_generics #iter_where_clause {
+                            type Item = #item_name #iter_ty_generics;
+
+                            #[inline]
+                            fn drive_unindexed<__C>(self, consumer: __C) -> __C::Result
+                            where
+                                __C: shipyard::iter::__UnindexedConsumer<Self::Item>,
+                            {
+                                shipyard::iter::__ParallelIterator::drive_unindexed(
+                                    shipyard::iter::__ParallelIterator::map(
+                                        self.0,
+                                        |(#iter_fields_variable)| #item_name(#iter_fields_variable)
+                                    ),
+                                    consumer
+                                )
+                            }
+
+                            #[inline]
+                            fn opt_len(&self) -> core::option::Option<usize> {
+                                shipyard::iter::__ParallelIterator::opt_len(&self.0)
+                            }
+                        }),
+                    )
+                }
+                #[cfg(not(feature = "parallel"))]
+                {
+                    None
+                }
+            };
+
+            let r#mut = if contains_view_mut {
+                Some(quote!(mut))
+            } else {
+                None
+            };
+
             Ok(quote!(
                 struct #item_name #iter_generics (
                     #item_fields
@@ -458,15 +595,11 @@ pub(crate) fn expand_into_iter(
                     )>
                 );
 
-                struct #par_iter_name #iter_generics (
-                    shipyard::iter::ParIter<(
-                        #iter_fields
-                    )>
-                );
+                #par_iter_struct
 
-                impl #iter_impl_generics shipyard::iter::IntoIter for &'__tmp mut #name #ty_generics #where_clause {
+                impl #iter_impl_generics shipyard::iter::IntoIter for &'__tmp #r#mut #name #ty_generics #where_clause {
                     type IntoIter = #iter_name #iter_ty_generics;
-                    type IntoParIter = #par_iter_name #iter_ty_generics;
+                    #into_par_iter
 
                     fn iter(self) -> Self::IntoIter {
                         #iter_name((#iter_fields_access).iter())
@@ -476,9 +609,7 @@ pub(crate) fn expand_into_iter(
                         #iter_name((#iter_fields_access).iter_by::<__D>())
                     }
 
-                    fn par_iter(self) -> Self::IntoParIter {
-                        #par_iter_name((#iter_fields_access).par_iter())
-                    }
+                    #par_iter
                 }
 
                 impl #iter_impl_generics core::iter::Iterator for #iter_name #iter_ty_generics #iter_where_clause {
@@ -522,28 +653,7 @@ pub(crate) fn expand_into_iter(
                     }
                 }
 
-                impl #iter_impl_generics shipyard::iter::__ParallelIterator for #par_iter_name #iter_ty_generics #iter_where_clause {
-                    type Item = #item_name #iter_ty_generics;
-
-                    #[inline]
-                    fn drive_unindexed<__C>(self, consumer: __C) -> __C::Result
-                    where
-                        __C: shipyard::iter::__UnindexedConsumer<Self::Item>,
-                    {
-                        shipyard::iter::__ParallelIterator::drive_unindexed(
-                            shipyard::iter::__ParallelIterator::map(
-                                self.0,
-                                |(#iter_fields_variable)| #item_name(#iter_fields_variable)
-                            ),
-                            consumer
-                        )
-                    }
-
-                    #[inline]
-                    fn opt_len(&self) -> core::option::Option<usize> {
-                        shipyard::iter::__ParallelIterator::opt_len(&self.0)
-                    }
-                }
+                #parallel_iter
             ))
         }
         syn::Fields::Unit => Err(Error::new(
