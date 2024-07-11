@@ -54,6 +54,7 @@ pub(crate) fn expand_into_iter(
 
     let item_name = Ident::new(&iter_item_name, name_string.span());
     let iter_name = Ident::new(&format!("{}Iter", name_string), name_string.span());
+    #[cfg_attr(not(feature = "parallel"), allow(unused_variables))]
     let par_iter_name = Ident::new(&format!("{}ParIter", name_string), name_string.span());
 
     let Some(lifetime) = generics.lifetimes_mut().next() else {
