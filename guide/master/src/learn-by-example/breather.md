@@ -86,7 +86,7 @@ fn collision(mut player: UniqueViewMut<Player>, v_friend: View<Friend>) -> Resul
 Systems can return any type, [`World::run`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run) then returns when the function returns.\
 Moving the panic to `main` isn't a big change but it allows a better control of what happens which will be useful later on.
 
-To finish this chapter we can better show the duplicity of the "`Friend`s".
+To conclude this chapter we can better show the duplicity of the "`Friends`".
 
 ```rust,noplaypen
 fn render(player: UniqueView<Player>, v_friend: View<Friend>) {

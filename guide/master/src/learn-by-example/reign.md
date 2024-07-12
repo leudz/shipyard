@@ -1,8 +1,8 @@
 # Reign
 
-We've had plenty of time to think of a way for our `Player` to get back at those pesky `Friend`s.\
-Sometimes the simplest solution is the best.\
-If the `Friend`s can overpower the `Player` when they are fully grown, we shouldn't let them reach that size.\
+We've had plenty of time to think of a way for our `Player` to get back at those pesky `Friends`.\
+Sometimes, the simplest solution is the best.\
+If the `Friends` can overpower the `Player` when they are fully grown, we shouldn't let them reach that size.\
 I'm sure the `Player` can overcome `Friend` that are smaller than them.
 
 ```rust,noplaypen
@@ -33,13 +33,13 @@ fn collision(
 }
 ```
 
-It appears our `Player` can even overcome `Friend`s that are their size.\
+It appears our `Player` can even overcome `Friends` of equal size.\
 By... eating them!?
 
-Remember when we added `Friend`s to the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), each one was assigned an [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html).\
+Remember when we added `Friends` to the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html), each one was assigned an [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html).\
 We can iterate over both components and the [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) of the entity that owns them by using `with_id`.
 
-Then we can use this [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) to add another component to the vanquished `Friend`s.\
+Then we can use this [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html) to add another component to the vanquished `Friends`.\
 As you may have noticed we are not modifying `entities`. We only need it to check that the `eid` is alive.
 
 `ToDelete` is not a special component, we still have to make it do its job.
@@ -80,7 +80,7 @@ We are using it to [`delete_any`](https://docs.rs/shipyard/latest/shipyard/struc
 
 ## It's over
 
-Defeating smaller `Friend`s is nice but most of the time they've grown by the time the `Player` reaches them.\
+Defeating smaller `Friends` is nice but most of the time they've grown by the time the `Player` reaches them.\
 The `Player` needs more power.
 
 ```rust,noplaypen

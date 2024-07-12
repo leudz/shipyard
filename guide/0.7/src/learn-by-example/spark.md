@@ -29,9 +29,9 @@ fn grow(mut vm_friend: ViewMut<Friend>) {
 }
 ```
 
-`grow`'s code could be simpler but this version makes `Friend`s grow from their center which feels a lot more natural.
+`grow`'s code could be simpler but this version makes `Friends` grow from their center, which feels a lot more natural.
 
-It appears our `Friend`s want to come close to the `Player`, likely to give them a hug.
+It appears our `Friends` want to come close to the `Player`, likely to give them a hug.
 
 ```rust,noplaypen
 const SPEED: f32 = 1.5;
@@ -97,8 +97,8 @@ fn move_friends(player: UniqueView<Player>, mut vm_friend: ViewMut<Friend>) {
 }
 ```
 
-As you can see you can iterate views multiple times in the same system.\
-We also make sure the `Friend`s don't simply all overlap by stirring them away from their neighbors.
+As you can see, you can iterate views multiple times in the same system.\
+We also prevent the `Friends` from overlapping by stirring them away from their neighbors.
 
 But something doesn't feel right...
 
@@ -139,4 +139,4 @@ fn collision(mut player: UniqueViewMut<Player>, v_friend: View<Friend>) {
 }
 ```
 
-Oh my god! The "`Friend`s" killed the `Player`!?
+Oh my god! The "`Friends`" killed the `Player`!?

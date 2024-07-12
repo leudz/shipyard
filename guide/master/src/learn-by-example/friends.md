@@ -13,7 +13,7 @@ Instead we'll store them in a [`World`](https://docs.rs/shipyard/latest/shipyard
 [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) is shipyard's main type.\
 It's where everything is stored, from components to entities to systems.
 
-In this guide I'll be explicit about `shipyard` imports but you could `use shipyard::*;` if you wanted.
+In this guide, I'll be explicit about `shipyard` imports but you could `use shipyard::*;` if you prefer.
 
 ```rust,noplaypen
 use macroquad::rand::gen_range;
@@ -63,10 +63,10 @@ impl Friend {
 }
 ```
 
-This won't compile just yet, `Friend` is not a [`Component`](https://docs.rs/shipyard/latest/shipyard/trait.Component.html).\
+This won't compile just yet, as `Friend` is not a [`Component`](https://docs.rs/shipyard/latest/shipyard/trait.Component.html).\
 Some ECS require you to explicitly specify which types are components and some don't.\
 One of the reasons shipyard requires it is to easily identify components in codebases.\
-With small projects this isn't a big issue but as the number of lines grow, you'll have to find a way to identify components. This could be moving types to a `component.rs` but I'd rather have modules split based on what they do.
+With small projects, this isn't a big issue but as the number of lines grow, you'll have to find a way to identify components. This could be moving types to a `component.rs`, but I'd rather have modules split based on what they do.
 
 Let's add the missing piece.
 
@@ -81,7 +81,7 @@ And [`iter`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.i
 
 We can move `Player` into the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) to simplify our code a little.\
 We only have a single `Player` and it will only ever have a single component.\
-For this kind of entities shipyard has [`Unique`](https://docs.rs/shipyard/latest/shipyard/trait.Unique.html) components.
+For this kind of entities, shipyard has [`Unique`](https://docs.rs/shipyard/latest/shipyard/trait.Unique.html) components.
 
 ```rust,noplaypen
 use shipyard::{Component, Unique, World};
@@ -169,7 +169,7 @@ fn move_player(mut player: UniqueViewMut<Player>) {
 ```
 
 You've just written your first systems.\
-With shipyard all functions that have only views as arguments are systems.\
+With shipyard, all functions that have only views as arguments are systems.\
 The [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) understands these functions and provides the desired components automatically.
 
 The `v_`/`vm_` prefix for views is a convention that some `shipyard` users use. I'll follow it throughout the guide.

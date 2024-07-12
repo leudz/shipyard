@@ -1,6 +1,6 @@
 # True victory
 
-It seems the `Friend`s are able to copy the power pellets' spawning mechanic!
+It seems the `Friends` are able to copy the power pellets' spawning mechanic!
 And they've learned to avoid the `Player` whenever they are powered up.
 
 ```rust,noplaypen
@@ -44,7 +44,7 @@ fn spawn(
 ```
 
 Let's give the `Player` a little bit of help and a way to win again.
-In many games whenever the player is hit they'll turn invincible for a few frames.
+In many games, whenever the player is hit they'll turn invincible for a few frames.
 
 ```rust,noplaypen
 async fn main() {
@@ -102,7 +102,7 @@ fn counters(mut player: UniqueViewMut<Player>) {
 }
 ```
 
-We'll finish this guide by allowing the `Player` to win.
+We'll conclude this guide by allowing the `Player` to win.
 
 ```rust,noplaypen
 use shipyard::{
@@ -189,10 +189,10 @@ fn check_game_over(player: UniqueView<Player>, v_friends: View<Friend>) -> Resul
 [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html)s are a collection of systems.\
 We only have a single [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) in our game since it's quite small.\
 You would usually have smaller [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html)s that make up larger ones.\
-Apart from organization, [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html)s are automatically run across multiple threads which can usually boost performance.
+Apart from organization, [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html)s are automatically run across multiple threads, which can usually boost performance.
 
 The last touch is to handle `check_game_over`'s return value.\
-We use [`into_workload_try_system`](https://docs.rs/shipyard/latest/shipyard/trait.IntoWorkloadTrySystem.html#tymethod.into_workload_try_system) to explicitly tell the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) that this system might return something but we don't handle it anywhere.
+We use [`into_workload_try_system`](https://docs.rs/shipyard/latest/shipyard/trait.IntoWorkloadTrySystem.html#tymethod.into_workload_try_system) to explicitly inform the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) that this system might return something, but we don't handle it anywhere.
 
 ```rust,noplaypen
 async fn main() {
@@ -216,20 +216,20 @@ async fn main() {
 }
 ```
 
-After some type juggling we can get our result back.
+After some type juggling, we can get our result back.
 
 ## Conclusion
 
 This concludes the example guide.\
 You've encountered the main ways you can interact with entities, components and systems.\
-The following reference guide goes deeper into details and is a good place to come back to once you start your own project.
+The following reference guide delves deeper into details and is a good place to come back to once you start your own project.
 
 ---
 
 You may be wondering where are the floors, the shop,...\
 Your mission, should you choose to accept it is to build the rest of the game.
 
-Each new floor reached the `Friend`s gain one of these bonus:
+Each new floor reached, the `Friends` gain one of these bonuses:
 - start size +0.5
 - growth rate +0.05
 - speed +0.1
@@ -244,6 +244,6 @@ Each floor, new or not, the `Player` chooses between:
 - defense +0.4 (capped at 5)
 
 The game alternates between floor and shop.\
-Each floor a total of `(floor_number + 1) * 2` `Friend`s spawn.\
-If the `Player` is able to eat all `Friend`s they move to the next floor.\
+Each floor a total of `(floor_number + 1) * 2` `Friends` spawn.\
+If the `Player` is able to eat all `Friends`, they move to the next floor.\
 If not, they stay on the same floor but with a visit to the shop.
