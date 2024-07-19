@@ -222,3 +222,17 @@ fn tracking_enabled() {
 
     world.run_workload(w).unwrap();
 }
+
+#[test]
+fn single_system_run_on_same_thread() {
+    let world = World::new();
+    let main_thread = std::thread::current().id();
+
+    world.add_workload(move || {
+        move || {
+            assert_eq!(main_thread, std::thread::current().id());
+        }
+    });
+
+    world.run_default_workload().unwrap();
+}

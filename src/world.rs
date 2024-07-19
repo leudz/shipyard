@@ -794,9 +794,15 @@ let i = world.run(sys1);
                         .collect::<Result<Vec<_>, error::RunWorkload>>()?,
                 );
 
+                let mut skip_first = false;
+                let single_system = batch.0.filter(|_| run_if.0).or_else(|| {
+                    skip_first = true;
+                    batch.1.first().copied().filter(|_| run_if.1[0])
+                });
+
                 rayon::in_place_scope(|scope| {
                     scope.spawn(|_| {
-                        if batch.1.len() == 1 {
+                        if batch.1.len() == 1 && !skip_first {
                             if !run_if.1[0] {
                                 return;
                             }
@@ -812,7 +818,13 @@ let i = world.run(sys1);
                         } else {
                             use rayon::prelude::*;
 
-                            result = batch.1.par_iter().zip(run_if.1).try_for_each(|(&index, should_run)| {
+                            let start = if skip_first {
+                                1
+                            } else {
+                                0
+                            };
+
+                            result = batch.1[start..].par_iter().zip(&run_if.1[start..]).try_for_each(|(&index, should_run)| {
                                 if !should_run {
                                     return Ok(());
                                 }
@@ -829,17 +841,15 @@ let i = world.run(sys1);
                         }
                     });
 
-                    if let Some(index) = batch.0 {
-                        if run_if.0 {
-                            #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
+                    if let Some(index) = single_system {
+                        #[cfg(feature = "tracing")]
+                        let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
+                        #[cfg(feature = "tracing")]
+                        let _system_span = system_span.enter();
 
-                            systems[index](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[index].clone(), err))
-                            })?;
-                        }
+                        systems[index](self).map_err(|err| {
+                            error::RunWorkload::Run((system_names[index].clone(), err))
+                        })?;
                     }
 
                     Ok(())
