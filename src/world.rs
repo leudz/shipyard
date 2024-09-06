@@ -796,49 +796,39 @@ let i = world.run(sys1);
 
                 let mut skip_first = false;
                 let single_system = batch.0.filter(|_| run_if.0).or_else(|| {
-                    skip_first = true;
-                    batch.1.first().copied().filter(|_| run_if.1[0])
+                    let system = batch.1.first().copied().filter(|_| run_if.1[0]);
+
+                    if system.is_some() {
+                        skip_first = true;
+                    }
+
+                    system
                 });
 
                 rayon::in_place_scope(|scope| {
                     scope.spawn(|_| {
-                        if batch.1.len() == 1 && !skip_first {
-                            if !run_if.1[0] {
-                                return;
+                        use rayon::prelude::*;
+
+                        let start = if skip_first {
+                            1
+                        } else {
+                            0
+                        };
+
+                        result = batch.1[start..].par_iter().zip(&run_if.1[start..]).try_for_each(|(&index, should_run)| {
+                            if !should_run {
+                                return Ok(());
                             }
 
                             #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[batch.1[0]]);
+                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
                             #[cfg(feature = "tracing")]
                             let _system_span = system_span.enter();
 
-                            result = systems[batch.1[0]](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[batch.1[0]].clone(), err))
-                            });
-                        } else {
-                            use rayon::prelude::*;
-
-                            let start = if skip_first {
-                                1
-                            } else {
-                                0
-                            };
-
-                            result = batch.1[start..].par_iter().zip(&run_if.1[start..]).try_for_each(|(&index, should_run)| {
-                                if !should_run {
-                                    return Ok(());
-                                }
-
-                                #[cfg(feature = "tracing")]
-                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
-                                #[cfg(feature = "tracing")]
-                                let _system_span = system_span.enter();
-
-                                (systems[index])(self).map_err(|err| {
-                                    error::RunWorkload::Run((system_names[index].clone(), err))
-                                })
-                            });
-                        }
+                            (systems[index])(self).map_err(|err| {
+                                error::RunWorkload::Run((system_names[index].clone(), err))
+                            })
+                        });
                     });
 
                     if let Some(index) = single_system {
