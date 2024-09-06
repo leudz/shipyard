@@ -236,3 +236,16 @@ fn single_system_run_on_same_thread() {
 
     world.run_default_workload().unwrap();
 }
+
+/// Make sure that we don't panic in this scenario:
+/// - one system running on main thread
+/// - the system has a run_if that evaluates to false
+/// - no other system
+#[test]
+fn skip_first() {
+    let world = World::new();
+
+    world.add_workload(|| (|_: AllStoragesViewMut| {}).run_if(|| false));
+
+    world.run_default_workload().unwrap();
+}
