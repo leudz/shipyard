@@ -26,7 +26,7 @@ build_square_eater:
 
 move_square_eater:
     rm -f ./square_eater/public/square_eater.wasm
-    mv ./target/wasm32-unknown/release/square_eater.wasm ./square_eater/public/
+    mv ./target/wasm32-unknown-unknown/release/square_eater.wasm ./square_eater/public/
 
 square_eater: fmt test-all doc miri clippy clean
 
