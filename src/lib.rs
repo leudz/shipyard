@@ -126,8 +126,9 @@ pub use tracking::{
 };
 pub use unique::UniqueStorage;
 pub use views::{
-    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
-    View, ViewMut,
+    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueOrDefaultView,
+    UniqueOrDefaultViewMut, UniqueOrInitView, UniqueOrInitViewMut, UniqueView, UniqueViewMut, View,
+    ViewMut,
 };
 pub use world::{World, WorldBuilder};
 
