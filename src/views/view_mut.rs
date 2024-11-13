@@ -212,48 +212,73 @@ where
     }
 }
 
-impl<Track, T: Component + Default> ViewMut<'_, T, Track> {
+impl<'v, Track, T: Component + Default> ViewMut<'v, T, Track>
+where
+    for<'a> &'a mut ViewMut<'v, T, Track>: Get,
+{
     /// Retrieve `entity` component.
     ///
     /// If the entity doesn't have the component, insert its `Default` value.
+    ///
+    /// ### Errors
+    ///
+    /// Returns `None` when `entity` is dead and a component is already present for an entity with the same index.
     #[inline]
-    pub fn get_or_default(&mut self, entity: EntityId) -> Mut<'_, T> {
-        self.get_or_insert(entity, T::default())
+    pub fn get_or_default<'a>(
+        &'a mut self,
+        entity: EntityId,
+    ) -> Option<<&'a mut ViewMut<'v, T, Track> as Get>::Out> {
+        self.get_or_insert_with(entity, T::default)
     }
 }
 
-impl<Track, T: Component> ViewMut<'_, T, Track> {
+impl<'v, Track, T: Component> ViewMut<'v, T, Track>
+where
+    for<'a> &'a mut ViewMut<'v, T, Track>: Get,
+{
     /// Retrieve `entity` component.
     ///
     /// If the entity doesn't have the component, insert `component`.
+    ///
+    /// ### Errors
+    ///
+    /// Returns `None` when `entity` is dead and a component is already present for an entity with the same index.
     #[inline]
-    pub fn get_or_insert(&mut self, entity: EntityId, component: T) -> Mut<'_, T> {
-        if !self.sparse_set.contains(entity) {
-            self.sparse_set.insert(entity, component, self.current);
-        }
-
-        let index = self.index_of(entity).unwrap();
-
-        let SparseSet {
-            data,
-            modification_data,
-            is_tracking_modification,
-            ..
-        } = self.sparse_set;
-
-        Mut {
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
-            current: self.current,
-            data: unsafe { data.get_unchecked_mut(index) },
-        }
+    pub fn get_or_insert<'a>(
+        &'a mut self,
+        entity: EntityId,
+        component: T,
+    ) -> Option<<&'a mut ViewMut<'v, T, Track> as Get>::Out> {
+        self.get_or_insert_with(entity, || component)
     }
     /// Retrieve `entity` component.
     ///
     /// If the entity doesn't have the component, insert the result of `f`.
+    ///
+    /// ### Errors
+    ///
+    /// Returns `None` when `entity` is dead and a component is already present for an entity with the same index.
     #[inline]
-    pub fn get_or_insert_with<F: FnOnce() -> T>(&mut self, entity: EntityId, f: F) -> Mut<'_, T> {
-        self.get_or_insert(entity, f())
+    pub fn get_or_insert_with<'a, F: FnOnce() -> T>(
+        &'a mut self,
+        entity: EntityId,
+        f: F,
+    ) -> Option<<&'a mut ViewMut<'v, T, Track> as Get>::Out> {
+        if !self.sparse_set.contains(entity) {
+            let was_inserted = self
+                .sparse_set
+                .insert(entity, f(), self.current)
+                .was_inserted();
+
+            if !was_inserted {
+                return None;
+            }
+        }
+
+        // At this point, it is not possible for the entity to not have a component of this type.
+        let component = unsafe { Get::get(self, entity).unwrap_unchecked() };
+
+        Some(component)
     }
 }
 
