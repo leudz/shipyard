@@ -33,7 +33,7 @@ impl<T: Component, TRACK> AddEntity for &mut ViewMut<'_, T, TRACK> {
     #[inline]
     #[track_caller]
     fn add_entity(storage: &mut Self, entity: EntityId, component: Self::Component) {
-        storage
+        let _ = storage
             .sparse_set
             .insert(entity, component, storage.current);
     }

@@ -38,7 +38,7 @@ impl<T: Component, TRACK> AddComponent<T> for ViewMut<'_, T, TRACK> {
     #[inline]
     #[track_caller]
     fn add_component_unchecked(&mut self, entity: EntityId, component: T) {
-        self.sparse_set.insert(entity, component, self.current);
+        let _ = self.sparse_set.insert(entity, component, self.current);
     }
 }
 
@@ -46,7 +46,7 @@ impl<T: Component, TRACK> AddComponent<T> for &mut ViewMut<'_, T, TRACK> {
     #[inline]
     #[track_caller]
     fn add_component_unchecked(&mut self, entity: EntityId, component: T) {
-        self.sparse_set.insert(entity, component, self.current);
+        let _ = self.sparse_set.insert(entity, component, self.current);
     }
 }
 
@@ -55,7 +55,7 @@ impl<T: Component, TRACK> AddComponent<Option<T>> for ViewMut<'_, T, TRACK> {
     #[track_caller]
     fn add_component_unchecked(&mut self, entity: EntityId, component: Option<T>) {
         if let Some(component) = component {
-            self.sparse_set.insert(entity, component, self.current);
+            let _ = self.sparse_set.insert(entity, component, self.current);
         }
     }
 }
@@ -65,7 +65,7 @@ impl<T: Component, TRACK> AddComponent<Option<T>> for &mut ViewMut<'_, T, TRACK>
     #[track_caller]
     fn add_component_unchecked(&mut self, entity: EntityId, component: Option<T>) {
         if let Some(component) = component {
-            self.sparse_set.insert(entity, component, self.current);
+            let _ = self.sparse_set.insert(entity, component, self.current);
         }
     }
 }
@@ -77,7 +77,7 @@ macro_rules! impl_add_component {
             #[track_caller]
             fn add_component_unchecked(&mut self, entity: EntityId, component: ($($component,)+)) {
                 $(
-                    self.$index.add_component_unchecked(entity, component.$index);
+                    let _ = self.$index.add_component_unchecked(entity, component.$index);
                 )+
             }
         }
