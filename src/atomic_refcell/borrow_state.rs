@@ -7,6 +7,7 @@ const MAX_FAILED_BORROWS: usize = HIGH_BIT + (HIGH_BIT >> 1);
 pub(super) struct BorrowState(AtomicUsize);
 
 /// Unlocks a shared borrow on drop.
+#[must_use]
 pub struct SharedBorrow<'a>(&'a BorrowState);
 
 impl Drop for SharedBorrow<'_> {
@@ -24,13 +25,12 @@ impl Clone for SharedBorrow<'_> {
 }
 
 /// Unlocks an exclusive borrow on drop.
+#[must_use]
 pub struct ExclusiveBorrow<'a>(&'a BorrowState);
 
 impl ExclusiveBorrow<'_> {
     pub(crate) fn shared_reborrow(&self) -> SharedBorrow<'_> {
-        self.0.read_reborrow();
-
-        SharedBorrow(self.0)
+        self.0.read_reborrow()
     }
 }
 
@@ -128,5 +128,20 @@ impl BorrowState {
     #[inline(never)]
     fn cold_check_overflow(&self, new: usize) {
         self.check_overflow(new)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reborrow() {
+        let borrow = BorrowState::new();
+        let write = borrow.write().unwrap();
+
+        let read = write.shared_reborrow();
+
+        assert_eq!(HIGH_BIT + 1, (read.0).0.load(Ordering::Relaxed));
     }
 }
