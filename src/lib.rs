@@ -26,6 +26,7 @@
 #![warn(clippy::print_stdout)]
 #![warn(clippy::maybe_infinite_iter)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::needless_lifetimes)]
 #![cfg_attr(not(any(feature = "std", test)), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]

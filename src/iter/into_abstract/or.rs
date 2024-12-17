@@ -6,7 +6,7 @@ use crate::type_id::TypeId;
 use alloc::vec;
 use alloc::vec::Vec;
 
-impl<'a: 'b, 'b, T: IntoAbstract, U: IntoAbstract> IntoAbstract for Or<(T, U)>
+impl<T: IntoAbstract, U: IntoAbstract> IntoAbstract for Or<(T, U)>
 where
     <U as IntoAbstract>::AbsView: AbstractMut,
     <<U as IntoAbstract>::AbsView as AbstractMut>::Index: Into<usize> + Clone,
