@@ -9,7 +9,7 @@ use crate::World;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 pub trait IntoRunIf<B> {
     fn into_workload_run_if(self) -> Result<RunIf, error::InvalidSystem>;
@@ -80,7 +80,7 @@ macro_rules! impl_into_workload_run_if {
                     }
                 }
 
-                let last_run = AtomicU32::new(0);
+                let last_run = AtomicU64::new(0);
                 Ok(RunIf {
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
@@ -165,7 +165,7 @@ macro_rules! impl_into_workload_run_if {
                     }
                 }
 
-                let last_run = Arc::new(AtomicU32::new(0));
+                let last_run = Arc::new(AtomicU64::new(0));
                 Ok(Box::new(move |world: &World| {
                     let current = world.get_current();
                     let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
