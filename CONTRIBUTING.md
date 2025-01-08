@@ -16,12 +16,9 @@ One of the hardest parts about determining which features to build into the core
 
 ## Testing
 
-Currently, Shipyard uses [`cargo-make`](https://github.com/sagiegurari/cargo-make) alongside our [Makefile.toml](./Makefile.toml) to specify helpful tasks for testing different feature combinations.
+Currently, Shipyard uses [`just`](https://github.com/casey/just) alongside our [justfile](./justfile) to specify helpful tasks for testing different feature combinations.
 
 ```sh
 # run all tests and static checks (miri may not work for macOS)
-cargo make test
-
-# test all feature combinations
-cargo make test-all
+cargo just test
 ```
