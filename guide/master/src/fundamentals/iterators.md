@@ -8,7 +8,7 @@ Iteration is one of the most important features of an ECS.
 {{#include ../../../../tests/book/iterators.rs:world}}
 ```
 
-THe "extra" `&mut` is unfortunate but necessary.
+The "extra" `&mut` is unfortunate but necessary.
 
 ## Views
 
