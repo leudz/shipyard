@@ -182,17 +182,17 @@ pub(crate) fn map_deletion_data<T>(
 
 /// Timestamp used to clear tracking information.
 #[derive(Clone, Copy, Debug)]
-pub struct TrackingTimestamp(u32);
+pub struct TrackingTimestamp(u64);
 
 impl TrackingTimestamp {
     /// Returns a new [`TrackingTimestamp`] at the given tracking cycle.
     #[inline]
-    pub fn new(now: u32) -> TrackingTimestamp {
+    pub fn new(now: u64) -> TrackingTimestamp {
         TrackingTimestamp(now)
     }
 
     #[inline]
-    pub(crate) fn get(self) -> u32 {
+    pub(crate) fn get(self) -> u64 {
         self.0
     }
 
@@ -212,13 +212,13 @@ impl TrackingTimestamp {
     /// This method should only be necessary for custom storages that want to implement tracking.
     #[inline]
     pub fn is_older_than(self, other: TrackingTimestamp) -> bool {
-        other.0.wrapping_sub(1).wrapping_sub(self.0) < u32::MAX / 2
+        other.0.wrapping_sub(1).wrapping_sub(self.0) < u64::MAX / 2
     }
 
     /// Returns the timesptamp the furthest from the given one.
     #[inline]
     pub fn furthest_from(self) -> TrackingTimestamp {
-        TrackingTimestamp(self.0.wrapping_add(u32::MAX / 2))
+        TrackingTimestamp(self.0.wrapping_add(u64::MAX / 2))
     }
 }
 
@@ -233,9 +233,9 @@ mod tests {
             (5, 0, 10, true),
             (11, 0, 10, false),
             // check wrapping true
-            (u32::MAX, u32::MAX - 1, 0, true),
+            (u64::MAX, u64::MAX - 1, 0, true),
             // check wrapping false
-            (u32::MAX - 1, u32::MAX, 0, false),
+            (u64::MAX - 1, u64::MAX, 0, false),
             (1, 2, 0, false),
             // timestamp is equal to last
             (1, 1, 0, false),
@@ -262,13 +262,13 @@ mod tests {
             (5, 10, true),
             (11, 10, false),
             // check wrapping true
-            (u32::MAX, 0, true),
+            (u64::MAX, 0, true),
             // check wrapping false
-            (0, u32::MAX, false),
+            (0, u64::MAX, false),
             // barely within limit
-            (0, u32::MAX / 2, true),
+            (0, u64::MAX / 2, true),
             // barely outside limit
-            (0, u32::MAX / 2 + 1, false),
+            (0, u64::MAX / 2 + 1, false),
             // timestamp is equal to other
             (1, 1, false),
         ];

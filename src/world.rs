@@ -27,13 +27,13 @@ use crate::views::EntitiesViewMut;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
-use core::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU64;
 
 /// `World` contains all data this library will manipulate.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
     pub(crate) scheduler: AtomicRefCell<Scheduler>,
-    counter: Arc<AtomicU32>,
+    counter: Arc<AtomicU64>,
     #[cfg(feature = "parallel")]
     thread_pool: Option<rayon::ThreadPool>,
 }
@@ -42,7 +42,7 @@ pub struct World {
 impl Default for World {
     /// Creates an empty `World`.
     fn default() -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
+        let counter = Arc::new(AtomicU64::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
             all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
