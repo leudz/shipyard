@@ -39,6 +39,13 @@ where
     /// One case where this method shines is for calling a system in another system.\
     /// `sys_b` cannot use a reference or it wouldn't work as a system anymore.
     /// ```rust
+    /// # use shipyard::{track ,Component, View, ViewMut, World};
+    /// # let mut world = World::new();
+    /// # struct A;
+    /// # impl Component for A { type Tracking = track::Untracked; };
+    /// # struct B;
+    /// # impl Component for B { type Tracking = track::Untracked; };
+    ///
     /// fn sys_a(vm_compA: ViewMut<A>) {
     ///     // -- SNIP --
     ///
