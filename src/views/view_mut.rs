@@ -34,6 +34,22 @@ where
     Track: Tracking,
 {
     /// Returns a `View` reborrowing from `ViewMut`.
+    ///
+    /// There are often alternatives to calling this method, like reborrow.\
+    /// One case where this method shines is for calling a system in another system.\
+    /// `sys_b` cannot use a reference or it wouldn't work as a system anymore.
+    /// ```rust
+    /// fn sys_a(vm_compA: ViewMut<A>) {
+    ///     // -- SNIP --
+    ///
+    ///     sys_b(vm_compA.as_view());
+    /// }
+    ///
+    /// fn sys_b(v_compA: View<A>) {}
+    ///
+    /// world.run(sys_a);
+    /// world.run(sys_b);
+    /// ```
     pub fn as_view(&self) -> View<'_, T, Track> {
         View {
             sparse_set: self.sparse_set,
