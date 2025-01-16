@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use core::any::type_name;
 #[cfg(not(feature = "std"))]
 use core::any::Any;
-use core::sync::atomic::{AtomicU32, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(feature = "std")]
 use std::error::Error;
 
@@ -179,7 +179,7 @@ macro_rules! impl_into_workload_try_system {
                     $type::enable_tracking(&mut tracking_to_enable);
                 )+
 
-                let last_run = AtomicU32::new(0);
+                let last_run = AtomicU64::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
                     tracking_to_enable,
@@ -250,7 +250,7 @@ macro_rules! impl_into_workload_try_system {
                     $type::enable_tracking(&mut tracking_to_enable);
                 )+
 
-                let last_run = AtomicU32::new(0);
+                let last_run = AtomicU64::new(0);
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
                     tracking_to_enable,

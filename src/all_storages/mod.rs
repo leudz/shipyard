@@ -33,7 +33,7 @@ use alloc::sync::Arc;
 use core::any::type_name;
 use core::hash::BuildHasherDefault;
 use core::marker::PhantomData;
-use core::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
 
 #[allow(missing_docs)]
@@ -103,7 +103,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
 }
 
 impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
-    pub(crate) fn build(self, counter: Arc<AtomicU32>) -> AtomicRefCell<AllStorages> {
+    pub(crate) fn build(self, counter: Arc<AtomicU64>) -> AtomicRefCell<AllStorages> {
         let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -159,7 +159,7 @@ pub struct AllStorages {
     main_thread_id: u64,
     #[cfg(feature = "thread_local")]
     thread_id_generator: Arc<dyn Fn() -> u64 + Send + Sync>,
-    counter: Arc<AtomicU32>,
+    counter: Arc<AtomicU64>,
 }
 
 #[cfg(not(feature = "thread_local"))]
@@ -169,7 +169,7 @@ unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     #[cfg(feature = "std")]
-    pub(crate) fn new(counter: Arc<AtomicU32>) -> Self {
+    pub(crate) fn new(counter: Arc<AtomicU64>) -> Self {
         let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
