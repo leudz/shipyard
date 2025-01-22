@@ -33,9 +33,9 @@ impl<T: Unique> UniqueStorage<T> {
         UniqueStorage {
             value,
             insert: current,
-            modification: current.furthest_from(),
-            last_insert: current.furthest_from(),
-            last_modification: current.furthest_from(),
+            modification: TrackingTimestamp::origin(),
+            last_insert: TrackingTimestamp::origin(),
+            last_modification: TrackingTimestamp::origin(),
         }
     }
 }

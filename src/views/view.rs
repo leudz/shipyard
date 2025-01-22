@@ -64,7 +64,7 @@ impl<'a, T: Component, Track: Tracking> View<'a, T, Track> {
         Self {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
+            last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
             borrow,

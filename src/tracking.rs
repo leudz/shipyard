@@ -191,34 +191,27 @@ impl TrackingTimestamp {
         TrackingTimestamp(now)
     }
 
+    /// Returns a new [`TrackingTimestamp`] that is before all other timestamps.
+    #[inline]
+    pub fn origin() -> TrackingTimestamp {
+        TrackingTimestamp::new(0)
+    }
+
     #[inline]
     pub(crate) fn get(self) -> u64 {
         self.0
     }
 
-    /// Returns `true` when the track timestamp is after the last time the system ran and before the current execution.
-    ///
-    /// This method should only be necessary for custom storages that want to implement tracking.
+    /// Returns `true` when `self` is within the (last, current] range.
     #[inline]
     pub fn is_within(self, last: TrackingTimestamp, current: TrackingTimestamp) -> bool {
-        let bounds = current.0.wrapping_sub(last.0.wrapping_add(1));
-        let track = current.0.wrapping_sub(self.0);
-
-        track <= bounds
+        last.0 < self.0 && self.0 <= current.0
     }
 
-    /// Returns `true` when the track timestamp is within `u32::MAX / 2` cycles of `other`.
-    ///
-    /// This method should only be necessary for custom storages that want to implement tracking.
+    /// Returns `true` when `self` is older than `other`.
     #[inline]
     pub fn is_older_than(self, other: TrackingTimestamp) -> bool {
-        other.0.wrapping_sub(1).wrapping_sub(self.0) < u64::MAX / 2
-    }
-
-    /// Returns the timesptamp the furthest from the given one.
-    #[inline]
-    pub fn furthest_from(self) -> TrackingTimestamp {
-        TrackingTimestamp(self.0.wrapping_add(u64::MAX / 2))
+        self.0 < other.0
     }
 }
 
@@ -229,13 +222,8 @@ mod tests {
     #[test]
     fn is_within_bounds() {
         let tests = [
-            (0, 0, 0, true),
             (5, 0, 10, true),
             (11, 0, 10, false),
-            // check wrapping true
-            (u64::MAX, u64::MAX - 1, 0, true),
-            // check wrapping false
-            (u64::MAX - 1, u64::MAX, 0, false),
             (1, 2, 0, false),
             // timestamp is equal to last
             (1, 1, 0, false),
@@ -261,14 +249,6 @@ mod tests {
             (0, 0, false),
             (5, 10, true),
             (11, 10, false),
-            // check wrapping true
-            (u64::MAX, 0, true),
-            // check wrapping false
-            (0, u64::MAX, false),
-            // barely within limit
-            (0, u64::MAX / 2, true),
-            // barely outside limit
-            (0, u64::MAX / 2 + 1, false),
             // timestamp is equal to other
             (1, 1, false),
         ];

@@ -207,16 +207,9 @@ where
 
         sparse_set.check_tracking::<Track>()?;
 
-        Ok(NonSend(View {
-            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
-            current,
-            sparse_set,
-            borrow,
-            all_borrow,
-            phantom: PhantomData,
-        }))
+        Ok(NonSend(View::new(
+            sparse_set, borrow, all_borrow, last_run, current,
+        )))
     }
 }
 
@@ -240,16 +233,9 @@ where
 
         sparse_set.check_tracking::<Track>()?;
 
-        Ok(NonSync(View {
-            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
-            current,
-            sparse_set,
-            borrow,
-            all_borrow,
-            phantom: PhantomData,
-        }))
+        Ok(NonSync(View::new(
+            sparse_set, borrow, all_borrow, last_run, current,
+        )))
     }
 }
 
@@ -274,16 +260,9 @@ where
 
         sparse_set.check_tracking::<Track>()?;
 
-        Ok(NonSendSync(View {
-            last_insertion: last_run.unwrap_or(sparse_set.last_insert),
-            last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
-            current,
-            sparse_set,
-            borrow,
-            all_borrow,
-            phantom: PhantomData,
-        }))
+        Ok(NonSendSync(View::new(
+            sparse_set, borrow, all_borrow, last_run, current,
+        )))
     }
 }
 
@@ -309,7 +288,7 @@ where
         Ok(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
+            last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
             borrow,
@@ -343,7 +322,7 @@ where
         Ok(NonSend(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
+            last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
             borrow: borrow,
@@ -377,7 +356,7 @@ where
         Ok(NonSync(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
+            last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
             borrow: borrow,
@@ -411,7 +390,7 @@ where
         Ok(NonSendSync(ViewMut {
             last_insertion: last_run.unwrap_or(sparse_set.last_insert),
             last_modification: last_run.unwrap_or(sparse_set.last_modified),
-            last_removal_or_deletion: last_run.unwrap_or(current),
+            last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
             borrow: borrow,
