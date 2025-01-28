@@ -7,6 +7,7 @@ use crate::info::TypeInfo;
 use crate::tracking::TrackingTimestamp;
 use crate::views::UniqueView;
 use crate::world::World;
+use alloc::vec::Vec;
 use core::cell::OnceCell;
 
 /// Shared view over a unique component storage.

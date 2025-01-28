@@ -1,6 +1,7 @@
 use crate::error;
 use crate::scheduler::{Batches, Label};
 use crate::world::World;
+use alloc::boxed::Box;
 
 impl World {
     #[cfg(feature = "parallel")]
@@ -50,7 +51,7 @@ impl World {
                                 Ok(true)
                             }
                         })
-                        .collect::<Result<Vec<_>, error::RunWorkload>>()?,
+                        .collect::<Result<alloc::vec::Vec<_>, error::RunWorkload>>()?,
                 );
 
                 let mut start = 0;

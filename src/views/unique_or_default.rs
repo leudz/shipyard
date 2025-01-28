@@ -7,7 +7,8 @@ use crate::tracking::TrackingTimestamp;
 use crate::views::UniqueView;
 use crate::world::World;
 use crate::{error, BorrowInfo};
-use std::ops::Deref;
+use alloc::vec::Vec;
+use core::ops::Deref;
 
 /// Shared view over a unique component storage.
 ///

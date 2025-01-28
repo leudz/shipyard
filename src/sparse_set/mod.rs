@@ -1029,6 +1029,7 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
 mod tests {
     use super::*;
     use crate::Component;
+    use std::println;
 
     #[derive(PartialEq, Eq, Debug)]
     struct STR(&'static str);

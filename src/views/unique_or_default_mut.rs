@@ -7,7 +7,8 @@ use crate::tracking::TrackingTimestamp;
 use crate::views::UniqueViewMut;
 use crate::world::World;
 use crate::{error, BorrowInfo};
-use std::ops::{Deref, DerefMut};
+use alloc::vec::Vec;
+use core::ops::{Deref, DerefMut};
 
 /// Exclusive view over a unique component storage.
 ///
