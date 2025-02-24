@@ -43,3 +43,8 @@ serde_json = "1.0.78"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[workspace.metadata.release]
+consolidate-commits = false
+pre-release-commit-message = "Bump {{crate_name}} version to {{version}}"
+tag-message = "Release {{crate_name}} version {{version}}"

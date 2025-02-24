@@ -42,4 +42,4 @@ rustfmt_errors:
     cargo +nightly fmt -- --config=error_on_line_overflow=true,error_on_unformatted=true
 
 publish version args="":
-    cargo release --pre-release-commit-message "Bump version to {{version}}" {{args}} {{version}}
+    cargo release {{version}} {{args}}
