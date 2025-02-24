@@ -659,16 +659,16 @@ impl<T: Component> SparseSet<T> {
         }
 
         self.insertion_data.clear();
+        self.modification_data.clear();
+
+        let dense = self.dense.drain(..);
+        let data = self.data.drain(..);
 
         let is_tracking_deletion = self.is_tracking_deletion();
-
-        let iter = self
-            .dense
-            .drain(..)
-            .zip(self.data.drain(..))
-            .map(|(entity, component)| (entity, current, component));
-
         if is_tracking_deletion {
+            let iter = dense
+                .zip(data)
+                .map(|(entity, component)| (entity, current, component));
             self.deletion_data.extend(iter);
         }
     }
