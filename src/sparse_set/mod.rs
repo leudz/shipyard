@@ -661,10 +661,11 @@ impl<T: Component> SparseSet<T> {
         self.insertion_data.clear();
         self.modification_data.clear();
 
+        let is_tracking_deletion = self.is_tracking_deletion();
+
         let dense = self.dense.drain(..);
         let data = self.data.drain(..);
 
-        let is_tracking_deletion = self.is_tracking_deletion();
         if is_tracking_deletion {
             let iter = dense
                 .zip(data)
