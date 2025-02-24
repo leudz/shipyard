@@ -612,15 +612,10 @@ impl<T: Component> SparseSet<T> {
         self.insertion_data.clear();
         self.modification_data.clear();
 
-        let is_tracking_deletion = self.is_tracking_deletion();
-        let is_tracking_removal = self.is_tracking_removal();
-
         let dense = self.dense.drain(..);
         let data = self.data.drain(..);
 
-        if is_tracking_removal {
-            self.removal_data.extend(dense.as_ref().into_iter().map(|entity| (*entity, current)));
-        }
+        let is_tracking_deletion = self.is_tracking_deletion();
         if is_tracking_deletion {
             let iter = dense
                 .zip(data)
