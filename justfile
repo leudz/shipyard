@@ -40,3 +40,6 @@ visualizer:
 
 rustfmt_errors:
     cargo +nightly fmt -- --config=error_on_line_overflow=true,error_on_unformatted=true
+
+publish version args="":
+    cargo release {{version}} {{args}}
