@@ -96,7 +96,7 @@ jobs:
         working-directory: ./guide/master
 
       - name: save guide master
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: guide_master
           path: guide/master/guide_master/html
@@ -119,7 +119,7 @@ jobs:
         working-directory: ./guide/0.5.0
 
       - name: save guide 0.5.0
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: guide_0_5_0
           path: guide/0.5.0/guide_0_5_0/html
@@ -142,7 +142,7 @@ jobs:
         working-directory: ./guide/0.6
 
       - name: save guide 0.6
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: guide_0_6
           path: guide/0.6/guide_0_6/html
@@ -165,7 +165,7 @@ jobs:
         working-directory: ./guide/0.7
 
       - name: save guide 0.7
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: guide_0_7
           path: guide/0.7/guide_0_7/html
@@ -188,7 +188,7 @@ jobs:
       - run: rm bunny_demo/public/wasm/.gitignore
 
       - name: save bunny_demo
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: bunny_demo
           path: bunny_demo/public
@@ -204,7 +204,7 @@ jobs:
       - run: cargo build --release --package square_eater --target wasm32-unknown-unknown --manifest-path=square_eater/Cargo.toml
       - run: mv ./target/wasm32-unknown-unknown/release/square_eater.wasm ./square_eater/public
       - name: save square_eater
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: square_eater
           path: square_eater/public
@@ -222,7 +222,7 @@ jobs:
       # https://github.com/thedodd/trunk/issues/268
       - run: trunk build --public-url "/shipyard/visualizer/" --release visualizer/index.html
       - name: save visualizer
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: visualizer
           path: visualizer/dist
