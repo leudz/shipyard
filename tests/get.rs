@@ -4,11 +4,15 @@ use shipyard::*;
 fn type_check() {
     #[derive(Debug, PartialEq)]
     struct Life(f32);
-    impl Component for Life {}
+    impl Component for Life {
+        type Tracking = track::Untracked;
+    }
 
     #[derive(Debug, PartialEq)]
     struct Energy(f32);
-    impl Component for Energy {}
+    impl Component for Energy {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 
@@ -30,11 +34,15 @@ fn type_check() {
 fn non_packed() {
     #[derive(PartialEq, Eq, Debug)]
     struct U32(u32);
-    impl Component for U32 {}
+    impl Component for U32 {
+        type Tracking = track::Untracked;
+    }
 
     #[derive(PartialEq, Eq, Debug)]
     struct I16(i16);
-    impl Component for I16 {}
+    impl Component for I16 {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 
@@ -70,11 +78,15 @@ fn non_packed() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct U32(u32);
-    impl Component for U32 {}
+    impl Component for U32 {
+        type Tracking = track::Untracked;
+    }
 
     #[derive(PartialEq, Eq, Debug)]
     struct I16(i16);
-    impl Component for I16 {}
+    impl Component for I16 {
+        type Tracking = track::Untracked;
+    }
 
     let mut world = World::new();
     world.track_all::<(U32, I16)>();
@@ -109,8 +121,11 @@ fn update() {
 }
 #[test]
 fn old_id() {
+    #[allow(unused)]
     struct U32(u32);
-    impl Component for U32 {}
+    impl Component for U32 {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 

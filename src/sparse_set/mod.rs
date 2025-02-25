@@ -20,20 +20,21 @@ use crate::all_storages::AllStorages;
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::r#mut::Mut;
 use crate::storage::{Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
-use crate::{error, track};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::type_name;
+use core::mem::size_of;
 use core::{
     cmp::{Ord, Ordering},
     fmt,
 };
 
-pub(crate) const BUCKET_SIZE: usize = 256 / core::mem::size_of::<EntityId>();
+pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 
 /// Default component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
@@ -85,10 +86,10 @@ impl<T: Component> SparseSet<T> {
             modification_data: Vec::new(),
             deletion_data: Vec::new(),
             removal_data: Vec::new(),
-            is_tracking_insertion: false,
-            is_tracking_modification: false,
-            is_tracking_deletion: false,
-            is_tracking_removal: false,
+            is_tracking_insertion: T::Tracking::track_insertion(),
+            is_tracking_modification: T::Tracking::track_modification(),
+            is_tracking_deletion: T::Tracking::track_deletion(),
+            is_tracking_removal: T::Tracking::track_removal(),
             on_insertion: None,
             on_removal: None,
         }
@@ -186,6 +187,35 @@ impl<T: Component> SparseSet<T> {
     }
 }
 
+#[must_use]
+pub(crate) enum InsertionResult<T> {
+    /// No component were present at this index.
+    Inserted,
+    /// The component was inserted.\
+    /// A component from the same entity was present.
+    ComponentOverride(T),
+    /// A component from an entity with a smaller generation was present.
+    OtherComponentOverride,
+    /// A component from an entity with a larger generation was present.
+    NotInserted,
+}
+
+impl<T> InsertionResult<T> {
+    pub(crate) fn was_inserted(&self) -> bool {
+        match self {
+            InsertionResult::Inserted
+            | InsertionResult::ComponentOverride(_)
+            | InsertionResult::OtherComponentOverride => true,
+            InsertionResult::NotInserted => false,
+        }
+    }
+
+    #[track_caller]
+    pub(crate) fn assert_inserted(&self) {
+        assert!(self.was_inserted());
+    }
+}
+
 impl<T: Component> SparseSet<T> {
     /// Inserts `value` in the `SparseSet`.
     ///
@@ -199,7 +229,7 @@ impl<T: Component> SparseSet<T> {
         entity: EntityId,
         value: T,
         current: TrackingTimestamp,
-    ) -> Option<T> {
+    ) -> InsertionResult<T> {
         self.sparse.allocate_at(entity);
 
         // at this point there can't be nothing at the sparse index
@@ -219,14 +249,14 @@ impl<T: Component> SparseSet<T> {
                 self.insertion_data.push(current);
             }
             if self.is_tracking_modification {
-                self.modification_data.push(current.furthest_from());
+                self.modification_data.push(TrackingTimestamp::origin());
             }
 
             self.dense.push(entity);
             self.data.push(value);
 
-            old_component = None;
-        } else if entity.gen() >= sparse_entity.gen() {
+            old_component = InsertionResult::Inserted;
+        } else if entity.gen() == sparse_entity.gen() {
             if let Some(on_insertion) = &mut self.on_insertion {
                 on_insertion(entity, &value);
             }
@@ -235,11 +265,7 @@ impl<T: Component> SparseSet<T> {
                 core::mem::replace(self.data.get_unchecked_mut(sparse_entity.uindex()), value)
             };
 
-            if entity.gen() == sparse_entity.gen() {
-                old_component = Some(old_data);
-            } else {
-                old_component = None;
-            }
+            old_component = InsertionResult::ComponentOverride(old_data);
 
             sparse_entity.copy_gen(entity);
 
@@ -254,8 +280,32 @@ impl<T: Component> SparseSet<T> {
             }
 
             dense_entity.copy_index_gen(entity);
+        } else if entity.gen() > sparse_entity.gen() {
+            if let Some(on_insertion) = &mut self.on_insertion {
+                on_insertion(entity, &value);
+            }
+
+            let _ = unsafe {
+                core::mem::replace(self.data.get_unchecked_mut(sparse_entity.uindex()), value)
+            };
+
+            old_component = InsertionResult::OtherComponentOverride;
+
+            sparse_entity.copy_gen(entity);
+
+            let dense_entity = unsafe { self.dense.get_unchecked_mut(sparse_entity.uindex()) };
+
+            if self.is_tracking_insertion {
+                unsafe {
+                    *self
+                        .insertion_data
+                        .get_unchecked_mut(sparse_entity.uindex()) = current;
+                }
+            }
+
+            dense_entity.copy_index_gen(entity);
         } else {
-            old_component = None;
+            old_component = InsertionResult::NotInserted;
         }
 
         old_component
@@ -383,23 +433,27 @@ impl<T: Component> SparseSet<T> {
 impl<T: Component> SparseSet<T> {
     /// Make this storage track insertions.
     pub fn track_insertion(&mut self) -> &mut SparseSet<T> {
-        if !self.is_tracking_insertion() {
-            self.is_tracking_insertion = true;
-
-            self.insertion_data
-                .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
+        if self.is_tracking_insertion() {
+            return self;
         }
+
+        self.is_tracking_insertion = true;
+
+        self.insertion_data
+            .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
 
         self
     }
     /// Make this storage track modification.
     pub fn track_modification(&mut self) -> &mut SparseSet<T> {
-        if !self.is_tracking_modification() {
-            self.is_tracking_modification = true;
-
-            self.modification_data
-                .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
+        if self.is_tracking_modification() {
+            return self;
         }
+
+        self.is_tracking_modification = true;
+
+        self.modification_data
+            .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense.len()));
 
         self
     }
@@ -443,33 +497,32 @@ impl<T: Component> SparseSet<T> {
             || self.is_tracking_deletion()
             || self.is_tracking_removal()
     }
-    pub(crate) fn check_tracking<TRACK: Tracking>(&self) -> Result<(), error::GetStorage> {
-        if (TRACK::as_const() & track::InsertionConst != 0 && !self.is_tracking_insertion())
-            || (TRACK::as_const() & track::ModificationConst != 0
-                && !self.is_tracking_modification())
-            || (TRACK::as_const() & track::DeletionConst != 0 && !self.is_tracking_deletion())
-            || (TRACK::as_const() & track::RemovalConst != 0 && !self.is_tracking_removal())
+    pub(crate) fn check_tracking<Track: Tracking>(&self) -> Result<(), error::GetStorage> {
+        if (Track::track_insertion() && !self.is_tracking_insertion())
+            || (Track::track_modification() && !self.is_tracking_modification())
+            || (Track::track_deletion() && !self.is_tracking_deletion())
+            || (Track::track_removal() && !self.is_tracking_removal())
         {
             return Err(error::GetStorage::TrackingNotEnabled {
                 name: Some(type_name::<SparseSet<T>>()),
                 id: StorageId::of::<SparseSet<T>>(),
-                tracking: TRACK::as_const(),
+                tracking: Track::name(),
             });
         }
 
         Ok(())
     }
-    pub(crate) fn enable_tracking<TRACK: Tracking>(&mut self) {
-        if TRACK::as_const() & track::InsertionConst != 0 {
+    pub(crate) fn enable_tracking<Track: Tracking>(&mut self) {
+        if Track::track_insertion() {
             self.track_insertion();
         }
-        if TRACK::as_const() & track::ModificationConst != 0 {
+        if Track::track_modification() {
             self.track_modification();
         }
-        if TRACK::as_const() & track::DeletionConst != 0 {
+        if Track::track_deletion() {
             self.track_deletion();
         }
-        if TRACK::as_const() & track::RemovalConst != 0 {
+        if Track::track_removal() {
             self.track_removal();
         }
     }
@@ -711,21 +764,21 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.modification_data.capacity() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>())
+                + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.modification_data.len() * core::mem::size_of::<TrackingTimestamp>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<TrackingTimestamp>())
+                + (self.modification_data.len() * size_of::<TrackingTimestamp>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -762,7 +815,7 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
                 SparseSet::<T>::new,
             );
 
-            other_sparse_set.insert(to, component, other_current);
+            let _ = other_sparse_set.insert(to, component, other_current);
         }
     }
 }
@@ -781,19 +834,19 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<u32>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<u32>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -830,7 +883,7 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
                 || NonSend(SparseSet::<T>::new()),
             );
 
-            other_sparse_set.insert(to, component, other_current);
+            let _ = other_sparse_set.insert(to, component, other_current);
         }
     }
 }
@@ -849,19 +902,19 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<u32>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<u32>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -898,7 +951,7 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
                 || NonSync(SparseSet::<T>::new()),
             );
 
-            other_sparse_set.insert(to, component, other_current);
+            let _ = other_sparse_set.insert(to, component, other_current);
         }
     }
 }
@@ -917,19 +970,19 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * core::mem::size_of::<EntityId>())
-                + (self.data.capacity() * core::mem::size_of::<T>())
-                + (self.insertion_data.capacity() * core::mem::size_of::<u32>())
-                + (self.deletion_data.capacity() * core::mem::size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.capacity() * size_of::<EntityId>())
+                + (self.data.capacity() * size_of::<T>())
+                + (self.insertion_data.capacity() * size_of::<u32>())
+                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
+                + (self.removal_data.capacity() * size_of::<EntityId>())
+                + size_of::<Self>(),
             used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * core::mem::size_of::<EntityId>())
-                + (self.data.len() * core::mem::size_of::<T>())
-                + (self.insertion_data.len() * core::mem::size_of::<u32>())
-                + (self.deletion_data.len() * core::mem::size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Self>(),
+                + (self.dense.len() * size_of::<EntityId>())
+                + (self.data.len() * size_of::<T>())
+                + (self.insertion_data.len() * size_of::<u32>())
+                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
+                + (self.removal_data.len() * size_of::<EntityId>())
+                + size_of::<Self>(),
             component_count: self.len(),
         })
     }
@@ -967,7 +1020,7 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
                     || NonSendSync(SparseSet::<T>::new()),
                 );
 
-            other_sparse_set.insert(to, component, other_current);
+            let _ = other_sparse_set.insert(to, component, other_current);
         }
     }
 }
@@ -976,28 +1029,33 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
 mod tests {
     use super::*;
     use crate::Component;
+    use std::println;
 
     #[derive(PartialEq, Eq, Debug)]
     struct STR(&'static str);
 
-    impl Component for STR {}
+    impl Component for STR {
+        type Tracking = crate::track::Untracked;
+    }
 
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct I32(i32);
 
-    impl Component for I32 {}
+    impl Component for I32 {
+        type Tracking = crate::track::Untracked;
+    }
 
     #[test]
     fn insert() {
         let mut array = SparseSet::new();
 
-        assert!(array
+        array
             .insert(
                 EntityId::new_from_parts(0, 0),
                 STR("0"),
-                TrackingTimestamp::new(0)
+                TrackingTimestamp::new(0),
             )
-            .is_none());
+            .assert_inserted();
         assert_eq!(array.dense, &[EntityId::new_from_parts(0, 0)]);
         assert_eq!(array.data, &[STR("0")]);
         assert_eq!(
@@ -1005,13 +1063,13 @@ mod tests {
             Some(&STR("0"))
         );
 
-        assert!(array
+        array
             .insert(
                 EntityId::new_from_parts(1, 0),
                 STR("1"),
-                TrackingTimestamp::new(0)
+                TrackingTimestamp::new(0),
             )
-            .is_none());
+            .assert_inserted();
         assert_eq!(
             array.dense,
             &[
@@ -1029,13 +1087,13 @@ mod tests {
             Some(&STR("1"))
         );
 
-        assert!(array
+        array
             .insert(
                 EntityId::new_from_parts(5, 0),
                 STR("5"),
-                TrackingTimestamp::new(0)
+                TrackingTimestamp::new(0),
             )
-            .is_none());
+            .assert_inserted();
         assert_eq!(
             array.dense,
             &[
@@ -1056,21 +1114,27 @@ mod tests {
     #[test]
     fn remove() {
         let mut array = SparseSet::new();
-        array.insert(
-            EntityId::new_from_parts(0, 0),
-            STR("0"),
-            TrackingTimestamp::new(0),
-        );
-        array.insert(
-            EntityId::new_from_parts(5, 0),
-            STR("5"),
-            TrackingTimestamp::new(0),
-        );
-        array.insert(
-            EntityId::new_from_parts(10, 0),
-            STR("10"),
-            TrackingTimestamp::new(0),
-        );
+        array
+            .insert(
+                EntityId::new_from_parts(0, 0),
+                STR("0"),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+        array
+            .insert(
+                EntityId::new_from_parts(5, 0),
+                STR("5"),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+        array
+            .insert(
+                EntityId::new_from_parts(10, 0),
+                STR("10"),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
 
         assert_eq!(
             array.dyn_remove(EntityId::new_from_parts(0, 0), TrackingTimestamp::new(0)),
@@ -1094,16 +1158,20 @@ mod tests {
             Some(&STR("10"))
         );
 
-        array.insert(
-            EntityId::new_from_parts(3, 0),
-            STR("3"),
-            TrackingTimestamp::new(0),
-        );
-        array.insert(
-            EntityId::new_from_parts(100, 0),
-            STR("100"),
-            TrackingTimestamp::new(0),
-        );
+        array
+            .insert(
+                EntityId::new_from_parts(3, 0),
+                STR("3"),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+        array
+            .insert(
+                EntityId::new_from_parts(100, 0),
+                STR("100"),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
         assert_eq!(
             array.dense,
             &[
@@ -1189,8 +1257,12 @@ mod tests {
     fn drain() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0));
-        sparse_set.insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0));
+        sparse_set
+            .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0))
+            .assert_inserted();
 
         let mut drain = sparse_set.private_drain(TrackingTimestamp::new(0));
 
@@ -1208,8 +1280,12 @@ mod tests {
     fn drain_with_id() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0));
-        sparse_set.insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0));
+        sparse_set
+            .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0))
+            .assert_inserted();
 
         let mut drain = sparse_set
             .private_drain(TrackingTimestamp::new(0))
@@ -1251,7 +1327,9 @@ mod tests {
         for i in (0..100).rev() {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i);
-            array.insert(entity_id, I32(i as i32), TrackingTimestamp::new(0));
+            array
+                .insert(entity_id, I32(i as i32), TrackingTimestamp::new(0))
+                .assert_inserted();
         }
 
         array.sort_unstable();
@@ -1260,7 +1338,7 @@ mod tests {
             assert!(window[0] < window[1]);
         }
         for i in 0..100 {
-            let mut entity_id = crate::entity_id::EntityId::zero();
+            let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }
@@ -1273,16 +1351,16 @@ mod tests {
         for i in 0..20 {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(i);
-            assert!(array
+            array
                 .insert(entity_id, I32(i as i32), TrackingTimestamp::new(0))
-                .is_none());
+                .assert_inserted();
         }
         for i in (20..100).rev() {
             let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i + 20);
-            assert!(array
+            array
                 .insert(entity_id, I32(i as i32), TrackingTimestamp::new(0))
-                .is_none());
+                .assert_inserted();
         }
 
         array.sort_unstable();
@@ -1291,12 +1369,12 @@ mod tests {
             assert!(window[0] < window[1]);
         }
         for i in 0..20 {
-            let mut entity_id = crate::entity_id::EntityId::zero();
+            let mut entity_id = EntityId::zero();
             entity_id.set_index(i);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }
         for i in 20..100 {
-            let mut entity_id = crate::entity_id::EntityId::zero();
+            let mut entity_id = EntityId::zero();
             entity_id.set_index(100 - i + 20);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }
@@ -1306,9 +1384,15 @@ mod tests {
     fn debug() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(EntityId::new(0), STR("0"), TrackingTimestamp::new(0));
-        sparse_set.insert(EntityId::new(5), STR("5"), TrackingTimestamp::new(0));
-        sparse_set.insert(EntityId::new(10), STR("10"), TrackingTimestamp::new(0));
+        sparse_set
+            .insert(EntityId::new(0), STR("0"), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(5), STR("5"), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(10), STR("10"), TrackingTimestamp::new(0))
+            .assert_inserted();
 
         println!("{:#?}", sparse_set);
     }
@@ -1317,11 +1401,13 @@ mod tests {
     fn multiple_enable_tracking() {
         let mut sparse_set = SparseSet::new();
 
-        sparse_set.insert(
-            EntityId::new_from_parts(0, 0),
-            I32(0),
-            TrackingTimestamp::new(0),
-        );
+        sparse_set
+            .insert(
+                EntityId::new_from_parts(0, 0),
+                I32(0),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
 
         sparse_set.track_all();
         sparse_set.track_all();

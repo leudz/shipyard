@@ -2,17 +2,19 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::{DeletionConst, ModificationAndDeletion, ModificationConst};
+use crate::track::ModificationAndDeletion;
 use crate::tracking::{
-    map_deletion_data, DeletionTracking, ModificationTracking, RemovalOrDeletionTracking, Track,
-    Tracking, TrackingTimestamp,
+    map_deletion_data, DeletionTracking, ModificationTracking, RemovalOrDeletionTracking, Tracking,
+    TrackingTimestamp,
 };
 
-impl Sealed for Track<ModificationAndDeletion> {}
+impl Sealed for ModificationAndDeletion {}
 
-impl Tracking for Track<ModificationAndDeletion> {
-    fn as_const() -> u32 {
-        ModificationConst + DeletionConst
+impl Tracking for ModificationAndDeletion {
+    const VALUE: u32 = 0b0110;
+
+    fn name() -> &'static str {
+        "Modification and Deletion"
     }
 
     fn is_modified<T: Component>(
@@ -41,9 +43,9 @@ impl Tracking for Track<ModificationAndDeletion> {
     }
 }
 
-impl ModificationTracking for Track<ModificationAndDeletion> {}
-impl DeletionTracking for Track<ModificationAndDeletion> {}
-impl RemovalOrDeletionTracking for Track<ModificationAndDeletion> {
+impl ModificationTracking for ModificationAndDeletion {}
+impl DeletionTracking for ModificationAndDeletion {}
+impl RemovalOrDeletionTracking for ModificationAndDeletion {
     #[allow(trivial_casts)]
     fn removed_or_deleted<T: Component>(
         sparse_set: &SparseSet<T>,

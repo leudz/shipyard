@@ -1,5 +1,6 @@
 use crate::info::DedupedLabels;
 use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
+use crate::scheduler::system::WorkloadSystem;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
@@ -84,7 +85,7 @@ pub trait IntoWorkload<Views, R> {
     ///     if day % 6 == 0 {
     ///         world.run(reproduction);
     ///     }
-    ///     world.run_default().unwrap();
+    ///     world.run_default_workload().unwrap();
     /// }
     ///
     /// // we've got some new pigs
@@ -163,6 +164,11 @@ where
             workload.name = Box::new(label);
 
             workload
+        } else if TypeId::of::<R>() == TypeId::of::<WorkloadSystem>() {
+            let system: Box<dyn Any> = Box::new(self.call());
+            let system = *system.downcast::<WorkloadSystem>().unwrap();
+
+            system.into_workload()
         } else {
             let system = self.into_workload_system().unwrap();
 

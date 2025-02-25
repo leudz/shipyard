@@ -14,7 +14,9 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);
-impl Component for USIZE {}
+impl Component for USIZE {
+    type Tracking = track::Untracked;
+}
 
 impl Sum for USIZE {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -24,7 +26,9 @@ impl Sum for USIZE {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn run() {
@@ -68,7 +72,7 @@ fn run() {
 #[test]
 fn system() {
     fn system1((mut usizes, u32s): (ViewMut<USIZE>, View<U32>)) {
-        (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
+        (&mut usizes, &u32s).iter().for_each(|(x, y)| {
             x.0 += y.0 as usize;
         });
     }
@@ -87,7 +91,7 @@ fn system() {
         .add_to_world(&world)
         .unwrap();
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
     world.run(|usizes: View<USIZE>| {
         let mut iter = usizes.iter();
         assert_eq!(iter.next(), Some(&USIZE(1)));
@@ -99,13 +103,13 @@ fn system() {
 #[test]
 fn systems() {
     fn system1((mut usizes, u32s): (ViewMut<USIZE>, View<U32>)) {
-        (&mut usizes, &u32s).iter().for_each(|(mut x, y)| {
+        (&mut usizes, &u32s).iter().for_each(|(x, y)| {
             x.0 += y.0 as usize;
         });
     }
 
     fn system2(mut usizes: ViewMut<USIZE>) {
-        (&mut usizes,).iter().for_each(|(mut x,)| {
+        (&mut usizes,).iter().for_each(|(x,)| {
             x.0 += 1;
         });
     }
@@ -125,7 +129,7 @@ fn systems() {
         .add_to_world(&world)
         .unwrap();
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
     world.run(|usizes: View<USIZE>| {
         let mut iter = usizes.iter();
         assert_eq!(iter.next(), Some(&USIZE(2)));
@@ -173,7 +177,7 @@ fn parallel_iterator() {
     world.run(|(mut usizes, u32s): (ViewMut<USIZE>, View<U32>)| {
         let counter = std::sync::atomic::AtomicUsize::new(0);
 
-        (&mut usizes, &u32s).par_iter().for_each(|(mut x, y)| {
+        (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
             counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             x.0 += y.0 as usize;
         });
@@ -201,8 +205,8 @@ fn two_workloads() {
         .unwrap();
 
     rayon::scope(|s| {
-        s.spawn(|_| world.run_default().unwrap());
-        s.spawn(|_| world.run_default().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
     });
 }
 
@@ -224,8 +228,8 @@ fn two_bad_workloads() {
         .unwrap();
 
     rayon::scope(|s| {
-        s.spawn(|_| world.run_default().unwrap());
-        s.spawn(|_| world.run_default().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
+        s.spawn(|_| world.run_default_workload().unwrap());
     });
 }
 
@@ -258,7 +262,9 @@ fn add_component_with_old_key() {
 fn par_update_pack() {
     #[derive(PartialEq, Eq, Debug, Clone, Copy)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     impl Sum for USIZE {
         fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -314,7 +320,9 @@ fn par_update_pack() {
 fn par_multiple_update_pack() {
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct U32(u32);
-    impl Component for U32 {}
+    impl Component for U32 {
+        type Tracking = track::Untracked;
+    }
 
     use rayon::prelude::*;
 
@@ -349,7 +357,7 @@ fn par_multiple_update_pack() {
             assert_eq!(u32s.modified().iter().count(), 0);
 
             if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(mut x, y)| {
+                iter.for_each(|(x, y)| {
                     x.0 += y.0 as usize;
                     x.0 -= y.0 as usize;
                 });
@@ -385,7 +393,9 @@ fn par_multiple_update_pack() {
 fn par_update_filter() {
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     use rayon::prelude::*;
 

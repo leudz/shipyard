@@ -2,7 +2,9 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn no_pack() {

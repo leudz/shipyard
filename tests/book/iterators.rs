@@ -3,6 +3,18 @@ use shipyard::{IntoIter, IntoWithId, View, ViewMut, World};
 
 #[test]
 #[rustfmt::skip]
+fn world() {
+// ANCHOR: world
+let world = World::new();
+
+for (i, j) in &mut world.iter::<(&mut Pos, &Vel)>() {
+    i.0 += j.0;
+}
+// ANCHOR_END: world
+}
+
+#[test]
+#[rustfmt::skip]
 fn iter() {
 // ANCHOR: iter
 let world = World::new();
@@ -12,7 +24,7 @@ world.run(|mut vm_pos: ViewMut<Pos>, v_vel: View<Vel>| {
         dbg!(i);
     }
     
-    for (mut i, j) in (&mut vm_pos, &v_vel).iter() {
+    for (i, j) in (&mut vm_pos, &v_vel).iter() {
         i.0 += j.0;
     }
 });

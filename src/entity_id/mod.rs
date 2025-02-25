@@ -79,10 +79,9 @@ impl EntityId {
     #[inline]
     pub(crate) const fn new_from_parts(index: u64, gen: u16) -> Self {
         assert!(index < Self::INDEX_MASK);
-        assert!(gen <= Self::max_gen());
 
         EntityId(unsafe {
-            NonZeroU64::new_unchecked((index + 1) | (gen as u64) << Self::INDEX_LEN)
+            NonZeroU64::new_unchecked((index + 1) | ((gen as u64) << Self::INDEX_LEN))
         })
     }
     /// Build a new `EntityId` with the given index and generation.

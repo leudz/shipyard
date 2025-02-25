@@ -2,17 +2,19 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
-use crate::track::{DeletionConst, InsertionAndDeletionAndRemoval, InsertionConst, RemovalConst};
+use crate::track::InsertionAndDeletionAndRemoval;
 use crate::tracking::{
     map_deletion_data, DeletionTracking, InsertionTracking, RemovalOrDeletionTracking,
-    RemovalTracking, Track, Tracking, TrackingTimestamp,
+    RemovalTracking, Tracking, TrackingTimestamp,
 };
 
-impl Sealed for Track<InsertionAndDeletionAndRemoval> {}
+impl Sealed for InsertionAndDeletionAndRemoval {}
 
-impl Tracking for Track<InsertionAndDeletionAndRemoval> {
-    fn as_const() -> u32 {
-        InsertionConst + DeletionConst + RemovalConst
+impl Tracking for InsertionAndDeletionAndRemoval {
+    const VALUE: u32 = 0b1101;
+
+    fn name() -> &'static str {
+        "Insertion and Deletion and Removal"
     }
 
     #[inline]
@@ -54,10 +56,10 @@ impl Tracking for Track<InsertionAndDeletionAndRemoval> {
     }
 }
 
-impl InsertionTracking for Track<InsertionAndDeletionAndRemoval> {}
-impl RemovalTracking for Track<InsertionAndDeletionAndRemoval> {}
-impl DeletionTracking for Track<InsertionAndDeletionAndRemoval> {}
-impl RemovalOrDeletionTracking for Track<InsertionAndDeletionAndRemoval> {
+impl InsertionTracking for InsertionAndDeletionAndRemoval {}
+impl RemovalTracking for InsertionAndDeletionAndRemoval {}
+impl DeletionTracking for InsertionAndDeletionAndRemoval {}
+impl RemovalOrDeletionTracking for InsertionAndDeletionAndRemoval {
     #[allow(trivial_casts)]
     fn removed_or_deleted<T: Component>(
         sparse_set: &SparseSet<T>,

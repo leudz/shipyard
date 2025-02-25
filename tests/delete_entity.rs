@@ -4,13 +4,17 @@ use shipyard::*;
 
 #[derive(Debug, PartialEq, Eq)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn no_pack() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
     let (mut entities, mut usizes, mut u32s) = world
@@ -49,7 +53,9 @@ fn no_pack() {
 fn update() {
     #[derive(Debug, PartialEq, Eq)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();

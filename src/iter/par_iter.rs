@@ -27,6 +27,7 @@ where
 {
     type Item = <Storage as AbstractMut>::Out;
 
+    #[inline]
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
     where
         C: UnindexedConsumer<Self::Item>,
@@ -36,6 +37,8 @@ where
             ParIter::Mixed(mixed) => mixed.drive_unindexed(consumer),
         }
     }
+
+    #[inline]
     fn opt_len(&self) -> Option<usize> {
         match self {
             ParIter::Tight(tight) => tight.opt_len(),

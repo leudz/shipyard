@@ -9,7 +9,7 @@ use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
     DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Tracking,
 };
 use crate::views::view::View;
 use crate::{error, TrackingTimestamp};
@@ -18,7 +18,7 @@ use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
 
 /// Exclusive view over a component storage.
-pub struct ViewMut<'a, T: Component, TRACK = track::Untracked> {
+pub struct ViewMut<'a, T: Component, Track = <T as Component>::Tracking> {
     pub(crate) sparse_set: &'a mut SparseSet<T>,
     pub(crate) all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) borrow: ExclusiveBorrow<'a>,
@@ -26,15 +26,38 @@ pub struct ViewMut<'a, T: Component, TRACK = track::Untracked> {
     pub(crate) last_modification: TrackingTimestamp,
     pub(crate) last_removal_or_deletion: TrackingTimestamp,
     pub(crate) current: TrackingTimestamp,
-    pub(crate) phantom: PhantomData<TRACK>,
+    pub(crate) phantom: PhantomData<Track>,
 }
 
-impl<'a, T: Component, TRACK> ViewMut<'a, T, TRACK>
+impl<'a, T: Component, Track> ViewMut<'a, T, Track>
 where
-    Track<TRACK>: Tracking,
+    Track: Tracking,
 {
     /// Returns a `View` reborrowing from `ViewMut`.
-    pub fn as_view(&self) -> View<'_, T, TRACK> {
+    ///
+    /// There are often alternatives to calling this method, like reborrow.\
+    /// One case where this method shines is for calling a system in another system.\
+    /// `sys_b` cannot use a reference or it wouldn't work as a system anymore.
+    /// ```rust
+    /// # use shipyard::{track ,Component, View, ViewMut, World};
+    /// # let mut world = World::new();
+    /// # struct A;
+    /// # impl Component for A { type Tracking = track::Untracked; };
+    /// # struct B;
+    /// # impl Component for B { type Tracking = track::Untracked; };
+    ///
+    /// fn sys_a(vm_compA: ViewMut<A>) {
+    ///     // -- SNIP --
+    ///
+    ///     sys_b(vm_compA.as_view());
+    /// }
+    ///
+    /// fn sys_b(v_compA: View<A>) {}
+    ///
+    /// world.run(sys_a);
+    /// world.run(sys_b);
+    /// ```
+    pub fn as_view(&self) -> View<'_, T, Track> {
         View {
             sparse_set: self.sparse_set,
             all_borrow: self.all_borrow.as_ref().cloned(),
@@ -115,7 +138,9 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
     /// use shipyard::{track, Component, SparseSet, StorageId, ViewMut, World};
     ///
     /// struct ScriptingComponent(Vec<u8>);
-    /// impl Component for ScriptingComponent {}
+    /// impl Component for ScriptingComponent {
+    ///     type Tracking = track::Untracked;
+    /// }
     ///
     /// let world = World::new();
     ///
@@ -159,9 +184,9 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
     }
 }
 
-impl<'a, T: Component, TRACK> ViewMut<'a, T, TRACK>
+impl<'a, T: Component, Track> ViewMut<'a, T, Track>
 where
-    Track<TRACK>: Tracking,
+    Track: Tracking,
 {
     /// Deletes all components in this storage.
     pub fn clear(&mut self) {
@@ -210,61 +235,86 @@ where
     }
 }
 
-impl<TRACK, T: Component + Default> ViewMut<'_, T, TRACK> {
+impl<'v, Track, T: Component + Default> ViewMut<'v, T, Track>
+where
+    for<'a> &'a mut ViewMut<'v, T, Track>: Get,
+{
     /// Retrieve `entity` component.
     ///
     /// If the entity doesn't have the component, insert its `Default` value.
+    ///
+    /// ### Errors
+    ///
+    /// Returns `None` when `entity` is dead and a component is already present for an entity with the same index.
     #[inline]
-    pub fn get_or_default(&mut self, entity: EntityId) -> Mut<'_, T> {
-        self.get_or_insert(entity, T::default())
+    pub fn get_or_default<'a>(
+        &'a mut self,
+        entity: EntityId,
+    ) -> Option<<&'a mut ViewMut<'v, T, Track> as Get>::Out> {
+        self.get_or_insert_with(entity, T::default)
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK> {
+impl<'v, Track, T: Component> ViewMut<'v, T, Track>
+where
+    for<'a> &'a mut ViewMut<'v, T, Track>: Get,
+{
     /// Retrieve `entity` component.
     ///
     /// If the entity doesn't have the component, insert `component`.
+    ///
+    /// ### Errors
+    ///
+    /// Returns `None` when `entity` is dead and a component is already present for an entity with the same index.
     #[inline]
-    pub fn get_or_insert(&mut self, entity: EntityId, component: T) -> Mut<'_, T> {
-        if !self.sparse_set.contains(entity) {
-            self.sparse_set.insert(entity, component, self.current);
-        }
-
-        let index = self.index_of(entity).unwrap();
-
-        let SparseSet {
-            data,
-            modification_data,
-            is_tracking_modification,
-            ..
-        } = self.sparse_set;
-
-        Mut {
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
-            current: self.current,
-            data: unsafe { data.get_unchecked_mut(index) },
-        }
+    pub fn get_or_insert<'a>(
+        &'a mut self,
+        entity: EntityId,
+        component: T,
+    ) -> Option<<&'a mut ViewMut<'v, T, Track> as Get>::Out> {
+        self.get_or_insert_with(entity, || component)
     }
     /// Retrieve `entity` component.
     ///
     /// If the entity doesn't have the component, insert the result of `f`.
+    ///
+    /// ### Errors
+    ///
+    /// Returns `None` when `entity` is dead and a component is already present for an entity with the same index.
     #[inline]
-    pub fn get_or_insert_with<F: FnOnce() -> T>(&mut self, entity: EntityId, f: F) -> Mut<'_, T> {
-        self.get_or_insert(entity, f())
+    pub fn get_or_insert_with<'a, F: FnOnce() -> T>(
+        &'a mut self,
+        entity: EntityId,
+        f: F,
+    ) -> Option<<&'a mut ViewMut<'v, T, Track> as Get>::Out> {
+        if !self.sparse_set.contains(entity) {
+            let was_inserted = self
+                .sparse_set
+                .insert(entity, f(), self.current)
+                .was_inserted();
+
+            if !was_inserted {
+                return None;
+            }
+        }
+
+        // At this point, it is not possible for the entity to not have a component of this type.
+        let component = unsafe { Get::get(self, entity).unwrap_unchecked() };
+
+        Some(component)
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
+impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track<TRACK>: InsertionTracking,
+    Track: InsertionTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was inserted since the last run of this system.\
     /// Outside workloads returns `true` if `entity`'s component was inserted since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
+        Track::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
     }
     /// Wraps this view to be able to iterate *inserted* components.
     #[inline]
@@ -283,16 +333,16 @@ where
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
+impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track<TRACK>: ModificationTracking,
+    Track: ModificationTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was modified since the last run of this system.\
     /// Outside workloads returns `true` if `entity`'s component was modified since the last call to [`clear_all_modified`](ViewMut::clear_all_modified).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_modified(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_modified(
+        Track::is_modified(
             self.sparse_set,
             entity,
             self.last_modification,
@@ -316,9 +366,9 @@ where
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
+impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track<TRACK>: InsertionTracking + ModificationTracking,
+    Track: InsertionTracking + ModificationTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was inserted or modified since the last run of this system.\
     /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
@@ -345,16 +395,16 @@ where
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
+impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track<TRACK>: DeletionTracking,
+    Track: DeletionTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was deleted since the last run of this system.\
     /// Outside workloads returns `true` if `entity`'s component was deleted since the last call to [`clear_all_deleted`](SparseSet::clear_all_deleted).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_deleted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
+        Track::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
     }
     /// Returns the *deleted* components of a storage tracking deletion.
     pub fn deleted(&self) -> impl Iterator<Item = (EntityId, &T)> + '_ {
@@ -371,16 +421,16 @@ where
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
+impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track<TRACK>: RemovalTracking,
+    Track: RemovalTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was removed since the last run of this system.\
     /// Outside workloads returns `true` if `entity`'s component was removed since the last call to [`clear_all_removed`](SparseSet::clear_all_removed).\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_removed(self, entity, self.last_removal_or_deletion, self.current)
+        Track::is_removed(self, entity, self.last_removal_or_deletion, self.current)
     }
     /// Returns the ids of *removed* components of a storage tracking removal.
     pub fn removed(&self) -> impl Iterator<Item = EntityId> + '_ {
@@ -397,17 +447,17 @@ where
     }
 }
 
-impl<TRACK, T: Component> ViewMut<'_, T, TRACK>
+impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track<TRACK>: RemovalOrDeletionTracking,
+    Track: RemovalOrDeletionTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was deleted or removed since the last run of this system.\
     /// Outside workloads returns `true` if `entity`'s component was deleted or removed since the last clear call.\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_removed_or_deleted(&self, entity: EntityId) -> bool {
-        Track::<TRACK>::is_removed(self, entity, self.last_removal_or_deletion, self.current)
-            || Track::<TRACK>::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
+        Track::is_removed(self, entity, self.last_removal_or_deletion, self.current)
+            || Track::is_deleted(self, entity, self.last_removal_or_deletion, self.current)
     }
     /// Returns the ids of *removed* or *deleted* components of a storage tracking removal and/or deletion.
     pub fn removed_or_deleted(&self) -> impl Iterator<Item = EntityId> + '_ {
@@ -421,7 +471,7 @@ where
     }
 }
 
-impl<T: Component, TRACK> Deref for ViewMut<'_, T, TRACK> {
+impl<T: Component, Track> Deref for ViewMut<'_, T, Track> {
     type Target = SparseSet<T>;
 
     #[inline]
@@ -430,41 +480,41 @@ impl<T: Component, TRACK> Deref for ViewMut<'_, T, TRACK> {
     }
 }
 
-impl<T: Component, TRACK> DerefMut for ViewMut<'_, T, TRACK> {
+impl<T: Component, Track> DerefMut for ViewMut<'_, T, Track> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, TRACK> AsRef<SparseSet<T>> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track> AsRef<SparseSet<T>> for ViewMut<'a, T, Track> {
     #[inline]
     fn as_ref(&self) -> &SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, TRACK> AsMut<SparseSet<T>> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track> AsMut<SparseSet<T>> for ViewMut<'a, T, Track> {
     #[inline]
     fn as_mut(&mut self) -> &mut SparseSet<T> {
         self.sparse_set
     }
 }
 
-impl<'a, T: Component, TRACK> AsMut<Self> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track> AsMut<Self> for ViewMut<'a, T, Track> {
     #[inline]
     fn as_mut(&mut self) -> &mut Self {
         self
     }
 }
 
-impl<T: fmt::Debug + Component, TRACK> fmt::Debug for ViewMut<'_, T, TRACK> {
+impl<T: fmt::Debug + Component, Track> fmt::Debug for ViewMut<'_, T, Track> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.sparse_set.fmt(f)
     }
 }
 
-impl<'a, T: Component, TRACK> core::ops::Index<EntityId> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track> core::ops::Index<EntityId> for ViewMut<'a, T, Track> {
     type Output = T;
     #[inline]
     fn index(&self, entity: EntityId) -> &Self::Output {
@@ -472,7 +522,7 @@ impl<'a, T: Component, TRACK> core::ops::Index<EntityId> for ViewMut<'a, T, TRAC
     }
 }
 
-impl<'a, T: Component, TRACK> core::ops::IndexMut<EntityId> for ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track> core::ops::IndexMut<EntityId> for ViewMut<'a, T, Track> {
     #[inline]
     fn index_mut(&mut self, entity: EntityId) -> &mut Self::Output {
         let index = self

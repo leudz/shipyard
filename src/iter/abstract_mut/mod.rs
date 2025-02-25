@@ -8,6 +8,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
+use crate::track;
 
 #[allow(missing_docs)]
 #[allow(clippy::len_without_is_empty)]
@@ -74,47 +75,89 @@ impl<'tmp, T: Component> AbstractMut for FullRawWindow<'tmp, T> {
     }
 }
 
-impl<'tmp, T: Component> AbstractMut for FullRawWindowMut<'tmp, T> {
-    type Out = Mut<'tmp, T>;
-    type Index = usize;
+macro_rules! impl_abstract_mut_ref {
+    ($($track: path)+) => {
+        $(
+            impl<'tmp, T: Component> AbstractMut for FullRawWindowMut<'tmp, T, $track> {
+                type Out = &'tmp mut T;
+                type Index = usize;
 
-    #[inline]
-    unsafe fn get_data(&self, index: usize) -> Self::Out {
-        Mut {
-            flag: self
-                .is_tracking_modification
-                .then(|| &mut *self.modification_data.add(index)),
-            current: self.current,
-            data: &mut *self.data.add(index),
-        }
-    }
-    #[inline]
-    unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
-        Mut {
-            flag: self
-                .is_tracking_modification
-                .then(|| &mut *self.modification_data.add(index)),
-            current: self.current,
-            data: &mut *self.data.add(index),
-        }
-    }
-    #[inline]
-    fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
-        self.index_of(entity_id)
-    }
-    #[inline]
-    unsafe fn indices_of_unchecked(&self, entity_id: EntityId, _: usize, _: u16) -> Self::Index {
-        self.index_of_unchecked(entity_id)
-    }
-    #[inline]
-    unsafe fn get_id(&self, index: usize) -> EntityId {
-        *self.dense.add(index)
-    }
-    #[inline]
-    fn len(&self) -> usize {
-        self.dense_len
+                #[inline]
+                unsafe fn get_data(&self, index: usize) -> Self::Out {
+                    &mut *self.data.add(index)
+                }
+                #[inline]
+                unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
+                    &mut *self.data.add(index)
+                }
+                #[inline]
+                fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
+                    self.index_of(entity_id)
+                }
+                #[inline]
+                unsafe fn indices_of_unchecked(&self, entity_id: EntityId, _: usize, _: u16) -> Self::Index {
+                    self.index_of_unchecked(entity_id)
+                }
+                #[inline]
+                unsafe fn get_id(&self, index: usize) -> EntityId {
+                    *self.dense.add(index)
+                }
+                #[inline]
+                fn len(&self) -> usize {
+                    self.dense_len
+                }
+            }
+        )+
     }
 }
+
+impl_abstract_mut_ref![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
+
+macro_rules! impl_abstract_mut_mut {
+    ($($track: path)+) => {
+        $(
+            impl<'tmp, T: Component> AbstractMut for FullRawWindowMut<'tmp, T, $track> {
+                type Out = Mut<'tmp, T>;
+                type Index = usize;
+
+                #[inline]
+                unsafe fn get_data(&self, index: usize) -> Self::Out {
+                    Mut {
+                        flag: Some(&mut *self.modification_data.add(index)),
+                        current: self.current,
+                        data: &mut *self.data.add(index),
+                    }
+                }
+                #[inline]
+                unsafe fn get_datas(&self, index: Self::Index) -> Self::Out {
+                    Mut {
+                        flag: Some(&mut *self.modification_data.add(index)),
+                        current: self.current,
+                        data: &mut *self.data.add(index),
+                    }
+                }
+                #[inline]
+                fn indices_of(&self, entity_id: EntityId, _: usize, _: u16) -> Option<Self::Index> {
+                    self.index_of(entity_id)
+                }
+                #[inline]
+                unsafe fn indices_of_unchecked(&self, entity_id: EntityId, _: usize, _: u16) -> Self::Index {
+                    self.index_of_unchecked(entity_id)
+                }
+                #[inline]
+                unsafe fn get_id(&self, index: usize) -> EntityId {
+                    *self.dense.add(index)
+                }
+                #[inline]
+                fn len(&self) -> usize {
+                    self.dense_len
+                }
+            }
+        )+
+    }
+}
+
+impl_abstract_mut_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 macro_rules! impl_abstract_mut {
     ($(($type: ident, $index: tt))+) => {

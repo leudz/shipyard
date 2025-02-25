@@ -12,6 +12,7 @@ use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::get_component::GetComponent;
+use crate::get_unique::GetUnique;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
@@ -32,7 +33,7 @@ use alloc::sync::Arc;
 use core::any::type_name;
 use core::hash::BuildHasherDefault;
 use core::marker::PhantomData;
-use core::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
 
 #[allow(missing_docs)]
@@ -102,7 +103,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
 }
 
 impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
-    pub(crate) fn build(self, counter: Arc<AtomicU32>) -> AtomicRefCell<AllStorages> {
+    pub(crate) fn build(self, counter: Arc<AtomicU64>) -> AtomicRefCell<AllStorages> {
         let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -158,7 +159,7 @@ pub struct AllStorages {
     main_thread_id: u64,
     #[cfg(feature = "thread_local")]
     thread_id_generator: Arc<dyn Fn() -> u64 + Send + Sync>,
-    counter: Arc<AtomicU32>,
+    counter: Arc<AtomicU64>,
 }
 
 #[cfg(not(feature = "thread_local"))]
@@ -168,7 +169,7 @@ unsafe impl Sync for AllStorages {}
 
 impl AllStorages {
     #[cfg(feature = "std")]
-    pub(crate) fn new(counter: Arc<AtomicU32>) -> Self {
+    pub(crate) fn new(counter: Arc<AtomicU64>) -> Self {
         let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
@@ -1279,6 +1280,67 @@ assert!(*j == &U32(1));
         let current = self.get_current();
 
         T::get(self, None, current, entity)
+    }
+
+    #[doc = "Retrieve a unique component.
+
+You can use:
+* `&T` for a shared access to `T` unique component
+* `&mut T` for an exclusive access to `T` unique component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` unique component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` unique component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` unique component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared) + storage (exclusive or shared)
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+
+### Example
+```
+use shipyard::{AllStoragesViewMut, Unique, World};
+
+#[derive(Unique, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+let world = World::new();
+let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+
+all_storages.add_unique(U32(0));
+
+let i = all_storages.get_unique::<&U32>().unwrap();
+
+assert!(*i == U32(0));
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    #[inline]
+    pub fn get_unique<T: GetUnique>(&self) -> Result<T::Out<'_>, error::GetStorage> {
+        T::get_unique(self, None)
     }
 
     #[doc = "Iterate components.

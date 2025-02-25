@@ -22,7 +22,7 @@ pub(crate) fn expand_label(name: syn::Ident, generics: syn::Generics) -> TokenSt
             fn dyn_clone(&self) -> Box<dyn ::shipyard::Label> {
                 Box::new(Clone::clone(self))
             }
-            fn dyn_debug(&self, f: &mut ::core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error> {
+            fn dyn_debug(&self, f: &mut ::core::fmt::Formatter<'_>) -> core::result::Result<(), core::fmt::Error> {
                 ::core::fmt::Debug::fmt(self, f)
             }
         }

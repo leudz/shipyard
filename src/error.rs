@@ -1,9 +1,9 @@
 //! All error types.
 
+use crate::entity_id::EntityId;
 use crate::info::TypeInfo;
 use crate::scheduler::Label;
 use crate::storage::StorageId;
-use crate::{entity_id::EntityId, tracking::tracking_fmt};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -71,7 +71,7 @@ pub enum GetStorage {
     TrackingNotEnabled {
         name: Option<&'static str>,
         id: StorageId,
-        tracking: u32,
+        tracking: &'static str,
     },
     /// Error returned by a custom view.
     #[cfg(feature = "std")]
@@ -185,9 +185,9 @@ impl Debug for GetStorage {
                 f.write_fmt(format_args!("{:?} storage was not found in the World. You can register unique storage with: world.add_unique(your_unique);", id))
             }
             GetStorage::TrackingNotEnabled { name, id, tracking } => if let Some(name) = name {
-                f.write_fmt(format_args!("{} tracking is not enabled for {} storage.", tracking_fmt(*tracking), name))
+                f.write_fmt(format_args!("{} tracking is not enabled for {} storage.", tracking, name))
             } else {
-                f.write_fmt(format_args!("{} tracking is not enabled for {:?} storage.", tracking_fmt(*tracking), id))
+                f.write_fmt(format_args!("{} tracking is not enabled for {:?} storage.", tracking, id))
             }
             GetStorage::Custom(err) => {
                 f.write_fmt(format_args!("Storage borrow failed with a custom error, {:?}.", err))

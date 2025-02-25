@@ -5,7 +5,7 @@ use crate::tracking::TrackingTimestamp;
 use crate::views::{AllStoragesView, AllStoragesViewMut};
 use crate::world::World;
 
-/// Allows a type to be borrowed by [`World::borrow`], [`World::run`] and workloads.
+/// Allows a type to be borrowed by [`World::borrow`] and [`World::run`].
 pub trait WorldBorrow {
     #[allow(missing_docs)]
     type WorldView<'a>;

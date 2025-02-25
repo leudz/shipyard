@@ -176,7 +176,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     pub fn new<T>(label: impl AsLabel<T>) -> Self {
         let label = label.as_label();
@@ -188,7 +188,7 @@ impl Workload {
             tags: vec![label],
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
-            overwritten_name: false,
+            overwritten_name: true,
             require_before: DedupedLabels::new(),
             require_after: DedupedLabels::new(),
             barriers: Vec::new(),
@@ -291,7 +291,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     #[track_caller]
     pub fn with_system<B, R, S: IntoWorkloadSystem<B, R>>(mut self, system: S) -> Workload {
@@ -339,7 +339,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     #[track_caller]
     #[cfg(feature = "std")]
@@ -392,7 +392,7 @@ impl Workload {
     ///     .add_to_world(&world)
     ///     .unwrap();
     ///
-    /// world.run_default();
+    /// world.run_default_workload();
     /// ```
     #[track_caller]
     #[cfg(not(feature = "std"))]
@@ -427,7 +427,7 @@ impl Workload {
     /// - Nested workload is not present in `world`.
     /// - [`AllStorages`] borrow failed.
     /// - Storage borrow failed.
-    #[allow(clippy::blocks_in_if_conditions)]
+    #[allow(clippy::blocks_in_conditions)]
     pub fn add_to_world(self, world: &World) -> Result<(), error::AddWorkload> {
         let Scheduler {
             systems,
@@ -486,7 +486,9 @@ impl Workload {
     ) -> Result<(), error::UniquePresence> {
         struct ComponentType;
 
-        impl Component for ComponentType {}
+        impl Component for ComponentType {
+            type Tracking = crate::track::Untracked;
+        }
         impl Unique for ComponentType {}
 
         let all_storages = world
@@ -1647,12 +1649,20 @@ mod tests {
     };
 
     struct Usize(usize);
+    #[allow(unused)]
     struct U32(u32);
+    #[allow(unused)]
     struct U16(u16);
 
-    impl Component for Usize {}
-    impl Component for U32 {}
-    impl Component for U16 {}
+    impl Component for Usize {
+        type Tracking = crate::track::Untracked;
+    }
+    impl Component for U32 {
+        type Tracking = crate::track::Untracked;
+    }
+    impl Component for U16 {
+        type Tracking = crate::track::Untracked;
+    }
     impl Unique for Usize {}
     impl Unique for U32 {}
     impl Unique for U16 {}
@@ -1980,11 +1990,14 @@ mod tests {
     #[cfg(feature = "thread_local")]
     #[test]
     fn non_send() {
-        use crate::{NonSend, View, ViewMut, World};
+        use crate::{track, NonSend, View, ViewMut, World};
 
+        #[allow(unused)]
         struct NotSend(*const ());
         unsafe impl Sync for NotSend {}
-        impl Component for NotSend {}
+        impl Component for NotSend {
+            type Tracking = track::Untracked;
+        }
 
         fn sys1(_: NonSend<View<'_, NotSend>>) {}
         fn sys2(_: NonSend<ViewMut<'_, NotSend>>) {}
@@ -2231,7 +2244,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2251,7 +2264,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2276,7 +2289,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2299,7 +2312,7 @@ mod tests {
             .add_to_world(&world)
             .unwrap();
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
     }
 
     #[test]
@@ -2317,7 +2330,7 @@ mod tests {
             )
         });
 
-        world.run_default().unwrap();
+        world.run_default_workload().unwrap();
 
         assert_eq!(world.borrow::<UniqueView<'_, Usize>>().unwrap().0, 1);
     }

@@ -2,11 +2,16 @@
 mod non_send_sync;
 
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 impl Unique for U32 {}
 
+#[allow(unused)]
 struct USIZE(usize);
-impl Component for USIZE {}
+impl Component for USIZE {
+    type Tracking = track::Untracked;
+}
 impl Unique for USIZE {}
 
 use core::any::type_name;
@@ -164,7 +169,7 @@ fn enable_tracking() {
         .into_workload()
     });
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 /// System run_if should not run if a workload run_if returns `false`
@@ -178,7 +183,7 @@ fn check_nested_workloads_run_if() {
         (sys.run_if(|| panic!()).into_workload().run_if(|| false),).into_workload()
     });
 
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 #[test]
@@ -193,7 +198,7 @@ fn check_run_if_error() {
 
     world.add_workload(|| (|| {}, sys.run_if(|_: UniqueView<USIZE>| true)).into_workload());
 
-    match world.run_default() {
+    match world.run_default_workload() {
         Err(error::RunWorkload::Run((label, _))) => {
             assert!(label.dyn_eq(&*type_name_of(sys).as_label()));
         }
@@ -216,4 +221,31 @@ fn tracking_enabled() {
     world.add_workload(w);
 
     world.run_workload(w).unwrap();
+}
+
+#[test]
+fn single_system_run_on_same_thread() {
+    let world = World::new();
+    let main_thread = std::thread::current().id();
+
+    world.add_workload(move || {
+        move || {
+            assert_eq!(main_thread, std::thread::current().id());
+        }
+    });
+
+    world.run_default_workload().unwrap();
+}
+
+/// Make sure that we don't panic in this scenario:
+/// - one system running on main thread
+/// - the system has a run_if that evaluates to false
+/// - no other system
+#[test]
+fn skip_first() {
+    let world = World::new();
+
+    world.add_workload(|| (|_: AllStoragesViewMut| {}).run_if(|| false));
+
+    world.run_default_workload().unwrap();
 }

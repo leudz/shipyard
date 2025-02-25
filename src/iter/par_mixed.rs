@@ -19,6 +19,7 @@ where
 {
     type Item = <Mixed<Storage> as Iterator>::Item;
 
+    #[inline]
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
     where
         C: UnindexedConsumer<Self::Item>,

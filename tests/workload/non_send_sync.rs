@@ -3,14 +3,22 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 struct MyRc(Rc<RefCell<Vec<u32>>>);
-impl Component for MyRc {}
+impl Component for MyRc {
+    type Tracking = track::Untracked;
+}
 
+#[allow(unused)]
 struct NotSend(*const ());
-impl Component for NotSend {}
+impl Component for NotSend {
+    type Tracking = track::Untracked;
+}
 unsafe impl Sync for NotSend {}
 
+#[allow(unused)]
 struct NotSync(*const ());
-impl Component for NotSync {}
+impl Component for NotSync {
+    type Tracking = track::Untracked;
+}
 unsafe impl Send for NotSync {}
 
 #[test]
@@ -31,7 +39,7 @@ fn basic() {
         .with_system(push)
         .add_to_world(&world)
         .unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
 
     world.run(|vecs: NonSendSync<ViewMut<MyRc>>| {
         assert_eq!(&**vecs.iter().next().unwrap().0.borrow(), &[0][..]);

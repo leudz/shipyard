@@ -1,7 +1,10 @@
 use shipyard::*;
 
+#[allow(unused)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn entity_id_serde() {
@@ -35,6 +38,14 @@ fn entity_id_serde() {
             let entity_id3 = entities.add_entity(&mut u32s, U32(1));
             check_roundtrip(entity_id3, "{\"index\":2,\"gen\":0}");
         },
+    );
+}
+
+#[test]
+fn dead_entity() {
+    check_roundtrip(
+        EntityId::dead(),
+        &format!("{{\"index\":281474976710654,\"gen\":{}}}", !0u16,),
     );
 }
 

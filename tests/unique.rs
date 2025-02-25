@@ -2,8 +2,11 @@ use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
+#[derive(Default, Debug, PartialEq)]
 struct USIZE(usize);
-impl Component for USIZE {}
+impl Component for USIZE {
+    type Tracking = track::Untracked;
+}
 impl Unique for USIZE {}
 
 #[test]
@@ -73,7 +76,9 @@ fn non_send() {
         _phantom: core::marker::PhantomData<*const ()>,
     }
     unsafe impl Sync for NonSendStruct {}
-    impl Component for NonSendStruct {}
+    impl Component for NonSendStruct {
+        type Tracking = track::Untracked;
+    }
     impl Unique for NonSendStruct {}
 
     let world = World::default();
@@ -98,7 +103,9 @@ fn non_sync() {
         _phantom: core::marker::PhantomData<*const ()>,
     }
     unsafe impl Send for NonSyncStruct {}
-    impl Component for NonSyncStruct {}
+    impl Component for NonSyncStruct {
+        type Tracking = track::Untracked;
+    }
     impl Unique for NonSyncStruct {}
 
     let world = World::default();
@@ -122,7 +129,9 @@ fn non_send_sync() {
         value: usize,
         _phantom: core::marker::PhantomData<*const ()>,
     }
-    impl Component for NonSendSyncStruct {}
+    impl Component for NonSendSyncStruct {
+        type Tracking = track::Untracked;
+    }
     impl Unique for NonSendSyncStruct {}
 
     let world = World::default();
@@ -160,4 +169,45 @@ fn non_send_remove() {
     })
     .join()
     .unwrap();
+}
+
+#[test]
+fn unique_or_default() {
+    let world = World::new();
+
+    world.run(|u: UniqueOrDefaultView<USIZE>| assert_eq!(*u, USIZE(0)));
+}
+
+#[test]
+fn unique_or_default_mut() {
+    let world = World::new();
+
+    world.run(|mut u: UniqueOrDefaultViewMut<USIZE>| {
+        u.0 += 1;
+        assert_eq!(*u, USIZE(1))
+    });
+}
+
+#[test]
+fn unique_or_init() {
+    let world = World::new();
+
+    world.run(|u: UniqueOrInitView<USIZE>| {
+        assert_eq!(**u.get_or_init(|| USIZE(10)).unwrap(), USIZE(10))
+    });
+
+    world.run(|u: UniqueOrInitView<USIZE>| assert_eq!(**u.get().unwrap(), USIZE(10)));
+}
+
+#[test]
+fn unique_or_init_mut() {
+    let world = World::new();
+
+    world.run(|u: UniqueOrInitViewMut<USIZE>| {
+        assert_eq!(**u.get_or_init(|| USIZE(10)).unwrap(), USIZE(10))
+    });
+
+    world.run(|mut u: UniqueOrInitViewMut<USIZE>| u.get_mut().unwrap().0 += 1);
+
+    world.run(|u: UniqueOrInitViewMut<USIZE>| assert_eq!(**u.get().unwrap(), USIZE(11)));
 }

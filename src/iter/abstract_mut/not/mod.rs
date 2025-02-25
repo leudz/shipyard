@@ -21,7 +21,7 @@ impl<'w, T: Component> AbstractMut for Not<FullRawWindow<'w, T>> {
         if self.0.index_of(entity).is_some() {
             None
         } else {
-            Some(core::usize::MAX)
+            Some(usize::MAX)
         }
     }
     #[inline]
@@ -38,7 +38,7 @@ impl<'w, T: Component> AbstractMut for Not<FullRawWindow<'w, T>> {
     }
 }
 
-impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T>> {
+impl<'w, T: Component, Track> AbstractMut for Not<FullRawWindowMut<'w, T, Track>> {
     type Out = ();
     type Index = usize;
 
@@ -51,7 +51,7 @@ impl<'w, T: Component> AbstractMut for Not<FullRawWindowMut<'w, T>> {
         if self.0.index_of(entity).is_some() {
             None
         } else {
-            Some(core::usize::MAX)
+            Some(usize::MAX)
         }
     }
     #[inline]

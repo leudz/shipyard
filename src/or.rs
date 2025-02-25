@@ -1,7 +1,7 @@
 use crate::{
     component::Component,
     iter::IntoAbstract,
-    tracking::Inserted,
+    tracking::{Inserted, Tracking},
     views::{View, ViewMut},
 };
 use core::ops::BitOr;
@@ -43,7 +43,7 @@ use core::ops::BitOr;
 #[derive(Copy, Clone)]
 pub struct Or<T>(pub(crate) T);
 
-impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a View<'a, T, TRACK> {
+impl<'a, T: Component, Track: Tracking, U: IntoAbstract> BitOr<U> for &'a View<'a, T, Track> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -51,7 +51,9 @@ impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a View<'a, T, TRAC
     }
 }
 
-impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for Inserted<&'a View<'a, T, TRACK>> {
+impl<'a, T: Component, Track: Tracking, U: IntoAbstract> BitOr<U>
+    for Inserted<&'a View<'a, T, Track>>
+{
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -59,7 +61,7 @@ impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for Inserted<&'a View<'a
     }
 }
 
-impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track: Tracking, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T, Track> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
@@ -67,7 +69,9 @@ impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a ViewMut<'a, T, T
     }
 }
 
-impl<'a, T: Component, TRACK, U: IntoAbstract> BitOr<U> for &'a mut ViewMut<'a, T, TRACK> {
+impl<'a, T: Component, Track: Tracking, U: IntoAbstract> BitOr<U>
+    for &'a mut ViewMut<'a, T, Track>
+{
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {

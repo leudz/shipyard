@@ -91,7 +91,7 @@ impl<T: Send + Sync + Component> BulkInsert for T {
         if sparse_set.is_tracking_modification() {
             sparse_set
                 .modification_data
-                .extend(new_entities.iter().map(|_| current.furthest_from()));
+                .extend(new_entities.iter().map(|_| TrackingTimestamp::origin()));
         }
 
         let SparseSet { sparse, dense, .. } = &mut *sparse_set;

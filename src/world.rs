@@ -1,4 +1,5 @@
 mod builder;
+mod run_batches;
 
 pub use builder::WorldBuilder;
 
@@ -10,6 +11,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
+use crate::get_unique::GetUnique;
 use crate::info::WorkloadsInfo;
 use crate::iter_component::{IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
@@ -25,13 +27,13 @@ use crate::views::EntitiesViewMut;
 use alloc::boxed::Box;
 use alloc::format;
 use alloc::sync::Arc;
-use core::sync::atomic::AtomicU32;
+use core::sync::atomic::AtomicU64;
 
 /// `World` contains all data this library will manipulate.
 pub struct World {
     pub(crate) all_storages: AtomicRefCell<AllStorages>,
     pub(crate) scheduler: AtomicRefCell<Scheduler>,
-    counter: Arc<AtomicU32>,
+    counter: Arc<AtomicU64>,
     #[cfg(feature = "parallel")]
     thread_pool: Option<rayon::ThreadPool>,
 }
@@ -40,7 +42,7 @@ pub struct World {
 impl Default for World {
     /// Creates an empty `World`.
     fn default() -> Self {
-        let counter = Arc::new(AtomicU32::new(1));
+        let counter = Arc::new(AtomicU64::new(1));
         World {
             #[cfg(not(feature = "thread_local"))]
             all_storages: AtomicRefCell::new(AllStorages::new(counter.clone())),
@@ -68,8 +70,8 @@ impl World {
     pub fn remove_local_thread_pool(&mut self) -> Option<rayon::ThreadPool> {
         self.thread_pool.take()
     }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
+    /// Adds a new unique storage, unique storages store a single value.
+    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].
     ///
     /// ### Borrows
     ///
@@ -102,8 +104,8 @@ impl World {
     pub fn add_unique<T: Send + Sync + Unique>(&self, component: T) {
         self.all_storages.borrow().unwrap().add_unique(component);
     }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].  
+    /// Adds a new unique storage, unique storages store a single value.
+    /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
@@ -144,8 +146,8 @@ impl World {
             .unwrap()
             .add_unique_non_send(component);
     }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].  
+    /// Adds a new unique storage, unique storages store a single value.
+    /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
@@ -186,8 +188,8 @@ impl World {
             .unwrap()
             .add_unique_non_sync(component);
     }
-    /// Adds a new unique storage, unique storages store a single value.  
-    /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].  
+    /// Adds a new unique storage, unique storages store a single value.
+    /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].
     /// Does nothing if the storage already exists.
     ///
     /// ### Borrows
@@ -264,7 +266,7 @@ impl World {
             .map_err(|_| error::UniqueRemove::AllStorages)?
             .remove_unique::<T>()
     }
-    #[doc = "Borrows the requested storages, if they don't exist they'll get created.  
+    #[doc = "Borrows the requested storages, if they don't exist they'll get created.
 You can use a tuple to get multiple storages at once.
 
 You can use:
@@ -283,13 +285,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`
 [NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`
 [NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
@@ -299,13 +301,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`
 [NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`
 [NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
@@ -315,13 +317,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
 [NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
 [NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
@@ -374,7 +376,7 @@ let (entities, mut usizes) = world
 
         V::world_borrow(self, None, current)
     }
-    #[doc = "Borrows the requested storages, runs the function and evaluates to the function's return value.  
+    #[doc = "Borrows the requested storages, runs the function and evaluates to the function's return value.
 Data can be passed to the function, this always has to be a single type but you can use a tuple if needed.
 
 You can use:
@@ -393,13 +395,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`
 [NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`
 [NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
@@ -409,13 +411,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`
 [NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`
 [NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
@@ -425,13 +427,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
 [NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
 [NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
@@ -514,13 +516,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+    * [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`
 [NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSend]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send`
-* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`  
+* [NonSend]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send`
 [NonSend] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send` unique storage."
     )]
     #[cfg_attr(
@@ -530,13 +532,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+    * [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`
 [NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Sync`
-* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`  
+* [NonSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Sync`
 [NonSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Sync` unique storage."
     )]
     #[cfg_attr(
@@ -546,13 +548,13 @@ You can use:
     #[cfg_attr(
         all(feature = "thread_local", docsrs),
         doc = "    * [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+    * [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
 [NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
         all(feature = "thread_local", not(docsrs)),
         doc = "* [NonSendSync]<[View]\\<T\\>> for a shared access to a `T` storage where `T` isn't `Send` nor `Sync`
-* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`  
+* [NonSendSync]<[ViewMut]\\<T\\>> for an exclusive access to a `T` storage where `T` isn't `Send` nor `Sync`
 [NonSendSync] and [UniqueView]/[UniqueViewMut] can be used together to access a `!Send + !Sync` unique storage."
     )]
     #[cfg_attr(
@@ -743,159 +745,6 @@ let i = world.run(sys1);
             self.run_batches_sequential(systems, system_names, batches, workload_name)
         }
     }
-    #[cfg(feature = "parallel")]
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn run_batches_parallel(
-        &self,
-        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
-        system_names: &[Box<dyn Label>],
-        batches: &Batches,
-        #[cfg_attr(not(feature = "tracing"), allow(unused))] workload_name: &dyn Label,
-    ) -> Result<(), error::RunWorkload> {
-        #[cfg(feature = "tracing")]
-        let parent_span = tracing::info_span!("workload", name = ?workload_name);
-        #[cfg(feature = "tracing")]
-        let _parent_span = parent_span.enter();
-
-        let run_batch = || -> Result<(), error::RunWorkload> {
-            for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
-                let mut result = Ok(());
-                let run_if = (
-                    if let Some(run_if_index) = batches_run_if.0 {
-                        if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
-                            (run_if)(self).map_err(|err| {
-                                error::RunWorkload::Run((
-                                    system_names[batch.0.unwrap()].clone(),
-                                    err,
-                                ))
-                            })?
-                        } else {
-                            true
-                        }
-                    } else {
-                        true
-                    },
-                    batches_run_if
-                        .1
-                        .iter()
-                        .map(|run_if_index| {
-                            if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
-                                (run_if)(self).map_err(|err| {
-                                    error::RunWorkload::Run((
-                                        system_names[batches.sequential[*run_if_index]].clone(),
-                                        err,
-                                    ))
-                                })
-                            } else {
-                                Ok(true)
-                            }
-                        })
-                        .collect::<Result<Vec<_>, error::RunWorkload>>()?,
-                );
-
-                rayon::in_place_scope(|scope| {
-                    scope.spawn(|_| {
-                        if batch.1.len() == 1 {
-                            if !run_if.1[0] {
-                                return;
-                            }
-
-                            #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[batch.1[0]]);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
-
-                            result = systems[batch.1[0]](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[batch.1[0]].clone(), err))
-                            });
-                        } else {
-                            use rayon::prelude::*;
-
-                            result = batch.1.par_iter().zip(run_if.1).try_for_each(|(&index, should_run)| {
-                                if !should_run {
-                                    return Ok(());
-                                }
-
-                                #[cfg(feature = "tracing")]
-                                let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
-                                #[cfg(feature = "tracing")]
-                                let _system_span = system_span.enter();
-
-                                (systems[index])(self).map_err(|err| {
-                                    error::RunWorkload::Run((system_names[index].clone(), err))
-                                })
-                            });
-                        }
-                    });
-
-                    if let Some(index) = batch.0 {
-                        if run_if.0 {
-                            #[cfg(feature = "tracing")]
-                            let system_span = tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_names[index]);
-                            #[cfg(feature = "tracing")]
-                            let _system_span = system_span.enter();
-
-                            systems[index](self).map_err(|err| {
-                                error::RunWorkload::Run((system_names[index].clone(), err))
-                            })?;
-                        }
-                    }
-
-                    Ok(())
-                })?;
-
-                result?;
-            }
-
-            Ok(())
-        };
-
-        if let Some(thread_pool) = &self.thread_pool {
-            thread_pool.scope(|_| run_batch())
-        } else {
-            // Use non local ThreadPool
-            run_batch()
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn run_batches_sequential(
-        &self,
-        systems: &[Box<dyn Fn(&World) -> Result<(), error::Run> + Send + Sync + 'static>],
-        system_names: &[Box<dyn Label>],
-        batches: &Batches,
-        #[cfg_attr(not(feature = "tracing"), allow(unused))] workload_name: &dyn Label,
-    ) -> Result<(), error::RunWorkload> {
-        #[cfg(feature = "tracing")]
-        let parent_span = tracing::info_span!("workload", name = ?workload_name);
-        #[cfg(feature = "tracing")]
-        let _parent_span = parent_span.enter();
-
-        batches
-            .sequential
-            .iter()
-            .zip(&batches.sequential_run_if)
-            .try_for_each(|(&index, run_if)| {
-                if let Some(run_if) = run_if.as_ref() {
-                    let should_run = (run_if)(self).map_err(|err| {
-                        error::RunWorkload::Run((system_names[index].clone(), err))
-                    })?;
-
-                    if !should_run {
-                        return Ok(());
-                    }
-                }
-
-                #[cfg(feature = "tracing")]
-                let system_span =
-                    tracing::info_span!(parent: parent_span.clone(), "system", name = ?system_name);
-                #[cfg(feature = "tracing")]
-                let _system_span = system_span.enter();
-
-                (systems[index])(self)
-                    .map_err(|err| error::RunWorkload::Run((system_names[index].clone(), err)))
-            })
-    }
     /// Run the default workload if there is one.
     ///
     /// ### Borrows
@@ -908,7 +757,7 @@ let i = world.run(sys1);
     /// - Scheduler borrow failed.
     /// - Storage borrow failed.
     /// - User error returned by system.
-    pub fn run_default(&self) -> Result<(), error::RunWorkload> {
+    pub fn run_default_workload(&self) -> Result<(), error::RunWorkload> {
         let scheduler = self
             .scheduler
             .borrow()
@@ -924,7 +773,7 @@ let i = world.run(sys1);
         }
         Ok(())
     }
-    /// Returns a `Ref<&AllStorages>`, used to implement custom storages.  
+    /// Returns a `Ref<&AllStorages>`, used to implement custom storages.
     /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
     ///
     /// ### Errors
@@ -933,7 +782,7 @@ let i = world.run(sys1);
     pub fn all_storages(&self) -> Result<ARef<'_, &'_ AllStorages>, error::Borrow> {
         self.all_storages.borrow()
     }
-    /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.  
+    /// Returns a `RefMut<&mut AllStorages>`, used to implement custom storages.
     /// To borrow `AllStorages` you should use `borrow` or `run` with `AllStoragesViewMut`.
     ///
     /// ### Errors
@@ -976,7 +825,7 @@ let i = world.run(sys1);
 }
 
 impl World {
-    /// Creates a new entity with the components passed as argument and returns its `EntityId`.  
+    /// Creates a new entity with the components passed as argument and returns its `EntityId`.
     /// `component` must always be a tuple, even for a single component.
     ///
     /// ### Example
@@ -999,7 +848,7 @@ impl World {
     pub fn add_entity<C: TupleAddComponent>(&mut self, component: C) -> EntityId {
         self.all_storages.get_mut().add_entity(component)
     }
-    /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.  
+    /// Creates multiple new entities and returns an iterator yielding the new `EntityId`s.
     /// `source` must always yield a tuple, even for a single component.
     ///
     /// ### Example
@@ -1021,9 +870,9 @@ impl World {
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
         self.all_storages.get_mut().bulk_add_entity(source)
     }
-    /// Adds components to an existing entity.  
-    /// If the entity already owned a component it will be replaced.  
-    /// `component` must always be a tuple, even for a single component.  
+    /// Adds components to an existing entity.
+    /// If the entity already owned a component it will be replaced.
+    /// `component` must always be a tuple, even for a single component.
     ///
     /// ### Panics
     ///
@@ -1054,7 +903,7 @@ impl World {
     pub fn add_component<C: TupleAddComponent>(&mut self, entity: EntityId, component: C) {
         self.all_storages.get_mut().add_component(entity, component)
     }
-    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.  
+    /// Deletes components from an entity. As opposed to `remove`, `delete` doesn't return anything.
     /// `C` must always be a tuple, even for a single component.
     ///
     /// ### Example
@@ -1078,7 +927,7 @@ impl World {
     pub fn delete_component<C: TupleDelete>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().delete_component::<C>(entity)
     }
-    /// Removes components from an entity.  
+    /// Removes components from an entity.
     /// `C` must always be a tuple, even for a single component.
     ///
     /// ### Example
@@ -1149,8 +998,8 @@ impl World {
     pub fn strip(&mut self, entity: EntityId) {
         self.all_storages.get_mut().strip(entity);
     }
-    /// Deletes all entities with any of the given components.  
-    /// The storage's type has to be used and not the component.  
+    /// Deletes all entities with any of the given components.
+    /// The storage's type has to be used and not the component.
     /// `SparseSet` is the default storage.
     ///
     /// ### Example
@@ -1182,8 +1031,8 @@ impl World {
     pub fn delete_any<S: TupleDeleteAny>(&mut self) {
         self.all_storages.get_mut().delete_any::<S>();
     }
-    /// Deletes all components of an entity except the ones passed in `S`.  
-    /// The storage's type has to be used and not the component.  
+    /// Deletes all components of an entity except the ones passed in `S`.
+    /// The storage's type has to be used and not the component.
     /// `SparseSet` is the default storage.
     ///
     /// ### Example
@@ -1207,7 +1056,7 @@ impl World {
     pub fn retain_storage<S: TupleRetainStorage>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().retain_storage::<S>(entity);
     }
-    /// Same as `retain_storage` but uses `StorageId` and not generics.  
+    /// Same as `retain_storage` but uses `StorageId` and not generics.
     /// You should only use this method if you use a custom storage with a runtime id.
     #[inline]
     pub fn retain_storage_by_id(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
@@ -1243,8 +1092,8 @@ impl World {
             .get_mut()
             .clear_all_removed_and_deleted_older_than_timestamp(timestamp)
     }
-    /// Make the given entity alive.  
-    /// Does nothing if an entity with a greater generation is already at this index.  
+    /// Make the given entity alive.
+    /// Does nothing if an entity with a greater generation is already at this index.
     /// Returns `true` if the entity is successfully spawned.
     #[inline]
     pub fn spawn(&mut self, entity: EntityId) -> bool {
@@ -1405,6 +1254,74 @@ assert!(*j == &U32(1));
         let current = self.get_current();
 
         T::get(all_storages, Some(all_borrow), current, entity)
+    }
+
+    #[doc = "Retrieve a unique component.
+
+You can use:
+* `&T` for a shared access to `T` unique component
+* `&mut T` for an exclusive access to `T` unique component"]
+    #[cfg_attr(
+        all(feature = "thread_local", docsrs),
+        doc = "* <span style=\"display: table;color: #2f2f2f;background-color: #C4ECFF;border-width: 1px;border-style: solid;border-color: #7BA5DB;padding: 3px;margin-bottom: 5px; font-size: 90%\">This is supported on <strong><code style=\"background-color: #C4ECFF\">feature=\"thread_local\"</code></strong> only:</span>"
+    )]
+    #[cfg_attr(
+        all(feature = "thread_local"),
+        doc = "* [NonSend]<&T> for a shared access to a `T` unique component where `T` isn't `Send`
+* [NonSend]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Send`
+* [NonSync]<&T> for a shared access to a `T` unique component where `T` isn't `Sync`
+* [NonSync]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Sync`
+* [NonSendSync]<&T> for a shared access to a `T` unique component where `T` isn't `Send` nor `Sync`
+* [NonSendSync]<&mut T> for an exclusive access to a `T` unique component where `T` isn't `Send` nor `Sync`"
+    )]
+    #[cfg_attr(
+        not(feature = "thread_local"),
+        doc = "* NonSend: must activate the *thread_local* feature
+* NonSync: must activate the *thread_local* feature
+* NonSendSync: must activate the *thread_local* feature"
+    )]
+    #[doc = "
+### Borrows
+
+- [AllStorages] (shared) + storage (exclusive or shared)
+
+### Errors
+
+- [AllStorages] borrow failed.
+- Storage borrow failed.
+
+### Example
+```
+use shipyard::{Unique, World};
+
+#[derive(Unique, Debug, PartialEq, Eq)]
+struct U32(u32);
+
+let mut world = World::new();
+
+world.add_unique(U32(0));
+
+let i = world.get_unique::<&U32>().unwrap();
+
+assert!(*i == U32(0));
+```"]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSend]: crate::NonSend
+[NonSync]: crate::NonSync
+[NonSendSync]: crate::NonSendSync"
+    )]
+    #[inline]
+    pub fn get_unique<T: GetUnique>(&self) -> Result<T::Out<'_>, error::GetStorage> {
+        let (all_storages, all_borrow) = unsafe {
+            ARef::destructure(
+                self.all_storages
+                    .borrow()
+                    .map_err(error::GetStorage::AllStoragesBorrow)?,
+            )
+        };
+
+        T::get_unique(all_storages, Some(all_borrow))
     }
 
     #[doc = "Iterate components.

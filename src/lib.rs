@@ -26,9 +26,13 @@
 #![warn(clippy::print_stdout)]
 #![warn(clippy::maybe_infinite_iter)]
 #![allow(clippy::uninlined_format_args)]
-#![cfg_attr(not(any(feature = "std", test)), no_std)]
+#![allow(clippy::needless_lifetimes)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
+#![no_std]
+
+#[cfg(feature = "std")]
+extern crate std;
 
 extern crate alloc;
 
@@ -47,6 +51,7 @@ mod entity_id;
 pub mod error;
 mod get;
 mod get_component;
+mod get_unique;
 pub mod iter;
 mod iter_component;
 mod memory_usage;
@@ -97,6 +102,7 @@ pub use entities::Entities;
 pub use entity_id::EntityId;
 pub use get::Get;
 pub use get_component::{GetComponent, Ref, RefMut};
+pub use get_unique::GetUnique;
 pub use iter::{IntoIter, IntoWithId};
 pub use iter_component::{IntoIterRef, IterComponent, IterRef};
 pub use memory_usage::StorageMemoryUsage;
@@ -110,7 +116,7 @@ pub use scheduler::{
     ScheduledWorkload, SystemModificator, Workload, WorkloadModificator, WorkloadSystem,
 };
 #[cfg(feature = "proc")]
-pub use shipyard_proc::{Borrow, BorrowInfo, Component, Label, Unique, WorldBorrow};
+pub use shipyard_proc::{Borrow, BorrowInfo, Component, IntoIter, Label, Unique, WorldBorrow};
 pub use sparse_set::{
     BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
     TupleRemove,
@@ -120,13 +126,13 @@ pub use storage::{Storage, StorageId};
 pub use system::{AllSystem, Nothing, System};
 pub use tracking::{
     DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalOrDeletionTracking, RemovalTracking, Track, Tracking, TrackingTimestamp,
-    TupleTrack,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Tracking, TrackingTimestamp, TupleTrack,
 };
 pub use unique::UniqueStorage;
 pub use views::{
-    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
-    View, ViewMut,
+    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueOrDefaultView,
+    UniqueOrDefaultViewMut, UniqueOrInitView, UniqueOrInitViewMut, UniqueView, UniqueViewMut, View,
+    ViewMut,
 };
 pub use world::{World, WorldBuilder};
 

@@ -1,4 +1,5 @@
 use crate::component::Component;
+use crate::tracking::Tracking;
 use crate::views::{View, ViewMut};
 use core::ops::Not as NotOps;
 
@@ -34,21 +35,21 @@ use core::ops::Not as NotOps;
 #[derive(Copy, Clone)]
 pub struct Not<T>(pub(crate) T);
 
-impl<T: Component, TRACK> NotOps for &View<'_, T, TRACK> {
+impl<T: Component, Track: Tracking> NotOps for &View<'_, T, Track> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T: Component, TRACK> NotOps for &ViewMut<'_, T, TRACK> {
+impl<T: Component, Track: Tracking> NotOps for &ViewMut<'_, T, Track> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)
     }
 }
 
-impl<T: Component, TRACK> NotOps for &mut ViewMut<'_, T, TRACK> {
+impl<T: Component, Track: Tracking> NotOps for &mut ViewMut<'_, T, Track> {
     type Output = Not<Self>;
     fn not(self) -> Self::Output {
         Not(self)

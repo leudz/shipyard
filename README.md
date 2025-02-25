@@ -10,7 +10,7 @@ If you have any question or want to follow the development more closely <sub>[![
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 
-### [Guide Master](https://leudz.github.io/shipyard/guide/master) | [Guide 0.6](https://leudz.github.io/shipyard/guide/0.6) | [Demo](https://leudz.github.io/shipyard/bunny_demo) | [Visualizer](https://leudz.github.io/shipyard/visualizer)
+### [Guide Master](https://leudz.github.io/shipyard/guide/master) | [Guide 0.7](https://leudz.github.io/shipyard/guide/0.7) | [Demo](https://leudz.github.io/shipyard/bunny_demo) | [Visualizer](https://leudz.github.io/shipyard/visualizer)
 
 </div>
 
@@ -28,7 +28,7 @@ struct Position {
 }
 
 fn in_acid(positions: View<Position>, mut healths: ViewMut<Health>) {
-    for (_, mut health) in (&positions, &mut healths)
+    for (_, health) in (&positions, &mut healths)
         .iter()
         .filter(|(pos, _)| is_in_acid(pos))
     {

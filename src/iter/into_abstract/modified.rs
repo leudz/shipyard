@@ -2,13 +2,13 @@ use super::IntoAbstract;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, SparseSet};
-use crate::tracking::{ModificationTracking, Modified, Track};
+use crate::tracking::{ModificationTracking, Modified};
 use crate::type_id::TypeId;
 use crate::views::{View, ViewMut};
 
-impl<'tmp, 'v, T: Component, TRACK> IntoAbstract for Modified<&'tmp View<'v, T, TRACK>>
+impl<'tmp, 'v, T: Component, Track> IntoAbstract for Modified<&'tmp View<'v, T, Track>>
 where
-    Track<TRACK>: ModificationTracking,
+    Track: ModificationTracking,
 {
     type AbsView = Modified<FullRawWindow<'tmp, T>>;
 
@@ -33,9 +33,9 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for Modified<&'b ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for Modified<&'b ViewMut<'a, T, Track>>
 where
-    Track<TRACK>: ModificationTracking,
+    Track: ModificationTracking,
 {
     type AbsView = Modified<FullRawWindow<'b, T>>;
 
@@ -60,11 +60,11 @@ where
     }
 }
 
-impl<'a: 'b, 'b, T: Component, TRACK> IntoAbstract for Modified<&'b mut ViewMut<'a, T, TRACK>>
+impl<'a: 'b, 'b, T: Component, Track> IntoAbstract for Modified<&'b mut ViewMut<'a, T, Track>>
 where
-    Track<TRACK>: ModificationTracking,
+    Track: ModificationTracking,
 {
-    type AbsView = Modified<FullRawWindowMut<'b, T>>;
+    type AbsView = Modified<FullRawWindowMut<'b, T, Track>>;
 
     fn into_abstract(self) -> Self::AbsView {
         Modified(self.0.into_abstract())

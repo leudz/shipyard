@@ -18,11 +18,8 @@ pub(crate) fn expand_borrow(
     };
 
     let mut gat_generics = generics.clone();
-    for generic in gat_generics.params.iter_mut() {
-        if let syn::GenericParam::Lifetime(lifetime) = generic {
-            lifetime.lifetime = parse_quote!('__view);
-            break;
-        }
+    if let Some(lifetime) = gat_generics.lifetimes_mut().next() {
+        lifetime.lifetime = parse_quote!('__view);
     }
 
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -69,7 +66,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp,) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp,) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -90,7 +87,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp) -> Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#borrow),*))
                     }
                 }

@@ -34,7 +34,8 @@ impl<T: Send + Sync + Component> TupleAddComponent for T {
     ) {
         all_storages
             .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
-            .insert(entity, self, current);
+            .insert(entity, self, current)
+            .assert_inserted();
     }
 }
 
@@ -50,7 +51,8 @@ impl<T: Send + Sync + Component> TupleAddComponent for Option<T> {
         if let Some(component) = self {
             all_storages
                 .exclusive_storage_or_insert_mut(StorageId::of::<SparseSet<T>>(), SparseSet::new)
-                .insert(entity, component, current);
+                .insert(entity, component, current)
+                .assert_inserted();
         }
     }
 }

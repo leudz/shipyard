@@ -2,26 +2,40 @@ use core::any::type_name;
 use shipyard::error;
 use shipyard::*;
 
+#[allow(unused)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn no_pack() {
+    #[allow(unused)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
 
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
 
-    entities.add_entity(&mut u32s, U32(0));
-    entities.add_entity(&mut u32s, U32(1));
-    entities.add_entity(&mut u32s, U32(2));
+    let e0 = entities.add_entity(&mut u32s, U32(0));
+    let e1 = entities.add_entity(&mut u32s, U32(1));
+    let e2 = entities.add_entity(&mut u32s, U32(2));
 
     drop((entities, u32s));
     world.borrow::<AllStoragesViewMut>().unwrap().clear();
 
     let (mut entities, mut u32s) = world.borrow::<(EntitiesViewMut, ViewMut<U32>)>().unwrap();
+
+    assert!(u32s.get(e0).is_err());
+    assert!(u32s.get(e1).is_err());
+    assert!(u32s.get(e2).is_err());
+    assert!(!entities.is_alive(e0));
+    assert!(!entities.is_alive(e1));
+    assert!(!entities.is_alive(e2));
+    assert_eq!(entities.iter().count(), 0);
 
     assert_eq!(u32s.len(), 0);
     let entity0 = entities.add_entity(&mut u32s, U32(3));
@@ -39,7 +53,9 @@ fn no_pack() {
 fn update() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     let world = World::new();
     let (mut entities, mut usizes) = world.borrow::<(EntitiesViewMut, ViewMut<USIZE>)>().unwrap();
@@ -79,7 +95,9 @@ fn update() {
 fn inserted() {
     #[derive(PartialEq, Eq, Debug)]
     struct USIZE(usize);
-    impl Component for USIZE {}
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
 
     fn system(u32s: View<U32>, mut usizes: ViewMut<USIZE, track::All>) {
         usizes.clear();
@@ -102,7 +120,7 @@ fn inserted() {
         .add_to_world(&world)
         .unwrap();
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }

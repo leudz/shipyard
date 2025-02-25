@@ -80,6 +80,7 @@ pub trait IntoIter {
 
 impl<T: IntoAbstract> IntoIter for T
 where
+    T::AbsView: AbstractMut,
     <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<T::AbsView>;
@@ -127,6 +128,7 @@ where
 
 impl<T: IntoAbstract> IntoIter for (T,)
 where
+    T::AbsView: AbstractMut,
     <T::AbsView as AbstractMut>::Index: From<usize> + Clone,
 {
     type IntoIter = Iter<(T::AbsView,)>;
@@ -174,17 +176,21 @@ where
 
 macro_rules! impl_into_iter {
     (($type1: ident, $index1: tt) $(($type: ident, $index: tt))+) => {
-        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+) where <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
+        impl<$type1: IntoAbstract, $($type: IntoAbstract),+> IntoIter for ($type1, $($type,)+)
+        where
+            $type1::AbsView: AbstractMut, $($type::AbsView: AbstractMut),+,
+            <$type1::AbsView as AbstractMut>::Index: From<usize> + Clone, $(<$type::AbsView as AbstractMut>::Index: From<usize> + Clone),+ {
+
             type IntoIter = Iter<($type1::AbsView, $($type::AbsView,)+)>;
             #[cfg(feature = "parallel")]
             type IntoParIter = ParIter<($type1::AbsView, $($type::AbsView,)+)>;
 
             fn iter(self) -> Self::IntoIter {
                 let type_ids = [self.$index1.type_id(), $(self.$index.type_id()),+];
-                let mut smallest = core::usize::MAX;
+                let mut smallest = usize::MAX;
                 let mut smallest_dense = ptr::null();
                 let mut mask: u16 = 0;
-                let mut factored_len = core::usize::MAX;
+                let mut factored_len = usize::MAX;
 
                 if !self.$index1.is_or() && !self.$index1.is_not() {
                     if let Some(len) = self.$index1.len() {
@@ -228,7 +234,7 @@ macro_rules! impl_into_iter {
 
                 let _ = factored_len;
 
-                if smallest == core::usize::MAX {
+                if smallest == usize::MAX {
                     Iter::Mixed(Mixed {
                         count: 0,
                         mask,
@@ -253,7 +259,7 @@ macro_rules! impl_into_iter {
             fn iter_by<Driver: 'static>(self) -> Self::IntoIter {
                 let type_id = TypeId::of::<Driver>();
                 let mut found = false;
-                let mut smallest = core::usize::MAX;
+                let mut smallest = usize::MAX;
                 let mut smallest_dense = ptr::null();
                 let mut mask: u16 = 0;
 
@@ -302,7 +308,7 @@ macro_rules! impl_into_iter {
                 )+
 
                 if found {
-                    if smallest == core::usize::MAX {
+                    if smallest == usize::MAX {
                         Iter::Mixed(Mixed {
                             count: 0,
                             mask,

@@ -2,11 +2,15 @@ use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug)]
 struct U32(u32);
-impl Component for U32 {}
+impl Component for U32 {
+    type Tracking = track::Untracked;
+}
 
 #[derive(PartialEq, Eq, Debug)]
 struct USIZE(usize);
-impl Component for USIZE {}
+impl Component for USIZE {
+    type Tracking = track::Untracked;
+}
 
 #[test]
 fn no_pack() {
@@ -114,9 +118,9 @@ fn workload_add() {
             .into_workload()
     });
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 #[test]
@@ -140,9 +144,9 @@ fn workload_add_and_remove() {
             .into_workload()
     });
 
-    world.run_default().unwrap();
-    world.run_default().unwrap();
-    world.run_default().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
+    world.run_default_workload().unwrap();
 }
 
 #[test]

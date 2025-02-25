@@ -9,14 +9,16 @@ use crate::borrow::Borrow;
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::error;
 use crate::iter::{AbstractMut, Iter, Mixed, Tight};
+use crate::r#mut::Mut;
 use crate::sparse_set::SparseSet;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
+use crate::tracking::Tracking;
 use crate::tracking::TrackingTimestamp;
 use crate::views::{View, ViewMut};
+use crate::{error, track};
 use alloc::vec::Vec;
-use core::any::TypeId;
+use core::any::{type_name, TypeId};
 use core::ptr;
 
 const ACCESS_FACTOR: usize = 3;
@@ -27,7 +29,7 @@ const ACCESS_FACTOR: usize = 3;
 /// [`World::iter`]: crate::World::iter
 pub trait IterComponent {
     #[allow(missing_docs)]
-    type Storage<'a>: AbstractMut;
+    type Storage<'a>;
     #[allow(missing_docs)]
     type Borrow<'a>;
 
@@ -278,9 +280,10 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
 }
 
 impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
+    #[track_caller]
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -295,6 +298,13 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
     > {
         let view = ViewMut::<'a, T>::borrow(all_storages, all_borrow, None, current)?;
 
+        if view.sparse_set.is_tracking_modification && !T::Tracking::track_modification() {
+            panic!(
+                "`{0}` tracks modification but trying to iterate `&mut {0}`. Use `Mut<{0}>` instead.",
+                type_name::<T>()
+            );
+        }
+
         Ok(FullRawWindowMut::new_owned(view))
     }
 
@@ -306,6 +316,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
         raw_window.dense
     }
 
+    #[track_caller]
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -314,7 +325,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -332,9 +343,10 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
+    #[track_caller]
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -349,6 +361,13 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
     > {
         let view = NonSend::<ViewMut<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
 
+        if view.sparse_set.is_tracking_modification && !T::Tracking::track_modification() {
+            panic!(
+                "`{0}` tracks modification but trying to iterate `&mut {0}`. Use `Mut<{0}>` instead.",
+                type_name::<T>()
+            );
+        }
+
         Ok(FullRawWindowMut::new_owned(view.0))
     }
 
@@ -360,6 +379,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
         raw_window.dense
     }
 
+    #[track_caller]
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -368,7 +388,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -386,9 +406,10 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
+    #[track_caller]
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -403,6 +424,13 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
     > {
         let view = NonSync::<ViewMut<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
 
+        if view.sparse_set.is_tracking_modification && !T::Tracking::track_modification() {
+            panic!(
+                "`{0}` tracks modification but trying to iterate `&mut {0}`. Use `Mut<{0}>` instead.",
+                type_name::<T>()
+            );
+        }
+
         Ok(FullRawWindowMut::new_owned(view.0))
     }
 
@@ -414,6 +442,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
         raw_window.dense
     }
 
+    #[track_caller]
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -422,7 +451,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -440,9 +469,10 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
-    type Storage<'a> = FullRawWindowMut<'a, T>;
+    type Storage<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
+    #[track_caller]
     fn into_abtract_mut<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -468,6 +498,7 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
         raw_window.dense
     }
 
+    #[track_caller]
     fn into_iter<'a>(
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
@@ -476,7 +507,238 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
         let (raw_window, all_borrow, borrow) =
             Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
-        let len = raw_window.len();
+        let len = raw_window.dense_len;
+
+        let iter = Iter::Tight(Tight {
+            current: 0,
+            end: len,
+            storage: raw_window,
+        });
+
+        Ok(IterRef {
+            iter,
+            _all_borrow: all_borrow,
+            _borrow: borrow,
+        })
+    }
+}
+
+impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
+    type Storage<'a> = FullRawWindowMut<'a, T, track::Modification>;
+    type Borrow<'a> = ExclusiveBorrow<'a>;
+
+    fn into_abtract_mut<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<
+        (
+            Self::Storage<'a>,
+            Option<SharedBorrow<'a>>,
+            Self::Borrow<'a>,
+        ),
+        error::GetStorage,
+    > {
+        let view =
+            ViewMut::<'a, T, track::Modification>::borrow(all_storages, all_borrow, None, current)?;
+
+        Ok(FullRawWindowMut::new_owned(view))
+    }
+
+    fn type_id() -> TypeId {
+        TypeId::of::<SparseSet<T>>()
+    }
+
+    fn dense(raw_window: &Self::Storage<'_>) -> *const EntityId {
+        raw_window.dense
+    }
+
+    fn into_iter<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<IterRef<'a, Self>, error::GetStorage> {
+        let (raw_window, all_borrow, borrow) =
+            Self::into_abtract_mut(all_storages, all_borrow, current)?;
+
+        let len = raw_window.dense_len;
+
+        let iter = Iter::Tight(Tight {
+            current: 0,
+            end: len,
+            storage: raw_window,
+        });
+
+        Ok(IterRef {
+            iter,
+            _all_borrow: all_borrow,
+            _borrow: borrow,
+        })
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
+    type Storage<'a> = FullRawWindowMut<'a, T, track::Modification>;
+    type Borrow<'a> = ExclusiveBorrow<'a>;
+
+    fn into_abtract_mut<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<
+        (
+            Self::Storage<'a>,
+            Option<SharedBorrow<'a>>,
+            Self::Borrow<'a>,
+        ),
+        error::GetStorage,
+    > {
+        let view = NonSend::<ViewMut<'a, T, track::Modification>>::borrow(
+            all_storages,
+            all_borrow,
+            None,
+            current,
+        )?;
+
+        Ok(FullRawWindowMut::new_owned(view.0))
+    }
+
+    fn type_id() -> TypeId {
+        TypeId::of::<SparseSet<T>>()
+    }
+
+    fn dense(raw_window: &Self::Storage<'_>) -> *const EntityId {
+        raw_window.dense
+    }
+
+    fn into_iter<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<IterRef<'a, Self>, error::GetStorage> {
+        let (raw_window, all_borrow, borrow) =
+            Self::into_abtract_mut(all_storages, all_borrow, current)?;
+
+        let len = raw_window.dense_len;
+
+        let iter = Iter::Tight(Tight {
+            current: 0,
+            end: len,
+            storage: raw_window,
+        });
+
+        Ok(IterRef {
+            iter,
+            _all_borrow: all_borrow,
+            _borrow: borrow,
+        })
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
+    type Storage<'a> = FullRawWindowMut<'a, T, track::Modification>;
+    type Borrow<'a> = ExclusiveBorrow<'a>;
+
+    fn into_abtract_mut<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<
+        (
+            Self::Storage<'a>,
+            Option<SharedBorrow<'a>>,
+            Self::Borrow<'a>,
+        ),
+        error::GetStorage,
+    > {
+        let view = NonSync::<ViewMut<'a, T, track::Modification>>::borrow(
+            all_storages,
+            all_borrow,
+            None,
+            current,
+        )?;
+
+        Ok(FullRawWindowMut::new_owned(view.0))
+    }
+
+    fn type_id() -> TypeId {
+        TypeId::of::<SparseSet<T>>()
+    }
+
+    fn dense(raw_window: &Self::Storage<'_>) -> *const EntityId {
+        raw_window.dense
+    }
+
+    fn into_iter<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<IterRef<'a, Self>, error::GetStorage> {
+        let (raw_window, all_borrow, borrow) =
+            Self::into_abtract_mut(all_storages, all_borrow, current)?;
+
+        let len = raw_window.dense_len;
+
+        let iter = Iter::Tight(Tight {
+            current: 0,
+            end: len,
+            storage: raw_window,
+        });
+
+        Ok(IterRef {
+            iter,
+            _all_borrow: all_borrow,
+            _borrow: borrow,
+        })
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
+    type Storage<'a> = FullRawWindowMut<'a, T, track::Modification>;
+    type Borrow<'a> = ExclusiveBorrow<'a>;
+
+    fn into_abtract_mut<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<
+        (
+            Self::Storage<'a>,
+            Option<SharedBorrow<'a>>,
+            Self::Borrow<'a>,
+        ),
+        error::GetStorage,
+    > {
+        let view = NonSendSync::<ViewMut<'a, T, track::Modification>>::borrow(
+            all_storages,
+            all_borrow,
+            None,
+            current,
+        )?;
+
+        Ok(FullRawWindowMut::new_owned(view.0))
+    }
+
+    fn type_id() -> TypeId {
+        TypeId::of::<SparseSet<T>>()
+    }
+
+    fn dense(raw_window: &Self::Storage<'_>) -> *const EntityId {
+        raw_window.dense
+    }
+
+    fn into_iter<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<IterRef<'a, Self>, error::GetStorage> {
+        let (raw_window, all_borrow, borrow) =
+            Self::into_abtract_mut(all_storages, all_borrow, current)?;
+
+        let len = raw_window.dense_len;
 
         let iter = Iter::Tight(Tight {
             current: 0,
@@ -494,7 +756,11 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
 
 macro_rules! impl_iter_component {
     ($(($type: ident, $raw_window: ident, $borrow: ident, $index: tt))+) => {
-        impl<$($type: IterComponent),+> IterComponent for ($($type,)+) where $(for<'a> <$type::Storage<'a> as AbstractMut>::Index: From<usize>),+  {
+        impl<$($type: IterComponent),+> IterComponent for ($($type,)+)
+        where
+            $(for<'a> $type::Storage<'a>: AbstractMut),+,
+            $(for<'a> <$type::Storage<'a> as AbstractMut>::Index: From<usize>),+
+        {
             type Storage<'a> = ($($type::Storage<'a>,)+);
             type Borrow<'a> = ($($type::Borrow<'a>,)+);
 
@@ -535,10 +801,10 @@ macro_rules! impl_iter_component {
                     Self::into_abtract_mut(all_storages, all_borrow, current)?;
 
                     let type_ids = [$($type::type_id()),+];
-                    let mut smallest = core::usize::MAX;
+                    let mut smallest = usize::MAX;
                     let mut smallest_dense = ptr::null();
                     let mut mask: u16 = 0;
-                    let mut factored_len = core::usize::MAX;
+                    let mut factored_len = usize::MAX;
 
                     $(
                         let len = raw_window.$index.len();
@@ -554,7 +820,7 @@ macro_rules! impl_iter_component {
 
                     let _ = factored_len;
 
-                    let iter = if smallest == core::usize::MAX {
+                    let iter = if smallest == usize::MAX {
                         Iter::Mixed(Mixed {
                             count: 0,
                             mask,

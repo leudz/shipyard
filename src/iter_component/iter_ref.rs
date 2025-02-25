@@ -14,7 +14,10 @@ pub struct IterRef<'a, T: IterComponent> {
     pub(crate) _borrow: T::Borrow<'a>,
 }
 
-impl<'a, T: IterComponent> Iterator for IterRef<'a, T> {
+impl<'a, T: IterComponent> Iterator for IterRef<'a, T>
+where
+    T::Storage<'a>: AbstractMut,
+{
     type Item = <T::Storage<'a> as AbstractMut>::Out;
 
     #[inline]
@@ -23,7 +26,10 @@ impl<'a, T: IterComponent> Iterator for IterRef<'a, T> {
     }
 }
 
-impl<'a, T: IterComponent> LastId for IterRef<'a, T> {
+impl<'a, T: IterComponent> LastId for IterRef<'a, T>
+where
+    T::Storage<'a>: AbstractMut,
+{
     #[inline]
     unsafe fn last_id(&self) -> EntityId {
         self.iter.last_id()
@@ -61,7 +67,10 @@ impl<'a, T: IterComponent> IntoIterRef<'a, T> {
     }
 }
 
-impl<'a, 'b, T: IterComponent> IntoIterator for &'b mut IntoIterRef<'a, T> {
+impl<'a, 'b, T: IterComponent> IntoIterator for &'b mut IntoIterRef<'a, T>
+where
+    T::Storage<'b>: AbstractMut,
+{
     type Item = <T::Storage<'b> as AbstractMut>::Out;
     type IntoIter = IterRef<'b, T>;
 

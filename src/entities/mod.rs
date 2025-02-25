@@ -13,7 +13,9 @@ use crate::storage::Storage;
 use crate::tracking::TrackingTimestamp;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::type_name;
 use core::iter::repeat_with;
+use core::mem::size_of;
 
 /// Entities holds the EntityIds to all entities: living, removed and dead.
 ///
@@ -392,7 +394,13 @@ impl Storage for Entities {
             return;
         }
 
-        let mut last_alive = self.data.len() as u64 - 1;
+        // the first value can be anything but self.data.len() - 1
+        // otherwise we would set data[len - 1].index to len - 1 and not delete it
+        let mut last_alive = if self.data.len() as u64 == EntityId::max_index() {
+            0
+        } else {
+            EntityId::max_index()
+        };
         for (i, id) in self.data.iter_mut().enumerate().rev() {
             let target = last_alive;
             let id_before_bump = *id;
@@ -423,11 +431,10 @@ impl Storage for Entities {
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
-            storage_name: core::any::type_name::<Self>().into(),
-            allocated_memory_bytes: (self.data.capacity() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Entities>(),
-            used_memory_bytes: (self.data.len() * core::mem::size_of::<EntityId>())
-                + core::mem::size_of::<Entities>(),
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: (self.data.capacity() * size_of::<EntityId>())
+                + size_of::<Entities>(),
+            used_memory_bytes: (self.data.len() * size_of::<EntityId>()) + size_of::<Entities>(),
             component_count: self.data.len(),
         })
     }

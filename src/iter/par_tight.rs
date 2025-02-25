@@ -19,12 +19,15 @@ where
 {
     type Item = <Tight<Storage> as Iterator>::Item;
 
+    #[inline]
     fn drive_unindexed<C>(self, consumer: C) -> C::Result
     where
         C: UnindexedConsumer<Self::Item>,
     {
         bridge(self, consumer)
     }
+
+    #[inline]
     fn opt_len(&self) -> Option<usize> {
         Some(self.len())
     }
@@ -35,12 +38,17 @@ where
     Storage: Clone + Send,
     <Storage as AbstractMut>::Out: Send,
 {
+    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
+
+    #[inline]
     fn drive<C: Consumer<Self::Item>>(self, consumer: C) -> C::Result {
         bridge(self, consumer)
     }
+
+    #[inline]
     fn with_producer<CB: ProducerCallback<Self::Item>>(self, callback: CB) -> CB::Output {
         callback.callback(self.0)
     }

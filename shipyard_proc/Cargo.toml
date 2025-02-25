@@ -1,6 +1,6 @@
 [package]
 name = "shipyard_proc"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["leudz <dylan.ancel@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -10,6 +10,10 @@ repository = "https://github.com/leudz/shipyard"
 
 [lib]
 proc-macro = true
+
+[features]
+default = []
+parallel = []
 
 [dependencies]
 proc-macro2 = "1"
