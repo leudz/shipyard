@@ -232,43 +232,43 @@ jobs:
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - name: load guide master
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: guide_master
           path: dist/guide/master
 
       - name: load guide 0.5.0
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: guide_0_5_0
           path: dist/guide/0.5.0
 
       - name: load guide 0.6
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: guide_0_6
           path: dist/guide/0.6
           
       - name: load guide 0.7
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: guide_0_7
           path: dist/guide/0.7
 
       - name: load bunny_demo
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: bunny_demo
           path: dist/bunny_demo
 
       - name: load square_eater
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: square_eater
           path: dist/square_eater
 
       - name: load visualizer
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: visualizer
           path: dist/visualizer
