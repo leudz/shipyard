@@ -81,7 +81,7 @@ impl EntityId {
         assert!(index < Self::INDEX_MASK);
 
         EntityId(unsafe {
-            NonZeroU64::new_unchecked((index + 1) | (gen as u64) << Self::INDEX_LEN)
+            NonZeroU64::new_unchecked((index + 1) | ((gen as u64) << Self::INDEX_LEN))
         })
     }
     /// Build a new `EntityId` with the given index and generation.
