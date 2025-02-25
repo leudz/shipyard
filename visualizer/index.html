@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html style="overflow-y: hidden;">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>⚓ Visualizer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css" />
+
+    <base href="/shipyard/visualizer/" />
+<link rel="modulepreload" href="/shipyard/visualizer/visualizer-d54667adc24cdef.js" crossorigin="anonymous" integrity="sha384-VT5lgQu6cHdDOt3N2te7VallsXFN5NPQzsM4JYenlhgzPZjSLlfTTnPYjTBCSVlF"><link rel="preload" href="/shipyard/visualizer/visualizer-d54667adc24cdef_bg.wasm" crossorigin="anonymous" integrity="sha384-20x2Ah7D4gUcfBT3OpBe8KNy+JMhlm52H+YnFwOgP3k6UFlhycccfT2L+ikDYbsA" as="fetch" type="application/wasm"></head>
+
+<body>
+    
+<script type="module">
+import init, * as bindings from '/shipyard/visualizer/visualizer-d54667adc24cdef.js';
+const wasm = await init({ module_or_path: '/shipyard/visualizer/visualizer-d54667adc24cdef_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+</body>
+
+</html>
