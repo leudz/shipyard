@@ -744,6 +744,37 @@ impl<T: Component> SparseSet<T> {
     }
 }
 
+impl<T: Component> SparseSet<T> {
+    fn private_memory_usage(&self) -> StorageMemoryUsage {
+        StorageMemoryUsage {
+            storage_name: type_name::<Self>().into(),
+            allocated_memory_bytes: self.allocated_memory_bytes(),
+            used_memory_bytes: self.used_memory_bytes(),
+            component_count: self.len(),
+        }
+    }
+    fn allocated_memory_bytes(&self) -> usize {
+        self.sparse.reserved_memory()
+            + (self.dense.capacity() * size_of::<EntityId>())
+            + (self.data.capacity() * size_of::<T>())
+            + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>())
+            + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
+            + (self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>())
+            + (self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>())
+            + size_of::<Self>()
+    }
+    fn used_memory_bytes(&self) -> usize {
+        self.sparse.used_memory()
+            + (self.dense.len() * size_of::<EntityId>())
+            + (self.data.len() * size_of::<T>())
+            + (self.insertion_data.len() * size_of::<TrackingTimestamp>())
+            + (self.modification_data.len() * size_of::<TrackingTimestamp>())
+            + (self.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, T)>())
+            + (self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>())
+            + size_of::<Self>()
+    }
+}
+
 impl<T: Ord + Component> SparseSet<T> {
     /// Sorts the `SparseSet`, but may not preserve the order of equal elements.
     pub fn sort_unstable(&mut self) {
@@ -760,30 +791,11 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
-        Some(StorageMemoryUsage {
-            storage_name: type_name::<Self>().into(),
-            allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * size_of::<EntityId>())
-                + (self.data.capacity() * size_of::<T>())
-                + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>())
-                + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
-                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * size_of::<EntityId>())
-                + (self.data.len() * size_of::<T>())
-                + (self.insertion_data.len() * size_of::<TrackingTimestamp>())
-                + (self.modification_data.len() * size_of::<TrackingTimestamp>())
-                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            component_count: self.len(),
-        })
-    }
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
         Some(&self.sparse)
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(self.private_memory_usage())
     }
     fn is_empty(&self) -> bool {
         self.is_empty()
@@ -830,28 +842,11 @@ impl<T: 'static + Component + Sync> Storage for NonSend<SparseSet<T>> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
-        Some(StorageMemoryUsage {
-            storage_name: type_name::<Self>().into(),
-            allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * size_of::<EntityId>())
-                + (self.data.capacity() * size_of::<T>())
-                + (self.insertion_data.capacity() * size_of::<u32>())
-                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * size_of::<EntityId>())
-                + (self.data.len() * size_of::<T>())
-                + (self.insertion_data.len() * size_of::<u32>())
-                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            component_count: self.len(),
-        })
-    }
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
         Some(&self.sparse)
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(self.private_memory_usage())
     }
     fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -898,28 +893,11 @@ impl<T: 'static + Component + Send> Storage for NonSync<SparseSet<T>> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
-        Some(StorageMemoryUsage {
-            storage_name: type_name::<Self>().into(),
-            allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * size_of::<EntityId>())
-                + (self.data.capacity() * size_of::<T>())
-                + (self.insertion_data.capacity() * size_of::<u32>())
-                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * size_of::<EntityId>())
-                + (self.data.len() * size_of::<T>())
-                + (self.insertion_data.len() * size_of::<u32>())
-                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            component_count: self.len(),
-        })
-    }
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
         Some(&self.sparse)
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(self.private_memory_usage())
     }
     fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -966,28 +944,11 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
-        Some(StorageMemoryUsage {
-            storage_name: type_name::<Self>().into(),
-            allocated_memory_bytes: self.sparse.reserved_memory()
-                + (self.dense.capacity() * size_of::<EntityId>())
-                + (self.data.capacity() * size_of::<T>())
-                + (self.insertion_data.capacity() * size_of::<u32>())
-                + (self.deletion_data.capacity() * size_of::<(T, EntityId)>())
-                + (self.removal_data.capacity() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            used_memory_bytes: self.sparse.used_memory()
-                + (self.dense.len() * size_of::<EntityId>())
-                + (self.data.len() * size_of::<T>())
-                + (self.insertion_data.len() * size_of::<u32>())
-                + (self.deletion_data.len() * size_of::<(EntityId, T)>())
-                + (self.removal_data.len() * size_of::<EntityId>())
-                + size_of::<Self>(),
-            component_count: self.len(),
-        })
-    }
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
         Some(&self.sparse)
+    }
+    fn memory_usage(&self) -> Option<StorageMemoryUsage> {
+        Some(self.private_memory_usage())
     }
     fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -1415,5 +1376,65 @@ mod tests {
 
         assert_eq!(sparse_set.insertion_data.len(), 1);
         assert_eq!(sparse_set.modification_data.len(), 1);
+    }
+
+    /// Makes sure the `memory_usage` method is up-to-date with the current `SparseSet` data.
+    #[test]
+    fn memory_usage() {
+        let mut sparse_set = SparseSet::new();
+        sparse_set.track_all();
+
+        sparse_set
+            .insert(
+                EntityId::new_from_parts(0, 0),
+                I32(0),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+        sparse_set.delete(
+            EntityId::new_from_index_and_gen(0, 0),
+            TrackingTimestamp::new(0),
+        );
+
+        sparse_set
+            .insert(
+                EntityId::new_from_parts(0, 0),
+                I32(1),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+        sparse_set.dyn_remove(
+            EntityId::new_from_index_and_gen(0, 0),
+            TrackingTimestamp::new(0),
+        );
+
+        sparse_set
+            .insert(
+                EntityId::new_from_parts(0, 0),
+                I32(2),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+
+        let expected_sparse_memory = sparse_set.sparse.used_memory();
+        let expected_dense_memory = 1 * size_of::<EntityId>();
+        let expected_data_memory = 1 * size_of::<I32>();
+        let expected_insertion_tracking_memory = 1 * size_of::<TrackingTimestamp>();
+        let expected_modification_tracking_memory = 1 * size_of::<TrackingTimestamp>();
+        let expected_deletion_tracking_memory = 1 * size_of::<(EntityId, TrackingTimestamp, I32)>();
+        let expected_removal_tracking_memory = 1 * size_of::<(EntityId, TrackingTimestamp)>();
+        let expected_self_memory = size_of::<SparseSet<I32>>();
+        let expected_total_memory = expected_sparse_memory
+            + expected_dense_memory
+            + expected_data_memory
+            + expected_insertion_tracking_memory
+            + expected_modification_tracking_memory
+            + expected_deletion_tracking_memory
+            + expected_removal_tracking_memory
+            + expected_self_memory;
+
+        let memory_usage = sparse_set.private_memory_usage();
+
+        assert_eq!(memory_usage.used_memory_bytes, expected_total_memory);
     }
 }
