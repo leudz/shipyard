@@ -220,7 +220,7 @@ jobs:
       - uses: jetli/trunk-action@v0.4.0
       # GH pages doesn't use the same url naming as trunk's default
       # https://github.com/thedodd/trunk/issues/268
-      - run: trunk build --public-url "/shipyard/visualizer/" --release true visualizer/index.html
+      - run: trunk build --public-url "/shipyard/visualizer/" --release true -d visualizer/dist visualizer/index.html
       - name: save visualizer
         uses: actions/upload-artifact@v4
         with:
