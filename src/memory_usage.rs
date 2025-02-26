@@ -6,26 +6,50 @@ pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
-/// A trait to query the amount of memory a storage uses.
-pub struct StorageMemoryUsage {
-    #[allow(missing_docs)]
-    pub storage_name: Cow<'static, str>,
-    /// Amount of memory used by the storage in bytes.
-    pub used_memory_bytes: usize,
-    /// Amount of memory allocated by the storage in bytes (including reserved memory).
-    pub allocated_memory_bytes: usize,
-    #[allow(missing_docs)]
-    pub component_count: usize,
+#[derive(Debug)]
+pub struct SparseSetMemoryUsage {
+    pub spase: usize,
+    pub dense: usize,
+    pub data: usize,
+    pub insertion_data: usize,
+    pub modification_data: usize,
+    pub deletion_data: usize,
+    pub removal_data: usize,
+    pub self_data: usize,
 }
 
-impl core::fmt::Debug for StorageMemoryUsage {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!(
-            "{}: {} bytes used for {} components ({} bytes reserved in total)",
-            self.storage_name,
-            self.used_memory_bytes,
-            self.component_count,
-            self.allocated_memory_bytes
-        ))
+impl SparseSetMemoryUsage {
+    pub fn sum(&self) -> usize {
+        self.spase
+            + self.dense
+            + self.data
+            + self.insertion_data
+            + self.modification_data
+            + self.deletion_data
+            + self.removal_data
+            + self.self_data
     }
+}
+
+/// A enum to query the amount of memory a storage uses.
+#[allow(missing_docs, unused)]
+#[derive(Debug)]
+pub enum StorageMemoryUsage {
+    Entities {
+        used_memory_bytes: usize,
+        allocated_memory_bytes: usize,
+        entity_count: usize,
+    },
+    SparseSet {
+        storage_name: Cow<'static, str>,
+        used_memory_usage: SparseSetMemoryUsage,
+        allocated_memory_usage: SparseSetMemoryUsage,
+        used_memory_bytes: usize,
+        allocated_memory_bytes: usize,
+        component_count: usize,
+    },
+    Unique {
+        storage_name: Cow<'static, str>,
+        used_memory_bytes: usize,
+    },
 }

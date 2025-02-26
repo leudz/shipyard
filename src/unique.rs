@@ -16,11 +16,9 @@ pub struct UniqueStorage<T: Unique> {
 
 impl<T: Unique> Storage for UniqueStorage<T> {
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
-        Some(StorageMemoryUsage {
+        Some(StorageMemoryUsage::Unique {
             storage_name: type_name::<Self>().into(),
-            allocated_memory_bytes: size_of::<Self>(),
             used_memory_bytes: size_of::<Self>(),
-            component_count: 1,
         })
     }
     fn is_empty(&self) -> bool {
