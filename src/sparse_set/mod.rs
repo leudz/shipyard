@@ -1433,7 +1433,7 @@ mod tests {
             + expected_removal_tracking_memory
             + expected_self_memory;
 
-        let memory_usage = sparse_set.memory_usage();
+        let memory_usage = sparse_set.private_memory_usage();
 
         assert_eq!(memory_usage.used_memory_bytes, expected_total_memory);
     }
