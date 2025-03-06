@@ -6,6 +6,7 @@ pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
+#[derive(Debug)]
 pub struct SparseSetMemoryUsage {
     pub spase: usize,
     pub dense: usize,
@@ -15,15 +16,6 @@ pub struct SparseSetMemoryUsage {
     pub deletion_data: usize,
     pub removal_data: usize,
     pub self_data: usize,
-}
-
-impl core::fmt::Debug for SparseSetMemoryUsage {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!(
-            "(spase: {}, dense: {}, data: {}, insertion_data: {}, modification_data: {}, deletion_data: {}, removal_data: {}, self_data: {})",
-            self.spase, self.dense, self.data, self.insertion_data, self.modification_data, self.deletion_data, self.removal_data, self.self_data
-        ))
-    }
 }
 
 impl SparseSetMemoryUsage {
