@@ -762,8 +762,7 @@ impl<T: Component> SparseSet<T> {
             data: self.data.capacity() * size_of::<T>(),
             insertion_data: self.insertion_data.capacity() * size_of::<TrackingTimestamp>(),
             modification_data: self.modification_data.capacity() * size_of::<TrackingTimestamp>(),
-            deletion_data: self.deletion_data.capacity()
-                * size_of::<(EntityId, TrackingTimestamp, T)>(),
+            deletion_data: self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>(),
             removal_data: self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>(),
             self_data: size_of::<Self>(),
         };
@@ -1436,10 +1435,7 @@ mod tests {
             + expected_removal_tracking_memory
             + expected_self_memory;
 
-        let StorageMemoryUsage::SparseSet {
-            used_memory_bytes, ..
-        } = sparse_set.private_memory_usage()
-        else {
+        let StorageMemoryUsage::SparseSet { used_memory_bytes, .. } = sparse_set.private_memory_usage() else {
             unreachable!()
         };
         assert_eq!(used_memory_bytes, expected_total_memory);
