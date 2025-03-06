@@ -54,7 +54,8 @@ mod get_component;
 mod get_unique;
 pub mod iter;
 mod iter_component;
-mod memory_usage;
+/// Module describing internal memory usage.
+pub mod memory_usage;
 mod r#mut;
 mod not;
 mod or;
@@ -66,7 +67,7 @@ mod seal;
 mod sparse_set;
 mod storage;
 mod system;
-/// module related to storage tracking, like insertion or modification.
+/// Module related to storage tracking, like insertion or modification.
 pub mod track;
 mod tracking;
 mod type_id;
@@ -105,7 +106,6 @@ pub use get_component::{GetComponent, Ref, RefMut};
 pub use get_unique::GetUnique;
 pub use iter::{IntoIter, IntoWithId};
 pub use iter_component::{IntoIterRef, IterComponent, IterRef};
-pub use memory_usage::StorageMemoryUsage;
 pub use not::Not;
 pub use or::{OneOfTwo, Or};
 pub use r#mut::Mut;

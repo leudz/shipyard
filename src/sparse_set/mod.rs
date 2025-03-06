@@ -777,8 +777,11 @@ impl<T: Component> SparseSet<T> {
 
 /// Detailed memory usage of a `SparseSet`.
 pub struct SparseSetMemoryUsage {
+    #[allow(missing_docs)]
     pub base: StorageMemoryUsage,
+    #[allow(missing_docs)]
     pub allocated: SparseSetMemory,
+    #[allow(missing_docs)]
     pub used: SparseSetMemory,
 }
 
@@ -793,12 +796,19 @@ impl fmt::Debug for SparseSetMemoryUsage {
 
 /// Detailed memory layout of a `SparseSet`.
 pub struct SparseSetMemory {
+    #[allow(missing_docs)]
     pub sparse: usize,
+    #[allow(missing_docs)]
     pub dense: usize,
+    #[allow(missing_docs)]
     pub data: usize,
+    #[allow(missing_docs)]
     pub insertion_data: usize,
+    #[allow(missing_docs)]
     pub modification_data: usize,
+    #[allow(missing_docs)]
     pub deletion_data: usize,
+    #[allow(missing_docs)]
     pub removal_data: usize,
 }
 

@@ -1,9 +1,13 @@
+pub use crate::sparse_set::{SparseSetMemory, SparseSetMemoryUsage};
+
 use crate::all_storages::AllStorages;
 use crate::world::World;
 use alloc::borrow::Cow;
 
+#[allow(missing_docs)]
 pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 
+#[allow(missing_docs)]
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
 /// A structure representing the memory usage of a storage.
@@ -34,7 +38,7 @@ impl core::fmt::Debug for StorageMemoryUsage {
 pub trait MemoryUsageDetail {
     /// The output type of the detailed memory usage.
     type Out: core::fmt::Debug;
+
     /// Returns the detailed memory usage of the storage.
-    #[allow(unused)]
     fn detailed_memory_usage(&self) -> Self::Out;
 }
