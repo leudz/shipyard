@@ -659,6 +659,7 @@ impl<T: Component> SparseSet<T> {
         }
 
         self.insertion_data.clear();
+        self.modification_data.clear();
 
         let is_tracking_deletion = self.is_tracking_deletion();
 
@@ -686,6 +687,9 @@ impl<T: Component> SparseSet<T> {
                 *self.sparse.get_mut_unchecked(*id) = EntityId::dead();
             }
         }
+
+        self.insertion_data.clear();
+        self.modification_data.clear();
 
         let dense_ptr = self.dense.as_ptr();
         let dense_len = self.dense.len();
@@ -1215,8 +1219,31 @@ mod tests {
     }
 
     #[test]
+    fn clear() {
+        let mut sparse_set = SparseSet::new();
+        sparse_set.track_all();
+
+        sparse_set
+            .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        sparse_set.private_clear(TrackingTimestamp::new(0));
+
+        assert_eq!(sparse_set.len(), 0);
+        assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
+        assert_eq!(sparse_set.insertion_data.len(), 0);
+        assert_eq!(sparse_set.modification_data.len(), 0);
+        assert_eq!(sparse_set.deletion_data.len(), 2);
+        assert_eq!(sparse_set.removal_data.len(), 0);
+    }
+
+    #[test]
     fn drain() {
         let mut sparse_set = SparseSet::new();
+        sparse_set.track_all();
 
         sparse_set
             .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
@@ -1235,6 +1262,10 @@ mod tests {
 
         assert_eq!(sparse_set.len(), 0);
         assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
+        assert_eq!(sparse_set.insertion_data.len(), 0);
+        assert_eq!(sparse_set.modification_data.len(), 0);
+        assert_eq!(sparse_set.deletion_data.len(), 0);
+        assert_eq!(sparse_set.removal_data.len(), 2);
     }
 
     #[test]
