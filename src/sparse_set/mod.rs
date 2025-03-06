@@ -810,13 +810,15 @@ pub struct SparseSetMemory {
     pub deletion_data: usize,
     #[allow(missing_docs)]
     pub removal_data: usize,
+    #[allow(missing_docs)]
+    pub itself: usize,
 }
 
 impl fmt::Debug for SparseSetMemory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "(sparse: {}, dense: {}, data: {}, insertion: {}, modification: {}, deletion: {}, removal: {})",
-            self.sparse, self.dense, self.data, self.insertion_data, self.modification_data, self.deletion_data, self.removal_data
+            "(sparse: {}, dense: {}, data: {}, insertion: {}, modification: {}, deletion: {}, removal: {}, self: {})",
+            self.sparse, self.dense, self.data, self.insertion_data, self.modification_data, self.deletion_data, self.removal_data, self.itself
         ))
     }
 }
@@ -837,6 +839,7 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                     * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.capacity()
                     * size_of::<(EntityId, TrackingTimestamp)>(),
+                itself: size_of::<SparseSet<T>>(),
             },
             used: SparseSetMemory {
                 sparse: self.sparse.used_memory(),
@@ -847,6 +850,7 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                 deletion_data: self.deletion_data.len()
                     * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>(),
+                itself: size_of::<SparseSet<T>>(),
             },
         }
     }
@@ -1564,15 +1568,6 @@ mod tests {
             sparse_set.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, I32)>();
         let expected_removal_allocated =
             sparse_set.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>();
-        let expected_self_allocated = size_of::<SparseSet<I32>>();
-        let expected_total_allocated = expected_sparse_allocated
-            + expected_dense_allocated
-            + expected_data_allocated
-            + expected_insertion_allocated
-            + expected_modification_allocated
-            + expected_deletion_allocated
-            + expected_removal_allocated
-            + expected_self_allocated;
 
         let expected_sparse_used = sparse_set.sparse.used_memory();
         let expected_dense_used = sparse_set.dense.len() * size_of::<EntityId>();
@@ -1585,28 +1580,45 @@ mod tests {
             sparse_set.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, I32)>();
         let expected_removal_used =
             sparse_set.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>();
-        let expected_self_used = size_of::<SparseSet<I32>>();
-        let expected_total_used = expected_sparse_used
-            + expected_dense_used
-            + expected_data_used
-            + expected_insertion_used
-            + expected_modification_used
-            + expected_deletion_used
-            + expected_removal_used
-            + expected_self_used;
 
+        let memory_usage = sparse_set.private_memory_usage();
         let detailed_usage = sparse_set.detailed_memory_usage();
 
+        assert_eq!(detailed_usage.base.storage_name, memory_usage.storage_name);
         assert_eq!(
-            detailed_usage.base.storage_name,
-            type_name::<SparseSet<I32>>()
+            detailed_usage.base.component_count,
+            memory_usage.component_count
+        );
+        assert_eq!(
+            detailed_usage.base.used_memory_bytes,
+            memory_usage.used_memory_bytes
         );
         assert_eq!(
             detailed_usage.base.allocated_memory_bytes,
-            expected_total_allocated
+            memory_usage.allocated_memory_bytes
         );
-        assert_eq!(detailed_usage.base.used_memory_bytes, expected_total_used);
-        assert_eq!(detailed_usage.base.component_count, sparse_set.len());
+        assert_eq!(
+            memory_usage.used_memory_bytes,
+            (detailed_usage.used.sparse
+                + detailed_usage.used.dense
+                + detailed_usage.used.data
+                + detailed_usage.used.insertion_data
+                + detailed_usage.used.modification_data
+                + detailed_usage.used.deletion_data
+                + detailed_usage.used.removal_data
+                + detailed_usage.used.itself)
+        );
+        assert_eq!(
+            memory_usage.allocated_memory_bytes,
+            (detailed_usage.allocated.sparse
+                + detailed_usage.allocated.dense
+                + detailed_usage.allocated.data
+                + detailed_usage.allocated.insertion_data
+                + detailed_usage.allocated.modification_data
+                + detailed_usage.allocated.deletion_data
+                + detailed_usage.allocated.removal_data
+                + detailed_usage.allocated.itself)
+        );
 
         assert_eq!(detailed_usage.allocated.sparse, expected_sparse_allocated);
         assert_eq!(detailed_usage.allocated.dense, expected_dense_allocated);
