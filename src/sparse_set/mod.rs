@@ -21,7 +21,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::error;
-use crate::memory_usage::{SparseSetMemoryUsage, StorageMemoryUsage};
+use crate::memory_usage::StorageMemoryUsage;
 use crate::r#mut::Mut;
 use crate::storage::{Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
@@ -746,34 +746,32 @@ impl<T: Component> SparseSet<T> {
 
 impl<T: Component> SparseSet<T> {
     fn private_memory_usage(&self) -> StorageMemoryUsage {
-        let used_memory_usage = SparseSetMemoryUsage {
-            spase: self.sparse.used_memory(),
-            dense: self.dense.len() * size_of::<EntityId>(),
-            data: self.data.len() * size_of::<T>(),
-            insertion_data: self.insertion_data.len() * size_of::<TrackingTimestamp>(),
-            modification_data: self.modification_data.len() * size_of::<TrackingTimestamp>(),
-            deletion_data: self.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, T)>(),
-            removal_data: self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>(),
-            self_data: size_of::<Self>(),
-        };
-        let allocated_memory_usage = SparseSetMemoryUsage {
-            spase: self.sparse.reserved_memory(),
-            dense: self.dense.capacity() * size_of::<EntityId>(),
-            data: self.data.capacity() * size_of::<T>(),
-            insertion_data: self.insertion_data.capacity() * size_of::<TrackingTimestamp>(),
-            modification_data: self.modification_data.capacity() * size_of::<TrackingTimestamp>(),
-            deletion_data: self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>(),
-            removal_data: self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>(),
-            self_data: size_of::<Self>(),
-        };
-        StorageMemoryUsage::SparseSet {
+        StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
-            used_memory_bytes: used_memory_usage.sum(),
-            allocated_memory_bytes: allocated_memory_usage.sum(),
-            used_memory_usage,
-            allocated_memory_usage,
+            allocated_memory_bytes: self.allocated_memory_bytes(),
+            used_memory_bytes: self.used_memory_bytes(),
             component_count: self.len(),
         }
+    }
+    fn allocated_memory_bytes(&self) -> usize {
+        self.sparse.reserved_memory()
+            + (self.dense.capacity() * size_of::<EntityId>())
+            + (self.data.capacity() * size_of::<T>())
+            + (self.insertion_data.capacity() * size_of::<TrackingTimestamp>())
+            + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
+            + (self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>())
+            + (self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>())
+            + size_of::<Self>()
+    }
+    fn used_memory_bytes(&self) -> usize {
+        self.sparse.used_memory()
+            + (self.dense.len() * size_of::<EntityId>())
+            + (self.data.len() * size_of::<T>())
+            + (self.insertion_data.len() * size_of::<TrackingTimestamp>())
+            + (self.modification_data.len() * size_of::<TrackingTimestamp>())
+            + (self.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, T)>())
+            + (self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>())
+            + size_of::<Self>()
     }
 }
 
@@ -1435,9 +1433,8 @@ mod tests {
             + expected_removal_tracking_memory
             + expected_self_memory;
 
-        let StorageMemoryUsage::SparseSet { used_memory_bytes, .. } = sparse_set.private_memory_usage() else {
-            unreachable!()
-        };
-        assert_eq!(used_memory_bytes, expected_total_memory);
+        let memory_usage = sparse_set.private_memory_usage();
+
+        assert_eq!(memory_usage.used_memory_bytes, expected_total_memory);
     }
 }

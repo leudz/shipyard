@@ -13,6 +13,7 @@ use crate::storage::Storage;
 use crate::tracking::TrackingTimestamp;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::type_name;
 use core::iter::repeat_with;
 use core::mem::size_of;
 
@@ -429,11 +430,12 @@ impl Storage for Entities {
         self.list = Some((self.data.len() - end - 1, begin));
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
-        Some(StorageMemoryUsage::Entities {
+        Some(StorageMemoryUsage {
+            storage_name: type_name::<Self>().into(),
             allocated_memory_bytes: (self.data.capacity() * size_of::<EntityId>())
                 + size_of::<Entities>(),
             used_memory_bytes: (self.data.len() * size_of::<EntityId>()) + size_of::<Entities>(),
-            entity_count: self.data.len(),
+            component_count: self.data.len(),
         })
     }
     fn is_empty(&self) -> bool {
