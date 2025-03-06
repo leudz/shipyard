@@ -6,7 +6,7 @@ pub struct WorldMemoryUsage<'w>(pub(crate) &'w World);
 
 pub struct AllStoragesMemoryUsage<'a>(pub(crate) &'a AllStorages);
 
-/// A trait to query the amount of memory a storage uses.
+/// A structure representing the memory usage of a storage.
 pub struct StorageMemoryUsage {
     #[allow(missing_docs)]
     pub storage_name: Cow<'static, str>,
@@ -28,4 +28,13 @@ impl core::fmt::Debug for StorageMemoryUsage {
             self.allocated_memory_bytes
         ))
     }
+}
+
+/// A trait to query the detailed memory usage of a storage
+pub trait MemoryUsageDetail {
+    /// The output type of the detailed memory usage.
+    type Out: core::fmt::Debug;
+    /// Returns the detailed memory usage of the storage.
+    #[allow(unused)]
+    fn detailed_memory_usage(&self) -> Self::Out;
 }
