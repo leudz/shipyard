@@ -1234,6 +1234,7 @@ mod tests {
 
         assert_eq!(sparse_set.len(), 0);
         assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
+        assert_eq!(sparse_set.private_get(EntityId::new(1)), None);
         assert_eq!(sparse_set.insertion_data.len(), 0);
         assert_eq!(sparse_set.modification_data.len(), 0);
         assert_eq!(sparse_set.deletion_data.len(), 2);
@@ -1262,6 +1263,7 @@ mod tests {
 
         assert_eq!(sparse_set.len(), 0);
         assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
+        assert_eq!(sparse_set.private_get(EntityId::new(1)), None);
         assert_eq!(sparse_set.insertion_data.len(), 0);
         assert_eq!(sparse_set.modification_data.len(), 0);
         assert_eq!(sparse_set.deletion_data.len(), 0);
