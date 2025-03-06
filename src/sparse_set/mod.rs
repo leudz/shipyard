@@ -821,9 +821,12 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                 dense: self.dense.capacity() * size_of::<EntityId>(),
                 data: self.data.capacity() * size_of::<T>(),
                 insertion_data: self.insertion_data.capacity() * size_of::<TrackingTimestamp>(),
-                modification_data: self.modification_data.capacity() * size_of::<TrackingTimestamp>(),
-                deletion_data: self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>(),
-                removal_data: self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>(),
+                modification_data: self.modification_data.capacity()
+                    * size_of::<TrackingTimestamp>(),
+                deletion_data: self.deletion_data.capacity()
+                    * size_of::<(EntityId, TrackingTimestamp, T)>(),
+                removal_data: self.removal_data.capacity()
+                    * size_of::<(EntityId, TrackingTimestamp)>(),
             },
             used: SparseSetMemory {
                 sparse: self.sparse.used_memory(),
@@ -831,7 +834,8 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                 data: self.data.len() * size_of::<T>(),
                 insertion_data: self.insertion_data.len() * size_of::<TrackingTimestamp>(),
                 modification_data: self.modification_data.len() * size_of::<TrackingTimestamp>(),
-                deletion_data: self.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, T)>(),
+                deletion_data: self.deletion_data.len()
+                    * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>(),
             },
         }
@@ -1051,9 +1055,9 @@ impl<T: 'static + Component> Storage for NonSendSync<SparseSet<T>> {
 
 #[cfg(test)]
 mod tests {
-    use std::println;
     use super::*;
     use crate::Component;
+    use std::println;
 
     #[derive(PartialEq, Eq, Debug)]
     struct STR(&'static str);
@@ -1542,10 +1546,14 @@ mod tests {
         let expected_sparse_allocated = sparse_set.sparse.reserved_memory();
         let expected_dense_allocated = sparse_set.dense.capacity() * size_of::<EntityId>();
         let expected_data_allocated = sparse_set.data.capacity() * size_of::<I32>();
-        let expected_insertion_allocated = sparse_set.insertion_data.capacity() * size_of::<TrackingTimestamp>();
-        let expected_modification_allocated = sparse_set.modification_data.capacity() * size_of::<TrackingTimestamp>();
-        let expected_deletion_allocated = sparse_set.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, I32)>();
-        let expected_removal_allocated = sparse_set.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>();
+        let expected_insertion_allocated =
+            sparse_set.insertion_data.capacity() * size_of::<TrackingTimestamp>();
+        let expected_modification_allocated =
+            sparse_set.modification_data.capacity() * size_of::<TrackingTimestamp>();
+        let expected_deletion_allocated =
+            sparse_set.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, I32)>();
+        let expected_removal_allocated =
+            sparse_set.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>();
         let expected_self_allocated = size_of::<SparseSet<I32>>();
         let expected_total_allocated = expected_sparse_allocated
             + expected_dense_allocated
@@ -1559,10 +1567,14 @@ mod tests {
         let expected_sparse_used = sparse_set.sparse.used_memory();
         let expected_dense_used = sparse_set.dense.len() * size_of::<EntityId>();
         let expected_data_used = sparse_set.data.len() * size_of::<I32>();
-        let expected_insertion_used = sparse_set.insertion_data.len() * size_of::<TrackingTimestamp>();
-        let expected_modification_used = sparse_set.modification_data.len() * size_of::<TrackingTimestamp>();
-        let expected_deletion_used = sparse_set.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, I32)>();
-        let expected_removal_used = sparse_set.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>();
+        let expected_insertion_used =
+            sparse_set.insertion_data.len() * size_of::<TrackingTimestamp>();
+        let expected_modification_used =
+            sparse_set.modification_data.len() * size_of::<TrackingTimestamp>();
+        let expected_deletion_used =
+            sparse_set.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, I32)>();
+        let expected_removal_used =
+            sparse_set.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>();
         let expected_self_used = size_of::<SparseSet<I32>>();
         let expected_total_used = expected_sparse_used
             + expected_dense_used
@@ -1575,24 +1587,45 @@ mod tests {
 
         let detailed_usage = sparse_set.detailed_memory_usage();
 
-        assert_eq!(detailed_usage.base.storage_name, type_name::<SparseSet<I32>>());
-        assert_eq!(detailed_usage.base.allocated_memory_bytes, expected_total_allocated);
+        assert_eq!(
+            detailed_usage.base.storage_name,
+            type_name::<SparseSet<I32>>()
+        );
+        assert_eq!(
+            detailed_usage.base.allocated_memory_bytes,
+            expected_total_allocated
+        );
         assert_eq!(detailed_usage.base.used_memory_bytes, expected_total_used);
         assert_eq!(detailed_usage.base.component_count, sparse_set.len());
 
         assert_eq!(detailed_usage.allocated.sparse, expected_sparse_allocated);
         assert_eq!(detailed_usage.allocated.dense, expected_dense_allocated);
         assert_eq!(detailed_usage.allocated.data, expected_data_allocated);
-        assert_eq!(detailed_usage.allocated.insertion_data, expected_insertion_allocated);
-        assert_eq!(detailed_usage.allocated.modification_data, expected_modification_allocated);
-        assert_eq!(detailed_usage.allocated.deletion_data, expected_deletion_allocated);
-        assert_eq!(detailed_usage.allocated.removal_data, expected_removal_allocated);
+        assert_eq!(
+            detailed_usage.allocated.insertion_data,
+            expected_insertion_allocated
+        );
+        assert_eq!(
+            detailed_usage.allocated.modification_data,
+            expected_modification_allocated
+        );
+        assert_eq!(
+            detailed_usage.allocated.deletion_data,
+            expected_deletion_allocated
+        );
+        assert_eq!(
+            detailed_usage.allocated.removal_data,
+            expected_removal_allocated
+        );
 
         assert_eq!(detailed_usage.used.sparse, expected_sparse_used);
         assert_eq!(detailed_usage.used.dense, expected_dense_used);
         assert_eq!(detailed_usage.used.data, expected_data_used);
         assert_eq!(detailed_usage.used.insertion_data, expected_insertion_used);
-        assert_eq!(detailed_usage.used.modification_data, expected_modification_used);
+        assert_eq!(
+            detailed_usage.used.modification_data,
+            expected_modification_used
+        );
         assert_eq!(detailed_usage.used.deletion_data, expected_deletion_used);
         assert_eq!(detailed_usage.used.removal_data, expected_removal_used);
     }
