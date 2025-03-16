@@ -1,5 +1,5 @@
 use super::{Pos, Vel};
-use shipyard::{IntoIter, IntoWithId, View, ViewMut, World};
+use shipyard::{IntoIter, View, ViewMut, World};
 
 #[test]
 #[rustfmt::skip]

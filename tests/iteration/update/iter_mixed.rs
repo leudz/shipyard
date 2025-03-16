@@ -52,34 +52,28 @@ fn basic() {
             assert_eq!(u32s.modified().iter().count(), 0);
             assert_eq!(u32s.inserted_or_modified().iter().count(), 1);
 
-            if let iter::Iter::Tight(mut iter) = (&u32s).iter() {
-                assert_eq!(iter.size_hint(), (4, Some(4)));
-                assert_eq!(iter.next().unwrap(), &U32(0));
-                assert_eq!(iter.next().unwrap(), &U32(1));
-                assert_eq!(iter.next().unwrap(), &U32(2));
-                assert_eq!(iter.next().unwrap(), &U32(4));
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&u32s).iter();
+            assert_eq!(iter.size_hint(), (4, Some(4)));
+            assert_eq!(iter.next().unwrap(), &U32(0));
+            assert_eq!(iter.next().unwrap(), &U32(1));
+            assert_eq!(iter.next().unwrap(), &U32(2));
+            assert_eq!(iter.next().unwrap(), &U32(4));
+            assert!(iter.next().is_none());
 
             assert_eq!(u32s.inserted().iter().count(), 1);
             assert_eq!(u32s.modified().iter().count(), 0);
             assert_eq!(u32s.inserted_or_modified().iter().count(), 1);
 
-            if let iter::Iter::Tight(mut iter) = (&mut u32s).iter() {
-                assert_eq!(iter.size_hint(), (4, Some(4)));
-                let mut next = iter.next().unwrap();
-                next.0 += 1;
-                next.0 -= 1;
-                assert_eq!(*next, U32(0));
-                assert_eq!(*iter.next().unwrap(), U32(1));
-                assert_eq!(*iter.next().unwrap(), U32(2));
-                assert_eq!(*iter.next().unwrap(), U32(4));
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&mut u32s).iter();
+            assert_eq!(iter.size_hint(), (4, Some(4)));
+            let mut next = iter.next().unwrap();
+            next.0 += 1;
+            next.0 -= 1;
+            assert_eq!(*next, U32(0));
+            assert_eq!(*iter.next().unwrap(), U32(1));
+            assert_eq!(*iter.next().unwrap(), U32(2));
+            assert_eq!(*iter.next().unwrap(), U32(4));
+            assert!(iter.next().is_none());
 
             assert_eq!(u32s.inserted().iter().count(), 1);
             assert_eq!(u32s.modified().iter().count(), 1);
@@ -91,60 +85,48 @@ fn basic() {
 
     world.run(
         |(mut u32s, mut i16s): (ViewMut<U32, track::All>, ViewMut<I16>)| {
-            if let iter::Iter::Tight(mut iter) = (&i16s).iter() {
-                assert_eq!(iter.size_hint(), (4, Some(4)));
-                assert_eq!(iter.next().unwrap(), &I16(10));
-                assert_eq!(iter.next().unwrap(), &I16(12));
-                assert_eq!(iter.next().unwrap(), &I16(13));
-                assert_eq!(iter.next().unwrap(), &I16(14));
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&i16s).iter();
+            assert_eq!(iter.size_hint(), (4, Some(4)));
+            assert_eq!(iter.next().unwrap(), &I16(10));
+            assert_eq!(iter.next().unwrap(), &I16(12));
+            assert_eq!(iter.next().unwrap(), &I16(13));
+            assert_eq!(iter.next().unwrap(), &I16(14));
+            assert!(iter.next().is_none());
 
-            if let iter::Iter::Tight(mut iter) = (&mut i16s).iter() {
-                assert_eq!(iter.size_hint(), (4, Some(4)));
-                assert!(*iter.next().unwrap() == I16(10));
-                assert!(*iter.next().unwrap() == I16(12));
-                assert!(*iter.next().unwrap() == I16(13));
-                assert!(*iter.next().unwrap() == I16(14));
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&mut i16s).iter();
+            assert_eq!(iter.size_hint(), (4, Some(4)));
+            assert!(*iter.next().unwrap() == I16(10));
+            assert!(*iter.next().unwrap() == I16(12));
+            assert!(*iter.next().unwrap() == I16(13));
+            assert!(*iter.next().unwrap() == I16(14));
+            assert!(iter.next().is_none());
 
-            if let iter::Iter::Mixed(mut iter) = (&u32s, &i16s).iter() {
-                assert_eq!(iter.size_hint(), (0, Some(4)));
-                assert_eq!(iter.next().unwrap(), (&U32(0), &I16(10)));
-                assert_eq!(iter.next().unwrap(), (&U32(2), &I16(12)));
-                assert_eq!(iter.next().unwrap(), (&U32(4), &I16(14)));
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&u32s, &i16s).iter();
+            assert_eq!(iter.size_hint(), (0, Some(4)));
+            assert_eq!(iter.next().unwrap(), (&U32(0), &I16(10)));
+            assert_eq!(iter.next().unwrap(), (&U32(2), &I16(12)));
+            assert_eq!(iter.next().unwrap(), (&U32(4), &I16(14)));
+            assert!(iter.next().is_none());
 
             assert_eq!(u32s.inserted().iter().count(), 1);
             assert_eq!(u32s.modified().iter().count(), 0);
             assert_eq!(u32s.inserted_or_modified().iter().count(), 1);
 
-            if let iter::Iter::Mixed(mut iter) = (&mut u32s, &mut i16s).iter() {
-                assert_eq!(iter.size_hint(), (0, Some(4)));
-                let mut next = iter.next().unwrap();
-                (next.0).0 += 1;
-                (next.0).0 -= 1;
-                assert_eq!((*next.0, *next.1), (U32(0), I16(10)));
-                assert_eq!(
-                    iter.next().map(|(x, y)| (*x, *y)).unwrap(),
-                    (U32(2), I16(12))
-                );
-                assert_eq!(
-                    iter.next().map(|(x, y)| (*x, *y)).unwrap(),
-                    (U32(4), I16(14))
-                );
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&mut u32s, &mut i16s).iter();
+            assert_eq!(iter.size_hint(), (0, Some(4)));
+            let mut next = iter.next().unwrap();
+            (next.0).0 += 1;
+            (next.0).0 -= 1;
+            assert_eq!((*next.0, *next.1), (U32(0), I16(10)));
+            assert_eq!(
+                iter.next().map(|(x, y)| (*x, *y)).unwrap(),
+                (U32(2), I16(12))
+            );
+            assert_eq!(
+                iter.next().map(|(x, y)| (*x, *y)).unwrap(),
+                (U32(4), I16(14))
+            );
+            assert!(iter.next().is_none());
 
             assert_eq!(u32s.inserted().iter().count(), 1);
             assert_eq!(u32s.modified().iter().count(), 1);
@@ -156,38 +138,32 @@ fn basic() {
 
     world.run(
         |(mut u32s, mut i16s): (ViewMut<U32, track::All>, ViewMut<I16>)| {
-            if let iter::Iter::Mixed(mut iter) = (&i16s, &u32s).iter() {
-                assert_eq!(iter.size_hint(), (0, Some(4)));
-                assert_eq!(iter.next().unwrap(), (&I16(10), &U32(0)));
-                assert_eq!(iter.next().unwrap(), (&I16(12), &U32(2)));
-                assert_eq!(iter.next().unwrap(), (&I16(14), &U32(4)));
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&i16s, &u32s).iter();
+            assert_eq!(iter.size_hint(), (0, Some(4)));
+            assert_eq!(iter.next().unwrap(), (&I16(10), &U32(0)));
+            assert_eq!(iter.next().unwrap(), (&I16(12), &U32(2)));
+            assert_eq!(iter.next().unwrap(), (&I16(14), &U32(4)));
+            assert!(iter.next().is_none());
 
             assert_eq!(u32s.inserted().iter().count(), 1);
             assert_eq!(u32s.modified().iter().count(), 0);
             assert_eq!(u32s.inserted_or_modified().iter().count(), 1);
 
-            if let iter::Iter::Mixed(mut iter) = (&mut i16s, &mut u32s).iter() {
-                assert_eq!(iter.size_hint(), (0, Some(4)));
-                let mut next = iter.next().unwrap();
-                (next.1).0 += 1;
-                (next.1).0 -= 1;
-                assert_eq!((*next.0, *next.1), (I16(10), U32(0)));
-                assert_eq!(
-                    iter.next().map(|(x, y)| (*x, *y)).unwrap(),
-                    (I16(12), U32(2))
-                );
-                assert_eq!(
-                    iter.next().map(|(x, y)| (*x, *y)).unwrap(),
-                    (I16(14), U32(4))
-                );
-                assert!(iter.next().is_none());
-            } else {
-                panic!()
-            }
+            let mut iter = (&mut i16s, &mut u32s).iter();
+            assert_eq!(iter.size_hint(), (0, Some(4)));
+            let mut next = iter.next().unwrap();
+            (next.1).0 += 1;
+            (next.1).0 -= 1;
+            assert_eq!((*next.0, *next.1), (I16(10), U32(0)));
+            assert_eq!(
+                iter.next().map(|(x, y)| (*x, *y)).unwrap(),
+                (I16(12), U32(2))
+            );
+            assert_eq!(
+                iter.next().map(|(x, y)| (*x, *y)).unwrap(),
+                (I16(14), U32(4))
+            );
+            assert!(iter.next().is_none());
 
             assert_eq!(u32s.inserted().iter().count(), 1);
             assert_eq!(u32s.modified().iter().count(), 1);

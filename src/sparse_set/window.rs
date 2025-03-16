@@ -4,14 +4,14 @@ use crate::entity_id::EntityId;
 use crate::tracking::{Tracking, TrackingTimestamp};
 use crate::views::{View, ViewMut};
 use alloc::boxed::Box;
-use core::hint::unreachable_unchecked;
+use alloc::vec::Vec;
 use core::marker::PhantomData;
-use core::ptr;
+use core::ptr::{self, NonNull};
 
 pub struct FullRawWindow<'a, T> {
     sparse: *const *const EntityId,
     sparse_len: usize,
-    pub(crate) dense: *const EntityId,
+    pub(crate) dense: NonNull<EntityId>,
     pub(crate) dense_len: usize,
     pub(crate) data: *const T,
     pub(crate) insertion_data: *const TrackingTimestamp,
@@ -34,7 +34,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         FullRawWindow {
             sparse,
             sparse_len,
-            dense: view.dense.as_ptr(),
+            dense: NonNull::new(view.dense.as_ptr().cast_mut()).unwrap(),
             dense_len: view.dense.len(),
             data: view.data.as_ptr(),
             insertion_data: view.insertion_data.as_ptr(),
@@ -45,6 +45,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             _phantom: PhantomData,
         }
     }
+
     #[inline]
     pub(crate) fn from_owned_view<Track: Tracking>(
         view: View<'_, T, Track>,
@@ -67,7 +68,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             FullRawWindow {
                 sparse,
                 sparse_len,
-                dense: sparse_set.dense.as_ptr(),
+                dense: NonNull::new(sparse_set.dense.as_ptr().cast_mut()).unwrap(),
                 dense_len: sparse_set.dense.len(),
                 data: sparse_set.data.as_ptr(),
                 insertion_data: sparse_set.insertion_data.as_ptr(),
@@ -81,6 +82,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             borrow,
         )
     }
+
     #[inline]
     pub(crate) fn from_view_mut<Track: Tracking>(view: &ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
@@ -90,7 +92,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         FullRawWindow {
             sparse,
             sparse_len,
-            dense: view.dense.as_ptr(),
+            dense: NonNull::new(view.dense.as_ptr().cast_mut()).unwrap(),
             dense_len: view.dense.len(),
             data: view.data.as_ptr(),
             insertion_data: view.insertion_data.as_ptr(),
@@ -101,6 +103,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             _phantom: PhantomData,
         }
     }
+
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
         self.sparse_index(entity).and_then(|sparse_entity| {
@@ -111,20 +114,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             }
         })
     }
-    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
-    /// This index is only valid for this window and until a modification happens.
-    /// # Safety
-    ///
-    /// `entity` has to own a component in this storage.  
-    /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
-    #[inline]
-    pub(crate) unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-        if let Some(index) = self.index_of(entity) {
-            index
-        } else {
-            unreachable_unchecked()
-        }
-    }
+
     #[inline]
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
         if entity.bucket() < self.sparse_len {
@@ -138,6 +128,16 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         } else {
             None
         }
+    }
+
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        self.dense_len
+    }
+
+    #[inline]
+    pub(crate) fn entity_iter(&self) -> RawEntityIdAccess {
+        RawEntityIdAccess::new(self.dense, Vec::new())
     }
 }
 
@@ -163,7 +163,7 @@ impl<T: Component> Clone for FullRawWindow<'_, T> {
 pub struct FullRawWindowMut<'a, T, Track> {
     sparse: *mut *mut EntityId,
     sparse_len: usize,
-    pub(crate) dense: *mut EntityId,
+    pub(crate) dense: NonNull<EntityId>,
     pub(crate) dense_len: usize,
     pub(crate) data: *mut T,
     pub(crate) insertion_data: *const TrackingTimestamp,
@@ -187,7 +187,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
         FullRawWindowMut {
             sparse,
             sparse_len,
-            dense: view.dense.as_mut_ptr(),
+            dense: NonNull::new(view.dense.as_mut_ptr().cast()).unwrap(),
             dense_len: view.dense.len(),
             data: view.data.as_mut_ptr(),
             insertion_data: view.insertion_data.as_ptr(),
@@ -199,6 +199,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
             _phantom: PhantomData,
         }
     }
+
     #[inline]
     pub(crate) fn new_owned<TRACK>(
         view: ViewMut<'_, T, TRACK>,
@@ -222,7 +223,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
             FullRawWindowMut {
                 sparse,
                 sparse_len,
-                dense: sparse_set.dense.as_mut_ptr(),
+                dense: NonNull::new(sparse_set.dense.as_mut_ptr().cast()).unwrap(),
                 dense_len: sparse_set.dense.len(),
                 data: sparse_set.data.as_mut_ptr(),
                 insertion_data: sparse_set.insertion_data.as_ptr(),
@@ -237,6 +238,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
             borrow,
         )
     }
+
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
         self.sparse_index(entity).and_then(|sparse_entity| {
@@ -247,20 +249,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
             }
         })
     }
-    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
-    /// This index is only valid for this window and until a modification happens.
-    /// # Safety
-    ///
-    /// `entity` has to own a component in this storage.  
-    /// In case it used to but no longer does, the result will be wrong but won't trigger any UB.
-    #[inline]
-    pub(crate) unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-        if let Some(index) = self.index_of(entity) {
-            index
-        } else {
-            unreachable_unchecked()
-        }
-    }
+
     #[inline]
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
         if entity.bucket() < self.sparse_len {
@@ -274,6 +263,16 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
         } else {
             None
         }
+    }
+
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        self.dense_len
+    }
+
+    #[inline]
+    pub(crate) fn entity_iter(&self) -> RawEntityIdAccess {
+        RawEntityIdAccess::new(self.dense, Vec::new())
     }
 }
 
@@ -295,4 +294,107 @@ impl<T: Component, Track> Clone for FullRawWindowMut<'_, T, Track> {
             _phantom: PhantomData,
         }
     }
+}
+
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct RawEntityIdAccess {
+    pub ptr: NonNull<EntityId>,
+    pub follow_up_ptrs: Vec<(NonNull<EntityId>, usize)>,
+}
+
+unsafe impl Send for RawEntityIdAccess {}
+
+impl RawEntityIdAccess {
+    #[inline]
+    #[doc(hidden)]
+    pub fn new(
+        ptr: NonNull<EntityId>,
+        follow_up_ptrs: Vec<(NonNull<EntityId>, usize)>,
+    ) -> RawEntityIdAccess {
+        RawEntityIdAccess {
+            ptr,
+            follow_up_ptrs,
+        }
+    }
+
+    #[inline]
+    #[doc(hidden)]
+    pub fn dangling() -> RawEntityIdAccess {
+        RawEntityIdAccess {
+            ptr: NonNull::dangling(),
+            follow_up_ptrs: Vec::new(),
+        }
+    }
+
+    #[inline]
+    #[doc(hidden)]
+    pub unsafe fn get(&self, index: usize) -> EntityId {
+        self.ptr.add(index).read()
+    }
+
+    #[inline]
+    #[doc(hidden)]
+    pub fn follow_up_len(&self) -> usize {
+        self.follow_up_ptrs
+            .iter()
+            .map(|(_, len)| len)
+            .sum::<usize>()
+    }
+
+    #[inline]
+    #[doc(hidden)]
+    pub fn next_slice(&mut self) -> Option<usize> {
+        let Some((new_start, new_end)) = self.follow_up_ptrs.pop() else {
+            return None;
+        };
+
+        self.ptr = new_start;
+
+        Some(new_end)
+    }
+
+    #[inline]
+    #[doc(hidden)]
+    pub fn split_at(mut self, count: usize) -> (RawEntityIdAccess, RawEntityIdAccess) {
+        let mut total_len = 0;
+        let mut remaining = 0;
+        let split_point = self.follow_up_ptrs.iter().position(|(_, len)| {
+            total_len += len;
+
+            if total_len >= count {
+                remaining = count - (total_len - len);
+
+                true
+            } else {
+                false
+            }
+        });
+
+        let mut follow_up2 = if let Some(split_point) = split_point {
+            self.follow_up_ptrs.split_off(split_point)
+        } else {
+            core::mem::take(&mut self.follow_up_ptrs)
+        };
+
+        if remaining != 0 {
+            let right = &mut follow_up2[0];
+            self.follow_up_ptrs.push((right.0, remaining));
+            right.1 -= remaining;
+        }
+
+        let other = RawEntityIdAccess {
+            ptr: self.ptr,
+            follow_up_ptrs: follow_up2,
+        };
+
+        (self, other)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// This is tested by shiperator::split_at
+    #[test]
+    fn raw_entity_access_split_at() {}
 }

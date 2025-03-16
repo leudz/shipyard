@@ -1,7 +1,7 @@
 use super::Vel;
 use shipyard::{
-    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWithId,
-    IntoWorkload, SparseSet, View, ViewMut, Workload, World,
+    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWorkload,
+    SparseSet, View, ViewMut, Workload, World,
 };
 
 #[derive(Component)]

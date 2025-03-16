@@ -109,7 +109,7 @@ fn systems() {
     }
 
     fn system2(mut usizes: ViewMut<USIZE>) {
-        (&mut usizes,).iter().for_each(|(x,)| {
+        (&mut usizes,).iter().for_each(|x| {
             x.0 += 1;
         });
     }
@@ -348,33 +348,21 @@ fn par_multiple_update_pack() {
 
     world.run(
         |(mut usizes, mut u32s): (ViewMut<USIZE>, ViewMut<U32, track::All>)| {
-            if let iter::ParIter::Mixed(iter) = (&usizes, &u32s).par_iter() {
-                iter.for_each(|_| {});
-            } else {
-                panic!("not packed");
-            }
+            (&usizes, &u32s).par_iter().for_each(|_| {});
 
             assert_eq!(u32s.modified().iter().count(), 0);
 
-            if let iter::ParIter::Mixed(iter) = (&mut usizes, &u32s).par_iter() {
-                iter.for_each(|(x, y)| {
-                    x.0 += y.0 as usize;
-                    x.0 -= y.0 as usize;
-                });
-            } else {
-                panic!("not packed");
-            }
+            (&mut usizes, &u32s).par_iter().for_each(|(x, y)| {
+                x.0 += y.0 as usize;
+                x.0 -= y.0 as usize;
+            });
 
             assert_eq!(u32s.modified().iter().count(), 0);
 
-            if let iter::ParIter::Mixed(iter) = (&usizes, &mut u32s).par_iter() {
-                iter.for_each(|(x, mut y)| {
-                    y.0 += x.0 as u32;
-                    y.0 -= x.0 as u32;
-                });
-            } else {
-                panic!("not packed");
-            }
+            (&usizes, &mut u32s).par_iter().for_each(|(x, mut y)| {
+                y.0 += x.0 as u32;
+                y.0 -= x.0 as u32;
+            });
 
             let mut modified: Vec<_> = u32s.modified().iter().collect();
             modified.sort_unstable();

@@ -14,6 +14,7 @@ pub use drain::SparseSetDrain;
 pub use memory_usage::{SparseSetMemory, SparseSetMemoryUsage};
 pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
+pub use window::RawEntityIdAccess;
 
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
@@ -190,7 +191,7 @@ impl<T: Component> SparseSet<T> {
 }
 
 #[must_use]
-pub(crate) enum InsertionResult<T> {
+pub enum InsertionResult<T> {
     /// No component were present at this index.
     Inserted,
     /// The component was inserted.\
@@ -226,7 +227,7 @@ impl<T: Component> SparseSet<T> {
     /// In case `entity` had a component of this type, the new component will be considered `modified`.  
     /// In all other cases it'll be considered `inserted`.
     #[track_caller]
-    pub(crate) fn insert(
+    pub fn insert(
         &mut self,
         entity: EntityId,
         value: T,

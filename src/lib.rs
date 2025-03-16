@@ -27,6 +27,8 @@
 #![warn(clippy::maybe_infinite_iter)]
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::needless_lifetimes)]
+// The question mark operator can damage performance
+#![allow(clippy::question_mark)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 #![no_std]
@@ -52,12 +54,16 @@ pub mod error;
 mod get;
 mod get_component;
 mod get_unique;
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod iter;
 mod iter_component;
 /// Module describing internal memory usage.
 pub mod memory_usage;
 mod r#mut;
 mod not;
+mod optional;
 mod or;
 mod public_transport;
 mod remove;
@@ -104,9 +110,10 @@ pub use entity_id::EntityId;
 pub use get::Get;
 pub use get_component::{GetComponent, Ref, RefMut};
 pub use get_unique::GetUnique;
-pub use iter::{IntoIter, IntoWithId};
-pub use iter_component::{IntoIterRef, IterComponent, IterRef};
+pub use iter::IntoIter;
+pub use iter_component::{IntoIterRef, IterComponent};
 pub use not::Not;
+pub use optional::Optional;
 pub use or::{OneOfTwo, Or};
 pub use r#mut::Mut;
 pub use remove::Remove;
@@ -118,8 +125,8 @@ pub use scheduler::{
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{Borrow, BorrowInfo, Component, IntoIter, Label, Unique, WorldBorrow};
 pub use sparse_set::{
-    BulkAddEntity, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent, TupleDelete,
-    TupleRemove,
+    BulkAddEntity, RawEntityIdAccess, SparseArray, SparseSet, SparseSetDrain, TupleAddComponent,
+    TupleDelete, TupleRemove,
 };
 pub use storage::{Storage, StorageId};
 #[doc(hidden)]
@@ -143,10 +150,12 @@ type ShipHashMap<K, V> =
 type ShipHashMap<K, V> = hashbrown::HashMap<K, V>;
 
 #[cfg(not(feature = "std"))]
-type ShipHashSet<V> =
+#[doc(hidden)]
+pub type ShipHashSet<V> =
     hashbrown::HashSet<V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
 #[cfg(feature = "std")]
-type ShipHashSet<V> = hashbrown::HashSet<V>;
+#[doc(hidden)]
+pub type ShipHashSet<V> = hashbrown::HashSet<V>;
 
 #[cfg(feature = "std")]
 fn std_thread_id_generator() -> u64 {

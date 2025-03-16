@@ -1,129 +1,144 @@
-use super::abstract_mut::AbstractMut;
-use super::with_id::LastId;
 use crate::entity_id::EntityId;
-use alloc::vec::Vec;
-use core::slice::Iter;
-#[cfg(feature = "parallel")]
-use rayon::iter::plumbing::UnindexedProducer;
+use crate::iter::{
+    captain::ShiperatorCaptain, into_shiperator::strip_plus, output::ShiperatorOutput,
+    sailor::ShiperatorSailor,
+};
 
-#[allow(missing_docs)]
-pub struct Mixed<Storage> {
-    pub(crate) storage: Storage,
-    pub(crate) indices: Iter<'static, EntityId>,
-    pub(crate) count: usize,
-    pub(crate) mask: u16,
-    pub(crate) last_id: EntityId,
-    pub(crate) rev_next_storage: Vec<Iter<'static, EntityId>>,
+const NON_CAPTAIN_FACTOR: f32 = 0.5;
+
+/// Iterator over multiple storages.
+pub struct Mixed<S> {
+    pub(crate) shiperator: S,
+    pub(crate) mask: u32,
 }
 
-unsafe impl<Storage: Send> Send for Mixed<Storage> {}
+unsafe impl<S: Send> Send for Mixed<S> {}
 
-impl<Storage: AbstractMut> Iterator for Mixed<Storage> {
-    type Item = <Storage as AbstractMut>::Out;
-
+impl<S: Clone> Clone for Mixed<S> {
     #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            for &id in self.indices.by_ref() {
-                self.count += 1;
+    fn clone(&self) -> Self {
+        Self {
+            shiperator: self.shiperator.clone(),
+            mask: self.mask,
+        }
+    }
+}
 
-                if let Some(data_indices) = self.storage.indices_of(id, self.count - 1, self.mask) {
-                    self.last_id = id;
-                    return Some(unsafe { self.storage.get_datas(data_indices) });
+impl<S: ShiperatorOutput> ShiperatorOutput for Mixed<S> {
+    type Out = S::Out;
+}
+
+macro_rules! impl_abstract_mut {
+    ($(($type: ident, $index: tt))+) => {
+        impl<$($type: ShiperatorOutput),+> ShiperatorOutput for Mixed<($($type,)+)> {
+            type Out = ($($type::Out,)+);
+        }
+
+        impl<$($type: ShiperatorCaptain),+> ShiperatorCaptain for Mixed<($($type,)+)> {
+            #[inline]
+            unsafe fn get_captain_data(&self, index: usize) -> Self::Out {
+                ($(
+                    self.shiperator.$index.get_captain_data(index),
+                )+)
+            }
+
+            #[inline]
+            fn next_slice(&mut self) {
+                $(
+                    self.shiperator.$index.next_slice();
+                )+
+            }
+
+            #[inline]
+            #[allow(clippy::cast_precision_loss)]
+            fn sail_time(&self) -> usize {
+                strip_plus!($(+{
+                    let sail_time = self.shiperator.$index.sail_time() as f32;
+
+                    if self.mask & (1 << $index) != 0 {
+                        sail_time as usize
+                    } else {
+                        (sail_time * NON_CAPTAIN_FACTOR) as usize
+                    }
+                }
+                )+)
+            }
+
+            #[inline]
+            fn is_exact_sized(&self) -> bool {
+                // True if mask flags all iterated storages
+                self.mask.count_ones() == strip_plus!($(+{let _: $type; 1})+)
+            }
+
+            #[inline]
+            fn unpick(&mut self) {
+                self.mask = 0;
+
+                $(
+                    self.shiperator.$index.unpick();
+                )+
+            }
+        }
+
+        impl<$($type: ShiperatorSailor),+> ShiperatorSailor for Mixed<($($type,)+)> {
+            type Index = ($($type::Index,)+);
+
+            #[inline]
+            unsafe fn get_sailor_data(&self, index: Self::Index) -> Self::Out {
+                ($(
+                    self.shiperator.$index.get_sailor_data(index.$index),
+                )+)
+            }
+
+            #[inline]
+            fn indices_of(&self, eid: EntityId, index: usize, ) -> Option<Self::Index> {
+                if self.mask.count_ones() == 1 {
+                    let one = self.mask.trailing_zeros();
+
+                    Some(($(
+                        if one == $index {
+                            $type::index_from_usize(index)
+                        } else {
+                            if let Some(index) = self.shiperator.$index.indices_of(eid, index) {
+                                index
+                            } else {
+                                return None
+                            }
+                        },
+                    )+))
+                } else {
+                    Some(($(
+                        if self.mask & (1 << $index) != 0 {
+                            $type::index_from_usize(index)
+                        } else {
+                            if let Some(index) = self.shiperator.$index.indices_of(eid, index) {
+                                index
+                            } else {
+                                return None
+                            }
+                        },
+                    )+))
                 }
             }
 
-            let next_indices = self.rev_next_storage.pop()?;
-            self.indices = next_indices;
-        }
-    }
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (
-            0,
-            Some(
-                self.indices.len()
-                    + self
-                        .rev_next_storage
-                        .iter()
-                        .map(|iter| iter.len())
-                        .sum::<usize>(),
-            ),
-        )
-    }
-    #[inline]
-    fn fold<B, F>(mut self, mut init: B, mut f: F) -> B
-    where
-        Self: Sized,
-        F: FnMut(B, Self::Item) -> B,
-    {
-        loop {
-            for &id in self.indices {
-                self.count += 1;
-
-                if let Some(data_indices) = self.storage.indices_of(id, self.count - 1, self.mask) {
-                    self.last_id = id;
-                    init = f(init, unsafe { self.storage.get_datas(data_indices) });
-                }
-            }
-
-            if let Some(next_iter) = self.rev_next_storage.pop() {
-                self.indices = next_iter;
-            } else {
-                return init;
+            #[inline]
+            fn index_from_usize(index: usize) -> Self::Index {
+                ($(
+                    $type::index_from_usize(index),
+                )+)
             }
         }
+    };
+}
+
+macro_rules! abstract_mut {
+    ($(($type: ident, $index: tt))+; ($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
+        impl_abstract_mut![$(($type, $index))*];
+        abstract_mut![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
+    };
+    ($(($type: ident, $index: tt))+;) => {
+        impl_abstract_mut![$(($type, $index))*];
     }
 }
 
-impl<Storage: AbstractMut> LastId for Mixed<Storage> {
-    #[inline]
-    unsafe fn last_id(&self) -> EntityId {
-        self.last_id
-    }
-    #[inline]
-    unsafe fn last_id_back(&self) -> EntityId {
-        self.last_id
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl<Storage: AbstractMut + Clone + Send> UnindexedProducer for Mixed<Storage> {
-    type Item = <Storage as AbstractMut>::Out;
-
-    #[inline]
-    fn split(mut self) -> (Self, Option<Self>) {
-        let len = self.indices.len();
-
-        if len >= 2 || !self.rev_next_storage.is_empty() {
-            let indices = self.indices.as_slice();
-            let (first, second) = indices.split_at(indices.len() / 2);
-            let second_next = self
-                .rev_next_storage
-                .split_off(self.rev_next_storage.len() / 2);
-
-            let clone = Mixed {
-                storage: self.storage.clone(),
-                indices: second.iter(),
-                count: self.count + (len / 2),
-                mask: self.mask,
-                last_id: self.last_id,
-                rev_next_storage: second_next,
-            };
-
-            self.indices = first.iter();
-
-            (self, Some(clone))
-        } else {
-            (self, None)
-        }
-    }
-
-    #[inline]
-    fn fold_with<F>(self, folder: F) -> F
-    where
-        F: rayon::iter::plumbing::Folder<Self::Item>,
-    {
-        folder.consume_iter(self)
-    }
-}
+abstract_mut![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

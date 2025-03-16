@@ -304,7 +304,7 @@ impl Workload {
     ///
     /// ### Example:
     /// ```
-    /// use shipyard::{Component, EntitiesViewMut, Get, IntoIter, IntoWithId, View, ViewMut, Workload, World};
+    /// use shipyard::{Component, EntitiesViewMut, Get, IntoIter, View, ViewMut, Workload, World};
     /// use shipyard::error::MissingComponent;
     ///
     /// #[derive(Component, Clone, Copy)]

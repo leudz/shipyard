@@ -13,7 +13,8 @@ use crate::error;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
 use crate::info::WorkloadsInfo;
-use crate::iter_component::{IntoIterRef, IterComponent};
+use crate::iter::{ShiperatorCaptain, ShiperatorSailor};
+use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
@@ -1387,7 +1388,10 @@ for (i, j) in &mut iter {
     )]
     #[inline]
     #[track_caller]
-    pub fn iter<T: IterComponent>(&self) -> IntoIterRef<'_, T> {
+    pub fn iter<'a, T: IterComponent>(&'a self) -> IntoIterRef<'a, T>
+    where
+        <T as IterComponent>::Shiperator<'a>: ShiperatorCaptain + ShiperatorSailor,
+    {
         let (all_storages, all_borrow) = unsafe {
             ARef::destructure(
                 self.all_storages
@@ -1399,12 +1403,7 @@ for (i, j) in &mut iter {
 
         let current = self.get_current();
 
-        IntoIterRef {
-            all_storages,
-            all_borrow: Some(all_borrow),
-            current,
-            phantom: core::marker::PhantomData,
-        }
+        into_iter(all_storages, Some(all_borrow), current).unwrap()
     }
 
     /// Sets the on entity deletion callback.

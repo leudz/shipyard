@@ -321,7 +321,7 @@ fn shared() {
     let first_borrow = refcell.borrow().unwrap();
 
     assert!(refcell.borrow().is_ok());
-    assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Shared));
+    assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Unique));
 
     drop(first_borrow);
 
@@ -333,7 +333,7 @@ fn exclusive() {
     let refcell = AtomicRefCell::new(0);
     let first_borrow = refcell.borrow_mut().unwrap();
 
-    assert_eq!(refcell.borrow().err(), Some(error::Borrow::Unique));
+    assert_eq!(refcell.borrow().err(), Some(error::Borrow::Shared));
     assert_eq!(refcell.borrow_mut().err(), Some(error::Borrow::Unique));
 
     drop(first_borrow);
@@ -354,7 +354,7 @@ fn shared_thread() {
         refcell_clone.borrow().unwrap();
         assert_eq!(
             refcell_clone.borrow_mut().err(),
-            Some(error::Borrow::Shared)
+            Some(error::Borrow::Unique)
         );
     })
     .join()

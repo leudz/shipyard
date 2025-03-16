@@ -53,7 +53,7 @@ impl BorrowState {
         if new & HIGH_BIT != 0 {
             self.cold_check_overflow(new);
 
-            Err(error::Borrow::Unique)
+            Err(error::Borrow::Shared)
         } else {
             Ok(SharedBorrow(self))
         }
@@ -72,10 +72,8 @@ impl BorrowState {
 
         if old == 0 {
             Ok(SharedBorrow(self))
-        } else if old & HIGH_BIT == 0 {
-            Err(error::Borrow::Shared)
         } else {
-            Err(error::Borrow::Unique)
+            Err(error::Borrow::Shared)
         }
     }
 
@@ -100,8 +98,6 @@ impl BorrowState {
 
         if old == 0 {
             Ok(ExclusiveBorrow(self))
-        } else if old & HIGH_BIT == 0 {
-            Err(error::Borrow::Shared)
         } else {
             Err(error::Borrow::Unique)
         }

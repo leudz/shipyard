@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::{
     parse_quote, punctuated::Punctuated, spanned::Spanned, token::Comma, Error, ExprReference,
-    Field, Ident, Index, LitStr, Result,
+    Field, Ident, LitStr, Result,
 };
 
 pub(crate) fn expand_into_iter(
@@ -53,9 +53,7 @@ pub(crate) fn expand_into_iter(
         })?;
 
     let item_name = Ident::new(&iter_item_name, name_string.span());
-    let iter_name = Ident::new(&format!("{}Iter", name_string), name_string.span());
-    #[cfg_attr(not(feature = "parallel"), allow(unused_variables))]
-    let par_iter_name = Ident::new(&format!("{}ParIter", name_string), name_string.span());
+    let iter_name = Ident::new(&format!("{}Shiperator", name_string), name_string.span());
 
     let Some(lifetime) = generics.lifetimes_mut().next() else {
         return Err(Error::new(generics.span(), "Views must have a lifetime"));
@@ -85,7 +83,7 @@ pub(crate) fn expand_into_iter(
             let mut iter_fields_access = Punctuated::<ExprReference, Comma>::new();
             let mut iter_fields_variable = Punctuated::<Ident, Comma>::new();
             let mut contains_view_mut = false;
-            'field: for field in fields.named.iter() {
+            for field in fields.named.iter() {
                 if let syn::Type::Path(path) = &field.ty {
                     let field_attrs = field
                         .attrs
@@ -120,196 +118,116 @@ pub(crate) fn expand_into_iter(
                         continue;
                     }
 
-                    for segment in path.path.segments.iter() {
-                        let segment_ident = segment.ident.to_string();
+                    let segment = path.path.segments.last().unwrap();
 
-                        if segment_ident == "View" {
-                            let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => args
-                                    .args
-                                    .iter()
-                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => {
-                                    return Err(Error::new(
-                                        segment.arguments.span(),
-                                        "Unexpected syntax",
-                                    ));
-                                }
-                            };
+                    if segment.ident == "View" {
+                        let mut tys = match &segment.arguments {
+                            syn::PathArguments::AngleBracketed(args) => args
+                                .args
+                                .iter()
+                                .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
+                            _ => {
+                                return Err(Error::new(
+                                    segment.arguments.span(),
+                                    "Unexpected syntax",
+                                ));
+                            }
+                        };
 
-                            let comp_ty = tys
-                                .next()
-                                .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
+                        let comp_ty = tys
+                            .next()
+                            .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
 
-                            let tracking_ty = tys.next();
+                        let tracking_ty = tys.next();
 
-                            let field_name = field.ident.clone().unwrap();
-                            let trimmed_field_name = field_name_override.unwrap_or_else(|| {
-                                let field_name = field.ident.as_ref().unwrap();
-                                let field_name_string = field_name.to_string();
-                                let trimmed = field_name_string.trim_start_matches("v_");
+                        let field_name = field.ident.clone().unwrap();
+                        let trimmed_field_name = field_name_override.unwrap_or_else(|| {
+                            let field_name = field.ident.as_ref().unwrap();
+                            let field_name_string = field_name.to_string();
+                            let trimmed = field_name_string.trim_start_matches("v_");
 
-                                Ident::new(
-                                    if trimmed.len() < field_name_string.len() {
-                                        trimmed
-                                    } else {
-                                        field_name_string.as_str()
-                                    },
-                                    field_name.span(),
-                                )
-                            });
-                            let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView as shipyard::iter::AbstractMut>::Out);
-                            item_fields.push(item_ty);
+                            Ident::new(
+                                if trimmed.len() < field_name_string.len() {
+                                    trimmed
+                                } else {
+                                    field_name_string.as_str()
+                                },
+                                field_name.span(),
+                            )
+                        });
+                        let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
+                        item_fields.push(item_ty);
 
-                            let abstract_view_ty = parse_quote!(<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView);
-                            iter_fields.push(abstract_view_ty);
+                        let abstract_view_ty =
+                            parse_quote!(&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty>);
+                        iter_fields.push(abstract_view_ty);
 
-                            let field = parse_quote!(self.#field_name);
-                            iter_fields_access.push(ExprReference {
-                                attrs: Vec::new(),
-                                and_token: parse_quote!(&),
-                                mutability: None,
-                                expr: Box::new(field),
-                            });
+                        let field = parse_quote!(self.#field_name);
+                        iter_fields_access.push(ExprReference {
+                            attrs: Vec::new(),
+                            and_token: parse_quote!(&),
+                            mutability: None,
+                            expr: Box::new(field),
+                        });
 
-                            iter_fields_variable.push(trimmed_field_name);
+                        iter_fields_variable.push(trimmed_field_name);
+                    } else if segment.ident == "ViewMut" {
+                        let mut tys = match &segment.arguments {
+                            syn::PathArguments::AngleBracketed(args) => args
+                                .args
+                                .iter()
+                                .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
+                            _ => {
+                                return Err(Error::new(
+                                    segment.arguments.span(),
+                                    "Unexpected syntax",
+                                ))
+                            }
+                        };
 
-                            continue 'field;
-                        } else if segment_ident == "ViewMut" {
-                            let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => args
-                                    .args
-                                    .iter()
-                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => {
-                                    return Err(Error::new(
-                                        segment.arguments.span(),
-                                        "Unexpected syntax",
-                                    ))
-                                }
-                            };
+                        contains_view_mut = true;
 
-                            contains_view_mut = true;
+                        let comp_ty = tys
+                            .next()
+                            .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
 
-                            let comp_ty = tys
-                                .next()
-                                .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
+                        let tracking_ty = tys.next();
 
-                            let tracking_ty = tys.next();
+                        let field_name = field.ident.clone().unwrap();
+                        let trimmed_field_name = field_name_override.unwrap_or_else(|| {
+                            let field_name = field.ident.as_ref().unwrap();
+                            let field_name_string = field_name.to_string();
+                            let trimmed = field_name_string.trim_start_matches("vm_");
 
-                            let field_name = field.ident.clone().unwrap();
-                            let trimmed_field_name = field_name_override.unwrap_or_else(|| {
-                                let field_name = field.ident.as_ref().unwrap();
-                                let field_name_string = field_name.to_string();
-                                let trimmed = field_name_string.trim_start_matches("vm_");
+                            Ident::new(
+                                if trimmed.len() < field_name_string.len() {
+                                    trimmed
+                                } else {
+                                    field_name_string.as_str()
+                                },
+                                field_name.span(),
+                            )
+                        });
+                        let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
+                        item_fields.push(item_ty);
 
-                                Ident::new(
-                                    if trimmed.len() < field_name_string.len() {
-                                        trimmed
-                                    } else {
-                                        field_name_string.as_str()
-                                    },
-                                    field_name.span(),
-                                )
-                            });
-                            let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView as shipyard::iter::AbstractMut>::Out);
-                            item_fields.push(item_ty);
+                        let abtract_view_ty = parse_quote!(&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty>);
+                        iter_fields.push(abtract_view_ty);
 
-                            let abtract_view_ty = parse_quote!(<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView);
-                            iter_fields.push(abtract_view_ty);
+                        let field = parse_quote!(self.#field_name);
+                        iter_fields_access.push(ExprReference {
+                            attrs: Vec::new(),
+                            and_token: parse_quote!(&),
+                            mutability: Some(parse_quote!(mut)),
+                            expr: Box::new(field),
+                        });
 
-                            let field = parse_quote!(self.#field_name);
-                            iter_fields_access.push(ExprReference {
-                                attrs: Vec::new(),
-                                and_token: parse_quote!(&),
-                                mutability: Some(parse_quote!(mut)),
-                                expr: Box::new(field),
-                            });
-
-                            iter_fields_variable.push(trimmed_field_name);
-
-                            continue 'field;
-                        }
+                        iter_fields_variable.push(trimmed_field_name);
+                    } else {
+                        return Err(Error::new(field.ty.span(), "Field is not a view"));
                     }
-
-                    return Err(Error::new(field.ty.span(), "Field is not a view"));
-                } else {
-                    return Err(Error::new(field.ty.span(), "Field is not a view"));
                 }
             }
-
-            let par_iter_struct: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(quote!(struct #par_iter_name #iter_generics (
-                        shipyard::iter::ParIter<(
-                            #iter_fields
-                        )>
-                    );))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
-
-            let into_par_iter: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(quote!(type IntoParIter = #par_iter_name #iter_ty_generics;))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
-
-            let par_iter: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(quote!(fn par_iter(self) -> Self::IntoParIter {
-                        #par_iter_name((#iter_fields_access).par_iter())
-                    }))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
-
-            let parallel_iter: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(
-                        quote!(impl #iter_impl_generics shipyard::iter::__ParallelIterator for #par_iter_name #iter_ty_generics #iter_where_clause {
-                            type Item = #item_name #iter_ty_generics;
-
-                            #[inline]
-                            fn drive_unindexed<__C>(self, consumer: __C) -> __C::Result
-                            where
-                                __C: shipyard::iter::__UnindexedConsumer<Self::Item>,
-                            {
-                                shipyard::iter::__ParallelIterator::drive_unindexed(
-                                    shipyard::iter::__ParallelIterator::map(
-                                        self.0,
-                                        |(#iter_fields_variable)| #item_name { #iter_fields_variable }
-                                    ),
-                                    consumer
-                                )
-                            }
-
-                            #[inline]
-                            fn opt_len(&self) -> core::option::Option<usize> {
-                                shipyard::iter::__ParallelIterator::opt_len(&self.0)
-                            }
-                        }),
-                    )
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
 
             let r#mut = if contains_view_mut {
                 Some(quote!(mut))
@@ -322,71 +240,86 @@ pub(crate) fn expand_into_iter(
                     #item_fields
                 }
 
+                #[derive(Clone)]
                 struct #iter_name #iter_generics (
-                    shipyard::iter::Iter<(
-                        #iter_fields
-                    )>
+                    <(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator
                 );
 
-                #par_iter_struct
-
-                impl #iter_impl_generics shipyard::iter::IntoIter for &'__tmp #r#mut #name #ty_generics #where_clause {
-                    type IntoIter = #iter_name #iter_ty_generics;
-                    #into_par_iter
-
-                    fn iter(self) -> Self::IntoIter {
-                        #iter_name((#iter_fields_access).iter())
-                    }
-
-                    fn iter_by<__D: 'static>(self) -> Self::IntoIter {
-                        #iter_name((#iter_fields_access).iter_by::<__D>())
-                    }
-
-                    #par_iter
-                }
-
-                impl #iter_impl_generics core::iter::Iterator for #iter_name #iter_ty_generics #iter_where_clause {
-                    type Item = #item_name #iter_ty_generics;
+                impl #iter_impl_generics shipyard::iter::IntoShiperator for &'__tmp #r#mut #name #ty_generics #where_clause {
+                    type Shiperator = #iter_name #iter_ty_generics;
 
                     #[inline]
-                    fn next(&mut self) -> Option<Self::Item> {
-                        if let Some((#iter_fields_variable)) = core::iter::Iterator::next(&mut self.0) {
-                            Some(#item_name { #iter_fields_variable })
-                        } else {
-                            None
-                        }
+                    #[track_caller]
+                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::StorageId>) -> (Self::Shiperator, usize, shipyard::RawEntityIdAccess) {
+                        let (shiperator, end, entities) = (#iter_fields_access).into_shiperator(storage_ids);
+
+                        (#iter_name (shiperator), end, entities)
                     }
 
                     #[inline]
-                    fn size_hint(&self) -> (usize, core::option::Option<usize>) {
-                        core::iter::Iterator::size_hint(&self.0)
+                    fn can_captain() -> bool {
+                        <(#iter_fields) as shipyard::iter::IntoShiperator>::can_captain()
                     }
 
                     #[inline]
-                    fn fold<__B, __F>(self, init: __B, mut f: __F) -> __B
-                    where
-                        Self: Sized,
-                        __F: FnMut(__B, Self::Item) -> __B,
-                    {
-                        core::iter::Iterator::fold(self.0, init, |init, (#iter_fields_variable)| {
-                            f(init, #item_name { #iter_fields_variable })
-                        })
+                    fn can_sailor() -> bool {
+                        <(#iter_fields) as shipyard::iter::IntoShiperator>::can_sailor()
                     }
                 }
 
-                impl #iter_impl_generics shipyard::iter::LastId for #iter_name #iter_ty_generics #iter_where_clause {
+                impl #iter_impl_generics shipyard::iter::ShiperatorOutput for #iter_name #iter_ty_generics #iter_where_clause {
+                    type Out = #item_name #iter_ty_generics;
+                }
+
+                impl #iter_impl_generics shipyard::iter::ShiperatorCaptain for #iter_name #iter_ty_generics #iter_where_clause {
                     #[inline]
-                    unsafe fn last_id(&self) -> shipyard::EntityId {
-                        shipyard::iter::LastId::last_id(&self.0)
+                    unsafe fn get_captain_data(&self, index: usize) -> Self::Out {
+                        let (#iter_fields_variable) = self.0.get_captain_data(index);
+
+                        #item_name { #iter_fields_variable }
                     }
 
                     #[inline]
-                    unsafe fn last_id_back(&self) -> shipyard::EntityId {
-                        shipyard::iter::LastId::last_id_back(&self.0)
+                    fn next_slice(&mut self) {
+                        self.0.next_slice()
+                    }
+
+                    #[inline]
+                    fn sail_time(&self) -> usize {
+                        self.0.sail_time()
+                    }
+
+                    #[inline]
+                    fn is_exact_sized(&self) -> bool {
+                        self.0.is_exact_sized()
+                    }
+
+                    #[inline]
+                    fn unpick(&mut self) {
+                        self.0.unpick()
                     }
                 }
 
-                #parallel_iter
+                impl #iter_impl_generics shipyard::iter::ShiperatorSailor for #iter_name #iter_ty_generics #iter_where_clause {
+                    type Index = <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorSailor>::Index;
+
+                    #[inline]
+                    unsafe fn get_sailor_data(&self, index: Self::Index) -> Self::Out {
+                        let (#iter_fields_variable) = self.0.get_sailor_data(index);
+
+                        #item_name { #iter_fields_variable }
+                    }
+
+                    #[inline]
+                    fn indices_of(&self, entity_id: shipyard::EntityId, index: usize) -> Option<Self::Index> {
+                        self.0.indices_of(entity_id, index)
+                    }
+
+                    #[inline]
+                    fn index_from_usize(index: usize) -> Self::Index {
+                        <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorSailor>::index_from_usize(index)
+                    }
+                }
             ))
         }
         syn::Fields::Unnamed(fields) => {
@@ -397,187 +330,53 @@ pub(crate) fn expand_into_iter(
                 ));
             }
 
-            let mut item_fields = Punctuated::<Field, Comma>::new();
-            let mut iter_fields = Punctuated::<Field, Comma>::new();
-            let mut iter_fields_access = Punctuated::<ExprReference, Comma>::new();
-            let mut iter_fields_variable = Punctuated::<Ident, Comma>::new();
+            let mut views = Vec::new();
+            let mut views_ty = Vec::new();
             let mut contains_view_mut = false;
-            'field: for (field_index, field) in fields.unnamed.iter().enumerate() {
+
+            for (field_index, field) in fields.unnamed.iter().enumerate() {
                 if let syn::Type::Path(path) = &field.ty {
-                    for segment in path.path.segments.iter() {
-                        let segment_ident = segment.ident.to_string();
+                    let segment = path.path.segments.last().unwrap();
+                    let mut tys = match &segment.arguments {
+                        syn::PathArguments::AngleBracketed(args) => args
+                            .args
+                            .iter()
+                            .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
+                        _ => return Err(Error::new(segment.arguments.span(), "Unexpected syntax")),
+                    };
 
-                        if segment_ident == "View" {
-                            let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => args
-                                    .args
-                                    .iter()
-                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => {
-                                    return Err(Error::new(
-                                        segment.arguments.span(),
-                                        "Unexpected syntax",
-                                    ))
-                                }
-                            };
+                    let comp_ty = tys
+                        .next()
+                        .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
 
-                            let comp_ty = tys
-                                .next()
-                                .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
+                    let tracking_ty = tys.next();
 
-                            let tracking_ty = tys.next();
+                    let index = syn::Index::from(field_index);
 
-                            let item_ty = parse_quote!(<<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView as shipyard::iter::AbstractMut>::Out);
-                            item_fields.push(item_ty);
-
-                            let abstract_view_ty = parse_quote!(<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView);
-                            iter_fields.push(abstract_view_ty);
-
-                            let index = Index {
-                                index: field_index as u32,
-                                span: Span::call_site(),
-                            };
-                            let field = parse_quote!(self.#index);
-                            iter_fields_access.push(ExprReference {
-                                attrs: Vec::new(),
-                                and_token: parse_quote!(&),
-                                mutability: None,
-                                expr: Box::new(field),
-                            });
-
-                            iter_fields_variable.push(Ident::new(
-                                &format!("field{}", field_index),
-                                Span::call_site(),
-                            ));
-
-                            continue 'field;
-                        } else if segment_ident == "ViewMut" {
-                            let mut tys = match &segment.arguments {
-                                syn::PathArguments::AngleBracketed(args) => args
-                                    .args
-                                    .iter()
-                                    .filter(|arg| matches!(arg, syn::GenericArgument::Type(_))),
-                                _ => {
-                                    return Err(Error::new(
-                                        segment.arguments.span(),
-                                        "Unexpected syntax",
-                                    ))
-                                }
-                            };
-
-                            contains_view_mut = true;
-
-                            let comp_ty = tys
-                                .next()
-                                .ok_or_else(|| Error::new(segment.span(), "Missing generic"))?;
-
-                            let tracking_ty = tys.next();
-
-                            let item_ty = parse_quote!(<<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView as shipyard::iter::AbstractMut>::Out);
-                            item_fields.push(item_ty);
-
-                            let abtract_view_ty = parse_quote!(<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoAbstract>::AbsView);
-                            iter_fields.push(abtract_view_ty);
-
-                            let index = Index {
-                                index: field_index as u32,
-                                span: Span::call_site(),
-                            };
-                            let field = parse_quote!(self.#index);
-                            iter_fields_access.push(ExprReference {
-                                attrs: Vec::new(),
-                                and_token: parse_quote!(&),
-                                mutability: Some(parse_quote!(mut)),
-                                expr: Box::new(field),
-                            });
-
-                            iter_fields_variable.push(Ident::new(
-                                &format!("field{}", field_index),
-                                Span::call_site(),
-                            ));
-
-                            continue 'field;
-                        }
+                    if segment.ident == "View" {
+                        views.push(quote!(&self.#index));
+                        views_ty
+                            .push(quote!(&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty>));
+                    } else if segment.ident == "ViewMut" {
+                        views.push(quote!(&mut self.#index));
+                        views_ty.push(
+                            quote!(&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty>),
+                        );
+                        contains_view_mut = true;
+                    } else {
+                        return Err(Error::new(field.ty.span(), "Field is not a view"));
                     }
-
-                    return Err(Error::new(field.ty.span(), "Field is not a view"));
                 } else {
                     return Err(Error::new(field.ty.span(), "Field is not a view"));
                 }
             }
 
-            let par_iter_struct: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(quote!(struct #par_iter_name #iter_generics (
-                        shipyard::iter::ParIter<(
-                            #iter_fields
-                        )>
-                    );))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
-
-            let par_iter: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(quote!(fn par_iter(self) -> Self::IntoParIter {
-                        #par_iter_name((#iter_fields_access).par_iter())
-                    }))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
-
-            let into_par_iter: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(quote!(type IntoParIter = #par_iter_name #iter_ty_generics;))
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
-
-            let parallel_iter: Option<TokenStream> = {
-                #[cfg(feature = "parallel")]
-                {
-                    Some(
-                        quote!(impl #iter_impl_generics shipyard::iter::__ParallelIterator for #par_iter_name #iter_ty_generics #iter_where_clause {
-                            type Item = #item_name #iter_ty_generics;
-
-                            #[inline]
-                            fn drive_unindexed<__C>(self, consumer: __C) -> __C::Result
-                            where
-                                __C: shipyard::iter::__UnindexedConsumer<Self::Item>,
-                            {
-                                shipyard::iter::__ParallelIterator::drive_unindexed(
-                                    shipyard::iter::__ParallelIterator::map(
-                                        self.0,
-                                        |(#iter_fields_variable)| #item_name(#iter_fields_variable)
-                                    ),
-                                    consumer
-                                )
-                            }
-
-                            #[inline]
-                            fn opt_len(&self) -> core::option::Option<usize> {
-                                shipyard::iter::__ParallelIterator::opt_len(&self.0)
-                            }
-                        }),
-                    )
-                }
-                #[cfg(not(feature = "parallel"))]
-                {
-                    None
-                }
-            };
+            let tuple = quote!(
+                (#(#views,)*)
+            );
+            let tuple_ty = quote!(
+                (#(#views_ty,)*)
+            );
 
             let r#mut = if contains_view_mut {
                 Some(quote!(mut))
@@ -586,75 +385,23 @@ pub(crate) fn expand_into_iter(
             };
 
             Ok(quote!(
-                struct #item_name #iter_generics (
-                    #item_fields
-                );
-
-                struct #iter_name #iter_generics (
-                    shipyard::iter::Iter<(
-                        #iter_fields
-                    )>
-                );
-
-                #par_iter_struct
-
-                impl #iter_impl_generics shipyard::iter::IntoIter for &'__tmp #r#mut #name #ty_generics #where_clause {
-                    type IntoIter = #iter_name #iter_ty_generics;
-                    #into_par_iter
-
-                    fn iter(self) -> Self::IntoIter {
-                        #iter_name((#iter_fields_access).iter())
-                    }
-
-                    fn iter_by<__D: 'static>(self) -> Self::IntoIter {
-                        #iter_name((#iter_fields_access).iter_by::<__D>())
-                    }
-
-                    #par_iter
-                }
-
-                impl #iter_impl_generics core::iter::Iterator for #iter_name #iter_ty_generics #iter_where_clause {
-                    type Item = #item_name #iter_ty_generics;
+                impl #iter_impl_generics shipyard::iter::IntoShiperator for &'__tmp #r#mut #name #ty_generics #where_clause {
+                    type Shiperator = <#tuple_ty as shipyard::iter::IntoShiperator>::Shiperator;
 
                     #[inline]
-                    fn next(&mut self) -> Option<Self::Item> {
-                        if let Some((#iter_fields_variable)) = core::iter::Iterator::next(&mut self.0) {
-                            Some(#item_name(#iter_fields_variable))
-                        } else {
-                            None
-                        }
+                    #[track_caller]
+                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::StorageId>) -> (Self::Shiperator, usize, shipyard::RawEntityIdAccess) {
+                        #tuple.into_shiperator(storage_ids)
                     }
 
-                    #[inline]
-                    fn size_hint(&self) -> (usize, core::option::Option<usize>) {
-                        core::iter::Iterator::size_hint(&self.0)
+                    fn can_captain() -> bool {
+                        <#tuple_ty as shipyard::iter::IntoShiperator>::can_captain()
                     }
 
-                    #[inline]
-                    fn fold<__B, __F>(self, init: __B, mut f: __F) -> __B
-                    where
-                        Self: Sized,
-                        __F: FnMut(__B, Self::Item) -> __B,
-                    {
-                        core::iter::Iterator::fold(self.0, init, |init, (#iter_fields_variable)| {
-                            f(init, #item_name(#iter_fields_variable))
-                        })
+                    fn can_sailor() -> bool {
+                        <#tuple_ty as shipyard::iter::IntoShiperator>::can_sailor()
                     }
                 }
-
-                impl #iter_impl_generics shipyard::iter::LastId for #iter_name #iter_ty_generics #iter_where_clause {
-                    #[inline]
-                    unsafe fn last_id(&self) -> shipyard::EntityId {
-                        shipyard::iter::LastId::last_id(&self.0)
-                    }
-
-                    #[inline]
-                    unsafe fn last_id_back(&self) -> shipyard::EntityId {
-                        shipyard::iter::LastId::last_id_back(&self.0)
-                    }
-                }
-
-                #parallel_iter
             ))
         }
         syn::Fields::Unit => Err(Error::new(
