@@ -43,4 +43,12 @@ macro_rules! retain {
     }
 }
 
-retain![(StorageA, 0) (StorageB, 1); (StorageC, 2) (StorageD, 3) (StorageE, 4) (StorageF, 5) (StorageG, 6) (StorageH, 7) (StorageI, 8) (StorageJ, 9)];
+#[cfg(not(feature = "extended_tuple"))]
+retain![(StorageA, 0); (StorageB, 1) (StorageC, 2) (StorageD, 3) (StorageE, 4) (StorageF, 5) (StorageG, 6) (StorageH, 7) (StorageI, 8) (StorageJ, 9)];
+#[cfg(feature = "extended_tuple")]
+retain![
+    (StorageA, 0); (StorageB, 1) (StorageC, 2) (StorageD, 3) (StorageE, 4) (StorageF, 5) (StorageG, 6) (StorageH, 7) (StorageI, 8) (StorageJ, 9)
+    (StorageK, 10) (StorageL, 11) (StorageM, 12) (StorageN, 13) (StorageO, 14) (StorageP, 15) (StorageQ, 16) (StorageR, 17) (StorageS, 18) (StorageT, 19)
+    (StorageU, 20) (StorageV, 21) (StorageW, 22) (StorageX, 23) (StorageY, 24) (StorageZ, 25) (StorageAA, 26) (StorageBB, 27) (StorageCC, 28) (StorageDD, 29)
+    (StorageEE, 30) (StorageFF, 31)
+];

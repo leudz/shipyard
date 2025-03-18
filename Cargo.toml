@@ -29,6 +29,7 @@ tracing = { version = "0.1.0", default-features = false, optional = true }
 
 [features]
 default = ["parallel", "proc", "std"]
+extended_tuple = []
 parallel = ["rayon", "shipyard_proc/parallel"]
 proc = ["shipyard_proc"]
 serde1 = ["serde", "hashbrown/serde"]

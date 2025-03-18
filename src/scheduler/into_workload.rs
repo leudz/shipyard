@@ -309,5 +309,15 @@ macro_rules! into_workload {
     }
 }
 
-into_workload![(A, ViewsA, Ra, 0); (B, ViewsB, Rb, 1) (C, ViewsC, Rc, 2) (D, ViewsD, Rd, 3) (E, ViewsE, Re, 4) (F, ViewsF, Rf, 5) (G, ViewsG, Rg, 6) (H, ViewsH, Rh, 7) (I, ViewsI, Ri, 8) (J, ViewsJ, Rj, 9)
-        (K, ViewsK, Rk, 10) (L, ViewsL, Rl, 11) (M, ViewsM, Rm, 12) (N, ViewsN, Rn, 13) (O, ViewsO, Ro, 14) (P, ViewsP, Rp, 15) (Q, ViewsQ, Rq, 16) (R, ViewsR, Rr, 17) (S, ViewsS, Rs, 18) (T, ViewsT, Rt, 19)];
+#[cfg(not(feature = "extended_tuple"))]
+into_workload![
+    (ViewA, A, Ra, 0); (ViewB, B, Rb, 1) (ViewC, C, Rc, 2) (ViewD, D, Rd, 3) (ViewE, E, Re, 4) (ViewF, F, Rf, 5) (ViewG, G, Rg, 6) (ViewH, H, Rh, 7) (ViewI, I, Ri, 8) (ViewJ, J, Rj, 9)
+    (ViewK, K, Rk, 10) (ViewL, L, Rl, 11) (ViewM, M, Rm, 12) (ViewN, N, Rn, 13) (ViewO, O, Ro, 14) (ViewP, P, Rp, 15) (ViewQ, Q, Rq, 16) (ViewR, R, Rr, 17) (ViewS, S, Rs, 18) (ViewT, T, Rt, 19)
+];
+#[cfg(feature = "extended_tuple")]
+into_workload![
+    (ViewA, A, Ra, 0); (ViewB, B, Rb, 1) (ViewC, C, Rc, 2) (ViewD, D, Rd, 3) (ViewE, E, Re, 4) (ViewF, F, Rf, 5) (ViewG, G, Rg, 6) (ViewH, H, Rh, 7) (ViewI, I, Ri, 8) (ViewJ, J, Rj, 9)
+    (ViewK, K, Rk, 10) (ViewL, L, Rl, 11) (ViewM, M, Rm, 12) (ViewN, N, Rn, 13) (ViewO, O, Ro, 14) (ViewP, P, Rp, 15) (ViewQ, Q, Rq, 16) (ViewR, R, Rr, 17) (ViewS, S, Rs, 18) (ViewT, T, Rt, 19)
+    (ViewU, U, Ru, 20) (ViewV, V, Rv, 21) (ViewW, W, Rw, 22) (ViewX, X, Rx, 23) (ViewY, Y, Ry, 24) (ViewZ, Z, Rz, 25) (ViewAA, AA, Raa, 26) (ViewBB, BB, Rbb, 27) (ViewCC, CC, Rcc, 28) (ViewDD, DD, Rdd, 29)
+    (ViewEE, EE, Ree, 30) (ViewFF, FF, Rff, 31)
+];

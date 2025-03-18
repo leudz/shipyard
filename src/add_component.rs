@@ -94,4 +94,12 @@ macro_rules! add_component {
     }
 }
 
+#[cfg(not(feature = "extended_tuple"))]
 add_component![(ViewA, A, 0); (ViewB, B, 1) (ViewC, C, 2) (ViewD, D, 3) (ViewE, E, 4) (ViewF, F, 5) (ViewG, G, 6) (ViewH, H, 7) (ViewI, I, 8) (ViewJ, J, 9)];
+#[cfg(feature = "extended_tuple")]
+add_component![
+    (ViewA, A, 0); (ViewB, B, 1) (ViewC, C, 2) (ViewD, D, 3) (ViewE, E, 4) (ViewF, F, 5) (ViewG, G, 6) (ViewH, H, 7) (ViewI, I, 8) (ViewJ, J, 9)
+    (ViewK, K, 10) (ViewL, L, 11) (ViewM, M, 12) (ViewN, N, 13) (ViewO, O, 14) (ViewP, P, 15) (ViewQ, Q, 16) (ViewR, R, 17) (ViewS, S, 18) (ViewT, T, 19)
+    (ViewU, U, 20) (ViewV, V, 21) (ViewW, W, 22) (ViewX, X, 23) (ViewY, Y, 24) (ViewZ, Z, 25) (ViewAA, AA, 26) (ViewBB, BB, 27) (ViewCC, CC, 28) (ViewDD, DD, 29)
+    (ViewEE, EE, 30) (ViewFF, FF, 31)
+];

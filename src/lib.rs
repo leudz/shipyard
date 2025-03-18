@@ -5,6 +5,7 @@
 //! ## Features
 //!
 //! - **parallel** *(default)* &mdash; enables workload threading and add parallel iterators
+//! - **extended_tuple** &mdash; extends implementations from the default 10 to 32 tuple size at the cost of 4X build time
 //! - **proc** *(default)* &mdash; re-exports macros from `shipyard_proc`, mainly to derive `Component`
 //! - **serde1** &mdash; adds (de)serialization support with [serde](https://github.com/serde-rs/serde)
 //! - **std** *(default)* &mdash; lets Shipyard use the standard library

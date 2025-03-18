@@ -217,4 +217,12 @@ macro_rules! bulk_insert {
     }
 }
 
+#[cfg(not(feature = "extended_tuple"))]
 bulk_insert![(A, sparse_set0, 0) (B, sparse_set1, 1); (C, sparse_set2, 2) (D, sparse_set3, 3) (E, sparse_set4, 4) (F, sparse_set5, 5) (G, sparse_set6, 6) (H, sparse_set7, 7) (I, sparse_set8, 8) (J, sparse_set9, 9)];
+#[cfg(feature = "extended_tuple")]
+bulk_insert![
+    (A, sparse_set0, 0) (B, sparse_set1, 1); (C, sparse_set2, 2) (D, sparse_set3, 3) (E, sparse_set4, 4) (F, sparse_set5, 5) (G, sparse_set6, 6) (H, sparse_set7, 7) (I, sparse_set8, 8) (J, sparse_set9, 9)
+    (K, sparse_set10, 10) (L, sparse_set11, 11) (M, sparse_set12, 12) (N, sparse_set13, 13) (O, sparse_set14, 14) (P, sparse_set15, 15) (Q, sparse_set16, 16) (R, sparse_set17, 17) (S, sparse_set18, 18) (T, sparse_set19, 19)
+    (U, sparse_set20, 20) (V, sparse_set21, 21) (W, sparse_set22, 22) (X, sparse_set23, 23) (Y, sparse_set24, 24) (Z, sparse_set25, 25) (AA, sparse_set26, 26) (BB, sparse_set27, 27) (CC, sparse_set28, 28) (DD, sparse_set29, 29)
+    (EE, sparse_set30, 30) (FF, sparse_set31, 31)
+];

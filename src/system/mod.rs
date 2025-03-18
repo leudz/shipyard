@@ -48,27 +48,27 @@ where
 
 macro_rules! impl_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: WorldBorrow,)+ R, Func> System<(), ($($type,)+)> for Func
+        impl<$($type: WorldBorrow,)+ Ret, Func> System<(), ($($type,)+)> for Func
         where
-            Func: FnOnce($($type),+) -> R
-                + FnOnce($($type::WorldView<'_>),+) -> R
+            Func: FnOnce($($type),+) -> Ret
+                + FnOnce($($type::WorldView<'_>),+) -> Ret
         {
-            type Return = R;
+            type Return = Ret;
 
-            fn run(self, _: (), world: &World) -> Result<R, error::GetStorage> {
+            fn run(self, _: (), world: &World) -> Result<Ret, error::GetStorage> {
                 let current = world.get_current();
                 Ok((self)($($type::world_borrow(world, None, current)?,)+))
             }
         }
 
-        impl<Data, $($type: WorldBorrow,)+ R, Func> System<(Data,), ($($type,)+)> for Func
+        impl<Data, $($type: WorldBorrow,)+ Ret, Func> System<(Data,), ($($type,)+)> for Func
         where
-            Func: FnOnce(Data, $($type),+) -> R
-                + FnOnce(Data, $($type::WorldView<'_>),+) -> R
+            Func: FnOnce(Data, $($type),+) -> Ret
+                + FnOnce(Data, $($type::WorldView<'_>),+) -> Ret
         {
-            type Return = R;
+            type Return = Ret;
 
-            fn run(self, (data,): (Data,), world: &World) -> Result<R, error::GetStorage> {
+            fn run(self, (data,): (Data,), world: &World) -> Result<Ret, error::GetStorage> {
                 let current = world.get_current();
                 Ok((self)(data, $($type::world_borrow(world, None, current)?,)+))
             }
@@ -86,4 +86,12 @@ macro_rules! system {
     }
 }
 
+#[cfg(not(feature = "extended_tuple"))]
 system![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+#[cfg(feature = "extended_tuple")]
+system![
+    (A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
+    (K, 10) (L, 11) (M, 12) (N, 13) (O, 14) (P, 15) (Q, 16) (R, 17) (S, 18) (T, 19)
+    (U, 20) (V, 21) (W, 22) (X, 23) (Y, 24) (Z, 25) (AA, 26) (BB, 27) (CC, 28) (DD, 29)
+    (EE, 30) (FF, 31)
+];

@@ -44,35 +44,35 @@ where
 
 macro_rules! impl_all_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: Borrow,)+ R, Func> AllSystem<(), ($($type,)+)> for Func
+        impl<$($type: Borrow,)+ Ret, Func> AllSystem<(), ($($type,)+)> for Func
         where
-            Func: FnOnce($($type),+) -> R
-                + FnOnce($($type::View<'_>),+) -> R,
+            Func: FnOnce($($type),+) -> Ret
+                + FnOnce($($type::View<'_>),+) -> Ret,
         {
-            type Return = R;
+            type Return = Ret;
 
             fn run(
                 self,
                 _: (),
                 all_storages: &AllStorages,
-            ) -> Result<R, error::GetStorage> {
+            ) -> Result<Ret, error::GetStorage> {
                 let current = all_storages.get_current();
                 Ok(self($($type::borrow(all_storages, None, None, current)?,)+))
             }
         }
 
-        impl<Data, $($type: Borrow,)+ R, Func> AllSystem<(Data,), ($($type,)+)> for Func
+        impl<Data, $($type: Borrow,)+ Ret, Func> AllSystem<(Data,), ($($type,)+)> for Func
         where
-            Func: FnOnce(Data, $($type),+) -> R
-                + FnOnce(Data, $($type::View<'_>),+) -> R,
+            Func: FnOnce(Data, $($type),+) -> Ret
+                + FnOnce(Data, $($type::View<'_>),+) -> Ret,
         {
-            type Return = R;
+            type Return = Ret;
 
             fn run(
                 self,
                 (data,): (Data,),
                 all_storages: &AllStorages,
-            ) -> Result<R, error::GetStorage> {
+            ) -> Result<Ret, error::GetStorage> {
                 let current = all_storages.get_current();
                 Ok(self(data, $($type::borrow(all_storages, None, None, current)?,)+))
             }
@@ -90,4 +90,12 @@ macro_rules! all_system {
     }
 }
 
+#[cfg(not(feature = "extended_tuple"))]
 all_system![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+#[cfg(feature = "extended_tuple")]
+all_system![
+    (A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
+    (K, 10) (L, 11) (M, 12) (N, 13) (O, 14) (P, 15) (Q, 16) (R, 17) (S, 18) (T, 19)
+    (U, 20) (V, 21) (W, 22) (X, 23) (Y, 24) (Z, 25) (AA, 26) (BB, 27) (CC, 28) (DD, 29)
+    (EE, 30) (FF, 31)
+];

@@ -95,15 +95,15 @@ impl IntoWorkloadSystem<WorkloadSystem, ()> for WorkloadSystem {
 
 macro_rules! impl_into_workload_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: WorldBorrow + BorrowInfo,)+ R, Func> IntoWorkloadSystem<($($type,)+), R> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ Ret, Func> IntoWorkloadSystem<($($type,)+), Ret> for Func
         where
-            R: 'static,
+            Ret: 'static,
             Func: 'static
                 + Send
                 + Sync,
             for<'a, 'b> &'b Func:
-                Fn($($type),+) -> R
-                + Fn($($type::WorldView<'a>),+) -> R {
+                Fn($($type),+) -> Ret
+                + Fn($($type::WorldView<'a>),+) -> Ret {
 
             fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
                 let mut borrows = Vec::new();
@@ -181,7 +181,7 @@ macro_rules! impl_into_workload_system {
                     name: type_name::<Func>().as_label(),
                 })
             }
-            fn call(&self) -> R {
+            fn call(&self) -> Ret {
                 unreachable!()
             }
         }
@@ -198,4 +198,12 @@ macro_rules! into_workload_system {
     }
 }
 
+#[cfg(not(feature = "extended_tuple"))]
 into_workload_system![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+#[cfg(feature = "extended_tuple")]
+into_workload_system![
+    (A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
+    (K, 10) (L, 11) (M, 12) (N, 13) (O, 14) (P, 15) (Q, 16) (R, 17) (S, 18) (T, 19)
+    (U, 20) (V, 21) (W, 22) (X, 23) (Y, 24) (Z, 25) (AA, 26) (BB, 27) (CC, 28) (DD, 29)
+    (EE, 30) (FF, 31)
+];

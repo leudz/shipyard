@@ -260,19 +260,19 @@ impl SystemModificator<WorkloadSystem, ()> for WorkloadSystem {
 
 macro_rules! impl_into_workload_system {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: WorldBorrow + BorrowInfo,)+ R, Func> SystemModificator<($($type,)+), R> for Func
+        impl<$($type: WorldBorrow + BorrowInfo,)+ Ret, Func> SystemModificator<($($type,)+), Ret> for Func
         where
-            R: 'static,
+            Ret: 'static,
             Func: 'static
                 + Send
                 + Sync,
             for<'a, 'b> &'b Func:
-                Fn($($type),+) -> R
-                + Fn($($type::WorldView<'a>),+) -> R {
+                Fn($($type),+) -> Ret
+                + Fn($($type::WorldView<'a>),+) -> Ret {
 
             #[track_caller]
             fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
                 let run_if = run_if.into_workload_run_if().unwrap();
 
                 system.run_if = Some(run_if.system_fn);
@@ -285,59 +285,59 @@ macro_rules! impl_into_workload_system {
 
                 run_if.system_fn = Box::new(move |world| (run_if.system_fn)(world).map(Not::not));
 
-                SystemModificator::<($($type,)+), R>::run_if(self, run_if)
+                SystemModificator::<($($type,)+), Ret>::run_if(self, run_if)
             }
             #[track_caller]
-            fn before_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn before_all<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.before_all.add(other);
 
                 system
             }
             #[track_caller]
-            fn after_all<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn after_all<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.after_all.add(other);
 
                 system
             }
             #[track_caller]
-            fn display_name<T>(self, name: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn display_name<Label>(self, name: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.display_name = name.as_label();
 
                 system
             }
             #[track_caller]
-            fn tag<T>(self, tag: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn tag<Label>(self, tag: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.tags.push(tag.as_label());
 
                 system
             }
             #[track_caller]
-            fn require_in_workload<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn require_in_workload<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.require_in_workload.add(other);
 
                 system
             }
             #[track_caller]
-            fn require_before<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn require_before<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.require_before.add(other);
 
                 system
             }
             #[track_caller]
-            fn require_after<T>(self, other: impl AsLabel<T>) -> WorkloadSystem {
-                let mut system = IntoWorkloadSystem::<($($type,)+), R>::into_workload_system(self).unwrap();
+            fn require_after<Label>(self, other: impl AsLabel<Label>) -> WorkloadSystem {
+                let mut system = IntoWorkloadSystem::<($($type,)+), Ret>::into_workload_system(self).unwrap();
 
                 system.require_after.add(other);
 
@@ -357,4 +357,12 @@ macro_rules! into_workload_system {
     }
 }
 
+#[cfg(not(feature = "extended_tuple"))]
 into_workload_system![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+#[cfg(feature = "extended_tuple")]
+into_workload_system![
+    (A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)
+    (K, 10) (L, 11) (M, 12) (N, 13) (O, 14) (P, 15) (Q, 16) (R, 17) (S, 18) (T, 19)
+    (U, 20) (V, 21) (W, 22) (X, 23) (Y, 24) (Z, 25) (AA, 26) (BB, 27) (CC, 28) (DD, 29)
+    (EE, 30) (FF, 31)
+];
