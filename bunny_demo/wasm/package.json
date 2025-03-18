@@ -1,0 +1,12 @@
+{
+  "name": "bunny_demo",
+  "version": "0.1.0",
+  "files": [
+    "bunny_demo_lib_bg.wasm",
+    "bunny_demo_lib.js",
+    "bunny_demo_lib.d.ts"
+  ],
+  "module": "bunny_demo_lib.js",
+  "types": "bunny_demo_lib.d.ts",
+  "sideEffects": false
+}

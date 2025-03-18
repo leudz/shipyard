@@ -1,0 +1,2488 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Shipyard User&#x27;s Guide</title>
+        <meta name="robots" content="noindex" />
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="welcome.html">Welcome</a></li><li class="chapter-item expanded "><a href="learn-by-example.html"><strong aria-hidden="true">1.</strong> Learn by example</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="learn-by-example/a-lone-square.html"><strong aria-hidden="true">1.1.</strong> A lone square</a></li><li class="chapter-item expanded "><a href="learn-by-example/friends.html"><strong aria-hidden="true">1.2.</strong> Friends</a></li><li class="chapter-item expanded "><a href="learn-by-example/spark.html"><strong aria-hidden="true">1.3.</strong> Spark</a></li><li class="chapter-item expanded "><a href="learn-by-example/breather.html"><strong aria-hidden="true">1.4.</strong> Breather</a></li><li class="chapter-item expanded "><a href="learn-by-example/reign.html"><strong aria-hidden="true">1.5.</strong> Reign</a></li><li class="chapter-item expanded "><a href="learn-by-example/true-victory.html"><strong aria-hidden="true">1.6.</strong> True Victory</a></li></ol></li><li class="chapter-item expanded "><a href="fundamentals.html"><strong aria-hidden="true">2.</strong> Fundamentals</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="fundamentals/world.html"><strong aria-hidden="true">2.1.</strong> World</a></li><li class="chapter-item expanded "><a href="fundamentals/add-entity.html"><strong aria-hidden="true">2.2.</strong> Add Entity</a></li><li class="chapter-item expanded "><a href="fundamentals/delete-entity.html"><strong aria-hidden="true">2.3.</strong> Delete Entity</a></li><li class="chapter-item expanded "><a href="fundamentals/add-components.html"><strong aria-hidden="true">2.4.</strong> Add Components</a></li><li class="chapter-item expanded "><a href="fundamentals/remove-components.html"><strong aria-hidden="true">2.5.</strong> Remove Components</a></li><li class="chapter-item expanded "><a href="fundamentals/delete-components.html"><strong aria-hidden="true">2.6.</strong> Delete Components</a></li><li class="chapter-item expanded "><a href="fundamentals/get-and-modify.html"><strong aria-hidden="true">2.7.</strong> Get and Modify Components</a></li><li class="chapter-item expanded "><a href="fundamentals/iterators.html"><strong aria-hidden="true">2.8.</strong> Iterators</a></li><li class="chapter-item expanded "><a href="fundamentals/uniques.html"><strong aria-hidden="true">2.9.</strong> Uniques</a></li><li class="chapter-item expanded "><a href="fundamentals/systems.html"><strong aria-hidden="true">2.10.</strong> Systems</a></li></ol></li><li class="chapter-item expanded "><a href="going-further.html"><strong aria-hidden="true">3.</strong> Going Further</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="going-further/tracking.html"><strong aria-hidden="true">3.1.</strong> Tracking</a></li><li class="chapter-item expanded "><a href="going-further/parallelism.html"><strong aria-hidden="true">3.2.</strong> Parallelism</a></li><li class="chapter-item expanded "><a href="going-further/custom-views.html"><strong aria-hidden="true">3.3.</strong> Custom Views</a></li><li class="chapter-item expanded "><a href="going-further/non-send-sync.html"><strong aria-hidden="true">3.4.</strong> !Send and !Sync Components</a></li><li class="chapter-item expanded "><a href="going-further/performance-tips.html"><strong aria-hidden="true">3.5.</strong> Performance Tips</a></li><li class="chapter-item expanded "><a href="going-further/tracing.html"><strong aria-hidden="true">3.6.</strong> Tracing</a></li><li class="chapter-item expanded "><a href="going-further/more-resources.html"><strong aria-hidden="true">3.7.</strong> More Resources</a></li></ol></li><li class="chapter-item expanded "><a href="going-deeper.html"><strong aria-hidden="true">4.</strong> Going Deeper</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="going-deeper/sparse-set.html"><strong aria-hidden="true">4.1.</strong> Sparse Set</a></li></ol></li><li class="chapter-item expanded "><a href="recipes.html"><strong aria-hidden="true">5.</strong> Recipes</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="recipes/hierarchy.html"><strong aria-hidden="true">5.1.</strong> Hierarchy</a></li><li class="chapter-item expanded "><a href="recipes/seed.html"><strong aria-hidden="true">5.2.</strong> Seed</a></li><li class="chapter-item expanded "><a href="recipes/0.4-migration.html"><strong aria-hidden="true">5.3.</strong> 0.4 migration</a></li></ol></li><li class="chapter-item expanded "><a href="contributors.html"><strong aria-hidden="true">6.</strong> Contributors</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Shipyard User&#x27;s Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/leudz/shipyard" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="welcome-to-shipyard"><a class="header" href="#welcome-to-shipyard">Welcome to Shipyard!</a></h1>
+<p><a href="https://github.com/leudz/shipyard">Shipyard</a> is an Entity Component System focused on usability and flexibility.</p>
+<p>ECS is a great way to organize logic and data:</p>
+<ol>
+<li>Elegant approach for humans
+<ul>
+<li>Composition over inheritance</li>
+<li>Separation of concerns</li>
+<li>Less burdened by lifetimes</li>
+</ul>
+</li>
+<li>Optimal design for computers
+<ul>
+<li>Spatial locality</li>
+<li>Less pointer chasing</li>
+</ul>
+</li>
+</ol>
+<p>However, programming with an ECS requires thinking about data and logic in a different way than you might be used to.</p>
+<h2 id="how-does-it-work"><a class="header" href="#how-does-it-work">How does it work?</a></h2>
+<p>Components hold data. Entities are a group of components identified by an Id.</p>
+<p>Systems do the heavy lifting: updating components, running side-effects, and integrating with other parts of the code.</p>
+<h1 id="learn"><a class="header" href="#learn">Learn</a></h1>
+<p>You can either build a small game with shipyard's concepts showed as you encounter them.<br />
+Or go through a more packed format.</p>
+<p><a href="./learn-by-example.html">I want to build a small game</a><br />
+<a href="./fundamentals.html">I prefer a packed format</a></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="learn-by-example"><a class="header" href="#learn-by-example">Learn by example</a></h1>
+<p>In this section you'll learn how to use shipyard by building a small game.</p>
+<iframe src="https://leudz.github.io/shipyard/square_eater" width="645" height="360" title="Square Eater game" scrolling="no"></iframe>
+<h2 id="dependencies"><a class="header" href="#dependencies">Dependencies</a></h2>
+<p>We'll only use two dependencies, let's add them to <code>Cargo.toml</code>.</p>
+<pre><code class="language-toml">macroquad = &quot;0.4.8&quot;
+shipyard = { version = &quot;0.7&quot;, default-features = false, features = [
+    &quot;proc&quot;,
+    &quot;std&quot;,
+] }
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="a-lone-square"><a class="header" href="#a-lone-square">A lone square</a></h1>
+<p>Let's start with a blank window.</p>
+<pre><code class="language-rust noplaypen">use macroquad::prelude::*;
+
+#[macroquad::main(&quot;Square Eater&quot;)]
+async fn main() {
+    loop {
+        next_frame().await
+    }
+}</code></pre>
+<p>Then let's add the player. This game is all about squares so naturally the player is one.</p>
+<pre><code class="language-rust noplaypen">struct Square {
+    x: f32,
+    y: f32,
+    size: f32,
+}
+
+struct Player {
+    square: Square,
+}</code></pre>
+<p>We can now it add the scene.</p>
+<pre><code class="language-rust noplaypen">#[macroquad::main(&quot;Square Eater&quot;)]
+async fn main() {
+    let x = screen_width() / 2.0;
+    let y = screen_height() / 2.0;
+    let player = Player {
+        square: Square { x, y, size: 15.0 },
+    };
+
+    loop {
+        clear_background(WHITE);
+
+        render(&amp;player);
+
+        next_frame().await
+    }
+}
+
+impl Square {
+    fn render(&amp;self, color: Color) {
+        draw_rectangle(self.x, self.y, self.size, self.size, color);
+    }
+}
+
+fn render(player: &amp;Player) {
+    player.square.render(BLUE);
+}</code></pre>
+<p>Our player looks a bit stiff, we can fix that.</p>
+<pre><code class="language-rust noplaypen">async fn main() {
+    // -- SNIP --
+    let mut player = Player {
+        square: Square { x, y, size: 15.0 },
+    };
+
+    loop {
+        clear_background(WHITE);
+
+        move_player(&amp;mut player);
+        render(&amp;player);
+
+        next_frame().await
+    }
+}
+
+fn move_player(player: &amp;mut Player) {
+    let width = screen_width();
+    let height = screen_height();
+    let (x, y) = mouse_position();
+
+    player.square.x = x.clamp(0.0, width - player.square.size);
+    player.square.y = y.clamp(0.0, height - player.square.size);
+}</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="friends"><a class="header" href="#friends">Friends</a></h1>
+<p>Our player has the whole window to explore but they're feeling lonely.<br />
+We can add a few friends.</p>
+<pre><code class="language-rust noplaypen">struct Friend(Square);</code></pre>
+<p>We could store them in a <code>Vec&lt;Friend&gt;</code> but you're not here for a macroquad tutorial.<br />
+Instead we'll store them in a <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>.</p>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> is shipyard's main type.<br />
+It's where everything is stored, from components to entities to systems.</p>
+<p>In this guide, I'll be explicit about <code>shipyard</code> imports but you could <code>use shipyard::*;</code> if you prefer.</p>
+<pre><code class="language-rust noplaypen">use macroquad::rand::gen_range;
+use shipyard::{Component, World};
+
+#[macroquad::main(&quot;Square Eater&quot;)]
+async fn main() {
+    rand::srand(macroquad::miniquad::date::now() as u64);
+
+    // -- SNIP --
+
+    let mut world = World::new();
+
+    for _ in 0..5 {
+        let _entity_id = world.add_entity(Friend::new());
+    }
+
+    loop {
+        clear_background(WHITE);
+
+        move_player(&amp;mut player);
+        render(&amp;player, &amp;world);
+
+        next_frame().await
+    }
+}
+
+fn render(player: &amp;Player, world: &amp;World) {
+    for friend in &amp;mut world.iter::&lt;&amp;Friend&gt;() {
+        friend.0.render(GREEN);
+    }
+
+    player.square.render(BLUE);
+}
+
+impl Friend {
+    fn new() -&gt; Friend {
+        let width = screen_width();
+        let height = screen_height();
+
+        Friend(Square {
+            x: gen_range(0.0, width - 5.0),
+            y: gen_range(0.0, height - 5.0),
+            size: 5.0,
+        })
+    }
+}</code></pre>
+<p>This won't compile just yet, as <code>Friend</code> is not a <a href="https://docs.rs/shipyard/latest/shipyard/trait.Component.html"><code>Component</code></a>.<br />
+Some ECS require you to explicitly specify which types are components, and some don't.<br />
+One of the reasons shipyard requires it is to easily identify components in codebases.<br />
+With small projects, this isn't a big issue, but as the number of lines grow, you'll have to find a way to identify components. This could be moving types to a <code>component.rs</code>, but I'd rather have modules split based on what they do.</p>
+<p>Let's add the missing piece.</p>
+<pre><code class="language-rust noplaypen">#[derive(Component)]
+struct Friend(Square);</code></pre>
+<p>Now <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.add_entity"><code>add_entity</code></a> can create 5 entities that are each composed of a single component.<br />
+Every entity is identified with an <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId"><code>EntityId</code></a>. It's a small handle that you can copy.<br />
+And <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.iter"><code>iter</code></a> let us iterate over components.</p>
+<p>We can move <code>Player</code> into the <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> to simplify our code a little.<br />
+We only have a single <code>Player</code> and it will only ever have a single component.<br />
+For this kind of entities, shipyard has <a href="https://docs.rs/shipyard/latest/shipyard/trait.Unique.html"><code>Unique</code></a> components.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{Component, Unique, World};
+
+async fn main() {
+    // -- SNIP --
+    let mut world = World::new();
+    let player = Player {
+        square: Square { x, y, size: 15.0 },
+    };
+
+    world.add_unique(player);
+    // -- SNIP --
+
+    loop {
+        clear_background(WHITE);
+
+        move_player(&amp;world);
+        render(&amp;world);
+
+        next_frame().await
+    }
+}
+
+#[derive(Unique)]
+struct Player {
+    square: Square,
+}
+
+fn render(world: &amp;World) {
+    for friend in &amp;mut world.iter::&lt;&amp;Friend&gt;() {
+        friend.0.render(GREEN);
+    }
+
+    let player = world.get_unique::&lt;&amp;Player&gt;().unwrap();
+
+    player.square.render(BLUE);
+}
+
+fn move_player(world: &amp;World) {
+    let width = screen_width();
+    let height = screen_height();
+    let (x, y) = mouse_position();
+    let mut player = world.get_unique::&lt;&amp;mut Player&gt;().unwrap();
+
+    player.square.x = x.clamp(0.0, width - player.square.size);
+    player.square.y = y.clamp(0.0, height - player.square.size);
+}</code></pre>
+<p>We can simply further by using views. Views are temporary access of components.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{Component, IntoIter, Unique, UniqueView, UniqueViewMut, View, World};
+
+async fn main() {
+    // -- SNIP --
+
+    loop {
+        clear_background(WHITE);
+
+        world.run(move_player);
+        world.run(render);
+
+        next_frame().await
+    }
+}
+
+fn render(player: UniqueView&lt;Player&gt;, v_friend: View&lt;Friend&gt;) {
+    for friend in v_friend.iter() {
+        friend.0.render(GREEN);
+    }
+
+    player.square.render(BLUE);
+}
+
+fn move_player(mut player: UniqueViewMut&lt;Player&gt;) {
+    let width = screen_width();
+    let height = screen_height();
+    let (x, y) = mouse_position();
+
+    player.square.x = x.clamp(0.0, width - player.square.size);
+    player.square.y = y.clamp(0.0, height - player.square.size);
+}</code></pre>
+<p>You've just written your first systems.<br />
+With shipyard, all functions that have only views as arguments are systems.<br />
+The <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> understands these functions and provides the desired components automatically.</p>
+<p>The <code>v_</code>/<code>vm_</code> prefix for views is a convention that some <code>shipyard</code> users use. I'll follow it throughout the guide.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="spark"><a class="header" href="#spark">Spark</a></h1>
+<p>Let's infuse a bit of life into our friends.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{Component, IntoIter, Unique, UniqueView, UniqueViewMut, View, ViewMut, World};
+
+const GROWTH_RATE: f32 = 0.15;
+const MAX_SIZE: f32 = 25.0;
+
+async fn main() {
+    // -- SNIP --
+
+        world.run(move_player);
+        world.run(grow);
+        world.run(render);
+
+    // -- SNIP --
+}
+
+
+fn grow(mut vm_friend: ViewMut&lt;Friend&gt;) {
+    for friend in (&amp;mut vm_friend).iter() {
+        let delta_size = (friend.0.size + GROWTH_RATE).min(MAX_SIZE) - friend.0.size;
+        friend.0.size = friend.0.size + delta_size;
+        friend.0.x = (friend.0.x - delta_size / 2.0).max(0.0);
+        friend.0.y = (friend.0.y - delta_size / 2.0).max(0.0);
+    }
+}</code></pre>
+<p><code>grow</code>'s code could be simpler but this version makes <code>Friends</code> grow from their center, which feels a lot more natural.</p>
+<p>It appears our <code>Friends</code> want to come close to the <code>Player</code>, likely to give them a hug.</p>
+<pre><code class="language-rust noplaypen">const SPEED: f32 = 1.5;
+
+async fn main() {
+    // -- SNIP --
+
+        world.run(move_player);
+        world.run(move_friends);
+        world.run(grow);
+        world.run(render);
+
+    // -- SNIP --
+}
+
+
+impl Square {
+    // -- SNIP --
+
+    fn center(&amp;self) -&gt; Vec2 {
+        vec2(self.x + self.size / 2.0, self.y + self.size / 2.0)
+    }
+}
+
+fn move_friends(player: UniqueView&lt;Player&gt;, mut vm_friend: ViewMut&lt;Friend&gt;) {
+    let mut dirs = vec![Vec2::ZERO; vm_friend.len()];
+
+    for (friend, dir) in vm_friend.iter().zip(&amp;mut dirs) {
+        if friend.0.size &lt;= player.square.size {
+            continue;
+        }
+
+        let player_dir = player.square.center() - friend.0.center();
+
+        *dir = player_dir.normalize();
+
+        let mut neighbor_dir = Vec2::ZERO;
+
+        for neighbor in vm_friend.iter() {
+            if friend.0.center().distance_squared(neighbor.0.center())
+                &lt; friend.0.size * friend.0.size / 1.5
+            {
+                neighbor_dir +=
+                    Vec2::new(friend.0.x - neighbor.0.x, friend.0.y - neighbor.0.y);
+            }
+        }
+
+        *dir *= SPEED;
+
+        *dir += neighbor_dir * 0.05;
+    }
+
+    let width = screen_width();
+    let height = screen_height();
+    for (friend, dir) in (&amp;mut vm_friend).iter().zip(dirs) {
+        if dir == Vec2::ZERO {
+            continue;
+        }
+
+        friend.0.x = (friend.0.x + dir.x).clamp(0.0, width - friend.0.size);
+        friend.0.y = (friend.0.y + dir.y).clamp(0.0, height - friend.0.size);
+    }
+}</code></pre>
+<p>As you can see, you can iterate views multiple times in the same system.<br />
+We also prevent the <code>Friends</code> from overlapping by stirring them away from their neighbors.</p>
+<p>But something doesn't feel right...</p>
+<pre><code class="language-rust noplaypen">async fn main() {
+    // -- SNIP --
+
+        world.run(move_player);
+        world.run(move_friends);
+        world.run(grow);
+        world.run(collision);
+        world.run(render);
+
+    // -- SNIP --
+}
+
+impl Square {
+    // -- SNIP --
+
+    fn collide(&amp;self, other: &amp;Square) -&gt; bool {
+        self.x + self.size &gt;= other.x
+            &amp;&amp; self.x &lt;= other.x + other.size
+            &amp;&amp; self.y + self.size &gt;= other.y
+            &amp;&amp; self.y &lt;= other.y + other.size
+    }
+}
+
+fn collision(mut player: UniqueViewMut&lt;Player&gt;, v_friend: View&lt;Friend&gt;) {
+    for friend in v_friend.iter() {
+        if friend.0.size == MAX_SIZE &amp;&amp; friend.0.collide(&amp;player.square) {
+            player.square.size -= 5.0 / 2.;
+
+            if player.square.size &lt; 5.0 {
+                panic!(&quot;Murder&quot;);
+            }
+        }
+    }
+}</code></pre>
+<p>Oh my god! The &quot;<code>Friends</code>&quot; killed the <code>Player</code>!?</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="breather"><a class="header" href="#breather">Breather</a></h1>
+<p>Let's refactor a little to give us time to process this betrayal and think of a way to get our revenge.<br />
+You can move things around and maybe create modules.</p>
+<p>We're using an initial size in a few spots, we can abstract it.</p>
+<pre><code class="language-rust noplaypen">const INIT_SIZE: f32 = 5.0;
+
+async fn main() {
+    // -- SNIP --
+
+    let player = Player {
+        square: Square {
+            x,
+            y,
+            size: INIT_SIZE * 3.0,
+        },
+    };
+
+    // -- SNIP --
+}
+
+impl Friend {
+    fn new() -&gt; Friend {
+        // -- SNIP --
+
+        Friend(Square {
+            x: gen_range(0.0, width - INIT_SIZE),
+            y: gen_range(0.0, height - INIT_SIZE),
+            size: INIT_SIZE,
+        })
+    }
+}
+
+fn collision(mut player: UniqueViewMut&lt;Player&gt;, v_friend: View&lt;Friend&gt;) {
+    for friend in v_friend.iter() {
+        if friend.0.size == MAX_SIZE &amp;&amp; friend.0.collide(&amp;player.square) {
+            player.square.size -= INIT_SIZE / 2.;
+
+            if player.square.size &lt; INIT_SIZE {
+                panic!(&quot;Murder&quot;);
+            }
+        }
+    }
+}</code></pre>
+<p>We can also handle the game over a little cleaner.</p>
+<pre><code class="language-rust noplaypen">enum GameOver {
+    Defeat,
+}
+
+async fn main() {
+    // -- SNIP --
+
+    loop {
+        // -- SNIP --
+
+        if world.run(collision).is_err() {
+            panic!(&quot;Murder&quot;);
+        }
+
+        // -- SNIP --
+    }
+}
+
+fn collision(mut player: UniqueViewMut&lt;Player&gt;, v_friend: View&lt;Friend&gt;) -&gt; Result&lt;(), GameOver&gt; {
+    for friend in v_friend.iter() {
+        if friend.0.size == MAX_SIZE &amp;&amp; friend.0.collide(&amp;player.square) {
+            player.square.size -= INIT_SIZE / 2.;
+
+            if player.square.size &lt; INIT_SIZE {
+                return Err(GameOver::Defeat);
+            }
+        }
+    }
+
+    Ok(())
+}</code></pre>
+<p>Systems can return any type, <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run"><code>World::run</code></a> then returns when the function returns.<br />
+Moving the panic to <code>main</code> isn't a big change but it allows a better control of what happens which will be useful later on.</p>
+<p>To conclude this chapter we can better show the duplicity of the &quot;<code>Friends</code>&quot;.</p>
+<pre><code class="language-rust noplaypen">fn render(player: UniqueView&lt;Player&gt;, v_friend: View&lt;Friend&gt;) {
+    for friend in v_friend.iter() {
+        if friend.0.size == MAX_SIZE {
+            friend.0.render(RED);
+        } else if friend.0.size &gt; player.square.size {
+            friend.0.render(GRAY);
+        } else {
+            friend.0.render(GREEN);
+        }
+    }
+
+    player.square.render(BLUE);
+}</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="reign"><a class="header" href="#reign">Reign</a></h1>
+<p>We've had plenty of time to think of a way for our <code>Player</code> to get back at those pesky <code>Friends</code>.<br />
+Sometimes, the simplest solution is the best.<br />
+If the <code>Friends</code> can overpower the <code>Player</code> when they are fully grown, we shouldn't let them reach that size.<br />
+I'm sure the <code>Player</code> can overcome <code>Friend</code> that are smaller than them.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{
+    Component, EntitiesView, IntoIter, IntoWithId, Unique, UniqueView, UniqueViewMut, View,
+    ViewMut, World,
+};
+
+#[derive(Component)]
+struct ToDelete;
+
+fn collision(
+    entities: EntitiesView,
+    mut player: UniqueViewMut&lt;Player&gt;,
+    v_friend: View&lt;Friend&gt;,
+    mut vm_to_delete: ViewMut&lt;ToDelete&gt;,
+) -&gt; Result&lt;(), GameOver&gt; {
+    for (eid, friend) in v_friend.iter().with_id() {
+        if friend.0.size == MAX_SIZE &amp;&amp; friend.0.collide(&amp;player.square) {
+            // -- SNIP --
+        } else if player.square.size &gt;= friend.0.size &amp;&amp; player.square.collide(&amp;friend.0) {
+            player.square.size = (player.square.size + INIT_SIZE / 2.).min(MAX_SIZE - 0.01);
+            entities.add_component(eid, &amp;mut vm_to_delete, ToDelete);
+        }
+    }
+
+    Ok(())
+}</code></pre>
+<p>It appears our <code>Player</code> can even overcome <code>Friends</code> of equal size.<br />
+By... eating them!?</p>
+<p>Remember when we added <code>Friends</code> to the <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>, each one was assigned an <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html"><code>EntityId</code></a>.<br />
+We can iterate over both components and the <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html"><code>EntityId</code></a> of the entity that owns them by using <code>with_id</code>.</p>
+<p>Then we can use this <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html"><code>EntityId</code></a> to add another component to the vanquished <code>Friends</code>.<br />
+As you may have noticed we are not modifying <code>entities</code>. We only need it to check that the <code>eid</code> is alive.</p>
+<p><code>ToDelete</code> is not a special component, we still have to make it do its job.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{
+    AllStoragesViewMut, Component, EntitiesView, IntoIter, IntoWithId, SparseSet, Unique,
+    UniqueView, UniqueViewMut, View, ViewMut, World,
+};
+
+async fn main() {
+    // -- SNIP --
+
+    loop {
+        clear_background(WHITE);
+
+        world.run(move_player);
+        world.run(move_friends);
+        world.run(grow);
+        if world.run(collision).is_err() {
+            panic!(&quot;Murder&quot;);
+        }
+        world.run(clean_up);
+        world.run(render);
+
+        next_frame().await
+    }
+}
+
+fn clean_up(mut all_storages: AllStoragesViewMut) {
+    all_storages.delete_any::&lt;SparseSet&lt;ToDelete&gt;&gt;();
+}</code></pre>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html"><code>AllStorages</code></a> is the part of <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> that stores all components and entities.<br />
+We are using it to <a href="https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html#method.delete_any"><code>delete_any</code></a> entity that has a <code>ToDelete</code> component in a <a href="https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html"><code>SparseSet</code></a> storage.<br />
+<a href="https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html"><code>SparseSet</code></a> is the storage for all <a href="https://docs.rs/shipyard/latest/shipyard/trait.Component.html"><code>Component</code></a>s. <a href="https://docs.rs/shipyard/latest/shipyard/trait.Unique.html"><code>Unique</code></a>s have a different storage and you can add custom storages to the <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> but that's an advanced feature.</p>
+<h2 id="its-over"><a class="header" href="#its-over">It's over</a></h2>
+<p>Defeating smaller <code>Friends</code> is nice but most of the time they've grown by the time the <code>Player</code> reaches them.<br />
+The <code>Player</code> needs more power.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{
+    AllStoragesViewMut, Component, EntitiesView, EntitiesViewMut, IntoIter, IntoWithId, SparseSet,
+    Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
+};
+
+const POWER_PELLET_SPAWN_RATE: u32 = 150;
+
+async fn main() {
+    // -- SNIP --
+
+    let player = Player {
+        square: Square {
+            x,
+            y,
+            size: INIT_SIZE * 3.0,
+        },
+        pellet_counter: 0,
+    };
+
+    // -- SNIP --
+
+    loop {
+        // -- SNIP --
+
+        world.run(grow);
+        world.run(counters);
+        world.run(spawn);
+        if world.run(collision).is_err() {
+            panic!(&quot;Murder&quot;);
+        }
+
+        // -- SNIP --
+    }
+}
+
+struct Player {
+    square: Square,
+    pellet_counter: u32,
+}
+
+impl Player {
+    fn power_up(&amp;mut self) {
+        self.pellet_counter = 120;
+    }
+
+    fn is_powered_up(&amp;self) -&gt; bool {
+        self.pellet_counter &gt; 0
+    }
+}
+
+#[derive(Component)]
+struct PowerPellet(Square);
+
+fn render(player: UniqueView&lt;Player&gt;, v_friend: View&lt;Friend&gt;, v_power_pellets: View&lt;PowerPellet&gt;) {
+    for pellet in v_power_pellets.iter() {
+        pellet.0.render(YELLOW);
+    }
+
+    // -- SNIP --
+
+    if player.is_powered_up() {
+        player.square.render(YELLOW);
+    } else {
+        player.square.render(BLUE);
+    }
+}
+
+
+fn collision(
+    entities: EntitiesView,
+    mut player: UniqueViewMut&lt;Player&gt;,
+    v_friend: View&lt;Friend&gt;,
+    v_power_pellets: View&lt;PowerPellet&gt;,
+    mut vm_to_delete: ViewMut&lt;ToDelete&gt;,
+) -&gt; Result&lt;(), GameOver&gt; {
+    for (eid, pellet) in v_power_pellets.iter().with_id() {
+        if player.square.collide(&amp;pellet.0) {
+            player.power_up();
+            entities.add_component(eid, &amp;mut vm_to_delete, ToDelete);
+        }
+    }
+
+    for (eid, friend) in v_friend.iter().with_id() {
+        if friend.0.size == MAX_SIZE &amp;&amp; friend.0.collide(&amp;player.square) {
+            if player.is_powered_up() {
+                player.square.size = (player.square.size + INIT_SIZE / 2.).min(MAX_SIZE - 0.01);
+                entities.add_component(eid, &amp;mut vm_to_delete, ToDelete);
+
+                continue;
+            }
+
+            player.square.size -= INIT_SIZE / 2.;
+
+            // -- SNIP --
+        } else if player.square.size &gt;= friend.0.size &amp;&amp; player.square.collide(&amp;friend.0) {
+            // -- SNIP --
+        }
+    }
+
+    Ok(())
+}
+
+
+fn counters(mut player: UniqueViewMut&lt;Player&gt;) {
+    player.pellet_counter = player.pellet_counter.saturating_sub(1);
+}
+
+fn spawn(mut entities: EntitiesViewMut, mut vm_power_pellets: ViewMut&lt;PowerPellet&gt;) {
+    let width = screen_width();
+    let height = screen_height();
+
+    let pellet_spawn_rate = if vm_power_pellets.is_empty() {
+        POWER_PELLET_SPAWN_RATE / 2
+    } else {
+        POWER_PELLET_SPAWN_RATE
+    };
+
+    if rand::gen_range(0, pellet_spawn_rate) == 0 {
+        let x = rand::gen_range(0.0, width - INIT_SIZE);
+        let y = rand::gen_range(0.0, height - INIT_SIZE);
+
+        entities.add_entity(
+            &amp;mut vm_power_pellets,
+            PowerPellet(Square {
+                x,
+                y,
+                size: INIT_SIZE * 2.0,
+            }),
+        );
+    }
+}</code></pre>
+<p>The syntax to add entities is very similar to adding components.<br />
+But this time we need <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html"><code>EntitiesViewMut</code></a>.</p>
+<p>With this change the <code>Player</code> is can now rest, stronger than ever.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="true-victory"><a class="header" href="#true-victory">True victory</a></h1>
+<p>It seems the <code>Friends</code> are able to copy the power pellets' spawning mechanic!
+And they've learned to avoid the <code>Player</code> whenever they are powered up.</p>
+<pre><code class="language-rust noplaypen">const FRIEND_SPAWN_RATE: u32 = 25;
+
+
+fn move_friends(player: UniqueView&lt;Player&gt;, mut vm_friend: ViewMut&lt;Friend&gt;) {
+        // -- SNIP --
+
+        *dir = player_dir.normalize();
+
+        if player.is_powered_up() {
+            *dir = -*dir;
+        }
+
+        // -- SNIP --
+}
+
+
+fn spawn(
+    mut entities: EntitiesViewMut,
+    mut vm_friend: ViewMut&lt;Friend&gt;,
+    mut vm_power_pellets: ViewMut&lt;PowerPellet&gt;,
+) {
+    // -- SNIP --
+
+    if rand::gen_range(0, FRIEND_SPAWN_RATE) == 0 {
+        let x = rand::gen_range(0.0, width - INIT_SIZE / 2.0);
+        let y = rand::gen_range(0.0, height - INIT_SIZE / 2.0);
+
+        entities.add_entity(
+            &amp;mut vm_friend,
+            Friend(Square {
+                x,
+                y,
+                size: INIT_SIZE,
+            }),
+        );
+    }
+}</code></pre>
+<p>Let's give the <code>Player</code> a little bit of help and a way to win again.
+In many games, whenever the player is hit, they'll turn invincible for a few frames.</p>
+<pre><code class="language-rust noplaypen">async fn main() {
+    // -- SNIP --
+
+    let player = Player {
+        // -- SNIP --
+        i_counter: 0,
+    };
+
+    // -- SNIP --
+}
+
+struct Player {
+    // -- SNIP --
+    i_counter: u32,
+}
+
+impl Player {
+    // -- SNIP --
+
+    fn turn_invincible(&amp;mut self) {
+        self.i_counter = 5;
+    }
+
+    fn is_invincible(&amp;self) -&gt; bool {
+        self.i_counter &gt; 0
+    }
+}
+
+fn collision(
+    entities: EntitiesView,
+    mut player: UniqueViewMut&lt;Player&gt;,
+    v_friend: View&lt;Friend&gt;,
+    v_power_pellets: View&lt;PowerPellet&gt;,
+    mut vm_to_delete: ViewMut&lt;ToDelete&gt;,
+) -&gt; Result&lt;(), GameOver&gt; {
+        // -- SNIP --
+
+            if player.powered_up() {
+                // -- SNIP --
+            } else if player.is_invincible() {
+                continue;
+            }
+
+            player.square.size -= INIT_SIZE / 2.;
+            player.turn_invincible();
+
+            // -- SNIP --
+}
+
+fn counters(mut player: UniqueViewMut&lt;Player&gt;) {
+    player.pellet_counter = player.pellet_counter.saturating_sub(1);
+    player.i_counter = player.i_counter.saturating_sub(1);
+}</code></pre>
+<p>We'll conclude this guide by allowing the <code>Player</code> to win.</p>
+<pre><code class="language-rust noplaypen">use shipyard::{
+    AllStoragesViewMut, Component, EntitiesView, EntitiesViewMut, IntoIter, IntoWithId,
+    IntoWorkload, IntoWorkloadTrySystem, SparseSet, Unique, UniqueView, UniqueViewMut, View,
+    ViewMut, Workload, World,
+};
+
+async fn main() {
+    // -- SNIP --
+
+    for _ in 0..5 {
+        let _entity_id = world.add_entity(Friend::new());
+    }
+
+    world.add_workload(main_loop);
+
+    loop {
+        clear_background(WHITE);
+
+        world.run_workload(main_loop);
+
+        next_frame().await
+    }
+}
+
+#[derive(Debug)]
+enum GameOver {
+    Defeat,
+    Victory,
+}
+
+impl std::fmt::Display for GameOver {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        std::fmt::Debug::fmt(self, f)
+    }
+}
+impl std::error::Error for GameOver {}
+
+fn main_loop() -&gt; Workload {
+    (
+        move_player,
+        move_friends,
+        grow,
+        counters,
+        spawn,
+        collision,
+        clean_up,
+        check_game_over.into_workload_try_system().unwrap(),
+        render,
+    )
+        .into_workload()
+}
+
+
+fn collision(
+    // -- SNIP --
+) {
+    // -- SNIP --
+
+            player.square.size -= INIT_SIZE / 2.;
+            player.turn_invincible();
+
+            // No more return
+        } else if player.square.size &gt;= friend.0.size &amp;&amp; player.square.collide(&amp;friend.0) {
+            // -- SNIP --
+        }
+    }
+
+    // No more Ok(())
+}
+
+fn check_game_over(player: UniqueView&lt;Player&gt;, v_friends: View&lt;Friend&gt;) -&gt; Result&lt;(), GameOver&gt; {
+    if player.square.size &lt; INIT_SIZE {
+        Err(GameOver::Defeat)
+    } else if v_friends.is_empty() {
+        Err(GameOver::Victory)
+    } else {
+        Ok(())
+    }
+}</code></pre>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.Workload.html"><code>Workload</code></a>s are a collection of systems.<br />
+We only have a single <a href="https://docs.rs/shipyard/latest/shipyard/struct.Workload.html"><code>Workload</code></a> in our game since it's quite small.<br />
+You would usually have smaller <a href="https://docs.rs/shipyard/latest/shipyard/struct.Workload.html"><code>Workload</code></a>s that make up larger ones.<br />
+Apart from organization, <a href="https://docs.rs/shipyard/latest/shipyard/struct.Workload.html"><code>Workload</code></a>s are automatically run across multiple threads, which can usually boost performance.</p>
+<p>The last touch is to handle <code>check_game_over</code>'s return value.<br />
+We use <a href="https://docs.rs/shipyard/latest/shipyard/trait.IntoWorkloadTrySystem.html#tymethod.into_workload_try_system"><code>into_workload_try_system</code></a> to explicitly inform the <a href="https://docs.rs/shipyard/latest/shipyard/struct.Workload.html"><code>Workload</code></a> that this system might return something, but we don't handle it anywhere.</p>
+<pre><code class="language-rust noplaypen">async fn main() {
+    // -- SNIP --
+
+    loop {
+        clear_background(WHITE);
+
+        if let Err(Some(game_over)) = world
+            .run_workload(main_loop)
+            .map_err(shipyard::error::RunWorkload::custom_error)
+        {
+            match game_over.downcast_ref::&lt;GameOver&gt;().unwrap() {
+                GameOver::Defeat =&gt; panic!(&quot;Murder&quot;),
+                GameOver::Victory =&gt; panic!(&quot;Victory!&quot;),
+            }
+        }
+
+        next_frame().await
+    }
+}</code></pre>
+<p>After some type juggling, we can get our result back.</p>
+<h2 id="conclusion"><a class="header" href="#conclusion">Conclusion</a></h2>
+<p>This concludes the example guide.<br />
+You've encountered the main ways you can interact with entities, components and systems.<br />
+The following reference guide delves deeper into details and is a good place to come back to once you start your own project.</p>
+<hr />
+<p>You may be wondering where are the floors, the shop,...<br />
+Your mission, should you choose to accept it is to build the rest of the game.</p>
+<p>Each new floor reached, the <code>Friends</code> gain one of these bonuses:</p>
+<ul>
+<li>start size +0.5</li>
+<li>growth rate +0.05</li>
+<li>speed +0.1</li>
+<li>number +3</li>
+<li>spawn rate +4</li>
+</ul>
+<p>Each floor, new or not, the <code>Player</code> chooses between:</p>
+<ul>
+<li>start size +3.0 (capped at 3)</li>
+<li>power up duration +10 (capped at 10)</li>
+<li>power up spawn rate +10 (capped at 10)</li>
+<li>size on eat +0.5 (capped at 10)</li>
+<li>defense +0.4 (capped at 5)</li>
+</ul>
+<p>The game alternates between floor and shop.<br />
+Each floor a total of <code>(floor_number + 1) * 2</code> <code>Friends</code> spawn.<br />
+If the <code>Player</code> is able to eat all <code>Friends</code>, they move to the next floor.<br />
+If not, they stay on the same floor but with a visit to the shop.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="fundamentals"><a class="header" href="#fundamentals">Fundamentals</a></h1>
+<p>This section is about learning all basic ECS operations.</p>
+<p>It also acts as a reference that you can come back to.<br />
+So even if you've just finished building the square eater game, this section can be useful to get a more condensed version.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="world"><a class="header" href="#world">World</a></h1>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> is Shipyard's core data structure: It holds all data and knows how to process systems. All operations originate from one (or more) <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>.</p>
+<h2 id="creation"><a class="header" href="#creation">Creation</a></h2>
+<p>You can use <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.new"><code>new</code></a> or <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.default"><code>default</code></a>:</p>
+<pre><code class="language-rust  noplaypen">let world = World::default();
+// or
+let world = World::new();</code></pre>
+<h2 id="views"><a class="header" href="#views">Views</a></h2>
+<p>While some actions are available directly on <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>, you'll often interact with it through views. They allow access to one or multiple storage.<br />
+Storage access follows the same rules as Rust's borrowing: as many shared accesses to a storage as you like or a single exclusive access.</p>
+<p>You can request a view using <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run"><code>World::run</code></a>, <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.borrow"><code>World::borrow</code></a> or with workloads (more on this in a later chapter).<br />
+These three methods have the exact same storage access abilities.<br />
+<a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.borrow"><code>borrow</code></a> has the extra ability to allow fallible storage access while workloads are about system composition.<br />
+Most examples in this guide require neither so we'll use almost exclusively <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run"><code>run</code></a>.</p>
+<p>For example if you want a shared access to the entities storage:</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(|entities: EntitiesView| {});</code></pre>
+<h2 id="components"><a class="header" href="#components">Components</a></h2>
+<p>Components are identified with the <a href="https://docs.rs/shipyard/latest/shipyard/trait.Component.html"><code>Component</code></a> trait.<br />
+While it can be cumbersome for small projects, this trait becomes self-documenting and helps identify what is present in the <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>.</p>
+<p>Throughout this guide we'll use a couple of components, the following snippet is assumed to be present in all other snippets:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Component, Debug)]
+struct Pos(f32, f32);
+
+#[derive(Component, Debug)]
+struct Vel(f32, f32);</code></pre>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/trait.Component.html"><code>Component</code></a> can also be implemented manually.</p>
+<pre><code class="language-rust  noplaypen">#[derive(Debug)]
+struct Pos(f32, f32);
+impl Component for Pos {
+    // We'll come back to this in a later chapter
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug)]
+struct Vel(f32, f32);
+impl Component for Vel {
+    type Tracking = track::Untracked;
+}</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="add-entity"><a class="header" href="#add-entity">Add Entity</a></h1>
+<p>When an entity is created you will receive a unique handle to it: an <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html"><code>EntityId</code></a>.</p>
+<h2 id="world-1"><a class="header" href="#world-1">World</a></h2>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let empty_entity = world.add_entity(());
+let single_component = world.add_entity(Pos::new());
+let multiple_components = world.add_entity((Pos::new(), Vel::new()));</code></pre>
+<h2 id="views-1"><a class="header" href="#views-1">Views</a></h2>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(
+    |mut entities: EntitiesViewMut, mut vm_pos: ViewMut&lt;Pos&gt;, mut vm_vel: ViewMut&lt;Vel&gt;| {
+        let empty_entity = entities.add_entity((), ());
+        let single_component = entities.add_entity(&amp;mut vm_pos, Pos::new());
+        let multiple_components =
+            entities.add_entity((&amp;mut vm_pos, &amp;mut vm_vel), (Pos::new(), Vel::new()));
+    },
+);</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="delete-entity"><a class="header" href="#delete-entity">Delete Entity</a></h1>
+<p>Deleting an entity deletes it from the entities storage, while also deleting all its components.</p>
+<h2 id="world-2"><a class="header" href="#world-2">World</a></h2>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let id = world.add_entity(Pos::new());
+
+world.delete_entity(id);</code></pre>
+<h2 id="view"><a class="header" href="#view">View</a></h2>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(|mut all_storages: AllStoragesViewMut| {
+    let id = all_storages.add_entity(Pos::new());
+
+    all_storages.delete_entity(id);
+});</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="add-components"><a class="header" href="#add-components">Add Components</a></h1>
+<p>An entity can have any number of components but only one in each storage.<br />
+Adding another component of the same type will replace the existing one.</p>
+<h2 id="world-3"><a class="header" href="#world-3">World</a></h2>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let id = world.add_entity(());
+
+world.add_component(id, Vel::new());
+world.add_component(id, (Pos::new(), Vel::new()));</code></pre>
+<h2 id="view-1"><a class="header" href="#view-1">View</a></h2>
+<p>When adding components, the entities storage is only used to check if the <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html"><code>EntityId</code></a> is alive.<br />
+We don't need exclusive access to the entities storage.</p>
+<p>If you don't need to check if the entity is alive, you can use the <a href="https://docs.rs/shipyard/latest/shipyard/trait.AddComponent.html"><code>AddComponent</code></a> trait and do without the entities storage entirely.</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(
+    |mut entities: EntitiesViewMut, mut vm_pos: ViewMut&lt;Pos&gt;, mut vm_vel: ViewMut&lt;Vel&gt;| {
+        let id = entities.add_entity((), ());
+
+        entities.add_component(id, &amp;mut vm_pos, Pos::new());
+        entities.add_component(id, (&amp;mut vm_pos, &amp;mut vm_vel), (Pos::new(), Vel::new()));
+        vm_vel.add_component_unchecked(id, Vel::new());
+    },
+);</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="remove-components"><a class="header" href="#remove-components">Remove Components</a></h1>
+<p>Removing a component will take it out of the storage and return it.</p>
+<h2 id="world-4"><a class="header" href="#world-4">World</a></h2>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let id = world.add_entity((Pos::new(), Vel::new()));
+
+world.remove::&lt;Vel&gt;(id);
+world.remove::&lt;(Pos, Vel)&gt;(id);</code></pre>
+<h2 id="view-2"><a class="header" href="#view-2">View</a></h2>
+<p>We have to import the <a href="https://docs.rs/shipyard/latest/shipyard/trait.Remove.html"><code>Remove</code></a> trait for multiple components.</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(
+    |mut entities: EntitiesViewMut, mut vm_pos: ViewMut&lt;Pos&gt;, mut vm_vel: ViewMut&lt;Vel&gt;| {
+        let id = entities.add_entity((&amp;mut vm_pos, &amp;mut vm_vel), (Pos::new(), Vel::new()));
+
+        vm_pos.remove(id);
+        (&amp;mut vm_pos, &amp;mut vm_vel).remove(id);
+    },
+);</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="delete-components"><a class="header" href="#delete-components">Delete Components</a></h1>
+<p>Deleting a component will erase it from the storage but will not return it.</p>
+<h2 id="world-5"><a class="header" href="#world-5">World</a></h2>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let id = world.add_entity((Pos::new(), Vel::new()));
+
+world.delete_component::&lt;Vel&gt;(id);
+world.delete_component::&lt;(Pos, Vel)&gt;(id);</code></pre>
+<h4 id="all-components"><a class="header" href="#all-components">All Components</a></h4>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let id = world.add_entity((Pos::new(), Vel::new()));
+
+world.strip(id);</code></pre>
+<h2 id="view-3"><a class="header" href="#view-3">View</a></h2>
+<p>We have to import the <a href="https://docs.rs/shipyard/latest/shipyard/trait.Delete.html"><code>Delete</code></a> trait for multiple components.</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(
+    |mut entities: EntitiesViewMut, mut vm_pos: ViewMut&lt;Pos&gt;, mut vm_vel: ViewMut&lt;Vel&gt;| {
+        let id = entities.add_entity((&amp;mut vm_pos, &amp;mut vm_vel), (Pos::new(), Vel::new()));
+
+        vm_pos.delete(id);
+        (&amp;mut vm_pos, &amp;mut vm_vel).delete(id);
+    },
+);</code></pre>
+<h4 id="all-components-1"><a class="header" href="#all-components-1">All Components</a></h4>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(|mut all_storages: AllStoragesViewMut| {
+    let id = all_storages.add_entity((Pos::new(), Vel::new()));
+
+    all_storages.strip(id);
+});</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="get-and-modify-components"><a class="header" href="#get-and-modify-components">Get and Modify Components</a></h1>
+<p>To access or update components you can use <a href="https://docs.rs/shipyard/latest/shipyard/trait.Get.html#tymethod.get"><code>Get::get</code></a>. It'll work with both shared and exclusive views.</p>
+<pre><code class="language-rust  noplaypen">let mut world = World::new();
+
+let id = world.add_entity((Pos::new(), Vel::new()));
+
+world.run(|mut vm_pos: ViewMut&lt;Pos&gt;, mut vm_vel: ViewMut&lt;Vel&gt;| {
+    (&amp;mut vm_vel).get(id).unwrap().0 += 1.0;
+
+    let (mut i, j) = (&amp;mut vm_pos, &amp;vm_vel).get(id).unwrap();
+    i.0 += j.0;
+
+    vm_pos[id].0 += 1.0;
+});</code></pre>
+<p>When using a single view, if you are certain an entity has the desired component, you can access it via index.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="iterators"><a class="header" href="#iterators">Iterators</a></h1>
+<p>Iteration is one of the most important features of an ECS.</p>
+<h2 id="world-6"><a class="header" href="#world-6">World</a></h2>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+for (i, j) in &amp;mut world.iter::&lt;(&amp;mut Pos, &amp;Vel)&gt;() {
+    i.0 += j.0;
+}</code></pre>
+<p>THe &quot;extra&quot; <code>&amp;mut</code> is unfortunate but necessary.</p>
+<h2 id="views-2"><a class="header" href="#views-2">Views</a></h2>
+<p>Iteration on views is achieved using <a href="https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter"><code>IntoIter::iter</code></a>.</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(|mut vm_pos: ViewMut&lt;Pos&gt;, v_vel: View&lt;Vel&gt;| {
+    for i in vm_pos.iter() {
+        dbg!(i);
+    }
+    
+    for (i, j) in (&amp;mut vm_pos, &amp;v_vel).iter() {
+        i.0 += j.0;
+    }
+});</code></pre>
+<p>You can use views in any order. However, using the same combination of views in different positions may yield components in a different order.<br />
+You shouldn't expect specific ordering from Shipyard's iterators in general.</p>
+<h4 id="with-id"><a class="header" href="#with-id">With Id</a></h4>
+<p>You can ask an iterator to tell you which entity owns each component by using <a href="https://docs.rs/shipyard/latest/shipyard/trait.IntoWithId.html#method.with_id"><code>WithId::with_id</code></a>:</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(|v_pos: View&lt;Pos&gt;| {
+    for (id, i) in v_pos.iter().with_id() {
+        println!(&quot;{:?} belongs to entity {:?}&quot;, i, id);
+    }
+});</code></pre>
+<h4 id="not"><a class="header" href="#not">Not</a></h4>
+<p>It's possible to filter entities that don't have a certain component using <a href="https://docs.rs/shipyard/latest/shipyard/struct.Not.html"><code>Not</code></a> by adding <code>!</code> in front of the view reference.</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(|v_pos: View&lt;Pos&gt;, v_vel: View&lt;Vel&gt;| {
+    for (i, _) in (&amp;v_pos, !&amp;v_vel).iter() {
+        dbg!(i);
+    }
+});</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="unique"><a class="header" href="#unique">Unique</a></h1>
+<p>Unique components (a.k.a. resources) are useful when you know there will only ever be a single instance of some component.<br />
+In that case there is no need to attach the component to an entity. It also works well as global data without most of its drawback.</p>
+<p>As opposed to the default storage uniques are declared using the <a href="https://docs.rs/shipyard/latest/shipyard/trait.Unique.html"><code>Unique</code></a> trait.</p>
+<pre><code class="language-rust  noplaypen">// Using a derive macro
+#[derive(Unique)]
+struct Camera;
+
+// By manually implementing the trait
+struct Camera;
+impl Unique for Camera {}</code></pre>
+<p>They also need to be initialized with <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.add_unique"><code>add_unique</code></a>. We can then access them with <a href="https://docs.rs/shipyard/latest/shipyard/struct.UniqueView.html"><code>UniqueView</code></a> and <a href="https://docs.rs/shipyard/latest/shipyard/struct.UniqueViewMut.html"><code>UniqueViewMut</code></a>.</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.add_unique(Camera::new());
+
+world
+    .run(|camera: UniqueView&lt;Camera&gt;| {
+        // -- snip --
+    });</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="systems"><a class="header" href="#systems">Systems</a></h1>
+<p>Systems are a great way to organize code.<br />
+A function with views as arguments is all you need.</p>
+<p>Here's an example:</p>
+<pre><code class="language-rust  noplaypen">fn create_ints(mut entities: EntitiesViewMut, mut vm_vel: ViewMut&lt;Vel&gt;) {
+    // -- snip --
+}</code></pre>
+<p>We have a system, let's run it!</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+world.run(create_ints);</code></pre>
+<p>It also works with closures, all previous chapters were using systems.</p>
+<h3 id="workloads"><a class="header" href="#workloads">Workloads</a></h3>
+<p>A workload is a group of systems.</p>
+<pre><code class="language-rust  noplaypen">fn create_ints(mut entities: EntitiesViewMut, mut vm_vel: ViewMut&lt;Vel&gt;) {
+    // -- snip --
+}
+
+fn delete_ints(mut vm_vel: ViewMut&lt;Vel&gt;) {
+    // -- snip --
+}
+
+fn int_cycle() -&gt; Workload {
+    (create_ints, delete_ints).into_workload()
+}
+
+let world = World::new();
+
+world.add_workload(int_cycle);
+
+world.run_workload(int_cycle).unwrap();</code></pre>
+<p>They are stored in the <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>, ready to be run again and again.</p>
+<p>Workloads will run their systems first to last and try to run them in parallel when possible. We call this <em>outer-parallelism</em>, you can learn more about it in <a href="fundamentals/../going-further/parallelism.html">this chapter</a>.</p>
+<h4 id="workload-nesting"><a class="header" href="#workload-nesting">Workload Nesting</a></h4>
+<p>You can also add a workload to another and build your execution logic brick by brick.</p>
+<pre><code class="language-rust  noplaypen">#[derive(Component)]
+struct Dead&lt;T: 'static + Send + Sync&gt;(core::marker::PhantomData&lt;T&gt;);
+
+fn increment(mut vm_vel: ViewMut&lt;Vel&gt;) {
+    for i in (&amp;mut vm_vel).iter() {
+        i.0 += 1.0;
+    }
+}
+
+fn flag_deleted_vel(v_vel: View&lt;Vel&gt;, mut deads: ViewMut&lt;Dead&lt;Vel&gt;&gt;) {
+    for (id, i) in v_vel.iter().with_id() {
+        if i.0 &gt; 100.0 {
+            deads.add_component_unchecked(id, Dead(core::marker::PhantomData));
+        }
+    }
+}
+
+fn clear_deleted_vel(mut all_storages: AllStoragesViewMut) {
+    all_storages.delete_any::&lt;SparseSet&lt;Dead&lt;Vel&gt;&gt;&gt;();
+}
+
+fn filter_vel() -&gt; Workload {
+    (flag_deleted_vel, clear_deleted_vel).into_workload()
+}
+
+fn main_loop() -&gt; Workload {
+    (increment, filter_vel).into_workload()
+}
+
+let world = World::new();
+
+world.add_workload(main_loop);
+
+world.run_workload(main_loop).unwrap();</code></pre>
+<hr />
+<p>Congratulations, you made it to the end of the fundamentals!<br />
+The next section will explore less universal topics.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="going-further"><a class="header" href="#going-further">Going Further</a></h1>
+<p>This section covers patterns that are not needed for all projects but come in handy when the situation requires it.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tracking"><a class="header" href="#tracking">Tracking</a></h1>
+<p>Shipyard comes with built-in tracking for <em>insertion</em>, <em>modification</em>, <em>deletion</em> and <em>removal</em>.<br />
+<em>deletion</em> will store the component in the tracking info whereas <em>removal</em> gives it back immediately.<br />
+It can be noticed on <code>SparseSet::delete</code> vs <code>SparseSet::remove</code> signatures:</p>
+<pre><code class="language-rust noplaypen">fn delete(&amp;mut self, entity: EntityId) -&gt; bool {}
+fn remove(&amp;mut self, entity: EntityId) -&gt; Option&lt;T&gt; {}</code></pre>
+<p>Components can be deleted or removed but whole entities can only be deleted (at least for now, it's technically possible to return something but I digress).</p>
+<h2 id="declaration"><a class="header" href="#declaration">Declaration</a></h2>
+<p>Tracking is set with the <code>Component</code> trait. You can set it to any single operation or use <code>All</code> to track everything.</p>
+<pre><code class="language-rust noplaypen">struct Life(f32);
+impl Component for Life {
+    type Tracking = track::Modification;
+}
+
+// or with the proc macro
+
+#[derive(Component)]
+#[track(Modification)]
+struct Life(f32);</code></pre>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>When inside a workload you will get all tracking information since the last time this system ran.<br />
+Outside workloads you'll get information since the last call to <code>clear_*</code>.</p>
+<h4 id="inserted-or-modified"><a class="header" href="#inserted-or-modified"><em>Inserted</em> or <em>Modified</em></a></h4>
+<p>You can query <em>inserted</em> and <em>modified</em> components when iterating by calling <code>inserted</code>, <code>modified</code> or <code>inserted_or_modified</code> on a view before making the iterator. (*_mut versions also exist).</p>
+<pre><code class="language-rust noplaypen">fn run(life: View&lt;Life&gt;, mut is_dead: ViewMut&lt;IsDead&gt;) {
+    for (entity, life) in life.modified().iter().with_id() {
+        if life.0 &lt;= 0.0 {
+            is_dead.add_component_unchecked(entity, IsDead);
+        }
+    }
+}</code></pre>
+<h4 id="removed-or-deleted"><a class="header" href="#removed-or-deleted"><em>Removed</em> or <em>Deleted</em></a></h4>
+<p><em>Removed</em> and <em>deleted</em> cannot be used with <code>iter</code> but can be accessed with <code>removed</code>, <code>deleted</code> or <code>removed_or_deleted</code> methods on views.</p>
+<h2 id="reset"><a class="header" href="#reset">Reset</a></h2>
+<p>Inside workloads tracking information doesn't need to be reset. You will always get the operations that happened since the last run of the system.</p>
+<p>You can reset out of workload tracking info with:</p>
+<ul>
+<li><code>clear_all_inserted</code></li>
+<li><code>clear_all_modified</code></li>
+<li><code>clear_all_inserted_and_modified</code></li>
+<li><code>clear_all_removed</code></li>
+<li><code>clear_all_deleted</code></li>
+<li><code>clear_all_removed_and_deleted</code></li>
+</ul>
+<p>You can also reset removed and deleted information older than some timestamp.</p>
+<p>Use <code>World::get_tracking_timestamp</code> or <code>AllStorages::get_tracking_timestamp</code> to get a timestamp.<br />
+Then call <code>clear_all_deleted_older_than_timestamp</code>, <code>clear_all_removed_older_than_timestamp</code> or <code>clear_all_removed_and_deleted_older_than_timestamp</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="parallelism"><a class="header" href="#parallelism">Parallelism</a></h1>
+<p>By late 90s - early 2000s, CPUs started to get too close to the physical limitation of transistors and manufacturers couldn't &quot;just&quot; make their product faster. The solution: more cores.</p>
+<p>Nowadays almost all devices come with multiple cores, it would be a shame to use just one.</p>
+<p>In ECS there's two big ways to split work across cores: running systems on separate threads or using a parallel iterator, we call these two methods &quot;outer-parallelism&quot; and &quot;inner-parallelism,&quot; respectively.</p>
+<h3 id="outer-parallelism"><a class="header" href="#outer-parallelism">Outer-parallelism</a></h3>
+<p>We'll start by the simplest one to use. So simple that there's nothing to do, workloads handle all the work for you. We even almost used multiple threads in the <a href="going-further/../fundamentals/systems.html">Systems chapter</a>.</p>
+<p>As long as the &quot;parallel&quot; feature is set (enabled by default) workloads will try to execute systems as much in parallel as possible. There is a set of rules that defines the &quot;possible&quot;:</p>
+<ul>
+<li>Systems accessing <a href="https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html"><code>AllStorages</code></a> stop all threading.</li>
+<li>There can't be any other access during an exclusive access, so <a href="https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html"><code>ViewMut&lt;T&gt;</code></a> will block <code>T</code> threading.</li>
+</ul>
+<p>When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.<br />
+<a href="https://docs.rs/shipyard/latest/shipyard/struct.Workload.html#method.add_to_world"><code>add_to_world</code></a> returns information about these batches and why each system didn't get into the previous batch.</p>
+<h3 id="inner-parallelism"><a class="header" href="#inner-parallelism">Inner-parallelism</a></h3>
+<p>While parallel iterators does require us to modify our code, it's just a matter of using <code>par_iter</code> instead of <code>iter</code>.<br />
+Don't forget to import rayon. <a href="https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.par_iter"><code>par_iter</code></a> returns a <a href="https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html"><code>ParallelIterator</code></a>.</p>
+<p>Example:</p>
+<pre><code class="language-rust  noplaypen">use rayon::prelude::*;
+
+fn many_vm_pos(mut vm_pos: ViewMut&lt;Pos&gt;) {
+    vm_pos.par_iter().for_each(|i| {
+        // -- snip --
+    });
+}</code></pre>
+<p>Don't replace all your <a href="https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.iter"><code>iter</code></a> method calls just yet, however! Using a parallel iterator comes with an upfront overhead cost. It will only exceed the speed of its sequential counterpart on computations expensive enough to make up for the overhead cost in improved processing efficiency.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="custom-views"><a class="header" href="#custom-views">Custom Views</a></h1>
+<p>Custom views are types that you can borrow (like <code>View</code> or <code>UniqueView</code>) but are not provided by <code>shipyard</code>.</p>
+<p>Many types can become custom views, they'll fall into one of two categories: View Bundle or Wild View.
+View bundles only contain other views while wild views can contain other types.</p>
+<p>Example of a View Bundle:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Borrow, BorrowInfo)]
+struct Hierarchy&lt;'v&gt; {
+    entities: EntitiesViewMut&lt;'v&gt;,
+    parents: ViewMut&lt;'v, Parent&gt;,
+    children: ViewMut&lt;'v, Child&gt;,
+}</code></pre>
+<p>Example of a Wild View:</p>
+<pre><code class="language-rust  noplaypen">struct RandomNumber(u64);</code></pre>
+<h3 id="iteration"><a class="header" href="#iteration">Iteration</a></h3>
+<p>View bundles can be iterated directly by deriving the <code>IntoIter</code> trait.</p>
+<pre><code class="language-rust  noplaypen">#[derive(Borrow, BorrowInfo, IntoIter)]
+#[shipyard(item_name = &quot;Node&quot;)]
+struct Hierarchy&lt;'v&gt; {
+    #[shipyard(item_field_skip)]
+    entities: EntitiesViewMut&lt;'v&gt;,
+    #[shipyard(item_field_name = &quot;parent&quot;)]
+    parents: ViewMut&lt;'v, Parent&gt;,
+    #[shipyard(item_field_name = &quot;child&quot;)]
+    children: ViewMut&lt;'v, Child&gt;,
+}
+
+let world = World::new();
+
+world.run(|mut hierarchy: Hierarchy| {
+    for Node { parent, child } in hierarchy.iter() {
+    }
+});</code></pre>
+<p>All attributes are optional.</p>
+<h2 id="concrete-example"><a class="header" href="#concrete-example">Concrete example</a></h2>
+<p>When creating a frame with any low level api there is always some boilerplate. We'll look at how custom views can help for <code>wgpu</code>.</p>
+<p>The original code creates the frame in a system by borrowing <code>Graphics</code> which contains everything needed.
+The rendering part just clears the screen with a color.</p>
+<p>The entire starting code for this chapter is available in <a href="going-further/./custom_views_original.rs">this file</a>. You can copy all of it in a fresh <code>main.rs</code> and edit the fresh <code>Cargo.toml</code>.</p>
+<details>
+<summary>Original</summary>
+<pre><code class="language-rust  noplaypen">#[derive(Unique)]
+struct Graphics {
+    surface: wgpu::Surface,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    config: wgpu::SurfaceConfiguration,
+    size: winit::dpi::PhysicalSize&lt;u32&gt;,
+}
+
+fn render(graphics: UniqueView&lt;Graphics&gt;) -&gt; Result&lt;(), wgpu::SurfaceError&gt; {
+    // Get a few things from the GPU
+    let output = graphics.surface.get_current_texture()?;
+    let view = output
+        .texture
+        .create_view(&amp;wgpu::TextureViewDescriptor::default());
+
+    let mut encoder = graphics
+        .device
+        .create_command_encoder(&amp;wgpu::CommandEncoderDescriptor {
+            label: Some(&quot;Render Encoder&quot;),
+        });
+
+    {
+        // RenderPass borrows encoder for all its lifetime
+        let mut _render_pass = encoder.begin_render_pass(&amp;wgpu::RenderPassDescriptor {
+            label: Some(&quot;Render Pass&quot;),
+            color_attachments: &amp;[wgpu::RenderPassColorAttachment {
+                view: &amp;view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
+                    store: true,
+                },
+            }],
+            depth_stencil_attachment: None,
+        });
+    }
+
+    // encoder.finish() consumes `encoder`, so the RenderPass needs to disappear before that to release the borrow
+    graphics.queue.submit(iter::once(encoder.finish()));
+    output.present();
+
+    Ok(())
+}</code></pre>
+</details>
+<p>We want to abstract the beginning and end of the system to get this version working.
+The error handling is going to move, we could keep it closer to the original by having a <code>ResultRenderGraphicsViewMut</code> for example. </p>
+<pre><code class="language-rust  noplaypen">fn render(mut graphics: RenderGraphicsViewMut) {
+    let mut _render_pass = graphics
+        .encoder
+        .begin_render_pass(&amp;wgpu::RenderPassDescriptor {
+            label: Some(&quot;Render Pass&quot;),
+            color_attachments: &amp;[wgpu::RenderPassColorAttachment {
+                view: &amp;graphics.view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
+                    store: true,
+                },
+            }],
+            depth_stencil_attachment: None,
+        });
+}</code></pre>
+<p>We'll start by creating a struct to hold our init state.</p>
+<pre><code class="language-rust  noplaypen">struct RenderGraphicsViewMut {
+    view: wgpu::TextureView,
+    encoder: wgpu::CommandEncoder,
+}</code></pre>
+<p>Now let's make this struct able to be borrowed and generate the initial state we need.</p>
+<pre><code class="language-rust  noplaypen">impl shipyard::Borrow for RenderGraphicsViewMut {
+    type View&lt;'v&gt; = RenderGraphicsViewMut;
+
+    fn borrow&lt;'a&gt;(
+        all_storages: &amp;'a AllStorages,
+        all_borrow: Option&lt;SharedBorrow&lt;'a&gt;&gt;,
+        last_run: Option&lt;TrackingTimestamp&gt;,
+        current: TrackingTimestamp,
+    ) -&gt; Result&lt;Self::View&lt;'a&gt;, shipyard::error::GetStorage&gt; {
+        // Even if we don't use tracking for Graphics, it's good to build an habit of using last_run and current when creating custom views
+        let graphics =
+            UniqueView::&lt;Graphics&gt;::borrow(&amp;all_storages, all_borrow, last_run, current)?;
+        // This error will now be reported as an error during the view creation process and not the system but is still bubbled up
+        let output = graphics
+            .surface
+            .get_current_texture()
+            .map_err(shipyard::error::GetStorage::from_custom)?;
+        let view = output
+            .texture
+            .create_view(&amp;wgpu::TextureViewDescriptor::default());
+
+        let encoder = graphics
+            .device
+            .create_command_encoder(&amp;wgpu::CommandEncoderDescriptor {
+                label: Some(&quot;Render Encoder&quot;),
+            });
+
+        Ok(RenderGraphicsViewMut { encoder, view })
+    }
+}</code></pre>
+<p>We now have a custom view! We can't change our system just yet, we're missing <code>output</code>.</p>
+<p>Let's add <code>output</code> and <code>graphics</code> to our custom view.</p>
+<pre><code class="language-rust  noplaypen">struct RenderGraphicsViewMut&lt;'v&gt; {
+    encoder: wgpu::CommandEncoder,
+    view: wgpu::TextureView,
+    // New fields
+    output: Option&lt;wgpu::SurfaceTexture&gt;,
+    graphics: UniqueView&lt;'v, Graphics&gt;,
+}</code></pre>
+<p>Let's revisit our <code>Borrow</code> implementation and add one for <code>Drop</code>.</p>
+<pre><code class="language-rust  noplaypen">impl shipyard::Borrow for RenderGraphicsViewMut&lt;'_&gt; {
+    type View&lt;'v&gt; = RenderGraphicsViewMut&lt;'v&gt;;
+
+    fn borrow&lt;'a&gt;(
+        all_storages: &amp;'a AllStorages,
+        all_borrow: Option&lt;SharedBorrow&lt;'a&gt;&gt;,
+        last_run: Option&lt;TrackingTimestamp&gt;,
+        current: TrackingTimestamp,
+    ) -&gt; Result&lt;Self::View&lt;'a&gt;, shipyard::error::GetStorage&gt; {
+        // Even if we don't use tracking for Graphics, it's good to build an habit of using last_run and current when creating custom views
+        let graphics =
+            UniqueView::&lt;Graphics&gt;::borrow(&amp;all_storages, all_borrow, last_run, current)?;
+        // This error will now be reported as an error during the view creation process and not the system but is still bubbled up
+        let output = graphics
+            .surface
+            .get_current_texture()
+            .map_err(shipyard::error::GetStorage::from_custom)?;
+        let view = output
+            .texture
+            .create_view(&amp;wgpu::TextureViewDescriptor::default());
+
+        let encoder = graphics
+            .device
+            .create_command_encoder(&amp;wgpu::CommandEncoderDescriptor {
+                label: Some(&quot;Render Encoder&quot;),
+            });
+
+        Ok(RenderGraphicsViewMut {
+            encoder,
+            view,
+            output: Some(output),
+            graphics,
+        })
+    }
+}
+
+impl Drop for RenderGraphicsViewMut&lt;'_&gt; {
+    fn drop(&amp;mut self) {
+        // I chose to swap here to not have to use an `Option&lt;wgpu::CommandEncoder&gt;` in a publicly accessible field
+        let encoder = std::mem::replace(
+            &amp;mut self.encoder,
+            self.graphics
+                .device
+                .create_command_encoder(&amp;wgpu::CommandEncoderDescriptor {
+                    label: Some(&quot;Render Encoder&quot;),
+                }),
+        );
+
+        self.graphics.queue.submit(iter::once(encoder.finish()));
+        // output on the other hand is only used here so an `Option` is good enough
+        self.output.take().unwrap().present();
+    }
+}</code></pre>
+<p>Our custom view is now fully functional and we successfully moved code that would be duplicated out of the render system.
+You can remove the error handling in <code>main.rs</code> to see the result.</p>
+<p>As a final touch we can implement <code>BorrowInfo</code> to make our view work with workloads.</p>
+<pre><code class="language-rust  noplaypen">// SAFE: All storages info is recorded.
+unsafe impl shipyard::BorrowInfo for RenderGraphicsViewMut&lt;'_&gt; {
+    fn borrow_info(info: &amp;mut Vec&lt;shipyard::info::TypeInfo&gt;) {
+        &lt;UniqueView&lt;Graphics&gt;&gt;::borrow_info(info);
+    }
+
+    fn enable_tracking(
+        enable_tracking_fn: &amp;mut Vec&lt;fn(&amp;AllStorages) -&gt; Result&lt;(), shipyard::error::GetStorage&gt;&gt;,
+    ) {
+        // We only have a single UniqueView so no tracking
+    }
+}</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="send-and-sync-components"><a class="header" href="#send-and-sync-components"><code>!Send</code> and <code>!Sync</code> Components</a></h1>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a> can store <code>!Send</code> and/or <code>!Sync</code> components once the <code>thread_local</code> feature is set but they come with limitations:</p>
+<ul>
+<li><code>!Send</code> storages can only be added in <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html"><code>World</code></a>'s thread.</li>
+<li><code>Send + !Sync</code> components can only be accessed from one thread at a time.</li>
+<li><code>!Send + Sync</code> components can only be accessed immutably from other threads.</li>
+<li><code>!Send + !Sync</code> components can only be accessed in the thread they were added in.</li>
+</ul>
+<p>These storages are accessed with <a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend</code></a>, <a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSync.html"><code>NonSync</code></a> and <a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSendSync.html"><code>NonSendSync</code></a>, for example:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Unique)]
+struct RcU32(Rc&lt;u32&gt;);
+#[derive(Component)]
+struct RcUSIZE(Rc&lt;usize&gt;);
+
+#[allow(unused)]
+fn run(rcs_usize: NonSendSync&lt;View&lt;RcUSIZE&gt;&gt;, rc_u32: NonSendSync&lt;UniqueView&lt;RcU32&gt;&gt;) {}</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="performance-tips"><a class="header" href="#performance-tips">Performance Tips</a></h1>
+<p>List of small information to get the most out of Shipyard.</p>
+<h3 id="for_each"><a class="header" href="#for_each"><code>for_each</code></a></h3>
+<p><code>for ... in</code> desugars to calling <a href="https://doc.rust-lang.org/std/iter/trait.Iterator.html#tymethod.next"><code>next</code></a> repeatedly, the compiler can sometimes optimize it very well.<br />
+If you don't want to take any chance prefer calling <a href="https://doc.rust-lang.org/std/iter/trait.Iterator.html#method.for_each"><code>for_each</code></a> instead.</p>
+<h3 id="borrow--run-in-a-loop"><a class="header" href="#borrow--run-in-a-loop"><code>borrow</code> / <code>run</code> in a loop</a></h3>
+<p>While borrowing storages is quite cheap, doing so in a loop is generally a bad idea.<br />
+Prefer moving the loop inside <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.run"><code>run</code></a> and move <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.borrow"><code>borrow</code></a>'s call outside the loop.</p>
+<h3 id="bulk_add_entity"><a class="header" href="#bulk_add_entity"><code>bulk_add_entity</code></a></h3>
+<p>When creating many entities at the same time remember to call <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.bulk_add_entity"><code>bulk_add_entity</code></a> if possible.</p>
+<h3 id="deleting-entities"><a class="header" href="#deleting-entities">Deleting entities</a></h3>
+<p>This is a niche optimization but the methods presented in the <a href="going-further/../fundamentals/delete-components.html">Delete Components</a> chapter are not always the fastest way to delete an entity.</p>
+<p>When an entity is deleted, all storages have to be checked to delete the components of that entity.
+But if you know which components this entity might have, you can focus the search on those and ignore the other storages.</p>
+<p>Instead of calling <a href="https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.delete_entity">World::delete_entity</a> or <a href="https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html#method.delete_entity">AllStorages::delete_entity</a> you can call <code>delete</code> on all potential storages using the <a href="https://docs.rs/shipyard/latest/shipyard/trait.Delete.html">Delete</a> trait and <a href="https://docs.rs/shipyard/latest/shipyard/struct.Entities.html#method.delete_unchecked">Entities::delete_unchecked</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tracing"><a class="header" href="#tracing">Tracing</a></h1>
+<p>Shipyard comes with a <code>tracing</code> feature that let you see and inspect systems execution.</p>
+<p>You can use various adapters for the <code>tracing</code> crate. I'll use <a href="https://github.com/wolfpld/tracy"><code>tracy</code></a>, a C++ profiler.</p>
+<p>We'll need to enable the <code>tracing</code> feature and add a few dependencies.<br />
+This can all be feature gated to not impact exported binaries performance.</p>
+<pre><code class="language-toml">shipyard = { git = &quot;https://github.com/leudz/shipyard&quot;, features = [&quot;tracing&quot;] }
+tracy_full = { version = &quot;1.3&quot;, features = [&quot;enable&quot;, &quot;tracing&quot;] }
+tracing = &quot;0.1&quot;
+tracing-subscriber = &quot;0.3.18&quot;
+</code></pre>
+<p>Enabling tracing is done by adding a few lines to <code>main</code>.</p>
+<pre><code class="language-rust noplaypen">fn main() {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::registry().with(tracy_full::tracing::TracyLayer),
+    )
+    .expect(&quot;setup tracy layer&quot;);
+
+    // The rest of your main function
+}</code></pre>
+<p>You can download the latest <a href="https://github.com/wolfpld/tracy/releases"><code>tracy</code> release</a>, run your program alongside <code>tracy</code> which will start registering traces once you click the &quot;connect&quot; button in its interface.</p>
+<p>You can then get a quick overview of execution times:</p>
+<p><img src="going-further/full-trace.png" alt="Square eater trace" /></p>
+<p>Or more details for specific systems or workloads:</p>
+<p><img src="going-further/system.png" alt="System trace" /></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="more-resources"><a class="header" href="#more-resources">More Resources</a></h1>
+<p><a href="https://skypjack.github.io/2019-03-21-ecs-baf-part-2-insights/">Packs</a>, the whole series is a good read<br />
+<a href="https://www.youtube.com/watch?v=W3aieHjyNvw">Timothy Ford's GDC talk on ECS usage in Overwatch</a><br />
+<a href="https://www.youtube.com/watch?v=aKLntZcp27M">Catherine West's closing keynote on using the ECS pattern in Rust</a><br />
+<a href="https://github.com/SanderMertens/ecs-faq">Sander Mertens's ECS FAQ</a><br />
+<a href="https://www.richardlord.net/blog/ecs/finite-state-machines-with-ash.html">FSM in ECS</a><br />
+<a href="https://github.com/abulka/todomvc-ecs">Todo MVC using ECS</a></p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="going-further-1"><a class="header" href="#going-further-1">Going Further</a></h1>
+<p>This section covers the inner working of shipyard. As a user you don't need to know any of this to leverage everything shipyard can offer.</p>
+<p>If you want to contribute or make your own ECS this section can be handy.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="sparse-set"><a class="header" href="#sparse-set">Sparse Set</a></h1>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html"><code>SparseSet</code></a> is Shipyard's default storage. This chapter explains the basics
+of how it works, the actual implementation is more optimized both in term of speed and memory.</p>
+<h3 id="overview"><a class="header" href="#overview">Overview</a></h3>
+<p>To understand how Shipyard uses sparse sets, we must first understand how sparse sets work.
+A basic sparse set is a data structure for storing integers. It is comprised of two
+arrays: <code>sparse</code> and <code>dense</code>.</p>
+<p>To insert an integer <code>i</code>, we first set the next available slot in the <code>dense</code> array to <code>i</code>,
+and then set <code>sparse[i]</code> to the position of <code>i</code> in the dense array. Let's walk through
+an example.</p>
+<p>We start off with an empty sparse set:</p>
+<ul>
+<li>Sparse Array: <code>[]</code></li>
+<li>Dense Array: <code>[]</code></li>
+</ul>
+<p>To add <code>3</code> to our sparse set, we first append it to <code>dense</code> and then set <code>sparse[3]</code> to <code>0</code>
+(the position of <code>3</code> in <code>dense</code>):</p>
+<ul>
+<li>Sparse Array: <code>[U, U, 0]</code></li>
+<li>Dense Array: <code>[3]</code>
+<code>U</code> is short for uninitialised.</li>
+</ul>
+<p>If we then add <code>0</code>, the sparse set will look like so:</p>
+<ul>
+<li>Sparse Array: <code>[1, U, 0]</code></li>
+<li>Dense Array: <code>[3, 0]</code></li>
+</ul>
+<p>Searching a sparse set is <code>O(1)</code>. To check if the integer <code>i</code> exists we check whether
+<code>dense[sparse[i]] == i</code>. For example, to look up <code>3</code> in our example sparse set, we should
+first check <code>sparse[check]</code>. <code>sparse[check]</code> is equal to <code>0</code> and so next we check
+<code>dense[0]</code>. Since <code>dense[0] == 3</code> we can say that <code>3</code> is in our example sparse set.</p>
+<h3 id="shipyard"><a class="header" href="#shipyard">Shipyard</a></h3>
+<p>So far, we've only seen how sparse sets can store integers. However, Shipyard has to store both
+entity IDs (basically just integers) and components, requiring us to use a slightly more
+complicated data structure. Shipyard makes two major changes to the traditional sparse set
+described above.</p>
+<p>Firstly, Shipyard sparse sets are actually composed of three arrays: <code>sparse</code>, <code>dense</code>, and
+<code>data</code>. <code>dense</code> stores the entity IDs, whereas <code>data</code> contains the actual components of the
+entities. <code>dense</code> and <code>data</code> are linked: their lengths are always the same. <code>data[i]</code> is
+the component for the entity with the ID located at <code>dense[i]</code>. Whenever <code>dense</code> changes,
+so does <code>data</code>.</p>
+<p>Secondly, Shipyard uses multiple sparse sets, one for each type of component. The <code>dense</code> array
+in each sparse set contains the <a href="https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html"><code>EntityIds</code></a> of the entities that have that
+component.</p>
+<p>Let's walk through an example:</p>
+<pre><code class="language-rust noplaypen">#[derive(Component)]
+struct FirstComponent(pub u32);
+
+#[derive(Component)]
+struct SecondComponent(pub u32);
+
+let mut world = World::new();
+
+let entity_id_0 = world.add_entity((FirstComponent(322),));
+let entity_id_1 = world.add_entity((SecondComponent(17),));
+let entity_id_2 = world.add_entity((FirstComponent(5050), SecondComponent(3154)));
+let entity_id_3 = world.add_entity((FirstComponent(958),));</code></pre>
+<p>For this example we will assume that the entity IDs are in order i.e. <code>entity_id_0 == 0</code>, <code>entity_id_1 == 1</code>, etc.</p>
+<p>The world data will now be stored in two sparse sets, one for each component:</p>
+<pre><code class="language-txt">SparseSet&lt;FirstComponent&gt;:
+    sparse: [0, U, 1, 2]
+    dense:  [0, 2, 3]
+    data:   [FirstComponent(322), FirstComponent(5050), FirstComponent(958)]
+
+SparseSet&lt;SecondComponent&gt;:
+    sparse: [U, 0, 1]
+    dense:  [1, 2]
+    data:   [SecondComponent(17), SecondComponent(3154)]
+</code></pre>
+<p><code>U</code> is short for uninitialised.</p>
+<h3 id="iteration-1"><a class="header" href="#iteration-1">Iteration</a></h3>
+<p>To iterate over a single sparse set, we can simply iterate over the <code>data</code> array.
+However, Shipyard also lets us iterate over multiple sparse sets.</p>
+<p>To iterate over multiple sparse sets, we first pick the shortest set (comparing the lengths
+of the <code>dense</code> arrays) and then iterate over the <code>dense</code> array of the shortest set. For each
+entity ID, we check whether all the other sparse sets contain it, and if they do, we yield
+the entity ID in the iterator.</p>
+<p>Let's walk through an example with the sparse set we defined above:</p>
+<pre><code class="language-rust noplaypen">let (firsts, seconds) = world
+	.borrow::&lt;(View&lt;FirstComponent&gt;, View&lt;SecondComponent&gt;)&gt;()
+	.unwrap();
+
+for (first, second) in (&amp;firsts, &amp;seconds).iter() {
+	// Do some stuff
+}</code></pre>
+<p>We first check which has the shortest dense set. The <code>SecondComponent</code> sparse set does, so
+we begin iterating over its <code>dense</code> array.</p>
+<p>The first entity ID is <code>1</code>. Since we are iterating over <code>SecondComponent</code>, we already know
+that entity <code>1</code> has a <code>SecondComponent</code>; we just need to check if the entity has a
+<code>FirstComponent</code>. As described above, to check whether an entity has a component, we have
+to check if <code>dense[sparse[id]] == id</code> in the sparse set of the component. <code>sparse[1]</code> in
+<code>SparseSet&lt;FirstComponent&gt;</code> is uninitialised and so we know that entity <code>1</code> does not have
+a <code>FirstComponent</code>.</p>
+<p>The next entity that contains a <code>SecondComponent</code> is <code>2</code>. However, this time, <code>sparse[2]</code>
+in <code>SparseSet&lt;FirstComponent&gt;</code> is equal to <code>1</code> and <code>dense[1]</code> is equal to <code>2</code>, which means
+that entity <code>2</code> has a <code>FirstComponent</code> meaning we can yield it in the iterator.</p>
+<p>After iterating over all the items in the <code>SecondComponent</code> sparse set, we are done.</p>
+<h3 id="removal"><a class="header" href="#removal">Removal</a></h3>
+<p>Removing is done by swap removing from both <code>dense</code> and <code>data</code> and updating <code>sparse</code> in
+consequence.</p>
+<p>Continuing the previous example if we call:</p>
+<pre><code class="language-rust noplaypen">world.remove::&lt;(FirstComponent,)&gt;(entity_id_0);</code></pre>
+<p>The internal representation now looks like this:</p>
+<pre><code class="language-txt">sparse: [U, U, 0, 1]
+dense: [2, 3]
+data: [FirstComponent(5050), FirstComponent(958)]
+</code></pre>
+<p><code>dense</code> and <code>data</code> shifted to the left, the first element in sparse is now uninitialised,
+and the indexes at <code>sparse[2]</code> and <code>sparse[3]</code> were updated.</p>
+<h3 id="additional-resources"><a class="header" href="#additional-resources">Additional Resources</a></h3>
+<p><a href="https://skypjack.github.io/2019-03-07-ecs-baf-part-2/">This blog post</a> goes into more detail on sparse sets and compares them
+with archetypes, another common way of representing data in ECS libraries. The blog post is
+part of a larger series about the design and internals of ECS systems.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="recipes"><a class="header" href="#recipes">Recipes</a></h1>
+<p>Cool patterns you may be interested in.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="building-an-entity-hierarchy-with-shipyard"><a class="header" href="#building-an-entity-hierarchy-with-shipyard">Building an Entity Hierarchy with Shipyard</a></h1>
+<p>Hierarchies are a very commonly used organizational structure in game development. An important example is a transform hierarchy: child entities move along with their parents.</p>
+<p>How can we build such a hierarchy of entities in shipyard?</p>
+<p>One method is to use a secondary data structure which represents the hierarchy.</p>
+<p>But an ECS already has all the means to store data: components. So let's use them!</p>
+<p>Below you won't find a ready-to-use solution, rather some hints on how to start with your own hierarchy implementation, tailored to your requirements.</p>
+<h2 id="parents-and-children"><a class="header" href="#parents-and-children">Parents and Children</a></h2>
+<p>Think about the different roles an entity can take in a hierarchy. It can be:</p>
+<ul>
+<li>a parent (root node),</li>
+<li>a parent and a child (intermediate node),</li>
+<li>a child (leaf node).</li>
+</ul>
+<p>From this we can derive two simple, composable component types:</p>
+<p>A <code>Parent</code> component stores the number of its children and the first child:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Component)]
+struct Parent {
+    num_children: usize,
+    first_child: EntityId,
+}</code></pre>
+<p>A <code>Child</code> component links to its parent as well as neighbor siblings:</p>
+<pre><code class="language-rust  noplaypen">#[derive(Component)]
+struct Child {
+    parent: EntityId,
+    prev: EntityId,
+    next: EntityId,
+}</code></pre>
+<p>As you can see, we simply store <code>EntityId</code>s to refer to other entities inside a component.</p>
+<p>Note that <code>Option</code>s are completely avoided by making the sibling chain circular:</p>
+<ul>
+<li>Last child's <code>next</code> points to the first child.</li>
+<li>First child's <code>prev</code> points to the last child.</li>
+</ul>
+<p>Our entire hierarchy structure resides only in <code>Parent</code> and <code>Child</code> components – nice!</p>
+<p>But it'd be a hassle to create them manually each time you want to insert an entity into the tree.</p>
+<h2 id="lets-make-it-convenient"><a class="header" href="#lets-make-it-convenient">Let's make it convenient</a></h2>
+<p>We begin with two useful methods in a trait declaration:</p>
+<pre><code class="language-rust  noplaypen">trait Hierarchy {
+    // Removes the child status of an entity.
+    fn detach(&amp;mut self, id: EntityId);
+
+    // Attaches an entity as a child to a given parent entity.
+    fn attach(&amp;mut self, id: EntityId, parent: EntityId);
+}</code></pre>
+<p>With these, you'll be able to not only insert new entities into the tree but also move a whole subtree – a child with all its descendants – to another parent.</p>
+<p>Since we need access to <code>EntitiesViewMut</code> as well as our hierarchy component storages, we implement the <code>Hierarchy</code> trait for the type <code>(EntitiesViewMut&lt;'_&gt;, ViewMut&lt;'_, Parent&gt;, ViewMut&lt;'_, Child&gt;)</code>.</p>
+<pre><code class="language-rust  noplaypen">fn detach(&amp;mut self, id: EntityId) {
+    let (_, parents, children) = self;
+    // remove the Child component - if nonexistent, do nothing
+    if let Some(child) = children.remove(id) {
+        // retrieve and update Parent component from ancestor
+        let parent = &amp;mut parents[child.parent];
+        parent.num_children -= 1;
+
+        if parent.num_children == 0 {
+            // if the number of children is zero, the Parent component must be removed
+            parents.remove(child.parent);
+        } else {
+            // the ancestor still has children, and we have to change some linking
+            // check if we have to change first_child
+            if parent.first_child == id {
+                parent.first_child = child.next;
+            }
+            // remove the detached child from the sibling chain
+            children[child.prev].next = child.next;
+            children[child.next].prev = child.prev;
+        }
+    }
+}</code></pre>
+<p>Before we move on to <code>attach</code>, let's make some observations.</p>
+<p>We use indexing on <code>parents</code> and <code>children</code> but if the entity doesn't have the component it'll <code>unwrap</code>.</p>
+<p>We don't have to worry as long as we only use the methods in our <code>Hierarchy</code> trait.</p>
+<p>If you accidentally delete hierarchy components in other places without changing the linking, things will go fatally wrong. If you want to catch these errors you might want to use <code>get</code> and handle the error (for example with <code>expect</code>).</p>
+<p><code>attach</code> looks like this:</p>
+<pre><code class="language-rust  noplaypen">fn attach(&amp;mut self, id: EntityId, parent: EntityId) {
+    // the entity we want to attach might already be attached to another parent
+    self.detach(id);
+
+    let (entities, parents, children) = self;
+
+    // either the designated parent already has a Parent component – and thus one or more children
+    if let Ok(mut p) = parents.get(parent) {
+        // increase the parent's children counter
+        p.num_children += 1;
+
+        // get the ids of the new previous and next siblings of our new child
+        let prev = children[p.first_child].prev;
+        let next = p.first_child;
+
+        // change the linking
+        children[prev].next = id;
+        children[next].prev = id;
+
+        // add the Child component to the new entity
+        entities.add_component(id, children, Child { parent, prev, next });
+    } else {
+        // in this case our designated parent is missing a Parent component
+        // we don't need to change any links, just insert both components
+        entities.add_component(
+            id,
+            children,
+            Child {
+                parent,
+                prev: id,
+                next: id,
+            },
+        );
+        entities.add_component(
+            parent,
+            parents,
+            Parent {
+                num_children: 1,
+                first_child: id,
+            },
+        );
+    }
+}</code></pre>
+<p>We can now add another handy method to our trait:</p>
+<pre><code class="language-rust  noplaypen">fn attach_new(&amp;mut self, parent: EntityId) -&gt; EntityId {
+    let id = self.0.add_entity((), ());
+    self.attach(id, parent);
+    id
+}</code></pre>
+<p>And lastly a simple usage example:</p>
+<pre><code class="language-rust  noplaypen">let world = World::new();
+
+let mut hierarchy = world
+    .borrow::&lt;(EntitiesViewMut, ViewMut&lt;Parent&gt;, ViewMut&lt;Child&gt;)&gt;()
+    .unwrap();
+
+let root1 = hierarchy.0.add_entity((), ());
+let root2 = hierarchy.0.add_entity((), ());
+
+let e1 = hierarchy.attach_new(root1);
+let _e2 = hierarchy.attach_new(e1);
+let e3 = hierarchy.attach_new(e1);
+let _e4 = hierarchy.attach_new(e3);
+
+hierarchy.attach(e3, root2);</code></pre>
+<h2 id="traversing-the-hierarchy"><a class="header" href="#traversing-the-hierarchy">Traversing the hierarchy</a></h2>
+<p>There are different ways the hierarchy can be queried.</p>
+<p>For example, we may want to know the parent of a given entity. Doing this is simply done by inspecting its child component - if there is one.</p>
+<p>However, sometimes you might need</p>
+<ul>
+<li>all children,</li>
+<li>all ancestors,</li>
+<li>or all descendants of a given entity.</li>
+</ul>
+<p>A perfect use case for iterators! An iterator has to implement the <code>next</code> method from the <code>Iterator</code> trait.</p>
+<p>We start with a <code>ChildrenIter</code>, which is pretty straightforward:</p>
+<pre><code class="language-rust  noplaypen">struct ChildrenIter&lt;C&gt; {
+    get_child: C,
+    cursor: (EntityId, usize),
+}
+
+impl&lt;'a, C&gt; Iterator for ChildrenIter&lt;C&gt;
+where
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    type Item = EntityId;
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        if self.cursor.1 &gt; 0 {
+            self.cursor.1 -= 1;
+            let ret = self.cursor.0;
+            self.cursor.0 = self.get_child.get(self.cursor.0).unwrap().next;
+            Some(ret)
+        } else {
+            None
+        }
+    }
+}</code></pre>
+<p>Note that we don't implement <code>Iterator</code> for <code>ViewMut&lt;Child&gt;</code> directly, but for a type that implements the <code>GetComponent</code> trait. This way, our iterator can be used with <code>View</code> as well as <code>ViewMut</code>.</p>
+<p>The next one is the <code>AncestorIter</code>:</p>
+<pre><code class="language-rust  noplaypen">struct AncestorIter&lt;C&gt; {
+    get_child: C,
+    cursor: EntityId,
+}
+
+impl&lt;'a, C&gt; Iterator for AncestorIter&lt;C&gt;
+where
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    type Item = EntityId;
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.get_child.get(self.cursor).ok().map(|child| {
+            self.cursor = child.parent;
+            child.parent
+        })
+    }
+}</code></pre>
+<p>Easy.</p>
+<p><code>DescendantIter</code> will be a bit more complicated. We choose to implement a depth-first variant using recursion.</p>
+<p>It is based on the code for the <code>ChildrenIter</code> but comes with an additional stack to keep track of the current level the cursor is in:</p>
+<ul>
+<li>Push a new level to the stack if we encounter a <code>Parent</code> component.</li>
+<li>Pop the last level from the stack whenever we run out of siblings, then carry on where we left off.</li>
+</ul>
+<pre><code class="language-rust  noplaypen">struct DescendantsIter&lt;P, C&gt; {
+    get_parent: P,
+    get_child: C,
+    cursors: Vec&lt;(EntityId, usize)&gt;,
+}
+
+impl&lt;'a, P, C&gt; Iterator for DescendantsIter&lt;P, C&gt;
+where
+    P: Get&lt;Out = &amp;'a Parent&gt; + Copy,
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    type Item = EntityId;
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        if let Some(cursor) = self.cursors.last_mut() {
+            if cursor.1 &gt; 0 {
+                cursor.1 -= 1;
+                let ret = cursor.0;
+                cursor.0 = self.get_child.get(cursor.0).unwrap().next;
+                if let Ok(parent) = self.get_parent.get(ret) {
+                    self.cursors.push((parent.first_child, parent.num_children));
+                }
+                Some(ret)
+            } else {
+                self.cursors.pop();
+                self.next()
+            }
+        } else {
+            None
+        }
+    }
+}</code></pre>
+<p>What we still need to do is to implement a simple trait with methods that return nicely initialized <code>*Iter</code> structs for us:</p>
+<pre><code class="language-rust  noplaypen">trait HierarchyIter&lt;'a, P, C&gt; {
+    fn ancestors(&amp;self, id: EntityId) -&gt; AncestorIter&lt;C&gt;;
+    fn children(&amp;self, id: EntityId) -&gt; ChildrenIter&lt;C&gt;;
+    fn descendants(&amp;self, id: EntityId) -&gt; DescendantsIter&lt;P, C&gt;;
+}
+
+impl&lt;'a, P, C&gt; HierarchyIter&lt;'a, P, C&gt; for (P, C)
+where
+    P: Get&lt;Out = &amp;'a Parent&gt; + Copy,
+    C: Get&lt;Out = &amp;'a Child&gt; + Copy,
+{
+    fn ancestors(&amp;self, id: EntityId) -&gt; AncestorIter&lt;C&gt; {
+        let (_, children) = self;
+
+        AncestorIter {
+            get_child: *children,
+            cursor: id,
+        }
+    }
+
+    fn children(&amp;self, id: EntityId) -&gt; ChildrenIter&lt;C&gt; {
+        let (parents, children) = self;
+
+        ChildrenIter {
+            get_child: *children,
+            cursor: parents
+                .get(id)
+                .map_or((id, 0), |parent| (parent.first_child, parent.num_children)),
+        }
+    }
+
+    fn descendants(&amp;self, id: EntityId) -&gt; DescendantsIter&lt;P, C&gt; {
+        let (parents, children) = self;
+
+        DescendantsIter {
+            get_parent: *parents,
+            get_child: *children,
+            cursors: parents.get(id).map_or_else(
+                |_| Vec::new(),
+                |parent| vec![(parent.first_child, parent.num_children)],
+            ),
+        }
+    }
+}</code></pre>
+<p>Cool. Let's extend the former usage example into a little test.</p>
+<pre><code class="language-rust  noplaypen">#[test]
+fn test_hierarchy() {
+    let world = World::new();
+
+    let mut hierarchy = world
+        .borrow::&lt;(EntitiesViewMut, ViewMut&lt;Parent&gt;, ViewMut&lt;Child&gt;)&gt;()
+        .unwrap();
+
+    let root1 = hierarchy.0.add_entity((), ());
+    let root2 = hierarchy.0.add_entity((), ());
+
+    let e1 = hierarchy.attach_new(root1);
+    let e2 = hierarchy.attach_new(e1);
+    let e3 = hierarchy.attach_new(e1);
+    let e4 = hierarchy.attach_new(e3);
+
+    hierarchy.attach(e3, root2);
+
+    let e5 = hierarchy.attach_new(e3);
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .children(e3)
+        .eq([e4, e5].iter().cloned()));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .ancestors(e4)
+        .eq([e3, root2].iter().cloned()));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .descendants(root1)
+        .eq([e1, e2].iter().cloned()));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .descendants(root2)
+        .eq([e3, e4, e5].iter().cloned()));
+}</code></pre>
+<h2 id="removing-entities-from-the-hierarchy"><a class="header" href="#removing-entities-from-the-hierarchy">Removing entities from the hierarchy</a></h2>
+<p>Removing an entity from the hierarchy means removing its <code>Parent</code> and <code>Child</code> components.</p>
+<p>To remove an entity's <code>Child</code> component, we can simply reuse <code>detach</code>. Removing its <code>Parent</code> component must be done with caution. This entity's children now become orphans – we have to detach them as well.</p>
+<p>Both methods can be added to our <code>Hierarchy</code> trait:</p>
+<pre><code class="language-rust  noplaypen">fn remove(&amp;mut self, id: EntityId) {
+    self.detach(id);
+
+    let children = (&amp;self.1, &amp;self.2).children(id).collect::&lt;Vec&lt;_&gt;&gt;();
+    for child_id in children {
+        self.detach(child_id);
+    }
+    self.1.remove(id);
+}</code></pre>
+<p>A method that removes a whole subtree is easy to write by making use of recursion again:</p>
+<pre><code class="language-rust  noplaypen">fn remove_all(&amp;mut self, id: EntityId) {
+    let (_, parents, children) = self;
+
+    for child_id in (&amp;*parents, &amp;*children).children(id).collect::&lt;Vec&lt;_&gt;&gt;() {
+        self.remove_all(child_id);
+    }
+    self.remove(id);
+}</code></pre>
+<p>That's it! We can now add the following code to the end of our test from the last chapter:</p>
+<pre><code class="language-rust  noplaypen">hierarchy.detach(e1);
+
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).descendants(root1).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).ancestors(e1).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+    .children(e1)
+    .eq([e2].iter().cloned()));
+
+hierarchy.remove(e1);
+
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).children(e1).eq(None));
+
+hierarchy.remove_all(root2);
+
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).descendants(root2).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).descendants(e3).eq(None));
+assert!((&amp;hierarchy.1, &amp;hierarchy.2).ancestors(e5).eq(None));</code></pre>
+<h2 id="sorting"><a class="header" href="#sorting">Sorting</a></h2>
+<p>The order between siblings may or may not play a role in your project.</p>
+<p>However, a simple sorting for children can be done in two steps:</p>
+<ul>
+<li>Collect all children into a <code>Vec</code> and sort it.</li>
+<li>Adjust the linking in the <code>Child</code> components according to the sorted list.</li>
+</ul>
+<p>We can add this method to the <code>Hierarchy</code> trait:</p>
+<pre><code class="language-rust  noplaypen">fn sort_children_by&lt;F&gt;(&amp;mut self, id: EntityId, compare: F)
+where
+    F: FnMut(&amp;EntityId, &amp;EntityId) -&gt; std::cmp::Ordering,
+{
+    let (_, parents, children_storage) = self;
+
+    let mut children = (&amp;*parents, &amp;*children_storage)
+        .children(id)
+        .collect::&lt;Vec&lt;EntityId&gt;&gt;();
+    if children.len() &gt; 1 {
+        children.sort_by(compare);
+        // set first_child in Parent component
+        parents[id].first_child = children[0];
+        // loop through children and relink them
+        for i in 0..children.len() - 1 {
+            children_storage[children[i]].next = children[i + 1];
+            children_storage[children[i + 1]].prev = children[i];
+        }
+        children_storage[children[0]].prev = *children.last().unwrap();
+        children_storage[*children.last().unwrap()].next = children[0];
+    }
+}</code></pre>
+<p>Again a small test demonstrates the usage:</p>
+<pre><code class="language-rust  noplaypen">#[test]
+fn test_sorting() {
+    let world = World::new();
+
+    let (mut hierarchy, mut vm_pos) = world
+        .borrow::&lt;(
+            (EntitiesViewMut, ViewMut&lt;Parent&gt;, ViewMut&lt;Child&gt;),
+            ViewMut&lt;Pos&gt;,
+        )&gt;()
+        .unwrap();
+
+    let root = hierarchy.0.add_entity((), ());
+
+    let e0 = hierarchy.attach_new(root);
+    let e1 = hierarchy.attach_new(root);
+    let e2 = hierarchy.attach_new(root);
+    let e3 = hierarchy.attach_new(root);
+    let e4 = hierarchy.attach_new(root);
+
+    hierarchy.0.add_component(e0, &amp;mut vm_pos, Pos(7.0, 0.0));
+    hierarchy.0.add_component(e1, &amp;mut vm_pos, Pos(5.0, 0.0));
+    hierarchy.0.add_component(e2, &amp;mut vm_pos, Pos(6.0, 0.0));
+    hierarchy.0.add_component(e3, &amp;mut vm_pos, Pos(1.0, 0.0));
+    hierarchy.0.add_component(e4, &amp;mut vm_pos, Pos(3.0, 0.0));
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .children(root)
+        .eq([e0, e1, e2, e3, e4].iter().cloned()));
+
+    hierarchy.sort_children_by(root, |a, b| {
+        vm_pos[*a].0.partial_cmp(&amp;vm_pos[*b].0).unwrap()
+    });
+
+    assert!((&amp;hierarchy.1, &amp;hierarchy.2)
+        .children(root)
+        .eq([e3, e4, e1, e2, e0].iter().cloned()));
+}</code></pre>
+<h2 id="do-it-yourself"><a class="header" href="#do-it-yourself">Do it yourself!</a></h2>
+<p>We recommend that you build your own hierarchy system fitted to your specific needs. In deviation of the above code examples you may want:</p>
+<ul>
+<li>a single hierarchy component instead of two,</li>
+<li>breadth-first instead of depth-first traversal,</li>
+<li>different sorting methods,</li>
+<li>etc.</li>
+</ul>
+<h2 id="further-reading"><a class="header" href="#further-reading">Further reading</a></h2>
+<p>These notes are based on ideas presented in a highly recommended article by skypjack: <a href="https://skypjack.github.io/2019-06-25-ecs-baf-part-4/">ECS back and forth</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><p>If you're working with <a href="https://github.com/seed-rs/seed">Seed</a>, @MartinKavik ported the bunny demo to it. You can find the source <a href="https://github.com/seed-rs/seed/tree/master/examples/bunnies">here</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><p>0.4 comes with a few big changes, this chapter aims to facilitate the transition.</p>
+<h2 id="imports"><a class="header" href="#imports">Imports</a></h2>
+<p>Let's start small, prelude and internal no longer exist, you just have to replace all <code>shipyard::prelude</code> and <code>shipyard::internal</code> by <code>shipyard</code>.</p>
+<h2 id="systems-1"><a class="header" href="#systems-1">Systems</a></h2>
+<p>Following <a href="https://github.com/leudz/shipyard/issues/75">an issue</a> opened by <a href="https://github.com/cart">@cart</a>, systems will become functions instead of an instance of the <code>System</code> trait.</p>
+<p>To make this work, borrowing is now done with the actual types you get when you borrow a storage instead of using references.</p>
+<p>In 0.3:</p>
+<pre><code class="language-rust  noplaypen">struct MySystem;
+impl&lt;'sys&gt; System&lt;'sys&gt; for MySystem {
+    type Data = (
+        EntitiesMut,
+        &amp;mut usize,
+    );
+    fn run((mut entities, mut usizes): &lt;Self::Data as SystemData&lt;'sys&gt;&gt;::View) {}
+}
+
+// or with the macro
+
+#[system(MySystem)]
+fn run(mut entities: &amp;mut Entities, mut usizes: &amp;mut usize) {}</code></pre>
+<p>In 0.4:</p>
+<pre><code class="language-rust  noplaypen">fn my_system(mut entities: EntitiesViewMut, mut usizes: ViewMut&lt;usize&gt;) {}</code></pre>
+<p>This change also affects <code>run</code> and <code>borrow</code>.<br />
+<code>World::run_system</code> is no longer needed and you can run systems with <code>run</code> directly.</p>
+<pre><code class="language-rust  noplaypen">world.run(my_system);
+
+// and closures still work
+
+world.run(|mut entities: EntitiesViewMut, mut usizes: ViewMut&lt;usize&gt;| {});</code></pre>
+<p><code>run</code> has the same return type as the system or closure and it doesn't require any tuple most of the time.</p>
+<p>Here's the complete list:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: center">0.3</th><th style="text-align: center">0.4</th></tr></thead><tbody>
+<tr><td style="text-align: center"><code>AllStorages</code> / <code>&amp;mut AllStorages</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.AllStoragesViewMut.html"><code>AllStoragesViewMut</code></a></td></tr>
+<tr><td style="text-align: center"><code>Entities</code> / <code>&amp;Entities</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.EntitiesView.html"><code>EntitiesView</code></a></td></tr>
+<tr><td style="text-align: center"><code>EntitiesMut</code> / <code>&amp;mut Entities</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.EntitiesViewMut.html"><code>EntitiesViewMut</code></a></td></tr>
+<tr><td style="text-align: center"><code>&amp;T</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.View.html"><code>View&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>&amp;mut T</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html"><code>ViewMut&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>ThreadPool</code> / <code>&amp;ThreadPool</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.ThreadPoolView.html"><code>ThreadPoolView</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;&amp;T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.UniqueView.html"><code>UniqueView&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;&amp;mut T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.UniqueViewMut.html"><code>UniqueViewMut&lt;T&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>NonSend&lt;&amp;T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;View&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>NonSend&lt;&amp;mut T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;ViewMut&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;NonSend&lt;&amp;T&gt;&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;UniqueView&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>Unique&lt;NonSend&lt;&amp;mut T&gt;&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSend.html"><code>NonSend&lt;UniqueViewMut&lt;T&gt;&gt;</code></a></td></tr>
+<tr><td style="text-align: center"><code>FakeBorrow&lt;T&gt;</code></td><td style="text-align: center"><a href="https://docs.rs/shipyard/latest/shipyard/struct.FakeBorrow.html"><code>FakeBorrow&lt;T&gt;</code></a></td></tr>
+</tbody></table>
+</div>
+<p><a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSync.html"><code>NonSync</code></a> and <a href="https://docs.rs/shipyard/latest/shipyard/struct.NonSendSync.html"><code>NonSendSync</code></a> follow the same pattern as <code>NonSend</code>.</p>
+<h2 id="macro"><a class="header" href="#macro">Macro</a></h2>
+<p>The system proc macro doesn't exist anymore. With the new system design the advantage it provides are not great enough to justify it.</p>
+<h2 id="workloads-1"><a class="header" href="#workloads-1">Workloads</a></h2>
+<h3 id="the-ugly"><a class="header" href="#the-ugly">The ugly</a></h3>
+<p>Workloads are the only one suffering a downgrade. You'll have to give all systems twice to the function plus a few things.</p>
+<p>In 0.3:</p>
+<pre><code class="language-rust  noplaypen">world.add_workload&lt;(Sys1, Sys2), _&gt;(&quot;Workload1&quot;);</code></pre>
+<p>In 0.4:</p>
+<pre><code class="language-rust  noplaypen">world
+    .add_workload(&quot;Workload1&quot;)
+    .with_system((
+        |world: &amp;World| world.try_run(sys1),
+        sys1
+    ))
+    .with_system((
+        |world: &amp;World| world.try_run(sys2),
+        sys2
+    ))
+    .build();
+
+// with a macro
+
+world
+    .add_workload(&quot;Workload1&quot;)
+    .with_system(system!(sys1))
+    .with_system(system!(sys2))
+    .build();</code></pre>
+<p>⚠️ The two arguments are wrapped in a tuple.</p>
+<p>This repetition will disappear someday but I don't expect it to be soon.<br />
+You don't have to use a closure, any function with <code>&amp;World</code> as argument and returning <code>Result&lt;(), shipyard::error::Run&gt;</code> are valid.<br />
+It's very important to pass the same function twice, the workload might always error if this isn't the case.</p>
+<h3 id="the-good"><a class="header" href="#the-good">The good</a></h3>
+<p>Workloads don't come with only a downgrade. You can now return errors from systems inside workloads.</p>
+<pre><code class="language-rust  noplaypen">#[derive(Debug)]
+struct TerribleError;
+
+impl Display for TerribleError {
+    fn fmt(&amp;self, fmt: &amp;mut Formatter&lt;'_&gt;) -&gt; Result&lt;(), core::fmt::Error&gt; {
+        Debug::fmt(self, fmt)
+    }
+}
+impl Error for TerribleError {}
+
+fn my_sys(mut entities: EntitiesViewMut) -&gt; Result&lt;(), TerribleError&gt; {
+    Err(TerribleError)
+}
+
+fn main() {
+    use shipyard::error::{Run, RunWorkload};
+
+    let world = World::new();
+    world
+        .add_workload(&quot;May fail&quot;)
+        .with_system((
+            |world: &amp;World| world.try_run(my_sys)?.map_err(Run::from_custom),
+            my_sys,
+        ))
+        .build();
+    match world.try_run_default().map_err(RunWorkload::custom_error) {
+        Err(Some(error)) =&gt; {
+            assert!(error.is::&lt;TerribleError&gt;());
+        }
+        _ =&gt; {}
+    }
+}</code></pre>
+<p>The error has to be anonymized so you'll get back a <code>Box&lt;dyn Error + Send&gt;</code> with std and a <code>Box&lt;dyn Any + Send&gt;</code> with no_std.<br />
+Workloads stop at the first error encountered, just like 0.3.<br />
+You can also use the <code>try_system!</code> macro the same way as <code>system!</code>.</p>
+<pre><code class="language-rust  noplaypen">world
+    .add_workload(&quot;May fail&quot;)
+    .with_system(try_system!(my_sys))
+    .build();</code></pre>
+<p>It'll generate the same code as above.</p>
+<h2 id="iterator"><a class="header" href="#iterator">Iterator</a></h2>
+<p>You can now use <code>std::iter::Iterator</code> and <code>for loop</code> with views without having to call <code>into_iter</code>.<br />
+All iteration code from 0.3 will still work.</p>
+<pre><code class="language-rust  noplaypen">fn my_sys((mut usizes, u32s): (ViewMut&lt;usize&gt;, View&lt;u32&gt;)) {
+    for (i, &amp;j) in (&amp;mut usizes, &amp;u32s).iter() {
+        *i += j as usize;
+    }
+}</code></pre>
+<h2 id="get"><a class="header" href="#get">Get</a></h2>
+<p>The <code>GetComponent</code> trait has been renamed <code>Get</code>.</p>
+<p>What follows is only true for 0.4. 0.5 went back to <code>get</code> returning a <code>Result</code>.<br />
+<code>Get::get</code> has been renamed <code>try_get</code> and a new <code>get</code> method has been added to unwrap errors.</p>
+<p>If you used <code>get</code> followed by <code>unwrap</code>, you can simply remove the <code>unwrap</code>.<br />
+If you used another error handling method you'll have to replace <code>get</code> by <code>try_get</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="contributors"><a class="header" href="#contributors">Contributors</a></h1>
+<p><a href="https://github.com/dakom">dakom - David Komer</a><br />
+<a href="https://github.com/eldyer">eldyer</a></p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>
