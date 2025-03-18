@@ -55,7 +55,7 @@ impl<'tmp, T: Component, Track> ShiperatorCaptain for Not<FullRawWindowMut<'tmp,
     fn unpick(&mut self) {}
 }
 
-macro_rules! impl_into_shiperator_tracking {
+macro_rules! impl_shiperator_captain_not_tracking {
     ($($type: ident)+) => {$(
         impl<'tmp, T: ShiperatorCaptain> ShiperatorCaptain for Not<$type<T>> {
             #[inline]
@@ -85,4 +85,4 @@ macro_rules! impl_into_shiperator_tracking {
     )+};
 }
 
-impl_into_shiperator_tracking![Inserted Modified InsertedOrModified];
+impl_shiperator_captain_not_tracking![Inserted Modified InsertedOrModified];

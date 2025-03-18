@@ -20,7 +20,7 @@ impl<'tmp, T: Component> ShiperatorOutput for FullRawWindow<'tmp, T> {
     type Out = &'tmp T;
 }
 
-macro_rules! impl_abstract_mut_ref {
+macro_rules! impl_shiperator_output_no_mut {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorOutput for FullRawWindowMut<'tmp, T, $track> {
@@ -30,9 +30,9 @@ macro_rules! impl_abstract_mut_ref {
     }
 }
 
-impl_abstract_mut_ref![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
+impl_shiperator_output_no_mut![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
 
-macro_rules! impl_abstract_mut_mut {
+macro_rules! impl_shiperator_output_mut {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorOutput for FullRawWindowMut<'tmp, T, $track> {
@@ -42,7 +42,7 @@ macro_rules! impl_abstract_mut_mut {
     }
 }
 
-impl_abstract_mut_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
+impl_shiperator_output_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 impl<T: ShiperatorOutput> ShiperatorOutput for Inserted<T> {
     type Out = T::Out;
@@ -64,7 +64,7 @@ impl<'tmp, T: Component, Track> ShiperatorOutput for Not<FullRawWindowMut<'tmp, 
     type Out = ();
 }
 
-macro_rules! impl_into_shiperator_tracking {
+macro_rules! impl_shiperator_output_tracking_not {
     ($($type: ident)+) => {$(
         impl<'tmp, T: ShiperatorOutput> ShiperatorOutput for Not<$type<T>> {
             type Out = T::Out;
@@ -72,7 +72,7 @@ macro_rules! impl_into_shiperator_tracking {
     )+};
 }
 
-impl_into_shiperator_tracking![Inserted Modified InsertedOrModified];
+impl_shiperator_output_tracking_not![Inserted Modified InsertedOrModified];
 
 impl<T: ShiperatorOutput, U: ShiperatorOutput> ShiperatorOutput for OrWindow<(T, U)> {
     type Out = OneOfTwo<T::Out, U::Out>;

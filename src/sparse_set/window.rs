@@ -391,10 +391,3 @@ impl RawEntityIdAccess {
         (self, other)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    /// This is tested by shiperator::split_at
-    #[test]
-    fn raw_entity_access_split_at() {}
-}

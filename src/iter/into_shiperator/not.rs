@@ -168,30 +168,3 @@ macro_rules! impl_into_shiperator_tracking {
 }
 
 impl_into_shiperator_tracking![Inserted Modified InsertedOrModified];
-
-// impl<T: IntoShiperator, U: IntoShiperator> IntoShiperator for Not<Or<(T, U)>> {
-//     type Shiperator = Not<Or<(T::Shiperator, U::Shiperator)>>;
-
-//     #[inline]
-//     fn into_shiperator(
-//         self,
-//         storage_ids: &mut ShipHashSet<StorageId>,
-//     ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-//         let (shiperator, len, entity_access) = self.0.into_shiperator(storage_ids);
-
-//         (Not(shiperator), len, entity_access)
-//     }
-
-//     #[inline]
-//     fn potential_co_captain(&self, _storage_ids: &mut ShipHashSet<StorageId>) {}
-
-//     #[inline]
-//     fn can_captain() -> bool {
-//         false
-//     }
-
-//     #[inline]
-//     fn can_sailor() -> bool {
-//         true
-//     }
-// }

@@ -77,7 +77,7 @@ impl<'tmp, T: Component> ShiperatorSailor for Not<Inserted<FullRawWindow<'tmp, T
     }
 }
 
-macro_rules! impl_abstract_mut_mut {
+macro_rules! impl_shiperator_sailor_not_inserted {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorSailor for Not<Inserted<FullRawWindowMut<'tmp, T, $track>>> {
@@ -112,8 +112,8 @@ macro_rules! impl_abstract_mut_mut {
     }
 }
 
-impl_abstract_mut_mut![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
-impl_abstract_mut_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
+impl_shiperator_sailor_not_inserted![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
+impl_shiperator_sailor_not_inserted![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 impl<'tmp, T: Component> ShiperatorSailor for Not<Modified<FullRawWindow<'tmp, T>>> {
     type Index = usize;
@@ -144,7 +144,7 @@ impl<'tmp, T: Component> ShiperatorSailor for Not<Modified<FullRawWindow<'tmp, T
     }
 }
 
-macro_rules! impl_abstract_mut_mut {
+macro_rules! impl_shiperator_sailor_not_modified {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorSailor for Not<Modified<FullRawWindowMut<'tmp, T, $track>>> {
@@ -179,8 +179,8 @@ macro_rules! impl_abstract_mut_mut {
     }
 }
 
-impl_abstract_mut_mut![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
-impl_abstract_mut_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
+impl_shiperator_sailor_not_modified![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
+impl_shiperator_sailor_not_modified![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 impl<'tmp, T: Component> ShiperatorSailor for Not<InsertedOrModified<FullRawWindow<'tmp, T>>> {
     type Index = usize;
@@ -213,7 +213,7 @@ impl<'tmp, T: Component> ShiperatorSailor for Not<InsertedOrModified<FullRawWind
     }
 }
 
-macro_rules! impl_abstract_mut_mut {
+macro_rules! impl_shiperator_sailor_not_inserted_or_modified {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorSailor for Not<InsertedOrModified<FullRawWindowMut<'tmp, T, $track>>> {
@@ -250,5 +250,5 @@ macro_rules! impl_abstract_mut_mut {
     }
 }
 
-impl_abstract_mut_mut![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
-impl_abstract_mut_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
+impl_shiperator_sailor_not_inserted_or_modified![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
+impl_shiperator_sailor_not_inserted_or_modified![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];

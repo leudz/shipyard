@@ -28,7 +28,7 @@ impl<S: ShiperatorOutput> ShiperatorOutput for Mixed<S> {
     type Out = S::Out;
 }
 
-macro_rules! impl_abstract_mut {
+macro_rules! impl_shiperator_output {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: ShiperatorOutput),+> ShiperatorOutput for Mixed<($($type,)+)> {
             type Out = ($($type::Out,)+);
@@ -131,14 +131,14 @@ macro_rules! impl_abstract_mut {
     };
 }
 
-macro_rules! abstract_mut {
+macro_rules! shiperator_output {
     ($(($type: ident, $index: tt))+; ($type1: ident, $index1: tt) $(($queue_type: ident, $queue_index: tt))*) => {
-        impl_abstract_mut![$(($type, $index))*];
-        abstract_mut![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
+        impl_shiperator_output![$(($type, $index))*];
+        shiperator_output![$(($type, $index))* ($type1, $index1); $(($queue_type, $queue_index))*];
     };
     ($(($type: ident, $index: tt))+;) => {
-        impl_abstract_mut![$(($type, $index))*];
+        impl_shiperator_output![$(($type, $index))*];
     }
 }
 
-abstract_mut![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];
+shiperator_output![(A, 0); (B, 1) (C, 2) (D, 3) (E, 4) (F, 5) (G, 6) (H, 7) (I, 8) (J, 9)];

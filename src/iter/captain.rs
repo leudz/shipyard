@@ -56,7 +56,7 @@ impl<'tmp, T: Component> ShiperatorCaptain for FullRawWindow<'tmp, T> {
     fn unpick(&mut self) {}
 }
 
-macro_rules! impl_abstract_mut_ref {
+macro_rules! impl_shiperator_captain_no_mut {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorCaptain for FullRawWindowMut<'tmp, T, $track> {
@@ -85,9 +85,9 @@ macro_rules! impl_abstract_mut_ref {
     }
 }
 
-impl_abstract_mut_ref![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
+impl_shiperator_captain_no_mut![track::Untracked track::Insertion track::InsertionAndDeletion track::InsertionAndRemoval track::InsertionAndDeletionAndRemoval track::Deletion track::DeletionAndRemoval track::Removal];
 
-macro_rules! impl_abstract_mut_mut {
+macro_rules! impl_shiperator_captain_mut {
     ($($track: path)+) => {
         $(
             impl<'tmp, T: Component> ShiperatorCaptain for FullRawWindowMut<'tmp, T, $track> {
@@ -120,7 +120,7 @@ macro_rules! impl_abstract_mut_mut {
     }
 }
 
-impl_abstract_mut_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
+impl_shiperator_captain_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 impl<'tmp> ShiperatorCaptain for &'tmp [EntityId] {
     unsafe fn get_captain_data(&self, index: usize) -> Self::Out {

@@ -3,7 +3,7 @@ use crate::tracking::{Inserted, InsertedOrModified, Modified};
 
 const TRACKING_FACTOR: f32 = 2.0;
 
-macro_rules! impl_into_shiperator_tracking {
+macro_rules! impl_shiperator_captain_tracking {
     ($($type: ident)+) => {$(
         impl<'tmp, T: ShiperatorCaptain> ShiperatorCaptain for $type<T> {
             #[inline]
@@ -33,4 +33,4 @@ macro_rules! impl_into_shiperator_tracking {
     )+};
 }
 
-impl_into_shiperator_tracking![Inserted Modified InsertedOrModified];
+impl_shiperator_captain_tracking![Inserted Modified InsertedOrModified];
