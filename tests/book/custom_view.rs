@@ -1,6 +1,6 @@
 use shipyard::{
-    AllStorages, Borrow, BorrowInfo, Component, EntitiesViewMut, IntoIter, SharedBorrow,
-    TrackingTimestamp, Unique, UniqueView, ViewMut, World,
+    atomic_refcell::SharedBorrow, tracking::TrackingTimestamp, AllStorages, Borrow, BorrowInfo,
+    Component, EntitiesViewMut, IntoIter, Unique, UniqueView, ViewMut, World,
 };
 use std::iter;
 
@@ -242,7 +242,7 @@ struct RenderGraphicsViewMut {
 // ANCHOR_END: custom_view
 
 // ANCHOR: borrow
-impl shipyard::Borrow for RenderGraphicsViewMut {
+impl shipyard::borrow::Borrow for RenderGraphicsViewMut {
     type View<'v> = RenderGraphicsViewMut;
 
     fn borrow<'a>(
@@ -290,7 +290,7 @@ struct RenderGraphicsViewMut<'v> {
 // ANCHOR_END: custom_view_full
 
 // ANCHOR: borrow_revisit
-impl shipyard::Borrow for RenderGraphicsViewMut<'_> {
+impl shipyard::borrow::Borrow for RenderGraphicsViewMut<'_> {
     type View<'v> = RenderGraphicsViewMut<'v>;
 
     fn borrow<'a>(
@@ -347,8 +347,8 @@ impl Drop for RenderGraphicsViewMut<'_> {
 
 // ANCHOR: borrow_info
 // SAFE: All storages info is recorded.
-unsafe impl shipyard::BorrowInfo for RenderGraphicsViewMut<'_> {
-    fn borrow_info(info: &mut Vec<shipyard::info::TypeInfo>) {
+unsafe impl shipyard::borrow::BorrowInfo for RenderGraphicsViewMut<'_> {
+    fn borrow_info(info: &mut Vec<shipyard::scheduler::info::TypeInfo>) {
         <UniqueView<Graphics>>::borrow_info(info);
     }
 

@@ -173,7 +173,7 @@ pub trait CustomStorageAccess {
     /// This can be used to list the names of an entity's components for example.
     ///
     /// ```rust
-    /// use shipyard::{AllStoragesView, Component, CustomStorageAccess, Storage, World};
+    /// use shipyard::{AllStoragesView, Component, all_storages::CustomStorageAccess, Storage, World};
     ///
     /// #[derive(Component)]
     /// struct MyComponent;

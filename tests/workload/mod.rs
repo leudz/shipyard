@@ -15,7 +15,7 @@ impl Component for USIZE {
 impl Unique for USIZE {}
 
 use core::any::type_name;
-use shipyard::*;
+use shipyard::{borrow::BorrowInfo, scheduler::AsLabel, *};
 
 #[test]
 fn duplicate_name() {

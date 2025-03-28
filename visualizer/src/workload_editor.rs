@@ -1,4 +1,4 @@
-use shipyard::info::{BatchInfo, Conflict, WorkloadInfo};
+use shipyard::scheduler::info::{BatchInfo, Conflict, WorkloadInfo};
 use wasm_bindgen::JsCast;
 use web_sys::{window, HtmlDivElement, HtmlInputElement};
 use yew::prelude::*;

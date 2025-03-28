@@ -1,3 +1,4 @@
+use shipyard::sparse_set::SparseSet;
 use shipyard::*;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]

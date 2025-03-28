@@ -14,6 +14,7 @@ pub use drain::SparseSetDrain;
 pub use memory_usage::{SparseSetMemory, SparseSetMemoryUsage};
 pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
+#[doc(hidden)]
 pub use window::RawEntityIdAccess;
 
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
@@ -190,6 +191,7 @@ impl<T: Component> SparseSet<T> {
     }
 }
 
+/// [`SparseSet::insert`]'s return value.
 #[must_use]
 pub enum InsertionResult<T> {
     /// No component were present at this index.

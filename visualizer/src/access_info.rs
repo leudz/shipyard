@@ -1,6 +1,6 @@
+use shipyard::borrow::Mutability;
+use shipyard::scheduler::info::TypeInfo;
 use std::collections::HashMap;
-
-use shipyard::{info::TypeInfo, Mutability};
 use yew::prelude::*;
 
 pub(crate) struct AccessInfo {

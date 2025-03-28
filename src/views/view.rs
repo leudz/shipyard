@@ -2,15 +2,15 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::get::Get;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
     DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalTracking, Tracking,
+    Modified, RemovalTracking, Tracking, TrackingTimestamp,
 };
-use crate::{error, TrackingTimestamp};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::Deref;
@@ -143,7 +143,7 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
     /// Creates a new [`View`] for custom [`SparseSet`] storage.
     ///
     /// ```
-    /// use shipyard::{track, Component, SparseSet, StorageId, View, World};
+    /// use shipyard::{track, Component, sparse_set::SparseSet, StorageId, View, World};
     ///
     /// struct ScriptingComponent(Vec<u8>);
     /// impl Component for ScriptingComponent {

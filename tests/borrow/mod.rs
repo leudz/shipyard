@@ -1,5 +1,6 @@
 use core::any::type_name;
 use shipyard::error;
+use shipyard::sparse_set::SparseSet;
 use shipyard::*;
 
 #[allow(unused)]

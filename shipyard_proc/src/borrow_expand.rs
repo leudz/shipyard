@@ -57,16 +57,16 @@ pub(crate) fn expand_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?
+                            #field_name: <#field_type as ::shipyard::borrow::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?
                         )
                     }
                 });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
+                impl #impl_generics ::shipyard::borrow::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp,) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::atomic_refcell::SharedBorrow<'__a>>, last_run: Option<::shipyard::tracking::TrackingTimestamp>, current: ::shipyard::tracking::TrackingTimestamp,) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -80,14 +80,14 @@ pub(crate) fn expand_borrow(
                 .iter()
                 .map(|field| {
                     let field_type = &field.ty;
-                    quote!(<#field_type as ::shipyard::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?)
+                    quote!(<#field_type as ::shipyard::borrow::Borrow>::borrow(all_storages, all_borrow.clone(), last_run, current)?)
                 });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::Borrow for #name #ty_generics #where_clause {
+                impl #impl_generics ::shipyard::borrow::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::SharedBorrow<'__a>>, last_run: Option<::shipyard::TrackingTimestamp>, current: ::shipyard::TrackingTimestamp) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::atomic_refcell::SharedBorrow<'__a>>, last_run: Option<::shipyard::tracking::TrackingTimestamp>, current: ::shipyard::tracking::TrackingTimestamp) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#borrow),*))
                     }
                 }

@@ -1,3 +1,4 @@
+use shipyard::sparse_set::SparseSet;
 use shipyard::*;
 
 #[allow(unused)]

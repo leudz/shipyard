@@ -1,14 +1,14 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::{BorrowInfo, Mutability, WorldBorrow};
-use crate::info::DedupedLabels;
+use crate::error;
+use crate::scheduler::info::DedupedLabels;
 use crate::scheduler::into_workload_system::Nothing;
 use crate::scheduler::label::SystemLabel;
-use crate::scheduler::{TypeInfo, WorkloadSystem};
+use crate::scheduler::{AsLabel, TypeInfo, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::tracking::TrackingTimestamp;
 use crate::type_id::TypeId;
 use crate::World;
-use crate::{error, AsLabel};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;

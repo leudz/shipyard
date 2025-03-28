@@ -3,7 +3,7 @@ use crate::atomic_refcell::{ARef, SharedBorrow};
 use crate::borrow::{Borrow, BorrowInfo, WorldBorrow};
 use crate::component::Unique;
 use crate::error;
-use crate::info::TypeInfo;
+use crate::scheduler::info::TypeInfo;
 use crate::tracking::TrackingTimestamp;
 use crate::views::UniqueViewMut;
 use crate::world::World;

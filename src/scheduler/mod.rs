@@ -20,10 +20,10 @@ pub use workload_modificator::WorkloadModificator;
 
 pub(crate) use info::TypeInfo;
 
-use crate::info::WorkloadInfo;
+use crate::scheduler::info::WorkloadInfo;
 use crate::scheduler::system::WorkloadRunIfFn;
 use crate::type_id::TypeId;
-use crate::World;
+use crate::world::World;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::vec::Vec;

@@ -1,9 +1,12 @@
 use crate::borrow::{BorrowInfo, WorldBorrow};
+use crate::component::{Component, Unique};
+use crate::error;
 use crate::scheduler::into_workload_run_if::IntoRunIf;
-use crate::scheduler::{IntoWorkloadSystem, WorkloadSystem};
+use crate::scheduler::{AsLabel, IntoWorkloadSystem, WorkloadSystem};
+use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::{error, AllStoragesViewMut, AsLabel, Unique, UniqueStorage};
-use crate::{Component, SparseSet};
+use crate::unique::UniqueStorage;
+use crate::views::AllStoragesViewMut;
 use alloc::boxed::Box;
 use core::ops::Not;
 

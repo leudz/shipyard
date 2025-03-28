@@ -7,6 +7,8 @@ mod parallel;
 mod sailor;
 mod with_id;
 
+#[doc(inline)]
+pub use crate::sparse_set::RawEntityIdAccess;
 pub use captain::ShiperatorCaptain;
 pub use into_shiperator::{IntoIter, IntoShiperator};
 pub use mixed::Mixed;
@@ -18,7 +20,7 @@ pub use sailor::ShiperatorSailor;
 pub use with_id::WithId;
 
 use crate::component::Component;
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use core::iter::FusedIterator;
 
 /// Handles storages iteration.

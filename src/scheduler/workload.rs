@@ -6,12 +6,15 @@ use crate::scheduler::info::{
 };
 use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::system::{ExtractWorkloadRunIf, WorkloadRunIfFn};
-use crate::scheduler::{AsLabel, Batches, IntoWorkloadTrySystem, Label, Scheduler, WorkloadSystem};
+use crate::scheduler::{
+    AsLabel, Batches, IntoWorkload, IntoWorkloadSystem, IntoWorkloadTrySystem, Label, Scheduler,
+    WorkloadSystem,
+};
 use crate::storage::StorageId;
 use crate::type_id::TypeId;
 use crate::unique::UniqueStorage;
 use crate::world::World;
-use crate::{error, IntoWorkload, IntoWorkloadSystem, ShipHashMap};
+use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::format;
 // macro not module
@@ -91,7 +94,7 @@ impl ScheduledWorkload {
 }
 
 impl World {
-    /// Creates a new workload and store it in the [`World`](crate::World).
+    /// Creates a new workload and store it in the [`World`].
     pub fn add_workload<Views, R, W, F: FnOnce() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
@@ -1729,7 +1732,7 @@ mod tests {
 
     #[test]
     fn multiple_immutable() {
-        use crate::{IntoWorkloadSystem, View, World};
+        use crate::{scheduler::IntoWorkloadSystem, View, World};
 
         fn system1(_: View<'_, Usize>) {}
         fn system2(_: View<'_, Usize>) {}

@@ -1,7 +1,7 @@
 use super::TypeInfo;
 use crate::all_storages::AllStorages;
 use crate::error;
-use crate::info::DedupedLabels;
+use crate::scheduler::info::DedupedLabels;
 use crate::scheduler::label::Label;
 use crate::scheduler::workload::Workload;
 use crate::type_id::TypeId;
@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 /// ### Example:
 ///
 /// ```rust
-/// use shipyard::{Component, IntoWorkloadSystem, View, Workload, WorkloadSystem, World};
+/// use shipyard::{Component, IntoWorkloadSystem, View, Workload, scheduler::WorkloadSystem, World};
 ///
 /// #[derive(Component)]
 /// struct U32(u32);

@@ -30,7 +30,7 @@ use core::any::type_name;
 ///
 /// ### Example of manual implementation:
 /// ```rust
-/// use shipyard::{BorrowInfo, info::TypeInfo, track, View, UniqueView};
+/// use shipyard::{borrow::BorrowInfo, scheduler::info::TypeInfo, track, View, UniqueView};
 ///
 /// # struct Camera {}
 /// # impl shipyard::Unique for Camera {}

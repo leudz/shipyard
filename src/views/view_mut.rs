@@ -2,6 +2,7 @@ use crate::all_storages::AllStorages;
 use crate::atomic_refcell::{ARef, ARefMut, ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::get::Get;
 use crate::r#mut::Mut;
 use crate::sparse_set::{SparseSet, SparseSetDrain};
@@ -9,10 +10,9 @@ use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
     DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalOrDeletionTracking, RemovalTracking, Tracking,
+    Modified, RemovalOrDeletionTracking, RemovalTracking, Tracking, TrackingTimestamp,
 };
 use crate::views::view::View;
-use crate::{error, TrackingTimestamp};
 use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
@@ -135,7 +135,7 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
     /// Creates a new [`ViewMut`] for custom [`SparseSet`] storage.
     ///
     /// ```
-    /// use shipyard::{track, Component, SparseSet, StorageId, ViewMut, World};
+    /// use shipyard::{track, Component, sparse_set::SparseSet, StorageId, ViewMut, World};
     ///
     /// struct ScriptingComponent(Vec<u8>);
     /// impl Component for ScriptingComponent {

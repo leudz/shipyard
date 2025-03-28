@@ -1,5 +1,5 @@
+use crate::scheduler::IntoWorkloadSystem;
 use crate::type_id::TypeId;
-use crate::IntoWorkloadSystem;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;

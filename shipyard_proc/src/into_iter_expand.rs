@@ -250,7 +250,7 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     #[track_caller]
-                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::StorageId>) -> (Self::Shiperator, usize, shipyard::RawEntityIdAccess) {
+                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::StorageId>) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
                         let (shiperator, end, entities) = (#iter_fields_access).into_shiperator(storage_ids);
 
                         (#iter_name (shiperator), end, entities)
@@ -390,7 +390,7 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     #[track_caller]
-                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::StorageId>) -> (Self::Shiperator, usize, shipyard::RawEntityIdAccess) {
+                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::StorageId>) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
                         #tuple.into_shiperator(storage_ids)
                     }
 

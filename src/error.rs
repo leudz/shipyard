@@ -1,7 +1,7 @@
 //! All error types.
 
 use crate::entity_id::EntityId;
-use crate::info::TypeInfo;
+use crate::scheduler::info::TypeInfo;
 use crate::scheduler::Label;
 use crate::storage::StorageId;
 use alloc::borrow::Cow;

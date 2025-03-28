@@ -60,16 +60,16 @@ pub(crate) fn expand_world_borrow(
                         )
                     } else {
                         quote!(
-                            #field_name: <#field_type as ::shipyard::WorldBorrow>::world_borrow(world, last_run, current)?
+                            #field_name: <#field_type as ::shipyard::borrow::WorldBorrow>::world_borrow(world, last_run, current)?
                         )
                     }
                 });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::WorldBorrow for #name #ty_generics #where_clause {
+                impl #impl_generics ::shipyard::borrow::WorldBorrow for #name #ty_generics #where_clause {
                     type WorldView<'__view> = #name #gat_ty_generics;
 
-                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<TrackingTimestamp>, current: TrackingTimestamp) -> core::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
+                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<::shipyard::tracking::TrackingTimestamp>, current: ::shipyard::tracking::TrackingTimestamp) -> core::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -80,14 +80,14 @@ pub(crate) fn expand_world_borrow(
         syn::Fields::Unnamed(fields) => {
             let world_borrow = fields.unnamed.iter().map(|field| {
                 let field_type = &field.ty;
-                quote!(<#field_type as ::shipyard::WorldBorrow>::world_borrow(world, last_run, current)?)
+                quote!(<#field_type as ::shipyard::borrow::WorldBorrow>::world_borrow(world, last_run, current)?)
             });
 
             Ok(quote!(
-                impl #impl_generics ::shipyard::WorldBorrow for #name #ty_generics #where_clause {
+                impl #impl_generics ::shipyard::borrow::WorldBorrow for #name #ty_generics #where_clause {
                     type WorldView<'__view> = #name #gat_ty_generics;
 
-                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<TrackingTimestamp>, current: TrackingTimestamp) -> core::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
+                    fn world_borrow<'__w>(world: & '__w ::shipyard::World, last_run: Option<::shipyard::tracking::TrackingTimestamp>, current: ::shipyard::tracking::TrackingTimestamp) -> core::result::Result<Self::WorldView<'__w>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#world_borrow),*))
                     }
                 }

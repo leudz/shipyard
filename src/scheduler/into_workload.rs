@@ -1,10 +1,9 @@
-use crate::info::DedupedLabels;
+use crate::scheduler::info::DedupedLabels;
 use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
 use crate::scheduler::system::WorkloadSystem;
 use crate::scheduler::workload::Workload;
-use crate::scheduler::IntoWorkloadSystem;
+use crate::scheduler::{AsLabel, IntoWorkloadSystem, WorkloadModificator};
 use crate::type_id::TypeId;
-use crate::{AsLabel, WorkloadModificator};
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
 use core::sync::atomic::{AtomicU32, Ordering};

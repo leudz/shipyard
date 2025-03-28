@@ -1,12 +1,12 @@
 use crate::all_storages::AllStorages;
 use crate::atomic_refcell::ARef;
-use crate::borrow::{Borrow, WorldBorrow};
+use crate::borrow::{Borrow, BorrowInfo, WorldBorrow};
 use crate::component::Unique;
-use crate::info::TypeInfo;
+use crate::error;
+use crate::scheduler::info::TypeInfo;
 use crate::tracking::TrackingTimestamp;
 use crate::views::UniqueView;
 use crate::world::World;
-use crate::{error, BorrowInfo};
 use alloc::vec::Vec;
 use core::ops::Deref;
 

@@ -64,8 +64,8 @@ pub(crate) fn expand_borrow_info(
                     });
 
             Ok(quote!(
-                unsafe impl #impl_generics ::shipyard::BorrowInfo for #name #ty_generics #where_clause {
-                    fn borrow_info(info: &mut Vec<::shipyard::info::TypeInfo>) {
+                unsafe impl #impl_generics ::shipyard::borrow::BorrowInfo for #name #ty_generics #where_clause {
+                    fn borrow_info(info: &mut Vec<::shipyard::scheduler::info::TypeInfo>) {
                         #(#field_info)*
                     }
                     fn enable_tracking(
@@ -81,8 +81,8 @@ pub(crate) fn expand_borrow_info(
             let field_type_clone = field_type.clone();
 
             Ok(quote!(
-                unsafe impl #impl_generics ::shipyard::BorrowInfo for #name #ty_generics #where_clause {
-                    fn borrow_info(info: &mut Vec<::shipyard::info::TypeInfo>) {
+                unsafe impl #impl_generics ::shipyard::borrow::BorrowInfo for #name #ty_generics #where_clause {
+                    fn borrow_info(info: &mut Vec<::shipyard::scheduler::info::TypeInfo>) {
                         #(<#field_type_clone>::borrow_info(info);)*
                     }
                     fn enable_tracking(

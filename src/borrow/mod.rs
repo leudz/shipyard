@@ -43,7 +43,7 @@ pub enum Mutability {
 ///
 /// ### Example of manual implementation:
 /// ```rust
-/// use shipyard::{AllStorages, Borrow, SharedBorrow, track, TrackingTimestamp, View, UniqueView};
+/// use shipyard::{AllStorages, borrow::Borrow, atomic_refcell::SharedBorrow, track, tracking::TrackingTimestamp, View, UniqueView};
 ///
 /// # struct Camera {}
 /// # impl shipyard::Unique for Camera {}

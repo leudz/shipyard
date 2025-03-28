@@ -14,7 +14,7 @@ use crate::entity_id::EntityId;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
 use crate::iter::{ShiperatorCaptain, ShiperatorSailor};
-use crate::iter_component::{into_iter, IterComponent};
+use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::public_transport::ShipyardRwLock;
@@ -28,7 +28,7 @@ use crate::system::AllSystem;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
 use crate::unique::UniqueStorage;
 use crate::views::EntitiesViewMut;
-use crate::{error, IntoIterRef, ShipHashMap};
+use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
@@ -399,7 +399,7 @@ impl AllStorages {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, Component, SparseSet, World};
+    /// use shipyard::{AllStoragesViewMut, Component, sparse_set::SparseSet, World};
     ///
     /// #[derive(Component)]
     /// struct U32(u32);
@@ -983,7 +983,7 @@ let i = all_storages.run(sys1);
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, Component, SparseSet, World};
+    /// use shipyard::{AllStoragesViewMut, Component, sparse_set::SparseSet, World};
     ///
     /// #[derive(Component)]
     /// struct U32(u32);

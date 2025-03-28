@@ -1,4 +1,4 @@
-use shipyard::info::WorkloadsInfo;
+use shipyard::scheduler::info::WorkloadsInfo;
 use yew::prelude::*;
 
 pub(crate) struct Home;

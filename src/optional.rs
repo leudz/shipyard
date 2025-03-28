@@ -1,7 +1,30 @@
 use crate::component::Component;
 use crate::views::{View, ViewMut};
 
-#[allow(missing_docs)]
+/// Allows iteration over a component that may be absent.
+///
+/// ### Example:
+///
+/// ```
+/// use shipyard::{Component, IntoIter, View, World};
+///
+/// #[derive(Component, PartialEq, Eq, Debug)]
+/// struct A(u32);
+///
+/// #[derive(Component, PartialEq, Eq, Debug)]
+/// struct B(u32);
+///
+/// let mut world = World::new();
+///
+/// world.add_entity((A(0),));
+/// world.add_entity((A(1), B(10)));
+///
+/// let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+/// let mut iter = (&a, b.as_optional()).iter();
+///
+/// assert_eq!(iter.next(), Some((&A(0), None)));
+/// assert_eq!(iter.next(), Some((&A(1), Some(&B(10)))));
+/// ```
 #[derive(Clone)]
 pub struct Optional<T>(pub T);
 
