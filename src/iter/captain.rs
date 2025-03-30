@@ -134,7 +134,7 @@ impl<'tmp> ShiperatorCaptain for &'tmp [EntityId] {
     }
 
     fn is_exact_sized(&self) -> bool {
-        true
+        false
     }
 
     fn unpick(&mut self) {}

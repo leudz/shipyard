@@ -111,16 +111,16 @@ macro_rules! impl_shiperator_sailor_mut {
 impl_shiperator_sailor_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 impl<'tmp> ShiperatorSailor for &'tmp [EntityId] {
-    type Index = usize;
+    type Index = EntityId;
 
     #[inline]
-    unsafe fn get_sailor_data(&self, _index: Self::Index) -> Self::Out {
-        unreachable!()
+    unsafe fn get_sailor_data(&self, index: Self::Index) -> Self::Out {
+        index
     }
 
     #[inline]
-    fn indices_of(&self, _entity_id: EntityId, _index: usize) -> Option<Self::Index> {
-        unreachable!()
+    fn indices_of(&self, entity_id: EntityId, _index: usize) -> Option<Self::Index> {
+        Some(entity_id)
     }
 
     #[inline]

@@ -318,3 +318,22 @@ fn world_iter_correct_borrow() {
 //     }
 //     assert_eq!(i, 100);
 // }
+
+#[test]
+fn vec() {
+    let mut world = World::new();
+
+    world.bulk_add_entity((0..100).map(USIZE));
+
+    world.run(|v_usize: View<USIZE>| {
+        let eids = v_usize.iter().ids().collect::<Vec<_>>();
+
+        let other_eids = (&*eids, &v_usize)
+            .iter()
+            .map(|(eid, _a)| eid)
+            .collect::<Vec<_>>();
+
+        assert_eq!(eids.len(), 100);
+        assert_eq!(eids, other_eids);
+    });
+}

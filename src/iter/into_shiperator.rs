@@ -371,7 +371,7 @@ macro_rules! impl_into_shiperator_tuple {
                             .enumerate()
                     {
                         if !can_sailor {
-                            mask &= 1 << index;
+                            mask = 1 << index;
                             len = shiperator_len;
                             entity_iter = shiperator_entity_iter;
 
