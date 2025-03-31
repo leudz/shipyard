@@ -180,8 +180,7 @@ jobs:
           target: wasm32-unknown-unknown
 
       - name: install wasm-pack
-        # https://github.com/rustwasm/wasm-pack/issues/823#issuecomment-1242611318
-        run: cargo install --git https://github.com/frewsxcv/wasm-pack.git --branch patch-2
+        run: cargo install wasm-pack
 
       - run: wasm-pack build bunny_demo --target web --release --out-dir public/wasm
 
