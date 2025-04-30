@@ -21,13 +21,13 @@ We start off with an empty sparse set:
 To add `3` to our sparse set, we first append it to `dense` and then set `sparse[3]` to `0`
 (the position of `3` in `dense`):
 
-- Sparse Array: `[U, U, 0]`
+- Sparse Array: `[U, U, U, 0]`
 - Dense Array: `[3]`
   `U` is short for uninitialised.
 
 If we then add `0`, the sparse set will look like so:
 
-- Sparse Array: `[1, U, 0]`
+- Sparse Array: `[1, U, U, 0]`
 - Dense Array: `[3, 0]`
 
 Searching a sparse set is `O(1)`. To check if the integer `i` exists we check whether
