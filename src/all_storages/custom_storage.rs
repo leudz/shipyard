@@ -17,8 +17,10 @@ pub trait CustomStorageAccess {
         storage_id: StorageId,
     ) -> Result<ARef<'_, &'_ dyn Storage>, error::GetStorage>;
     /// Returns a [`ARefMut`] to the requested `S` storage.
+    #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     fn custom_storage_mut<S: 'static>(&self) -> Result<ARefMut<'_, &'_ mut S>, error::GetStorage>;
     /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`].
+    #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     fn custom_storage_mut_by_id(
         &self,
         storage_id: StorageId,
@@ -95,6 +97,7 @@ pub trait CustomStorageAccess {
         S: 'static + Storage,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
+    #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     fn custom_storage_or_insert_mut<S, F>(
         &self,
         f: F,
@@ -103,6 +106,7 @@ pub trait CustomStorageAccess {
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
+    #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     fn custom_storage_or_insert_mut_by_id<S, F>(
         &self,
         storage_id: StorageId,

@@ -183,6 +183,7 @@ impl<T: ?Sized> AtomicRefCell<T> {
     /// The borrow lasts until the returned `RefMut` exits scope. The value cannot be borrowed while this borrow is
     /// active.
     #[inline]
+    #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     pub(crate) fn borrow_mut(&self) -> Result<ARefMut<'_, &'_ mut T>, error::Borrow> {
         #[cfg(feature = "thread_local")]
         {

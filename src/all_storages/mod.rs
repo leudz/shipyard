@@ -1023,6 +1023,7 @@ let i = all_storages.run(sys1);
             Err(err) => Err(error::GetStorage::Entities(err)),
         }
     }
+    #[allow(clippy::mut_from_ref, reason = "Interior mutability")]
     pub(crate) fn entities_mut(&self) -> Result<ARefMut<'_, &'_ mut Entities>, error::GetStorage> {
         let storage_id = StorageId::of::<Entities>();
 

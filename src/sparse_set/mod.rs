@@ -437,6 +437,7 @@ impl<T: Component> SparseSet<T> {
 
 impl<T: Component> SparseSet<T> {
     /// Make this storage track insertions.
+    #[allow(clippy::manual_repeat_n, reason = "Too recent version")]
     pub fn track_insertion(&mut self) -> &mut SparseSet<T> {
         if self.is_tracking_insertion() {
             return self;
@@ -450,6 +451,7 @@ impl<T: Component> SparseSet<T> {
         self
     }
     /// Make this storage track modification.
+    #[allow(clippy::manual_repeat_n, reason = "Too recent version")]
     pub fn track_modification(&mut self) -> &mut SparseSet<T> {
         if self.is_tracking_modification() {
             return self;
