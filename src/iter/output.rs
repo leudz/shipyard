@@ -86,7 +86,7 @@ impl<'tmp, T: Component> ShiperatorOutput for Optional<FullRawWindow<'tmp, T>> {
     type Out = Option<&'tmp T>;
 }
 
-impl<'tmp, T: Component, Track> ShiperatorOutput for Option<FullRawWindowMut<'tmp, T, Track>>
+impl<'tmp, T: Component, Track> ShiperatorOutput for Optional<FullRawWindowMut<'tmp, T, Track>>
 where
     FullRawWindowMut<'tmp, T, Track>: ShiperatorOutput,
 {
