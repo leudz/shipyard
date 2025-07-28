@@ -32,10 +32,12 @@ impl<T: 'static> SizedAny for T {
 /// Defines common storage operations.
 pub trait Storage: SizedAny {
     /// Casts to `&dyn Any`.
+    #[inline]
     fn any(&self) -> &dyn Any {
         SizedAny::as_any(self)
     }
     /// Casts to `&mut dyn Any`.
+    #[inline]
     fn any_mut(&mut self) -> &mut dyn Any {
         SizedAny::as_any_mut(self)
     }
@@ -48,10 +50,12 @@ pub trait Storage: SizedAny {
     #[allow(unused_variables)]
     fn clear(&mut self, current: TrackingTimestamp) {}
     /// Returns how much memory this storage uses.
+    #[inline]
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         None
     }
     /// Returns the storage's name.
+    #[inline]
     fn name(&self) -> Cow<'static, str> {
         core::any::type_name::<Self>().into()
     }
@@ -59,20 +63,29 @@ pub trait Storage: SizedAny {
     ///
     /// [`SparseSet`]: crate::sparse_set::SparseSet
     /// [`SparseArray`]: crate::sparse_set::SparseArray
+    #[inline]
     fn sparse_array(&self) -> Option<&SparseArray<EntityId, 32>> {
         None
     }
     /// Returns `true` if the storage is empty.
+    #[inline]
     fn is_empty(&self) -> bool {
         false
     }
+    /// Clear all insertion tracking data.
+    #[inline]
+    #[allow(unused_variables)]
+    fn clear_all_inserted(&mut self, current: TrackingTimestamp) {}
+    /// Clear all modification tracking data.
+    #[inline]
+    #[allow(unused_variables)]
+    fn clear_all_modified(&mut self, current: TrackingTimestamp) {}
     /// Clear all deletion and removal tracking data.
     fn clear_all_removed_and_deleted(&mut self) {}
     /// Clear all deletion and removal tracking data older than some timestamp.
-    fn clear_all_removed_and_deleted_older_than_timestamp(
-        &mut self,
-        _timestamp: TrackingTimestamp,
-    ) {
+    #[inline]
+    #[allow(unused_variables)]
+    fn clear_all_removed_and_deleted_older_than_timestamp(&mut self, timestamp: TrackingTimestamp) {
     }
     /// Moves a component from a `World` to another.
     #[inline]

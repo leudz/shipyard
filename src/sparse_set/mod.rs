@@ -780,6 +780,12 @@ impl<T: 'static + Component + Send + Sync> Storage for SparseSet<T> {
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
+    fn clear_all_inserted(&mut self, current: TrackingTimestamp) {
+        self.last_insert = current;
+    }
+    fn clear_all_modified(&mut self, current: TrackingTimestamp) {
+        self.last_modified = current;
+    }
     fn clear_all_removed_and_deleted(&mut self) {
         self.deletion_data.clear();
         self.removal_data.clear();

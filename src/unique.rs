@@ -23,8 +23,17 @@ impl<T: Unique> Storage for UniqueStorage<T> {
             component_count: 1,
         })
     }
+
     fn is_empty(&self) -> bool {
         false
+    }
+
+    fn clear_all_inserted(&mut self, current: TrackingTimestamp) {
+        self.insert = current;
+    }
+
+    fn clear_all_modified(&mut self, current: TrackingTimestamp) {
+        self.modification = current;
     }
 }
 

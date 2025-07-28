@@ -472,6 +472,37 @@ impl AllStorages {
         }
     }
 
+    /// Clear all insertion tracking data.
+    #[track_caller]
+    pub fn clear_all_inserted(&mut self) {
+        let now = self.get_tracking_timestamp();
+
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }.get_mut().clear_all_inserted(now);
+        }
+    }
+
+    /// Clear all modification tracking data.
+    #[track_caller]
+    pub fn clear_all_modified(&mut self) {
+        let now = self.get_tracking_timestamp();
+
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }.get_mut().clear_all_modified(now);
+        }
+    }
+
+    /// Clear all insertion tracking data.
+    #[track_caller]
+    pub fn clear_all_inserted_and_modified(&mut self) {
+        let now = self.get_tracking_timestamp();
+
+        for storage in self.storages.get_mut().values_mut() {
+            unsafe { &mut *storage.0 }.get_mut().clear_all_inserted(now);
+            unsafe { &mut *storage.0 }.get_mut().clear_all_modified(now);
+        }
+    }
+
     /// Deletes all components for which `f(id, &component)` returns `false`.
     ///
     /// # Panics

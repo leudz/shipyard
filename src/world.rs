@@ -1076,14 +1076,17 @@ impl World {
     /// world.clear();
     /// ```
     #[inline]
+    #[track_caller]
     pub fn clear(&mut self) {
         self.all_storages.get_mut().clear();
     }
     /// Clear all deletion and removal tracking data.
+    #[track_caller]
     pub fn clear_all_removed_and_deleted(&mut self) {
         self.all_storages.get_mut().clear_all_removed_and_deleted()
     }
     /// Clear all deletion and removal tracking data older than some timestamp.
+    #[track_caller]
     pub fn clear_all_removed_and_deleted_older_than_timestamp(
         &mut self,
         timestamp: TrackingTimestamp,
@@ -1091,6 +1094,23 @@ impl World {
         self.all_storages
             .get_mut()
             .clear_all_removed_and_deleted_older_than_timestamp(timestamp)
+    }
+    /// Clear all insertion tracking data.
+    #[track_caller]
+    pub fn clear_all_inserted(&mut self) {
+        self.all_storages.get_mut().clear_all_inserted()
+    }
+    /// Clear all modification tracking data.
+    #[track_caller]
+    pub fn clear_all_modified(&mut self) {
+        self.all_storages.get_mut().clear_all_modified()
+    }
+    /// Clear all insertion and modification tracking data.
+    #[track_caller]
+    pub fn clear_all_inserted_and_modified(&mut self) {
+        self.all_storages
+            .get_mut()
+            .clear_all_inserted_and_modified()
     }
     /// Make the given entity alive.
     /// Does nothing if an entity with a greater generation is already at this index.

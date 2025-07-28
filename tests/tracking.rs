@@ -1,4 +1,7 @@
-use shipyard::{error::GetStorage, track, Component, View, ViewMut, World};
+use shipyard::{
+    error::GetStorage, track, Component, EntityId, IntoIter, Unique, UniqueView, View, ViewMut,
+    World,
+};
 
 struct Unit;
 impl Component for Unit {
@@ -8,6 +11,11 @@ impl Component for Unit {
 struct UnitInsert;
 impl Component for UnitInsert {
     type Tracking = track::Insertion;
+}
+
+struct UnitInsertAndModification;
+impl Component for UnitInsertAndModification {
+    type Tracking = track::InsertionAndModification;
 }
 
 #[test]
@@ -147,4 +155,50 @@ fn workload_enable_runtime_removal_tracking() {
 
     assert!(world.borrow::<View<Unit, track::Removal>>().is_ok());
     assert!(world.borrow::<ViewMut<Unit, track::Removal>>().is_ok());
+}
+
+#[test]
+fn clear_all_inserted() {
+    let mut world = World::new();
+
+    let eid = world.add_entity(UnitInsert);
+
+    world.run(|unit: View<UnitInsert>| {
+        assert!(unit.is_inserted(eid));
+    });
+    world.run(|unit: View<UnitInsert>| {
+        assert!(unit.is_inserted(eid));
+    });
+
+    world.clear_all_inserted();
+
+    world.run(|unit: View<UnitInsert>| {
+        assert!(!unit.is_inserted(eid));
+    });
+}
+
+#[test]
+fn clear_all_modified() {
+    let mut world = World::new();
+
+    let eid = world.add_entity(UnitInsertAndModification);
+
+    world.run(|mut unit: ViewMut<UnitInsertAndModification>| {
+        for mut u in (&mut unit).iter() {
+            *u = UnitInsertAndModification;
+        }
+    });
+
+    world.run(|unit: View<UnitInsertAndModification>| {
+        assert!(unit.is_modified(eid));
+    });
+    world.run(|unit: View<UnitInsertAndModification>| {
+        assert!(unit.is_modified(eid));
+    });
+
+    world.clear_all_modified();
+
+    world.run(|unit: View<UnitInsertAndModification>| {
+        assert!(!unit.is_modified(eid));
+    });
 }
