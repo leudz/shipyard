@@ -7,6 +7,7 @@ use core::mem::size_of;
 /// Internal part of a [`SparseSet`].
 ///
 /// [`SparseSet`]: crate::sparse_set::SparseSet
+#[derive(Clone)]
 pub struct SparseArray<T, const N: usize>(Vec<Option<Box<[T; N]>>>);
 
 impl<T, const N: usize> SparseArray<T, N> {

@@ -1,3 +1,7 @@
+mod builder;
+
+pub use builder::SBoxBuilder;
+
 use crate::atomic_refcell::AtomicRefCell;
 use crate::storage::Storage;
 use alloc::boxed::Box;
@@ -25,30 +29,33 @@ impl Drop for SBox {
 
 impl SBox {
     #[inline]
-    pub(crate) fn new<T: Storage + Send + Sync + 'static>(value: T) -> Self {
+    pub(crate) fn new<T: Storage + Send + Sync + 'static>(value: T) -> SBox {
         SBox(Box::into_raw(Box::new(AtomicRefCell::new(value))))
     }
+
     #[cfg(feature = "thread_local")]
     #[inline]
     pub(crate) fn new_non_send<T: Storage + Sync + 'static>(
         value: T,
         thread_id: Arc<dyn Fn() -> u64 + Send + Sync>,
-    ) -> Self {
+    ) -> SBox {
         SBox(Box::into_raw(Box::new(AtomicRefCell::new_non_send(
             value, thread_id,
         ))))
     }
+
     #[cfg(feature = "thread_local")]
     #[inline]
-    pub(crate) fn new_non_sync<T: Storage + Send + 'static>(value: T) -> Self {
+    pub(crate) fn new_non_sync<T: Storage + Send + 'static>(value: T) -> SBox {
         SBox(Box::into_raw(Box::new(AtomicRefCell::new_non_sync(value))))
     }
+
     #[cfg(feature = "thread_local")]
     #[inline]
     pub(crate) fn new_non_send_sync<T: Storage + 'static>(
         value: T,
         thread_id: Arc<dyn Fn() -> u64 + Send + Sync>,
-    ) -> Self {
+    ) -> SBox {
         SBox(Box::into_raw(Box::new(AtomicRefCell::new_non_send_sync(
             value, thread_id,
         ))))

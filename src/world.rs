@@ -3,7 +3,9 @@ mod run_batches;
 
 pub use builder::WorldBuilder;
 
-use crate::all_storages::{AllStorages, CustomStorageAccess, TupleDeleteAny, TupleRetainStorage};
+use crate::all_storages::{
+    AllStorages, CustomStorageAccess, TupleClone, TupleDeleteAny, TupleRetainStorage,
+};
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
 use crate::component::{Component, Unique};
@@ -56,6 +58,23 @@ impl Default for World {
             #[cfg(feature = "parallel")]
             thread_pool: None,
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl Clone for World {
+    #[track_caller]
+    fn clone(&self) -> Self {
+        let mut other = World::new();
+
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .borrow()
+            .unwrap()
+            .clone_storages_to(other_all_storages);
+
+        other
     }
 }
 
@@ -845,6 +864,7 @@ impl World {
     /// let entity1 = world.add_entity((U32(1), USIZE(11)));
     /// ```
     #[inline]
+    #[track_caller]
     pub fn add_entity<C: TupleAddComponent>(&mut self, component: C) -> EntityId {
         self.all_storages.get_mut().add_entity(component)
     }
@@ -867,6 +887,7 @@ impl World {
     /// let new_entities = world.bulk_add_entity((10..20).map(|i| (U32(i as u32), USIZE(i))));
     /// ```
     #[inline]
+    #[track_caller]
     pub fn bulk_add_entity<T: BulkAddEntity>(&mut self, source: T) -> BulkEntityIter<'_> {
         self.all_storages.get_mut().bulk_add_entity(source)
     }
@@ -898,8 +919,8 @@ impl World {
     /// // entity already had a `U32` component so it will be replaced
     /// world.add_component(entity, (U32(1), USIZE(11)));
     /// ```
-    #[track_caller]
     #[inline]
+    #[track_caller]
     pub fn add_component<C: TupleAddComponent>(&mut self, entity: EntityId, component: C) {
         self.all_storages.get_mut().add_component(entity, component)
     }
@@ -924,6 +945,7 @@ impl World {
     /// world.delete_component::<(U32,)>(entity);
     /// ```
     #[inline]
+    #[track_caller]
     pub fn delete_component<C: TupleDelete>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().delete_component::<C>(entity)
     }
@@ -949,6 +971,7 @@ impl World {
     /// assert_eq!(i, Some(U32(0)));
     /// ```
     #[inline]
+    #[track_caller]
     pub fn remove<C: TupleRemove>(&mut self, entity: EntityId) -> C::Out {
         self.all_storages.get_mut().remove::<C>(entity)
     }
@@ -972,6 +995,7 @@ impl World {
     /// assert!(world.delete_entity(entity));
     /// ```
     #[inline]
+    #[track_caller]
     pub fn delete_entity(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().delete_entity(entity)
     }
@@ -995,6 +1019,7 @@ impl World {
     /// world.strip(entity);
     /// ```
     #[inline]
+    #[track_caller]
     pub fn strip(&mut self, entity: EntityId) {
         self.all_storages.get_mut().strip(entity);
     }
@@ -1028,6 +1053,7 @@ impl World {
     /// world.delete_any::<(SparseSet<U32>, SparseSet<USIZE>)>();
     /// ```
     #[inline]
+    #[track_caller]
     pub fn delete_any<S: TupleDeleteAny>(&mut self) {
         self.all_storages.get_mut().delete_any::<S>();
     }
@@ -1053,12 +1079,14 @@ impl World {
     /// world.retain_storage::<SparseSet<U32>>(entity);
     /// ```
     #[inline]
+    #[track_caller]
     pub fn retain_storage<S: TupleRetainStorage>(&mut self, entity: EntityId) {
         self.all_storages.get_mut().retain_storage::<S>(entity);
     }
     /// Same as `retain_storage` but uses `StorageId` and not generics.
     /// You should only use this method if you use a custom storage with a runtime id.
     #[inline]
+    #[track_caller]
     pub fn retain_storage_by_id(&mut self, entity: EntityId, excluded_storage: &[StorageId]) {
         self.all_storages
             .get_mut()
@@ -1116,6 +1144,7 @@ impl World {
     /// Does nothing if an entity with a greater generation is already at this index.
     /// Returns `true` if the entity is successfully spawned.
     #[inline]
+    #[track_caller]
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         self.all_storages.get_mut().spawn(entity)
     }
@@ -1125,6 +1154,7 @@ impl World {
     /// # Panics
     ///
     /// - Storage borrow failed.
+    #[track_caller]
     pub fn retain<T: Component + Send + Sync>(&mut self, f: impl FnMut(EntityId, &T) -> bool) {
         self.all_storages.get_mut().retain(f);
     }
@@ -1134,6 +1164,7 @@ impl World {
     /// # Panics
     ///
     /// - Storage borrow failed.
+    #[track_caller]
     pub fn retain_mut<T: Component + Send + Sync>(
         &mut self,
         f: impl FnMut(EntityId, Mut<'_, T>) -> bool,
@@ -1168,30 +1199,35 @@ impl World {
     }
 
     /// Enable insertion tracking for the given components.
+    #[track_caller]
     pub fn track_insertion<T: TupleTrack>(&mut self) -> &mut World {
         self.all_storages.get_mut().track_insertion::<T>();
         self
     }
 
     /// Enable modification tracking for the given components.
+    #[track_caller]
     pub fn track_modification<T: TupleTrack>(&mut self) -> &mut World {
         self.all_storages.get_mut().track_modification::<T>();
         self
     }
 
     /// Enable deletion tracking for the given components.
+    #[track_caller]
     pub fn track_deletion<T: TupleTrack>(&mut self) -> &mut World {
         self.all_storages.get_mut().track_deletion::<T>();
         self
     }
 
     /// Enable removal tracking for the given components.
+    #[track_caller]
     pub fn track_removal<T: TupleTrack>(&mut self) -> &mut World {
         self.all_storages.get_mut().track_removal::<T>();
         self
     }
 
     /// Enable insertion, deletion and removal tracking for the given components.
+    #[track_caller]
     pub fn track_all<T: TupleTrack>(&mut self) {
         self.all_storages.get_mut().track_all::<T>();
     }
@@ -1454,6 +1490,12 @@ for (i, j) in &mut iter {
 
     /// Moves an entity from a `World` to another.
     ///
+    /// ### Panics
+    ///
+    /// - `entity` is not alive
+    ///
+    /// ### Example
+    ///
     /// ```
     /// use shipyard::{Component, World};
     ///
@@ -1482,6 +1524,13 @@ for (i, j) in &mut iter {
 
     /// Moves all components from an entity to another in another `World`.
     ///
+    /// ### Panics
+    ///
+    /// - `from` is not alive
+    /// - `to` is not alive
+    ///
+    /// ### Example
+    ///
     /// ```
     /// use shipyard::{Component, World};
     ///
@@ -1500,12 +1549,127 @@ for (i, j) in &mut iter {
     /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
     /// ```
     #[inline]
+    #[track_caller]
     pub fn move_components(&mut self, other: &mut World, from: EntityId, to: EntityId) {
         let other_all_storages = other.all_storages.get_mut();
 
         self.all_storages
             .get_mut()
             .move_components(other_all_storages, from, to);
+    }
+
+    /// Registers the function to clone these components.
+    ///
+    /// The type of the storage is used and not the component itself.\
+    /// That would be [`SparseSet<T>`](crate::sparse_set::SparseSet) and [`UniqueStorage<T>`](crate::unique::UniqueStorage).
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, sparse_set::SparseSet, Unique, UniqueStorage, World};
+    ///
+    /// #[derive(Component, Clone)]
+    /// struct USIZE(usize);
+    ///
+    /// #[derive(Unique, Clone)]
+    /// struct U32(u32);
+    ///
+    /// let mut world = World::new();
+    ///
+    /// world.add_unique(U32(0));
+    ///
+    /// world.register_clone::<(SparseSet<USIZE>, UniqueStorage<U32>)>();
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn register_clone<T: TupleClone>(&mut self) {
+        self.all_storages.get_mut().register_clone::<T>();
+    }
+
+    /// Clones `entity` from this `World` to `other` alongside all its with a registered clone function.
+    ///
+    /// ### Borrows
+    ///
+    /// - AllStorages (shared)
+    /// - Every Storage (shared)
+    ///
+    /// ### Panics
+    ///
+    /// - `entity` is not alive
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, sparse_set::SparseSet, World};
+    ///
+    /// #[derive(Component, Clone, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world1 = World::new();
+    /// let mut world2 = World::new();
+    ///
+    /// world1.register_clone::<SparseSet<USIZE>>();
+    ///
+    /// let entity = world1.add_entity(USIZE(1));
+    ///
+    /// world1.clone_entity_to(&mut world2, entity);
+    ///
+    /// assert_eq!(world1.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(world2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
+    #[inline]
+    #[track_caller]
+    pub fn clone_entity_to(&self, other: &mut World, entity: EntityId) {
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .borrow()
+            .unwrap()
+            .clone_entity_to(other_all_storages, entity);
+    }
+
+    /// Clones all components of `from` entity with a registered clone function from
+    /// this `World` to `other`'s `to` entity.
+    ///
+    /// ### Borrows
+    ///
+    /// - AllStorages (shared)
+    /// - Every Storage (shared)
+    ///
+    /// ### Panics
+    ///
+    /// - `from` is not alive
+    /// - `to` is not alive
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, sparse_set::SparseSet, World};
+    ///
+    /// #[derive(Component, Clone, Debug, PartialEq, Eq)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world1 = World::new();
+    /// let mut world2 = World::new();
+    ///
+    /// world1.register_clone::<SparseSet<USIZE>>();
+    ///
+    /// let from = world1.add_entity(USIZE(1));
+    /// let to = world2.add_entity(());
+    ///
+    /// world1.clone_components_to(&mut world2, from, to);
+    ///
+    /// assert_eq!(world1.get::<&USIZE>(from).as_deref(), Ok(&&USIZE(1)));
+    /// assert_eq!(world2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
+    /// ```
+    #[inline]
+    #[track_caller]
+    pub fn clone_components_to(&self, other: &mut World, from: EntityId, to: EntityId) {
+        let other_all_storages = other.all_storages.get_mut();
+
+        self.all_storages
+            .borrow()
+            .unwrap()
+            .clone_components_to(other_all_storages, from, to);
     }
 }
 

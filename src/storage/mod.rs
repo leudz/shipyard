@@ -1,6 +1,7 @@
 mod sbox;
 mod storage_id;
 
+pub use sbox::SBoxBuilder;
 pub use storage_id::StorageId;
 
 pub(crate) use sbox::SBox;
@@ -96,6 +97,25 @@ pub trait Storage: SizedAny {
         from: EntityId,
         to: EntityId,
         current: TrackingTimestamp,
+        other_current: TrackingTimestamp,
+    ) {
+    }
+
+    /// Attempts to clone the entire storage.
+    #[inline]
+    #[allow(unused_variables)]
+    fn try_clone(&self, other_current: TrackingTimestamp) -> Option<SBoxBuilder> {
+        None
+    }
+
+    /// Clones a component from a `World` to another.
+    #[inline]
+    #[allow(unused_variables)]
+    fn clone_component_to(
+        &self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
         other_current: TrackingTimestamp,
     ) {
     }

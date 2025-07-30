@@ -9,7 +9,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::reserve::{BulkEntityIter, BulkReserve};
-use crate::storage::Storage;
+use crate::storage::{SBoxBuilder, Storage};
 use crate::tracking::TrackingTimestamp;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -27,7 +27,7 @@ use core::mem::size_of;
 ///
 /// The life cycle of an entity looks like this:
 ///
-/// Generation -> Deletion -> Dead  
+/// Generation -> Deletion -> Dead\
 /// &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
 ///       ⬑----------↵
 // An entity starts with a generation at 0, each removal will increase it by 1
@@ -429,6 +429,7 @@ impl Storage for Entities {
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
     }
+
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
         Some(StorageMemoryUsage {
             storage_name: type_name::<Self>().into(),
@@ -438,9 +439,13 @@ impl Storage for Entities {
             component_count: self.data.len(),
         })
     }
+
+    #[inline]
     fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
+
+    #[inline]
     fn move_component_from(
         &mut self,
         _other_all_storages: &mut crate::AllStorages,
@@ -450,6 +455,26 @@ impl Storage for Entities {
         _other_current: TrackingTimestamp,
     ) {
         // Do nothing here so this function can be used to implement both move component and move entity.
+    }
+
+    #[inline]
+    fn try_clone(&self, _other_current: TrackingTimestamp) -> Option<SBoxBuilder> {
+        Some(SBoxBuilder::new(Entities {
+            data: self.data.clone(),
+            list: self.list,
+            on_deletion: None,
+        }))
+    }
+
+    #[inline]
+    fn clone_component_to(
+        &self,
+        _other_all_storages: &mut crate::AllStorages,
+        _from: EntityId,
+        _to: EntityId,
+        _other_current: TrackingTimestamp,
+    ) {
+        // Do nothing here so this function can be used to implement both clone component and clone entity.
     }
 }
 

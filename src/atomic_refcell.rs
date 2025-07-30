@@ -112,6 +112,36 @@ impl<T> AtomicRefCell<T> {
 }
 
 impl<T: ?Sized> AtomicRefCell<T> {
+    #[cfg(feature = "thread_local")]
+    #[inline]
+    pub(crate) fn is_send(&self) -> bool {
+        self.send.is_none()
+    }
+
+    #[cfg(feature = "thread_local")]
+    #[inline]
+    pub(crate) fn is_sync(&self) -> bool {
+        self.is_sync
+    }
+
+    /// # Safety
+    ///
+    /// The information passed into this function must be accurate to this type.
+    #[cfg(feature = "thread_local")]
+    #[inline]
+    pub(crate) unsafe fn override_send_sync(
+        &mut self,
+        thread_id_generator: Arc<dyn Fn() -> u64 + Send + Sync>,
+        is_send: bool,
+        is_sync: bool,
+    ) {
+        self.thread_id = thread_id_generator.clone();
+        self.send = (!is_send).then(|| (self.thread_id)());
+        self.is_sync = is_sync;
+    }
+}
+
+impl<T: ?Sized> AtomicRefCell<T> {
     /// Immutably borrows the wrapped value, returning an error if the value is currently mutably
     /// borrowed.
     ///

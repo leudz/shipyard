@@ -42,7 +42,9 @@ extern crate alloc;
 mod add_component;
 mod add_distinct_component;
 mod add_entity;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod all_storages;
 /// Inner lock similar to `RwLock`.
 pub mod atomic_refcell;
@@ -63,7 +65,9 @@ pub mod get_unique;
 ///
 // We can't allow(missing_docs) without allowing it for everything inside
 pub mod iter;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod iter_component;
 /// Module describing internal memory usage.
 pub mod memory_usage;
@@ -73,24 +77,34 @@ mod optional;
 mod or;
 mod public_transport;
 mod remove;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod reserve;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod scheduler;
 mod seal;
 /// Default component storage.
 pub mod sparse_set;
 mod storage;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod system;
 /// Module related to storage tracking, like insertion or modification.
 pub mod track;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod tracking;
 mod type_id;
 mod unique;
 mod views;
-#[allow(missing_docs)]
+#[allow(clippy::empty_docs)]
+///
+// We can't allow(missing_docs) without allowing it for everything inside
 pub mod world;
 
 #[cfg(feature = "thread_local")]
@@ -127,7 +141,7 @@ pub use scheduler::{
 };
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{Borrow, BorrowInfo, Component, IntoIter, Label, Unique, WorldBorrow};
-pub use storage::{Storage, StorageId};
+pub use storage::{SBoxBuilder, Storage, StorageId};
 #[doc(inline)]
 pub use tracking::{Inserted, InsertedOrModified, Modified};
 pub use unique::UniqueStorage;

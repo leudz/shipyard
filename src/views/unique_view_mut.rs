@@ -100,6 +100,13 @@ impl<T: Unique> UniqueViewMut<'_, T> {
     }
 }
 
+impl<T: Unique + Clone> UniqueViewMut<'_, T> {
+    /// Registers the function to clone this unique component.
+    pub fn register_clone(&mut self) {
+        self.unique.register_clone();
+    }
+}
+
 impl<T: Unique> Deref for UniqueViewMut<'_, T> {
     type Target = T;
 

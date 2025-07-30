@@ -6,6 +6,7 @@ use crate::ShipHashSet;
 
 /// Trait used as a bound for AllStorages::delete_any.
 pub trait CustomDeleteAny {
+    #[allow(missing_docs)]
     fn delete_any(&mut self, ids: &mut ShipHashSet<EntityId>, current: TrackingTimestamp);
 }
 

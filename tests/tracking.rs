@@ -1,7 +1,4 @@
-use shipyard::{
-    error::GetStorage, track, Component, EntityId, IntoIter, Unique, UniqueView, View, ViewMut,
-    World,
-};
+use shipyard::{error::GetStorage, track, Component, IntoIter, View, ViewMut, World};
 
 struct Unit;
 impl Component for Unit {

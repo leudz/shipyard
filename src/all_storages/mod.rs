@@ -1,3 +1,5 @@
+mod builder;
+mod clone;
 mod custom_storage;
 mod delete_any;
 mod retain;
@@ -6,8 +8,13 @@ pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
 pub use retain::TupleRetainStorage;
 
+pub(crate) use builder::AllStoragesBuilder;
+pub(crate) use clone::TupleClone;
+
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;
+#[cfg(feature = "thread_local")]
+use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::{Component, Unique};
 use crate::entities::Entities;
 use crate::entity_id::EntityId;
@@ -17,11 +24,10 @@ use crate::iter::{ShiperatorCaptain, ShiperatorSailor};
 use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
-use crate::public_transport::ShipyardRwLock;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{BulkAddEntity, SparseSet, TupleAddComponent, TupleDelete, TupleRemove};
-#[cfg(feature = "std")]
+#[cfg(feature = "thread_local")]
 use crate::std_thread_id_generator;
 use crate::storage::{SBox, Storage, StorageId};
 use crate::system::AllSystem;
@@ -33,7 +39,6 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
 use core::hash::BuildHasherDefault;
-use core::marker::PhantomData;
 use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
 
@@ -45,106 +50,6 @@ pub struct LockPresent;
 pub struct MissingThreadId;
 #[allow(missing_docs)]
 pub struct ThreadIdPresent;
-
-pub(crate) struct AllStoragesBuilder<Lock, ThreadId> {
-    custom_lock: Option<Box<dyn ShipyardRwLock + Send + Sync>>,
-    custom_thread_id: Option<Arc<dyn Fn() -> u64 + Send + Sync>>,
-    _phantom: PhantomData<(Lock, ThreadId)>,
-}
-
-impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
-    #[cfg(feature = "std")]
-    pub(crate) fn new() -> AllStoragesBuilder<LockPresent, ThreadIdPresent> {
-        AllStoragesBuilder {
-            custom_lock: None,
-            custom_thread_id: Some(Arc::new(std_thread_id_generator)),
-            _phantom: PhantomData,
-        }
-    }
-
-    #[cfg(all(not(feature = "std"), not(feature = "thread_local")))]
-    pub(crate) fn new() -> AllStoragesBuilder<MissingLock, ThreadIdPresent> {
-        AllStoragesBuilder {
-            custom_lock: None,
-            custom_thread_id: None,
-            _phantom: PhantomData,
-        }
-    }
-
-    #[cfg(all(not(feature = "std"), feature = "thread_local"))]
-    pub(crate) fn new() -> AllStoragesBuilder<MissingLock, MissingThreadId> {
-        AllStoragesBuilder {
-            custom_lock: None,
-            custom_thread_id: None,
-            _phantom: PhantomData,
-        }
-    }
-
-    pub(crate) fn with_custom_lock<L: ShipyardRwLock + Send + Sync>(
-        self,
-    ) -> AllStoragesBuilder<LockPresent, ThreadId> {
-        AllStoragesBuilder {
-            custom_lock: Some(L::new()),
-            custom_thread_id: self.custom_thread_id,
-            _phantom: PhantomData,
-        }
-    }
-
-    #[cfg(feature = "thread_local")]
-    pub(crate) fn with_custom_thread_id(
-        self,
-        thread_id: impl Fn() -> u64 + Send + Sync + 'static,
-    ) -> AllStoragesBuilder<Lock, ThreadIdPresent> {
-        AllStoragesBuilder {
-            custom_lock: self.custom_lock,
-            custom_thread_id: Some(Arc::new(thread_id)),
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
-    pub(crate) fn build(self, counter: Arc<AtomicU64>) -> AtomicRefCell<AllStorages> {
-        let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
-
-        storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
-
-        let storages = if let Some(custom_lock) = self.custom_lock {
-            RwLock::new_custom(custom_lock, storages)
-        } else {
-            #[cfg(feature = "std")]
-            {
-                RwLock::new_std(storages)
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                unreachable!()
-            }
-        };
-
-        #[cfg(feature = "thread_local")]
-        let thread_id_generator = self.custom_thread_id.unwrap();
-        #[cfg(feature = "thread_local")]
-        let main_thread_id = (thread_id_generator)();
-
-        #[cfg(feature = "thread_local")]
-        {
-            AtomicRefCell::new_non_send(
-                AllStorages {
-                    storages,
-                    main_thread_id,
-                    thread_id_generator: thread_id_generator.clone(),
-                    counter,
-                },
-                thread_id_generator,
-            )
-        }
-        #[cfg(not(feature = "thread_local"))]
-        {
-            AtomicRefCell::new(AllStorages { storages, counter })
-        }
-    }
-}
 
 /// Contains all storages present in the `World`.
 // The lock is held very briefly:
@@ -228,7 +133,7 @@ impl AllStorages {
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send(
-                    UniqueStorage::new(component, self.get_tracking_timestamp()),
+                    NonSend(UniqueStorage::new(component, self.get_tracking_timestamp())),
                     self.thread_id_generator.clone(),
                 )
             });
@@ -246,7 +151,10 @@ impl AllStorages {
         let storage_id = StorageId::of::<UniqueStorage<T>>();
 
         self.storages.write().entry(storage_id).or_insert_with(|| {
-            SBox::new_non_sync(UniqueStorage::new(component, self.get_tracking_timestamp()))
+            SBox::new_non_sync(NonSync(UniqueStorage::new(
+                component,
+                self.get_tracking_timestamp(),
+            )))
         });
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
@@ -263,7 +171,7 @@ impl AllStorages {
 
             self.storages.write().entry(storage_id).or_insert_with(|| {
                 SBox::new_non_send_sync(
-                    UniqueStorage::new(component, self.get_tracking_timestamp()),
+                    NonSendSync(UniqueStorage::new(component, self.get_tracking_timestamp())),
                     self.thread_id_generator.clone(),
                 )
             });
@@ -1474,6 +1382,10 @@ for (i, j) in &mut iter {
 
     /// Moves an entity from a `World` to another.
     ///
+    /// ### Panics
+    ///
+    /// - `entity` is not alive
+    ///
     /// ```
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
@@ -1493,10 +1405,6 @@ for (i, j) in &mut iter {
     /// assert!(!all_storages1.is_entity_alive(entity));
     /// assert_eq!(all_storages2.get::<&USIZE>(entity).as_deref(), Ok(&&USIZE(1)));
     /// ```
-    ///
-    /// # Panics
-    ///
-    /// - `entity` is not alive
     #[track_caller]
     pub fn move_entity(&mut self, other: &mut AllStorages, entity: EntityId) {
         let current = self.get_current();
@@ -1535,6 +1443,11 @@ for (i, j) in &mut iter {
 
     /// Moves all components from an entity to another in another `World`.
     ///
+    /// ### Panics
+    ///
+    /// - `from` is not alive
+    /// - `to` is not alive
+    ///
     /// ```
     /// use shipyard::{AllStoragesViewMut, Component, World};
     ///
@@ -1555,10 +1468,6 @@ for (i, j) in &mut iter {
     /// assert!(all_storages1.get::<&USIZE>(from).is_err());
     /// assert_eq!(all_storages2.get::<&USIZE>(to).as_deref(), Ok(&&USIZE(1)));
     /// ```
-    /// # Panics
-    ///
-    /// - `from` is not alive
-    /// - `to` is not alive
     #[track_caller]
     pub fn move_components(&mut self, other: &mut AllStorages, from: EntityId, to: EntityId) {
         let current = self.get_current();
@@ -1594,6 +1503,150 @@ for (i, j) in &mut iter {
                 current,
                 other_current,
             );
+        }
+    }
+
+    /// Registers the function to clone these components.
+    #[inline]
+    pub fn register_clone<T: TupleClone>(&mut self) {
+        T::register_clone(self);
+    }
+
+    /// Clones all storages with a registered clone function from this `AllStorages` to `other`.
+    ///
+    /// Tracking is not cloned. Components will count as inserted in `other`.
+    #[track_caller]
+    pub fn clone_storages_to(&self, other: &mut AllStorages) {
+        let other_current = other.get_current();
+        let other_storages = other.storages.get_mut();
+
+        for (storage_id, storage) in self.storages.read().iter() {
+            let storage = unsafe { &*storage.0 };
+            #[cfg(feature = "thread_local")]
+            let other_thread_id_generator = other.thread_id_generator.clone();
+            #[cfg(feature = "thread_local")]
+            let is_send = storage.is_send();
+            #[cfg(feature = "thread_local")]
+            let is_sync = storage.is_sync();
+
+            #[cfg(feature = "thread_local")]
+            {
+                if !is_send || !is_sync {
+                    let thread_id = (self.thread_id_generator)();
+
+                    if thread_id != self.main_thread_id {
+                        panic!("Cannot clone !Send or !Sync storage in another thread.")
+                    }
+                }
+
+                if !is_send {
+                    let other_thread_id = (other_thread_id_generator)();
+
+                    if other_thread_id != other.main_thread_id {
+                        panic!("Cannot clone !Send storage to World from other thread.")
+                    }
+                }
+            }
+
+            let storage_borrow = storage.borrow().unwrap();
+            if let Some(storage_builder) = Storage::try_clone(&*storage_borrow, other_current) {
+                let storage = {
+                    #[cfg(not(feature = "thread_local"))]
+                    {
+                        storage_builder.build()
+                    }
+                    #[cfg(feature = "thread_local")]
+                    {
+                        let storage_type_id = storage_borrow.any().type_id();
+                        let storage_clone_type_id = unsafe { &*storage_builder.sbox.0 }
+                            .borrow()
+                            .unwrap()
+                            .any()
+                            .type_id();
+
+                        // The implementor could return another type when cloning as the type is erased.
+                        // We only check in the thread_local case because the other type could be !Send/!Sync.
+                        // If the type doesn't match there will be a panic when creating views in any case.
+                        if storage_type_id != storage_clone_type_id {
+                            panic!("Storage clone is not of the same type as original.")
+                        }
+
+                        // SAFE
+                        // We pass the information from the original storage and the types are the same.
+                        unsafe {
+                            storage_builder.build(other_thread_id_generator, is_send, is_sync)
+                        }
+                    }
+                };
+
+                other_storages.insert(*storage_id, storage);
+            }
+        }
+    }
+
+    /// Clones `entity` from this `AllStorages` to `other_all_storages` alongside all its with a registered clone function.
+    #[track_caller]
+    pub fn clone_entity_to(&self, other_all_storages: &mut AllStorages, entity: EntityId) {
+        let other_current = other_all_storages.get_current();
+
+        if !self.entities().unwrap().is_alive(entity) {
+            panic!(
+                "Entity {:?} has to be alive to move it to another World.",
+                entity
+            );
+        };
+
+        assert!(
+            other_all_storages
+                .exclusive_storage_mut::<Entities>()
+                .unwrap()
+                .spawn(entity),
+            "Other World already has an entity at {:?}'s index.",
+            entity
+        );
+
+        for storage in self.storages.read().values() {
+            unsafe { &mut *storage.0 }
+                .borrow()
+                .unwrap()
+                .clone_component_to(other_all_storages, entity, entity, other_current);
+        }
+    }
+
+    /// Clones all components of `from` entity with a registered clone function from
+    /// this `AllStorages` to `other_all_storages`'s `to` entity.
+    #[track_caller]
+    pub fn clone_components_to(
+        &self,
+        other_all_storages: &mut AllStorages,
+        from: EntityId,
+        to: EntityId,
+    ) {
+        let other_current = other_all_storages.get_current();
+
+        if !self.entities().unwrap().is_alive(from) {
+            panic!(
+                "Entity {:?} has to be alive to move its components to another World.",
+                from
+            );
+        };
+
+        if !other_all_storages
+            .exclusive_storage_mut::<Entities>()
+            .unwrap()
+            .is_alive(to)
+        {
+            panic!(
+                "Entity {:?} has to be alive to receive components from another World.",
+                to
+            );
+        };
+
+        for storage in self.storages.read().values() {
+            unsafe { &mut *storage.0 }
+                .borrow()
+                .unwrap()
+                .clone_component_to(other_all_storages, from, to, other_current);
         }
     }
 }

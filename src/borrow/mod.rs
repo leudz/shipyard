@@ -21,6 +21,8 @@ use crate::atomic_refcell::{ARef, ARefMut, SharedBorrow};
 use crate::component::{Component, Unique};
 use crate::error;
 use crate::sparse_set::SparseSet;
+#[cfg(feature = "thread_local")]
+use crate::storage::StorageId;
 use crate::system::Nothing;
 use crate::tracking::{Tracking, TrackingTimestamp};
 use crate::unique::UniqueStorage;
@@ -436,7 +438,13 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage()?;
+        let view = all_storages.custom_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = ARef::map(view, |storage| {
+            storage
+                .as_any()
+                .downcast_ref::<NonSend<UniqueStorage<T>>>()
+                .unwrap()
+        });
 
         let (unique, borrow) = unsafe { ARef::destructure(view) };
 
@@ -462,7 +470,13 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage()?;
+        let view = all_storages.custom_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = ARef::map(view, |storage| {
+            storage
+                .as_any()
+                .downcast_ref::<NonSync<UniqueStorage<T>>>()
+                .unwrap()
+        });
 
         let (unique, borrow) = unsafe { ARef::destructure(view) };
 
@@ -488,7 +502,13 @@ impl<T: Unique> Borrow for NonSendSync<UniqueView<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage()?;
+        let view = all_storages.custom_storage_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = ARef::map(view, |storage| {
+            storage
+                .as_any()
+                .downcast_ref::<NonSendSync<UniqueStorage<T>>>()
+                .unwrap()
+        });
 
         let (unique, borrow) = unsafe { ARef::destructure(view) };
 
@@ -539,7 +559,13 @@ impl<T: Sync + Unique> Borrow for NonSend<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
+        let view = all_storages.custom_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = ARefMut::map(view, |storage| {
+            storage
+                .as_any_mut()
+                .downcast_mut::<NonSend<UniqueStorage<T>>>()
+                .unwrap()
+        });
 
         let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -565,7 +591,13 @@ impl<T: Send + Unique> Borrow for NonSync<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
+        let view = all_storages.custom_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = ARefMut::map(view, |storage| {
+            storage
+                .as_any_mut()
+                .downcast_mut::<NonSync<UniqueStorage<T>>>()
+                .unwrap()
+        });
 
         let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
@@ -591,7 +623,13 @@ impl<T: Unique> Borrow for NonSendSync<UniqueViewMut<'_, T>> {
         last_run: Option<TrackingTimestamp>,
         current: TrackingTimestamp,
     ) -> Result<Self::View<'a>, error::GetStorage> {
-        let view = all_storages.custom_storage_mut::<UniqueStorage<T>>()?;
+        let view = all_storages.custom_storage_mut_by_id(StorageId::of::<UniqueStorage<T>>())?;
+        let view = ARefMut::map(view, |storage| {
+            storage
+                .as_any_mut()
+                .downcast_mut::<NonSendSync<UniqueStorage<T>>>()
+                .unwrap()
+        });
 
         let (unique, borrow) = unsafe { ARefMut::destructure(view) };
 
