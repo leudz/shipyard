@@ -4,18 +4,11 @@ use crate::scheduler::system::WorkloadSystem;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::{AsLabel, IntoWorkloadSystem, WorkloadModificator};
 use crate::type_id::TypeId;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::{type_name, Any};
-use core::sync::atomic::{AtomicU32, Ordering};
 // macro not module
-use alloc::boxed::Box;
-use alloc::string::ToString;
 use alloc::vec;
-
-static WORKLOAD_ID: AtomicU32 = AtomicU32::new(1);
-fn unique_id() -> u32 {
-    WORKLOAD_ID.fetch_add(1, Ordering::Relaxed)
-}
 
 /// Converts to a collection of systems.
 ///
@@ -169,13 +162,13 @@ where
 
             system.into_workload()
         } else {
+            // Single system, sys.into_workload()
+
             let system = self.into_workload_system().unwrap();
 
-            let unique_id = unique_id();
-
             let name = Box::new(WorkloadLabel {
-                type_id: TypeId(unique_id as u128),
-                name: unique_id.to_string().as_label(),
+                type_id: TypeId::of::<Sys>(),
+                name: type_name::<Sys>().as_label(),
             });
 
             Workload {
@@ -213,11 +206,9 @@ macro_rules! impl_into_workload {
             )+
         {
             fn into_workload(self) -> Workload {
-                let unique_id = unique_id();
-
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId(unique_id as u128),
-                    name: unique_id.to_string().as_label(),
+                    type_id: TypeId::of::<($($type,)+)>(),
+                    name: type_name::<($($type,)+)>().as_label(),
                 });
 
                 let mut workload = Workload {
@@ -243,11 +234,9 @@ macro_rules! impl_into_workload {
 
             #[track_caller]
             fn into_sequential_workload(self) -> Workload {
-                let unique_id = unique_id();
-
                 let name = Box::new(WorkloadLabel {
-                    type_id: TypeId(unique_id as u128),
-                    name: unique_id.to_string().as_label(),
+                    type_id: TypeId::of::<($($type,)+)>(),
+                    name: type_name::<($($type,)+)>().as_label(),
                 });
 
                 let mut workload = Workload {
