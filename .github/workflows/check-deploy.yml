@@ -192,6 +192,29 @@ jobs:
         with:
           name: guide_0_8
           path: guide/0.8/guide_0_8/html
+  guide_0_9:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: download mdbook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: "0.4.34"
+
+      - run: cargo install mdbook-linkcheck
+
+      - run: mdbook build -d guide_0_9
+        working-directory: ./guide/0.9
+
+      - name: save guide 0.9
+        uses: actions/upload-artifact@v4
+        with:
+          name: guide_0_9
+          path: guide/0.9/guide_0_9/html
   bunny_demo:
     runs-on: ubuntu-latest
     needs: changes
@@ -282,6 +305,12 @@ jobs:
         with:
           name: guide_0_8
           path: dist/guide/0.8
+
+      - name: load guide 0.9
+        uses: actions/download-artifact@v4
+        with:
+          name: guide_0_9
+          path: dist/guide/0.9
 
       - name: load bunny_demo
         uses: actions/download-artifact@v4
