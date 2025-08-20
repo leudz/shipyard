@@ -38,7 +38,6 @@ use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::any::type_name;
-use core::hash::BuildHasherDefault;
 use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
 
@@ -76,7 +75,7 @@ unsafe impl Sync for AllStorages {}
 impl AllStorages {
     #[cfg(feature = "std")]
     pub(crate) fn new(counter: Arc<AtomicU64>) -> Self {
-        let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
+        let mut storages = ShipHashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
 

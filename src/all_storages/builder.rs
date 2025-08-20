@@ -7,7 +7,6 @@ use crate::storage::{SBox, StorageId};
 use crate::ShipHashMap;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use core::hash::BuildHasherDefault;
 use core::marker::PhantomData;
 use core::sync::atomic::AtomicU64;
 
@@ -71,7 +70,7 @@ impl<Lock, ThreadId> AllStoragesBuilder<Lock, ThreadId> {
 impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
     #[track_caller]
     pub(crate) fn build(self, counter: Arc<AtomicU64>) -> AtomicRefCell<AllStorages> {
-        let mut storages = ShipHashMap::with_hasher(BuildHasherDefault::default());
+        let mut storages = ShipHashMap::new();
 
         storages.insert(StorageId::of::<Entities>(), SBox::new(Entities::new()));
 

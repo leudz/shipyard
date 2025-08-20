@@ -153,17 +153,7 @@ pub use views::{
 #[doc(inline)]
 pub use world::World;
 
-#[cfg(not(feature = "std"))]
-type ShipHashMap<K, V> =
-    hashbrown::HashMap<K, V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
-#[cfg(feature = "std")]
 type ShipHashMap<K, V> = hashbrown::HashMap<K, V>;
-
-#[cfg(not(feature = "std"))]
-#[doc(hidden)]
-pub type ShipHashSet<V> =
-    hashbrown::HashSet<V, core::hash::BuildHasherDefault<siphasher::sip::SipHasher>>;
-#[cfg(feature = "std")]
 #[doc(hidden)]
 pub type ShipHashSet<V> = hashbrown::HashSet<V>;
 

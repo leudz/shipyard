@@ -5,7 +5,6 @@ use crate::storage::{Storage, StorageId};
 #[cfg(doc)]
 use crate::world::World;
 use crate::ShipHashSet;
-use core::hash::BuildHasherDefault;
 pub use custom_delete_any::CustomDeleteAny;
 
 /// Trait used as a bound for [`World::delete_any`] and [AllStorages::delete_any].
@@ -18,7 +17,7 @@ impl<T: 'static + Storage + CustomDeleteAny> TupleDeleteAny for T {
     #[inline]
     #[track_caller]
     fn delete_any(all_storages: &mut AllStorages) {
-        let mut ids = ShipHashSet::with_hasher(BuildHasherDefault::default());
+        let mut ids = ShipHashSet::new();
 
         let current = all_storages.get_current();
         let storages = all_storages.storages.get_mut();
@@ -42,7 +41,7 @@ macro_rules! impl_delete_any {
     ($(($storage: ident, $index: tt))+) => {
         impl<$($storage: 'static + Storage + CustomDeleteAny),+> TupleDeleteAny for ($($storage,)+) {
             fn delete_any(all_storages: &mut AllStorages) {
-                let mut ids = ShipHashSet::with_hasher(BuildHasherDefault::default());
+                let mut ids = ShipHashSet::new();
 
                 let current = all_storages.get_current();
                 let storages = all_storages.storages.get_mut();

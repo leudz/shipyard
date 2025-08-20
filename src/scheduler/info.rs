@@ -10,7 +10,6 @@ use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::hash::BuildHasherDefault;
 
 /// Contains information related to a workload.
 ///
@@ -184,7 +183,7 @@ pub struct WorkloadsInfo(pub ShipHashMap<String, WorkloadInfo>);
 impl WorkloadsInfo {
     /// Creates an empty [`WorkloadsInfo`].
     pub fn new() -> WorkloadsInfo {
-        WorkloadsInfo(ShipHashMap::with_hasher(BuildHasherDefault::default()))
+        WorkloadsInfo(ShipHashMap::new())
     }
 }
 

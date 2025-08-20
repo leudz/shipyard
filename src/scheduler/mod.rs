@@ -27,7 +27,6 @@ use crate::world::World;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use core::hash::BuildHasherDefault;
 
 /// List of indexes into both systems and system_names
 #[derive(Default)]
@@ -88,9 +87,9 @@ impl Default for Scheduler {
             systems: Vec::new(),
             system_names: Vec::new(),
             system_generators: Vec::new(),
-            lookup_table: ShipHashMap::with_hasher(BuildHasherDefault::default()),
-            workloads: ShipHashMap::with_hasher(BuildHasherDefault::default()),
-            workloads_info: ShipHashMap::with_hasher(BuildHasherDefault::default()),
+            lookup_table: ShipHashMap::new(),
+            workloads: ShipHashMap::new(),
+            workloads_info: ShipHashMap::new(),
             default: Box::new(""),
         }
     }

@@ -5,6 +5,6 @@ authors = ["leudz <dylan.ancel@gmail.com>"]
 edition = "2021"
 
 [dependencies]
-macroquad = "0.4.8"
+macroquad = "0.4.14"
 sapp-wasm = "=0.1.26"
 shipyard = { path = "..", features = ["proc", "std"], default-features = false }
