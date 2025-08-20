@@ -4,6 +4,7 @@
 - bump version
 - create new branch
 - change link to the guide in lib.rs
+- swap shipyard_proc version to latest crates.io
 - release the version
 - make a git tag and release
 - check the doc publishing went ok
