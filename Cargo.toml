@@ -24,7 +24,7 @@ rayon = { version = "1.11.0", optional = true }
 serde = { version = "1.0.0", optional = true, default-features = false, features = [
     "derive",
 ] }
-shipyard_proc = { git = "https://github.com/leudz/shipyard", optional = true }
+shipyard_proc = { version = "0.5.0", optional = true }
 tracing = { version = "0.1.0", default-features = false, optional = true }
 
 [features]
