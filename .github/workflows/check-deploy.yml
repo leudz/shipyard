@@ -273,7 +273,7 @@ jobs:
           path: visualizer/dist
   deploy:
     runs-on: ubuntu-latest
-    needs: [changes, guide_master, guide_0_6, guide_0_5_0, bunny_demo, square_eater, visualizer]
+    needs: [changes, guide_master, guide_0_9, guide_0_8, guide_0_7, guide_0_6, guide_0_5_0, bunny_demo, square_eater, visualizer]
     if: github.event_name == 'push' && needs.changes.outputs.deploy == 'true'
     steps:
       - name: load guide master
