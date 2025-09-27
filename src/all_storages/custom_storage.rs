@@ -205,6 +205,8 @@ pub trait CustomStorageAccess {
     /// Which prints: "EId(0.0) entity has a component in shipyard::sparse_set::SparseSet<test_project::MyComponent>".
     /// Then you can trim the storage name to only have the component name.
     fn iter_storages(&self) -> Vec<ARef<'_, &dyn Storage>>;
+    /// Returns a mutable list of all the storages present in [`AllStorages`].
+    fn iter_storages_mut(&self) -> Vec<ARefMut<'_, &mut (dyn Storage + 'static)>>;
 }
 
 impl CustomStorageAccess for AllStorages {
@@ -806,6 +808,22 @@ impl CustomStorageAccess for AllStorages {
             .flat_map(|(storage_id, storage)| unsafe {
                 (*storage.0)
                     .borrow()
+                    .map_err(|err| error::GetStorage::StorageBorrow {
+                        name: None,
+                        id: *storage_id,
+                        borrow: err,
+                    })
+            })
+            .collect()
+    }
+
+    fn iter_storages_mut(&self) -> Vec<ARefMut<'_, &mut (dyn Storage + 'static)>> {
+        self.storages
+            .read()
+            .iter()
+            .flat_map(move |(storage_id, storage)| unsafe {
+                (*storage.0)
+                    .borrow_mut()
                     .map_err(|err| error::GetStorage::StorageBorrow {
                         name: None,
                         id: *storage_id,
