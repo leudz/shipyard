@@ -352,6 +352,65 @@ impl AllStorages {
         inner(self, &iter, current);
     }
 
+    /// Deletes in parallel all components of multiple entities without deleting them.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, View, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let eid0 = all_storages.add_entity((U32(0), USIZE(1)));
+    /// let eid1 = all_storages.add_entity(USIZE(10));
+    /// let eid2 = all_storages.add_entity(U32(30));
+    ///
+    /// all_storages.par_strip([eid0, eid1, eid2]);
+    ///
+    /// let (v_u32, v_usize) = all_storages.borrow::<(View<U32>, View<USIZE>)>().unwrap();
+    /// assert_eq!(v_u32.len(), 0);
+    /// assert_eq!(v_usize.len(), 0);
+    /// ```
+    #[track_caller]
+    #[cfg(all(feature = "parallel", not(feature = "thread_local")))]
+    pub fn par_strip<I: IntoIterator<Item = EntityId>>(&mut self, entities: I)
+    where
+        I::IntoIter: Clone + Sync,
+    {
+        #[inline]
+        fn inner<I: Iterator<Item = EntityId> + Clone + Sync>(
+            all_storages: &mut AllStorages,
+            iter: &I,
+            current: TrackingTimestamp,
+        ) {
+            use rayon::prelude::*;
+
+            all_storages
+                .storages
+                .get_mut()
+                .par_iter_mut()
+                .for_each(|(_, storage)| {
+                    let storage = unsafe { &mut *storage.0 }.get_mut();
+
+                    for entity_id in iter.clone() {
+                        storage.delete(entity_id, current);
+                    }
+                });
+        }
+
+        let current = self.get_current();
+
+        let iter = entities.into_iter();
+        inner(self, &iter, current);
+    }
+
     /// Deletes all components of an entity except the ones passed in `S`.  
     /// The storage's type has to be used and not the component.  
     /// `SparseSet` is the default storage.

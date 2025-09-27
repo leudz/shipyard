@@ -1058,6 +1058,41 @@ impl World {
         self.all_storages.get_mut().bulk_strip(entities);
     }
 
+    /// Deletes in parallel all components of multiple entities without deleting them.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, View, World};
+    ///
+    /// #[derive(Component)]
+    /// struct U32(u32);
+    ///
+    /// #[derive(Component)]
+    /// struct USIZE(usize);
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let eid0 = world.add_entity((U32(0), USIZE(1)));
+    /// let eid1 = world.add_entity(USIZE(10));
+    /// let eid2 = world.add_entity(U32(30));
+    ///
+    /// world.par_strip([eid0, eid1, eid2]);
+    ///
+    /// let (v_u32, v_usize) = world.borrow::<(View<U32>, View<USIZE>)>().unwrap();
+    /// assert_eq!(v_u32.len(), 0);
+    /// assert_eq!(v_usize.len(), 0);
+    /// ```
+    #[inline]
+    #[track_caller]
+    #[cfg(all(feature = "parallel", not(feature = "thread_local")))]
+    pub fn par_strip<I: IntoIterator<Item = EntityId>>(&mut self, entities: I)
+    where
+        I::IntoIter: Clone + Sync,
+    {
+        self.all_storages.get_mut().par_strip(entities);
+    }
+
     /// Deletes all entities with any of the given components.
     /// The storage's type has to be used and not the component.
     /// `SparseSet` is the default storage.
