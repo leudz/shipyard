@@ -206,6 +206,7 @@ pub trait CustomStorageAccess {
     /// Then you can trim the storage name to only have the component name.
     fn iter_storages(&self) -> Vec<ARef<'_, &dyn Storage>>;
     /// Returns a mutable list of all the storages present in [`AllStorages`].
+    #[allow(clippy::mut_from_ref)]
     fn iter_storages_mut(&self) -> Vec<ARefMut<'_, &mut (dyn Storage + 'static)>>;
 }
 
