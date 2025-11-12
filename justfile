@@ -1,8 +1,8 @@
 test-all:
     cargo test --all-features
 
-test-no-default:
-    cargo test --tests --lib --no-default-features
+check-no-default:
+    cargo check --no-default-features
 
 miri: clean _miri
 
@@ -30,7 +30,7 @@ move_square_eater:
 
 square_eater: build_square_eater move_square_eater
 
-test: fmt test-all doc miri clippy clean
+test: fmt check-no-default test-all doc miri clippy clean
 
 dev_visualizer $RUSTFLAGS = "--cfg=web_sys_unstable_apis":
     trunk serve visualizer/index.html

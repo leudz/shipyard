@@ -13,15 +13,17 @@ fn check_derive() {
     #[derive(Component, Unique, Borrow, BorrowInfo)]
     struct B(A);
 
+    #[allow(unused, reason = "This only checks the proc-macro compiles")]
     #[derive(WorldBorrow)]
     struct C {
         _c: (),
     }
 
+    #[allow(unused, reason = "This only checks the proc-macro compiles")]
     #[derive(WorldBorrow)]
     struct D(C);
 
-    #[allow(unused)]
+    #[allow(unused, reason = "This only checks the proc-macro compiles")]
     #[derive(Component, Unique)]
     struct E;
 

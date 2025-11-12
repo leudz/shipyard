@@ -1,7 +1,10 @@
+#[cfg(not(feature = "std"))]
+use crate::all_storages::MissingLock;
 use crate::all_storages::{AllStorages, LockPresent, ThreadIdPresent};
 use crate::atomic_refcell::AtomicRefCell;
 use crate::entities::Entities;
 use crate::public_transport::{RwLock, ShipyardRwLock};
+#[cfg(feature = "std")]
 use crate::std_thread_id_generator;
 use crate::storage::{SBox, StorageId};
 use crate::ShipHashMap;
