@@ -44,6 +44,17 @@ jobs:
           components: rustfmt
 
       - run: cargo fmt -- --check
+  check-no-std:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - run: cargo check --no-default-features
   miri:
     runs-on: ubuntu-latest
     needs: changes
