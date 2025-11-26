@@ -745,7 +745,7 @@ let i = world.run(sys1);
         batches: &Batches,
         workload_name: &dyn Label,
     ) -> Result<(), error::RunWorkload> {
-        if let Some(run_if) = &batches.run_if {
+        if let Some(run_if) = &batches.workload_run_if {
             if !run_if
                 .run(self)
                 .map_err(|err| error::RunWorkload::Run((workload_name.dyn_clone(), err)))?
@@ -1246,6 +1246,7 @@ impl World {
     pub fn memory_usage(&self) -> WorldMemoryUsage<'_> {
         WorldMemoryUsage(self)
     }
+
     /// Returns a list of workloads and all information related to them.
     ///
     /// ### Borrows

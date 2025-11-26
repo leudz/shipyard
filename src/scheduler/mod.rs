@@ -1,3 +1,4 @@
+mod batches;
 pub mod info;
 mod into_workload;
 mod into_workload_run_if;
@@ -18,50 +19,15 @@ pub use system_modificator::SystemModificator;
 pub use workload::{ScheduledWorkload, Workload};
 pub use workload_modificator::WorkloadModificator;
 
+pub(crate) use batches::Batches;
 pub(crate) use info::TypeInfo;
 
 use crate::scheduler::info::WorkloadInfo;
-use crate::scheduler::system::WorkloadRunIfFn;
 use crate::type_id::TypeId;
 use crate::world::World;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-
-/// List of indexes into both systems and system_names
-#[derive(Default)]
-#[allow(clippy::type_complexity)]
-pub(super) struct Batches {
-    /// Index into the list of systems
-    pub(super) parallel: Vec<(Option<usize>, Vec<usize>)>,
-    /// Index into `sequential_run_if`
-    pub(super) parallel_run_if: Vec<(Option<usize>, Vec<usize>)>,
-    /// Index into the list of systems
-    pub(super) sequential: Vec<usize>,
-    pub(super) sequential_run_if:
-        Vec<Option<Box<dyn Fn(&World) -> Result<bool, error::Run> + Send + Sync>>>,
-    pub(super) run_if: Option<Box<dyn WorkloadRunIfFn>>,
-}
-
-#[cfg(test)]
-impl core::fmt::Debug for Batches {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Batches")
-            .field("parallel", &self.parallel)
-            .field("sequential", &self.sequential)
-            .finish()
-    }
-}
-
-#[cfg(test)]
-impl PartialEq for Batches {
-    fn eq(&self, other: &Self) -> bool {
-        self.parallel == other.parallel && self.sequential == other.sequential
-    }
-}
-
-#[cfg(test)]
-impl Eq for Batches {}
 
 // systems are stored in an array to easily find if a system was already added
 // this wouldn't be possible if they were in the HashMap

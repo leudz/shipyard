@@ -340,16 +340,16 @@ impl Debug for AddWorkload {
             AddWorkload::ImpossibleRequirements(err) => Debug::fmt(err, f),
             AddWorkload::MissingInWorkload(system_name, missing_in_workload) => {
                 f.write_fmt(format_args!(
-                    "System({:?}) is missing some systems in workload: {:?}",
+                    "Workload lacks systems required by {:?}: {:?}",
                     system_name, missing_in_workload
                 ))
             }
             AddWorkload::MissingBefore(system_name, missing_before) => f.write_fmt(format_args!(
-                "System({:?}) is missing some systems before: {:?}",
+                "System({:?}) is missing systems before: {:?}",
                 system_name, missing_before
             )),
             AddWorkload::MissingAfter(system_name, missing_after) => f.write_fmt(format_args!(
-                "System({:?}) is missing some systems after: {:?}",
+                "System({:?}) is missing systems after: {:?}",
                 system_name, missing_after
             )),
             AddWorkload::TrackingAllStoragesBorrow => f.write_str(
@@ -461,7 +461,7 @@ impl Debug for RunWorkload {
             }
             RunWorkload::MissingWorkload => f.write_str("No workload with this name exists. You first need to add the workload using `World::add_workload`."),
             RunWorkload::Run((system_name, run)) => {
-                f.write_fmt(format_args!("System {:?} failed: {:?}", system_name, run))
+                f.write_fmt(format_args!("{:?} failed: {:?}", system_name, run))
             }
         }
     }
@@ -769,6 +769,8 @@ pub enum ImpossibleRequirements {
     BeforeAndAfter(Box<dyn Label>, Box<dyn Label>),
     #[allow(missing_docs)]
     ImpossibleConstraints(Box<dyn Label>, Vec<Box<dyn Label>>, Vec<Box<dyn Label>>),
+    #[allow(missing_docs)]
+    Cycle(Vec<Box<dyn Label>>),
 }
 
 impl PartialEq for ImpossibleRequirements {
@@ -782,6 +784,9 @@ impl PartialEq for ImpossibleRequirements {
                 ImpossibleRequirements::ImpossibleConstraints(workload1, before1, after1),
                 ImpossibleRequirements::ImpossibleConstraints(workload2, before2, after2),
             ) => workload1 == workload2 && before1 == before2 && after1 == after2,
+            (ImpossibleRequirements::Cycle(systems1), ImpossibleRequirements::Cycle(systems2)) => {
+                systems1 == systems2
+            }
             _ => false,
         }
     }
@@ -806,6 +811,10 @@ impl Debug for ImpossibleRequirements {
                 f.write_str("\n")?;
                 f.write_fmt(format_args!("After: {:?}", after))
             }
+            ImpossibleRequirements::Cycle(systems) => f.write_fmt(format_args!(
+                "These systems' ordering form a cycle and cannot be ordered: {:?}",
+                systems
+            )),
         }
     }
 }

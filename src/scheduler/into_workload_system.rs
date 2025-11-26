@@ -36,24 +36,22 @@ where
     F: 'static + Send + Sync + Fn() -> R,
 {
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem> {
-        let system_type_name = type_name::<F>();
-
         Ok(WorkloadSystem {
             borrow_constraints: Vec::new(),
             tracking_to_enable: Vec::new(),
+            display_name: self.label(),
+            tags: vec![self.label()],
             system_fn: Box::new(move |_: &World| {
                 (self)();
                 Ok(())
             }),
             type_id: TypeId::of::<F>(),
-            display_name: Box::new(system_type_name),
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
-            tags: vec![Box::new(SystemLabel {
-                type_id: TypeId::of::<F>(),
-                name: type_name::<F>().as_label(),
-            })],
+            after: Vec::new(),
+            before: Vec::new(),
+            unique_id: 0,
             run_if: None,
             require_in_workload: DedupedLabels::new(),
             require_before: DedupedLabels::new(),
@@ -149,19 +147,19 @@ macro_rules! impl_into_workload_system {
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
                     tracking_to_enable,
+                    display_name: self.label(),
+                    tags: vec![self.label()],
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
                         Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+)))
                     }),
                     type_id: TypeId::of::<Func>(),
-                    display_name: Box::new(type_name::<Func>()),
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
-                    tags: vec![Box::new(SystemLabel {
-                        type_id: TypeId::of::<Func>(),
-                        name: type_name::<Func>().as_label(),
-                    })],
+                    after: Vec::new(),
+                    before: Vec::new(),
+                    unique_id: 0,
                     generator: Box::new(|constraints| {
                         $(
                             $type::borrow_info(constraints);

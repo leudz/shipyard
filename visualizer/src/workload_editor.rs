@@ -42,7 +42,7 @@ impl Component for WorkloadEditor {
         let batches = ctx
             .props()
             .workload_info
-            .batch_info
+            .batches_info
             .iter()
             .enumerate()
             .map(|(i, batch)| {
@@ -352,13 +352,13 @@ impl WorkloadEditor {
                                     let dst_x;
                                     let dst_y;
 
-                                    if let Some(prev_i) =
-                                        prev_batch.info.systems().enumerate().find_map(
-                                            |(i, system)| {
-                                                (system.type_id == other_system.type_id)
-                                                    .then(|| i as i32)
-                                            },
-                                        )
+                                    if let Some(prev_i) = prev_batch
+                                        .info
+                                        .systems()
+                                        .enumerate()
+                                        .find_map(|(i, system)| {
+                                            (system.unique_id == *other_system).then(|| i as i32)
+                                        })
                                     {
                                         src_x = prev_x + prev_batch.width;
                                         src_y = prev_y
@@ -399,7 +399,7 @@ impl WorkloadEditor {
                                         .info
                                         .systems().enumerate().find_map(|(i, system)| {
                                             (
-                                                system.type_id == other_system.type_id
+                                                system.unique_id == *other_system
                                             ).then(|| i as i32)
                                         })?;
                                     }
@@ -487,6 +487,7 @@ impl WorkloadEditor {
                     .info
                     .systems()
                     .enumerate()
+                    .filter(|(_, system)| system.conflict.is_none())
                     .flat_map(move |(i, system)| {
                         system.after.iter().flat_map(move |before| {
                             (self.batches).iter().filter_map(move |other_batch| {
@@ -504,12 +505,8 @@ impl WorkloadEditor {
                                         .systems()
                                         .enumerate().find_map(|(i, system)| {
                                             (
-                                                &system.name
+                                                &system.unique_id
                                                 == before
-                                                .strip_prefix("System(")
-                                                .unwrap_or(&before)
-                                                .strip_suffix(")")
-                                                .unwrap_or(&before)
                                             )
                                             .then(|| i as i32)
                                         })?;

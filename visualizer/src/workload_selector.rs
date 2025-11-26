@@ -46,24 +46,38 @@ impl Component for WorkloadSelector {
             }
         };
 
-        let workloads = std::iter::once(html! {
-            <option
-                selected={ctx.props().selected_workload.is_none()}
-            >
-                {"None"}
-            </option>
-        })
-        .chain(ctx.props().workloads.iter().map(|workload| {
-            html! {
-                <option
-                    value={workload.clone()}
-                    selected={Some(workload) == ctx.props().selected_workload.as_ref()}
-                >
-                    {workload}
-                </option>
-            }
-        }))
-        .collect::<Html>();
+        if !ctx.props().workloads.is_empty() {
+            ctx.props()
+                .change_selected_workload
+                .emit(Some(ctx.props().workloads[0].clone()))
+        }
+
+        let workloads = ctx
+            .props()
+            .workloads
+            .is_empty()
+            .then(|| {
+                std::iter::once(html! {
+                    <option
+                        selected={ctx.props().selected_workload.is_none()}
+                    >
+                        {"None"}
+                    </option>
+                })
+            })
+            .into_iter()
+            .flatten()
+            .chain(ctx.props().workloads.iter().map(|workload| {
+                html! {
+                    <option
+                        value={workload.clone()}
+                        selected={Some(workload) == ctx.props().selected_workload.as_ref()}
+                    >
+                        {workload}
+                    </option>
+                }
+            }))
+            .collect::<Html>();
 
         html! {
             <div>

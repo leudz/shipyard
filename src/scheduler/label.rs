@@ -21,7 +21,7 @@ pub trait Label: 'static + Send + Sync {
     fn dyn_debug(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error>;
 }
 
-macro_rules! impl_label {
+macro_rules! impl_label_string_like {
     ($($type: ty),+) => {
         $(
             impl Label for $type {
@@ -49,6 +49,8 @@ macro_rules! impl_label {
     };
 }
 
+impl_label_string_like![&'static str, String, Cow<'static, str>];
+
 impl Label for TypeId {
     fn as_any(&self) -> &dyn Any {
         self
@@ -70,8 +72,6 @@ impl Label for TypeId {
         self.fmt(f)
     }
 }
-
-impl_label![&'static str, String, Cow<'static, str>];
 
 impl Label for Box<dyn Label> {
     fn as_any(&self) -> &dyn Any {

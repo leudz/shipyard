@@ -64,6 +64,9 @@ where
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
+            after: Vec::new(),
+            before: Vec::new(),
+            unique_id: 0,
             tags: vec![Box::new(SystemLabel {
                 type_id: TypeId::of::<F>(),
                 name: system_type_name.as_label(),
@@ -95,6 +98,9 @@ where
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
+            after: Vec::new(),
+            before: Vec::new(),
+            unique_id: 0,
             tags: vec![Box::new(SystemLabel {
                 type_id: TypeId::of::<F>(),
                 name: system_type_name.as_label(),
@@ -199,6 +205,9 @@ macro_rules! impl_into_workload_try_system {
                     }),
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
+                    after: Vec::new(),
+                    before: Vec::new(),
+                    unique_id: 0,
                     tags: vec![Box::new(SystemLabel {
                         type_id: TypeId::of::<Func>(),
                         name: type_name::<Func>().as_label(),
@@ -270,6 +279,9 @@ macro_rules! impl_into_workload_try_system {
                     }),
                     before_all: DedupedLabels::new(),
                     after_all: DedupedLabels::new(),
+                    after: Vec::new(),
+                    before: Vec::new(),
+                    unique_id: 0,
                     tags: vec![Box::new(SystemLabel {
                         type_id: TypeId::of::<Func>(),
                         name: type_name::<Func>().as_label(),

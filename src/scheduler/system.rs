@@ -56,6 +56,12 @@ pub struct WorkloadSystem {
     #[allow(missing_docs)]
     pub after_all: DedupedLabels,
     #[allow(missing_docs)]
+    pub after: Vec<usize>,
+    #[allow(missing_docs)]
+    pub before: Vec<usize>,
+    #[allow(missing_docs)]
+    pub unique_id: usize,
+    #[allow(missing_docs)]
     pub require_in_workload: DedupedLabels,
     #[allow(missing_docs)]
     pub require_before: DedupedLabels,

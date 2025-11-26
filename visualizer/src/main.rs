@@ -134,7 +134,7 @@ impl Component for App {
             .as_ref()
             .map(|workload| {
                 self.workloads.0[workload]
-                    .batch_info
+                    .batches_info
                     .iter()
                     .flat_map(|batch| {
                         batch.systems().map(|system| {
@@ -149,7 +149,7 @@ impl Component for App {
 
         let mut component_to_systems: HashMap<_, Vec<_>> = HashMap::new();
         if let Some(workload) = &self.selected_workload {
-            for batch in &self.workloads.0[workload].batch_info {
+            for batch in &self.workloads.0[workload].batches_info {
                 for system in batch.systems() {
                     for component in &system.borrow {
                         component_to_systems

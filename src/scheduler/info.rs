@@ -20,7 +20,7 @@ pub struct WorkloadInfo {
     #[allow(missing_docs)]
     pub name: String,
     #[allow(missing_docs)]
-    pub batch_info: Vec<BatchInfo>,
+    pub batches_info: Vec<BatchInfo>,
 }
 
 /// Contains information related to a batch.
@@ -47,23 +47,29 @@ pub struct SystemInfo {
     #[allow(missing_docs)]
     pub name: String,
     #[allow(missing_docs)]
-    pub type_id: TypeId,
-    #[allow(missing_docs)]
     pub borrow: Vec<TypeInfo>,
     /// Information explaining why this system could not be part of the previous batch.
     pub conflict: Option<Conflict>,
-    #[allow(missing_docs)]
-    pub before: Vec<String>,
-    #[allow(missing_docs)]
-    pub after: Vec<String>,
+    /// Contains all ordering information the scheduler used to place this system
+    pub after: Vec<usize>,
+    /// List of all after_all constraints
+    pub after_all: Vec<String>,
+    /// List of all before_all constraints
+    pub before_all: Vec<String>,
+    /// A unique identifier for this system within the workload
+    pub unique_id: usize,
 }
 
 impl core::fmt::Debug for SystemInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("SystemInfo")
             .field("name", &self.name)
+            .field("unique_id", &self.unique_id)
             .field("borrow", &self.borrow)
             .field("conflict", &self.conflict)
+            .field("after", &self.after)
+            .field("after_all", &self.after_all)
+            .field("before_all", &self.before_all)
             .finish()
     }
 }
@@ -77,7 +83,7 @@ pub enum Conflict {
         #[allow(missing_docs)]
         type_info: Option<TypeInfo>,
         #[allow(missing_docs)]
-        other_system: SystemId,
+        other_system: usize,
         #[allow(missing_docs)]
         other_type_info: TypeInfo,
     },
@@ -86,32 +92,10 @@ pub enum Conflict {
     /// A `!Send` and/or `!Sync` type currently prevents any parrallelism.
     OtherNotSendSync {
         #[allow(missing_docs)]
-        system: SystemId,
+        system: usize,
         #[allow(missing_docs)]
         type_info: TypeInfo,
     },
-}
-
-/// Identify a system.
-#[derive(Clone, Eq)]
-#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
-pub struct SystemId {
-    #[allow(missing_docs)]
-    pub name: String,
-    #[allow(missing_docs)]
-    pub type_id: TypeId,
-}
-
-impl PartialEq for SystemId {
-    fn eq(&self, other: &Self) -> bool {
-        self.type_id == other.type_id
-    }
-}
-
-impl core::fmt::Debug for SystemId {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_fmt(format_args!("{:?}", self.name))
-    }
 }
 
 /// Identify a type.
@@ -123,6 +107,7 @@ pub struct TypeInfo {
     #[allow(missing_docs)]
     pub mutability: Mutability,
     #[allow(missing_docs)]
+    #[cfg_attr(feature = "serde1", serde(skip))]
     pub storage_id: StorageId,
     #[allow(missing_docs)]
     pub thread_safe: bool,
@@ -187,7 +172,7 @@ impl WorkloadsInfo {
     }
 }
 
-/// List of before/after requirements for a system or workload.
+/// List of before/after requirements for a system or workload.\
 /// The list dedups items.
 #[derive(Clone, Debug, Default)]
 pub struct DedupedLabels(Vec<Box<dyn Label>>);
@@ -223,16 +208,8 @@ impl DedupedLabels {
         self.into_iter()
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.0.len()
-    }
-
     pub(crate) fn clear(&mut self) {
         self.0.clear();
-    }
-
-    pub(crate) fn to_vec(&self) -> Vec<Box<dyn Label>> {
-        self.0.clone()
     }
 
     pub(crate) fn retain<F: FnMut(&Box<dyn Label>) -> bool>(&mut self, f: F) {
@@ -244,9 +221,17 @@ impl DedupedLabels {
     }
 }
 
+impl IntoIterator for DedupedLabels {
+    type Item = Box<dyn Label>;
+    type IntoIter = alloc::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
 impl<'a> IntoIterator for &'a DedupedLabels {
     type Item = &'a Box<dyn Label>;
-
     type IntoIter = RequirementsIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {

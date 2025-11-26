@@ -19,36 +19,43 @@ impl World {
         let _parent_span = parent_span.enter();
 
         let run_batch = || -> Result<(), error::RunWorkload> {
-            for (batch, batches_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
+            for (batch, batch_run_if) in batches.parallel.iter().zip(&batches.parallel_run_if) {
                 let mut result = Ok(());
+
                 let run_if = (
-                    if let Some(run_if_index) = batches_run_if.0 {
-                        if let Some(run_if) = &batches.sequential_run_if[run_if_index] {
-                            (run_if)(self).map_err(|err| {
-                                error::RunWorkload::Run((
+                    if batch_run_if.0 == usize::MAX {
+                        // There is no run_if for this system
+
+                        true
+                    } else {
+                        let run_if_index = batches.sequential_run_if[batch_run_if.0];
+
+                        match (batches.systems_run_if[run_if_index])(self) {
+                            Ok(should_run) => should_run,
+                            Err(err) => {
+                                return Err(error::RunWorkload::Run((
                                     system_names[batch.0.unwrap()].clone(),
                                     err,
-                                ))
-                            })?
-                        } else {
-                            true
+                                )));
+                            }
                         }
-                    } else {
-                        true
                     },
-                    batches_run_if
+                    batch
                         .1
                         .iter()
-                        .map(|run_if_index| {
-                            if let Some(run_if) = &batches.sequential_run_if[*run_if_index] {
-                                (run_if)(self).map_err(|err| {
-                                    error::RunWorkload::Run((
-                                        system_names[batches.sequential[*run_if_index]].clone(),
-                                        err,
-                                    ))
-                                })
-                            } else {
-                                Ok(true)
+                        .zip(&batch_run_if.1)
+                        .map(|(&index, &run_if_index)| {
+                            if run_if_index == usize::MAX {
+                                // There is no run_if for this system
+
+                                return Ok(true);
+                            }
+
+                            match (batches.systems_run_if[run_if_index])(self) {
+                                Ok(should_run) => Ok(should_run),
+                                Err(err) => {
+                                    Err(error::RunWorkload::Run((system_names[index].clone(), err)))
+                                }
                             }
                         })
                         .collect::<Result<alloc::vec::Vec<_>, error::RunWorkload>>()?,
@@ -139,15 +146,25 @@ impl World {
             .sequential
             .iter()
             .zip(&batches.sequential_run_if)
-            .try_for_each(|(&index, run_if)| {
-                if let Some(run_if) = run_if.as_ref() {
-                    let should_run = (run_if)(self).map_err(|err| {
-                        error::RunWorkload::Run((system_names[index].clone(), err))
-                    })?;
+            .try_for_each(|(&index, &run_if_index)| {
+                let should_run = if run_if_index == usize::MAX {
+                    // There is no run_if for this system
 
-                    if !should_run {
-                        return Ok(());
+                    true
+                } else {
+                    match (batches.systems_run_if[run_if_index])(self) {
+                        Ok(should_run) => should_run,
+                        Err(err) => {
+                            return Err(error::RunWorkload::Run((
+                                system_names[index].clone(),
+                                err,
+                            )));
+                        }
                     }
+                };
+
+                if !should_run {
+                    return Ok(());
                 }
 
                 #[cfg(feature = "tracing")]

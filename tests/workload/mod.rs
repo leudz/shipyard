@@ -1,6 +1,8 @@
 #[cfg(feature = "thread_local")]
 mod non_send_sync;
 
+use shipyard::{borrow::BorrowInfo, scheduler::AsLabel, *};
+
 struct U32(u32);
 impl Component for U32 {
     type Tracking = track::Untracked;
@@ -13,9 +15,6 @@ impl Component for USIZE {
     type Tracking = track::Untracked;
 }
 impl Unique for USIZE {}
-
-use core::any::type_name;
-use shipyard::{borrow::BorrowInfo, scheduler::AsLabel, *};
 
 #[test]
 fn duplicate_name() {
@@ -188,10 +187,6 @@ fn check_nested_workloads_run_if() {
 
 #[test]
 fn check_run_if_error() {
-    fn type_name_of<F: FnOnce() + 'static>(_: F) -> &'static str {
-        type_name::<F>()
-    }
-
     fn sys() {}
 
     let world = World::new();
@@ -200,7 +195,7 @@ fn check_run_if_error() {
 
     match world.run_default_workload() {
         Err(error::RunWorkload::Run((label, _))) => {
-            assert!(label.dyn_eq(&*type_name_of(sys).as_label()));
+            assert!(label == sys.as_label());
         }
         _ => panic!(),
     }
