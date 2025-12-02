@@ -34,15 +34,25 @@ impl Component for Home {
                     transform: translateY(-50%) translateX(-50%);
                 "
             >
-                <span style="user-select: none;">{"Drop Json file of "}</span>
-                <code style="user-select: none;">{"shipyard::info::WorkloadsTypeUsage"}</code>
-                <span style="user-select: none;">{". "}</span><br/>
+                <span style="user-select: none;">{"Drop a Json file of "}</span>
+                <code style="user-select: none;">{"shipyard::info::WorkloadsInfo"}</code>
+                <span style="user-select: none;">{"."}</span><br/>
+                <span style="user-select: none;">{"No workload? "}</span>
                 <a
                     onclick={on_click_examples}
                     style="user-select: none;"
                 >
-                    {"Or check out the example."}
-                </a><br/><br/>
+                    {"Example"}
+                </a>
+                <span style="user-select: none;">{" or "}</span>
+                <a
+                    style="user-select: none;"
+                    href="https://leudz.github.io/shipyard/guide/master/going-further/visualizer.md"
+                    target="_blank" // open in a new tab
+                >
+                    {"tutorial"}
+                </a>
+                <span style="user-select: none;">{"."}</span><br/><br/>
                 <span>{"std::fs::write("}</span><br/>
                 <span>{"\u{00a0}\u{00a0}\u{00a0}\u{00a0}\"drop_me.json\","}</span><br/>
                 <span>

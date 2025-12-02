@@ -1783,7 +1783,7 @@ mod tests {
 mod info_tests {
     use super::*;
     use crate::borrow::Mutability;
-    use crate::scheduler::info::{Conflict, SystemInfo};
+    use crate::scheduler::info::{BeforeAfterConstraint, Conflict, SystemInfo};
     use crate::scheduler::system_modificator::SystemModificator;
     use crate::sparse_set::SparseSet;
     use crate::views::{View, ViewMut};
@@ -1825,10 +1825,12 @@ mod info_tests {
                 conflict: None,
                 after: vec![],
                 after_all: vec![],
-                before_all: vec![
-                    "System(shipyard::scheduler::workload::info_tests::before_all::sys_a)"
-                        .to_string()
-                ],
+                before_all: vec![BeforeAfterConstraint {
+                    other_system: 0,
+                    constraint:
+                        "System(shipyard::scheduler::workload::info_tests::before_all::sys_a)"
+                            .to_string()
+                }],
                 unique_id: 1
             })
         );
@@ -1890,10 +1892,12 @@ mod info_tests {
                 borrow: vec![],
                 conflict: None,
                 after: vec![1],
-                after_all: vec![
-                    "System(shipyard::scheduler::workload::info_tests::after_all::sys_b)"
-                        .to_string()
-                ],
+                after_all: vec![BeforeAfterConstraint {
+                    other_system: 1,
+                    constraint:
+                        "System(shipyard::scheduler::workload::info_tests::after_all::sys_b)"
+                            .to_string()
+                }],
                 before_all: vec![],
                 unique_id: 0
             })
@@ -1963,12 +1967,12 @@ mod info_tests {
                     }
                 ],
                 conflict: Some(Conflict::Borrow {
-                    type_info: Some(TypeInfo {
+                    type_info: TypeInfo {
                         name: type_name::<SparseSet::<Usize>>().into(),
                         mutability: Mutability::Exclusive,
                         storage_id: StorageId::of::<SparseSet<Usize>>(),
                         thread_safe: true
-                    }),
+                    },
                     other_system: 0,
                     other_type_info: TypeInfo {
                         name: type_name::<SparseSet::<Usize>>().into(),
@@ -1996,12 +2000,12 @@ mod info_tests {
                     thread_safe: true
                 },],
                 conflict: Some(Conflict::Borrow {
-                    type_info: Some(TypeInfo {
+                    type_info: TypeInfo {
                         name: type_name::<SparseSet::<Usize>>().into(),
                         mutability: Mutability::Shared,
                         storage_id: StorageId::of::<SparseSet<Usize>>(),
                         thread_safe: true
-                    }),
+                    },
                     other_system: 1,
                     other_type_info: TypeInfo {
                         name: type_name::<SparseSet::<Usize>>().into(),
@@ -2027,12 +2031,12 @@ mod info_tests {
                     thread_safe: true
                 },],
                 conflict: Some(Conflict::Borrow {
-                    type_info: Some(TypeInfo {
+                    type_info: TypeInfo {
                         name: type_name::<SparseSet::<Usize>>().into(),
                         mutability: Mutability::Shared,
                         storage_id: StorageId::of::<SparseSet<Usize>>(),
                         thread_safe: true
-                    }),
+                    },
                     other_system: 1,
                     other_type_info: TypeInfo {
                         name: type_name::<SparseSet::<Usize>>().into(),

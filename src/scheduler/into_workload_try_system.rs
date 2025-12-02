@@ -60,7 +60,10 @@ where
                 Ok(())
             }),
             type_id: TypeId::of::<F>(),
-            display_name: Box::new(system_type_name),
+            display_name: Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: system_type_name.as_label(),
+            }),
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
@@ -94,7 +97,10 @@ where
                 Ok(())
             }),
             type_id: TypeId::of::<F>(),
-            display_name: Box::new(system_type_name),
+            display_name: Box::new(SystemLabel {
+                type_id: TypeId::of::<F>(),
+                name: system_type_name.as_label(),
+            }),
             generator: Box::new(|_| TypeId::of::<F>()),
             before_all: DedupedLabels::new(),
             after_all: DedupedLabels::new(),
@@ -195,7 +201,10 @@ macro_rules! impl_into_workload_try_system {
                         Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
-                    display_name: Box::new(type_name::<Func>()),
+                    display_name: Box::new(SystemLabel {
+                        type_id: TypeId::of::<Func>(),
+                        name: type_name::<Func>().as_label(),
+                    }),
                     generator: Box::new(|constraints| {
                         $(
                             $type::borrow_info(constraints);
@@ -269,7 +278,10 @@ macro_rules! impl_into_workload_try_system {
                         Ok(drop((&&self)($($type::world_borrow(&world, Some(last_run), current)?),+).into().map_err(error::Run::from_custom)?))
                     }),
                     type_id: TypeId::of::<Func>(),
-                    display_name: Box::new(type_name::<Func>()),
+                    display_name: Box::new(SystemLabel {
+                        type_id: TypeId::of::<Func>(),
+                        name: type_name::<Func>().as_label(),
+                    }),
                     generator: Box::new(|constraints| {
                         $(
                             $type::borrow_info(constraints);

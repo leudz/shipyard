@@ -80,7 +80,7 @@ impl Component for WorkloadSelector {
             .collect::<Html>();
 
         html! {
-            <div>
+            <div style="padding-top: 4px; padding-left: 6px;">
                 <span>{"Selected workload: "}</span>
                 <select
                     onchange={on_change_workload}

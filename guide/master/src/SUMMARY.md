@@ -26,6 +26,7 @@
     - [!Send and !Sync Components](./going-further/non-send-sync.md)
     - [Performance Tips](./going-further/performance-tips.md)
     - [Tracing](./going-further/tracing.md)
+    - [Visualizer](./going-further/visualizer.md)
     - [More Resources](./going-further/more-resources.md)
 - [Going Deeper](./going-deeper.md)
     - [Sparse Set](./going-deeper/sparse-set.md)

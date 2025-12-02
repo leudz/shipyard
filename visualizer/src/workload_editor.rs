@@ -1,4 +1,7 @@
-use shipyard::scheduler::info::{BatchInfo, Conflict, WorkloadInfo};
+use shipyard::{
+    borrow::Mutability,
+    scheduler::info::{BatchInfo, Conflict, TypeInfo, WorkloadInfo},
+};
 use wasm_bindgen::JsCast;
 use web_sys::{window, HtmlDivElement, HtmlInputElement};
 use yew::prelude::*;
@@ -10,6 +13,8 @@ pub(crate) struct WorkloadEditor {
     drag_ignore: bool,
     conflict: bool,
     before_after: bool,
+    tooltip_pos: Option<(i32, i32)>,
+    tooltip_content: Option<Html>,
 }
 
 pub(crate) enum Msg {
@@ -22,6 +27,8 @@ pub(crate) enum Msg {
     DragIgnoreEnd,
     ToggleConflict,
     ToggleBeforeAfter,
+    ShowTooltip(i32, i32, Html),
+    HideTooltip,
 }
 
 #[derive(Properties, PartialEq)]
@@ -54,7 +61,14 @@ impl Component for WorkloadEditor {
                         .name,
                 ) + 16;
 
-                let pos = (win_width / 4 + offset, win_height / 4);
+                let mut pos = (win_width / 4 + offset, win_height / 2);
+
+                // Slightly shift batches to better see paths between systems
+                if i % 2 == 0 {
+                    pos.1 -= 20;
+                } else {
+                    pos.1 += 20;
+                }
 
                 offset += width + 50;
 
@@ -74,6 +88,8 @@ impl Component for WorkloadEditor {
             drag_ignore: false,
             conflict: true,
             before_after: true,
+            tooltip_pos: None,
+            tooltip_content: None,
         }
     }
 
@@ -91,12 +107,14 @@ impl Component for WorkloadEditor {
                 if let Some(batch) = self.dragged_batch {
                     let pos = &mut self.batches[batch].pos;
 
-                    pos.0 += (x as f32 / self.zoom) as i32;
-                    pos.1 += (y as f32 / self.zoom) as i32;
+                    // Rounding improves controls when the mouse doesn't move much.
+                    pos.0 += (x as f32 / self.zoom).round() as i32;
+                    pos.1 += (y as f32 / self.zoom).round() as i32;
                 } else {
+                    // Rounding improves controls when the mouse doesn't move much.
                     for batch in &mut self.batches {
-                        batch.pos.0 += (x as f32 / self.zoom) as i32;
-                        batch.pos.1 += (y as f32 / self.zoom) as i32;
+                        batch.pos.0 += (x as f32 / self.zoom).round() as i32;
+                        batch.pos.1 += (y as f32 / self.zoom).round() as i32;
                     }
                 }
 
@@ -143,13 +161,26 @@ impl Component for WorkloadEditor {
 
                 true
             }
+            Msg::ShowTooltip(x, y, content) => {
+                self.tooltip_pos = Some((x, y));
+                self.tooltip_content = Some(content);
+
+                true
+            }
+            Msg::HideTooltip => {
+                self.tooltip_pos = None;
+                self.tooltip_content = None;
+
+                true
+            }
         }
     }
 
     fn view(&self, ctx: &Context<WorkloadEditor>) -> Html {
         let batches: Html = self.batch_windows(ctx);
-        let conflicts = self.conflict_paths();
-        let after = self.before_after_paths();
+        let conflicts = self.conflict_paths(ctx);
+        let after = self.after_paths(ctx);
+        let before = self.before_paths(ctx);
 
         let link = ctx.link().clone();
         let on_input_slider = move |event: InputEvent| {
@@ -169,9 +200,9 @@ impl Component for WorkloadEditor {
         let link2 = ctx.link().clone();
         let link3 = ctx.link().clone();
         let controls = html! {
-            <div style="position: absolute; bottom: 0; right: 0; z-index: 1;">
-                <div style="position: absolute; right: 0;">
-                    <label for="conflicts">{"Conflicts "}</label>
+            <div style="position: absolute; bottom: 2px; right: 8px; z-index: 1;">
+                <div style="float: right;">
+                    <label for="conflicts">{"Conflicts 🔴 "}</label>
                     <input
                         type="checkbox"
                         name="conflicts"
@@ -181,8 +212,8 @@ impl Component for WorkloadEditor {
                         }}
                     />
                 </div><br/>
-                <div style="position: absolute; right: 0;">
-                    <label for="before_after">{"Before/After "}</label>
+                <div style="float: right;">
+                    <label for="before_after">{"Before/After 🟢 "}</label>
                     <input
                         type="checkbox"
                         name="before_after"
@@ -192,17 +223,19 @@ impl Component for WorkloadEditor {
                         }}
                     />
                 </div><br/>
-                <input
-                    type="range"
-                    min="-1"
-                    max="1"
-                    step="0.01"
-                    value={self.zoom.log10().to_string()}
-                    oninput={on_input_slider}
-                    onmousedown={move |_| {
-                        link3.send_message(Msg::DragIgnoreStart);
-                    }}
-                />
+                <div style="float: right;">
+                    <input
+                        type="range"
+                        min="-1"
+                        max="1"
+                        step="0.01"
+                        value={self.zoom.log10().to_string()}
+                        oninput={on_input_slider}
+                        onmousedown={move |_| {
+                            link3.send_message(Msg::DragIgnoreStart);
+                        }}
+                    />
+                </div>
             </div>
         };
 
@@ -229,6 +262,38 @@ impl Component for WorkloadEditor {
 
             link.send_message(Msg::ZoomDelta(delta as f32));
         };
+
+        let tooltip =
+            if let (Some((x, y)), Some(content)) = (&self.tooltip_pos, &self.tooltip_content) {
+                let x = x + 10;
+                let y = y + 10;
+
+                html! {
+                    <div
+                        style={
+                            format!(
+                                "position: fixed;
+                                left: {}px;
+                                top: {}px;
+                                background: #2c5282;
+                                padding: 8px;
+                                z-index: 1000;
+                                pointer-events: none;
+                                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.60);
+                                color: #ebf8ff;
+                                border-radius: 20px;
+                                white-space: pre-wrap;
+                                text-align: center;",
+                                x, y
+                            )
+                        }
+                    >
+                        {content.clone()}
+                    </div>
+                }
+            } else {
+                html! {}
+            };
 
         let zoom = self.zoom;
 
@@ -258,10 +323,12 @@ impl Component for WorkloadEditor {
                         style="overflow: visible;"
                         xmlns="http://www.w3.org/2000/svg"
                     >
-                        {conflicts}
                         {after}
+                        {before}
+                        {conflicts}
                     </svg>
-                </div>
+                    </div>
+                    {tooltip}
             </div>
         }
     }
@@ -302,10 +369,11 @@ impl WorkloadEditor {
                             top: {y}px;
                             left: {x}px;
                             text-align: center;
-                            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.25);
+                            box-shadow: 0 4px 6px 0 rgba(0,0,0,0.50);
                             border-radius: 5px;
                             user-select: none;
-                            background-color: pink;
+                            background-color: #d4d4d8;
+                            color: #1f2937;
                         ")}
                     >
                         <header style="border-bottom: 1px solid black;">
@@ -321,13 +389,14 @@ impl WorkloadEditor {
             .collect()
     }
 
-    fn conflict_paths(&self) -> Html {
+    fn conflict_paths(&self, ctx: &Context<WorkloadEditor>) -> Html {
         if !self.conflict {
             return html! {};
         }
 
         self.batches
             .iter()
+            .skip(1)
             .flat_map(|batch| {
                 let (batch_x, batch_y) = batch.pos;
 
@@ -338,71 +407,41 @@ impl WorkloadEditor {
                     .filter_map(move |(i, system)| {
                         system.conflict.as_ref().and_then(|conflict| {
                             match conflict {
-                                Conflict::Borrow { other_system, .. }
-                                | Conflict::OtherNotSendSync {
-                                    system: other_system,
-                                    ..
+                                Conflict::Borrow {
+                                    type_info,
+                                    other_system,
+                                    other_type_info,
                                 } => {
                                     let prev_batch =
                                         self.batches.get(batch.index.checked_sub(1)?).unwrap();
                                     let (prev_x, prev_y) = prev_batch.pos;
 
-                                    let src_x;
-                                    let src_y;
-                                    let dst_x;
-                                    let dst_y;
-
-                                    if let Some(prev_i) = prev_batch
+                                    // If the conflict is not with the previous batch,
+                                    // it means there is another reason this system is ordered this way.
+                                    let j = prev_batch
                                         .info
                                         .systems()
                                         .enumerate()
-                                        .find_map(|(i, system)| {
-                                            (system.unique_id == *other_system).then(|| i as i32)
-                                        })
-                                    {
-                                        src_x = prev_x + prev_batch.width;
-                                        src_y = prev_y
+                                        .find_map(|(j, system)| {
+                                            (system.unique_id == *other_system).then(|| j as i32)
+                                        })?;
+
+                                    let src_x = prev_x + prev_batch.width;
+                                    let src_y = prev_y
                                         + 24    // title
                                         + 1     // border
                                         + 2     // padding
                                         + 12    // half of the line
                                         + 24    // line
-                                        * prev_i;
-                                        dst_x = batch_x;
-                                        dst_y = batch_y
+                                        * j;
+                                    let dst_x = batch_x;
+                                    let dst_y = batch_y
                                         + 24    // title
                                         + 1     // border
                                         + 2     // padding
                                         + 12    // half of the line
                                         + 24    // line
                                         * i as i32;
-                                    } else {
-                                        let next_batch = self.batches.get(batch.index + 1)?;
-                                        let (next_x, next_y) = next_batch.pos;
-
-                                        src_x = batch_x + batch.width;
-                                        src_y = batch_y
-                                            + 24    // title
-                                            + 1     // border
-                                            + 2     // padding
-                                            + 12    // half of the line
-                                            + 24    // line
-                                            * i as i32;
-                                        dst_x = next_x;
-                                        dst_y = next_y
-                                        + 24    // title
-                                        + 1     // border
-                                        + 2     // padding
-                                        + 12    // half of the line
-                                        + 24    // line
-                                        * next_batch
-                                        .info
-                                        .systems().enumerate().find_map(|(i, system)| {
-                                            (
-                                                system.unique_id == *other_system
-                                            ).then(|| i as i32)
-                                        })?;
-                                    }
 
                                     let control_scale = ((dst_x - src_x) / 2).max(30);
                                     let src_control_x = src_x + control_scale;
@@ -418,16 +457,116 @@ impl WorkloadEditor {
                                         {dst_x} {dst_y}"
                                     );
 
+                                    let type_name = trim_type_name(&type_info);
+                                    let other_type_name = trim_type_name(&other_type_info);
+
+                                    let conflict_str = format!("{} ❌ {}", other_type_name, type_name);
+
                                     Some(html! {
                                         <path
                                             d={path}
-                                            stroke="black"
+                                            stroke="red"
+                                            stroke-width="4"
                                             fill="transparent"
-                                            stroke-width="1"
+                                            onmouseover={
+                                                let link = ctx.link().clone();
+
+                                                move |e: MouseEvent| {
+                                                    let x = e.client_x();
+                                                    let y = e.client_y();
+
+                                                    link.send_message(Msg::ShowTooltip(x, y, html!{ conflict_str.clone() }));
+                                                }
+                                            }
+                                            onmouseout={
+                                                let link = ctx.link().clone();
+
+                                                move |_| {
+                                                    link.send_message(Msg::HideTooltip);
+                                                }
+                                            }
                                         />
                                     })
                                 }
-                                Conflict::NotSendSync(_) => {
+                                Conflict::OtherNotSendSync {
+                                    system: other_system,
+                                    type_info,
+                                } => {
+                                    let prev_batch =
+                                        self.batches.get(batch.index.checked_sub(1)?).unwrap();
+                                    let (prev_x, prev_y) = prev_batch.pos;
+
+                                    let j = prev_batch
+                                        .info
+                                        .systems()
+                                        .enumerate()
+                                        .find_map(|(j, system)| {
+                                            (system.unique_id == *other_system).then(|| j as i32)
+                                        })
+                                        .unwrap();
+
+                                    let src_x = prev_x + prev_batch.width;
+                                    let src_y = prev_y
+                                        + 24    // title
+                                        + 1     // border
+                                        + 2     // padding
+                                        + 12    // half of the line
+                                        + 24    // line
+                                        * j;
+                                    let dst_x = batch_x;
+                                    let dst_y = batch_y
+                                        + 24    // title
+                                        + 1     // border
+                                        + 2     // padding
+                                        + 12    // half of the line
+                                        + 24    // line
+                                        * i as i32;
+
+                                    let control_scale = ((dst_x - src_x) / 2).max(30);
+                                    let src_control_x = src_x + control_scale;
+                                    let src_control_y = src_y;
+                                    let dst_control_x = dst_x - control_scale;
+                                    let dst_control_y = dst_y;
+
+                                    let path = format!(
+                                        "
+                                        M {src_x} {src_y}
+                                        C {src_control_x} {src_control_y},
+                                        {dst_control_x} {dst_control_y},
+                                        {dst_x} {dst_y}"
+                                    );
+
+                                    let type_info_str = trim_type_name(&type_info);
+
+                                    let conflict_str = format!("❌ {type_info_str} ❌\n(Non Thread Safe)");
+
+                                    Some(html! {
+                                        <path
+                                            d={path}
+                                            stroke="red"
+                                            stroke-width="4"
+                                            fill="transparent"
+                                            onmouseover={
+                                                let link = ctx.link().clone();
+
+                                                move |e: MouseEvent| {
+                                                    let x = e.client_x();
+                                                    let y = e.client_y();
+
+                                                    link.send_message(Msg::ShowTooltip(x, y, html!{ conflict_str.clone() }));
+                                                }
+                                            }
+                                            onmouseout={
+                                                let link = ctx.link().clone();
+
+                                                move |_| {
+                                                    link.send_message(Msg::HideTooltip);
+                                                }
+                                            }
+                                        />
+                                    })
+                                }
+                                Conflict::NotSendSync(type_info) => {
                                     let prev_batch =
                                         self.batches.get(batch.index.checked_sub(1)?).unwrap();
                                     let (prev_x, prev_y) = prev_batch.pos;
@@ -457,12 +596,33 @@ impl WorkloadEditor {
                                         {dst_x} {dst_y}"
                                     );
 
+                                    let type_info_str = trim_type_name(&type_info);
+
+                                    let conflict_str = format!("❌ {type_info_str} ❌\n(Non Thread Safe)");
+
                                     Some(html! {
                                         <path
                                             d={path}
-                                            stroke="black"
+                                            stroke="red"
+                                            stroke-width="4"
                                             fill="transparent"
-                                            stroke-width="1"
+                                            onmouseover={
+                                                let link = ctx.link().clone();
+
+                                                move |e: MouseEvent| {
+                                                    let x = e.client_x();
+                                                    let y = e.client_y();
+
+                                                    link.send_message(Msg::ShowTooltip(x, y, html!{ conflict_str.clone() }));
+                                                }
+                                            }
+                                            onmouseout={
+                                                let link = ctx.link().clone();
+
+                                                move |_| {
+                                                    link.send_message(Msg::HideTooltip);
+                                                }
+                                            }
                                         />
                                     })
                                 }
@@ -473,25 +633,33 @@ impl WorkloadEditor {
             .collect::<Html>()
     }
 
-    fn before_after_paths(&self) -> Html {
+    fn after_paths(&self, ctx: &Context<WorkloadEditor>) -> Html {
         if !self.before_after {
             return html! {};
         }
 
         self.batches
             .iter()
-            .flat_map(|batch| {
+            .enumerate()
+            .skip(1)
+            .flat_map(|(batch_index, batch)| {
                 let (batch_x, batch_y) = batch.pos;
 
                 batch
                     .info
                     .systems()
                     .enumerate()
-                    .filter(|(_, system)| system.conflict.is_none())
                     .flat_map(move |(i, system)| {
-                        system.after.iter().flat_map(move |before| {
-                            (self.batches).iter().filter_map(move |other_batch| {
+                        system.after_all.iter().flat_map(move |before| {
+                            self.batches[0..batch_index].iter().filter_map(move |other_batch| {
                                 let (prev_x, prev_y) = other_batch.pos;
+
+                                let j = other_batch
+                                    .info
+                                    .systems()
+                                    .enumerate().find_map(|(j, system)| {
+                                        (system.unique_id == before.other_system).then(|| j as i32)
+                                    })?;
 
                                 let src_x = prev_x + other_batch.width;
                                 let src_y = prev_y
@@ -500,16 +668,7 @@ impl WorkloadEditor {
                                     + 2     // padding
                                     + 12    // half of the line
                                     + 24    // line
-                                    * other_batch
-                                        .info
-                                        .systems()
-                                        .enumerate().find_map(|(i, system)| {
-                                            (
-                                                &system.unique_id
-                                                == before
-                                            )
-                                            .then(|| i as i32)
-                                        })?;
+                                    * j;
                                 let dst_x = batch_x;
                                 let dst_y = batch_y
                                     + 24    // title
@@ -533,12 +692,31 @@ impl WorkloadEditor {
                                     {dst_x} {dst_y}"
                                 );
 
+                                let constraints = format!("<-- After All ---\n❌ {}", before.constraint);
+
                                 Some(html! {
                                     <path
                                         d={path}
-                                        stroke="black"
+                                        stroke="green"
                                         fill="transparent"
-                                        stroke-width="1"
+                                        stroke-width="4"
+                                        onmouseover={
+                                                let link = ctx.link().clone();
+
+                                                move |e: MouseEvent| {
+                                                    let x = e.client_x();
+                                                    let y = e.client_y();
+
+                                                    link.send_message(Msg::ShowTooltip(x, y, html!{ constraints.clone() }));
+                                                }
+                                            }
+                                            onmouseout={
+                                                let link = ctx.link().clone();
+
+                                                move |_| {
+                                                    link.send_message(Msg::HideTooltip);
+                                                }
+                                            }
                                     />
                                 })
                             })
@@ -547,6 +725,134 @@ impl WorkloadEditor {
             })
             .collect::<Html>()
     }
+
+    fn before_paths(&self, ctx: &Context<WorkloadEditor>) -> Html {
+        if !self.before_after {
+            return html! {};
+        }
+
+        self.batches
+            .iter()
+            .enumerate()
+            .flat_map(|(batch_index, batch)| {
+                let (batch_x, batch_y) = batch.pos;
+                let batch_width = batch.width;
+
+                batch
+                    .info
+                    .systems()
+                    .enumerate()
+                    .flat_map(move |(i, system)| {
+                        system.before_all.iter().flat_map(move |after| {
+                            self.batches[batch_index..].iter().filter_map(move |other_batch| {
+                                let (next_x, next_y) = other_batch.pos;
+
+                                let j = other_batch
+                                    .info
+                                    .systems()
+                                    .enumerate().find_map(|(j, system)| {
+                                        (system.unique_id == after.other_system).then(|| j as i32)
+                                    })?;
+
+                                let src_x = batch_x + batch_width;
+                                let src_y = batch_y
+                                    + 24    // title
+                                    + 1     // border
+                                    + 2     // padding
+                                    + 12    // half of the line
+                                    + 24    // line
+                                    * i as i32;
+                                let dst_x = next_x;
+                                let dst_y = next_y
+                                    + 24    // title
+                                    + 1     // border
+                                    + 2     // padding
+                                    + 12    // half of the line
+                                    + 24    // line
+                                    * j;
+
+                                let control_scale = ((dst_x - src_x) / 2).max(30);
+                                let src_control_x = src_x + control_scale;
+                                let src_control_y = src_y;
+                                let dst_control_x = dst_x - control_scale;
+                                let dst_control_y = dst_y;
+
+                                let path = format!(
+                                    "
+                                    M {src_x} {src_y}
+                                    C {src_control_x} {src_control_y},
+                                    {dst_control_x} {dst_control_y},
+                                    {dst_x} {dst_y}"
+                                );
+
+                                let constraints = format!("--- Before All -->\n{} ❌", after.constraint);
+
+                                Some(html! {
+                                    <path
+                                        d={path}
+                                        stroke="green"
+                                        fill="transparent"
+                                        stroke-width="4"
+                                        onmouseover={
+                                                let link = ctx.link().clone();
+
+                                                move |e: MouseEvent| {
+                                                    let x = e.client_x();
+                                                    let y = e.client_y();
+
+                                                    link.send_message(Msg::ShowTooltip(x, y, html!{ constraints.clone() }));
+                                                }
+                                            }
+                                            onmouseout={
+                                                let link = ctx.link().clone();
+
+                                                move |_| {
+                                                    link.send_message(Msg::HideTooltip);
+                                                }
+                                            }
+                                    />
+                                })
+                            })
+                        })
+                    })
+            })
+            .collect::<Html>()
+    }
+}
+
+fn trim_type_name(ty: &TypeInfo) -> String {
+    match &ty.mutability {
+        Mutability::Shared => trim_type_name_non_mut(&ty.name),
+        Mutability::Exclusive => trim_type_name_mut(&ty.name),
+    }
+}
+
+fn trim_type_name_non_mut(type_name: &str) -> String {
+    type_name
+        .replace("shipyard::unique::UniqueStorage", "UniqueView")
+        .replace("shipyard::sparse_set::SparseSet", "View")
+        .replace("shipyard::all_storages::AllStorages", "AllStorages")
+        .replace("shipyard::entities::Entities", "EntitiesView")
+        .replace("shipyard::borrow::non_send::NonSend", "NonSend")
+        .replace("shipyard::borrow::non_sync::NonSync", "NonSync")
+        .replace(
+            "shipyard::borrow::non_send_sync::NonSendSync",
+            "NonSendSync",
+        )
+}
+
+fn trim_type_name_mut(type_name: &str) -> String {
+    type_name
+        .replace("shipyard::unique::UniqueStorage", "UniqueViewMut")
+        .replace("shipyard::sparse_set::SparseSet", "ViewMut")
+        .replace("shipyard::all_storages::AllStorages", "AllStorages")
+        .replace("shipyard::entities::Entities", "EntitiesViewMut")
+        .replace("shipyard::borrow::non_send::NonSend", "NonSend")
+        .replace("shipyard::borrow::non_sync::NonSync", "NonSync")
+        .replace(
+            "shipyard::borrow::non_send_sync::NonSendSync",
+            "NonSendSync",
+        )
 }
 
 struct BatchWindow {

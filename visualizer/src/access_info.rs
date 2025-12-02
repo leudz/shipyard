@@ -29,20 +29,26 @@ impl Component for AccessInfo {
     type Properties = Props;
 
     fn create(ctx: &Context<AccessInfo>) -> AccessInfo {
+        let mut systems: Vec<_> = ctx.props().system_to_components.keys().cloned().collect();
+        systems.sort_unstable();
+
+        let mut components: Vec<_> = ctx
+            .props()
+            .component_to_systems
+            .keys()
+            .map(|component| (component.clone(), trim_component_name(component)))
+            .collect();
+        components.sort_unstable();
+
         AccessInfo {
-            systems: ctx.props().system_to_components.keys().cloned().collect(),
+            systems,
             systems_mutability: ctx
                 .props()
                 .system_to_components
                 .keys()
                 .map(|_| None)
                 .collect(),
-            components: ctx
-                .props()
-                .component_to_systems
-                .keys()
-                .map(|component| (component.clone(), trim_component_name(component)))
-                .collect(),
+            components,
             components_mutability: ctx
                 .props()
                 .component_to_systems
@@ -159,8 +165,8 @@ impl Component for AccessInfo {
             .take(len)
             .map(
                 move |((system, sys_mutability), (component, comp_mutability))| {
-                    let mut sys_style = "border-radius: 10px;".to_string();
-                    let mut comp_style = "border-radius: 10px;".to_string();
+                    let mut sys_style = "border-radius: 10px; color: black;".to_string();
+                    let mut comp_style = "border-radius: 10px; color: black;".to_string();
 
                     sys_style += match sys_mutability {
                         Some(Mutability::Exclusive) => "background-color: #FF8080;",

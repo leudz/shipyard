@@ -1,27 +1,30 @@
 {
-    "Workload(square_eater::main_loop)": {
-        "name": "Workload(square_eater::main_loop)",
-        "batch_info": [
+    "Workload(square_eater::floor_loop)": {
+        "name": "Workload(square_eater::floor_loop)",
+        "batches_info": [
             {
                 "systems": [
                     null,
                     [
                         {
-                            "name": "square_eater::counters",
-                            "type_id": 14117666763000691904,
+                            "name": "System(square_eater::counters)",
                             "borrow": [
                                 {
                                     "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 6506199278047519345
-                                    },
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                    "mutability": "Shared",
                                     "thread_safe": true
                                 }
                             ],
                             "conflict": null,
-                            "before": [],
-                            "after": []
+                            "after": [],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 0
                         }
                     ]
                 ]
@@ -31,15 +34,11 @@
                     null,
                     [
                         {
-                            "name": "square_eater::move_player",
-                            "type_id": 9152095296989767772,
+                            "name": "System(square_eater::move_player)",
                             "borrow": [
                                 {
                                     "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 6506199278047519345
-                                    },
                                     "thread_safe": true
                                 }
                             ],
@@ -48,27 +47,22 @@
                                     "type_info": {
                                         "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 6506199278047519345
-                                        },
                                         "thread_safe": true
                                     },
-                                    "other_system": {
-                                        "name": "square_eater::counters",
-                                        "type_id": 14117666763000691904
-                                    },
+                                    "other_system": 0,
                                     "other_type_info": {
                                         "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 6506199278047519345
-                                        },
                                         "thread_safe": true
                                     }
                                 }
                             },
-                            "before": [],
-                            "after": []
+                            "after": [
+                                0
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 1
                         }
                     ]
                 ]
@@ -78,31 +72,26 @@
                     null,
                     [
                         {
-                            "name": "square_eater::move_square",
-                            "type_id": 8350382019172893814,
+                            "name": "System(square_eater::move_square)",
                             "borrow": [
                                 {
                                     "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                     "mutability": "Shared",
-                                    "storage_id": {
-                                        "TypeId": 6506199278047519345
-                                    },
-                                    "thread_safe": true
-                                },
-                                {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
-                                    "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 9087005290273366460
-                                    },
                                     "thread_safe": true
                                 },
                                 {
                                     "name": "shipyard::sparse_set::SparseSet<square_eater::Acceleration>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 7728031876132124388
-                                    },
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                    "mutability": "Exclusive",
                                     "thread_safe": true
                                 }
                             ],
@@ -111,27 +100,22 @@
                                     "type_info": {
                                         "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                         "mutability": "Shared",
-                                        "storage_id": {
-                                            "TypeId": 6506199278047519345
-                                        },
                                         "thread_safe": true
                                     },
-                                    "other_system": {
-                                        "name": "square_eater::move_player",
-                                        "type_id": 9152095296989767772
-                                    },
+                                    "other_system": 1,
                                     "other_type_info": {
                                         "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 6506199278047519345
-                                        },
                                         "thread_safe": true
                                     }
                                 }
                             },
-                            "before": [],
-                            "after": []
+                            "after": [
+                                1
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 2
                         }
                     ]
                 ]
@@ -141,44 +125,40 @@
                     null,
                     [
                         {
-                            "name": "square_eater::grow_square",
-                            "type_id": 17749109156927277163,
+                            "name": "System(square_eater::grow_square)",
                             "borrow": [
                                 {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 9087005290273366460
-                                    },
                                     "thread_safe": true
                                 }
                             ],
                             "conflict": {
                                 "Borrow": {
                                     "type_info": {
-                                        "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 9087005290273366460
-                                        },
                                         "thread_safe": true
                                     },
-                                    "other_system": {
-                                        "name": "square_eater::move_square",
-                                        "type_id": 8350382019172893814
-                                    },
+                                    "other_system": 2,
                                     "other_type_info": {
-                                        "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 9087005290273366460
-                                        },
                                         "thread_safe": true
                                     }
                                 }
                             },
-                            "before": [],
-                            "after": []
+                            "after": [
+                                2
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 3
                         }
                     ]
                 ]
@@ -188,68 +168,65 @@
                     null,
                     [
                         {
-                            "name": "square_eater::new_squares",
-                            "type_id": 459074681199199041,
+                            "name": "System(square_eater::spawn)",
                             "borrow": [
                                 {
                                     "name": "shipyard::entities::Entities",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 9866049078610068891
-                                    },
                                     "thread_safe": true
                                 },
                                 {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::SpawnedOnFloor>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 9087005290273366460
-                                    },
                                     "thread_safe": true
                                 },
                                 {
                                     "name": "shipyard::sparse_set::SparseSet<square_eater::Acceleration>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 7728031876132124388
-                                    },
                                     "thread_safe": true
                                 },
                                 {
                                     "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 9571121093711022877
-                                    },
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                    "mutability": "Exclusive",
                                     "thread_safe": true
                                 }
                             ],
                             "conflict": {
                                 "Borrow": {
                                     "type_info": {
-                                        "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 9087005290273366460
-                                        },
                                         "thread_safe": true
                                     },
-                                    "other_system": {
-                                        "name": "square_eater::grow_square",
-                                        "type_id": 17749109156927277163
-                                    },
+                                    "other_system": 3,
                                     "other_type_info": {
-                                        "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 9087005290273366460
-                                        },
                                         "thread_safe": true
                                     }
                                 }
                             },
-                            "before": [],
-                            "after": []
+                            "after": [
+                                3
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 4
                         }
                     ]
                 ]
@@ -259,68 +236,55 @@
                     null,
                     [
                         {
-                            "name": "square_eater::collision",
-                            "type_id": 3702460942882621439,
+                            "name": "System(square_eater::collision)",
                             "borrow": [
                                 {
                                     "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 6506199278047519345
-                                    },
                                     "thread_safe": true
                                 },
                                 {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
                                     "mutability": "Shared",
-                                    "storage_id": {
-                                        "TypeId": 9087005290273366460
-                                    },
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                    "mutability": "Shared",
                                     "thread_safe": true
                                 },
                                 {
                                     "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
                                     "mutability": "Shared",
-                                    "storage_id": {
-                                        "TypeId": 9571121093711022877
-                                    },
                                     "thread_safe": true
                                 },
                                 {
                                     "name": "shipyard::sparse_set::SparseSet<square_eater::ToDelete>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 14602170264123436859
-                                    },
                                     "thread_safe": true
                                 }
                             ],
                             "conflict": {
                                 "Borrow": {
                                     "type_info": {
-                                        "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                         "mutability": "Shared",
-                                        "storage_id": {
-                                            "TypeId": 9087005290273366460
-                                        },
                                         "thread_safe": true
                                     },
-                                    "other_system": {
-                                        "name": "square_eater::new_squares",
-                                        "type_id": 459074681199199041
-                                    },
+                                    "other_system": 4,
                                     "other_type_info": {
-                                        "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 9087005290273366460
-                                        },
                                         "thread_safe": true
                                     }
                                 }
                             },
-                            "before": [],
-                            "after": []
+                            "after": [
+                                4
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 5
                         }
                     ]
                 ]
@@ -328,15 +292,11 @@
             {
                 "systems": [
                     {
-                        "name": "square_eater::clean_up",
-                        "type_id": 8059911105523096948,
+                        "name": "System(square_eater::clean_up)",
                         "borrow": [
                             {
                                 "name": "shipyard::all_storages::AllStorages",
                                 "mutability": "Exclusive",
-                                "storage_id": {
-                                    "TypeId": 13493020775340723131
-                                },
                                 "thread_safe": true
                             }
                         ],
@@ -345,27 +305,22 @@
                                 "type_info": {
                                     "name": "shipyard::all_storages::AllStorages",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 13493020775340723131
-                                    },
                                     "thread_safe": true
                                 },
-                                "other_system": {
-                                    "name": "square_eater::collision",
-                                    "type_id": 3702460942882621439
-                                },
+                                "other_system": 5,
                                 "other_type_info": {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::ToDelete>",
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                     "mutability": "Exclusive",
-                                    "storage_id": {
-                                        "TypeId": 14602170264123436859
-                                    },
                                     "thread_safe": true
                                 }
                             }
                         },
-                        "before": [],
-                        "after": []
+                        "after": [
+                            5
+                        ],
+                        "after_all": [],
+                        "before_all": [],
+                        "unique_id": 6
                     },
                     []
                 ]
@@ -375,60 +330,108 @@
                     null,
                     [
                         {
-                            "name": "square_eater::render",
-                            "type_id": 2695193856673553897,
+                            "name": "System(square_eater::check_end_floor)",
                             "borrow": [
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
                                 {
                                     "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
                                     "mutability": "Shared",
-                                    "storage_id": {
-                                        "TypeId": 6506199278047519345
-                                    },
                                     "thread_safe": true
                                 },
                                 {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::MyRect>",
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::PowerUps>",
                                     "mutability": "Shared",
-                                    "storage_id": {
-                                        "TypeId": 9087005290273366460
-                                    },
                                     "thread_safe": true
                                 },
                                 {
-                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::SpawnedOnFloor>",
                                     "mutability": "Shared",
-                                    "storage_id": {
-                                        "TypeId": 9571121093711022877
-                                    },
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                    "mutability": "Exclusive",
                                     "thread_safe": true
                                 }
                             ],
                             "conflict": {
                                 "Borrow": {
                                     "type_info": {
-                                        "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                        "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
                                         "mutability": "Shared",
-                                        "storage_id": {
-                                            "TypeId": 6506199278047519345
-                                        },
                                         "thread_safe": true
                                     },
-                                    "other_system": {
-                                        "name": "square_eater::clean_up",
-                                        "type_id": 8059911105523096948
-                                    },
+                                    "other_system": 6,
                                     "other_type_info": {
                                         "name": "shipyard::all_storages::AllStorages",
                                         "mutability": "Exclusive",
-                                        "storage_id": {
-                                            "TypeId": 13493020775340723131
-                                        },
                                         "thread_safe": true
                                     }
                                 }
                             },
-                            "before": [],
-                            "after": []
+                            "after": [
+                                6
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 7
+                        }
+                    ]
+                ]
+            },
+            {
+                "systems": [
+                    null,
+                    [
+                        {
+                            "name": "System(square_eater::render)",
+                            "borrow": [
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::Player>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::sparse_set::SparseSet<square_eater::Squagum>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                },
+                                {
+                                    "name": "shipyard::unique::UniqueStorage<square_eater::FloorCounter>",
+                                    "mutability": "Shared",
+                                    "thread_safe": true
+                                }
+                            ],
+                            "conflict": {
+                                "Borrow": {
+                                    "type_info": {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Shared",
+                                        "thread_safe": true
+                                    },
+                                    "other_system": 7,
+                                    "other_type_info": {
+                                        "name": "shipyard::sparse_set::SparseSet<square_eater::Square>",
+                                        "mutability": "Exclusive",
+                                        "thread_safe": true
+                                    }
+                                }
+                            },
+                            "after": [
+                                7
+                            ],
+                            "after_all": [],
+                            "before_all": [],
+                            "unique_id": 8
                         }
                     ]
                 ]

@@ -7,7 +7,6 @@ pub use crate::type_id::TypeId;
 use crate::ShipHashMap;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
-use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -53,9 +52,9 @@ pub struct SystemInfo {
     /// Contains all ordering information the scheduler used to place this system
     pub after: Vec<usize>,
     /// List of all after_all constraints
-    pub after_all: Vec<String>,
+    pub after_all: Vec<BeforeAfterConstraint>,
     /// List of all before_all constraints
-    pub before_all: Vec<String>,
+    pub before_all: Vec<BeforeAfterConstraint>,
     /// A unique identifier for this system within the workload
     pub unique_id: usize,
 }
@@ -81,7 +80,7 @@ pub enum Conflict {
     /// Rust rules do not allow the type described by `type_info` to be borrowed at the same time as `other_type_info`.
     Borrow {
         #[allow(missing_docs)]
-        type_info: Option<TypeInfo>,
+        type_info: TypeInfo,
         #[allow(missing_docs)]
         other_system: usize,
         #[allow(missing_docs)]
@@ -215,10 +214,6 @@ impl DedupedLabels {
     pub(crate) fn retain<F: FnMut(&Box<dyn Label>) -> bool>(&mut self, f: F) {
         self.0.retain(f);
     }
-
-    pub(crate) fn to_string_vec(&self) -> Vec<String> {
-        self.0.iter().map(|label| format!("{:?}", label)).collect()
-    }
 }
 
 impl IntoIterator for DedupedLabels {
@@ -264,4 +259,14 @@ impl<'a> Extend<&'a Box<dyn Label>> for DedupedLabels {
             self.add(label.clone());
         }
     }
+}
+
+/// Represents a pair of constraints-tag that matched during scheduling.
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
+pub struct BeforeAfterConstraint {
+    #[allow(missing_docs)]
+    pub other_system: usize,
+    #[allow(missing_docs)]
+    pub constraint: String,
 }

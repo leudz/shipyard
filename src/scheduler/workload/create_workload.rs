@@ -1,7 +1,9 @@
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::error;
-use crate::scheduler::info::{BatchInfo, Conflict, DedupedLabels, SystemInfo};
+use crate::scheduler::info::{
+    BatchInfo, BeforeAfterConstraint, Conflict, DedupedLabels, SystemInfo,
+};
 use crate::scheduler::{Batches, Label, TypeId, TypeInfo, Workload, WorkloadInfo, WorkloadSystem};
 use crate::world::World;
 use crate::ShipHashMap;
@@ -20,7 +22,9 @@ struct ToBePlacedSystem {
     borrow_constraints: Vec<TypeInfo>,
     tags: Vec<Box<dyn Label>>,
     before_all: DedupedLabels,
+    before_all_info: Vec<BeforeAfterConstraint>,
     after_all: DedupedLabels,
+    after_all_info: Vec<BeforeAfterConstraint>,
     /// Copy of `hard_after` to be returned in `SystemInfo`.
     after_info: DedupedUniqueIds,
     // System must be after in the sequential order
@@ -341,7 +345,9 @@ fn insert_systems_in_scheduler(
                     borrow_constraints,
                     tags,
                     before_all,
+                    after_all_info: Vec::new(),
                     after_all,
+                    before_all_info: Vec::new(),
                     after_info: DedupedUniqueIds::new(),
                     hard_after: DedupedUniqueIds::new(),
                     hard_before,
@@ -412,8 +418,6 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
             continue;
         }
 
-        let borrow_constraints = &*system.borrow_constraints;
-
         for j in (0..i).rev() {
             let other_system = &to_be_placed_systems[j];
             if !other_system.before_all.is_empty() || !other_system.after_all.is_empty() {
@@ -423,7 +427,9 @@ fn propagate_implicit_hard_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
                 continue;
             }
 
-            if let Some(conflict) = check_conflict(other_system, borrow_constraints) {
+            if let Some(conflict) =
+                check_conflict(system, other_system.index, &other_system.borrow_constraints)
+            {
                 to_be_placed_systems[i].hard_after.add(j);
                 to_be_placed_systems[i].confict = Some(conflict);
 
@@ -466,23 +472,27 @@ fn propagate_implicit_soft_ordering(to_be_placed_systems: &mut [ToBePlacedSystem
 fn map_before_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     for i in 0..to_be_placed_systems.len() {
         let before_all = core::mem::take(&mut to_be_placed_systems[i].before_all);
+        let mut before_all_info = Vec::new();
 
         for (j, other_system) in to_be_placed_systems.iter_mut().enumerate() {
             if i == j {
                 continue;
             }
 
-            if other_system
+            if let Some(tag) = other_system
                 .tags
                 .iter()
-                .any(|tag| before_all.iter().any(|label| tag == label))
+                .find(|tag| before_all.iter().any(|label| tag == &label))
             {
                 other_system.hard_after.add(i);
+                before_all_info.push(BeforeAfterConstraint {
+                    other_system: other_system.index,
+                    constraint: format!("{:?}", tag),
+                })
             }
         }
 
-        // Put the constraints back in to be able to display them later
-        to_be_placed_systems[i].before_all = before_all;
+        to_be_placed_systems[i].before_all_info = before_all_info;
     }
 }
 
@@ -492,6 +502,7 @@ fn map_before_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
 fn map_after_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
     for i in 0..to_be_placed_systems.len() {
         let after_all = core::mem::take(&mut to_be_placed_systems[i].after_all);
+        let mut after_all_info = Vec::new();
 
         for j in 0..to_be_placed_systems.len() {
             if i == j {
@@ -502,13 +513,17 @@ fn map_after_all_to_after(to_be_placed_systems: &mut [ToBePlacedSystem]) {
                 if to_be_placed_systems[j].tags.iter().any(|tag| tag == label) {
                     to_be_placed_systems[i].hard_after.add(j);
 
+                    after_all_info.push(BeforeAfterConstraint {
+                        other_system: j,
+                        constraint: format!("{:?}", label),
+                    });
+
                     break;
                 }
             }
         }
 
-        // Put the constraints back in to be able to display them later
-        to_be_placed_systems[i].after_all = after_all;
+        to_be_placed_systems[i].after_all_info = after_all_info;
     }
 }
 
@@ -581,6 +596,7 @@ fn order_systems(
                 batches_info.push(BatchInfo {
                     systems: (None, Vec::new()),
                 });
+                system.confict = conflict;
 
                 latest_batch = batches.parallel.last_mut().unwrap();
                 latest_batch_run_if = batches.parallel_run_if.last_mut().unwrap();
@@ -598,8 +614,8 @@ fn order_systems(
                     borrow: system.borrow_constraints,
                     conflict: system.confict,
                     after: system.after_info.0,
-                    after_all: system.after_all.to_string_vec(),
-                    before_all: system.before_all.to_string_vec(),
+                    after_all: system.after_all_info,
+                    before_all: system.before_all_info,
                     unique_id: system.index,
                 });
             } else {
@@ -609,8 +625,8 @@ fn order_systems(
                     borrow: system.borrow_constraints,
                     conflict: system.confict,
                     after: system.after_info.0,
-                    after_all: system.after_all.to_string_vec(),
-                    before_all: system.before_all.to_string_vec(),
+                    after_all: system.after_all_info,
+                    before_all: system.before_all_info,
                     unique_id: system.index,
                 });
             }
@@ -686,13 +702,19 @@ fn check_can_go_in_parallel_batch(
     tested_system: &ToBePlacedSystem,
 ) -> Option<Conflict> {
     if let Some(single_system_info) = &batch_info.systems.0 {
-        if let Some(conflict) = check_conflict(tested_system, &single_system_info.borrow) {
+        if let Some(conflict) = check_conflict(
+            tested_system,
+            single_system_info.unique_id,
+            &single_system_info.borrow,
+        ) {
             return Some(conflict);
         };
     }
 
     for system_info in &batch_info.systems.1 {
-        if let Some(conflict) = check_conflict(tested_system, &system_info.borrow) {
+        if let Some(conflict) =
+            check_conflict(tested_system, system_info.unique_id, &system_info.borrow)
+        {
             return Some(conflict);
         };
     }
@@ -702,13 +724,14 @@ fn check_can_go_in_parallel_batch(
 
 fn check_conflict(
     tested_system: &ToBePlacedSystem,
+    other_system_id: usize,
     borrow_constraints: &[TypeInfo],
 ) -> Option<Conflict> {
-    for other_type_info in &tested_system.borrow_constraints {
-        for type_info in borrow_constraints {
+    for type_info in &tested_system.borrow_constraints {
+        for other_type_info in borrow_constraints {
             if !type_info.thread_safe && !other_type_info.thread_safe {
                 return Some(Conflict::OtherNotSendSync {
-                    system: tested_system.index,
+                    system: other_system_id,
                     type_info: other_type_info.clone(),
                 });
             }
@@ -722,8 +745,8 @@ fn check_conflict(
                 || other_type_info.storage_id == TypeId::of::<AllStorages>()
             {
                 return Some(Conflict::Borrow {
-                    type_info: Some(type_info.clone()),
-                    other_system: tested_system.index,
+                    type_info: type_info.clone(),
+                    other_system: other_system_id,
                     other_type_info: other_type_info.clone(),
                 });
             }
