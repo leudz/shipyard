@@ -1,9 +1,9 @@
 - make sure there is no debugging left
 - make sure the bunny demo and square eater are working
 - duplicate the guide
+- change link to the guide in lib.rs
 - bump version
 - create new branch
-- change link to the guide in lib.rs
 - swap shipyard_proc version to latest crates.io
 - release the version
 - make a git tag and release
