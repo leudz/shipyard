@@ -1,6 +1,6 @@
 # Systems
 
-Systems are a great way to organize code.  
+Systems are a great way to organize code.\
 A function with views as arguments is all you need.
 
 Here's an example:
@@ -38,5 +38,5 @@ You can also add a workload to another and build your execution logic brick by b
 
 ---
 
-Congratulations, you made it to the end of the fundamentals!  
+Congratulations, you made it to the end of the fundamentals!\
 The next section will explore less universal topics.

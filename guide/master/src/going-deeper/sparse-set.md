@@ -5,7 +5,7 @@ of how it works, the actual implementation is more optimized both in term of spe
 
 ### Overview
 
-To understand how Shipyard uses sparse sets, we must first understand how sparse sets work.
+To understand how Shipyard uses sparse sets, we must first understand how sparse sets work.\
 A basic sparse set is a data structure for storing integers. It is comprised of two
 arrays: `sparse` and `dense`.
 
@@ -78,7 +78,7 @@ SparseSet<SecondComponent>:
 
 ### Iteration
 
-To iterate over a single sparse set, we can simply iterate over the `data` array.
+To iterate over a single sparse set, we can simply iterate over the `data` array.\
 However, Shipyard also lets us iterate over multiple sparse sets.
 
 To iterate over multiple sparse sets, we first pick the shortest set (comparing the lengths
@@ -127,7 +127,7 @@ dense: [2, 3]
 data: [FirstComponent(5050), FirstComponent(958)]
 ```
 
-`dense` and `data` shifted to the left, the first element in sparse is now uninitialised,
+`dense` and `data` shifted to the left, the first element in sparse is now uninitialized,
 and the indexes at `sparse[2]` and `sparse[3]` were updated.
 
 ### Additional Resources

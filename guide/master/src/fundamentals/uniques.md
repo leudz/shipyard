@@ -1,6 +1,6 @@
 # Unique
 
-Unique components (a.k.a. resources) are useful when you know there will only ever be a single instance of some component.  
+Unique components (a.k.a. resources) are useful when you know there will only ever be a single instance of some component.\
 In that case there is no need to attach the component to an entity. It also works well as global data without most of its drawback.
 
 As opposed to the default storage uniques are declared using the [`Unique`](https://docs.rs/shipyard/latest/shipyard/trait.Unique.html) trait.

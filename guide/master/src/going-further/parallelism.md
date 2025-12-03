@@ -14,12 +14,12 @@ As long as the "parallel" feature is set (enabled by default) workloads will try
 - Systems accessing [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html) stop all threading.
 - There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will block `T` threading.
 
-When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.  
+When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.\
 [`add_to_world`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html#method.add_to_world) returns information about these batches and why each system didn't get into the previous batch.
 
 ### Inner-parallelism
 
-While parallel iterators does require us to modify our code, it's just a matter of using `par_iter` instead of `iter`.  
+While parallel iterators does require us to modify our code, it's just a matter of using `par_iter` instead of `iter`.\
 Don't forget to import rayon. [`par_iter`](https://docs.rs/shipyard/latest/shipyard/trait.IntoIter.html#tymethod.par_iter) returns a [`ParallelIterator`](https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html).
 
 Example:

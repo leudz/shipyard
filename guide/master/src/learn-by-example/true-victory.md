@@ -1,6 +1,6 @@
 # True victory
 
-It seems the `Friends` are able to copy the power pellets' spawning mechanic!
+It seems the `Friends` are able to copy the power pellets' spawning mechanic!\
 And they've learned to avoid the `Player` whenever they are powered up.
 
 ```rust,noplaypen
@@ -43,7 +43,7 @@ fn spawn(
 }
 ```
 
-Let's give the `Player` a little bit of help and a way to win again.
+Let's give the `Player` a little bit of help and a way to win again.\
 In many games, whenever the player is hit they'll turn invincible for a few frames.
 
 ```rust,noplaypen

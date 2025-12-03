@@ -18,7 +18,7 @@ Iteration on views is achieved using [`IntoIter::iter`](https://docs.rs/shipyard
 {{#include ../../../../tests/book/iterators.rs:iter}}
 ```
 
-You can use views in any order. However, using the same combination of views in different positions may yield components in a different order.  
+You can use views in any order. However, using the same combination of views in different positions may yield components in a different order.\
 You shouldn't expect specific ordering from Shipyard's iterators in general.
 
 #### With Id

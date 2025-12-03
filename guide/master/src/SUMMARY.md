@@ -33,5 +33,4 @@
 - [Recipes](./recipes.md)
     - [Hierarchy](./recipes/hierarchy.md)
     - [Seed](./recipes/seed.md)
-    - [0.4 migration](./recipes/0.4-migration.md)
 - [Contributors](./contributors.md)

@@ -29,7 +29,7 @@ All attributes are optional.
 
 When creating a frame with any low level api there is always some boilerplate. We'll look at how custom views can help for `wgpu`.
 
-The original code creates the frame in a system by borrowing `Graphics` which contains everything needed.
+The original code creates the frame in a system by borrowing `Graphics` which contains everything needed.\
 The rendering part just clears the screen with a color.
 
 The entire starting code for this chapter is available in [this file](./custom_views_original.rs). You can copy all of it in a fresh `main.rs` and edit the fresh `Cargo.toml`.
@@ -42,7 +42,7 @@ The entire starting code for this chapter is available in [this file](./custom_v
 ```
 </details>
 
-We want to abstract the beginning and end of the system to get this version working.
+We want to abstract the beginning and end of the system to get this version working.\
 The error handling is going to move, we could keep it closer to the original by having a `ResultRenderGraphicsViewMut` for example. 
 
 ```rust, noplaypen
@@ -75,7 +75,7 @@ Let's revisit our `Borrow` implementation and add one for `Drop`.
 {{#include ../../../../tests/book/custom_view.rs:borrow_revisit}}
 ```
 
-Our custom view is now fully functional and we successfully moved code that would be duplicated out of the render system.
+Our custom view is now fully functional and we successfully moved code that would be duplicated out of the render system.\
 You can remove the error handling in `main.rs` to see the result.
 
 As a final touch we can implement `BorrowInfo` to make our view work with workloads.
