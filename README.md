@@ -10,7 +10,7 @@ If you have any question or want to follow the development more closely <sub>[![
 [![Documentation](https://docs.rs/shipyard/badge.svg)](https://docs.rs/shipyard)
 [![LICENSE](https://img.shields.io/crates/l/shipyard)](LICENSE-APACHE)
 
-### [Guide Master](https://leudz.github.io/shipyard/guide/master) | [Guide 0.9](https://leudz.github.io/shipyard/guide/0.9) | [Demo](https://leudz.github.io/shipyard/bunny_demo) | [Visualizer](https://leudz.github.io/shipyard/visualizer)
+### [Guide Master](https://leudz.github.io/shipyard/guide/master) | [Guide 0.10](https://leudz.github.io/shipyard/guide/0.10) | [Demo](https://leudz.github.io/shipyard/bunny_demo) | [Visualizer](https://leudz.github.io/shipyard/visualizer)
 
 </div>
 
