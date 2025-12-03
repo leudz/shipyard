@@ -23,11 +23,11 @@ pub(crate) use batches::Batches;
 pub(crate) use info::TypeInfo;
 
 use crate::scheduler::info::WorkloadInfo;
-use crate::type_id::TypeId;
 use crate::world::World;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::TypeId;
 
 // systems are stored in an array to easily find if a system was already added
 // this wouldn't be possible if they were in the HashMap

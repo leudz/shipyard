@@ -3,9 +3,9 @@ use crate::scheduler::label::{SequentialLabel, WorkloadLabel};
 use crate::scheduler::system::WorkloadSystem;
 use crate::scheduler::workload::Workload;
 use crate::scheduler::{AsLabel, IntoWorkloadSystem, WorkloadModificator};
-use crate::type_id::TypeId;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::TypeId;
 use core::any::{type_name, Any};
 // macro not module
 use alloc::vec;

@@ -99,7 +99,6 @@ pub mod track;
 ///
 // We can't allow(missing_docs) without allowing it for everything inside
 pub mod tracking;
-mod type_id;
 mod unique;
 mod views;
 #[allow(clippy::empty_docs)]

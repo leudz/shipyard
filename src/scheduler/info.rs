@@ -3,12 +3,12 @@
 use crate::borrow::Mutability;
 use crate::scheduler::{AsLabel, Label};
 use crate::storage::StorageId;
-pub use crate::type_id::TypeId;
 use crate::ShipHashMap;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::any::TypeId;
 
 /// Contains information related to a workload.
 ///

@@ -1,9 +1,7 @@
-use crate::type_id::TypeId;
-use core::cmp::Ordering;
+use core::{any::TypeId, cmp::Ordering};
 
 /// Id of a storage, can be a `TypeId` or `u64`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub enum StorageId {
     /// Identify a Rust type known at compile time
     TypeId(TypeId),
@@ -21,12 +19,6 @@ impl StorageId {
 impl From<TypeId> for StorageId {
     fn from(type_id: TypeId) -> Self {
         StorageId::TypeId(type_id)
-    }
-}
-
-impl From<core::any::TypeId> for StorageId {
-    fn from(type_id: core::any::TypeId) -> Self {
-        StorageId::TypeId(type_id.into())
     }
 }
 

@@ -4,10 +4,10 @@ use crate::error;
 use crate::scheduler::info::DedupedLabels;
 use crate::scheduler::label::Label;
 use crate::scheduler::workload::Workload;
-use crate::type_id::TypeId;
 use crate::world::World;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::any::TypeId;
 
 /// Self contained system that may be inserted into a [`Workload`].
 ///

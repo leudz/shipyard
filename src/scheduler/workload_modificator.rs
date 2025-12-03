@@ -6,12 +6,12 @@ use crate::scheduler::workload::Workload;
 use crate::scheduler::AsLabel;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::type_id::TypeId;
 use crate::unique::UniqueStorage;
 use crate::views::AllStoragesViewMut;
 use crate::world::World;
 use alloc::boxed::Box;
 use core::any::type_name;
+use core::any::TypeId;
 use core::ops::Not;
 
 /// Modifies a workload.

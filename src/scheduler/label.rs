@@ -1,9 +1,9 @@
 use crate::scheduler::IntoWorkloadSystem;
-use crate::type_id::TypeId;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
 use core::any::Any;
+use core::any::TypeId;
 use core::fmt::{Debug, Formatter};
 use core::hash::{Hash, Hasher};
 

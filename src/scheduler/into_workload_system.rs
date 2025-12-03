@@ -6,12 +6,11 @@ use crate::scheduler::label::{SystemLabel, WorkloadLabel};
 use crate::scheduler::{AsLabel, Label, TypeInfo, Workload, WorkloadSystem};
 use crate::storage::StorageId;
 use crate::tracking::TrackingTimestamp;
-use crate::type_id::TypeId;
 use crate::world::World;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::any::type_name;
+use core::any::{type_name, TypeId};
 use core::sync::atomic::{AtomicU64, Ordering};
 
 /// Trait used to add systems to a workload.

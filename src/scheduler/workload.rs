@@ -10,11 +10,11 @@ use crate::scheduler::{
     WorkloadSystem,
 };
 use crate::storage::StorageId;
-use crate::type_id::TypeId;
 use crate::unique::UniqueStorage;
 use crate::world::World;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
+use core::any::TypeId;
 // macro not module
 use alloc::vec;
 use alloc::vec::Vec;
@@ -1491,6 +1491,9 @@ mod tests {
         fn type_name_of<T: 'static>(_: &T) -> &'static str {
             type_name::<T>()
         }
+        fn type_id_of<T: 'static>(_: &T) -> TypeId {
+            TypeId::of::<T>()
+        }
 
         fn w() -> Workload {
             (|| {}).into_workload()
@@ -1500,7 +1503,7 @@ mod tests {
             .build();
         world.add_workload(w);
         assert!(world.contains_workload(WorkloadLabel {
-            type_id: TypeId::of_val(&w),
+            type_id: type_id_of(&w),
             name: type_name_of(&w).as_label()
         }));
         assert!(world.contains_workload(w));
