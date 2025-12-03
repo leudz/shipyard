@@ -23,7 +23,7 @@ To add `3` to our sparse set, we first append it to `dense` and then set `sparse
 
 - Sparse Array: `[U, U, U, 0]`
 - Dense Array: `[3]`
-  `U` is short for uninitialised.
+  `U` is short for uninitialized.
 
 If we then add `0`, the sparse set will look like so:
 
@@ -74,7 +74,7 @@ SparseSet<SecondComponent>:
     data:   [SecondComponent(17), SecondComponent(3154)]
 ```
 
-`U` is short for uninitialised.
+`U` is short for uninitialized.
 
 ### Iteration
 
@@ -99,7 +99,7 @@ The first entity ID is `1`. Since we are iterating over `SecondComponent`, we al
 that entity `1` has a `SecondComponent`; we just need to check if the entity has a
 `FirstComponent`. As described above, to check whether an entity has a component, we have
 to check if `dense[sparse[id]] == id` in the sparse set of the component. `sparse[1]` in
-`SparseSet<FirstComponent>` is uninitialised and so we know that entity `1` does not have
+`SparseSet<FirstComponent>` is uninitialized and so we know that entity `1` does not have
 a `FirstComponent`.
 
 The next entity that contains a `SecondComponent` is `2`. However, this time, `sparse[2]`

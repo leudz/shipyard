@@ -5,7 +5,7 @@ of how it works, the actual implementation is more optimized both in term of spe
 
 ### Overview
 
-To understand how Shipyard uses sparse sets, we must first understand how sparse sets work.
+To understand how Shipyard uses sparse sets, we must first understand how sparse sets work.\
 A basic sparse set is a data structure for storing integers. It is comprised of two
 arrays: `sparse` and `dense`.
 
@@ -21,13 +21,13 @@ We start off with an empty sparse set:
 To add `3` to our sparse set, we first append it to `dense` and then set `sparse[3]` to `0`
 (the position of `3` in `dense`):
 
-- Sparse Array: `[U, U, 0]`
+- Sparse Array: `[U, U, U, 0]`
 - Dense Array: `[3]`
   `U` is short for uninitialized.
 
 If we then add `0`, the sparse set will look like so:
 
-- Sparse Array: `[1, U, 0]`
+- Sparse Array: `[1, U, U, 0]`
 - Dense Array: `[3, 0]`
 
 Searching a sparse set is `O(1)`. To check if the integer `i` exists we check whether
@@ -78,7 +78,7 @@ SparseSet<SecondComponent>:
 
 ### Iteration
 
-To iterate over a single sparse set, we can simply iterate over the `data` array.
+To iterate over a single sparse set, we can simply iterate over the `data` array.\
 However, Shipyard also lets us iterate over multiple sparse sets.
 
 To iterate over multiple sparse sets, we first pick the shortest set (comparing the lengths
@@ -136,6 +136,6 @@ and the indexes at `sparse[2]` and `sparse[3]` were updated.
 with archetypes, another common way of representing data in ECS libraries. The blog post is
 part of a larger series about the design and internals of ECS systems.
 
-[entityid docs]: https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html
-[sparseset docs]: https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html
+[entityid docs]: https://docs.rs/shipyard/0.10/shipyard/struct.EntityId.html
+[sparseset docs]: https://docs.rs/shipyard/0.10/shipyard/struct.SparseSet.html
 [skypjack blog post]: https://skypjack.github.io/2019-03-07-ecs-baf-part-2/
