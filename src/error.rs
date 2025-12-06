@@ -866,3 +866,27 @@ impl Display for GetComponent {
         Debug::fmt(self, f)
     }
 }
+
+/// Returned by [`World::serialize`] or [`AllStorages::serialize`].
+///
+/// [`World::serialize`]: crate::World::serialize
+/// [`AllStorages::serialize`]: crate::AllStorages::serialize
+#[cfg(feature = "serde1")]
+pub enum Serialize<S: serde::Serializer> {
+    #[allow(missing_docs)]
+    Borrow(GetStorage),
+    #[allow(missing_docs)]
+    Serialization(S::Error),
+}
+
+/// Returned by [`World::deserialize`] or [`AllStorages::deserialize`].
+///
+/// [`World::deserialize`]: crate::World::deserialize
+/// [`AllStorages::deserialize`]: crate::AllStorages::deserialize
+#[cfg(feature = "serde1")]
+pub enum Deserialize<'de, D: serde::Deserializer<'de>> {
+    #[allow(missing_docs)]
+    Borrow(GetStorage),
+    #[allow(missing_docs)]
+    Deserialization(D::Error),
+}

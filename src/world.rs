@@ -1773,3 +1773,43 @@ impl core::fmt::Debug for WorldMemoryUsage<'_> {
         }
     }
 }
+
+#[cfg(feature = "serde1")]
+impl World {
+    /// Serializes the view using the provided serializer.
+    pub fn serialize<S: serde::Serializer, V: WorldBorrow>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, error::Serialize<S>>
+    where
+        for<'a> V::WorldView<'a>: serde::Serialize,
+    {
+        use serde::Serialize;
+
+        match self.borrow::<V>() {
+            Ok(view) => match view.serialize(serializer) {
+                Ok(ok) => Ok(ok),
+                Err(err) => Err(error::Serialize::Serialization(err)),
+            },
+            Err(err) => Err(error::Serialize::Borrow(err)),
+        }
+    }
+
+    /// Deserializes the view using the provided deserializer.
+    pub fn deserialize<'de, D: serde::Deserializer<'de>, V: WorldBorrow>(
+        &self,
+        deserializer: D,
+    ) -> Result<(), error::Deserialize<'de, D>>
+    where
+        for<'a> V::WorldView<'a>: serde::Deserialize<'de>,
+    {
+        match self.borrow::<V>() {
+            Ok(mut view) => match serde::Deserialize::deserialize_in_place(deserializer, &mut view)
+            {
+                Ok(ok) => Ok(ok),
+                Err(err) => Err(error::Deserialize::Deserialization(err)),
+            },
+            Err(err) => Err(error::Deserialize::Borrow(err)),
+        }
+    }
+}
