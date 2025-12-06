@@ -16,6 +16,8 @@ mod non_send_sync;
 mod parallelism;
 mod remove_components;
 mod run;
+#[cfg(feature = "serde1")]
+mod serde;
 mod sparse_set;
 mod syntactic_peculiarities;
 mod systems;

@@ -21,6 +21,7 @@
     - [Systems](./fundamentals/systems.md)
 - [Going Further](./going-further.md)
     - [Tracking](./going-further/tracking.md)
+    - [Serde](./going-further/serde.md)
     - [Parallelism](./going-further/parallelism.md)
     - [Custom Views](./going-further/custom-views.md)
     - [!Send and !Sync Components](./going-further/non-send-sync.md)
