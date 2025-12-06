@@ -872,6 +872,7 @@ impl Display for GetComponent {
 /// [`World::serialize`]: crate::World::serialize
 /// [`AllStorages::serialize`]: crate::AllStorages::serialize
 #[cfg(feature = "serde1")]
+#[derive(PartialEq, Eq)]
 pub enum Serialize<S: serde::Serializer> {
     #[allow(missing_docs)]
     Borrow(GetStorage),
@@ -879,14 +880,55 @@ pub enum Serialize<S: serde::Serializer> {
     Serialization(S::Error),
 }
 
-/// Returned by [`World::deserialize`] or [`AllStorages::deserialize`].
+#[cfg(all(feature = "serde1", feature = "std"))]
+impl<S: serde::Serializer> Error for Serialize<S> {}
+
+#[cfg(feature = "serde1")]
+impl<S: serde::Serializer> Debug for Serialize<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Serialize::Borrow(err) => f.write_fmt(format_args!("{:?}", err)),
+            Serialize::Serialization(err) => f.write_fmt(format_args!("{:?}", err)),
+        }
+    }
+}
+
+#[cfg(feature = "serde1")]
+impl<S: serde::Serializer> Display for Serialize<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
+/// Returned by Des`World::deserialize`] or [`AllStorages::deserialize`].
 ///
 /// [`World::deserialize`]: crate::World::deserialize
 /// [`AllStorages::deserialize`]: crate::AllStorages::deserialize
 #[cfg(feature = "serde1")]
+#[derive(PartialEq, Eq)]
 pub enum Deserialize<'de, D: serde::Deserializer<'de>> {
     #[allow(missing_docs)]
     Borrow(GetStorage),
     #[allow(missing_docs)]
     Deserialization(D::Error),
+}
+
+#[cfg(all(feature = "serde1", feature = "std"))]
+impl<'de, D: serde::Deserializer<'de>> Error for Deserialize<'de, D> {}
+
+#[cfg(feature = "serde1")]
+impl<'de, D: serde::Deserializer<'de>> Debug for Deserialize<'de, D> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            Deserialize::Borrow(err) => f.write_fmt(format_args!("{:?}", err)),
+            Deserialize::Deserialization(err) => f.write_fmt(format_args!("{:?}", err)),
+        }
+    }
+}
+
+#[cfg(feature = "serde1")]
+impl<'de, D: serde::Deserializer<'de>> Display for Deserialize<'de, D> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
 }
