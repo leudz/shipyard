@@ -1807,6 +1807,28 @@ impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
 #[cfg(feature = "serde1")]
 impl AllStorages {
     /// Serializes the view using the provided serializer.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, View, World};
+    ///
+    /// #[derive(Component, serde::Serialize)]
+    /// struct Name(String);
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let eid1 = all_storages.add_entity(Name("Alice".to_string()));
+    ///
+    /// let mut serialized = Vec::new();
+    /// all_storages
+    ///     .serialize::<_, View<Name>>(&mut serde_json::ser::Serializer::new(&mut serialized))
+    ///     .unwrap_or_else(|_| panic!());
+    ///
+    /// let serialized_str = String::from_utf8(serialized).unwrap();
+    /// assert_eq!(serialized_str, r#"[[{"index":0,"gen":0},"Alice"]]"#);
+    /// ```
     pub fn serialize<'a, S: serde::Serializer, V: Borrow>(
         &'a self,
         serializer: S,
@@ -1826,6 +1848,37 @@ impl AllStorages {
     }
 
     /// Deserializes the view using the provided deserializer.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{AllStoragesViewMut, Component, EntityId, ViewMut, World};
+    ///
+    /// #[derive(Component, serde::Deserialize)]
+    /// struct Name(String);
+    ///
+    /// let world = World::new();
+    /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// let mut serialized = r#"[[{"index":0,"gen":0},"Alice"]]"#;
+    /// all_storages
+    ///     .deserialize::<_, ViewMut<Name>>(&mut serde_json::de::Deserializer::from_str(serialized))
+    ///     .unwrap_or_else(|_| panic!());
+    ///
+    /// let alice_eid = EntityId::new_from_index_and_gen(0, 0);
+    /// assert_eq!(all_storages.get::<&Name>(alice_eid).unwrap().0, "Alice");
+    ///
+    /// // Careful here, the World is not in a stable state
+    ///
+    /// assert_eq!(all_storages.is_entity_alive(alice_eid), false);
+    ///
+    /// // We can use World::spawn for example to fix the problem
+    /// // another solution would be to serialize EntitiesViewMut
+    ///
+    /// all_storages.spawn(alice_eid);
+    ///
+    /// assert_eq!(all_storages.is_entity_alive(alice_eid), true);
+    /// ```
     pub fn deserialize<'a, 'de, D: serde::Deserializer<'de>, V: Borrow>(
         &'a self,
         deserializer: D,

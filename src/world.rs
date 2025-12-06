@@ -1777,6 +1777,27 @@ impl core::fmt::Debug for WorldMemoryUsage<'_> {
 #[cfg(feature = "serde1")]
 impl World {
     /// Serializes the view using the provided serializer.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, View, World};
+    ///
+    /// #[derive(Component, serde::Serialize)]
+    /// struct Name(String);
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let eid1 = world.add_entity(Name("Alice".to_string()));
+    ///
+    /// let mut serialized = Vec::new();
+    /// world
+    ///     .serialize::<_, View<Name>>(&mut serde_json::ser::Serializer::new(&mut serialized))
+    ///     .unwrap_or_else(|_| panic!());
+    ///
+    /// let serialized_str = String::from_utf8(serialized).unwrap();
+    /// assert_eq!(serialized_str, r#"[[{"index":0,"gen":0},"Alice"]]"#);
+    /// ```
     pub fn serialize<'w, S: serde::Serializer, V: WorldBorrow>(
         &'w self,
         serializer: S,
@@ -1796,6 +1817,36 @@ impl World {
     }
 
     /// Deserializes the view using the provided deserializer.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{Component, EntityId, ViewMut, World};
+    ///
+    /// #[derive(Component, serde::Deserialize)]
+    /// struct Name(String);
+    ///
+    /// let mut world = World::new();
+    ///
+    /// let mut serialized = r#"[[{"index":0,"gen":0},"Alice"]]"#;
+    /// world
+    ///     .deserialize::<_, ViewMut<Name>>(&mut serde_json::de::Deserializer::from_str(serialized))
+    ///     .unwrap_or_else(|_| panic!());
+    ///
+    /// let alice_eid = EntityId::new_from_index_and_gen(0, 0);
+    /// assert_eq!(world.get::<&Name>(alice_eid).unwrap().0, "Alice");
+    ///
+    /// // Careful here, the World is not in a stable state
+    ///
+    /// assert_eq!(world.is_entity_alive(alice_eid), false);
+    ///
+    /// // We can use World::spawn for example to fix the problem
+    /// // another solution would be to serialize EntitiesViewMut
+    ///
+    /// world.spawn(alice_eid);
+    ///
+    /// assert_eq!(world.is_entity_alive(alice_eid), true);
+    /// ```
     pub fn deserialize<'w, 'de, D: serde::Deserializer<'de>, V: WorldBorrow>(
         &'w self,
         deserializer: D,
