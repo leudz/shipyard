@@ -13,7 +13,7 @@ use core::cell::OnceCell;
 /// Exclusive view over a unique component storage.
 ///
 /// The component can be initialized with this view.
-pub struct UniqueOrInitViewMut<'v, T: Unique + Default> {
+pub struct UniqueOrInitViewMut<'v, T: Unique> {
     cell: OnceCell<UniqueViewMut<'v, T>>,
     all_storages: &'v AllStorages,
     all_borrow: SharedBorrow<'v>,
@@ -21,7 +21,7 @@ pub struct UniqueOrInitViewMut<'v, T: Unique + Default> {
     current: TrackingTimestamp,
 }
 
-impl<'v, T: Unique + Default + Send + Sync> UniqueOrInitViewMut<'v, T> {
+impl<'v, T: Unique + Send + Sync> UniqueOrInitViewMut<'v, T> {
     /// Gets a reference to the inner [`UniqueViewMut`].
     ///
     /// Returns `None` if this view doesn't contains the inner [`UniqueViewMut`].
@@ -151,7 +151,7 @@ impl<'v, T: Unique + Default + Send + Sync> UniqueOrInitViewMut<'v, T> {
     }
 }
 
-impl<'v, T: Unique + Default + Send + Sync> WorldBorrow for UniqueOrInitViewMut<'v, T> {
+impl<'v, T: Unique + Send + Sync> WorldBorrow for UniqueOrInitViewMut<'v, T> {
     type WorldView<'a> = UniqueOrInitViewMut<'a, T>;
 
     fn world_borrow(
@@ -184,7 +184,7 @@ impl<'v, T: Unique + Default + Send + Sync> WorldBorrow for UniqueOrInitViewMut<
     }
 }
 
-unsafe impl<'v, T: Unique + Default + Send + Sync> BorrowInfo for UniqueOrInitViewMut<'v, T> {
+unsafe impl<'v, T: Unique + Send + Sync> BorrowInfo for UniqueOrInitViewMut<'v, T> {
     fn borrow_info(info: &mut Vec<TypeInfo>) {
         UniqueViewMut::<T>::borrow_info(info);
     }
