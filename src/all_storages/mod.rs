@@ -1807,12 +1807,12 @@ impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
 #[cfg(feature = "serde1")]
 impl AllStorages {
     /// Serializes the view using the provided serializer.
-    pub fn serialize<S: serde::Serializer, V: Borrow>(
-        &self,
+    pub fn serialize<'a, S: serde::Serializer, V: Borrow>(
+        &'a self,
         serializer: S,
     ) -> Result<S::Ok, error::Serialize<S>>
     where
-        for<'a> V::View<'a>: serde::Serialize,
+        V::View<'a>: serde::Serialize,
     {
         use serde::Serialize;
 
@@ -1826,12 +1826,12 @@ impl AllStorages {
     }
 
     /// Deserializes the view using the provided deserializer.
-    pub fn deserialize<'de, D: serde::Deserializer<'de>, V: Borrow>(
-        &self,
+    pub fn deserialize<'a, 'de, D: serde::Deserializer<'de>, V: Borrow>(
+        &'a self,
         deserializer: D,
     ) -> Result<(), error::Deserialize<'de, D>>
     where
-        for<'a> V::View<'a>: serde::Deserialize<'de>,
+        V::View<'a>: serde::Deserialize<'de>,
     {
         match self.borrow::<V>() {
             Ok(mut view) => match serde::Deserialize::deserialize_in_place(deserializer, &mut view)
