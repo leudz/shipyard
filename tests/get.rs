@@ -1,3 +1,4 @@
+use shipyard::advanced::Mut;
 use shipyard::*;
 
 #[test]

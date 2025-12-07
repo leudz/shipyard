@@ -54,7 +54,7 @@ impl World {
 impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     /// Use a custom `RwLock` for [`AllStorages`].
     ///
-    /// [`AllStorages`]: crate::AllStorages
+    /// [`AllStorages`]: crate::all_storages::AllStorages
     pub fn with_custom_lock<L: ShipyardRwLock + Send + Sync>(
         self,
     ) -> WorldBuilder<LockPresent, ThreadId> {

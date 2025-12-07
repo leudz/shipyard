@@ -2,7 +2,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::views::ViewMut;
 
-/// Trait describing how to add a new entity to a storage.
+/// Creates a new entity with the given components.
 pub trait AddEntity {
     #[allow(missing_docs)]
     type Component;

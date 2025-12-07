@@ -3,7 +3,8 @@ mod serde;
 
 use core::num::NonZeroU64;
 
-/// Handle to an entity.
+/// Entity handle.
+//
 // the id is 64 bits long
 // <- 46 index -> <- 16 gen -> <- 2 meta ->
 // a generation of !0 is used as a dead entity
@@ -28,13 +29,13 @@ impl EntityId {
     const GEN_MASK: u64 = !(!0 >> Self::GEN_LEN);
     const MAX_GEN: u16 = u16::MAX - 1;
 
-    /// Returns the index part of the `EntityId`.  
+    /// Returns the index part of the `EntityId`.\
     /// ⚠️ You shouldn't use it to index a storage.
     #[inline]
     pub fn index(self) -> u64 {
         (self.0.get() & Self::INDEX_MASK) - 1
     }
-    /// Returns the index part of the `EntityId` as an usize.  
+    /// Returns the index part of the `EntityId` as an usize.\
     /// ⚠️ You shouldn't use it to index a storage.
     #[inline]
     pub fn uindex(self) -> usize {
@@ -111,7 +112,7 @@ impl EntityId {
     pub(crate) fn max_index() -> u64 {
         Self::INDEX_MASK - 1
     }
-    /// Maximum generation of a valid [`EntityId`].
+    /// Maximum generation of a valid [`EntityId`].\
     /// A dead id will be above that.
     #[inline]
     pub(crate) const fn max_gen() -> u16 {

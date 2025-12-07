@@ -1,4 +1,4 @@
-use shipyard::{Unique, UniqueOrDefaultView, UniqueOrDefaultViewMut, World};
+use shipyard::{advanced::UniqueOrDefaultView, advanced::UniqueOrDefaultViewMut, Unique, World};
 
 #[derive(Unique, Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 struct GameState {

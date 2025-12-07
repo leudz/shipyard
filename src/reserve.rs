@@ -9,8 +9,8 @@ use core::slice::Iter;
 /// Obtained from [`World::bulk_add_entity`], [`AllStorages::bulk_add_entity`] and [`Entities::bulk_add_entity`].
 ///
 /// [`World::bulk_add_entity`]: crate::World::bulk_add_entity()
-/// [`AllStorages::bulk_add_entity`]: crate::AllStorages::bulk_add_entity()
-/// [`Entities::bulk_add_entity`]: crate::Entities#method::bulk_add_entity()
+/// [`AllStorages::bulk_add_entity`]: crate::all_storages::AllStorages::bulk_add_entity()
+/// [`Entities::bulk_add_entity`]: crate::entities::Entities#method::bulk_add_entity()
 #[derive(Clone, Debug)]
 pub struct BulkEntityIter<'a> {
     pub(crate) iter: Copied<Iter<'a, EntityId>>,

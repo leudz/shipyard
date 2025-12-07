@@ -116,7 +116,7 @@ impl World {
     /// assert_eq!(i.0, 0);
     /// ```
     ///
-    /// [`AllStorages`]: crate::AllStorages
+    /// [`AllStorages`]: crate::all_storages::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
     #[track_caller]
@@ -138,7 +138,7 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{NonSend, Unique, UniqueView, World};
+    /// use shipyard::{borrow::NonSend, Unique, UniqueView, World};
     ///
     /// #[derive(Unique)]
     /// struct U32(u32);
@@ -152,10 +152,10 @@ impl World {
     /// assert_eq!(i.0, 0);
     /// ```
     ///
-    /// [`AllStorages`]: crate::AllStorages
+    /// [`AllStorages`]: crate::all_storages::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    /// [`NonSend`]: crate::NonSend
+    /// [`NonSend`]: crate::borrow::NonSend
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]
@@ -180,7 +180,7 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{NonSync, Unique, UniqueView, World};
+    /// use shipyard::{borrow::NonSync, Unique, UniqueView, World};
     ///
     /// #[derive(Unique)]
     /// struct U32(u32);
@@ -194,10 +194,10 @@ impl World {
     /// assert_eq!(i.0, 0);
     /// ```
     ///
-    /// [`AllStorages`]: crate::AllStorages
+    /// [`AllStorages`]: crate::all_storages::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    /// [`NonSync`]: crate::NonSync
+    /// [`NonSync`]: crate::borrow::NonSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]
@@ -222,7 +222,7 @@ impl World {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{NonSendSync, Unique, UniqueView, World};
+    /// use shipyard::{borrow::NonSendSync, Unique, UniqueView, World};
     ///
     /// let world = World::new();
     ///
@@ -236,10 +236,10 @@ impl World {
     /// assert_eq!(i.0, 0);
     /// ```
     ///
-    /// [`AllStorages`]: crate::AllStorages
+    /// [`AllStorages`]: crate::all_storages::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    /// [`NonSendSync`]: crate::NonSync
+    /// [`NonSendSync`]: crate::borrow::NonSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]
@@ -278,7 +278,7 @@ impl World {
     /// assert_eq!(i.0, 0);
     /// ```
     ///
-    /// [`AllStorages`]: crate::AllStorages
+    /// [`AllStorages`]: crate::all_storages::AllStorages
     pub fn remove_unique<T: Unique>(&self) -> Result<T, error::UniqueRemove> {
         self.all_storages
             .borrow()
@@ -378,18 +378,21 @@ let (entities, mut usizes) = world
     .borrow::<(EntitiesView, ViewMut<USIZE>)>()
     .unwrap();
 ```
-[AllStorages]: crate::AllStorages
-[EntitiesView]: crate::Entities
-[EntitiesViewMut]: crate::Entities
-[AllStoragesViewMut]: crate::AllStorages
+[AllStorages]: crate::all_storages::AllStorages
+[EntitiesView]: crate::EntitiesView
+[EntitiesViewMut]: crate::EntitiesViewMut
+[AllStoragesViewMut]: crate::AllStoragesViewMut
 [World]: crate::World
 [View]: crate::View
 [ViewMut]: crate::ViewMut
 [UniqueView]: crate::UniqueView
 [UniqueViewMut]: crate::UniqueViewMut"]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::borrow::NonSend")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::borrow::NonSync")]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSendSync]: crate::borrow::NonSendSync"
+    )]
     pub fn borrow<V: WorldBorrow>(&self) -> Result<V::WorldView<'_>, error::GetStorage> {
         let current = self.get_current();
 
@@ -489,18 +492,21 @@ let world = World::new();
 
 world.run_with_data(sys1, (EntityId::dead(), [0., 0.]));
 ```
-[AllStorages]: crate::AllStorages
-[EntitiesView]: crate::Entities
-[EntitiesViewMut]: crate::Entities
-[AllStoragesViewMut]: crate::AllStorages
+[AllStorages]: crate::all_storages::AllStorages
+[EntitiesView]: crate::EntitiesView
+[EntitiesViewMut]: crate::EntitiesViewMut
+[AllStoragesViewMut]: crate::AllStoragesViewMut
 [World]: crate::World
 [View]: crate::View
 [ViewMut]: crate::ViewMut
 [UniqueView]: crate::UniqueView
 [UniqueViewMut]: crate::UniqueViewMut"]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::borrow::NonSend")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::borrow::NonSync")]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSendSync]: crate::borrow::NonSendSync"
+    )]
     #[track_caller]
     pub fn run_with_data<Data, B, S: System<(Data,), B>>(
         &self,
@@ -619,18 +625,21 @@ world
 
 let i = world.run(sys1);
 ```
-[AllStorages]: crate::AllStorages
-[EntitiesView]: crate::Entities
-[EntitiesViewMut]: crate::Entities
-[AllStoragesViewMut]: crate::AllStorages
+[AllStorages]: crate::all_storages::AllStorages
+[EntitiesView]: crate::EntitiesView
+[EntitiesViewMut]: crate::EntitiesViewMut
+[AllStoragesViewMut]: crate::AllStoragesViewMut
 [World]: crate::World
 [View]: crate::View
 [ViewMut]: crate::ViewMut
 [UniqueView]: crate::UniqueView
 [UniqueViewMut]: crate::UniqueViewMut"]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::borrow::NonSend")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::borrow::NonSync")]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSendSync]: crate::borrow::NonSendSync"
+    )]
     #[track_caller]
     pub fn run<B, S: System<(), B>>(&self, system: S) -> S::Return {
         #[cfg(feature = "tracing")]
@@ -1361,9 +1370,9 @@ assert!(*j == &U32(1));
 ```"]
     #[cfg_attr(
         feature = "thread_local",
-        doc = "[NonSend]: crate::NonSend
-[NonSync]: crate::NonSync
-[NonSendSync]: crate::NonSendSync"
+        doc = "[NonSend]: crate::borrow::NonSend
+[NonSync]: crate::borrow::NonSync
+[NonSendSync]: crate::borrow::NonSendSync"
     )]
     #[inline]
     pub fn get<T: GetComponent>(
@@ -1434,9 +1443,9 @@ assert!(*i == U32(0));
 ```"]
     #[cfg_attr(
         feature = "thread_local",
-        doc = "[NonSend]: crate::NonSend
-[NonSync]: crate::NonSync
-[NonSendSync]: crate::NonSendSync"
+        doc = "[NonSend]: crate::borrow::NonSend
+[NonSync]: crate::borrow::NonSync
+[NonSendSync]: crate::borrow::NonSendSync"
     )]
     #[inline]
     pub fn get_unique<T: GetUnique>(&self) -> Result<T::Out<'_>, error::GetStorage> {
@@ -1508,9 +1517,9 @@ for (i, j) in &mut iter {
 ```"]
     #[cfg_attr(
         feature = "thread_local",
-        doc = "[NonSend]: crate::NonSend
-[NonSync]: crate::NonSync
-[NonSendSync]: crate::NonSendSync"
+        doc = "[NonSend]: crate::borrow::NonSend
+[NonSync]: crate::borrow::NonSync
+[NonSendSync]: crate::borrow::NonSendSync"
     )]
     #[inline]
     #[track_caller]

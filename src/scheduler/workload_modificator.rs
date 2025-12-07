@@ -14,7 +14,7 @@ use core::any::type_name;
 use core::any::TypeId;
 use core::ops::Not;
 
-/// Modifies a workload.
+/// Allows to set if and when a workload runs.
 pub trait WorkloadModificator {
     /// Only run the workload if the function evaluates to `true`.
     fn run_if<RunB, Run: IntoWorkloadRunIf<RunB>>(self, run_if: Run) -> Workload;

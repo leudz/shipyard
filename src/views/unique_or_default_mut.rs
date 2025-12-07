@@ -10,7 +10,7 @@ use crate::world::World;
 use alloc::vec::Vec;
 use core::ops::{Deref, DerefMut};
 
-/// Exclusive view over a unique component storage.
+/// Exclusive view over a unique storage of a component with a default value.
 ///
 /// If the component is not already present, its default value will be inserted.
 pub struct UniqueOrDefaultViewMut<'v, T: Unique + Default>(UniqueViewMut<'v, T>);

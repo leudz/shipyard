@@ -2,7 +2,7 @@ use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::entities::Entities;
 use core::ops::{Deref, DerefMut};
 
-/// Shared view over `Entities` storage.
+/// Shared view over [`Entities`](crate::entities::Entities) storage.
 pub struct EntitiesView<'a> {
     pub(crate) entities: &'a Entities,
     pub(crate) borrow: Option<SharedBorrow<'a>>,
@@ -29,7 +29,7 @@ impl Clone for EntitiesView<'_> {
     }
 }
 
-/// Exclusive view over `Entities` storage.
+/// Exclusive view over [`Entities`](crate::entities::Entities) storage.
 pub struct EntitiesViewMut<'a> {
     pub(crate) entities: &'a mut Entities,
     pub(crate) _borrow: Option<ExclusiveBorrow<'a>>,

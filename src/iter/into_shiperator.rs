@@ -16,9 +16,9 @@ use crate::ShipHashSet;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
 
-/// Trait used to create iterators.  
+/// Creates view iterators.
 ///
-/// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.  
+/// `std::iter::IntoIterator` can't be used directly because of conflicting implementation.\
 /// This trait serves as substitute.
 pub trait IntoIter: IntoShiperator {
     /// ### Example

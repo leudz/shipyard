@@ -66,7 +66,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::borrow::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::atomic_refcell::SharedBorrow<'__a>>, last_run: Option<::shipyard::tracking::TrackingTimestamp>, current: ::shipyard::tracking::TrackingTimestamp,) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::all_storages::AllStorages, all_borrow: Option<::shipyard::advanced::atomic_refcell::SharedBorrow<'__a>>, last_run: Option<::shipyard::advanced::tracking::TrackingTimestamp>, current: ::shipyard::advanced::tracking::TrackingTimestamp,) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name {
                             #(#field),*
                         })
@@ -87,7 +87,7 @@ pub(crate) fn expand_borrow(
                 impl #impl_generics ::shipyard::borrow::Borrow for #name #ty_generics #where_clause {
                     type View<'__view> = #name #gat_ty_generics;
 
-                    fn borrow<'__a>(all_storages: & '__a ::shipyard::AllStorages, all_borrow: Option<::shipyard::atomic_refcell::SharedBorrow<'__a>>, last_run: Option<::shipyard::tracking::TrackingTimestamp>, current: ::shipyard::tracking::TrackingTimestamp) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
+                    fn borrow<'__a>(all_storages: & '__a ::shipyard::all_storages::AllStorages, all_borrow: Option<::shipyard::advanced::atomic_refcell::SharedBorrow<'__a>>, last_run: Option<::shipyard::advanced::tracking::TrackingTimestamp>, current: ::shipyard::advanced::tracking::TrackingTimestamp) -> core::result::Result<Self::View<'__a>, ::shipyard::error::GetStorage> {
                         Ok(#name(#(#borrow),*))
                     }
                 }

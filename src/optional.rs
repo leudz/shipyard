@@ -1,7 +1,7 @@
 use crate::component::Component;
 use crate::views::{View, ViewMut};
 
-/// Allows iteration over a component that may be absent.
+/// Iterates over a component that may be absent.
 ///
 /// ### Example:
 ///

@@ -476,8 +476,8 @@ impl Display for RunWorkload {
 /// Error returned by [`World::run`] and [`AllStorages::run`].
 /// Can refer to an invalid storage borrow or a custom error.
 ///
-/// [`World::run`]: crate::World::run()
-/// [`AllStorages::run`]: crate::AllStorages::run()
+/// [`World::run`]: crate::world::World::run()
+/// [`AllStorages::run`]: crate::all_storages::AllStorages::run()
 pub enum Run {
     /// Failed to borrow one of the storage.
     GetStorage(GetStorage),
@@ -603,8 +603,8 @@ impl Display for InvalidSystem {
 
 /// Error returned by [`World::remove_unique`] and [`AllStorages::remove_unique`].
 ///
-/// [`World::remove_unique`]: crate::World::remove_unique()
-/// [`AllStorages::remove_unique`]: crate::AllStorages::remove_unique()
+/// [`World::remove_unique`]: crate::world::World::remove_unique()
+/// [`AllStorages::remove_unique`]: crate::all_storages::AllStorages::remove_unique()
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum UniqueRemove {
     /// `AllStorages` was already borrowed.
@@ -827,8 +827,8 @@ impl Display for ImpossibleRequirements {
 
 /// Returned by [`World::get`] and [`AllStorages::get`].
 ///
-/// [`World::get`]: crate::World::get
-/// [`AllStorages::get`]: crate::AllStorages::get
+/// [`World::get`]: crate::world::World::get
+/// [`AllStorages::get`]: crate::all_storages::AllStorages::get
 #[derive(PartialEq)]
 pub enum GetComponent {
     #[allow(missing_docs)]
@@ -869,8 +869,8 @@ impl Display for GetComponent {
 
 /// Returned by [`World::serialize`] or [`AllStorages::serialize`].
 ///
-/// [`World::serialize`]: crate::World::serialize
-/// [`AllStorages::serialize`]: crate::AllStorages::serialize
+/// [`World::serialize`]: crate::world::World::serialize
+/// [`AllStorages::serialize`]: crate::all_storages::AllStorages::serialize
 #[cfg(feature = "serde1")]
 #[derive(PartialEq, Eq)]
 pub enum Serialize<S: serde::Serializer> {
@@ -902,8 +902,8 @@ impl<S: serde::Serializer> Display for Serialize<S> {
 
 /// Returned by Des`World::deserialize`] or [`AllStorages::deserialize`].
 ///
-/// [`World::deserialize`]: crate::World::deserialize
-/// [`AllStorages::deserialize`]: crate::AllStorages::deserialize
+/// [`World::deserialize`]: crate::world::World::deserialize
+/// [`AllStorages::deserialize`]: crate::all_storages::AllStorages::deserialize
 #[cfg(feature = "serde1")]
 #[derive(PartialEq, Eq)]
 pub enum Deserialize<'de, D: serde::Deserializer<'de>> {

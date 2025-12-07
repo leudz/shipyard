@@ -17,7 +17,7 @@ use core::any::type_name;
 use core::iter::repeat_with;
 use core::mem::size_of;
 
-/// Entities holds the EntityIds to all entities: living, removed and dead.
+/// Holds the handles to all entities: living, removed and dead.
 ///
 /// A living entity is an entity currently present, with or without component.
 ///
@@ -448,7 +448,7 @@ impl Storage for Entities {
     #[inline]
     fn move_component_from(
         &mut self,
-        _other_all_storages: &mut crate::AllStorages,
+        _other_all_storages: &mut crate::all_storages::AllStorages,
         _from: EntityId,
         _to: EntityId,
         _current: TrackingTimestamp,
@@ -469,7 +469,7 @@ impl Storage for Entities {
     #[inline]
     fn clone_component_to(
         &self,
-        _other_all_storages: &mut crate::AllStorages,
+        _other_all_storages: &mut crate::all_storages::AllStorages,
         _from: EntityId,
         _to: EntityId,
         _other_current: TrackingTimestamp,

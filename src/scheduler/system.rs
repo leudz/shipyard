@@ -14,7 +14,7 @@ use core::any::TypeId;
 /// ### Example:
 ///
 /// ```rust
-/// use shipyard::{Component, IntoWorkloadSystem, View, Workload, scheduler::WorkloadSystem, World};
+/// use shipyard::{Component, scheduler::IntoWorkloadSystem, View, Workload, scheduler::WorkloadSystem, World};
 ///
 /// #[derive(Component)]
 /// struct U32(u32);

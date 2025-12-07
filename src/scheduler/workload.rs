@@ -112,7 +112,7 @@ impl World {
     }
 }
 
-/// Keeps information to create a workload.
+/// Holds information to schedule a group of systems.
 ///
 /// A workload is a collection of systems. They will execute as much in parallel as possible.\
 /// They are evaluated first to last when they can't be parallelized.\
@@ -580,8 +580,8 @@ mod tests {
     use super::*;
     use crate::component::{Component, Unique};
     use crate::{
-        scheduler::Batches, AllStoragesViewMut, IntoWorkload, SystemModificator, UniqueView,
-        UniqueViewMut, View, ViewMut, WorkloadModificator, World,
+        scheduler::Batches, scheduler::SystemModificator, scheduler::WorkloadModificator,
+        AllStoragesViewMut, IntoWorkload, UniqueView, UniqueViewMut, View, ViewMut, World,
     };
 
     struct Usize(usize);
@@ -923,7 +923,7 @@ mod tests {
     #[cfg(feature = "thread_local")]
     #[test]
     fn non_send() {
-        use crate::NonSend;
+        use crate::borrow::NonSend;
 
         #[allow(unused)]
         struct NotSend(*const ());

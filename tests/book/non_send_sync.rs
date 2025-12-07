@@ -1,3 +1,4 @@
+use shipyard::borrow::NonSendSync;
 use shipyard::*;
 use std::rc::Rc;
 

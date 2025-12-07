@@ -1,4 +1,5 @@
 use core::any::type_name;
+use shipyard::advanced::StorageId;
 use shipyard::error;
 use shipyard::sparse_set::SparseSet;
 use shipyard::*;
@@ -165,10 +166,10 @@ fn non_send_storage_in_other_thread() {
     rayon::join(
         || {
             assert_eq!(
-                world.borrow::<NonSend<ViewMut<NotSend>>>().err(),
+                world.borrow::<borrow::NonSend<ViewMut<NotSend>>>().err(),
                 Some(error::GetStorage::StorageBorrow {
-                    name: Some(type_name::<NonSend<SparseSet<NotSend>>>()),
-                    id: StorageId::of::<NonSend<SparseSet<NotSend>>>(),
+                    name: Some(type_name::<borrow::NonSend<SparseSet<NotSend>>>()),
+                    id: StorageId::of::<borrow::NonSend<SparseSet<NotSend>>>(),
                     borrow: error::Borrow::WrongThread
                 })
             )
@@ -184,10 +185,12 @@ fn non_send_sync_storage_in_other_thread() {
     rayon::join(
         || {
             assert_eq!(
-                world.borrow::<NonSendSync<View<NotSendSync>>>().err(),
+                world
+                    .borrow::<borrow::NonSendSync<View<NotSendSync>>>()
+                    .err(),
                 Some(error::GetStorage::StorageBorrow {
-                    name: Some(type_name::<NonSendSync<SparseSet<NotSendSync>>>()),
-                    id: StorageId::of::<NonSendSync<SparseSet<NotSendSync>>>(),
+                    name: Some(type_name::<borrow::NonSendSync<SparseSet<NotSendSync>>>()),
+                    id: StorageId::of::<borrow::NonSendSync<SparseSet<NotSendSync>>>(),
                     borrow: error::Borrow::WrongThread
                 })
             )
@@ -219,22 +222,22 @@ fn exhaustive_list() {
     let world = World::new();
 
     let _ = world.borrow::<(
-        NonSend<View<NotSend>>,
-        NonSync<View<NotSync>>,
-        NonSendSync<View<NotSendSync>>,
-        NonSend<ViewMut<NotSend>>,
-        NonSync<ViewMut<NotSync>>,
-        NonSendSync<ViewMut<NotSendSync>>,
+        borrow::NonSend<View<NotSend>>,
+        borrow::NonSync<View<NotSync>>,
+        borrow::NonSendSync<View<NotSendSync>>,
+        borrow::NonSend<ViewMut<NotSend>>,
+        borrow::NonSync<ViewMut<NotSync>>,
+        borrow::NonSendSync<ViewMut<NotSendSync>>,
     )>();
 
     world.run(|all_storages: AllStoragesViewMut| {
         let _ = all_storages.borrow::<(
-            NonSend<View<NotSend>>,
-            NonSync<View<NotSync>>,
-            NonSendSync<View<NotSendSync>>,
-            NonSend<ViewMut<NotSend>>,
-            NonSync<ViewMut<NotSync>>,
-            NonSendSync<ViewMut<NotSendSync>>,
+            borrow::NonSend<View<NotSend>>,
+            borrow::NonSync<View<NotSync>>,
+            borrow::NonSendSync<View<NotSendSync>>,
+            borrow::NonSend<ViewMut<NotSend>>,
+            borrow::NonSync<ViewMut<NotSync>>,
+            borrow::NonSendSync<ViewMut<NotSendSync>>,
         )>();
     });
 }
@@ -249,22 +252,22 @@ fn unique_exhaustive_list() {
     world.add_unique_non_send_sync(NotSendSync(&()));
 
     let _ = world.borrow::<(
-        NonSend<UniqueView<NotSend>>,
-        NonSync<UniqueView<NotSync>>,
-        NonSendSync<UniqueView<NotSendSync>>,
-        NonSend<UniqueViewMut<NotSend>>,
-        NonSync<UniqueViewMut<NotSync>>,
-        NonSendSync<UniqueViewMut<NotSendSync>>,
+        borrow::NonSend<UniqueView<NotSend>>,
+        borrow::NonSync<UniqueView<NotSync>>,
+        borrow::NonSendSync<UniqueView<NotSendSync>>,
+        borrow::NonSend<UniqueViewMut<NotSend>>,
+        borrow::NonSync<UniqueViewMut<NotSync>>,
+        borrow::NonSendSync<UniqueViewMut<NotSendSync>>,
     )>();
 
     world.run(|all_storages: AllStoragesViewMut| {
         let _ = all_storages.borrow::<(
-            NonSend<UniqueView<NotSend>>,
-            NonSync<UniqueView<NotSync>>,
-            NonSendSync<UniqueView<NotSendSync>>,
-            NonSend<UniqueViewMut<NotSend>>,
-            NonSync<UniqueViewMut<NotSync>>,
-            NonSendSync<UniqueViewMut<NotSendSync>>,
+            borrow::NonSend<UniqueView<NotSend>>,
+            borrow::NonSync<UniqueView<NotSync>>,
+            borrow::NonSendSync<UniqueView<NotSendSync>>,
+            borrow::NonSend<UniqueViewMut<NotSend>>,
+            borrow::NonSync<UniqueViewMut<NotSync>>,
+            borrow::NonSendSync<UniqueViewMut<NotSendSync>>,
         )>();
     });
 }

@@ -1,4 +1,7 @@
 use core::any::type_name;
+use shipyard::advanced::{
+    StorageId, UniqueOrDefaultView, UniqueOrDefaultViewMut, UniqueOrInitView, UniqueOrInitViewMut,
+};
 use shipyard::error;
 use shipyard::*;
 
@@ -87,10 +90,10 @@ fn non_send() {
         _phantom: core::marker::PhantomData,
     });
 
-    world.run(|mut x: NonSend<UniqueViewMut<NonSendStruct>>| {
+    world.run(|mut x: borrow::NonSend<UniqueViewMut<NonSendStruct>>| {
         x.value += 1;
     });
-    world.run(|x: NonSend<UniqueView<NonSendStruct>>| {
+    world.run(|x: borrow::NonSend<UniqueView<NonSendStruct>>| {
         assert_eq!(x.value, 1);
     });
 }
@@ -114,10 +117,10 @@ fn non_sync() {
         _phantom: core::marker::PhantomData,
     });
 
-    world.run(|mut x: NonSync<UniqueViewMut<NonSyncStruct>>| {
+    world.run(|mut x: borrow::NonSync<UniqueViewMut<NonSyncStruct>>| {
         x.value += 1;
     });
-    world.run(|x: NonSync<UniqueView<NonSyncStruct>>| {
+    world.run(|x: borrow::NonSync<UniqueView<NonSyncStruct>>| {
         assert_eq!(x.value, 1);
     });
 }
@@ -140,10 +143,12 @@ fn non_send_sync() {
         _phantom: core::marker::PhantomData,
     });
 
-    world.run(|mut x: NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
-        x.value += 1;
-    });
-    world.run(|x: NonSendSync<UniqueView<NonSendSyncStruct>>| {
+    world.run(
+        |mut x: borrow::NonSendSync<UniqueViewMut<NonSendSyncStruct>>| {
+            x.value += 1;
+        },
+    );
+    world.run(|x: borrow::NonSendSync<UniqueView<NonSendSyncStruct>>| {
         assert_eq!(x.value, 1);
     });
 }

@@ -29,6 +29,8 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;
 
+/// Stores systems from all workloads and their scheduling.
+//
 // systems are stored in an array to easily find if a system was already added
 // this wouldn't be possible if they were in the HashMap
 //

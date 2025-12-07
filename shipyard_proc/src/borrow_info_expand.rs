@@ -69,7 +69,7 @@ pub(crate) fn expand_borrow_info(
                         #(#field_info)*
                     }
                     fn enable_tracking(
-                        enable_tracking_fn: &mut Vec<fn(&::shipyard::AllStorages) -> core::result::Result<(), ::shipyard::error::GetStorage>>,
+                        enable_tracking_fn: &mut Vec<fn(&::shipyard::all_storages::AllStorages) -> core::result::Result<(), ::shipyard::error::GetStorage>>,
                     ) {
                         #(#field_tracking)*
                     }
@@ -86,7 +86,7 @@ pub(crate) fn expand_borrow_info(
                         #(<#field_type_clone>::borrow_info(info);)*
                     }
                     fn enable_tracking(
-                        enable_tracking_fn: &mut Vec<fn(&::shipyard::AllStorages) -> core::result::Result<(), ::shipyard::error::GetStorage>>,
+                        enable_tracking_fn: &mut Vec<fn(&::shipyard::all_storages::AllStorages) -> core::result::Result<(), ::shipyard::error::GetStorage>>,
                     ) {
                         #(<#field_type>::enable_tracking(enable_tracking_fn);)*
                     }

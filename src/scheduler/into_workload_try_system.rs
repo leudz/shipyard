@@ -19,7 +19,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(feature = "std")]
 use std::error::Error;
 
-/// Trait used to add fallible systems to a workload.
+/// Validates a function can become a failable system.
 pub trait IntoWorkloadTrySystem<Views, R> {
     /// Wraps a fallible function in a struct containing all information required by a workload.  
     /// The workload will stop if an error is returned.

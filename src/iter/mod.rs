@@ -7,8 +7,12 @@ mod parallel;
 mod sailor;
 mod with_id;
 
+pub use crate::not::Not;
+pub use crate::optional::Optional;
+pub use crate::or::{OneOfTwo, Or};
 #[doc(inline)]
 pub use crate::sparse_set::RawEntityIdAccess;
+pub use crate::tracking::{Inserted, InsertedOrModified, Modified};
 pub use captain::ShiperatorCaptain;
 pub use into_shiperator::{IntoIter, IntoShiperator};
 pub use mixed::Mixed;

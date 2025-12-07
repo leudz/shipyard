@@ -2,7 +2,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::ViewMut;
 
-/// Defines how components are added to an existing entity.
+/// Adds components to an existing entity.
 pub trait AddComponent<T> {
     /// Adds `component` to `entity`, multiple components can be added at the same time using a tuple.  
     /// This function does not check `entity` is alive. It's possible to add components to removed entities.  
@@ -23,7 +23,7 @@ pub trait AddComponent<T> {
     /// u32s.add_component_unchecked(entity, U32(0));
     /// ```
     ///
-    /// [`Entities::add_component`]: crate::Entities::add_component()
+    /// [`Entities::add_component`]: crate::entities::Entities::add_component()
     fn add_component_unchecked(&mut self, entity: EntityId, component: T)
     where
         Self: Sized;

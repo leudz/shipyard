@@ -2,7 +2,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::views::ViewMut;
 
-/// Removes component from entities.
+/// Removes components from an entity.
 pub trait Remove {
     /// Type of the removed component.
     type Out;

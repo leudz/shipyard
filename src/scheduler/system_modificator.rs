@@ -10,7 +10,7 @@ use crate::views::AllStoragesViewMut;
 use alloc::boxed::Box;
 use core::ops::Not;
 
-/// Modifies a system.
+/// Allows to set if and when a systems runs.
 pub trait SystemModificator<B, R> {
     /// Only run the system if the function evaluates to `true`.
     fn run_if<RunB, Run: IntoRunIf<RunB>>(self, run_if: Run) -> WorkloadSystem;

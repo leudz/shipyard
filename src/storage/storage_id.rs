@@ -1,11 +1,11 @@
 use core::{any::TypeId, cmp::Ordering};
 
-/// Id of a storage, can be a `TypeId` or `u64`.
+/// Storage identifier, can be a `TypeId` or `u64`.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StorageId {
-    /// Identify a Rust type known at compile time
+    /// Identifies a Rust type known at compile time.
     TypeId(TypeId),
-    /// Identify a type only known at runtime
+    /// Identifies a type only known at runtime.
     Custom(u64),
 }
 

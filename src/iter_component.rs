@@ -1,3 +1,4 @@
+#[path = "iter_component/iter_ref.rs"]
 mod iter_ref;
 
 pub use iter_ref::IntoIterRef;

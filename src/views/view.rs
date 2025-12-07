@@ -143,7 +143,7 @@ impl<'a, T: Component> View<'a, T, track::Untracked> {
     /// Creates a new [`View`] for custom [`SparseSet`] storage.
     ///
     /// ```
-    /// use shipyard::{track, Component, sparse_set::SparseSet, StorageId, View, World};
+    /// use shipyard::{track, advanced::StorageId, Component, sparse_set::SparseSet, View, World};
     ///
     /// struct ScriptingComponent(Vec<u8>);
     /// impl Component for ScriptingComponent {

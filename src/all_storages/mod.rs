@@ -50,7 +50,7 @@ pub struct MissingThreadId;
 #[allow(missing_docs)]
 pub struct ThreadIdPresent;
 
-/// Contains all storages present in the `World`.
+/// Contains all storages present in the [`World`](crate::world::World).
 // The lock is held very briefly:
 // - shared: when trying to find a storage
 // - unique: when adding a storage
@@ -122,7 +122,7 @@ impl AllStorages {
     /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
-    /// [NonSend]: crate::NonSend
+    /// [NonSend]: crate::borrow::NonSend
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
@@ -142,7 +142,7 @@ impl AllStorages {
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.
     ///
-    /// [NonSync]: crate::NonSync
+    /// [NonSync]: crate::borrow::NonSync
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
@@ -160,7 +160,7 @@ impl AllStorages {
     /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
     /// Does nothing if the storage already exists.  
     ///
-    /// [NonSync]: crate::NonSync
+    /// [NonSync]: crate::borrow::NonSync
     /// [UniqueView]: crate::UniqueView
     /// [UniqueViewMut]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
@@ -792,15 +792,18 @@ let (entities, mut usizes) = all_storages
     .borrow::<(EntitiesView, ViewMut<USIZE>)>()
     .unwrap();
 ```
-[EntitiesView]: crate::Entities
-[EntitiesViewMut]: crate::Entities
+[EntitiesView]: crate::EntitiesView
+[EntitiesViewMut]: crate::EntitiesViewMut
 [View]: crate::View
 [ViewMut]: crate::ViewMut
 [UniqueView]: crate::UniqueView
 [UniqueViewMut]: crate::UniqueViewMut"]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::borrow::NonSend")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::borrow::NonSync")]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSendSync]: crate::borrow::NonSendSync"
+    )]
     pub fn borrow<V: Borrow>(&self) -> Result<V::View<'_>, error::GetStorage> {
         let current = self.get_current();
 
@@ -879,16 +882,19 @@ You can use:
 - Unique storage did not exist.
 - Error returned by user.
 
-[EntitiesView]: crate::Entities
-[EntitiesViewMut]: crate::Entities
+[EntitiesView]: crate::EntitiesView
+[EntitiesViewMut]: crate::EntitiesViewMut
 [World]: crate::World
 [View]: crate::View
 [ViewMut]: crate::ViewMut
 [UniqueView]: crate::UniqueView
 [UniqueViewMut]: crate::UniqueViewMut"]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::borrow::NonSend")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::borrow::NonSync")]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSendSync]: crate::borrow::NonSendSync"
+    )]
     #[track_caller]
     pub fn run_with_data<Data, B, S: AllSystem<(Data,), B>>(
         &self,
@@ -1005,15 +1011,18 @@ all_storages
 
 let i = all_storages.run(sys1);
 ```
-[EntitiesView]: crate::Entities
-[EntitiesViewMut]: crate::Entities
+[EntitiesView]: crate::EntitiesView
+[EntitiesViewMut]: crate::EntitiesViewMut
 [View]: crate::View
 [ViewMut]: crate::ViewMut
 [UniqueView]: crate::UniqueView
 [UniqueViewMut]: crate::UniqueViewMut"]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::NonSend")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::NonSync")]
-    #[cfg_attr(feature = "thread_local", doc = "[NonSendSync]: crate::NonSendSync")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSend]: crate::borrow::NonSend")]
+    #[cfg_attr(feature = "thread_local", doc = "[NonSync]: crate::borrow::NonSync")]
+    #[cfg_attr(
+        feature = "thread_local",
+        doc = "[NonSendSync]: crate::borrow::NonSendSync"
+    )]
     #[track_caller]
     pub fn run<B, S: AllSystem<(), B>>(&self, system: S) -> S::Return {
         #[cfg(feature = "tracing")]
@@ -1320,9 +1329,9 @@ assert!(*j == &U32(1));
 ```"]
     #[cfg_attr(
         feature = "thread_local",
-        doc = "[NonSend]: crate::NonSend
-[NonSync]: crate::NonSync
-[NonSendSync]: crate::NonSendSync"
+        doc = "[NonSend]: crate::borrow::NonSend
+[NonSync]: crate::borrow::NonSync
+[NonSendSync]: crate::borrow::NonSendSync"
     )]
     #[inline]
     pub fn get<T: GetComponent>(
@@ -1386,9 +1395,9 @@ assert!(*i == U32(0));
 ```"]
     #[cfg_attr(
         feature = "thread_local",
-        doc = "[NonSend]: crate::NonSend
-[NonSync]: crate::NonSync
-[NonSendSync]: crate::NonSendSync"
+        doc = "[NonSend]: crate::borrow::NonSend
+[NonSync]: crate::borrow::NonSync
+[NonSendSync]: crate::borrow::NonSendSync"
     )]
     #[inline]
     pub fn get_unique<T: GetUnique>(&self) -> Result<T::Out<'_>, error::GetStorage> {
@@ -1453,9 +1462,9 @@ for (i, j) in &mut iter {
 ```"]
     #[cfg_attr(
         feature = "thread_local",
-        doc = "[NonSend]: crate::NonSend
-[NonSync]: crate::NonSync
-[NonSendSync]: crate::NonSendSync"
+        doc = "[NonSend]: crate::borrow::NonSend
+[NonSync]: crate::borrow::NonSync
+[NonSendSync]: crate::borrow::NonSendSync"
     )]
     #[inline]
     #[track_caller]

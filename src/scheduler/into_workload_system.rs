@@ -13,10 +13,10 @@ use alloc::vec::Vec;
 use core::any::{type_name, TypeId};
 use core::sync::atomic::{AtomicU64, Ordering};
 
-/// Trait used to add systems to a workload.
+/// Validates a function can become a system.
 ///
 /// Usually you don't have to use it directly except if you want to handle the error.\
-/// To modify the system execution see [SystemModificator](crate::SystemModificator).
+/// To modify the system execution see [SystemModificator](crate::scheduler::SystemModificator).
 pub trait IntoWorkloadSystem<B, R> {
     /// Wraps a function in a struct containing all information required by a workload.
     fn into_workload_system(self) -> Result<WorkloadSystem, error::InvalidSystem>;

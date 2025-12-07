@@ -14,6 +14,7 @@ use into_iter_expand::expand_into_iter;
 use label_expand::expand_label;
 use world_borrow_expand::expand_world_borrow;
 
+/// Multiple instances can be stored in the `World`.
 #[proc_macro_derive(Component, attributes(track))]
 pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
@@ -40,6 +41,7 @@ pub fn component(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
+/// Single instance can be stored in the `World`.
 #[proc_macro_derive(Unique)]
 pub fn unique(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
@@ -50,6 +52,7 @@ pub fn unique(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     expand_unique(name, generics).into()
 }
 
+/// Group of views that can be borrowed from `World`.
 #[proc_macro_derive(WorldBorrow, attributes(shipyard))]
 pub fn borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
@@ -63,6 +66,7 @@ pub fn borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
+/// Group of views that can be borrowed from `AllStorages`.
 #[proc_macro_derive(Borrow, attributes(shipyard))]
 pub fn all_storages_borrow(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
@@ -76,6 +80,7 @@ pub fn all_storages_borrow(item: proc_macro::TokenStream) -> proc_macro::TokenSt
         .into()
 }
 
+/// Group of views that can be scheduled in workloads.
 #[proc_macro_derive(BorrowInfo, attributes(shipyard))]
 pub fn borrow_info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
@@ -89,6 +94,8 @@ pub fn borrow_info(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
         .into()
 }
 
+/// Flags a system or workload.
+///
 /// Requires `Hash`, `Debug`, `PartialEq`, `Clone`
 #[proc_macro_derive(Label)]
 pub fn label(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -100,6 +107,7 @@ pub fn label(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     expand_label(name, generics).into()
 }
 
+/// Creates an iterator for a group of views.
 #[proc_macro_derive(IntoIter, attributes(shipyard))]
 pub fn into_iter(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);

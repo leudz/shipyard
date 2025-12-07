@@ -1,3 +1,4 @@
+use shipyard::borrow::{NonSend, NonSendSync, NonSync};
 use shipyard::*;
 use std::cell::RefCell;
 use std::rc::Rc;

@@ -2,11 +2,11 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::not::Not;
 use crate::optional::Optional;
-use crate::or::OrWindow;
+use crate::or::{OneOfTwo, OrWindow};
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
+use crate::track;
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
-use crate::{track, OneOfTwo};
 
 /// Trait deciding what type a Shiperator will return when iterated.
 ///

@@ -1,6 +1,7 @@
 #[cfg(feature = "thread_local")]
 mod non_send_sync;
 
+use shipyard::scheduler::{SystemModificator, WorkloadModificator};
 use shipyard::{borrow::BorrowInfo, scheduler::AsLabel, *};
 
 struct U32(u32);

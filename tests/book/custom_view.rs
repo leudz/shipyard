@@ -1,6 +1,7 @@
 use shipyard::{
-    atomic_refcell::SharedBorrow, tracking::TrackingTimestamp, AllStorages, Borrow, BorrowInfo,
-    Component, EntitiesViewMut, IntoIter, Unique, UniqueView, ViewMut, World,
+    advanced::atomic_refcell::SharedBorrow, advanced::tracking::TrackingTimestamp,
+    all_storages::AllStorages, Borrow, BorrowInfo, Component, EntitiesViewMut, IntoIter, Unique,
+    UniqueView, ViewMut, World,
 };
 use std::iter;
 

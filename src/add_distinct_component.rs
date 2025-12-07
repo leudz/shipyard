@@ -2,7 +2,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::ViewMut;
 
-/// Add component only if not already present.
+/// Adds components to an existing entity only if not already present.
 pub trait AddDistinctComponent {
     #[allow(missing_docs)]
     type Component;
@@ -29,7 +29,7 @@ pub trait AddDistinctComponent {
     /// assert!(!u32s.add_distinct_component_unchecked(entity, U32(0)));
     /// ```
     ///
-    /// [`Entities::add_component`]: crate::Entities::add_component()
+    /// [`Entities::add_component`]: crate::entities::Entities::add_component()
     fn add_distinct_component_unchecked(
         &mut self,
         entity: EntityId,

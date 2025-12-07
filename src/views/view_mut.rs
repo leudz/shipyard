@@ -135,7 +135,7 @@ impl<'a, T: Component> ViewMut<'a, T, track::Untracked> {
     /// Creates a new [`ViewMut`] for custom [`SparseSet`] storage.
     ///
     /// ```
-    /// use shipyard::{track, Component, sparse_set::SparseSet, StorageId, ViewMut, World};
+    /// use shipyard::{track, advanced::StorageId, Component, sparse_set::SparseSet, ViewMut, World};
     ///
     /// struct ScriptingComponent(Vec<u8>);
     /// impl Component for ScriptingComponent {

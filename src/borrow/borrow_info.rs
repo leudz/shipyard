@@ -52,7 +52,7 @@ use core::any::type_name;
 ///     }
 ///     fn enable_tracking(
 ///         _: &mut Vec<
-///             for<'a> fn(&'a shipyard::AllStorages) -> Result<(), shipyard::error::GetStorage>,
+///             for<'a> fn(&'a shipyard::all_storages::AllStorages) -> Result<(), shipyard::error::GetStorage>,
 ///         >,
 ///     ) {}
 /// }

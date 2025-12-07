@@ -2,7 +2,7 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::views::ViewMut;
 
-/// Deletes component from entities.
+/// Deletes components from an entity.
 pub trait Delete {
     /// Deletes component in `entity`, return `true` if the entity had this component.  
     /// Multiple components can be deleted at the same time using a tuple.

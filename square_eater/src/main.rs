@@ -5,9 +5,9 @@ use macroquad::{
     ui::{root_ui, widgets::Button},
 };
 use shipyard::{
-    iter::IntoIter, sparse_set::SparseSet, AddComponent, AllStorages, AllStoragesViewMut,
-    Component, EntitiesViewMut, IntoWorkload, IntoWorkloadTrySystem, Unique, UniqueView,
-    UniqueViewMut, View, ViewMut, Workload, World,
+    all_storages::AllStorages, iter::IntoIter, scheduler::IntoWorkloadTrySystem,
+    sparse_set::SparseSet, AddComponent, AllStoragesViewMut, Component, EntitiesViewMut,
+    IntoWorkload, Unique, UniqueView, UniqueViewMut, View, ViewMut, Workload, World,
 };
 
 const WIDTH: f32 = 640.0;

@@ -10,9 +10,9 @@ use core::any::{type_name, Any};
 // macro not module
 use alloc::vec;
 
-/// Converts to a collection of systems.
+/// Turns a collection of systems into a [`Workload`](crate::scheduler::Workload)
 ///
-/// To modify the workload execution see [WorkloadModificator](crate::WorkloadModificator).
+/// To modify the workload execution see [WorkloadModificator](crate::scheduler::WorkloadModificator).
 pub trait IntoWorkload<Views, R> {
     /// Converts to a collection of systems.
     ///

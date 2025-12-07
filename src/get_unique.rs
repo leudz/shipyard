@@ -9,8 +9,8 @@ use crate::views::{UniqueView, UniqueViewMut};
 
 /// Trait used as bound for [`World::get_unique`] and [`AllStorages::get_unique`].
 ///
-/// [`World::get_unique`]: crate::World::get_unique
-/// [`AllStorages::get_unique`]: crate::AllStorages::get_unique
+/// [`World::get_unique`]: crate::world::World::get_unique
+/// [`AllStorages::get_unique`]: crate::all_storages::AllStorages::get_unique
 pub trait GetUnique {
     #[allow(missing_docs)]
     type Out<'a>;

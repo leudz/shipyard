@@ -10,9 +10,7 @@ use crate::world::World;
 use alloc::vec::Vec;
 use core::cell::OnceCell;
 
-/// Shared view over a unique component storage.
-///
-/// The component can be initialized with this view.
+/// Shared view over a unique storage with a component that can be lazily initialized.
 pub struct UniqueOrInitView<'v, T: Unique> {
     cell: OnceCell<UniqueView<'v, T>>,
     all_storages: &'v AllStorages,

@@ -42,12 +42,8 @@ extern crate alloc;
 mod add_component;
 mod add_distinct_component;
 mod add_entity;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
+/// Contains all storages present in the [`World`].
 pub mod all_storages;
-/// Inner lock similar to `RwLock`.
-pub mod atomic_refcell;
 /// Allows access to helper types needed to implement [`Borrow`](borrow::Borrow).
 pub mod borrow;
 mod component;
@@ -57,18 +53,8 @@ mod entities;
 mod entity_id;
 pub mod error;
 mod get;
-/// Trait bound for [`AllStorages::get`] and [`World::get`].
-pub mod get_component;
-/// Trait bound for [`AllStorages::get_unique`] and [`World::get_unique`].
-pub mod get_unique;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
+/// Contains all items related to storage iteration.
 pub mod iter;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
-pub mod iter_component;
 /// Module describing internal memory usage.
 pub mod memory_usage;
 mod r#mut;
@@ -77,80 +63,49 @@ mod optional;
 mod or;
 mod public_transport;
 mod remove;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
-pub mod reserve;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
+/// Stores systems from all workloads and their scheduling.
 pub mod scheduler;
 mod seal;
 /// Default component storage.
 pub mod sparse_set;
 mod storage;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
-pub mod system;
 /// Module related to storage tracking, like insertion or modification.
 pub mod track;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
-pub mod tracking;
 mod unique;
 mod views;
-#[allow(clippy::empty_docs)]
-///
-// We can't allow(missing_docs) without allowing it for everything inside
+/// Contains all data this library will manipulate.
 pub mod world;
 
-#[cfg(feature = "thread_local")]
-#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-pub use crate::borrow::NonSend;
-#[cfg(feature = "thread_local")]
-#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-pub use crate::borrow::NonSendSync;
-#[cfg(feature = "thread_local")]
-#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
-pub use crate::borrow::NonSync;
 pub use add_component::AddComponent;
 pub use add_distinct_component::AddDistinctComponent;
 pub use add_entity::AddEntity;
 #[doc(inline)]
-pub use all_storages::AllStorages;
 pub use component::{Component, Unique};
 pub use contains::Contains;
 pub use delete::Delete;
-pub use entities::Entities;
 pub use entity_id::EntityId;
 pub use get::Get;
 #[doc(inline)]
 pub use iter::IntoIter;
-pub use not::Not;
-pub use optional::Optional;
-pub use or::{OneOfTwo, Or};
-pub use r#mut::Mut;
 pub use remove::Remove;
 #[doc(inline)]
-pub use scheduler::{
-    IntoWorkload, IntoWorkloadSystem, IntoWorkloadTrySystem, SystemModificator, Workload,
-    WorkloadModificator,
-};
+pub use scheduler::{IntoWorkload, Workload};
 #[cfg(feature = "proc")]
 pub use shipyard_proc::{Borrow, BorrowInfo, Component, IntoIter, Label, Unique, WorldBorrow};
-pub use storage::{SBoxBuilder, Storage, StorageId};
-#[doc(inline)]
-pub use tracking::{Inserted, InsertedOrModified, Modified};
 pub use unique::UniqueStorage;
 pub use views::{
-    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueOrDefaultView,
-    UniqueOrDefaultViewMut, UniqueOrInitView, UniqueOrInitViewMut, UniqueView, UniqueViewMut, View,
-    ViewMut,
+    AllStoragesView, AllStoragesViewMut, EntitiesView, EntitiesViewMut, UniqueView, UniqueViewMut,
+    View, ViewMut,
 };
 #[doc(inline)]
 pub use world::World;
+
+// These modules are exported in the advanced module.
+//
+// There is no simpler way to only re-export modules in advanced.
+use advanced::{
+    atomic_refcell, get_component, get_unique, iter_component, reserve, system, tracking,
+};
 
 type ShipHashMap<K, V> = hashbrown::HashMap<K, V>;
 #[doc(hidden)]
@@ -165,4 +120,41 @@ fn std_thread_id_generator() -> u64 {
     let thread_id: *const u64 = thread_id as _;
 
     unsafe { *thread_id }
+}
+
+/// Items that do not need to be present in lib.rs.
+///
+/// Don't feel bad for importing items from this module.\
+/// It's only to keep lib.rs simple and not scare people.
+pub mod advanced {
+    // There is no simpler way to only re-export modules here.
+
+    /// Inner lock similar to `RwLock`.
+    #[path = "../atomic_refcell.rs"]
+    pub mod atomic_refcell;
+    /// Trait bound for [`AllStorages::get`](crate::all_storages::AllStorages::get) and [`crate::world::World::get`].
+    #[path = "../get_component.rs"]
+    pub mod get_component;
+    /// Trait bound for [`AllStorages::get_unique`](crate::all_storages::AllStorages::get_unique) and [`crate::world::World::get_unique`].
+    #[path = "../get_unique.rs"]
+    pub mod get_unique;
+    /// Trait used as bound for [`World::iter`](crate::world::World::iter) and [`AllStorages::iter`](crate::all_storages::AllStorages::iter).
+    #[path = "../iter_component.rs"]
+    pub mod iter_component;
+    /// Reserves memory for a set of entities.
+    #[path = "../reserve.rs"]
+    pub mod reserve;
+    /// Trait bound encompassing all functions that can be used as system.
+    #[path = "../system/mod.rs"]
+    pub mod system;
+    /// Traits implementing all trackings.
+    #[path = "../tracking.rs"]
+    pub mod tracking;
+
+    pub use crate::entities::Entities;
+    pub use crate::r#mut::Mut;
+    pub use crate::storage::{SBoxBuilder, Storage, StorageId};
+    pub use crate::views::{
+        UniqueOrDefaultView, UniqueOrDefaultViewMut, UniqueOrInitView, UniqueOrInitViewMut,
+    };
 }
