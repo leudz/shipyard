@@ -1,6 +1,4 @@
-#[path = "tracking/iterator_wrapper.rs"]
 mod iterator_wrapper;
-#[path = "tracking/tuple_track.rs"]
 mod tuple_track;
 
 pub use iterator_wrapper::{Inserted, InsertedOrModified, Modified};

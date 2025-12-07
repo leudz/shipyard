@@ -7,6 +7,7 @@ mod parallel;
 mod sailor;
 mod with_id;
 
+pub use crate::iter_component::{IntoIterRef, IterComponent};
 pub use crate::not::Not;
 pub use crate::optional::Optional;
 pub use crate::or::{OneOfTwo, Or};

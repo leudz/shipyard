@@ -1,4 +1,3 @@
-#[path = "atomic_refcell/borrow_state.rs"]
 mod borrow_state;
 
 pub use borrow_state::{ExclusiveBorrow, SharedBorrow};
