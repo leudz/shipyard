@@ -357,7 +357,7 @@ pub(crate) fn expand_into_iter(
                     if segment.ident == "View" {
                         views.push(quote!(&self.#index));
                         views_ty
-                            .push(quote!(&'__tmp shipyard::Viewt<'__view, #comp_ty, #tracking_ty>));
+                            .push(quote!(&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty>));
                     } else if segment.ident == "ViewMut" {
                         views.push(quote!(&mut self.#index));
                         views_ty.push(
