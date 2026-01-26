@@ -113,11 +113,12 @@ pub fn into_iter(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = syn::parse_macro_input!(item as syn::DeriveInput);
 
     let name = input.ident;
+    let vis = input.vis;
     let generics = input.generics;
     let data = input.data;
     let attrs = input.attrs;
 
-    expand_into_iter(name, generics, data, attrs)
+    expand_into_iter(name, vis, generics, data, attrs)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
