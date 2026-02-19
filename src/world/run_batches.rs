@@ -28,9 +28,7 @@ impl World {
 
                         true
                     } else {
-                        let run_if_index = batches.sequential_run_if[batch_run_if.0];
-
-                        match (batches.systems_run_if[run_if_index])(self) {
+                        match (batches.systems_run_if[batch_run_if.0])(self) {
                             Ok(should_run) => should_run,
                             Err(err) => {
                                 return Err(error::RunWorkload::Run((
