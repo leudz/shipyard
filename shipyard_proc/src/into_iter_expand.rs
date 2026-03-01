@@ -156,7 +156,7 @@ pub(crate) fn expand_into_iter(
                                 field_name.span(),
                             )
                         });
-                        let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
+                        let item_ty = parse_quote!(pub #trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
                         item_fields.push(item_ty);
 
                         let abstract_view_ty =
@@ -209,7 +209,7 @@ pub(crate) fn expand_into_iter(
                                 field_name.span(),
                             )
                         });
-                        let item_ty = parse_quote!(#trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
+                        let item_ty = parse_quote!(pub #trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
                         item_fields.push(item_ty);
 
                         let abtract_view_ty = parse_quote!(&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty>);
