@@ -92,3 +92,39 @@ fn into_iter_rename() {
         }
     });
 }
+
+/// Checks that field visibility applies to the generated iterator.
+#[test]
+fn into_iter_field_visibility() {
+    mod inner {
+        use super::*;
+
+        #[derive(Component)]
+        pub struct A;
+
+        #[derive(Component)]
+        pub struct B;
+
+        #[derive(IntoIter, Borrow)]
+        pub struct CustomView<'a> {
+            pub(super) comp_a: shipyard::View<'a, A>,
+            pub(crate) v_comp_aa: shipyard::View<'a, A>,
+            pub comp_b: shipyard::ViewMut<'a, B>,
+            vm_comp_bb: shipyard::ViewMut<'a, B>,
+        }
+    }
+
+    let world = World::new();
+    let Ok(view) = world.borrow::<inner::CustomView>() else {
+        // This function always returns here since 2 ViewMut cannot be borrowed
+        // This test is only a compile check, not runtime
+
+        return;
+    };
+
+    view.comp_a;
+    view.comp_b;
+    view.v_comp_aa;
+    // Should not be accessible
+    // view.v_comp_bb;
+}
