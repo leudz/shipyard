@@ -38,9 +38,14 @@ thread_local = []
 
 [dev-dependencies]
 bincode = "1.3.3"
+criterion = "0.7.0"
 parking_lot = "0.12.5"
 serde_json = "1.0.148"
 serde_derive = { version = "1", features = ["deserialize_in_place"] }
+
+[[bench]]
+name = "hot_iteration"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
