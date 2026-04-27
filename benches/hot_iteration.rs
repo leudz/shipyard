@@ -98,12 +98,14 @@ fn filtered_hot_world() -> World {
 }
 
 fn churn_world() -> (World, Vec<EntityId>) {
-    let world = dense_hot_world();
-    let mut churn_entities = Vec::with_capacity(CHURN_COUNT);
+    let world = dense_world();
 
-    world.run(|velocities: View<Velocity>| {
-        churn_entities.extend(velocities.iter().ids().take(CHURN_COUNT));
-    });
+    let churn_entities = world
+        .iter::<&Velocity>()
+        .iter()
+        .ids()
+        .take(CHURN_COUNT)
+        .collect::<Vec<_>>();
 
     (world, churn_entities)
 }
