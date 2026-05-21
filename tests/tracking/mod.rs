@@ -1,3 +1,6 @@
+#[cfg(feature = "thread_local")]
+mod thread_local;
+
 use shipyard::{error::GetStorage, track, Component, IntoIter, View, ViewMut, World};
 
 struct Unit;

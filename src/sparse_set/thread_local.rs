@@ -25,6 +25,12 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    fn clear_all_inserted(&mut self, current: TrackingTimestamp) {
+        self.0.last_insert = current;
+    }
+    fn clear_all_modified(&mut self, current: TrackingTimestamp) {
+        self.0.last_modified = current;
+    }
     fn clear_all_removed_and_deleted(&mut self) {
         self.deletion_data.clear();
         self.removal_data.clear();
@@ -121,6 +127,12 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
     fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    fn clear_all_inserted(&mut self, current: TrackingTimestamp) {
+        self.0.last_insert = current;
+    }
+    fn clear_all_modified(&mut self, current: TrackingTimestamp) {
+        self.0.last_modified = current;
+    }
     fn clear_all_removed_and_deleted(&mut self) {
         self.deletion_data.clear();
         self.removal_data.clear();
@@ -215,6 +227,12 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
     }
     fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+    fn clear_all_inserted(&mut self, current: TrackingTimestamp) {
+        self.0.last_insert = current;
+    }
+    fn clear_all_modified(&mut self, current: TrackingTimestamp) {
+        self.0.last_modified = current;
     }
     fn clear_all_removed_and_deleted(&mut self) {
         self.deletion_data.clear();
