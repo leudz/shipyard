@@ -146,3 +146,63 @@ impl<T: fmt::Debug + Unique> fmt::Debug for UniqueViewMut<'_, T> {
         self.unique.value.fmt(f)
     }
 }
+
+#[cfg(feature = "thread_local")]
+impl<T: Unique + Sync> crate::borrow::NonSend<UniqueViewMut<'_, T>> {
+    /// Removes the *inserted* flag on the component of this storage.
+    #[inline]
+    pub fn clear_inserted(self) {
+        self.0.unique.last_insert = self.current;
+    }
+    /// Removes the *modified* flag on the component of this storage.
+    #[inline]
+    pub fn clear_modified(self) {
+        self.0.unique.last_modification = self.current;
+    }
+    /// Removes the *inserted* and *modified* flags on the component of this storage.
+    #[inline]
+    pub fn clear_inserted_and_modified(self) {
+        self.0.unique.last_insert = self.current;
+        self.0.unique.last_modification = self.current;
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: Unique + Send> crate::borrow::NonSync<UniqueViewMut<'_, T>> {
+    /// Removes the *inserted* flag on the component of this storage.
+    #[inline]
+    pub fn clear_inserted(self) {
+        self.0.unique.last_insert = self.current;
+    }
+    /// Removes the *modified* flag on the component of this storage.
+    #[inline]
+    pub fn clear_modified(self) {
+        self.0.unique.last_modification = self.current;
+    }
+    /// Removes the *inserted* and *modified* flags on the component of this storage.
+    #[inline]
+    pub fn clear_inserted_and_modified(self) {
+        self.0.unique.last_insert = self.current;
+        self.0.unique.last_modification = self.current;
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl<T: Unique> crate::borrow::NonSendSync<UniqueViewMut<'_, T>> {
+    /// Removes the *inserted* flag on the component of this storage.
+    #[inline]
+    pub fn clear_inserted(self) {
+        self.0.unique.last_insert = self.current;
+    }
+    /// Removes the *modified* flag on the component of this storage.
+    #[inline]
+    pub fn clear_modified(self) {
+        self.0.unique.last_modification = self.current;
+    }
+    /// Removes the *inserted* and *modified* flags on the component of this storage.
+    #[inline]
+    pub fn clear_inserted_and_modified(self) {
+        self.0.unique.last_insert = self.current;
+        self.0.unique.last_modification = self.current;
+    }
+}
