@@ -6,6 +6,7 @@ mod derive;
 mod iteration;
 #[cfg(feature = "serde1")]
 mod serde;
+mod tracking;
 mod workload;
 
 use std::iter::Sum;
