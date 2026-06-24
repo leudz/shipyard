@@ -565,6 +565,12 @@ impl<T: Component> SparseSet<T> {
             }
             self.dense.swap(i, pos);
             self.data.swap(i, pos);
+            if self.is_tracking_insertion {
+                self.insertion_data.swap(i, pos);
+            }
+            if self.is_tracking_modification {
+                self.modification_data.swap(i, pos);
+            }
         }
 
         for (i, id) in self.dense.iter().enumerate() {
