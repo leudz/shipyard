@@ -1278,12 +1278,8 @@ mod tests {
         array
             .insert(tracked, TrackedI32(3), current)
             .assert_inserted();
-        array
-            .insert(other, TrackedI32(1), last)
-            .assert_inserted();
-        array
-            .insert(another, TrackedI32(2), last)
-            .assert_inserted();
+        array.insert(other, TrackedI32(1), last).assert_inserted();
+        array.insert(another, TrackedI32(2), last).assert_inserted();
 
         assert!(<crate::track::All as Tracking>::is_inserted(
             &array, tracked, last, current
