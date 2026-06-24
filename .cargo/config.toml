@@ -1,0 +1,13 @@
+# Workaround for macroquad error on nightly
+# https://github.com/not-fl3/macroquad/issues/1041
+[target.wasm32-unknown-unknown]
+rustflags = [
+    "-C",
+    "link-arg=--import-memory",
+    "-C",
+    "link-arg=--allow-undefined",
+    "-C",
+    "link-arg=-z",
+    "-C",
+    "link-arg=stack-size=1048576",
+]
