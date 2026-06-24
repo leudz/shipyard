@@ -889,6 +889,13 @@ mod tests {
         type Tracking = crate::track::Untracked;
     }
 
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
+    struct TrackedI32(i32);
+
+    impl Component for TrackedI32 {
+        type Tracking = crate::track::All;
+    }
+
     #[test]
     fn insert() {
         let mut array = SparseSet::new();
@@ -1251,6 +1258,86 @@ mod tests {
             entity_id.set_index(100 - i + 20);
             assert_eq!(array.private_get(entity_id), Some(&I32(i as i32)));
         }
+    }
+
+    #[test]
+    fn unstable_sort_preserves_inserted_tracking() {
+        let mut array = SparseSet::new();
+        let tracked = EntityId::new_from_parts(0, 0);
+        let other = EntityId::new_from_parts(1, 0);
+        let another = EntityId::new_from_parts(2, 0);
+        let last = TrackingTimestamp::new(1);
+        let current = TrackingTimestamp::new(2);
+
+        array
+            .insert(tracked, TrackedI32(3), current)
+            .assert_inserted();
+        array
+            .insert(other, TrackedI32(1), last)
+            .assert_inserted();
+        array
+            .insert(another, TrackedI32(2), last)
+            .assert_inserted();
+
+        assert!(<crate::track::All as Tracking>::is_inserted(
+            &array, tracked, last, current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_inserted(
+            &array, other, last, current
+        ));
+
+        array.sort_unstable();
+
+        assert!(<crate::track::All as Tracking>::is_inserted(
+            &array, tracked, last, current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_inserted(
+            &array, other, last, current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_inserted(
+            &array, another, last, current
+        ));
+    }
+
+    #[test]
+    fn unstable_sort_preserves_modified_tracking() {
+        let mut array = SparseSet::new();
+        let tracked = EntityId::new_from_parts(0, 0);
+        let other = EntityId::new_from_parts(1, 0);
+        let another = EntityId::new_from_parts(2, 0);
+        let last = TrackingTimestamp::new(1);
+        let current = TrackingTimestamp::new(2);
+
+        array
+            .insert(tracked, TrackedI32(3), TrackingTimestamp::origin())
+            .assert_inserted();
+        array
+            .insert(other, TrackedI32(1), TrackingTimestamp::origin())
+            .assert_inserted();
+        array
+            .insert(another, TrackedI32(2), TrackingTimestamp::origin())
+            .assert_inserted();
+
+        let _ = array.insert(tracked, TrackedI32(3), current);
+
+        assert!(<crate::track::All as Tracking>::is_modified(
+            &array, tracked, last, current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_modified(
+            &array, other, last, current
+        ));
+
+        array.sort_unstable();
+
+        assert!(<crate::track::All as Tracking>::is_modified(
+            &array, tracked, last, current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_modified(
+            &array, other, last, current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_modified(
+            &array, another, last, current
+        ));
     }
 
     #[test]
