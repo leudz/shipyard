@@ -1,7 +1,15 @@
-use crate::iter::{Shiperator, ShiperatorCaptain, ShiperatorSailor};
+use crate::entity_id::EntityId;
+use crate::iter::{Shiperator, ShiperatorCaptain, ShiperatorSailor, WithId};
 
 #[allow(missing_docs)]
 pub struct ParShiperator<S>(pub(crate) Shiperator<S>);
+
+impl<S> ParShiperator<S> {
+    /// Returns the [`EntityId`] alongside the component(s).
+    pub fn with_id(self) -> WithId<Self> {
+        WithId(self)
+    }
+}
 
 impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
     rayon::iter::plumbing::UnindexedProducer for Shiperator<S>
@@ -44,6 +52,24 @@ impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
         F: rayon::iter::plumbing::Folder<Self::Item>,
     {
         folder.consume_iter(self)
+    }
+}
+
+impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone> rayon::iter::ParallelIterator
+    for WithId<ParShiperator<S>>
+where
+    S::Out: Send,
+{
+    type Item = (EntityId, S::Out);
+
+    #[inline]
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        let WithId(ParShiperator(producer)) = self;
+
+        rayon::iter::plumbing::bridge_unindexed(WithId(producer), consumer)
     }
 }
 
