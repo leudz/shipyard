@@ -11,7 +11,7 @@ In ECS there's two big ways to split work across cores: running systems on separ
 We'll start by the simplest one to use. So simple that there's nothing to do, workloads handle all the work for you. We even almost used multiple threads in the [Systems chapter](../fundamentals/systems.md).
 
 As long as the "parallel" feature is set (enabled by default) workloads will try to execute systems as much in parallel as possible. There is a set of rules that defines the "possible":
-- Systems accessing [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html) stop all threading.
+- Systems accessing [`AllStorages`](https://docs.rs/shipyard/latest/shipyard/all_storages/struct.AllStorages.html) stop all threading.
 - There can't be any other access during an exclusive access, so [`ViewMut<T>`](https://docs.rs/shipyard/latest/shipyard/struct.ViewMut.html) will block `T` threading.
 
 When you make a workload, all systems in it will be checked and batches (groups of systems that don't conflict) will be created.\

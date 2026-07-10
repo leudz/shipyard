@@ -137,5 +137,5 @@ with archetypes, another common way of representing data in ECS libraries. The b
 part of a larger series about the design and internals of ECS systems.
 
 [entityid docs]: https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html
-[sparseset docs]: https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html
+[sparseset docs]: https://docs.rs/shipyard/latest/shipyard/sparse_set/struct.SparseSet.html
 [skypjack blog post]: https://skypjack.github.io/2019-03-07-ecs-baf-part-2/

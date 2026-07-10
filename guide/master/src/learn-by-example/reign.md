@@ -74,9 +74,9 @@ fn clean_up(mut all_storages: AllStoragesViewMut) {
 }
 ```
 
-[`AllStorages`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html) is the part of [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) that stores all components and entities.\
-We are using it to [`delete_any`](https://docs.rs/shipyard/latest/shipyard/struct.AllStorages.html#method.delete_any) entity that has a `ToDelete` component in a [`SparseSet`](https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html) storage.\
-[`SparseSet`](https://docs.rs/shipyard/latest/shipyard/struct.SparseSet.html) is the storage for all [`Component`](https://docs.rs/shipyard/latest/shipyard/trait.Component.html)s. [`Unique`](https://docs.rs/shipyard/latest/shipyard/trait.Unique.html)s have a different storage and you can add custom storages to the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) but that's an advanced feature.
+[`AllStorages`](https://docs.rs/shipyard/latest/shipyard/all_storages/struct.AllStorages.html) is the part of [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) that stores all components and entities.\
+We are using it to [`delete_any`](https://docs.rs/shipyard/latest/shipyard/all_storages/struct.AllStorages.html#method.delete_any) entity that has a `ToDelete` component in a [`SparseSet`](https://docs.rs/shipyard/latest/shipyard/sparse_set/struct.SparseSet.html) storage.\
+[`SparseSet`](https://docs.rs/shipyard/latest/shipyard/sparse_set/struct.SparseSet.html) is the storage for all [`Component`](https://docs.rs/shipyard/latest/shipyard/trait.Component.html)s. [`Unique`](https://docs.rs/shipyard/latest/shipyard/trait.Unique.html)s have a different storage and you can add custom storages to the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) but that's an advanced feature.
 
 ## It's over
 

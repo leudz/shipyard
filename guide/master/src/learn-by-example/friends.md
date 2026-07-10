@@ -76,7 +76,7 @@ struct Friend(Square);
 ```
 
 Now [`add_entity`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.add_entity) can create 5 entities that are each composed of a single component.\
-Every entity is identified with an [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId). It's a small handle that you can copy.\
+Every entity is identified with an [`EntityId`](https://docs.rs/shipyard/latest/shipyard/struct.EntityId.html). It's a small handle that you can copy.\
 And [`iter`](https://docs.rs/shipyard/latest/shipyard/struct.World.html#method.iter) let us iterate over components.
 
 We can move `Player` into the [`World`](https://docs.rs/shipyard/latest/shipyard/struct.World.html) to simplify our code a little.\

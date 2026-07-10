@@ -47,7 +47,7 @@ impl Component for Home {
                 <span style="user-select: none;">{" or "}</span>
                 <a
                     style="user-select: none;"
-                    href="https://leudz.github.io/shipyard/guide/master/going-further/visualizer.md"
+                    href="https://leudz.github.io/shipyard/guide/master/going-further/visualizer.html"
                     target="_blank" // open in a new tab
                 >
                     {"tutorial"}

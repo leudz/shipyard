@@ -192,7 +192,7 @@ You would usually have smaller [`Workload`](https://docs.rs/shipyard/latest/ship
 Apart from organization, [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html)s are automatically run across multiple threads, which can usually boost performance.
 
 The last touch is to handle `check_game_over`'s return value.\
-We use [`into_workload_try_system`](https://docs.rs/shipyard/latest/shipyard/trait.IntoWorkloadTrySystem.html#tymethod.into_workload_try_system) to explicitly inform the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) that this system might return something, but we don't handle it anywhere.
+We use [`into_workload_try_system`](https://docs.rs/shipyard/latest/shipyard/scheduler/trait.IntoWorkloadTrySystem.html#tymethod.into_workload_try_system) to explicitly inform the [`Workload`](https://docs.rs/shipyard/latest/shipyard/struct.Workload.html) that this system might return something, but we don't handle it anywhere.
 
 ```rust,noplaypen
 async fn main() {

@@ -23,7 +23,7 @@ You shouldn't expect specific ordering from Shipyard's iterators in general.
 
 #### With Id
 
-You can ask an iterator to tell you which entity owns each component by using [`WithId::with_id`](https://docs.rs/shipyard/latest/shipyard/trait.IntoWithId.html#method.with_id):
+You can ask an iterator to tell you which entity owns each component by using [`Shiperator::with_id`](https://docs.rs/shipyard/latest/shipyard/iter/struct.Shiperator.html#method.with_id):
 
 ```rust, noplaypen
 {{#include ../../../../tests/book/iterators.rs:with_id}}
