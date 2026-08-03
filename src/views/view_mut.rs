@@ -656,10 +656,10 @@ impl<'a, T: Component, Track> core::ops::IndexMut<EntityId> for ViewMut<'a, T, T
 
         if *is_tracking_modification {
             unsafe {
-                *modification_data.get_unchecked_mut(index) = self.current;
+                *modification_data[0].get_unchecked_mut(index) = self.current;
             };
         }
 
-        unsafe { data.get_unchecked_mut(index) }
+        unsafe { data[0].get_unchecked_mut(index) }
     }
 }

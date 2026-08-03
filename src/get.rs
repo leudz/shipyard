@@ -96,9 +96,9 @@ impl<'a, 'b, T: Component, Track: Tracking> Get for &'b mut ViewMut<'a, T, Track
 
         Ok(Mut {
             flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
             current: self.current,
-            data: unsafe { data.get_unchecked_mut(index) },
+            data: unsafe { data[0].get_unchecked_mut(index) },
         })
     }
 }

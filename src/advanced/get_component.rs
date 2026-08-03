@@ -268,9 +268,9 @@ impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
         } = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data.get_unchecked_mut(index) },
+            inner: unsafe { data[0].get_unchecked_mut(index) },
             flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
             current,
             all_borrow,
             borrow,
@@ -309,9 +309,9 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
         }) = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data.get_unchecked_mut(index) },
+            inner: unsafe { data[0].get_unchecked_mut(index) },
             flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
             current,
             all_borrow,
             borrow,
@@ -350,9 +350,9 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
         }) = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data.get_unchecked_mut(index) },
+            inner: unsafe { data[0].get_unchecked_mut(index) },
             flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
             current,
             all_borrow,
             borrow,
@@ -391,9 +391,9 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
         }) = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data.get_unchecked_mut(index) },
+            inner: unsafe { data[0].get_unchecked_mut(index) },
             flag: is_tracking_modification
-                .then(|| unsafe { modification_data.get_unchecked_mut(index) }),
+                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
             current,
             all_borrow,
             borrow,

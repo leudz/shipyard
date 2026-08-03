@@ -71,30 +71,28 @@ impl<T: Send + Sync + Component> BulkInsert for T {
             .unwrap();
 
         // add components to the storage
-        sparse_set.data.extend(iter);
+        sparse_set.data[0].extend(iter);
 
         // generate new EntityId for the entities created
         let entities_len = entities.data.len();
-        let old_len = sparse_set.dense.len();
-        let new_entities_count = sparse_set.data.len() - old_len;
+        let old_len = sparse_set.dense[0].len();
+        let new_entities_count = sparse_set.data[0].len() - old_len;
         let new_entities = entities.bulk_generate(new_entities_count);
 
         // add new EntityId to the storage for the components we added above
-        sparse_set.dense.extend_from_slice(new_entities);
+        sparse_set.dense[0].extend_from_slice(new_entities);
 
         // add tracking info if needed
         if sparse_set.is_tracking_insertion() {
-            sparse_set
-                .insertion_data
-                .extend(new_entities.iter().map(|_| current));
+            sparse_set.insertion_data[0].extend(new_entities.iter().map(|_| current));
         }
         if sparse_set.is_tracking_modification() {
-            sparse_set
-                .modification_data
+            sparse_set.modification_data[0]
                 .extend(new_entities.iter().map(|_| TrackingTimestamp::origin()));
         }
 
         let SparseSet { sparse, dense, .. } = &mut *sparse_set;
+        let dense = &mut dense[0];
 
         // update sparse to reflect the new state of dense and data
         sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
@@ -143,38 +141,39 @@ macro_rules! impl_bulk_insert {
                 )*
 
                 for ($type1, $($type,)*) in iter {
-                    $sparse_set1.data.push($type1);
+                    $sparse_set1.data[0].push($type1);
                     $(
-                        $sparse_set.data.push($type);
+                        $sparse_set.data[0].push($type);
                     )*
                 }
 
                 let entities_len = entities.data.len();
-                let new_entities_count = $sparse_set1.data.len() - $sparse_set1.dense.len();
+                let new_entities_count = $sparse_set1.data[0].len() - $sparse_set1.dense[0].len();
                 let new_entities = entities.bulk_generate(new_entities_count);
 
-                $sparse_set1.dense.extend_from_slice(new_entities);
+                $sparse_set1.dense[0].extend_from_slice(new_entities);
                 $(
-                    $sparse_set.dense.extend_from_slice(new_entities);
+                    $sparse_set.dense[0].extend_from_slice(new_entities);
                 )*
 
                 if $sparse_set1.is_tracking_insertion() {
-                    $sparse_set1.insertion_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                    $sparse_set1.insertion_data[0].extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                 }
                 if $sparse_set1.is_tracking_modification() {
-                    $sparse_set1.modification_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                    $sparse_set1.modification_data[0].extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                 }
                 $(
                     if $sparse_set.is_tracking_insertion() {
-                        $sparse_set.insertion_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                        $sparse_set.insertion_data[0].extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                     }
                     if $sparse_set.is_tracking_modification() {
-                        $sparse_set.modification_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                        $sparse_set.modification_data[0].extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
                     }
                 )*
 
-                let old_len = $sparse_set1.dense.len() - new_entities_count;
+                let old_len = $sparse_set1.dense[0].len() - new_entities_count;
                 let SparseSet { sparse, dense, .. } = &mut *$sparse_set1;
+                let dense = &mut dense[0];
 
                 sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
                 for (i, &entity) in dense[old_len..].iter().enumerate() {
@@ -183,8 +182,9 @@ macro_rules! impl_bulk_insert {
                     }
                 }
                 $(
-                    let old_len = $sparse_set.dense.len() - new_entities_count;
+                    let old_len = $sparse_set.dense[0].len() - new_entities_count;
                     let SparseSet { sparse, dense, .. } = &mut *$sparse_set;
+                    let dense = &mut dense[0];
 
                     sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
                     for (i, &entity) in dense[old_len..].iter().enumerate() {

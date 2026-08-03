@@ -72,17 +72,14 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
 
             sparse_set.sparse = self.sparse.clone();
             sparse_set.dense = self.dense.clone();
-            sparse_set.data = self.data.iter().map(clone).collect();
+            sparse_set.data[0] = self.data[0].iter().map(clone).collect();
 
             if sparse_set.is_tracking_insertion {
-                sparse_set
-                    .insertion_data
-                    .resize(self.dense.len(), other_current);
+                sparse_set.insertion_data[0].resize(self.dense[0].len(), other_current);
             }
             if sparse_set.is_tracking_modification {
-                sparse_set
-                    .modification_data
-                    .resize(self.dense.len(), TrackingTimestamp::origin());
+                sparse_set.modification_data[0]
+                    .resize(self.dense[0].len(), TrackingTimestamp::origin());
             }
 
             SBoxBuilder::new(NonSend(sparse_set))
@@ -173,17 +170,14 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
 
             sparse_set.sparse = self.sparse.clone();
             sparse_set.dense = self.dense.clone();
-            sparse_set.data = self.data.iter().map(clone).collect();
+            sparse_set.data[0] = self.data[0].iter().map(clone).collect();
 
             if sparse_set.is_tracking_insertion {
-                sparse_set
-                    .insertion_data
-                    .resize(self.dense.len(), other_current);
+                sparse_set.insertion_data[0].resize(self.dense[0].len(), other_current);
             }
             if sparse_set.is_tracking_modification {
-                sparse_set
-                    .modification_data
-                    .resize(self.dense.len(), TrackingTimestamp::origin());
+                sparse_set.modification_data[0]
+                    .resize(self.dense[0].len(), TrackingTimestamp::origin());
             }
 
             SBoxBuilder::new(NonSync(sparse_set))
@@ -276,17 +270,14 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
 
             sparse_set.sparse = self.sparse.clone();
             sparse_set.dense = self.dense.clone();
-            sparse_set.data = self.data.iter().map(clone).collect();
+            sparse_set.data[0] = self.data[0].iter().map(clone).collect();
 
             if sparse_set.is_tracking_insertion {
-                sparse_set
-                    .insertion_data
-                    .resize(self.dense.len(), other_current);
+                sparse_set.insertion_data[0].resize(self.dense[0].len(), other_current);
             }
             if sparse_set.is_tracking_modification {
-                sparse_set
-                    .modification_data
-                    .resize(self.dense.len(), TrackingTimestamp::origin());
+                sparse_set.modification_data[0]
+                    .resize(self.dense[0].len(), TrackingTimestamp::origin());
             }
 
             SBoxBuilder::new(NonSendSync(sparse_set))
