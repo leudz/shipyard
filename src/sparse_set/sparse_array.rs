@@ -8,40 +8,62 @@ use core::mem::size_of;
 ///
 /// [`SparseSet`]: crate::sparse_set::SparseSet
 #[derive(Clone)]
-pub struct SparseArray(Vec<Option<Box<[EntityId; 32]>>>);
+pub struct SparseArray {
+    ids: Vec<Option<Box<[EntityId; 32]>>>,
+    groups: Vec<Option<Box<[u16; 32]>>>,
+}
 
 impl SparseArray {
     #[inline]
     pub(super) fn new() -> Self {
-        SparseArray(Vec::new())
+        SparseArray {
+            ids: Vec::new(),
+            groups: Vec::new(),
+        }
     }
     #[inline]
     pub(crate) fn len(&self) -> usize {
-        self.0.len()
+        self.ids.len()
     }
     #[inline]
     pub(super) fn as_ptr(&self) -> *const Option<Box<[EntityId; 32]>> {
-        self.0.as_ptr()
+        self.ids.as_ptr()
     }
     #[inline]
     pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<[EntityId; 32]>> {
-        self.0.as_mut_ptr()
+        self.ids.as_mut_ptr()
     }
     pub(super) fn used_memory(&self) -> usize {
-        self.0.len() * size_of::<Option<Box<[EntityId; 32]>>>()
-            + self.0.iter().fold(0, |count, array| {
+        self.ids.len() * size_of::<Option<Box<[EntityId; 32]>>>()
+            + self.ids.iter().fold(0, |count, array| {
                 if array.is_some() {
                     count + size_of::<[EntityId; 32]>()
                 } else {
                     count
                 }
             })
+            + self.groups.len() * size_of::<Option<Box<[u16; 32]>>>()
+            + self.groups.iter().fold(0, |count, array| {
+                if array.is_some() {
+                    count + size_of::<[u16; 32]>()
+                } else {
+                    count
+                }
+            })
     }
     pub(super) fn reserved_memory(&self) -> usize {
-        self.0.capacity() * size_of::<Option<Box<[EntityId; 32]>>>()
-            + self.0.iter().fold(0, |count, array| {
+        self.ids.capacity() * size_of::<Option<Box<[EntityId; 32]>>>()
+            + self.ids.iter().fold(0, |count, array| {
                 if array.is_some() {
                     count + size_of::<[EntityId; 32]>()
+                } else {
+                    count
+                }
+            })
+            + self.groups.capacity() * size_of::<Option<Box<[u16; 32]>>>()
+            + self.groups.iter().fold(0, |count, array| {
+                if array.is_some() {
+                    count + size_of::<[u16; 32]>()
                 } else {
                     count
                 }
@@ -57,12 +79,12 @@ impl SparseArray {
             panic!("Tried to add a component with a dead entity.");
         }
 
-        if entity.bucket() >= self.0.len() {
-            self.0.resize(entity.bucket() + 1, None);
+        if entity.bucket() >= self.ids.len() {
+            self.ids.resize(entity.bucket() + 1, None);
         }
         unsafe {
             // SAFE we just allocated at least entity.bucket()
-            let bucket = self.0.get_unchecked_mut(entity.bucket());
+            let bucket = self.ids.get_unchecked_mut(entity.bucket());
 
             if bucket.is_none() {
                 *bucket = Some(Box::new([EntityId::dead(); 32]));
@@ -70,11 +92,11 @@ impl SparseArray {
         }
     }
     pub(crate) fn bulk_allocate(&mut self, start: EntityId, end: EntityId) {
-        if end.bucket() >= self.0.len() {
-            self.0.resize(end.bucket() + 1, None);
+        if end.bucket() >= self.ids.len() {
+            self.ids.resize(end.bucket() + 1, None);
         }
         for bucket_index in start.bucket()..end.bucket() + 1 {
-            let bucket = unsafe { self.0.get_unchecked_mut(bucket_index) };
+            let bucket = unsafe { self.ids.get_unchecked_mut(bucket_index) };
 
             if bucket.is_none() {
                 *bucket = Some(Box::new([EntityId::dead(); 32]));
@@ -83,21 +105,21 @@ impl SparseArray {
     }
     #[inline]
     pub(crate) fn get(&self, entity: EntityId) -> Option<EntityId> {
-        self.0
+        self.ids
             .get(entity.bucket())?
             .as_ref()
             .map(|bucket| unsafe { *bucket.get_unchecked(entity.bucket_index()) })
     }
     #[inline]
     pub(super) unsafe fn get_unchecked(&self, entity: EntityId) -> EntityId {
-        match self.0.get_unchecked(entity.bucket()) {
+        match self.ids.get_unchecked(entity.bucket()) {
             Some(bucket) => *bucket.get_unchecked(entity.bucket_index()),
             None => unreachable_unchecked(),
         }
     }
     #[inline]
     pub(crate) unsafe fn get_mut_unchecked(&mut self, entity: EntityId) -> &mut EntityId {
-        match self.0.get_unchecked_mut(entity.bucket()) {
+        match self.ids.get_unchecked_mut(entity.bucket()) {
             Some(bucket) => bucket.get_unchecked_mut(entity.bucket_index()),
             None => unreachable_unchecked(),
         }
