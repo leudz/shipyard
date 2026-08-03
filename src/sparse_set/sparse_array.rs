@@ -8,9 +8,9 @@ use core::mem::size_of;
 ///
 /// [`SparseSet`]: crate::sparse_set::SparseSet
 #[derive(Clone)]
-pub struct SparseArray<T, const N: usize>(Vec<Option<Box<[T; N]>>>);
+pub struct SparseArray(Vec<Option<Box<[EntityId; 32]>>>);
 
-impl<T, const N: usize> SparseArray<T, N> {
+impl SparseArray {
     #[inline]
     pub(super) fn new() -> Self {
         SparseArray(Vec::new())
@@ -20,28 +20,28 @@ impl<T, const N: usize> SparseArray<T, N> {
         self.0.len()
     }
     #[inline]
-    pub(super) fn as_ptr(&self) -> *const Option<Box<[T; N]>> {
+    pub(super) fn as_ptr(&self) -> *const Option<Box<[EntityId; 32]>> {
         self.0.as_ptr()
     }
     #[inline]
-    pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<[T; N]>> {
+    pub(super) fn as_mut_ptr(&mut self) -> *mut Option<Box<[EntityId; 32]>> {
         self.0.as_mut_ptr()
     }
     pub(super) fn used_memory(&self) -> usize {
-        self.0.len() * size_of::<Option<Box<T>>>()
+        self.0.len() * size_of::<Option<Box<[EntityId; 32]>>>()
             + self.0.iter().fold(0, |count, array| {
                 if array.is_some() {
-                    count + size_of::<[T; N]>()
+                    count + size_of::<[EntityId; 32]>()
                 } else {
                     count
                 }
             })
     }
     pub(super) fn reserved_memory(&self) -> usize {
-        self.0.capacity() * size_of::<Option<Box<T>>>()
+        self.0.capacity() * size_of::<Option<Box<[EntityId; 32]>>>()
             + self.0.iter().fold(0, |count, array| {
                 if array.is_some() {
-                    count + size_of::<[T; N]>()
+                    count + size_of::<[EntityId; 32]>()
                 } else {
                     count
                 }
@@ -49,7 +49,7 @@ impl<T, const N: usize> SparseArray<T, N> {
     }
 }
 
-impl<const N: usize> SparseArray<EntityId, N> {
+impl SparseArray {
     #[inline]
     #[track_caller]
     pub(super) fn allocate_at(&mut self, entity: EntityId) {
@@ -65,7 +65,7 @@ impl<const N: usize> SparseArray<EntityId, N> {
             let bucket = self.0.get_unchecked_mut(entity.bucket());
 
             if bucket.is_none() {
-                *bucket = Some(Box::new([EntityId::dead(); N]));
+                *bucket = Some(Box::new([EntityId::dead(); 32]));
             }
         }
     }
@@ -77,7 +77,7 @@ impl<const N: usize> SparseArray<EntityId, N> {
             let bucket = unsafe { self.0.get_unchecked_mut(bucket_index) };
 
             if bucket.is_none() {
-                *bucket = Some(Box::new([EntityId::dead(); N]));
+                *bucket = Some(Box::new([EntityId::dead(); 32]));
             }
         }
     }

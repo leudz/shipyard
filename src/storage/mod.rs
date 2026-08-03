@@ -65,7 +65,7 @@ pub trait Storage: SizedAny {
     /// [`SparseSet`]: crate::sparse_set::SparseSet
     /// [`SparseArray`]: crate::sparse_set::SparseArray
     #[inline]
-    fn sparse_array(&self) -> Option<&SparseArray<EntityId, 32>> {
+    fn sparse_array(&self) -> Option<&SparseArray> {
         None
     }
     /// Returns `true` if the storage is empty.

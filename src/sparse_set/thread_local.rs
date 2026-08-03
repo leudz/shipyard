@@ -3,7 +3,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::sparse_set::{sparse_array::SparseArray, SparseSet, BUCKET_SIZE};
+use crate::sparse_set::{sparse_array::SparseArray, SparseSet};
 use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::tracking::TrackingTimestamp;
 
@@ -16,7 +16,7 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+    fn sparse_array(&self) -> Option<&SparseArray> {
         Some(&self.sparse)
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -115,7 +115,7 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+    fn sparse_array(&self) -> Option<&SparseArray> {
         Some(&self.sparse)
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
@@ -213,7 +213,7 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+    fn sparse_array(&self) -> Option<&SparseArray> {
         Some(&self.sparse)
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
