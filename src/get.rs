@@ -88,17 +88,19 @@ impl<'a, 'b, T: Component, Track: Tracking> Get for &'b mut ViewMut<'a, T, Track
             })?;
 
         let SparseSet {
-            data,
-            modification_data,
+            unclassified_bucket,
             is_tracking_modification,
             ..
         } = self.sparse_set;
 
         Ok(Mut {
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
+            flag: is_tracking_modification.then(|| unsafe {
+                unclassified_bucket
+                    .modification_data
+                    .get_unchecked_mut(index)
+            }),
             current: self.current,
-            data: unsafe { data[0].get_unchecked_mut(index) },
+            data: unsafe { unclassified_bucket.data.get_unchecked_mut(index) },
         })
     }
 }

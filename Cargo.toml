@@ -14,6 +14,7 @@ version = "0.11.0"
 members = ["bunny_demo", "shipyard_proc", "square_eater", "visualizer"]
 
 [dependencies]
+arrayvec = "0.7.8"
 hashbrown = { version = "0.16.1", default-features = false, features = [
     "inline-more",
     "allocator-api2",

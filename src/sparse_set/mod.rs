@@ -1,5 +1,6 @@
 mod add_component;
 mod bulk_add_entity;
+mod component_bucket;
 mod delete;
 mod drain;
 mod memory_usage;
@@ -31,6 +32,7 @@ use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use component_bucket::ComponentBucket;
 use core::any::type_name;
 use core::mem::size_of;
 use core::{
@@ -51,12 +53,10 @@ pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 // It mimics the dense vector in regard to insertion/deletion.
 pub struct SparseSet<T: Component> {
     pub(crate) sparse: SparseArray,
-    pub(crate) dense: Vec<Vec<EntityId>>,
-    pub(crate) data: Vec<Vec<T>>,
+    pub(crate) unclassified_bucket: ComponentBucket<T>,
+    pub(crate) group_buckets: Vec<ComponentBucket<T>>,
     pub(crate) last_insert: TrackingTimestamp,
     pub(crate) last_modified: TrackingTimestamp,
-    pub(crate) insertion_data: Vec<Vec<TrackingTimestamp>>,
-    pub(crate) modification_data: Vec<Vec<TrackingTimestamp>>,
     pub(crate) deletion_data: Vec<(EntityId, TrackingTimestamp, T)>,
     pub(crate) removal_data: Vec<(EntityId, TrackingTimestamp)>,
     pub(crate) is_tracking_insertion: bool,
@@ -73,7 +73,12 @@ pub struct SparseSet<T: Component> {
 impl<T: fmt::Debug + Component> fmt::Debug for SparseSet<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list()
-            .entries(self.dense[0].iter().zip(&self.data[0]))
+            .entries(
+                self.unclassified_bucket
+                    .dense
+                    .iter()
+                    .zip(&self.unclassified_bucket.data),
+            )
             .finish()
     }
 }
@@ -83,12 +88,10 @@ impl<T: Component> SparseSet<T> {
     pub(crate) fn new() -> Self {
         SparseSet {
             sparse: SparseArray::new(),
-            dense: alloc::vec![Vec::new()],
-            data: alloc::vec![Vec::new()],
+            unclassified_bucket: ComponentBucket::new(),
+            group_buckets: Vec::new(),
             last_insert: TrackingTimestamp::new(0),
             last_modified: TrackingTimestamp::new(0),
-            insertion_data: alloc::vec![Vec::new()],
-            modification_data: alloc::vec![Vec::new()],
             deletion_data: Vec::new(),
             removal_data: Vec::new(),
             is_tracking_insertion: T::Tracking::track_insertion(),
@@ -108,7 +111,7 @@ impl<T: Component> SparseSet<T> {
     /// Returns a slice of all the components in this storage.
     #[inline]
     pub fn as_slice(&self) -> &[T] {
-        &self.data[0]
+        &self.unclassified_bucket.data
     }
 }
 
@@ -121,12 +124,12 @@ impl<T: Component> SparseSet<T> {
     /// Returns the length of the storage.
     #[inline]
     pub fn len(&self) -> usize {
-        self.dense[0].len()
+        self.unclassified_bucket.dense.len()
     }
     /// Returns true if the storage's length is 0.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.dense[0].is_empty()
+        self.unclassified_bucket.dense.is_empty()
     }
 }
 
@@ -157,7 +160,7 @@ impl<T: Component> SparseSet<T> {
     /// Returns the `EntityId` at a given `index`.
     #[inline]
     pub fn id_at(&self, index: usize) -> Option<EntityId> {
-        self.dense[0].get(index).copied()
+        self.unclassified_bucket.dense.get(index).copied()
     }
 
     /// Sets the on insertion callback.
@@ -189,7 +192,7 @@ impl<T: Component> SparseSet<T> {
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
         self.index_of(entity)
-            .map(|index| unsafe { self.data[0].get_unchecked(index) })
+            .map(|index| unsafe { self.unclassified_bucket.data.get_unchecked(index) })
     }
 }
 
@@ -249,18 +252,22 @@ impl<T: Component> SparseSet<T> {
                 on_insertion(entity, &value);
             }
 
-            *sparse_entity =
-                EntityId::new_from_index_and_gen(self.dense[0].len() as u64, entity.gen());
+            *sparse_entity = EntityId::new_from_index_and_gen(
+                self.unclassified_bucket.dense.len() as u64,
+                entity.gen(),
+            );
 
             if self.is_tracking_insertion {
-                self.insertion_data[0].push(current);
+                self.unclassified_bucket.insertion_data.push(current);
             }
             if self.is_tracking_modification {
-                self.modification_data[0].push(TrackingTimestamp::origin());
+                self.unclassified_bucket
+                    .modification_data
+                    .push(TrackingTimestamp::origin());
             }
 
-            self.dense[0].push(entity);
-            self.data[0].push(value);
+            self.unclassified_bucket.dense.push(entity);
+            self.unclassified_bucket.data.push(value);
 
             old_component = InsertionResult::Inserted;
         } else if entity.gen() == sparse_entity.gen() {
@@ -270,7 +277,9 @@ impl<T: Component> SparseSet<T> {
 
             let old_data = unsafe {
                 core::mem::replace(
-                    self.data[0].get_unchecked_mut(sparse_entity.uindex()),
+                    self.unclassified_bucket
+                        .data
+                        .get_unchecked_mut(sparse_entity.uindex()),
                     value,
                 )
             };
@@ -279,11 +288,18 @@ impl<T: Component> SparseSet<T> {
 
             sparse_entity.copy_gen(entity);
 
-            let dense_entity = unsafe { self.dense[0].get_unchecked_mut(sparse_entity.uindex()) };
+            let dense_entity = unsafe {
+                self.unclassified_bucket
+                    .dense
+                    .get_unchecked_mut(sparse_entity.uindex())
+            };
 
             if self.is_tracking_modification {
                 unsafe {
-                    *self.modification_data[0].get_unchecked_mut(sparse_entity.uindex()) = current;
+                    *self
+                        .unclassified_bucket
+                        .modification_data
+                        .get_unchecked_mut(sparse_entity.uindex()) = current;
                 }
             }
 
@@ -295,7 +311,9 @@ impl<T: Component> SparseSet<T> {
 
             let _ = unsafe {
                 core::mem::replace(
-                    self.data[0].get_unchecked_mut(sparse_entity.uindex()),
+                    self.unclassified_bucket
+                        .data
+                        .get_unchecked_mut(sparse_entity.uindex()),
                     value,
                 )
             };
@@ -304,11 +322,18 @@ impl<T: Component> SparseSet<T> {
 
             sparse_entity.copy_gen(entity);
 
-            let dense_entity = unsafe { self.dense[0].get_unchecked_mut(sparse_entity.uindex()) };
+            let dense_entity = unsafe {
+                self.unclassified_bucket
+                    .dense
+                    .get_unchecked_mut(sparse_entity.uindex())
+            };
 
             if self.is_tracking_insertion {
                 unsafe {
-                    *self.insertion_data[0].get_unchecked_mut(sparse_entity.uindex()) = current;
+                    *self
+                        .unclassified_bucket
+                        .insertion_data
+                        .get_unchecked_mut(sparse_entity.uindex()) = current;
                 }
             }
 
@@ -357,19 +382,31 @@ impl<T: Component> SparseSet<T> {
                 *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
             }
 
-            self.dense[0].swap_remove(sparse_entity.uindex());
+            self.unclassified_bucket
+                .dense
+                .swap_remove(sparse_entity.uindex());
             if self.is_tracking_insertion() {
-                self.insertion_data[0].swap_remove(sparse_entity.uindex());
+                self.unclassified_bucket
+                    .insertion_data
+                    .swap_remove(sparse_entity.uindex());
             }
             if self.is_tracking_modification() {
-                self.modification_data[0].swap_remove(sparse_entity.uindex());
+                self.unclassified_bucket
+                    .modification_data
+                    .swap_remove(sparse_entity.uindex());
             }
-            let component = self.data[0].swap_remove(sparse_entity.uindex());
+            let component = self
+                .unclassified_bucket
+                .data
+                .swap_remove(sparse_entity.uindex());
 
             // The SparseSet could now be empty or the removed component could have been the last one
-            if sparse_entity.uindex() < self.dense[0].len() {
+            if sparse_entity.uindex() < self.unclassified_bucket.dense.len() {
                 unsafe {
-                    let last = *self.dense[0].get_unchecked(sparse_entity.uindex());
+                    let last = *self
+                        .unclassified_bucket
+                        .dense
+                        .get_unchecked(sparse_entity.uindex());
                     self.sparse
                         .get_mut_unchecked(last)
                         .copy_index(sparse_entity);
@@ -449,8 +486,10 @@ impl<T: Component> SparseSet<T> {
 
         self.is_tracking_insertion = true;
 
-        self.insertion_data[0]
-            .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense[0].len()));
+        self.unclassified_bucket.insertion_data.extend(
+            core::iter::repeat(TrackingTimestamp::new(0))
+                .take(self.unclassified_bucket.dense.len()),
+        );
 
         self
     }
@@ -463,8 +502,10 @@ impl<T: Component> SparseSet<T> {
 
         self.is_tracking_modification = true;
 
-        self.modification_data[0]
-            .extend(core::iter::repeat(TrackingTimestamp::new(0)).take(self.dense[0].len()));
+        self.unclassified_bucket.modification_data.extend(
+            core::iter::repeat(TrackingTimestamp::new(0))
+                .take(self.unclassified_bucket.dense.len()),
+        );
 
         self
     }
@@ -543,18 +584,19 @@ impl<T: Component> SparseSet<T> {
     /// Reserves memory for at least `additional` components. Adding components can still allocate though.
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
-        self.dense[0].reserve(additional);
-        self.data[0].reserve(additional);
+        self.unclassified_bucket.dense.reserve(additional);
+        self.unclassified_bucket.data.reserve(additional);
     }
     /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
     pub fn sort_unstable_by<F: FnMut(&T, &T) -> Ordering>(&mut self, mut compare: F) {
-        let mut transform: Vec<usize> = (0..self.dense[0].len()).collect();
+        let mut transform: Vec<usize> = (0..self.unclassified_bucket.dense.len()).collect();
 
         transform.sort_unstable_by(|&i, &j| {
             // SAFE dense and data have the same length
-            compare(unsafe { self.data[0].get_unchecked(i) }, unsafe {
-                self.data[0].get_unchecked(j)
-            })
+            compare(
+                unsafe { self.unclassified_bucket.data.get_unchecked(i) },
+                unsafe { self.unclassified_bucket.data.get_unchecked(j) },
+            )
         });
 
         let mut pos;
@@ -565,17 +607,17 @@ impl<T: Component> SparseSet<T> {
                 // SAFE we're in bound
                 pos = unsafe { *transform.get_unchecked(pos) };
             }
-            self.dense[0].swap(i, pos);
-            self.data[0].swap(i, pos);
+            self.unclassified_bucket.dense.swap(i, pos);
+            self.unclassified_bucket.data.swap(i, pos);
             if self.is_tracking_insertion {
-                self.insertion_data[0].swap(i, pos);
+                self.unclassified_bucket.insertion_data.swap(i, pos);
             }
             if self.is_tracking_modification {
-                self.modification_data[0].swap(i, pos);
+                self.unclassified_bucket.modification_data.swap(i, pos);
             }
         }
 
-        for (i, id) in self.dense[0].iter().enumerate() {
+        for (i, id) in self.unclassified_bucket.dense.iter().enumerate() {
             unsafe {
                 self.sparse.get_mut_unchecked(*id).set_index(i as u64);
             }
@@ -612,11 +654,11 @@ impl<T: Component> SparseSet<T> {
 
         if a_index != b_index {
             if self.is_tracking_modification {
-                self.modification_data[0][a_index] = current;
+                self.unclassified_bucket.modification_data[a_index] = current;
             }
 
-            let a = unsafe { &mut *self.data[0].as_mut_ptr().add(a_index) };
-            let b = unsafe { &*self.data[0].as_mut_ptr().add(b_index) };
+            let a = unsafe { &mut *self.unclassified_bucket.data.as_mut_ptr().add(a_index) };
+            let b = unsafe { &*self.unclassified_bucket.data.as_mut_ptr().add(b_index) };
 
             f(a, b)
         } else {
@@ -654,12 +696,12 @@ impl<T: Component> SparseSet<T> {
 
         if a_index != b_index {
             if self.is_tracking_modification {
-                self.modification_data[0][a_index] = current;
-                self.modification_data[0][b_index] = current;
+                self.unclassified_bucket.modification_data[a_index] = current;
+                self.unclassified_bucket.modification_data[b_index] = current;
             }
 
-            let a = unsafe { &mut *self.data[0].as_mut_ptr().add(a_index) };
-            let b = unsafe { &mut *self.data[0].as_mut_ptr().add(b_index) };
+            let a = unsafe { &mut *self.unclassified_bucket.data.as_mut_ptr().add(a_index) };
+            let b = unsafe { &mut *self.unclassified_bucket.data.as_mut_ptr().add(b_index) };
 
             f(a, b)
         } else {
@@ -669,19 +711,19 @@ impl<T: Component> SparseSet<T> {
 
     /// Deletes all components in this storage.
     pub(crate) fn private_clear(&mut self, current: TrackingTimestamp) {
-        for &id in &self.dense[0] {
+        for &id in &self.unclassified_bucket.dense {
             unsafe {
                 *self.sparse.get_mut_unchecked(id) = EntityId::dead();
             }
         }
 
-        self.insertion_data[0].clear();
-        self.modification_data[0].clear();
+        self.unclassified_bucket.insertion_data.clear();
+        self.unclassified_bucket.modification_data.clear();
 
         let is_tracking_deletion = self.is_tracking_deletion();
 
-        let dense = self.dense[0].drain(..);
-        let data = self.data[0].drain(..);
+        let dense = self.unclassified_bucket.dense.drain(..);
+        let data = self.unclassified_bucket.data.drain(..);
 
         if is_tracking_deletion {
             let iter = dense
@@ -694,31 +736,35 @@ impl<T: Component> SparseSet<T> {
     /// Creates a draining iterator that empties the storage and yields the removed items.
     pub(crate) fn private_drain(&mut self, current: TrackingTimestamp) -> SparseSetDrain<'_, T> {
         if self.is_tracking_removal {
-            self.removal_data
-                .extend(self.dense[0].iter().map(|&entity| (entity, current)));
+            self.removal_data.extend(
+                self.unclassified_bucket
+                    .dense
+                    .iter()
+                    .map(|&entity| (entity, current)),
+            );
         }
 
-        for id in &self.dense[0] {
+        for id in &self.unclassified_bucket.dense {
             // SAFE ids from sparse_set.dense are always valid
             unsafe {
                 *self.sparse.get_mut_unchecked(*id) = EntityId::dead();
             }
         }
 
-        self.insertion_data[0].clear();
-        self.modification_data[0].clear();
+        self.unclassified_bucket.insertion_data.clear();
+        self.unclassified_bucket.modification_data.clear();
 
-        let dense_ptr = self.dense[0].as_ptr();
-        let dense_len = self.dense[0].len();
+        let dense_ptr = self.unclassified_bucket.dense.as_ptr();
+        let dense_len = self.unclassified_bucket.dense.len();
 
         unsafe {
-            self.dense[0].set_len(0);
+            self.unclassified_bucket.dense.set_len(0);
         }
 
         SparseSetDrain {
             dense_ptr,
             dense_len,
-            data: self.data[0].drain(..),
+            data: self.unclassified_bucket.data.drain(..),
         }
     }
 
@@ -731,8 +777,8 @@ impl<T: Component> SparseSet<T> {
         for i in 0..self.len() {
             let i = i - removed;
 
-            let eid = unsafe { *self.dense[0].get_unchecked(i) };
-            let component = unsafe { self.data[0].get_unchecked(i) };
+            let eid = unsafe { *self.unclassified_bucket.dense.get_unchecked(i) };
+            let component = unsafe { self.unclassified_bucket.data.get_unchecked(i) };
 
             if !f(eid, component) {
                 self.dyn_delete(eid, current);
@@ -750,11 +796,11 @@ impl<T: Component> SparseSet<T> {
         for i in 0..self.len() {
             let i = i - removed;
 
-            let eid = unsafe { *self.dense[0].get_unchecked(i) };
+            let eid = unsafe { *self.unclassified_bucket.dense.get_unchecked(i) };
             let component = Mut {
-                flag: self.modification_data[0].get_mut(i),
+                flag: self.unclassified_bucket.modification_data.get_mut(i),
                 current,
-                data: unsafe { self.data[0].get_unchecked_mut(i) },
+                data: unsafe { self.unclassified_bucket.data.get_unchecked_mut(i) },
             };
 
             if !f(eid, component) {
@@ -839,15 +885,21 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
             let mut sparse_set = SparseSet::<T>::new();
 
             sparse_set.sparse = self.sparse.clone();
-            sparse_set.dense = self.dense.clone();
-            sparse_set.data[0] = self.data[0].iter().map(clone).collect();
+            sparse_set.unclassified_bucket.dense = self.unclassified_bucket.dense.clone();
+            sparse_set.unclassified_bucket.data =
+                self.unclassified_bucket.data.iter().map(clone).collect();
 
             if sparse_set.is_tracking_insertion {
-                sparse_set.insertion_data[0].resize(self.dense[0].len(), other_current);
+                sparse_set
+                    .unclassified_bucket
+                    .insertion_data
+                    .resize(self.unclassified_bucket.dense.len(), other_current);
             }
             if sparse_set.is_tracking_modification {
-                sparse_set.modification_data[0]
-                    .resize(self.dense[0].len(), TrackingTimestamp::origin());
+                sparse_set.unclassified_bucket.modification_data.resize(
+                    self.unclassified_bucket.dense.len(),
+                    TrackingTimestamp::origin(),
+                );
             }
 
             SBoxBuilder::new(sparse_set)
@@ -912,8 +964,11 @@ mod tests {
                 TrackingTimestamp::new(0),
             )
             .assert_inserted();
-        assert_eq!(array.dense[0], &[EntityId::new_from_parts(0, 0)]);
-        assert_eq!(array.data[0], &[STR("0")]);
+        assert_eq!(
+            array.unclassified_bucket.dense,
+            &[EntityId::new_from_parts(0, 0)]
+        );
+        assert_eq!(array.unclassified_bucket.data, &[STR("0")]);
         assert_eq!(
             array.private_get(EntityId::new_from_parts(0, 0)),
             Some(&STR("0"))
@@ -927,13 +982,13 @@ mod tests {
             )
             .assert_inserted();
         assert_eq!(
-            array.dense[0],
+            array.unclassified_bucket.dense,
             &[
                 EntityId::new_from_parts(0, 0),
                 EntityId::new_from_parts(1, 0)
             ]
         );
-        assert_eq!(array.data[0], &[STR("0"), STR("1")]);
+        assert_eq!(array.unclassified_bucket.data, &[STR("0"), STR("1")]);
         assert_eq!(
             array.private_get(EntityId::new_from_parts(0, 0)),
             Some(&STR("0"))
@@ -951,14 +1006,17 @@ mod tests {
             )
             .assert_inserted();
         assert_eq!(
-            array.dense[0],
+            array.unclassified_bucket.dense,
             &[
                 EntityId::new_from_parts(0, 0),
                 EntityId::new_from_parts(1, 0),
                 EntityId::new_from_parts(5, 0)
             ]
         );
-        assert_eq!(array.data[0], &[STR("0"), STR("1"), STR("5")]);
+        assert_eq!(
+            array.unclassified_bucket.data,
+            &[STR("0"), STR("1"), STR("5")]
+        );
         assert_eq!(
             array.private_get(EntityId::new_from_parts(5, 0)),
             Some(&STR("5"))
@@ -997,13 +1055,13 @@ mod tests {
             Some(STR("0")),
         );
         assert_eq!(
-            array.dense[0],
+            array.unclassified_bucket.dense,
             &[
                 EntityId::new_from_parts(10, 0),
                 EntityId::new_from_parts(5, 0)
             ]
         );
-        assert_eq!(array.data[0], &[STR("10"), STR("5")]);
+        assert_eq!(array.unclassified_bucket.data, &[STR("10"), STR("5")]);
         assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
         assert_eq!(
             array.private_get(EntityId::new_from_parts(5, 0)),
@@ -1029,7 +1087,7 @@ mod tests {
             )
             .assert_inserted();
         assert_eq!(
-            array.dense[0],
+            array.unclassified_bucket.dense,
             &[
                 EntityId::new_from_parts(10, 0),
                 EntityId::new_from_parts(5, 0),
@@ -1037,7 +1095,10 @@ mod tests {
                 EntityId::new_from_parts(100, 0)
             ]
         );
-        assert_eq!(array.data[0], &[STR("10"), STR("5"), STR("3"), STR("100")]);
+        assert_eq!(
+            array.unclassified_bucket.data,
+            &[STR("10"), STR("5"), STR("3"), STR("100")]
+        );
         assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
         assert_eq!(
             array.private_get(EntityId::new_from_parts(3, 0)),
@@ -1061,14 +1122,17 @@ mod tests {
             Some(STR("3")),
         );
         assert_eq!(
-            array.dense[0],
+            array.unclassified_bucket.dense,
             &[
                 EntityId::new_from_parts(10, 0),
                 EntityId::new_from_parts(5, 0),
                 EntityId::new_from_parts(100, 0)
             ]
         );
-        assert_eq!(array.data[0], &[STR("10"), STR("5"), STR("100")]);
+        assert_eq!(
+            array.unclassified_bucket.data,
+            &[STR("10"), STR("5"), STR("100")]
+        );
         assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
         assert_eq!(array.private_get(EntityId::new_from_parts(3, 0)), None);
         assert_eq!(
@@ -1089,13 +1153,13 @@ mod tests {
             Some(STR("100"))
         );
         assert_eq!(
-            array.dense[0],
+            array.unclassified_bucket.dense,
             &[
                 EntityId::new_from_parts(10, 0),
                 EntityId::new_from_parts(5, 0)
             ]
         );
-        assert_eq!(array.data[0], &[STR("10"), STR("5")]);
+        assert_eq!(array.unclassified_bucket.data, &[STR("10"), STR("5")]);
         assert_eq!(array.private_get(EntityId::new_from_parts(0, 0)), None);
         assert_eq!(array.private_get(EntityId::new_from_parts(3, 0)), None);
         assert_eq!(
@@ -1126,8 +1190,8 @@ mod tests {
         assert_eq!(sparse_set.len(), 0);
         assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
         assert_eq!(sparse_set.private_get(EntityId::new(1)), None);
-        assert_eq!(sparse_set.insertion_data[0].len(), 0);
-        assert_eq!(sparse_set.modification_data[0].len(), 0);
+        assert_eq!(sparse_set.unclassified_bucket.insertion_data.len(), 0);
+        assert_eq!(sparse_set.unclassified_bucket.modification_data.len(), 0);
         assert_eq!(sparse_set.deletion_data.len(), 2);
         assert_eq!(sparse_set.removal_data.len(), 0);
     }
@@ -1155,8 +1219,8 @@ mod tests {
         assert_eq!(sparse_set.len(), 0);
         assert_eq!(sparse_set.private_get(EntityId::new(0)), None);
         assert_eq!(sparse_set.private_get(EntityId::new(1)), None);
-        assert_eq!(sparse_set.insertion_data[0].len(), 0);
-        assert_eq!(sparse_set.modification_data[0].len(), 0);
+        assert_eq!(sparse_set.unclassified_bucket.insertion_data.len(), 0);
+        assert_eq!(sparse_set.unclassified_bucket.modification_data.len(), 0);
         assert_eq!(sparse_set.deletion_data.len(), 0);
         assert_eq!(sparse_set.removal_data.len(), 2);
     }
@@ -1219,7 +1283,7 @@ mod tests {
 
         array.sort_unstable();
 
-        for window in array.data[0].windows(2) {
+        for window in array.unclassified_bucket.data.windows(2) {
             assert!(window[0] < window[1]);
         }
         for i in 0..100 {
@@ -1250,7 +1314,7 @@ mod tests {
 
         array.sort_unstable();
 
-        for window in array.data[0].windows(2) {
+        for window in array.unclassified_bucket.data.windows(2) {
             assert!(window[0] < window[1]);
         }
         for i in 0..20 {
@@ -1374,7 +1438,7 @@ mod tests {
         sparse_set.track_all();
         sparse_set.track_all();
 
-        assert_eq!(sparse_set.insertion_data[0].len(), 1);
-        assert_eq!(sparse_set.modification_data[0].len(), 1);
+        assert_eq!(sparse_set.unclassified_bucket.insertion_data.len(), 1);
+        assert_eq!(sparse_set.unclassified_bucket.modification_data.len(), 1);
     }
 }

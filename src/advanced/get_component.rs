@@ -261,16 +261,18 @@ impl<T: Component + Send + Sync> GetComponent for &'_ mut T {
             })?;
 
         let SparseSet {
-            data,
-            modification_data,
+            unclassified_bucket,
             is_tracking_modification,
             ..
         } = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data[0].get_unchecked_mut(index) },
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
+            inner: unsafe { unclassified_bucket.data.get_unchecked_mut(index) },
+            flag: is_tracking_modification.then(|| unsafe {
+                unclassified_bucket
+                    .modification_data
+                    .get_unchecked_mut(index)
+            }),
             current,
             all_borrow,
             borrow,
@@ -302,16 +304,18 @@ impl<T: Component + Sync> GetComponent for NonSend<&'_ mut T> {
             })?;
 
         let NonSend(SparseSet {
-            data,
-            modification_data,
+            unclassified_bucket,
             is_tracking_modification,
             ..
         }) = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data[0].get_unchecked_mut(index) },
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
+            inner: unsafe { unclassified_bucket.data.get_unchecked_mut(index) },
+            flag: is_tracking_modification.then(|| unsafe {
+                unclassified_bucket
+                    .modification_data
+                    .get_unchecked_mut(index)
+            }),
             current,
             all_borrow,
             borrow,
@@ -343,16 +347,18 @@ impl<T: Component + Send> GetComponent for NonSync<&'_ mut T> {
             })?;
 
         let NonSync(SparseSet {
-            data,
-            modification_data,
+            unclassified_bucket,
             is_tracking_modification,
             ..
         }) = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data[0].get_unchecked_mut(index) },
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
+            inner: unsafe { unclassified_bucket.data.get_unchecked_mut(index) },
+            flag: is_tracking_modification.then(|| unsafe {
+                unclassified_bucket
+                    .modification_data
+                    .get_unchecked_mut(index)
+            }),
             current,
             all_borrow,
             borrow,
@@ -384,16 +390,18 @@ impl<T: Component> GetComponent for NonSendSync<&'_ mut T> {
             })?;
 
         let NonSendSync(SparseSet {
-            data,
-            modification_data,
+            unclassified_bucket,
             is_tracking_modification,
             ..
         }) = sparse_set;
 
         Ok(RefMut {
-            inner: unsafe { data[0].get_unchecked_mut(index) },
-            flag: is_tracking_modification
-                .then(|| unsafe { modification_data[0].get_unchecked_mut(index) }),
+            inner: unsafe { unclassified_bucket.data.get_unchecked_mut(index) },
+            flag: is_tracking_modification.then(|| unsafe {
+                unclassified_bucket
+                    .modification_data
+                    .get_unchecked_mut(index)
+            }),
             current,
             all_borrow,
             borrow,

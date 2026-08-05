@@ -22,7 +22,7 @@ impl Tracking for Insertion {
         current: TrackingTimestamp,
     ) -> bool {
         if let Some(dense) = sparse_set.index_of(entity) {
-            sparse_set.insertion_data[0][dense].is_within(last, current)
+            sparse_set.unclassified_bucket.insertion_data[dense].is_within(last, current)
         } else {
             false
         }

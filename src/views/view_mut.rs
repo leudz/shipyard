@@ -648,18 +648,19 @@ impl<'a, T: Component, Track> core::ops::IndexMut<EntityId> for ViewMut<'a, T, T
             .unwrap();
 
         let SparseSet {
-            data,
-            modification_data,
+            unclassified_bucket,
             is_tracking_modification,
             ..
         } = self.sparse_set;
 
         if *is_tracking_modification {
             unsafe {
-                *modification_data[0].get_unchecked_mut(index) = self.current;
+                *unclassified_bucket
+                    .modification_data
+                    .get_unchecked_mut(index) = self.current;
             };
         }
 
-        unsafe { data[0].get_unchecked_mut(index) }
+        unsafe { unclassified_bucket.data.get_unchecked_mut(index) }
     }
 }
