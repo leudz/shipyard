@@ -34,7 +34,7 @@ use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use component_bucket::ComponentBucket;
-use core::any::type_name;
+use core::any::{type_name, TypeId};
 use core::mem::size_of;
 use core::{
     cmp::{Ord, Ordering},
@@ -116,6 +116,12 @@ impl<T: Component> SparseSet<T> {
     #[inline]
     pub fn as_slice(&self) -> &[T] {
         &self.unclassified_bucket.data
+    }
+
+    #[inline]
+    pub(crate) fn add_group(&mut self, group: &[TypeId]) {
+        self.groups.add(group);
+        self.group_buckets.push(ComponentBucket::new());
     }
 }
 

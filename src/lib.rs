@@ -58,6 +58,7 @@ mod entities;
 mod entity_id;
 pub mod error;
 mod get;
+mod group;
 /// Contains all items related to storage iteration.
 pub mod iter;
 /// Trait used as bound for [`World::iter`](crate::world::World::iter) and [`AllStorages::iter`](crate::all_storages::AllStorages::iter).
@@ -93,6 +94,7 @@ pub use contains::Contains;
 pub use delete::Delete;
 pub use entity_id::EntityId;
 pub use get::Get;
+pub use group::Group;
 #[doc(inline)]
 pub use iter::IntoIter;
 pub use remove::Remove;
