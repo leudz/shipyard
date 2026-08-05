@@ -3,6 +3,7 @@ mod bulk_add_entity;
 mod component_bucket;
 mod delete;
 mod drain;
+mod groups;
 mod memory_usage;
 mod remove;
 mod sparse_array;
@@ -39,6 +40,7 @@ use core::{
     cmp::{Ord, Ordering},
     fmt,
 };
+use groups::Groups;
 
 pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 
@@ -54,6 +56,7 @@ pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 pub struct SparseSet<T: Component> {
     pub(crate) sparse: SparseArray,
     pub(crate) unclassified_bucket: ComponentBucket<T>,
+    pub(crate) groups: Groups,
     pub(crate) group_buckets: Vec<ComponentBucket<T>>,
     pub(crate) last_insert: TrackingTimestamp,
     pub(crate) last_modified: TrackingTimestamp,
@@ -89,6 +92,7 @@ impl<T: Component> SparseSet<T> {
         SparseSet {
             sparse: SparseArray::new(),
             unclassified_bucket: ComponentBucket::new(),
+            groups: Groups::new(),
             group_buckets: Vec::new(),
             last_insert: TrackingTimestamp::new(0),
             last_modified: TrackingTimestamp::new(0),
