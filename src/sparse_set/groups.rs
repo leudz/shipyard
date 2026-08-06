@@ -16,6 +16,11 @@ impl Groups {
     }
 
     #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.offsets.is_empty()
+    }
+
+    #[inline]
     pub(crate) fn add(&mut self, group: &[TypeId]) -> usize {
         let index = self.offsets.len();
 

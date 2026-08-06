@@ -99,6 +99,8 @@ impl<T: Send + Sync + Component> BulkInsert for T {
                 .extend(new_entities.iter().map(|_| TrackingTimestamp::origin()));
         }
 
+        let should_set_pending_placement = !sparse_set.groups.is_empty();
+
         let SparseSet {
             sparse,
             unclassified_bucket,
@@ -111,6 +113,11 @@ impl<T: Send + Sync + Component> BulkInsert for T {
         for (i, &entity) in dense[old_len..].iter().enumerate() {
             unsafe {
                 *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+            }
+        }
+        if should_set_pending_placement {
+            for &entity in &dense[old_len..] {
+                sparse.set_pending_placement(entity);
             }
         }
 
@@ -184,6 +191,7 @@ macro_rules! impl_bulk_insert {
                 )*
 
                 let old_len = $sparse_set1.unclassified_bucket.dense.len() - new_entities_count;
+                let should_set_pending_placement = !$sparse_set1.groups.is_empty();
                 let SparseSet { sparse, unclassified_bucket, .. } = &mut *$sparse_set1;
                 let dense = &mut unclassified_bucket.dense;
 
@@ -193,8 +201,14 @@ macro_rules! impl_bulk_insert {
                         *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
                     }
                 }
+                if should_set_pending_placement {
+                    for &entity in &dense[old_len..] {
+                        sparse.set_pending_placement(entity);
+                    }
+                }
                 $(
                     let old_len = $sparse_set.unclassified_bucket.dense.len() - new_entities_count;
+                    let should_set_pending_placement = !$sparse_set.groups.is_empty();
                     let SparseSet { sparse, unclassified_bucket, .. } = &mut *$sparse_set;
                     let dense = &mut unclassified_bucket.dense;
 
@@ -202,6 +216,11 @@ macro_rules! impl_bulk_insert {
                     for (i, &entity) in dense[old_len..].iter().enumerate() {
                         unsafe {
                             *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                        }
+                    }
+                    if should_set_pending_placement {
+                        for &entity in &dense[old_len..] {
+                            sparse.set_pending_placement(entity);
                         }
                     }
                 )*
@@ -238,3 +257,71 @@ bulk_insert![
     (U, sparse_set20, 20) (V, sparse_set21, 21) (W, sparse_set22, 22) (X, sparse_set23, 23) (Y, sparse_set24, 24) (Z, sparse_set25, 25) (AA, sparse_set26, 26) (BB, sparse_set27, 27) (CC, sparse_set28, 28) (DD, sparse_set29, 29)
     (EE, sparse_set30, 30) (FF, sparse_set31, 31)
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{track, Group, View, ViewMut, World};
+
+    struct A;
+    struct B;
+
+    impl Component for A {
+        type Tracking = track::Untracked;
+    }
+
+    impl Component for B {
+        type Tracking = track::Untracked;
+    }
+
+    #[test]
+    fn scalar_bulk_insertion_marks_each_entity() {
+        let mut world = World::new();
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        world.bulk_add_entity((0..34).map(|_| A));
+
+        let view = world.borrow::<View<'_, A>>().unwrap();
+        assert_eq!(view.sparse_set.sparse.pending_placement_pages(), &[0, 1]);
+        assert_eq!(view.sparse_set.sparse.pending_placement_mask(0), u32::MAX);
+        assert_eq!(view.sparse_set.sparse.pending_placement_mask(1), 0b11);
+        assert!(view
+            .sparse_set
+            .sparse
+            .bucket_index(EntityId::new(0))
+            .is_unclassified());
+    }
+
+    #[test]
+    fn tuple_bulk_insertion_marks_each_storage() {
+        let mut world = World::new();
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        world.bulk_add_entity((0..34).map(|_| (A, B)));
+
+        let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        for sparse in [&a.sparse_set.sparse, &b.sparse_set.sparse] {
+            assert_eq!(sparse.pending_placement_pages(), &[0, 1]);
+            assert_eq!(sparse.pending_placement_mask(0), u32::MAX);
+            assert_eq!(sparse.pending_placement_mask(1), 0b11);
+        }
+    }
+
+    #[test]
+    fn bulk_insertion_without_groups_does_not_mark_pages() {
+        let mut world = World::new();
+
+        world.bulk_add_entity((0..34).map(|_| A));
+
+        let view = world.borrow::<View<'_, A>>().unwrap();
+        assert!(view.sparse_set.sparse.pending_placement_pages().is_empty());
+        assert_eq!(view.sparse_set.sparse.pending_placement_mask(0), 0);
+        assert_eq!(view.sparse_set.sparse.pending_placement_mask(1), 0);
+    }
+}

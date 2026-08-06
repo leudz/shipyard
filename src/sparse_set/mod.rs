@@ -1,8 +1,10 @@
 mod add_component;
+mod bucket_index;
 mod bulk_add_entity;
 mod component_bucket;
 mod delete;
 mod drain;
+mod group_page;
 mod groups;
 mod memory_usage;
 mod remove;
@@ -256,6 +258,7 @@ impl<T: Component> SparseSet<T> {
         let sparse_entity = unsafe { self.sparse.get_mut_unchecked(entity) };
 
         let old_component;
+        let mut should_set_pending_placement = false;
 
         if sparse_entity.is_dead() {
             if let Some(on_insertion) = &mut self.on_insertion {
@@ -280,6 +283,7 @@ impl<T: Component> SparseSet<T> {
             self.unclassified_bucket.data.push(value);
 
             old_component = InsertionResult::Inserted;
+            should_set_pending_placement = true;
         } else if entity.gen() == sparse_entity.gen() {
             if let Some(on_insertion) = &mut self.on_insertion {
                 on_insertion(entity, &value);
@@ -329,6 +333,7 @@ impl<T: Component> SparseSet<T> {
             };
 
             old_component = InsertionResult::OtherComponentOverride;
+            should_set_pending_placement = true;
 
             sparse_entity.copy_gen(entity);
 
@@ -350,6 +355,10 @@ impl<T: Component> SparseSet<T> {
             dense_entity.copy_index_gen(entity);
         } else {
             old_component = InsertionResult::NotInserted;
+        }
+
+        if should_set_pending_placement && !self.groups.is_empty() {
+            self.sparse.set_pending_placement(entity);
         }
 
         old_component
@@ -1033,6 +1042,92 @@ mod tests {
         );
 
         assert_eq!(array.private_get(EntityId::new_from_parts(4, 0)), None);
+    }
+
+    #[test]
+    fn insertion_marks_pending_placement_only_when_needed() {
+        let mut sparse_set = SparseSet::new();
+        let existing = EntityId::new_from_parts(0, 0);
+
+        sparse_set
+            .insert(existing, I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        assert!(sparse_set.sparse.pending_placement_pages().is_empty());
+        assert_eq!(sparse_set.sparse.pending_placement_mask(0), 0);
+
+        sparse_set.add_group(&[]);
+
+        let result = sparse_set.insert(existing, I32(1), TrackingTimestamp::new(1));
+        assert!(matches!(result, InsertionResult::ComponentOverride(I32(0))));
+        assert!(sparse_set.sparse.pending_placement_pages().is_empty());
+
+        let inserted = EntityId::new_from_parts(31, 0);
+        sparse_set
+            .insert(inserted, I32(31), TrackingTimestamp::new(2))
+            .assert_inserted();
+        assert_eq!(sparse_set.sparse.pending_placement_pages(), &[0]);
+        assert_eq!(sparse_set.sparse.pending_placement_mask(0), 1 << 31);
+
+        let newer_generation = EntityId::new_from_parts(0, 1);
+        let result = sparse_set.insert(newer_generation, I32(2), TrackingTimestamp::new(3));
+        assert!(matches!(result, InsertionResult::OtherComponentOverride));
+        assert_eq!(
+            sparse_set.sparse.pending_placement_mask(0),
+            (1 << 0) | (1 << 31)
+        );
+
+        let older_generation = EntityId::new_from_parts(0, 0);
+        let result = sparse_set.insert(older_generation, I32(3), TrackingTimestamp::new(4));
+        assert!(matches!(result, InsertionResult::NotInserted));
+        assert_eq!(
+            sparse_set.sparse.pending_placement_mask(0),
+            (1 << 0) | (1 << 31)
+        );
+    }
+
+    #[test]
+    fn pending_placement_is_entity_indexed_and_monotonic() {
+        let mut sparse_set = SparseSet::new();
+        sparse_set.add_group(&[]);
+
+        let first = EntityId::new(0);
+        let second = EntityId::new(32);
+        sparse_set
+            .insert(first, I32(2), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(second, I32(1), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        let pages = sparse_set.sparse.pending_placement_pages().to_vec();
+        let masks = [
+            sparse_set.sparse.pending_placement_mask(0),
+            sparse_set.sparse.pending_placement_mask(1),
+        ];
+
+        sparse_set.sort_unstable();
+        assert_eq!(sparse_set.sparse.pending_placement_pages(), pages);
+        assert_eq!(sparse_set.sparse.pending_placement_mask(0), masks[0]);
+        assert_eq!(sparse_set.sparse.pending_placement_mask(1), masks[1]);
+
+        assert_eq!(
+            sparse_set.dyn_remove(first, TrackingTimestamp::new(1)),
+            Some(I32(2))
+        );
+        assert_eq!(sparse_set.sparse.pending_placement_pages(), pages);
+        assert_eq!(sparse_set.sparse.pending_placement_mask(0), masks[0]);
+
+        sparse_set.private_clear(TrackingTimestamp::new(2));
+        assert_eq!(sparse_set.sparse.pending_placement_pages(), pages);
+        assert_eq!(sparse_set.sparse.pending_placement_mask(1), masks[1]);
+
+        sparse_set
+            .insert(EntityId::new(31), I32(3), TrackingTimestamp::new(3))
+            .assert_inserted();
+        let mask = sparse_set.sparse.pending_placement_mask(0);
+        drop(sparse_set.private_drain(TrackingTimestamp::new(4)));
+        assert_eq!(sparse_set.sparse.pending_placement_mask(0), mask);
+        assert_eq!(sparse_set.sparse.pending_placement_pages(), pages);
     }
 
     #[test]
