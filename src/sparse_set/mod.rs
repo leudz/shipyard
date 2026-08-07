@@ -31,6 +31,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::r#mut::Mut;
+use crate::sparse_set::bucket_index::BucketIndex;
 use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::boxed::Box;
@@ -124,6 +125,126 @@ impl<T: Component> SparseSet<T> {
     pub(crate) fn add_group(&mut self, group: &[TypeId]) {
         self.groups.add(group);
         self.group_buckets.push(ComponentBucket::new());
+    }
+
+    fn move_entity_to_group(&mut self, entity: EntityId, group_index: usize) {
+        let dense_index = self.index_of(entity).unwrap();
+        let source_bucket_index = self.sparse.bucket_index(entity);
+        let target_bucket_index = BucketIndex::from_group_index(group_index);
+
+        if source_bucket_index == target_bucket_index {
+            // I'm not sure if this should be silent, it could be an assert instead
+            return;
+        }
+
+        let is_tracking_insertion = self.is_tracking_insertion;
+        let is_tracking_modification = self.is_tracking_modification;
+
+        let (component, insertion, modification, replacement) = {
+            let source_bucket = if let Some(source_group_index) = source_bucket_index.group_index()
+            {
+                self.group_buckets
+                    .get_mut(source_group_index)
+                    .expect("A component's bucket index must reference an existing group.")
+            } else {
+                &mut self.unclassified_bucket
+            };
+
+            source_bucket.dense.swap_remove(dense_index);
+
+            let insertion = is_tracking_insertion
+                .then(|| source_bucket.insertion_data.swap_remove(dense_index));
+            let modification = is_tracking_modification
+                .then(|| source_bucket.modification_data.swap_remove(dense_index));
+            let component = source_bucket.data.swap_remove(dense_index);
+            let replacement = source_bucket.dense.get(dense_index).copied();
+
+            (component, insertion, modification, replacement)
+        };
+
+        if let Some(replacement) = replacement {
+            unsafe {
+                self.sparse
+                    .get_mut_unchecked(replacement)
+                    .set_index(dense_index as u64);
+            }
+        }
+
+        let target_bucket = unsafe { self.group_buckets.get_unchecked_mut(group_index) };
+        let target_dense_index = target_bucket.dense.len();
+
+        target_bucket.dense.push(entity);
+        target_bucket.data.push(component);
+        if let Some(insertion) = insertion {
+            target_bucket.insertion_data.push(insertion);
+        }
+        if let Some(modification) = modification {
+            target_bucket.modification_data.push(modification);
+        }
+
+        unsafe {
+            self.sparse
+                .get_mut_unchecked(entity)
+                .set_index(target_dense_index as u64);
+        }
+        self.sparse.set_bucket_index(entity, target_bucket_index);
+    }
+
+    fn private_collect_regroup(
+        &mut self,
+        all_storages: &AllStorages,
+        emit: &mut dyn FnMut(EntityId, &[TypeId], usize),
+    ) {
+        if self.sparse.pending_placement_pages.is_empty() {
+            return;
+        }
+
+        let origin_storage = TypeId::of::<SparseSet<T>>();
+        let mut page_position = 0;
+
+        while page_position < self.sparse.pending_placement_pages.len() {
+            let page_index = self.sparse.pending_placement_pages[page_position];
+            let mut mask = core::mem::take(
+                self.sparse
+                    .pending_placement_masks
+                    .get_mut(page_index)
+                    .unwrap(),
+            );
+
+            while mask != 0 {
+                let bit_index = mask.trailing_zeros() as usize;
+                mask &= mask - 1;
+
+                let entity_index = (page_index * BUCKET_SIZE + bit_index) as u64;
+                let sparse_entity = self.sparse.get(EntityId::new(entity_index)).unwrap();
+
+                let entity = EntityId::new_from_index_and_gen(entity_index, sparse_entity.gen());
+                let mut local_union = Vec::new();
+                let mut largest_group_len = 0;
+
+                for group in self.groups.iter() {
+                    let is_complete = group.iter().all(|&storage_id| {
+                        storage_id == origin_storage
+                            || all_storages.storage_contains_entity(storage_id, entity)
+                    });
+
+                    if is_complete {
+                        local_union.extend_from_slice(group);
+                        largest_group_len = largest_group_len.max(group.len());
+                    }
+                }
+
+                if largest_group_len != 0 {
+                    local_union.sort_unstable();
+                    local_union.dedup();
+                    emit(entity, &local_union, largest_group_len);
+                }
+            }
+
+            page_position += 1;
+        }
+
+        self.sparse.pending_placement_pages.clear();
     }
 }
 
@@ -943,12 +1064,46 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
             }
         }
     }
+
+    fn collect_regroup(
+        &mut self,
+        all_storages: &AllStorages,
+        emit: &mut dyn FnMut(EntityId, &[TypeId], usize),
+    ) {
+        self.private_collect_regroup(all_storages, emit);
+    }
+
+    fn entity_group(&self, entity: EntityId) -> Option<&[TypeId]> {
+        if !self.sparse.contains(entity) {
+            return None;
+        }
+
+        self.sparse
+            .bucket_index(entity)
+            .group_index()
+            .map(|group_index| &self.groups[group_index])
+    }
+
+    fn move_to_group(&mut self, entity: EntityId, group: &[TypeId]) {
+        let group_index = self
+            .groups
+            .iter()
+            .position(|local_group| local_group == group);
+        let group_index = group_index.unwrap_or_else(|| {
+            let group_index = self.groups.add(group);
+            self.group_buckets.push(ComponentBucket::new());
+            group_index
+        });
+
+        self.move_entity_to_group(entity, group_index);
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Component;
+    use crate::{Component, Group, View, ViewMut, World};
+    use alloc::vec;
     use std::println;
 
     #[derive(PartialEq, Eq, Debug)]
@@ -970,6 +1125,46 @@ mod tests {
 
     impl Component for TrackedI32 {
         type Tracking = crate::track::All;
+    }
+
+    struct A;
+    struct B;
+    struct C;
+    struct D;
+
+    impl Component for A {
+        type Tracking = crate::track::Untracked;
+    }
+
+    impl Component for B {
+        type Tracking = crate::track::Untracked;
+    }
+
+    impl Component for C {
+        type Tracking = crate::track::Untracked;
+    }
+
+    impl Component for D {
+        type Tracking = crate::track::Untracked;
+    }
+
+    fn sorted_group(mut storages: Vec<TypeId>) -> Vec<TypeId> {
+        storages.sort_unstable();
+        storages
+    }
+
+    fn storage_id<T: Component>() -> TypeId {
+        TypeId::of::<SparseSet<T>>()
+    }
+
+    fn current_group<T: Component>(sparse_set: &SparseSet<T>, entity: EntityId) -> &[TypeId] {
+        let group_index = sparse_set
+            .sparse
+            .bucket_index(entity)
+            .group_index()
+            .expect("the entity should occupy a group");
+
+        &sparse_set.groups[group_index]
     }
 
     #[test]
@@ -1545,5 +1740,517 @@ mod tests {
 
         assert_eq!(sparse_set.unclassified_bucket.insertion_data.len(), 1);
         assert_eq!(sparse_set.unclassified_bucket.modification_data.len(), 1);
+    }
+
+    fn consume_pending_without_regrouping<T: Component>(sparse_set: &mut SparseSet<T>) {
+        sparse_set.sparse.pending_placement_masks.fill(0);
+        sparse_set.sparse.pending_placement_pages.clear();
+    }
+
+    #[test]
+    fn overlapping_groups_inserted_together_form_union() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, C>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C));
+        world.regroup();
+
+        let expected = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+        ]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, entity), expected);
+        assert_eq!(current_group(views.1.sparse_set, entity), expected);
+        assert_eq!(current_group(views.2.sparse_set, entity), expected);
+    }
+
+    #[test]
+    fn existing_group_expands_when_only_new_component_is_pending() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, C>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, C));
+        world.regroup();
+        world.add_component(entity, (B,));
+        world.regroup();
+
+        let expected = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+        ]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, entity), expected);
+        assert_eq!(current_group(views.1.sparse_set, entity), expected);
+        assert_eq!(current_group(views.2.sparse_set, entity), expected);
+    }
+
+    #[test]
+    fn existing_encompassing_group_is_reused_and_same_target_is_noop() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C));
+        world.regroup();
+
+        let expected = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+        ]);
+
+        {
+            let view = world.borrow::<ViewMut<'_, A>>().unwrap();
+            assert_eq!(view.sparse_set.groups.iter().count(), 1);
+            assert_eq!(view.sparse_set.group_buckets[0].dense, [entity]);
+
+            Storage::move_to_group(view.sparse_set, entity, &expected);
+
+            assert_eq!(view.sparse_set.groups.iter().count(), 1);
+            assert_eq!(view.sparse_set.group_buckets[0].dense, [entity]);
+        }
+
+        world.regroup();
+
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+            .unwrap();
+        assert_eq!(views.0.sparse_set.groups.iter().count(), 1);
+        assert_eq!(views.1.sparse_set.groups.iter().count(), 1);
+        assert_eq!(views.2.sparse_set.groups.iter().count(), 1);
+    }
+
+    #[test]
+    fn chained_overlaps_merge_transitively() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, B>, ViewMut<'_, C>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, C>, ViewMut<'_, D>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C, D));
+        world.regroup();
+
+        let expected = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+            storage_id::<D>(),
+        ]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, entity), expected);
+        assert_eq!(current_group(views.1.sparse_set, entity), expected);
+        assert_eq!(current_group(views.2.sparse_set, entity), expected);
+        assert_eq!(current_group(views.3.sparse_set, entity), expected);
+    }
+
+    #[test]
+    fn disjoint_matches_remain_separate() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, C>, ViewMut<'_, D>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C, D));
+        world.regroup();
+
+        let ab = sorted_group(vec![storage_id::<A>(), storage_id::<B>()]);
+        let cd = sorted_group(vec![storage_id::<C>(), storage_id::<D>()]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, entity), ab);
+        assert_eq!(current_group(views.1.sparse_set, entity), ab);
+        assert_eq!(current_group(views.2.sparse_set, entity), cd);
+        assert_eq!(current_group(views.3.sparse_set, entity), cd);
+    }
+
+    #[test]
+    fn current_bucket_group_bridges_collected_candidates() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, B>, ViewMut<'_, C>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, C>, ViewMut<'_, D>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((B, C));
+        world.regroup();
+        world.add_component(entity, (A, D));
+        world.regroup();
+
+        let expected = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+            storage_id::<D>(),
+        ]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, entity), expected);
+        assert_eq!(current_group(views.1.sparse_set, entity), expected);
+        assert_eq!(current_group(views.2.sparse_set, entity), expected);
+        assert_eq!(current_group(views.3.sparse_set, entity), expected);
+    }
+
+    #[test]
+    fn dynamically_created_group_is_reused_by_later_entities() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, B>, ViewMut<'_, C>)>().unwrap();
+            views.create_group();
+        }
+
+        let first = world.add_entity((A, B, C));
+        world.regroup();
+
+        let group_counts = {
+            let views = world
+                .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+                .unwrap();
+            (
+                views.0.sparse_set.groups.iter().count(),
+                views.1.sparse_set.groups.iter().count(),
+                views.2.sparse_set.groups.iter().count(),
+            )
+        };
+
+        let second = world.add_entity((A, B, C));
+        world.regroup();
+
+        let expected = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+        ]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, first), expected);
+        assert_eq!(current_group(views.0.sparse_set, second), expected);
+        assert_eq!(views.0.sparse_set.groups.iter().count(), group_counts.0);
+        assert_eq!(views.1.sparse_set.groups.iter().count(), group_counts.1);
+        assert_eq!(views.2.sparse_set.groups.iter().count(), group_counts.2);
+    }
+
+    #[test]
+    fn movement_from_existing_group_repairs_swapped_sparse_indices() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, C>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let first = world.add_entity((A, C));
+        let second = world.add_entity((A, C));
+        world.regroup();
+
+        let (moving, remaining) = {
+            let view = world.borrow::<View<'_, A>>().unwrap();
+            let dense = &view.sparse_set.group_buckets[0].dense;
+            assert_eq!(dense.len(), 2);
+            (dense[0], dense[1])
+        };
+        assert!([first, second].contains(&moving));
+
+        world.add_component(moving, (B,));
+        world.regroup();
+
+        let ac = sorted_group(vec![storage_id::<A>(), storage_id::<C>()]);
+        let abc = sorted_group(vec![
+            storage_id::<A>(),
+            storage_id::<B>(),
+            storage_id::<C>(),
+        ]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+            .unwrap();
+
+        assert_eq!(current_group(views.0.sparse_set, moving), abc);
+        assert_eq!(current_group(views.1.sparse_set, moving), abc);
+        assert_eq!(current_group(views.2.sparse_set, moving), abc);
+        assert_eq!(current_group(views.0.sparse_set, remaining), ac);
+        assert_eq!(current_group(views.2.sparse_set, remaining), ac);
+        assert_eq!(
+            views.0.sparse_set.sparse.get(remaining).unwrap().uindex(),
+            0
+        );
+        assert_eq!(
+            views.2.sparse_set.sparse.get(remaining).unwrap().uindex(),
+            0
+        );
+        assert_eq!(views.0.sparse_set.group_buckets[0].dense, [remaining]);
+        assert_eq!(views.2.sparse_set.group_buckets[0].dense, [remaining]);
+    }
+
+    /// Checks that a 3 storage group is correctly populated after a regroup.
+    #[test]
+    fn regroup_three_components() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, STR>, ViewMut<'_, I32>, ViewMut<'_, TrackedI32>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((STR("a"), I32(1), TrackedI32(2)));
+
+        {
+            let views = world
+                .borrow::<(ViewMut<'_, STR>, ViewMut<'_, I32>, ViewMut<'_, TrackedI32>)>()
+                .unwrap();
+            consume_pending_without_regrouping(views.1.sparse_set);
+            consume_pending_without_regrouping(views.2.sparse_set);
+        }
+
+        world.regroup();
+
+        let views = world
+            .borrow::<(View<'_, STR>, View<'_, I32>, View<'_, TrackedI32>)>()
+            .unwrap();
+
+        for sparse in [
+            &views.0.sparse_set.sparse,
+            &views.1.sparse_set.sparse,
+            &views.2.sparse_set.sparse,
+        ] {
+            assert_eq!(sparse.bucket_index(entity).group_index(), Some(0));
+            assert!(sparse.pending_placement_pages().is_empty());
+        }
+        assert_eq!(views.0.sparse_set.group_buckets[0].dense, [entity]);
+        assert_eq!(views.1.sparse_set.group_buckets[0].dense, [entity]);
+        assert_eq!(views.2.sparse_set.group_buckets[0].dense, [entity]);
+    }
+
+    /// Checks that groups placed at different indices still work.
+    #[test]
+    fn regroup_different_local_indices() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, STR>, ViewMut<'_, TrackedI32>)>()
+                .unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, STR>, ViewMut<'_, I32>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((STR("a"), I32(1)));
+
+        {
+            let view = world.borrow::<ViewMut<'_, I32>>().unwrap();
+            consume_pending_without_regrouping(view.sparse_set);
+        }
+
+        world.regroup();
+
+        let views = world.borrow::<(View<'_, STR>, View<'_, I32>)>().unwrap();
+        assert_eq!(
+            views.0.sparse_set.sparse.bucket_index(entity).group_index(),
+            Some(1)
+        );
+        assert_eq!(
+            views.1.sparse_set.sparse.bucket_index(entity).group_index(),
+            Some(0)
+        );
+        assert_eq!(views.0.sparse_set.group_buckets[1].dense, [entity]);
+        assert_eq!(views.1.sparse_set.group_buckets[0].dense, [entity]);
+    }
+
+    /// Checks that a 3 storages group can be populated in two steps.
+    ///
+    /// The first step inserts 2 components then the last component is inserted later.
+    #[test]
+    fn missing_component_consumes_pending_then_final_component_places_cohort() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, STR>, ViewMut<'_, I32>, ViewMut<'_, TrackedI32>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((STR("a"), I32(1)));
+        world.regroup();
+
+        {
+            let views = world.borrow::<(View<'_, STR>, View<'_, I32>)>().unwrap();
+            assert!(views
+                .0
+                .sparse_set
+                .sparse
+                .pending_placement_pages()
+                .is_empty());
+            assert!(views
+                .1
+                .sparse_set
+                .sparse
+                .pending_placement_pages()
+                .is_empty());
+            assert!(views
+                .0
+                .sparse_set
+                .sparse
+                .bucket_index(entity)
+                .is_unclassified());
+            assert!(views
+                .1
+                .sparse_set
+                .sparse
+                .bucket_index(entity)
+                .is_unclassified());
+        }
+
+        world.add_component(entity, (TrackedI32(2),));
+        world.regroup();
+
+        let views = world
+            .borrow::<(View<'_, STR>, View<'_, I32>, View<'_, TrackedI32>)>()
+            .unwrap();
+        assert_eq!(
+            views.0.sparse_set.sparse.bucket_index(entity).group_index(),
+            Some(0)
+        );
+        assert_eq!(
+            views.1.sparse_set.sparse.bucket_index(entity).group_index(),
+            Some(0)
+        );
+        assert_eq!(
+            views.2.sparse_set.sparse.bucket_index(entity).group_index(),
+            Some(0)
+        );
+    }
+
+    /// Checks that regroup transfer tracking info.
+    #[test]
+    fn regroup_preserves_tracking() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, TrackedI32>, ViewMut<'_, STR>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let grouped = world.add_entity((TrackedI32(10), STR("grouped")));
+        let remaining = world.add_entity(TrackedI32(20));
+
+        world.get::<&mut TrackedI32>(grouped).unwrap().0 += 1;
+
+        let (grouped_insert, grouped_modified, remaining_insert, remaining_modified) = {
+            let view = world.borrow::<View<'_, TrackedI32>>().unwrap();
+            (
+                view.sparse_set.unclassified_bucket.insertion_data[0].get(),
+                view.sparse_set.unclassified_bucket.modification_data[0].get(),
+                view.sparse_set.unclassified_bucket.insertion_data[1].get(),
+                view.sparse_set.unclassified_bucket.modification_data[1].get(),
+            )
+        };
+        assert_ne!(grouped_insert, 0);
+        assert_ne!(grouped_modified, 0);
+
+        world.regroup();
+
+        let view = world.borrow::<View<'_, TrackedI32>>().unwrap();
+        assert_eq!(view.sparse_set.group_buckets[0].dense, [grouped]);
+        assert_eq!(view.sparse_set.group_buckets[0].data, [TrackedI32(11)]);
+        assert_eq!(
+            view.sparse_set.group_buckets[0].insertion_data[0].get(),
+            grouped_insert
+        );
+        assert_eq!(
+            view.sparse_set.group_buckets[0].modification_data[0].get(),
+            grouped_modified
+        );
+        assert_eq!(view.sparse_set.unclassified_bucket.dense, [remaining]);
+        assert_eq!(view.sparse_set.unclassified_bucket.data, [TrackedI32(20)]);
+        assert_eq!(
+            view.sparse_set.unclassified_bucket.insertion_data[0].get(),
+            remaining_insert
+        );
+        assert_eq!(
+            view.sparse_set.unclassified_bucket.modification_data[0].get(),
+            remaining_modified
+        );
+        assert_eq!(view.sparse_set.sparse.get(remaining).unwrap().uindex(), 0);
     }
 }

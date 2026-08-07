@@ -37,9 +37,93 @@ use crate::views::EntitiesViewMut;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
-use core::any::type_name;
+use alloc::vec::Vec;
+use core::any::{type_name, TypeId};
 use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
+
+struct RegroupCandidate {
+    storages: Vec<TypeId>,
+    largest_group_len: usize,
+    current_group_cursor: usize,
+}
+
+type RegroupCandidates = ShipHashMap<EntityId, Vec<RegroupCandidate>>;
+
+impl RegroupCandidate {
+    #[inline]
+    fn intersects(&self, other: &Self) -> bool {
+        self.storages
+            .iter()
+            .any(|storage| other.storages.contains(storage))
+    }
+
+    fn merge(&mut self, other: RegroupCandidate) {
+        let mut storages = Vec::with_capacity(self.storages.len() + other.storages.len());
+
+        for &storage in self.storages[..self.current_group_cursor]
+            .iter()
+            .chain(&other.storages[..other.current_group_cursor])
+        {
+            if !storages.contains(&storage) {
+                storages.push(storage);
+            }
+        }
+
+        let current_group_cursor = storages.len();
+
+        for &storage in self.storages[self.current_group_cursor..]
+            .iter()
+            .chain(&other.storages[other.current_group_cursor..])
+        {
+            if !storages.contains(&storage) {
+                storages.push(storage);
+            }
+        }
+
+        self.storages = storages;
+        self.largest_group_len = self.largest_group_len.max(other.largest_group_len);
+        self.current_group_cursor = current_group_cursor;
+    }
+
+    fn extend_current_group(&mut self, group: &[TypeId]) {
+        self.largest_group_len = self.largest_group_len.max(group.len());
+
+        for &storage in group {
+            if !self.storages.contains(&storage) {
+                self.storages.push(storage);
+            }
+        }
+    }
+}
+
+fn insert_regroup_candidate(
+    candidates: &mut Vec<RegroupCandidate>,
+    mut candidate: RegroupCandidate,
+) {
+    while let Some(index) = candidates
+        .iter()
+        .position(|existing| existing.intersects(&candidate))
+    {
+        candidate.merge(candidates.swap_remove(index));
+    }
+
+    candidates.push(candidate);
+}
+
+fn merge_overlapping_regroup_candidates(candidates: &mut Vec<RegroupCandidate>) -> bool {
+    for left in 0..candidates.len() {
+        if let Some(right) = (left + 1..candidates.len())
+            .find(|&right| candidates[left].intersects(&candidates[right]))
+        {
+            let other = candidates.swap_remove(right);
+            candidates[left].merge(other);
+            return true;
+        }
+    }
+
+    false
+}
 
 #[allow(missing_docs)]
 pub struct MissingLock;
@@ -1768,6 +1852,93 @@ for (i, j) in &mut iter {
                 .unwrap()
                 .clone_component_to(other_all_storages, from, to, other_current);
         }
+    }
+
+    /// Regroups pending components into complete, overlapping storage groups.
+    pub fn regroup(&mut self) {
+        let storages = self.storages.read();
+        let storage_by_type = {
+            let mut storage_by_type = ShipHashMap::with_capacity(storages.len());
+
+            for (storage_id, storage) in storages.iter() {
+                if let StorageId::TypeId(type_id) = storage_id {
+                    storage_by_type.insert(*type_id, storage.0);
+                }
+            }
+
+            storage_by_type
+        };
+
+        let mut candidates = RegroupCandidates::new();
+
+        for storage_pointer in storage_by_type.values() {
+            let mut storage = unsafe { &**storage_pointer }.borrow_mut().unwrap();
+
+            storage.collect_regroup(self, &mut |entity, storages, largest_group_len| {
+                insert_regroup_candidate(
+                    candidates.entry(entity).or_default(),
+                    RegroupCandidate {
+                        storages: storages.to_vec(),
+                        largest_group_len,
+                        current_group_cursor: 0,
+                    },
+                );
+            });
+        }
+
+        for (&entity, entity_candidates) in &mut candidates {
+            loop {
+                if merge_overlapping_regroup_candidates(entity_candidates) {
+                    continue;
+                }
+
+                let Some(candidate) = entity_candidates
+                    .iter_mut()
+                    .find(|candidate| candidate.current_group_cursor < candidate.storages.len())
+                else {
+                    break;
+                };
+
+                let storage_id = candidate.storages[candidate.current_group_cursor];
+                candidate.current_group_cursor += 1;
+
+                if let Some(storage_pointer) = storage_by_type.get(&storage_id) {
+                    let storage = unsafe { &**storage_pointer }.borrow().unwrap();
+
+                    if let Some(current_group) = storage.entity_group(entity) {
+                        candidate.extend_current_group(current_group);
+                    }
+                }
+            }
+        }
+
+        for (entity, entity_candidates) in candidates {
+            for mut candidate in entity_candidates {
+                candidate.storages.sort_unstable();
+                candidate.storages.dedup();
+
+                debug_assert!(candidate.storages.len() >= candidate.largest_group_len);
+
+                for storage_id in &candidate.storages {
+                    let storage_pointer = storage_by_type
+                        .get(storage_id)
+                        .expect("Regroup candidates must reference existing storages.");
+                    let mut storage = unsafe { &**storage_pointer }.borrow_mut().unwrap();
+
+                    storage.move_to_group(entity, &candidate.storages);
+                }
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn storage_contains_entity(&self, storage_id: TypeId, entity: EntityId) -> bool {
+        let storages = self.storages.read();
+        let storage_pointer = storages.get(&StorageId::from(storage_id)).unwrap();
+
+        let storage = unsafe { &*storage_pointer.0 }.borrow().unwrap();
+
+        storage.sparse_array().unwrap().contains(entity)
     }
 }
 

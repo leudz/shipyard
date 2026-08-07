@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
-use shipyard::{track, Component, EntitiesView, EntityId, IntoIter, View, ViewMut, World};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion, Throughput};
+use shipyard::{track, Component, EntitiesView, EntityId, Group, IntoIter, View, ViewMut, World};
 use std::hint::black_box;
 
 // Lifecycle benchmarks operate on enough items to amortize Criterion and World API overhead.
@@ -145,6 +145,73 @@ fn disjoint_world(count: usize) -> World {
         .count();
 
     world
+}
+
+fn regroup_world(entity_count: usize, overlapping_group_count: usize) -> World {
+    let mut world = World::new();
+
+    {
+        let mut views = world
+            .borrow::<(ViewMut<'_, Position>, ViewMut<'_, Velocity>)>()
+            .unwrap();
+        views.create_group();
+    }
+
+    if overlapping_group_count >= 2 {
+        let mut views = world
+            .borrow::<(ViewMut<'_, Velocity>, ViewMut<'_, Health>)>()
+            .unwrap();
+        views.create_group();
+    }
+
+    if overlapping_group_count >= 3 {
+        let mut views = world
+            .borrow::<(ViewMut<'_, Health>, ViewMut<'_, Marker>)>()
+            .unwrap();
+        views.create_group();
+    }
+
+    world
+        .bulk_add_entity((0..entity_count).map(|i| {
+            (
+                Position(i as f32, i as f32),
+                Velocity(1.0, -1.0),
+                Health(i as u64),
+                Marker,
+            )
+        }))
+        .count();
+
+    world
+}
+
+fn regroup_overlapping_groups(c: &mut Criterion) {
+    let mut group = c.benchmark_group("regroup_overlapping_groups");
+
+    for overlapping_group_count in 1..=3 {
+        for entity_count in [100, 1_000, 10_000] {
+            group.throughput(Throughput::Elements(entity_count as u64));
+            group.bench_with_input(
+                BenchmarkId::new(
+                    format!("{overlapping_group_count}_overlapping_groups"),
+                    entity_count,
+                ),
+                &(overlapping_group_count, entity_count),
+                |b, &(overlapping_group_count, entity_count)| {
+                    b.iter_batched(
+                        || regroup_world(entity_count, overlapping_group_count),
+                        |mut world| {
+                            world.regroup();
+                            black_box(&world);
+                        },
+                        BatchSize::LargeInput,
+                    );
+                },
+            );
+        }
+    }
+
+    group.finish();
 }
 
 fn add_entities(c: &mut Criterion) {
@@ -816,5 +883,6 @@ criterion_group!(
     remove_components,
     iterate_entities,
     iterate_components,
+    regroup_overlapping_groups,
 );
 criterion_main!(benches);

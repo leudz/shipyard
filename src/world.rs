@@ -1751,6 +1751,12 @@ for (i, j) in &mut iter {
             .unwrap()
             .clone_components_to(other_all_storages, from, to);
     }
+
+    /// Regroups pending components into complete, overlapping storage groups.
+    #[inline]
+    pub fn regroup(&mut self) {
+        self.all_storages.get_mut().regroup();
+    }
 }
 
 impl core::fmt::Debug for World {

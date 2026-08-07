@@ -12,7 +12,7 @@ use crate::memory_usage::StorageMemoryUsage;
 use crate::sparse_set::SparseArray;
 use crate::tracking::TrackingTimestamp;
 use alloc::borrow::Cow;
-use core::any::Any;
+use core::any::{Any, TypeId};
 
 pub trait SizedAny {
     fn as_any(&self) -> &dyn Any;
@@ -119,4 +119,26 @@ pub trait Storage: SizedAny {
         other_current: TrackingTimestamp,
     ) {
     }
+    /// Collects components whose storage-specific grouping conditions are met.
+    #[doc(hidden)]
+    #[inline]
+    #[allow(unused_variables)]
+    fn collect_regroup(
+        &mut self,
+        all_storages: &AllStorages,
+        emit: &mut dyn FnMut(EntityId, &[TypeId], usize),
+    ) {
+    }
+    /// Returns the group currently occupied by `entity`.
+    #[doc(hidden)]
+    #[inline]
+    #[allow(unused_variables)]
+    fn entity_group(&self, entity: EntityId) -> Option<&[TypeId]> {
+        None
+    }
+    /// Moves `entity` into `group`, creating the local group when necessary.
+    #[doc(hidden)]
+    #[inline]
+    #[allow(unused_variables)]
+    fn move_to_group(&mut self, entity: EntityId, group: &[TypeId]) {}
 }

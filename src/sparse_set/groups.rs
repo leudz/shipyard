@@ -2,7 +2,9 @@ use alloc::vec::Vec;
 use core::{any::TypeId, ops::Index};
 
 pub(crate) struct Groups {
+    /// Nested list of [TypeId] making up groups
     type_ids: Vec<TypeId>,
+    /// Start index of each group
     offsets: Vec<usize>,
 }
 
@@ -21,6 +23,11 @@ impl Groups {
     }
 
     #[inline]
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &[TypeId]> {
+        (0..self.offsets.len()).map(|index| &self[index])
+    }
+
+    #[inline]
     pub(crate) fn add(&mut self, group: &[TypeId]) -> usize {
         let index = self.offsets.len();
 
@@ -28,23 +35,6 @@ impl Groups {
         self.type_ids.extend_from_slice(group);
 
         index
-    }
-
-    /// Returns the group at `index` without doing bounds checking.
-    ///
-    /// # Safety
-    ///
-    /// `index` must be less than the number of groups added to this collection.
-    #[inline]
-    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> &[TypeId] {
-        let start = unsafe { *self.offsets.get_unchecked(index) };
-        let end = if index + 1 == self.offsets.len() {
-            self.type_ids.len()
-        } else {
-            unsafe { *self.offsets.get_unchecked(index + 1) }
-        };
-
-        unsafe { self.type_ids.get_unchecked(start..end) }
     }
 }
 
@@ -97,7 +87,6 @@ mod tests {
         assert_eq!(&groups[multiple], &[a, b, c]);
         assert_eq!(&groups[second_empty], &[]);
         assert_eq!(&groups[duplicate], &[a]);
-        assert_eq!(unsafe { groups.get_unchecked(duplicate) }, &[a]);
     }
 
     #[test]
@@ -113,6 +102,5 @@ mod tests {
         }
 
         assert_eq!(&groups[first], &[a, b]);
-        assert_eq!(unsafe { groups.get_unchecked(first) }, &[a, b]);
     }
 }
