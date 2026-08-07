@@ -13,7 +13,9 @@ use core::mem::size_of;
 pub struct SparseArray {
     ids: Vec<Option<Box<[EntityId; BUCKET_SIZE]>>>,
     group_pages: Vec<Option<Box<GroupPage>>>,
+    /// Bitset of components pending placement.
     pending_placement_masks: Vec<u32>,
+    /// Ordered list of pages containing components pending placement.
     pending_placement_pages: Vec<usize>,
 }
 
