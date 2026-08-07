@@ -13,6 +13,7 @@ use core::mem::size_of;
 pub struct SparseArray {
     ids: Vec<Option<Box<[EntityId; BUCKET_SIZE]>>>,
     group_pages: Vec<Option<Box<GroupPage>>>,
+    pending_placement_masks: Vec<u32>,
     pending_placement_pages: Vec<usize>,
 }
 
@@ -22,6 +23,7 @@ impl SparseArray {
         SparseArray {
             ids: Vec::new(),
             group_pages: Vec::new(),
+            pending_placement_masks: Vec::new(),
             pending_placement_pages: Vec::new(),
         }
     }
@@ -54,6 +56,7 @@ impl SparseArray {
                     count
                 }
             })
+            + self.pending_placement_masks.len() * size_of::<u32>()
             + self.pending_placement_pages.len() * size_of::<usize>()
     }
     pub(super) fn reserved_memory(&self) -> usize {
@@ -73,6 +76,7 @@ impl SparseArray {
                     count
                 }
             })
+            + self.pending_placement_masks.capacity() * size_of::<u32>()
             + self.pending_placement_pages.capacity() * size_of::<usize>()
     }
 }
@@ -168,10 +172,17 @@ impl SparseArray {
                 if !sparse_entity.is_dead() && sparse_entity.gen() == entity.gen()
         ));
 
-        let became_pending_page = {
-            let page = self.group_page_mut_or_insert(entity.bucket());
-            page.set_pending_placement(entity.bucket_index())
+        if entity.bucket() >= self.pending_placement_masks.len() {
+            self.pending_placement_masks.resize(entity.bucket() + 1, 0);
+        }
+
+        let mask = unsafe {
+            // SAFE we just allocated at least entity.bucket()
+            self.pending_placement_masks
+                .get_unchecked_mut(entity.bucket())
         };
+        let became_pending_page = *mask == 0;
+        *mask |= 1 << entity.bucket_index();
 
         if became_pending_page {
             self.insert_pending_placement_page(entity.bucket());
@@ -187,10 +198,10 @@ impl SparseArray {
     #[inline]
     #[allow(dead_code)]
     pub(crate) fn pending_placement_mask(&self, page_index: usize) -> u32 {
-        self.group_pages
+        self.pending_placement_masks
             .get(page_index)
-            .and_then(Option::as_deref)
-            .map_or(0, GroupPage::pending_placement_mask)
+            .copied()
+            .unwrap_or(0)
     }
 
     #[inline]
@@ -233,12 +244,18 @@ mod tests {
     }
 
     #[test]
-    fn pending_pages_are_sorted_unique_and_cross_page_bits_are_distinct() {
+    fn pending_masks_are_lazily_allocated_and_pages_are_sorted_unique() {
         let mut array = SparseArray::new();
         let entities = [95, 64, 32, 31, 33, 0].map(EntityId::new);
 
         for entity in entities {
             insert_live(&mut array, entity);
+        }
+
+        assert!(array.pending_placement_masks.is_empty());
+        assert!(array.group_pages.is_empty());
+
+        for entity in entities {
             array.set_pending_placement(entity);
         }
 
@@ -249,23 +266,38 @@ mod tests {
         assert_eq!(array.pending_placement_mask(0), (1 << 0) | (1 << 31));
         assert_eq!(array.pending_placement_mask(1), (1 << 0) | (1 << 1));
         assert_eq!(array.pending_placement_mask(2), (1 << 0) | (1 << 31));
+        assert_eq!(array.pending_placement_masks.len(), 3);
+        assert!(array.group_pages.is_empty());
     }
 
     #[test]
-    fn pending_placement_preserves_bucket_index_and_clone_state() {
+    fn pending_placement_preserves_unclassified_bucket_and_clone_state() {
         let mut array = SparseArray::new();
         let entity = EntityId::new(42);
         insert_live(&mut array, entity);
-        array.set_bucket_index(entity, BucketIndex::from_group_index(4));
 
         array.set_pending_placement(entity);
 
-        assert_eq!(array.bucket_index(entity).group_index(), Some(4));
+        assert!(array.bucket_index(entity).is_unclassified());
+        assert!(array.group_pages.is_empty());
 
         let clone = array.clone();
         assert_eq!(clone.pending_placement_pages(), &[1]);
         assert_eq!(clone.pending_placement_mask(1), 1 << 10);
-        assert_eq!(clone.bucket_index(entity).group_index(), Some(4));
+        assert!(clone.bucket_index(entity).is_unclassified());
+        assert!(clone.group_pages.is_empty());
+    }
+
+    #[test]
+    fn bucket_index_allocates_group_page_without_pending_mask() {
+        let mut array = SparseArray::new();
+        let entity = EntityId::new(42);
+
+        array.set_bucket_index(entity, BucketIndex::from_group_index(4));
+
+        assert_eq!(array.bucket_index(entity).group_index(), Some(4));
+        assert!(array.pending_placement_masks.is_empty());
+        assert!(array.pending_placement_pages.is_empty());
     }
 
     #[test]
