@@ -192,14 +192,17 @@ impl<T: Component> SparseSet<T> {
 
     fn private_collect_regroup(
         &mut self,
-        all_storages: &AllStorages,
-        emit: &mut dyn FnMut(EntityId, &[TypeId], usize),
+        emit_entity: &mut dyn FnMut(EntityId),
+        emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
+        for group in self.groups.iter() {
+            emit_group(group);
+        }
+
         if self.sparse.pending_placement_pages.is_empty() {
             return;
         }
 
-        let origin_storage = TypeId::of::<SparseSet<T>>();
         let mut page_position = 0;
 
         while page_position < self.sparse.pending_placement_pages.len() {
@@ -219,26 +222,7 @@ impl<T: Component> SparseSet<T> {
                 let sparse_entity = self.sparse.get(EntityId::new(entity_index)).unwrap();
 
                 let entity = EntityId::new_from_index_and_gen(entity_index, sparse_entity.gen());
-                let mut local_union = Vec::new();
-                let mut largest_group_len = 0;
-
-                for group in self.groups.iter() {
-                    let is_complete = group.iter().all(|&storage_id| {
-                        storage_id == origin_storage
-                            || all_storages.storage_contains_entity(storage_id, entity)
-                    });
-
-                    if is_complete {
-                        local_union.extend_from_slice(group);
-                        largest_group_len = largest_group_len.max(group.len());
-                    }
-                }
-
-                if largest_group_len != 0 {
-                    local_union.sort_unstable();
-                    local_union.dedup();
-                    emit(entity, &local_union, largest_group_len);
-                }
+                emit_entity(entity);
             }
 
             page_position += 1;
@@ -1067,10 +1051,10 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
 
     fn collect_regroup(
         &mut self,
-        all_storages: &AllStorages,
-        emit: &mut dyn FnMut(EntityId, &[TypeId], usize),
+        emit_entity: &mut dyn FnMut(EntityId),
+        emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
-        self.private_collect_regroup(all_storages, emit);
+        self.private_collect_regroup(emit_entity, emit_group);
     }
 
     fn entity_group(&self, entity: EntityId) -> Option<&[TypeId]> {
@@ -1085,6 +1069,10 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
     }
 
     fn move_to_group(&mut self, entity: EntityId, group: &[TypeId]) {
+        self.move_to_group_batch(core::slice::from_ref(&entity), group);
+    }
+
+    fn move_to_group_batch(&mut self, entities: &[EntityId], group: &[TypeId]) {
         let group_index = self
             .groups
             .iter()
@@ -1095,7 +1083,9 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
             group_index
         });
 
-        self.move_entity_to_group(entity, group_index);
+        for &entity in entities {
+            self.move_entity_to_group(entity, group_index);
+        }
     }
 }
 
@@ -1996,6 +1986,25 @@ mod tests {
         assert_eq!(views.0.sparse_set.groups.iter().count(), group_counts.0);
         assert_eq!(views.1.sparse_set.groups.iter().count(), group_counts.1);
         assert_eq!(views.2.sparse_set.groups.iter().count(), group_counts.2);
+    }
+
+    #[test]
+    fn regroup_batch_reuses_one_group_for_all_entities() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let entities: Vec<_> = (0..16).map(|_| world.add_entity((A, B))).collect();
+        world.regroup();
+
+        let views = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        assert_eq!(views.0.sparse_set.groups.iter().count(), 1);
+        assert_eq!(views.1.sparse_set.groups.iter().count(), 1);
+        assert_eq!(views.0.sparse_set.group_buckets[0].dense, entities);
+        assert_eq!(views.1.sparse_set.group_buckets[0].dense, entities);
     }
 
     #[test]

@@ -11,7 +11,7 @@ use crate::ShipHashMap;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use core::marker::PhantomData;
-use core::sync::atomic::AtomicU64;
+use core::sync::atomic::{AtomicBool, AtomicU64};
 
 pub(crate) struct AllStoragesBuilder<Lock, ThreadId> {
     pub(crate) custom_lock: Option<Box<dyn ShipyardRwLock + Send + Sync>>,
@@ -100,6 +100,7 @@ impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
             AtomicRefCell::new_non_send(
                 AllStorages {
                     storages,
+                    mutably_borrowed_since_regroup: AtomicBool::new(false),
                     main_thread_id,
                     thread_id_generator: thread_id_generator.clone(),
                     counter,
@@ -109,7 +110,11 @@ impl AllStoragesBuilder<LockPresent, ThreadIdPresent> {
         }
         #[cfg(not(feature = "thread_local"))]
         {
-            AtomicRefCell::new(AllStorages { storages, counter })
+            AtomicRefCell::new(AllStorages {
+                storages,
+                mutably_borrowed_since_regroup: AtomicBool::new(false),
+                counter,
+            })
         }
     }
 }

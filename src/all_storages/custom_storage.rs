@@ -264,9 +264,12 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe { &*storage.0 }.borrow_mut();
             drop(storages);
             match storage {
-                Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                    storage.as_any_mut().downcast_mut().unwrap()
-                })),
+                Ok(storage) => {
+                    self.mark_mutably_borrowed();
+                    Ok(ARefMut::map(storage, |storage| {
+                        storage.as_any_mut().downcast_mut().unwrap()
+                    }))
+                }
                 Err(err) => Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -289,11 +292,13 @@ impl CustomStorageAccess for AllStorages {
         if let Some(storage) = storage {
             let storage = unsafe { &*storage.0 }.borrow_mut();
             drop(storages);
-            storage.map_err(|err| error::GetStorage::StorageBorrow {
+            let storage = storage.map_err(|err| error::GetStorage::StorageBorrow {
                 name: None,
                 id: storage_id,
                 borrow: err,
-            })
+            })?;
+            self.mark_mutably_borrowed();
+            Ok(storage)
         } else {
             Err(error::GetStorage::MissingStorage {
                 name: None,
@@ -576,9 +581,12 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe { &*storage.0 }.borrow_mut();
             drop(storages);
             match storage {
-                Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                    storage.as_any_mut().downcast_mut().unwrap()
-                })),
+                Ok(storage) => {
+                    self.mark_mutably_borrowed();
+                    Ok(ARefMut::map(storage, |storage| {
+                        storage.as_any_mut().downcast_mut().unwrap()
+                    }))
+                }
                 Err(err) => Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -602,7 +610,9 @@ impl CustomStorageAccess for AllStorages {
                 borrow: err,
             });
 
-            Ok(ARefMut::map(storage?, |storage| {
+            let storage = storage?;
+            self.mark_mutably_borrowed();
+            Ok(ARefMut::map(storage, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -635,9 +645,12 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe { &*storage.0 }.borrow_mut();
 
             match storage {
-                Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                    storage.as_any_mut().downcast_mut().unwrap()
-                })),
+                Ok(storage) => {
+                    self.mark_mutably_borrowed();
+                    Ok(ARefMut::map(storage, |storage| {
+                        storage.as_any_mut().downcast_mut().unwrap()
+                    }))
+                }
                 Err(err) => Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -669,7 +682,9 @@ impl CustomStorageAccess for AllStorages {
                 borrow: err,
             });
 
-            Ok(ARefMut::map(storage?, |storage| {
+            let storage = storage?;
+            self.mark_mutably_borrowed();
+            Ok(ARefMut::map(storage, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -702,9 +717,12 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe { &*storage.0 }.borrow_mut();
 
             match storage {
-                Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                    storage.as_any_mut().downcast_mut().unwrap()
-                })),
+                Ok(storage) => {
+                    self.mark_mutably_borrowed();
+                    Ok(ARefMut::map(storage, |storage| {
+                        storage.as_any_mut().downcast_mut().unwrap()
+                    }))
+                }
                 Err(err) => Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -728,7 +746,9 @@ impl CustomStorageAccess for AllStorages {
                 borrow: err,
             });
 
-            Ok(ARefMut::map(storage?, |storage| {
+            let storage = storage?;
+            self.mark_mutably_borrowed();
+            Ok(ARefMut::map(storage, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -761,9 +781,12 @@ impl CustomStorageAccess for AllStorages {
             let storage = unsafe { &*storage.0 }.borrow_mut();
 
             match storage {
-                Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                    storage.as_any_mut().downcast_mut().unwrap()
-                })),
+                Ok(storage) => {
+                    self.mark_mutably_borrowed();
+                    Ok(ARefMut::map(storage, |storage| {
+                        storage.as_any_mut().downcast_mut().unwrap()
+                    }))
+                }
                 Err(err) => Err(error::GetStorage::StorageBorrow {
                     name: Some(type_name::<S>()),
                     id: StorageId::of::<S>(),
@@ -797,7 +820,9 @@ impl CustomStorageAccess for AllStorages {
                 borrow: err,
             });
 
-            Ok(ARefMut::map(storage?, |storage| {
+            let storage = storage?;
+            self.mark_mutably_borrowed();
+            Ok(ARefMut::map(storage, |storage| {
                 storage.as_any_mut().downcast_mut::<S>().unwrap()
             }))
         }
@@ -819,7 +844,8 @@ impl CustomStorageAccess for AllStorages {
     }
 
     fn iter_storages_mut(&self) -> Vec<ARefMut<'_, &mut (dyn Storage + 'static)>> {
-        self.storages
+        let storages = self
+            .storages
             .read()
             .iter()
             .flat_map(move |(storage_id, storage)| unsafe {
@@ -831,6 +857,12 @@ impl CustomStorageAccess for AllStorages {
                         borrow: err,
                     })
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        if !storages.is_empty() {
+            self.mark_mutably_borrowed();
+        }
+
+        storages
     }
 }

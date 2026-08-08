@@ -119,14 +119,14 @@ pub trait Storage: SizedAny {
         other_current: TrackingTimestamp,
     ) {
     }
-    /// Collects components whose storage-specific grouping conditions are met.
+    /// Consumes pending regroup inputs, emitting entities and group definitions.
     #[doc(hidden)]
     #[inline]
     #[allow(unused_variables)]
     fn collect_regroup(
         &mut self,
-        all_storages: &AllStorages,
-        emit: &mut dyn FnMut(EntityId, &[TypeId], usize),
+        emit_entity: &mut dyn FnMut(EntityId),
+        emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
     }
     /// Returns the group currently occupied by `entity`.
@@ -141,4 +141,13 @@ pub trait Storage: SizedAny {
     #[inline]
     #[allow(unused_variables)]
     fn move_to_group(&mut self, entity: EntityId, group: &[TypeId]) {}
+    /// Moves a batch of entities into `group`.
+    #[doc(hidden)]
+    #[inline]
+    #[allow(unused_variables)]
+    fn move_to_group_batch(&mut self, entities: &[EntityId], group: &[TypeId]) {
+        for &entity in entities {
+            self.move_to_group(entity, group);
+        }
+    }
 }

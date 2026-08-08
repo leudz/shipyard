@@ -25,6 +25,17 @@ struct Health(u64);
 #[derive(Component, Clone, Copy)]
 struct Marker;
 
+macro_rules! regroup_components {
+    ($($component:ident),+ $(,)?) => {
+        $(
+            #[derive(Component, Clone, Copy)]
+            struct $component;
+        )+
+    };
+}
+
+regroup_components!(G0, G1, G2, G3, G4, G5, G6, G7, G8, G9);
+
 #[derive(Clone, Copy)]
 struct Tracked(u64);
 
@@ -185,6 +196,127 @@ fn regroup_world(entity_count: usize, overlapping_group_count: usize) -> World {
     world
 }
 
+macro_rules! create_regroup_pair {
+    ($world:expr, $left:ty, $right:ty) => {{
+        let mut views = $world
+            .borrow::<(ViewMut<'_, $left>, ViewMut<'_, $right>)>()
+            .unwrap();
+        views.create_group();
+    }};
+}
+
+fn register_overlap_groups(world: &World, group_count: usize) {
+    if group_count >= 1 {
+        create_regroup_pair!(world, G0, G1);
+    }
+    if group_count >= 2 {
+        create_regroup_pair!(world, G1, G2);
+    }
+    if group_count >= 3 {
+        create_regroup_pair!(world, G2, G3);
+    }
+    if group_count >= 4 {
+        create_regroup_pair!(world, G3, G4);
+    }
+    if group_count >= 5 {
+        create_regroup_pair!(world, G4, G5);
+    }
+    if group_count >= 6 {
+        create_regroup_pair!(world, G5, G6);
+    }
+    if group_count >= 7 {
+        create_regroup_pair!(world, G6, G7);
+    }
+    if group_count >= 8 {
+        create_regroup_pair!(world, G7, G8);
+    }
+    if group_count >= 9 {
+        create_regroup_pair!(world, G8, G9);
+    }
+    if group_count >= 10 {
+        create_regroup_pair!(world, G9, G0);
+    }
+    if group_count >= 11 {
+        create_regroup_pair!(world, G0, G2);
+    }
+    if group_count >= 12 {
+        create_regroup_pair!(world, G1, G3);
+    }
+    if group_count >= 13 {
+        create_regroup_pair!(world, G2, G4);
+    }
+    if group_count >= 14 {
+        create_regroup_pair!(world, G3, G5);
+    }
+    if group_count >= 15 {
+        create_regroup_pair!(world, G4, G6);
+    }
+    if group_count >= 16 {
+        create_regroup_pair!(world, G5, G7);
+    }
+}
+
+fn overlap_regroup_world(entity_count: usize, group_count: usize) -> World {
+    let mut world = World::new();
+    register_overlap_groups(&world, group_count);
+    world
+        .bulk_add_entity((0..entity_count).map(|_| (G0, G1, G2, G3, G4, G5, G6, G7, G8, G9)))
+        .count();
+    world
+}
+
+fn wide_regroup_world(entity_count: usize) -> World {
+    let mut world = World::new();
+
+    {
+        let mut views = world
+            .borrow::<(
+                ViewMut<'_, G0>,
+                ViewMut<'_, G1>,
+                ViewMut<'_, G2>,
+                ViewMut<'_, G3>,
+                ViewMut<'_, G4>,
+                ViewMut<'_, G5>,
+                ViewMut<'_, G6>,
+                ViewMut<'_, G7>,
+                ViewMut<'_, G8>,
+                ViewMut<'_, G9>,
+            )>()
+            .unwrap();
+        views.create_group();
+    }
+
+    world
+        .bulk_add_entity((0..entity_count).map(|_| (G0, G1, G2, G3, G4, G5, G6, G7, G8, G9)))
+        .count();
+    world
+}
+
+fn incomplete_regroup_world(entity_count: usize) -> World {
+    let mut world = World::new();
+    create_regroup_pair!(&world, G0, G1);
+    world
+        .bulk_add_entity((0..entity_count).map(|_| (G0,)))
+        .count();
+    world
+}
+
+fn incremental_regroup_world(entity_count: usize) -> World {
+    let mut world = World::new();
+    create_regroup_pair!(&world, G0, G1);
+    create_regroup_pair!(&world, G0, G2);
+    let entities: Vec<_> = world
+        .bulk_add_entity((0..entity_count).map(|_| (G0, G2)))
+        .collect();
+    world.regroup();
+
+    for entity in entities {
+        world.add_component(entity, (G1,));
+    }
+
+    world
+}
+
 fn regroup_overlapping_groups(c: &mut Criterion) {
     let mut group = c.benchmark_group("regroup_overlapping_groups");
 
@@ -209,6 +341,69 @@ fn regroup_overlapping_groups(c: &mut Criterion) {
                 },
             );
         }
+    }
+
+    let entity_count = MUTATION_COUNT;
+    group.throughput(Throughput::Elements(entity_count as u64));
+
+    group.bench_function("no_op_clean", |b| {
+        let mut world = wide_regroup_world(entity_count);
+        world.regroup();
+
+        b.iter(|| {
+            world.regroup();
+            black_box(&world);
+        });
+    });
+
+    group.bench_function("incomplete_group", |b| {
+        b.iter_batched(
+            || incomplete_regroup_world(entity_count),
+            |mut world| {
+                world.regroup();
+                black_box(&world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("incremental_insertion", |b| {
+        b.iter_batched(
+            || incremental_regroup_world(entity_count),
+            |mut world| {
+                world.regroup();
+                black_box(&world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("wide_10_storage_group", |b| {
+        b.iter_batched(
+            || wide_regroup_world(entity_count),
+            |mut world| {
+                world.regroup();
+                black_box(&world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    for overlap_count in [8, 16] {
+        group.bench_with_input(
+            BenchmarkId::new("overlap_groups", overlap_count),
+            &overlap_count,
+            |b, &overlap_count| {
+                b.iter_batched(
+                    || overlap_regroup_world(entity_count, overlap_count),
+                    |mut world| {
+                        world.regroup();
+                        black_box(&world);
+                    },
+                    BatchSize::LargeInput,
+                );
+            },
+        );
     }
 
     group.finish();

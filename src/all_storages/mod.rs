@@ -37,63 +37,95 @@ use crate::views::EntitiesViewMut;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::any::{type_name, TypeId};
-use core::sync::atomic::AtomicU64;
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use hashbrown::hash_map::Entry;
 
-struct RegroupCandidate {
-    storages: Vec<TypeId>,
-    largest_group_len: usize,
-    current_group_cursor: usize,
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct StorageMask {
+    words: Vec<usize>,
 }
 
-type RegroupCandidates = ShipHashMap<EntityId, Vec<RegroupCandidate>>;
+impl StorageMask {
+    fn new(storage_count: usize) -> Self {
+        Self {
+            words: vec![0; storage_count.div_ceil(usize::BITS as usize)],
+        }
+    }
 
-impl RegroupCandidate {
+    #[inline]
+    fn insert(&mut self, storage_index: usize) -> bool {
+        let word_index = storage_index / usize::BITS as usize;
+        let bit = 1 << (storage_index % usize::BITS as usize);
+        let was_missing = self.words[word_index] & bit == 0;
+        self.words[word_index] |= bit;
+        was_missing
+    }
+
     #[inline]
     fn intersects(&self, other: &Self) -> bool {
-        self.storages
+        self.words
             .iter()
-            .any(|storage| other.storages.contains(storage))
+            .zip(&other.words)
+            .any(|(&left, &right)| left & right != 0)
+    }
+
+    fn union_with(&mut self, other: &Self) {
+        for (word, &other_word) in self.words.iter_mut().zip(&other.words) {
+            *word |= other_word;
+        }
+    }
+
+    fn first_difference(&self, other: &Self) -> Option<usize> {
+        self.words.iter().zip(&other.words).enumerate().find_map(
+            |(word_index, (&word, &other_word))| {
+                let difference = word & !other_word;
+
+                (difference != 0).then(|| {
+                    word_index * usize::BITS as usize + difference.trailing_zeros() as usize
+                })
+            },
+        )
+    }
+
+    fn indices(&self) -> impl Iterator<Item = usize> + '_ {
+        self.words
+            .iter()
+            .copied()
+            .enumerate()
+            .flat_map(|(word_index, mut word)| {
+                core::iter::from_fn(move || {
+                    if word == 0 {
+                        return None;
+                    }
+
+                    let bit_index = word.trailing_zeros() as usize;
+                    word &= word - 1;
+
+                    Some(word_index * usize::BITS as usize + bit_index)
+                })
+            })
+    }
+}
+
+struct RegroupCandidate {
+    storages: StorageMask,
+    expanded_storages: StorageMask,
+}
+
+impl RegroupCandidate {
+    fn new(storages: StorageMask) -> Self {
+        Self {
+            expanded_storages: StorageMask::new(storages.words.len() * usize::BITS as usize),
+            storages,
+        }
     }
 
     fn merge(&mut self, other: RegroupCandidate) {
-        let mut storages = Vec::with_capacity(self.storages.len() + other.storages.len());
-
-        for &storage in self.storages[..self.current_group_cursor]
-            .iter()
-            .chain(&other.storages[..other.current_group_cursor])
-        {
-            if !storages.contains(&storage) {
-                storages.push(storage);
-            }
-        }
-
-        let current_group_cursor = storages.len();
-
-        for &storage in self.storages[self.current_group_cursor..]
-            .iter()
-            .chain(&other.storages[other.current_group_cursor..])
-        {
-            if !storages.contains(&storage) {
-                storages.push(storage);
-            }
-        }
-
-        self.storages = storages;
-        self.largest_group_len = self.largest_group_len.max(other.largest_group_len);
-        self.current_group_cursor = current_group_cursor;
-    }
-
-    fn extend_current_group(&mut self, group: &[TypeId]) {
-        self.largest_group_len = self.largest_group_len.max(group.len());
-
-        for &storage in group {
-            if !self.storages.contains(&storage) {
-                self.storages.push(storage);
-            }
-        }
+        self.storages.union_with(&other.storages);
+        self.expanded_storages.union_with(&other.expanded_storages);
     }
 }
 
@@ -103,26 +135,12 @@ fn insert_regroup_candidate(
 ) {
     while let Some(index) = candidates
         .iter()
-        .position(|existing| existing.intersects(&candidate))
+        .position(|existing| existing.storages.intersects(&candidate.storages))
     {
         candidate.merge(candidates.swap_remove(index));
     }
 
     candidates.push(candidate);
-}
-
-fn merge_overlapping_regroup_candidates(candidates: &mut Vec<RegroupCandidate>) -> bool {
-    for left in 0..candidates.len() {
-        if let Some(right) = (left + 1..candidates.len())
-            .find(|&right| candidates[left].intersects(&candidates[right]))
-        {
-            let other = candidates.swap_remove(right);
-            candidates[left].merge(other);
-            return true;
-        }
-    }
-
-    false
 }
 
 #[allow(missing_docs)]
@@ -144,6 +162,7 @@ pub struct ThreadIdPresent;
 // we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
 pub struct AllStorages {
     pub(crate) storages: RwLock<ShipHashMap<StorageId, SBox>>,
+    mutably_borrowed_since_regroup: AtomicBool,
     #[cfg(feature = "thread_local")]
     main_thread_id: u64,
     #[cfg(feature = "thread_local")]
@@ -165,12 +184,19 @@ impl AllStorages {
 
         AllStorages {
             storages: RwLock::new_std(storages),
+            mutably_borrowed_since_regroup: AtomicBool::new(false),
             #[cfg(feature = "thread_local")]
             main_thread_id: (std_thread_id_generator)(),
             #[cfg(feature = "thread_local")]
             thread_id_generator: Arc::new(std_thread_id_generator),
             counter,
         }
+    }
+
+    #[inline]
+    fn mark_mutably_borrowed(&self) {
+        self.mutably_borrowed_since_regroup
+            .store(true, Ordering::Release);
     }
     /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
@@ -1175,9 +1201,12 @@ let i = all_storages.run(sys1);
         let storage = unsafe { &*storage.0 }.borrow_mut();
         drop(storages);
         match storage {
-            Ok(storage) => Ok(ARefMut::map(storage, |storage| {
-                storage.as_any_mut().downcast_mut().unwrap()
-            })),
+            Ok(storage) => {
+                self.mark_mutably_borrowed();
+                Ok(ARefMut::map(storage, |storage| {
+                    storage.as_any_mut().downcast_mut().unwrap()
+                }))
+            }
             Err(err) => Err(error::GetStorage::Entities(err)),
         }
     }
@@ -1197,6 +1226,8 @@ let i = all_storages.run(sys1);
                 .as_any_mut()
                 .downcast_mut()
                 .unwrap();
+            self.mutably_borrowed_since_regroup
+                .store(true, Ordering::Release);
             Ok(storage)
         } else {
             Err(error::GetStorage::MissingStorage {
@@ -1216,7 +1247,7 @@ let i = all_storages.run(sys1);
     {
         let storages = self.storages.get_mut();
 
-        unsafe {
+        let storage = unsafe {
             &mut *storages
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new(f()))
@@ -1225,7 +1256,11 @@ let i = all_storages.run(sys1);
         .get_mut()
         .as_any_mut()
         .downcast_mut()
-        .unwrap()
+        .unwrap();
+
+        self.mutably_borrowed_since_regroup
+            .store(true, Ordering::Release);
+        storage
     }
     #[cfg(feature = "thread_local")]
     #[track_caller]
@@ -1240,7 +1275,7 @@ let i = all_storages.run(sys1);
     {
         let storages = self.storages.get_mut();
 
-        unsafe {
+        let storage = unsafe {
             &mut *storages
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new_non_send(f(), self.thread_id_generator.clone()))
@@ -1249,7 +1284,11 @@ let i = all_storages.run(sys1);
         .get_mut()
         .as_any_mut()
         .downcast_mut()
-        .unwrap()
+        .unwrap();
+
+        self.mutably_borrowed_since_regroup
+            .store(true, Ordering::Release);
+        storage
     }
     #[cfg(feature = "thread_local")]
     pub(crate) fn exclusive_storage_or_insert_non_sync_mut<T, F>(
@@ -1263,7 +1302,7 @@ let i = all_storages.run(sys1);
     {
         let storages = self.storages.get_mut();
 
-        unsafe {
+        let storage = unsafe {
             &mut *storages
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new_non_sync(f()))
@@ -1272,7 +1311,11 @@ let i = all_storages.run(sys1);
         .get_mut()
         .as_any_mut()
         .downcast_mut()
-        .unwrap()
+        .unwrap();
+
+        self.mutably_borrowed_since_regroup
+            .store(true, Ordering::Release);
+        storage
     }
     #[cfg(feature = "thread_local")]
     #[track_caller]
@@ -1287,7 +1330,7 @@ let i = all_storages.run(sys1);
     {
         let storages = self.storages.get_mut();
 
-        unsafe {
+        let storage = unsafe {
             &mut *storages
                 .entry(storage_id)
                 .or_insert_with(|| SBox::new_non_send_sync(f(), self.thread_id_generator.clone()))
@@ -1296,7 +1339,11 @@ let i = all_storages.run(sys1);
         .get_mut()
         .as_any_mut()
         .downcast_mut()
-        .unwrap()
+        .unwrap();
+
+        self.mutably_borrowed_since_regroup
+            .store(true, Ordering::Release);
+        storage
     }
     /// Make the given entity alive.  
     /// Does nothing if an entity with a greater generation is already at this index.  
@@ -1314,15 +1361,12 @@ let i = all_storages.run(sys1);
 
     #[inline]
     pub(crate) fn get_current(&self) -> TrackingTimestamp {
-        TrackingTimestamp::new(
-            self.counter
-                .fetch_add(1, core::sync::atomic::Ordering::Acquire),
-        )
+        TrackingTimestamp::new(self.counter.fetch_add(1, Ordering::Acquire))
     }
 
     /// Returns a timestamp used to clear tracking information.
     pub fn get_tracking_timestamp(&self) -> TrackingTimestamp {
-        TrackingTimestamp::new(self.counter.load(core::sync::atomic::Ordering::Acquire))
+        TrackingTimestamp::new(self.counter.load(Ordering::Acquire))
     }
 
     /// Enable insertion tracking for the given components.
@@ -1856,89 +1900,164 @@ for (i, j) in &mut iter {
 
     /// Regroups pending components into complete, overlapping storage groups.
     pub fn regroup(&mut self) {
-        let storages = self.storages.read();
-        let storage_by_type = {
-            let mut storage_by_type = ShipHashMap::with_capacity(storages.len());
+        if !self.mutably_borrowed_since_regroup.load(Ordering::Acquire) {
+            return;
+        }
 
-            for (storage_id, storage) in storages.iter() {
-                if let StorageId::TypeId(type_id) = storage_id {
-                    storage_by_type.insert(*type_id, storage.0);
+        let storage_map = self.storages.get_mut();
+        let mut pending_entities = Vec::new();
+        let mut group_definitions = Vec::new();
+
+        for storage in storage_map.values_mut() {
+            let storage = unsafe { &mut *storage.0 }.get_mut();
+
+            storage.collect_regroup(&mut |entity| pending_entities.push(entity), &mut |group| {
+                let mut group = group.to_vec();
+                group.sort_unstable();
+                group.dedup();
+
+                if !group.is_empty() {
+                    group_definitions.push(group);
                 }
-            }
-
-            storage_by_type
-        };
-
-        let mut candidates = RegroupCandidates::new();
-
-        for storage_pointer in storage_by_type.values() {
-            let mut storage = unsafe { &**storage_pointer }.borrow_mut().unwrap();
-
-            storage.collect_regroup(self, &mut |entity, storages, largest_group_len| {
-                insert_regroup_candidate(
-                    candidates.entry(entity).or_default(),
-                    RegroupCandidate {
-                        storages: storages.to_vec(),
-                        largest_group_len,
-                        current_group_cursor: 0,
-                    },
-                );
             });
         }
 
-        for (&entity, entity_candidates) in &mut candidates {
-            loop {
-                if merge_overlapping_regroup_candidates(entity_candidates) {
-                    continue;
+        pending_entities.sort_unstable();
+        pending_entities.dedup();
+        group_definitions.sort_unstable();
+        group_definitions.dedup();
+
+        if pending_entities.is_empty() || group_definitions.is_empty() {
+            self.mutably_borrowed_since_regroup
+                .store(false, Ordering::Release);
+            return;
+        }
+
+        let mut participating_storages: Vec<_> = group_definitions
+            .iter()
+            .flat_map(|group| group.iter().copied())
+            .collect();
+        participating_storages.sort_unstable();
+        participating_storages.dedup();
+
+        let storage_count = participating_storages.len();
+        let storage_indices: ShipHashMap<_, _> = participating_storages
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, storage_id)| (storage_id, index))
+            .collect();
+        let group_masks: Vec<_> = group_definitions
+            .iter()
+            .map(|group| {
+                let mut mask = StorageMask::new(storage_count);
+
+                for storage_id in group {
+                    mask.insert(storage_indices[storage_id]);
                 }
 
-                let Some(candidate) = entity_candidates
-                    .iter_mut()
-                    .find(|candidate| candidate.current_group_cursor < candidate.storages.len())
-                else {
-                    break;
-                };
+                mask
+            })
+            .collect();
 
-                let storage_id = candidate.storages[candidate.current_group_cursor];
-                candidate.current_group_cursor += 1;
+        let storage_guards: Vec<_> = participating_storages
+            .iter()
+            .map(|&storage_id| {
+                storage_map
+                    .get(&StorageId::from(storage_id))
+                    .map(|storage| unsafe { &*storage.0 }.borrow().unwrap())
+            })
+            .collect();
 
-                if let Some(storage_pointer) = storage_by_type.get(&storage_id) {
-                    let storage = unsafe { &**storage_pointer }.borrow().unwrap();
+        let mut interned_signatures: Vec<Vec<TypeId>> = Vec::new();
+        let mut signature_indices = ShipHashMap::new();
+        let mut movement_batches: ShipHashMap<(usize, usize), Vec<EntityId>> = ShipHashMap::new();
 
-                    if let Some(current_group) = storage.entity_group(entity) {
-                        candidate.extend_current_group(current_group);
+        for entity in pending_entities {
+            let mut candidates = Vec::new();
+
+            for group_mask in &group_masks {
+                let is_complete = group_mask.indices().all(|storage_index| {
+                    storage_guards[storage_index]
+                        .as_ref()
+                        .and_then(|storage| storage.sparse_array())
+                        .map(|sparse| sparse.contains(entity))
+                        .unwrap_or(false)
+                });
+
+                if is_complete {
+                    insert_regroup_candidate(
+                        &mut candidates,
+                        RegroupCandidate::new(group_mask.clone()),
+                    );
+                }
+            }
+
+            for candidate in &mut candidates {
+                while let Some(storage_index) = candidate
+                    .storages
+                    .first_difference(&candidate.expanded_storages)
+                {
+                    candidate.expanded_storages.insert(storage_index);
+
+                    if let Some(current_group) = storage_guards[storage_index]
+                        .as_ref()
+                        .and_then(|storage| storage.entity_group(entity))
+                    {
+                        for storage_id in current_group {
+                            if let Some(&current_storage_index) = storage_indices.get(storage_id) {
+                                candidate.storages.insert(current_storage_index);
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        for (entity, entity_candidates) in candidates {
-            for mut candidate in entity_candidates {
-                candidate.storages.sort_unstable();
-                candidate.storages.dedup();
+            let mut merged_candidates = Vec::with_capacity(candidates.len());
+            for candidate in candidates {
+                insert_regroup_candidate(&mut merged_candidates, candidate);
+            }
 
-                debug_assert!(candidate.storages.len() >= candidate.largest_group_len);
+            for candidate in merged_candidates {
+                let signature_index = match signature_indices.entry(candidate.storages.clone()) {
+                    Entry::Occupied(entry) => *entry.get(),
+                    Entry::Vacant(entry) => {
+                        let signature_index = interned_signatures.len();
+                        let signature = candidate
+                            .storages
+                            .indices()
+                            .map(|storage_index| participating_storages[storage_index])
+                            .collect();
 
-                for storage_id in &candidate.storages {
-                    let storage_pointer = storage_by_type
-                        .get(storage_id)
-                        .expect("Regroup candidates must reference existing storages.");
-                    let mut storage = unsafe { &**storage_pointer }.borrow_mut().unwrap();
+                        interned_signatures.push(signature);
+                        entry.insert(signature_index);
+                        signature_index
+                    }
+                };
 
-                    storage.move_to_group(entity, &candidate.storages);
+                for storage_index in candidate.storages.indices() {
+                    movement_batches
+                        .entry((storage_index, signature_index))
+                        .or_default()
+                        .push(entity);
                 }
             }
         }
-    }
 
-    #[inline]
-    pub(crate) fn storage_contains_entity(&self, storage_id: TypeId, entity: EntityId) -> bool {
-        let storages = self.storages.read();
-        let storage_pointer = storages.get(&StorageId::from(storage_id)).unwrap();
+        drop(storage_guards);
 
-        let storage = unsafe { &*storage_pointer.0 }.borrow().unwrap();
+        for ((storage_index, signature_index), entities) in movement_batches {
+            let storage_id = participating_storages[storage_index];
+            let storage = storage_map
+                .get_mut(&StorageId::from(storage_id))
+                .expect("Regroup batches must reference existing storages.");
+            let storage = unsafe { &mut *storage.0 }.get_mut();
 
-        storage.sparse_array().unwrap().contains(entity)
+            storage.move_to_group_batch(&entities, &interned_signatures[signature_index]);
+        }
+
+        self.mutably_borrowed_since_regroup
+            .store(false, Ordering::Release);
     }
 }
 
@@ -1981,6 +2100,364 @@ impl core::fmt::Debug for AllStoragesMemoryUsage<'_> {
         }
 
         debug_struct.finish()
+    }
+}
+
+#[cfg(test)]
+mod regroup_tests {
+    use super::*;
+    use crate::all_storages::CustomStorageAccess;
+    use crate::component::Component;
+    use crate::sparse_set::SparseArray;
+    use crate::track;
+    use crate::{View, ViewMut, World};
+    use core::sync::atomic::AtomicUsize;
+
+    struct A;
+
+    impl Component for A {
+        type Tracking = track::Untracked;
+    }
+
+    struct RegroupProbe(Arc<AtomicUsize>);
+
+    impl Storage for RegroupProbe {
+        fn collect_regroup(
+            &mut self,
+            _emit_entity: &mut dyn FnMut(EntityId),
+            _emit_group: &mut dyn FnMut(&[TypeId]),
+        ) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn is_dirty(world: &World) -> bool {
+        world
+            .all_storages
+            .borrow()
+            .unwrap()
+            .mutably_borrowed_since_regroup
+            .load(Ordering::Acquire)
+    }
+
+    #[test]
+    fn dirty_gate_marks_successful_mutable_borrows_and_skips_clean_regroups() {
+        let mut world = World::new();
+        let collect_count = Arc::new(AtomicUsize::new(0));
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert(|| RegroupProbe(collect_count.clone()))
+                    .unwrap(),
+            );
+        }
+
+        assert!(!is_dirty(&world));
+        world.regroup();
+        assert_eq!(collect_count.load(Ordering::Relaxed), 0);
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(all_storages.custom_storage_mut::<RegroupProbe>().unwrap());
+            assert!(all_storages
+                .mutably_borrowed_since_regroup
+                .load(Ordering::Acquire));
+        }
+
+        world.regroup();
+        assert_eq!(collect_count.load(Ordering::Relaxed), 1);
+        assert!(!is_dirty(&world));
+
+        world.regroup();
+        assert_eq!(collect_count.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn shared_and_failed_mutable_borrows_do_not_mark_dirty() {
+        let mut world = World::new();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert(|| RegroupProbe(Arc::new(AtomicUsize::new(0))))
+                    .unwrap(),
+            );
+        }
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            let shared = all_storages.custom_storage::<RegroupProbe>().unwrap();
+
+            assert!(all_storages.custom_storage_mut::<RegroupProbe>().is_err());
+            assert!(!all_storages
+                .mutably_borrowed_since_regroup
+                .load(Ordering::Acquire));
+
+            drop(shared);
+            drop(all_storages.custom_storage::<RegroupProbe>().unwrap());
+            assert!(!all_storages
+                .mutably_borrowed_since_regroup
+                .load(Ordering::Acquire));
+        }
+    }
+
+    #[test]
+    fn direct_component_entity_and_iteration_access_mark_dirty() {
+        let mut world = World::new();
+
+        let entity = world.add_entity(A);
+        assert!(is_dirty(&world));
+        world.regroup();
+        assert!(!is_dirty(&world));
+
+        drop(world.borrow::<View<'_, A>>().unwrap());
+        assert!(!is_dirty(&world));
+
+        drop(world.borrow::<ViewMut<'_, A>>().unwrap());
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        world.add_component(entity, (A,));
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(all_storages.iter_storages_mut());
+        }
+        assert!(is_dirty(&world));
+    }
+
+    struct B;
+
+    impl Component for B {
+        type Tracking = track::Untracked;
+    }
+
+    struct CountingStorage<T: Component> {
+        sparse_set: SparseSet<T>,
+        pending: Vec<EntityId>,
+        group: Vec<TypeId>,
+        completeness_checks: Arc<AtomicUsize>,
+        batch_calls: Arc<AtomicUsize>,
+    }
+
+    impl<T: Component + Send + Sync> Storage for CountingStorage<T> {
+        fn sparse_array(&self) -> Option<&SparseArray> {
+            self.completeness_checks.fetch_add(1, Ordering::Relaxed);
+            Storage::sparse_array(&self.sparse_set)
+        }
+
+        fn collect_regroup(
+            &mut self,
+            emit_entity: &mut dyn FnMut(EntityId),
+            emit_group: &mut dyn FnMut(&[TypeId]),
+        ) {
+            emit_group(&self.group);
+            for entity in self.pending.drain(..) {
+                emit_entity(entity);
+            }
+        }
+
+        fn move_to_group_batch(&mut self, entities: &[EntityId], _group: &[TypeId]) {
+            assert!(!entities.is_empty());
+            self.batch_calls.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn counting_storage<T: Component + Send + Sync>(
+        entity: EntityId,
+        component: T,
+        group: &[TypeId],
+        completeness_checks: Arc<AtomicUsize>,
+        batch_calls: Arc<AtomicUsize>,
+    ) -> CountingStorage<T> {
+        let mut sparse_set = SparseSet::new_custom_storage();
+        let _ = sparse_set.insert(entity, component, TrackingTimestamp::new(1));
+        CountingStorage {
+            sparse_set,
+            pending: vec![entity],
+            group: group.to_vec(),
+            completeness_checks,
+            batch_calls,
+        }
+    }
+
+    #[test]
+    fn canonical_groups_are_evaluated_once_and_committed_as_batches() {
+        let mut world = World::new();
+        let entity = world.add_entity(());
+        let a_checks = Arc::new(AtomicUsize::new(0));
+        let b_checks = Arc::new(AtomicUsize::new(0));
+        let a_batches = Arc::new(AtomicUsize::new(0));
+        let b_batches = Arc::new(AtomicUsize::new(0));
+        let mut group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+        ];
+        group.sort_unstable();
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            all_storages
+                .exclusive_storage_or_insert_mut(StorageId::of::<CountingStorage<A>>(), || {
+                    counting_storage(entity, A, &group, a_checks.clone(), a_batches.clone())
+                });
+            all_storages
+                .exclusive_storage_or_insert_mut(StorageId::of::<CountingStorage<B>>(), || {
+                    counting_storage(entity, B, &group, b_checks.clone(), b_batches.clone())
+                });
+        }
+
+        world.regroup();
+
+        assert_eq!(a_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(b_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(a_batches.load(Ordering::Relaxed), 1);
+        assert_eq!(b_batches.load(Ordering::Relaxed), 1);
+        assert!(!is_dirty(&world));
+    }
+
+    #[cfg(feature = "thread_local")]
+    struct NonSendStorage(core::marker::PhantomData<alloc::rc::Rc<()>>);
+
+    #[cfg(feature = "thread_local")]
+    unsafe impl Sync for NonSendStorage {}
+
+    #[cfg(feature = "thread_local")]
+    impl Storage for NonSendStorage {}
+
+    #[cfg(feature = "thread_local")]
+    struct NonSyncStorage(core::cell::Cell<()>);
+
+    #[cfg(feature = "thread_local")]
+    impl Storage for NonSyncStorage {}
+
+    #[cfg(feature = "thread_local")]
+    #[allow(dead_code)]
+    struct NonSendSyncStorage(alloc::rc::Rc<()>);
+
+    #[cfg(feature = "thread_local")]
+    impl Storage for NonSendSyncStorage {}
+
+    #[cfg(feature = "thread_local")]
+    #[test]
+    fn all_thread_local_mutable_access_variants_mark_dirty() {
+        let mut world = World::new();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert_non_send_mut(|| {
+                        NonSendStorage(core::marker::PhantomData)
+                    })
+                    .unwrap(),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert_non_send_mut_by_id(
+                        StorageId::of::<NonSendStorage>(),
+                        || NonSendStorage(core::marker::PhantomData),
+                    )
+                    .unwrap(),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert_non_sync_mut(|| {
+                        NonSyncStorage(core::cell::Cell::new(()))
+                    })
+                    .unwrap(),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert_non_sync_mut_by_id(
+                        StorageId::of::<NonSyncStorage>(),
+                        || NonSyncStorage(core::cell::Cell::new(())),
+                    )
+                    .unwrap(),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert_non_send_sync_mut(|| {
+                        NonSendSyncStorage(alloc::rc::Rc::new(()))
+                    })
+                    .unwrap(),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.borrow().unwrap();
+            drop(
+                all_storages
+                    .custom_storage_or_insert_non_send_sync_mut_by_id(
+                        StorageId::of::<NonSendSyncStorage>(),
+                        || NonSendSyncStorage(alloc::rc::Rc::new(())),
+                    )
+                    .unwrap(),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            let _ = all_storages.exclusive_storage_or_insert_non_send_mut(
+                StorageId::of::<NonSendStorage>(),
+                || NonSendStorage(core::marker::PhantomData),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            let _ = all_storages.exclusive_storage_or_insert_non_sync_mut(
+                StorageId::of::<NonSyncStorage>(),
+                || NonSyncStorage(core::cell::Cell::new(())),
+            );
+        }
+        assert!(is_dirty(&world));
+        world.regroup();
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            let _ = all_storages.exclusive_storage_or_insert_non_send_sync_mut(
+                StorageId::of::<NonSendSyncStorage>(),
+                || NonSendSyncStorage(alloc::rc::Rc::new(())),
+            );
+        }
+        assert!(is_dirty(&world));
     }
 }
 
