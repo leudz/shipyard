@@ -115,6 +115,15 @@ struct RegroupCandidate {
     expanded_storages: StorageMask,
 }
 
+struct RegroupBatch {
+    /// Dense indices into `participating_storages`.
+    storage_indices: Vec<usize>,
+    /// Sorted storage `TypeId`s passed to each storage as its group signature.
+    type_ids: Vec<TypeId>,
+    /// Entities that resolved to this exact signature.
+    entities: Vec<EntityId>,
+}
+
 impl RegroupCandidate {
     fn new(storages: StorageMask) -> Self {
         Self {
@@ -1969,9 +1978,8 @@ for (i, j) in &mut iter {
             })
             .collect();
 
-        let mut interned_signatures: Vec<Vec<TypeId>> = Vec::new();
-        let mut signature_indices = ShipHashMap::new();
-        let mut movement_batches: ShipHashMap<(usize, usize), Vec<EntityId>> = ShipHashMap::new();
+        let mut signature_indices: ShipHashMap<StorageMask, usize> = ShipHashMap::new();
+        let mut batches = Vec::new();
 
         for entity in pending_entities {
             let mut candidates = Vec::new();
@@ -2022,38 +2030,44 @@ for (i, j) in &mut iter {
                 let signature_index = match signature_indices.entry(candidate.storages.clone()) {
                     Entry::Occupied(entry) => *entry.get(),
                     Entry::Vacant(entry) => {
-                        let signature_index = interned_signatures.len();
-                        let signature = candidate
-                            .storages
-                            .indices()
-                            .map(|storage_index| participating_storages[storage_index])
+                        let signature_index = batches.len();
+                        let storage_indices: Vec<_> = candidate.storages.indices().collect();
+                        let type_ids = storage_indices
+                            .iter()
+                            .map(|&storage_index| participating_storages[storage_index])
                             .collect();
 
-                        interned_signatures.push(signature);
+                        debug_assert!(!storage_indices.is_empty());
+                        batches.push(RegroupBatch {
+                            storage_indices,
+                            type_ids,
+                            entities: Vec::new(),
+                        });
                         entry.insert(signature_index);
                         signature_index
                     }
                 };
 
-                for storage_index in candidate.storages.indices() {
-                    movement_batches
-                        .entry((storage_index, signature_index))
-                        .or_default()
-                        .push(entity);
-                }
+                let batch = &mut batches[signature_index];
+                debug_assert_ne!(batch.entities.last(), Some(&entity));
+                batch.entities.push(entity);
             }
         }
 
         drop(storage_guards);
 
-        for ((storage_index, signature_index), entities) in movement_batches {
-            let storage_id = participating_storages[storage_index];
-            let storage = storage_map
-                .get_mut(&StorageId::from(storage_id))
-                .expect("Regroup batches must reference existing storages.");
-            let storage = unsafe { &mut *storage.0 }.get_mut();
+        for batch in batches {
+            debug_assert!(!batch.entities.is_empty());
 
-            storage.move_to_group_batch(&entities, &interned_signatures[signature_index]);
+            for storage_index in batch.storage_indices {
+                let storage_id = participating_storages[storage_index];
+                let storage = storage_map
+                    .get_mut(&StorageId::from(storage_id))
+                    .expect("Regroup batches must reference existing storages.");
+                let storage = unsafe { &mut *storage.0 }.get_mut();
+
+                storage.move_to_group_batch(&batch.entities, &batch.type_ids);
+            }
         }
 
         self.mutably_borrowed_since_regroup
@@ -2238,12 +2252,25 @@ mod regroup_tests {
         type Tracking = track::Untracked;
     }
 
+    struct C;
+
+    impl Component for C {
+        type Tracking = track::Untracked;
+    }
+
+    struct D;
+
+    impl Component for D {
+        type Tracking = track::Untracked;
+    }
+
     struct CountingStorage<T: Component> {
         sparse_set: SparseSet<T>,
         pending: Vec<EntityId>,
-        group: Vec<TypeId>,
+        groups: Vec<Vec<TypeId>>,
         completeness_checks: Arc<AtomicUsize>,
         batch_calls: Arc<AtomicUsize>,
+        received_batches: Vec<(Vec<EntityId>, Vec<TypeId>)>,
     }
 
     impl<T: Component + Send + Sync> Storage for CountingStorage<T> {
@@ -2257,15 +2284,41 @@ mod regroup_tests {
             emit_entity: &mut dyn FnMut(EntityId),
             emit_group: &mut dyn FnMut(&[TypeId]),
         ) {
-            emit_group(&self.group);
+            for group in &self.groups {
+                emit_group(group);
+            }
             for entity in self.pending.drain(..) {
                 emit_entity(entity);
             }
         }
 
-        fn move_to_group_batch(&mut self, entities: &[EntityId], _group: &[TypeId]) {
+        fn move_to_group_batch(&mut self, entities: &[EntityId], group: &[TypeId]) {
             assert!(!entities.is_empty());
             self.batch_calls.fetch_add(1, Ordering::Relaxed);
+            self.received_batches
+                .push((entities.to_vec(), group.to_vec()));
+        }
+    }
+
+    fn counting_storage_with_batches<T: Component + Send + Sync>(
+        components: Vec<(EntityId, T)>,
+        pending: Vec<EntityId>,
+        groups: Vec<Vec<TypeId>>,
+        completeness_checks: Arc<AtomicUsize>,
+        batch_calls: Arc<AtomicUsize>,
+    ) -> CountingStorage<T> {
+        let mut sparse_set = SparseSet::new_custom_storage();
+        for (entity, component) in components {
+            let _ = sparse_set.insert(entity, component, TrackingTimestamp::new(1));
+        }
+
+        CountingStorage {
+            sparse_set,
+            pending,
+            groups,
+            completeness_checks,
+            batch_calls,
+            received_batches: Vec::new(),
         }
     }
 
@@ -2276,15 +2329,31 @@ mod regroup_tests {
         completeness_checks: Arc<AtomicUsize>,
         batch_calls: Arc<AtomicUsize>,
     ) -> CountingStorage<T> {
-        let mut sparse_set = SparseSet::new_custom_storage();
-        let _ = sparse_set.insert(entity, component, TrackingTimestamp::new(1));
-        CountingStorage {
-            sparse_set,
-            pending: vec![entity],
-            group: group.to_vec(),
+        counting_storage_with_batches(
+            vec![(entity, component)],
+            vec![entity],
+            vec![group.to_vec()],
             completeness_checks,
             batch_calls,
-        }
+        )
+    }
+
+    fn received_batches<T: Component + Send + Sync>(
+        world: &World,
+    ) -> Vec<(Vec<EntityId>, Vec<TypeId>)> {
+        let all_storages = world.all_storages.borrow().unwrap();
+        let batches = all_storages
+            .custom_storage::<CountingStorage<T>>()
+            .unwrap()
+            .received_batches
+            .clone();
+        batches
+    }
+
+    fn sort_batches(batches: &mut [(Vec<EntityId>, Vec<TypeId>)]) {
+        batches.sort_unstable_by(|left, right| {
+            left.1.cmp(&right.1).then_with(|| left.0.cmp(&right.0))
+        });
     }
 
     #[test]
@@ -2320,6 +2389,243 @@ mod regroup_tests {
         assert_eq!(a_batches.load(Ordering::Relaxed), 1);
         assert_eq!(b_batches.load(Ordering::Relaxed), 1);
         assert!(!is_dirty(&world));
+    }
+
+    #[test]
+    fn wide_signature_is_committed_once_per_storage() {
+        let mut world = World::new();
+        let entities: Vec<_> = (0..8).map(|_| world.add_entity(())).collect();
+        let mut group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+            TypeId::of::<CountingStorage<C>>(),
+            TypeId::of::<CountingStorage<D>>(),
+        ];
+        group.sort_unstable();
+
+        let a_batches = Arc::new(AtomicUsize::new(0));
+        let b_batches = Arc::new(AtomicUsize::new(0));
+        let c_batches = Arc::new(AtomicUsize::new(0));
+        let d_batches = Arc::new(AtomicUsize::new(0));
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<A>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, A)).collect(),
+                        entities.clone(),
+                        vec![group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        a_batches.clone(),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<B>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, B)).collect(),
+                        entities.clone(),
+                        vec![group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        b_batches.clone(),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<C>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, C)).collect(),
+                        entities.clone(),
+                        vec![group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        c_batches.clone(),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<D>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, D)).collect(),
+                        entities.clone(),
+                        vec![group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        d_batches.clone(),
+                    )
+                },
+            );
+        }
+
+        world.regroup();
+
+        let expected = vec![(entities.clone(), group.clone())];
+        assert_eq!(received_batches::<A>(&world), expected);
+        assert_eq!(received_batches::<B>(&world), expected);
+        assert_eq!(received_batches::<C>(&world), expected);
+        assert_eq!(received_batches::<D>(&world), expected);
+        assert_eq!(a_batches.load(Ordering::Relaxed), 1);
+        assert_eq!(b_batches.load(Ordering::Relaxed), 1);
+        assert_eq!(c_batches.load(Ordering::Relaxed), 1);
+        assert_eq!(d_batches.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn disjoint_signatures_remain_independent() {
+        let mut world = World::new();
+        let ab_entity = world.add_entity(());
+        let cd_entity = world.add_entity(());
+        let mut ab_group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+        ];
+        let mut cd_group = vec![
+            TypeId::of::<CountingStorage<C>>(),
+            TypeId::of::<CountingStorage<D>>(),
+        ];
+        ab_group.sort_unstable();
+        cd_group.sort_unstable();
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<A>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(ab_entity, A)],
+                        vec![ab_entity],
+                        vec![ab_group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<B>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(ab_entity, B)],
+                        vec![ab_entity],
+                        vec![ab_group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<C>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(cd_entity, C)],
+                        vec![cd_entity],
+                        vec![cd_group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<D>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(cd_entity, D)],
+                        vec![cd_entity],
+                        vec![cd_group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+        }
+
+        world.regroup();
+
+        let ab_expected = vec![(vec![ab_entity], ab_group)];
+        let cd_expected = vec![(vec![cd_entity], cd_group)];
+        assert_eq!(received_batches::<A>(&world), ab_expected);
+        assert_eq!(received_batches::<B>(&world), ab_expected);
+        assert_eq!(received_batches::<C>(&world), cd_expected);
+        assert_eq!(received_batches::<D>(&world), cd_expected);
+    }
+
+    #[test]
+    fn same_storage_receives_different_signature_batches() {
+        let mut world = World::new();
+        let ab_entity = world.add_entity(());
+        let abc_entity = world.add_entity(());
+        let mut ab_group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+        ];
+        let mut abc_group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+            TypeId::of::<CountingStorage<C>>(),
+        ];
+        ab_group.sort_unstable();
+        abc_group.sort_unstable();
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<A>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(ab_entity, A), (abc_entity, A)],
+                        vec![ab_entity, abc_entity],
+                        vec![ab_group.clone(), abc_group.clone()],
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<B>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(ab_entity, B), (abc_entity, B)],
+                        vec![ab_entity, abc_entity],
+                        Vec::new(),
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<C>>(),
+                || {
+                    counting_storage_with_batches(
+                        vec![(abc_entity, C)],
+                        vec![abc_entity],
+                        Vec::new(),
+                        Arc::new(AtomicUsize::new(0)),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+        }
+
+        world.regroup();
+
+        let mut expected_shared = vec![
+            (vec![ab_entity], ab_group),
+            (vec![abc_entity], abc_group.clone()),
+        ];
+        let mut a_batches = received_batches::<A>(&world);
+        let mut b_batches = received_batches::<B>(&world);
+        sort_batches(&mut expected_shared);
+        sort_batches(&mut a_batches);
+        sort_batches(&mut b_batches);
+
+        assert_eq!(a_batches, expected_shared);
+        assert_eq!(b_batches, expected_shared);
+        assert_eq!(
+            received_batches::<C>(&world),
+            vec![(vec![abc_entity], abc_group)]
+        );
     }
 
     #[cfg(feature = "thread_local")]
