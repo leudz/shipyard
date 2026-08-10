@@ -119,13 +119,13 @@ pub trait Storage: SizedAny {
         other_current: TrackingTimestamp,
     ) {
     }
-    /// Consumes pending regroup inputs, emitting entities and group definitions.
+    /// Consumes pending regroup inputs, emitting page masks and group definitions.
     #[doc(hidden)]
     #[inline]
     #[allow(unused_variables)]
-    fn collect_regroup(
+    fn collect_regroup_pages(
         &mut self,
-        emit_entity: &mut dyn FnMut(EntityId),
+        emit_page: &mut dyn FnMut(usize, u32),
         emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
     }

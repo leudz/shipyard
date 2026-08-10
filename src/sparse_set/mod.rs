@@ -190,9 +190,9 @@ impl<T: Component> SparseSet<T> {
         self.sparse.set_bucket_index(entity, target_bucket_index);
     }
 
-    fn private_collect_regroup(
+    fn private_collect_regroup_pages(
         &mut self,
-        emit_entity: &mut dyn FnMut(EntityId),
+        emit_page: &mut dyn FnMut(usize, u32),
         emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
         for group in self.groups.iter() {
@@ -207,22 +207,15 @@ impl<T: Component> SparseSet<T> {
 
         while page_position < self.sparse.pending_placement_pages.len() {
             let page_index = self.sparse.pending_placement_pages[page_position];
-            let mut mask = core::mem::take(
+            let mask = core::mem::take(
                 self.sparse
                     .pending_placement_masks
                     .get_mut(page_index)
                     .unwrap(),
             );
 
-            while mask != 0 {
-                let bit_index = mask.trailing_zeros() as usize;
-                mask &= mask - 1;
-
-                let entity_index = (page_index * BUCKET_SIZE + bit_index) as u64;
-                let sparse_entity = self.sparse.get(EntityId::new(entity_index)).unwrap();
-
-                let entity = EntityId::new_from_index_and_gen(entity_index, sparse_entity.gen());
-                emit_entity(entity);
+            if mask != 0 {
+                emit_page(page_index, mask);
             }
 
             page_position += 1;
@@ -1049,12 +1042,12 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
         }
     }
 
-    fn collect_regroup(
+    fn collect_regroup_pages(
         &mut self,
-        emit_entity: &mut dyn FnMut(EntityId),
+        emit_page: &mut dyn FnMut(usize, u32),
         emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
-        self.private_collect_regroup(emit_entity, emit_group);
+        self.private_collect_regroup_pages(emit_page, emit_group);
     }
 
     fn entity_group(&self, entity: EntityId) -> Option<&[TypeId]> {
@@ -1325,9 +1318,12 @@ mod tests {
             .assert_inserted();
 
         let mut emitted = Vec::new();
-        sparse_set.private_collect_regroup(&mut |entity| emitted.push(entity), &mut |_| {});
+        sparse_set.private_collect_regroup_pages(
+            &mut |page_index, mask| emitted.push((page_index, mask)),
+            &mut |_| {},
+        );
 
-        assert_eq!(emitted, [entity]);
+        assert_eq!(emitted, [(2, 1)]);
         assert!(sparse_set.sparse.pending_placement_pages().is_empty());
         assert_eq!(sparse_set.sparse.pending_placement_mask(2), 0);
 
@@ -1336,6 +1332,37 @@ mod tests {
 
         assert_eq!(sparse_set.sparse.pending_placement_pages(), &[2]);
         assert_eq!(sparse_set.sparse.pending_placement_mask(2), 1);
+    }
+
+    #[cfg(feature = "thread_local")]
+    #[test]
+    fn thread_local_wrappers_delegate_regroup_page_collection() {
+        use crate::borrow::{NonSend, NonSendSync, NonSync};
+
+        fn pending_sparse_set() -> SparseSet<I32> {
+            let mut sparse_set = SparseSet::new();
+            sparse_set.add_group(&[]);
+            sparse_set
+                .insert(EntityId::new(64), I32(1), TrackingTimestamp::new(0))
+                .assert_inserted();
+            sparse_set
+        }
+
+        fn assert_delegates(storage: &mut dyn Storage) {
+            let mut pages = Vec::new();
+            let mut groups = Vec::new();
+            storage.collect_regroup_pages(
+                &mut |page_index, mask| pages.push((page_index, mask)),
+                &mut |group| groups.push(group.to_vec()),
+            );
+
+            assert_eq!(pages, [(2, 1)]);
+            assert_eq!(groups, [Vec::<TypeId>::new()]);
+        }
+
+        assert_delegates(&mut NonSend(pending_sparse_set()));
+        assert_delegates(&mut NonSync(pending_sparse_set()));
+        assert_delegates(&mut NonSendSync(pending_sparse_set()));
     }
 
     #[test]
@@ -1788,6 +1815,61 @@ mod tests {
         assert_eq!(current_group(views.0.sparse_set, entity), expected);
         assert_eq!(current_group(views.1.sparse_set, entity), expected);
         assert_eq!(current_group(views.2.sparse_set, entity), expected);
+    }
+
+    #[test]
+    fn deleted_pending_entity_is_discarded_and_pending_masks_are_consumed() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B));
+        assert!(world.delete_entity(entity));
+        world.regroup();
+
+        let views = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        assert!(!views.0.contains(entity));
+        assert!(!views.1.contains(entity));
+        assert!(views
+            .0
+            .sparse_set
+            .sparse
+            .pending_placement_pages()
+            .is_empty());
+        assert!(views
+            .1
+            .sparse_set
+            .sparse
+            .pending_placement_pages()
+            .is_empty());
+        assert_eq!(views.0.sparse_set.sparse.pending_placement_mask(0), 0);
+        assert_eq!(views.1.sparse_set.sparse.pending_placement_mask(0), 0);
+    }
+
+    #[test]
+    fn regroup_uses_the_current_generation_for_a_recycled_pending_index() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let previous = world.add_entity((A, B));
+        assert!(world.delete_entity(previous));
+        let current = world.add_entity((A, B));
+        assert_eq!(current.index(), previous.index());
+        assert_ne!(current.gen(), previous.gen());
+
+        world.regroup();
+
+        let expected = sorted_group(vec![storage_id::<A>(), storage_id::<B>()]);
+        let views = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        assert_eq!(current_group(views.0.sparse_set, current), expected);
+        assert_eq!(current_group(views.1.sparse_set, current), expected);
     }
 
     #[test]

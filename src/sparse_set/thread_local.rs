@@ -110,6 +110,14 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
             }
         }
     }
+
+    fn collect_regroup_pages(
+        &mut self,
+        emit_page: &mut dyn FnMut(usize, u32),
+        emit_group: &mut dyn FnMut(&[core::any::TypeId]),
+    ) {
+        self.private_collect_regroup_pages(emit_page, emit_group);
+    }
 }
 
 impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
@@ -213,6 +221,14 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
                 let _ = other_sparse_set.insert(to, (clone)(component), other_current);
             }
         }
+    }
+
+    fn collect_regroup_pages(
+        &mut self,
+        emit_page: &mut dyn FnMut(usize, u32),
+        emit_group: &mut dyn FnMut(&[core::any::TypeId]),
+    ) {
+        self.private_collect_regroup_pages(emit_page, emit_group);
     }
 }
 
@@ -320,5 +336,13 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
                 let _ = other_sparse_set.insert(to, (clone)(component), other_current);
             }
         }
+    }
+
+    fn collect_regroup_pages(
+        &mut self,
+        emit_page: &mut dyn FnMut(usize, u32),
+        emit_group: &mut dyn FnMut(&[core::any::TypeId]),
+    ) {
+        self.private_collect_regroup_pages(emit_page, emit_group);
     }
 }

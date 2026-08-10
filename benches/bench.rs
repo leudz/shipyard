@@ -358,6 +358,24 @@ fn wide_regroup_world(entity_count: usize) -> World {
     world
 }
 
+fn sparse_page_regroup_world(page_count: usize) -> World {
+    const PENDING_PAGE_SIZE: usize = 32;
+
+    let mut world = World::new();
+    create_regroup_pair!(&world, G0, G1);
+    let mut entities: Vec<_> = world
+        .bulk_add_entity((0..page_count * PENDING_PAGE_SIZE).map(|_| ()))
+        .step_by(PENDING_PAGE_SIZE)
+        .collect();
+    entities.reverse();
+
+    for entity in entities {
+        world.add_component(entity, (G0, G1));
+    }
+
+    world
+}
+
 fn incomplete_regroup_world(entity_count: usize) -> World {
     let mut world = World::new();
     create_regroup_pair!(&world, G0, G1);
@@ -506,6 +524,23 @@ fn regroup_overlapping_groups(c: &mut Criterion) {
             BatchSize::LargeInput,
         );
     });
+
+    let sparse_page_count = 1_000;
+    let sparse_raw_pending_inputs = sparse_page_count * 2;
+    group.throughput(Throughput::Elements(sparse_page_count as u64));
+    group.bench_function(
+        format!("sparse_{sparse_page_count}_pages_{sparse_raw_pending_inputs}_raw_inputs"),
+        |b| {
+            b.iter_batched(
+                || sparse_page_regroup_world(sparse_page_count),
+                |mut world| {
+                    world.regroup();
+                    black_box(&world);
+                },
+                BatchSize::LargeInput,
+            );
+        },
+    );
 
     group.finish();
 }
