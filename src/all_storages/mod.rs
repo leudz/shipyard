@@ -44,54 +44,83 @@ use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use hashbrown::hash_map::Entry;
 
 #[derive(Clone, Eq, Hash, PartialEq)]
-struct StorageMask {
-    words: Vec<usize>,
+enum StorageMask {
+    Inline(u64),
+    Heap(Box<[u64]>),
 }
 
 impl StorageMask {
     fn new(storage_count: usize) -> Self {
-        Self {
-            words: vec![0; storage_count.div_ceil(usize::BITS as usize)],
+        if storage_count <= u64::BITS as usize {
+            Self::Inline(0)
+        } else {
+            Self::Heap(vec![0; storage_count.div_ceil(u64::BITS as usize)].into_boxed_slice())
+        }
+    }
+
+    fn zero_like(other: &Self) -> Self {
+        match other {
+            Self::Inline(_) => Self::Inline(0),
+            Self::Heap(words) => Self::Heap(vec![0; words.len()].into_boxed_slice()),
+        }
+    }
+
+    #[inline]
+    fn words(&self) -> &[u64] {
+        match self {
+            Self::Inline(word) => core::slice::from_ref(word),
+            Self::Heap(words) => words,
+        }
+    }
+
+    #[inline]
+    fn words_mut(&mut self) -> &mut [u64] {
+        match self {
+            Self::Inline(word) => core::slice::from_mut(word),
+            Self::Heap(words) => words,
         }
     }
 
     #[inline]
     fn insert(&mut self, storage_index: usize) -> bool {
-        let word_index = storage_index / usize::BITS as usize;
-        let bit = 1 << (storage_index % usize::BITS as usize);
-        let was_missing = self.words[word_index] & bit == 0;
-        self.words[word_index] |= bit;
+        let word_index = storage_index / u64::BITS as usize;
+        let bit = 1u64 << (storage_index % u64::BITS as usize);
+        let word = &mut self.words_mut()[word_index];
+        let was_missing = *word & bit == 0;
+        *word |= bit;
         was_missing
     }
 
     #[inline]
     fn intersects(&self, other: &Self) -> bool {
-        self.words
+        debug_assert_eq!(self.words().len(), other.words().len());
+        self.words()
             .iter()
-            .zip(&other.words)
+            .zip(other.words())
             .any(|(&left, &right)| left & right != 0)
     }
 
     fn union_with(&mut self, other: &Self) {
-        for (word, &other_word) in self.words.iter_mut().zip(&other.words) {
+        debug_assert_eq!(self.words().len(), other.words().len());
+        for (word, &other_word) in self.words_mut().iter_mut().zip(other.words()) {
             *word |= other_word;
         }
     }
 
     fn first_difference(&self, other: &Self) -> Option<usize> {
-        self.words.iter().zip(&other.words).enumerate().find_map(
+        debug_assert_eq!(self.words().len(), other.words().len());
+        self.words().iter().zip(other.words()).enumerate().find_map(
             |(word_index, (&word, &other_word))| {
                 let difference = word & !other_word;
 
-                (difference != 0).then(|| {
-                    word_index * usize::BITS as usize + difference.trailing_zeros() as usize
-                })
+                (difference != 0)
+                    .then(|| word_index * u64::BITS as usize + difference.trailing_zeros() as usize)
             },
         )
     }
 
     fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        self.words
+        self.words()
             .iter()
             .copied()
             .enumerate()
@@ -104,9 +133,24 @@ impl StorageMask {
                     let bit_index = word.trailing_zeros() as usize;
                     word &= word - 1;
 
-                    Some(word_index * usize::BITS as usize + bit_index)
+                    Some(word_index * u64::BITS as usize + bit_index)
                 })
             })
+    }
+
+    fn count_ones(&self) -> usize {
+        self.words()
+            .iter()
+            .map(|word| word.count_ones() as usize)
+            .sum()
+    }
+
+    fn is_subset_of(&self, other: &Self) -> bool {
+        debug_assert_eq!(self.words().len(), other.words().len());
+        self.words()
+            .iter()
+            .zip(other.words())
+            .all(|(&left, &right)| left & !right == 0)
     }
 }
 
@@ -127,7 +171,7 @@ struct RegroupBatch {
 impl RegroupCandidate {
     fn new(storages: StorageMask) -> Self {
         Self {
-            expanded_storages: StorageMask::new(storages.words.len() * usize::BITS as usize),
+            expanded_storages: StorageMask::zero_like(&storages),
             storages,
         }
     }
@@ -150,6 +194,14 @@ fn insert_regroup_candidate(
     }
 
     candidates.push(candidate);
+}
+
+#[cfg(test)]
+fn regroup_candidate_capacities(
+    candidates: &Vec<RegroupCandidate>,
+    merged_candidates: &Vec<RegroupCandidate>,
+) -> (usize, usize) {
+    (candidates.capacity(), merged_candidates.capacity())
 }
 
 #[allow(missing_docs)]
@@ -1980,9 +2032,12 @@ for (i, j) in &mut iter {
 
         let mut signature_indices: ShipHashMap<StorageMask, usize> = ShipHashMap::new();
         let mut batches = Vec::new();
+        let mut candidates = Vec::new();
+        let mut merged_candidates = Vec::new();
 
         for entity in pending_entities {
-            let mut candidates = Vec::new();
+            candidates.clear();
+            merged_candidates.clear();
 
             for group_mask in &group_masks {
                 let is_complete = group_mask.indices().all(|storage_index| {
@@ -2019,17 +2074,25 @@ for (i, j) in &mut iter {
                         }
                     }
                 }
+
+                debug_assert!(candidate
+                    .expanded_storages
+                    .is_subset_of(&candidate.storages));
+                debug_assert_eq!(
+                    candidate.expanded_storages.count_ones(),
+                    candidate.storages.count_ones()
+                );
             }
 
-            let mut merged_candidates = Vec::with_capacity(candidates.len());
-            for candidate in candidates {
+            for candidate in candidates.drain(..) {
                 insert_regroup_candidate(&mut merged_candidates, candidate);
             }
 
-            for candidate in merged_candidates {
-                let signature_index = match signature_indices.entry(candidate.storages.clone()) {
-                    Entry::Occupied(entry) => *entry.get(),
-                    Entry::Vacant(entry) => {
+            for candidate in merged_candidates.drain(..) {
+                let signature_index =
+                    if let Some(&signature_index) = signature_indices.get(&candidate.storages) {
+                        signature_index
+                    } else {
                         let signature_index = batches.len();
                         let storage_indices: Vec<_> = candidate.storages.indices().collect();
                         let type_ids = storage_indices
@@ -2043,10 +2106,9 @@ for (i, j) in &mut iter {
                             type_ids,
                             entities: Vec::new(),
                         });
-                        entry.insert(signature_index);
+                        signature_indices.insert(candidate.storages, signature_index);
                         signature_index
-                    }
-                };
+                    };
 
                 let batch = &mut batches[signature_index];
                 debug_assert_ne!(batch.entities.last(), Some(&entity));
@@ -2125,7 +2187,243 @@ mod regroup_tests {
     use crate::sparse_set::SparseArray;
     use crate::track;
     use crate::{View, ViewMut, World};
+    use core::hash::{Hash, Hasher};
     use core::sync::atomic::AtomicUsize;
+
+    #[cfg(feature = "std")]
+    mod allocation_counter {
+        use core::cell::Cell;
+        use std::alloc::{GlobalAlloc, Layout, System};
+
+        struct CountingAllocator;
+
+        std::thread_local! {
+            static ENABLED: Cell<bool> = const { Cell::new(false) };
+            static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+        }
+
+        unsafe impl GlobalAlloc for CountingAllocator {
+            unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+                record_allocation();
+                unsafe { System.alloc(layout) }
+            }
+
+            unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+                record_allocation();
+                unsafe { System.alloc_zeroed(layout) }
+            }
+
+            unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+                unsafe { System.dealloc(ptr, layout) }
+            }
+
+            unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+                record_allocation();
+                unsafe { System.realloc(ptr, layout, new_size) }
+            }
+        }
+
+        #[global_allocator]
+        static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+        fn record_allocation() {
+            let enabled = ENABLED.try_with(Cell::get).unwrap_or(false);
+            if enabled {
+                let _ = ALLOCATIONS.try_with(|allocations| allocations.set(allocations.get() + 1));
+            }
+        }
+
+        pub(super) fn count(f: impl FnOnce()) -> usize {
+            ALLOCATIONS.with(|allocations| allocations.set(0));
+            ENABLED.with(|enabled| enabled.set(true));
+            f();
+            ENABLED.with(|enabled| enabled.set(false));
+            ALLOCATIONS.with(Cell::get)
+        }
+    }
+
+    fn mask(storage_count: usize, indices: &[usize]) -> StorageMask {
+        let mut mask = StorageMask::new(storage_count);
+        for &index in indices {
+            assert!(mask.insert(index));
+        }
+        mask
+    }
+
+    #[test]
+    fn storage_mask_inline_boundaries() {
+        for storage_count in [0, 1, u64::BITS as usize - 1, u64::BITS as usize] {
+            let mask = StorageMask::new(storage_count);
+            assert!(matches!(&mask, StorageMask::Inline(0)));
+            assert_eq!(mask.words(), &[0]);
+        }
+    }
+
+    #[test]
+    fn storage_mask_heap_boundaries() {
+        for (storage_count, word_count) in [
+            (u64::BITS as usize + 1, 2),
+            (2 * u64::BITS as usize, 2),
+            (2 * u64::BITS as usize + 1, 3),
+        ] {
+            let mask = StorageMask::new(storage_count);
+            assert!(matches!(&mask, StorageMask::Heap(_)));
+            assert_eq!(mask.words(), vec![0; word_count]);
+        }
+    }
+
+    #[test]
+    fn storage_mask_cross_word_operations() {
+        let storage_count = 3 * u64::BITS as usize + 1;
+        let boundary_indices = [0, 63, 64, 127, 128, 191, 192];
+        let mut left = mask(storage_count, &boundary_indices);
+        assert!(!left.insert(64));
+        assert_eq!(left.count_ones(), boundary_indices.len());
+
+        let intersecting = mask(storage_count, &[63, 65, 127, 129, 192]);
+        let disjoint = mask(storage_count, &[1, 62, 66, 126, 130, 190]);
+        assert!(left.intersects(&intersecting));
+        assert!(!left.intersects(&disjoint));
+        assert_eq!(left.first_difference(&intersecting), Some(0));
+
+        let left_before_union = left.clone();
+        left.union_with(&intersecting);
+        assert!(left_before_union.is_subset_of(&left));
+        assert!(intersecting.is_subset_of(&left));
+        assert_eq!(
+            left.indices().collect::<Vec<_>>(),
+            vec![0, 63, 64, 65, 127, 128, 129, 191, 192]
+        );
+    }
+
+    #[test]
+    fn storage_mask_indices_are_ascending() {
+        let inline = mask(u64::BITS as usize, &[63, 1, 17, 0]);
+        assert_eq!(inline.indices().collect::<Vec<_>>(), vec![0, 1, 17, 63]);
+
+        let heap = mask(2 * u64::BITS as usize + 1, &[128, 65, 127, 0, 64, 2]);
+        assert_eq!(
+            heap.indices().collect::<Vec<_>>(),
+            vec![0, 2, 64, 65, 127, 128]
+        );
+    }
+
+    #[test]
+    fn storage_mask_hashing_is_canonical() {
+        struct TestHasher(u64);
+
+        impl Hasher for TestHasher {
+            fn finish(&self) -> u64 {
+                self.0
+            }
+
+            fn write(&mut self, bytes: &[u8]) {
+                for &byte in bytes {
+                    self.0 ^= u64::from(byte);
+                    self.0 = self.0.wrapping_mul(0x100_0000_01b3);
+                }
+            }
+        }
+
+        fn hash(mask: &StorageMask) -> u64 {
+            let mut hasher = TestHasher(0xcbf2_9ce4_8422_2325);
+            mask.hash(&mut hasher);
+            hasher.finish()
+        }
+
+        for (storage_count, ascending_indices, descending_indices) in [
+            (u64::BITS as usize, &[0, 1, 17, 63][..], &[63, 17, 1, 0][..]),
+            (
+                2 * u64::BITS as usize + 1,
+                &[0, 1, 63, 64, 128][..],
+                &[128, 64, 63, 1, 0][..],
+            ),
+        ] {
+            let ascending = mask(storage_count, ascending_indices);
+            let descending = mask(storage_count, descending_indices);
+            assert!(ascending == descending);
+            assert_eq!(hash(&ascending), hash(&descending));
+        }
+    }
+
+    #[test]
+    fn regroup_candidates_preserve_inline_and_multiword_behavior() {
+        for (storage_count, chain, disjoint) in [
+            (8, [0, 1, 2], [4, 5, 6, 7]),
+            (130, [63, 64, 65], [0, 1, 128, 129]),
+        ] {
+            let mut chained = Vec::new();
+            insert_regroup_candidate(
+                &mut chained,
+                RegroupCandidate::new(mask(storage_count, &chain[..2])),
+            );
+            insert_regroup_candidate(
+                &mut chained,
+                RegroupCandidate::new(mask(storage_count, &chain[1..])),
+            );
+            assert_eq!(chained.len(), 1);
+            assert_eq!(chained[0].storages.indices().collect::<Vec<_>>(), chain);
+
+            let mut separate = Vec::new();
+            insert_regroup_candidate(
+                &mut separate,
+                RegroupCandidate::new(mask(storage_count, &disjoint[..2])),
+            );
+            insert_regroup_candidate(
+                &mut separate,
+                RegroupCandidate::new(mask(storage_count, &disjoint[2..])),
+            );
+            assert_eq!(separate.len(), 2);
+        }
+    }
+
+    #[test]
+    fn regroup_candidate_scratch_capacities_are_reused() {
+        let mut candidates = Vec::new();
+        let mut merged_candidates = Vec::new();
+        let mut previous_capacities = (0, 0);
+
+        for candidate_count in [1, 8, 2] {
+            candidates.clear();
+            merged_candidates.clear();
+
+            for index in 0..candidate_count {
+                candidates.push(RegroupCandidate::new(mask(16, &[index])));
+            }
+            for candidate in candidates.drain(..) {
+                insert_regroup_candidate(&mut merged_candidates, candidate);
+            }
+            for candidate in merged_candidates.drain(..) {
+                core::hint::black_box(candidate);
+            }
+
+            let capacities = regroup_candidate_capacities(&candidates, &merged_candidates);
+            assert!(capacities.0 >= previous_capacities.0);
+            assert!(capacities.1 >= previous_capacities.1);
+            previous_capacities = capacities;
+        }
+
+        assert!(previous_capacities.0 >= 8);
+        assert!(previous_capacities.1 >= 8);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn inline_candidate_clone_and_expansion_do_not_allocate() {
+        let group_mask = mask(u64::BITS as usize, &[0, 1]);
+        let allocations = allocation_counter::count(|| {
+            let mut candidate = RegroupCandidate::new(group_mask.clone());
+            while let Some(storage_index) = candidate
+                .storages
+                .first_difference(&candidate.expanded_storages)
+            {
+                candidate.expanded_storages.insert(storage_index);
+            }
+            core::hint::black_box(candidate);
+        });
+
+        assert_eq!(allocations, 0);
+    }
 
     struct A;
 

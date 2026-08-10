@@ -205,6 +205,38 @@ macro_rules! create_regroup_pair {
     }};
 }
 
+#[derive(Component, Clone, Copy)]
+struct M0;
+
+macro_rules! multiword_components {
+    ($($component:ident),+ $(,)?) => {
+        $(
+            #[derive(Component, Clone, Copy)]
+            struct $component;
+        )+
+
+        fn register_multiword_groups(world: &World) {
+            $(
+                create_regroup_pair!(world, M0, $component);
+            )+
+        }
+
+        fn add_multiword_components(world: &mut World, entity: EntityId) {
+            world.add_component(entity, (M0,));
+            $(
+                world.add_component(entity, ($component,));
+            )+
+        }
+    };
+}
+
+multiword_components!(
+    M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17, M18, M19, M20, M21,
+    M22, M23, M24, M25, M26, M27, M28, M29, M30, M31, M32, M33, M34, M35, M36, M37, M38, M39, M40,
+    M41, M42, M43, M44, M45, M46, M47, M48, M49, M50, M51, M52, M53, M54, M55, M56, M57, M58, M59,
+    M60, M61, M62, M63, M64,
+);
+
 fn register_overlap_groups(world: &World, group_count: usize) {
     if group_count >= 1 {
         create_regroup_pair!(world, G0, G1);
@@ -262,6 +294,18 @@ fn overlap_regroup_world(entity_count: usize, group_count: usize) -> World {
     world
         .bulk_add_entity((0..entity_count).map(|_| (G0, G1, G2, G3, G4, G5, G6, G7, G8, G9)))
         .count();
+    world
+}
+
+fn multiword_regroup_world(entity_count: usize) -> World {
+    let mut world = World::new();
+    register_multiword_groups(&world);
+
+    for _ in 0..entity_count {
+        let entity = world.add_entity(());
+        add_multiword_components(&mut world, entity);
+    }
+
     world
 }
 
@@ -405,6 +449,19 @@ fn regroup_overlapping_groups(c: &mut Criterion) {
             },
         );
     }
+
+    let multiword_entity_count = 100;
+    group.throughput(Throughput::Elements(multiword_entity_count as u64));
+    group.bench_function("multiword_65_storages", |b| {
+        b.iter_batched(
+            || multiword_regroup_world(multiword_entity_count),
+            |mut world| {
+                world.regroup();
+                black_box(&world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
 
     group.finish();
 }
