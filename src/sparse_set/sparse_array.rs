@@ -15,7 +15,7 @@ pub struct SparseArray {
     group_pages: Vec<Option<Box<GroupPage>>>,
     /// Bitset of components pending placement.
     pub(super) pending_placement_masks: Vec<u32>,
-    /// Ordered list of pages containing components pending placement.
+    /// Unique list of pages containing components pending placement, in unspecified order.
     pub(super) pending_placement_pages: Vec<usize>,
 }
 
@@ -149,24 +149,6 @@ impl SparseArray {
     }
 
     #[inline]
-    fn insert_pending_placement_page(&mut self, page_index: usize) {
-        let can_push = match self.pending_placement_pages.last() {
-            Some(&last) => last < page_index,
-            None => true,
-        };
-
-        if can_push {
-            self.pending_placement_pages.push(page_index);
-            return;
-        }
-
-        match self.pending_placement_pages.binary_search(&page_index) {
-            Ok(_) => {}
-            Err(position) => self.pending_placement_pages.insert(position, page_index),
-        }
-    }
-
-    #[inline]
     pub(crate) fn set_pending_placement(&mut self, entity: EntityId) {
         debug_assert!(matches!(
             self.get(entity),
@@ -187,7 +169,54 @@ impl SparseArray {
         *mask |= 1 << entity.bucket_index();
 
         if became_pending_page {
-            self.insert_pending_placement_page(entity.bucket());
+            self.pending_placement_pages.push(entity.bucket());
+        }
+    }
+
+    #[inline]
+    pub(crate) fn set_pending_placement_range(&mut self, start: EntityId, end: EntityId) {
+        debug_assert!(start.index() <= end.index());
+
+        let start_page = start.bucket();
+        let end_page = end.bucket();
+
+        if end_page >= self.pending_placement_masks.len() {
+            self.pending_placement_masks.resize(end_page + 1, 0);
+        }
+
+        for page_index in start_page..=end_page {
+            let first_bit = if page_index == start_page {
+                start.bucket_index()
+            } else {
+                0
+            };
+            let last_bit = if page_index == end_page {
+                end.bucket_index()
+            } else {
+                BUCKET_SIZE - 1
+            };
+            let range_mask = if first_bit == 0 && last_bit == BUCKET_SIZE - 1 {
+                u32::MAX
+            } else {
+                let lower_bits = u32::MAX << first_bit;
+                let upper_bits = if last_bit == BUCKET_SIZE - 1 {
+                    u32::MAX
+                } else {
+                    (1 << (last_bit + 1)) - 1
+                };
+
+                lower_bits & upper_bits
+            };
+            let page_mask = unsafe {
+                // SAFE pending_placement_masks was resized through end_page.
+                self.pending_placement_masks.get_unchecked_mut(page_index)
+            };
+            let became_pending_page = *page_mask == 0;
+            *page_mask |= range_mask;
+
+            if became_pending_page {
+                self.pending_placement_pages.push(page_index);
+            }
         }
     }
 
@@ -246,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_masks_are_lazily_allocated_and_pages_are_sorted_unique() {
+    fn pending_masks_are_lazily_allocated_and_pages_follow_first_activation_order() {
         let mut array = SparseArray::new();
         let entities = [95, 64, 32, 31, 33, 0].map(EntityId::new);
 
@@ -264,12 +293,130 @@ mod tests {
         array.set_pending_placement(EntityId::new(33));
         array.set_pending_placement(EntityId::new(31));
 
-        assert_eq!(array.pending_placement_pages(), &[0, 1, 2]);
+        assert_eq!(array.pending_placement_pages(), &[2, 1, 0]);
         assert_eq!(array.pending_placement_mask(0), (1 << 0) | (1 << 31));
         assert_eq!(array.pending_placement_mask(1), (1 << 0) | (1 << 1));
         assert_eq!(array.pending_placement_mask(2), (1 << 0) | (1 << 31));
         assert_eq!(array.pending_placement_masks.len(), 3);
         assert!(array.group_pages.is_empty());
+    }
+
+    #[test]
+    fn repeated_pending_marks_append_each_page_once_per_cycle() {
+        let mut array = SparseArray::new();
+        let entities = [95, 64, 65, 95].map(EntityId::new);
+
+        for entity in entities {
+            insert_live(&mut array, entity);
+        }
+
+        for entity in entities {
+            array.set_pending_placement(entity);
+        }
+
+        assert_eq!(array.pending_placement_pages(), &[2]);
+
+        array.pending_placement_masks.fill(0);
+        array.pending_placement_pages.clear();
+
+        for entity in entities {
+            array.set_pending_placement(entity);
+        }
+
+        assert_eq!(array.pending_placement_pages(), &[2]);
+    }
+
+    fn pending_array_for_range(start: u64, end: u64) -> SparseArray {
+        let mut array = SparseArray::new();
+
+        for index in start..=end {
+            insert_live(&mut array, EntityId::new(index));
+        }
+
+        array.set_pending_placement_range(EntityId::new(start), EntityId::new(end));
+        array
+    }
+
+    #[test]
+    fn pending_placement_range_handles_page_boundaries() {
+        let array = pending_array_for_range(42, 42);
+        assert_eq!(array.pending_placement_pages(), &[1]);
+        assert_eq!(array.pending_placement_mask(1), 1 << 10);
+
+        let array = pending_array_for_range(32, 63);
+        assert_eq!(array.pending_placement_pages(), &[1]);
+        assert_eq!(array.pending_placement_mask(1), u32::MAX);
+
+        let array = pending_array_for_range(30, 65);
+        assert_eq!(array.pending_placement_pages(), &[0, 1, 2]);
+        assert_eq!(array.pending_placement_mask(0), 0b11 << 30);
+        assert_eq!(array.pending_placement_mask(1), u32::MAX);
+        assert_eq!(array.pending_placement_mask(2), 0b11);
+
+        let array = pending_array_for_range(5, 130);
+        assert_eq!(array.pending_placement_pages(), &[0, 1, 2, 3, 4]);
+        assert_eq!(array.pending_placement_mask(0), u32::MAX << 5);
+        assert_eq!(array.pending_placement_mask(1), u32::MAX);
+        assert_eq!(array.pending_placement_mask(2), u32::MAX);
+        assert_eq!(array.pending_placement_mask(3), u32::MAX);
+        assert_eq!(array.pending_placement_mask(4), 0b111);
+
+        for (start, end) in [(31, 32), (63, 64)] {
+            let array = pending_array_for_range(start, end);
+            let start_page = EntityId::new(start).bucket();
+            assert_eq!(
+                array.pending_placement_pages(),
+                &[start_page, start_page + 1]
+            );
+            assert_eq!(array.pending_placement_mask(start_page), 1 << 31);
+            assert_eq!(array.pending_placement_mask(start_page + 1), 1);
+        }
+    }
+
+    #[test]
+    fn pending_placement_range_matches_individual_marks() {
+        for (start, end) in [(0, 0), (31, 32), (32, 63), (35, 126), (5, 130)] {
+            let range_array = pending_array_for_range(start, end);
+            let mut individual_array = SparseArray::new();
+
+            for index in start..=end {
+                let entity = EntityId::new(index);
+                insert_live(&mut individual_array, entity);
+                individual_array.set_pending_placement(entity);
+            }
+
+            assert_eq!(
+                range_array.pending_placement_pages,
+                individual_array.pending_placement_pages
+            );
+            assert_eq!(
+                range_array.pending_placement_masks,
+                individual_array.pending_placement_masks
+            );
+        }
+    }
+
+    #[test]
+    fn pending_placement_range_ignores_generations_for_bit_positions() {
+        let mut array = SparseArray::new();
+        let start = EntityId::new_from_index_and_gen(31, 3);
+        let end = EntityId::new_from_index_and_gen(64, 9);
+
+        for index in 31..=64 {
+            let entity = match index {
+                31 => start,
+                64 => end,
+                _ => EntityId::new(index),
+            };
+            insert_live(&mut array, entity);
+        }
+
+        array.set_pending_placement_range(start, end);
+
+        assert_eq!(array.pending_placement_pages(), &[0, 1, 2]);
+        assert_eq!(array.pending_placement_mask(0), 1 << 31);
+        assert_eq!(array.pending_placement_mask(1), u32::MAX);
+        assert_eq!(array.pending_placement_mask(2), 1);
     }
 
     #[test]

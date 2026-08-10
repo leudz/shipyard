@@ -109,15 +109,15 @@ impl<T: Send + Sync + Component> BulkInsert for T {
         let dense = &mut unclassified_bucket.dense;
 
         // update sparse to reflect the new state of dense and data
-        sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
-        for (i, &entity) in dense[old_len..].iter().enumerate() {
-            unsafe {
-                *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+        if new_entities_count != 0 {
+            sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
+            for (i, &entity) in dense[old_len..].iter().enumerate() {
+                unsafe {
+                    *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                }
             }
-        }
-        if should_set_pending_placement {
-            for &entity in &dense[old_len..] {
-                sparse.set_pending_placement(entity);
+            if should_set_pending_placement {
+                sparse.set_pending_placement_range(dense[old_len], dense[dense.len() - 1]);
             }
         }
 
@@ -195,15 +195,15 @@ macro_rules! impl_bulk_insert {
                 let SparseSet { sparse, unclassified_bucket, .. } = &mut *$sparse_set1;
                 let dense = &mut unclassified_bucket.dense;
 
-                sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
-                for (i, &entity) in dense[old_len..].iter().enumerate() {
-                    unsafe {
-                        *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                if new_entities_count != 0 {
+                    sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
+                    for (i, &entity) in dense[old_len..].iter().enumerate() {
+                        unsafe {
+                            *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                        }
                     }
-                }
-                if should_set_pending_placement {
-                    for &entity in &dense[old_len..] {
-                        sparse.set_pending_placement(entity);
+                    if should_set_pending_placement {
+                        sparse.set_pending_placement_range(dense[old_len], dense[dense.len() - 1]);
                     }
                 }
                 $(
@@ -212,15 +212,15 @@ macro_rules! impl_bulk_insert {
                     let SparseSet { sparse, unclassified_bucket, .. } = &mut *$sparse_set;
                     let dense = &mut unclassified_bucket.dense;
 
-                    sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
-                    for (i, &entity) in dense[old_len..].iter().enumerate() {
-                        unsafe {
-                            *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                    if new_entities_count != 0 {
+                        sparse.bulk_allocate(dense[old_len], dense[dense.len() - 1]);
+                        for (i, &entity) in dense[old_len..].iter().enumerate() {
+                            unsafe {
+                                *sparse.get_mut_unchecked(entity) = EntityId::new((old_len + i) as u64);
+                            }
                         }
-                    }
-                    if should_set_pending_placement {
-                        for &entity in &dense[old_len..] {
-                            sparse.set_pending_placement(entity);
+                        if should_set_pending_placement {
+                            sparse.set_pending_placement_range(dense[old_len], dense[dense.len() - 1]);
                         }
                     }
                 )*
@@ -323,5 +323,24 @@ mod tests {
         assert!(view.sparse_set.sparse.pending_placement_pages().is_empty());
         assert_eq!(view.sparse_set.sparse.pending_placement_mask(0), 0);
         assert_eq!(view.sparse_set.sparse.pending_placement_mask(1), 0);
+    }
+
+    #[test]
+    fn empty_bulk_insertions_do_not_mark_pages() {
+        let mut world = World::new();
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        assert_eq!(world.bulk_add_entity(core::iter::empty::<A>()).count(), 0);
+        assert_eq!(
+            world.bulk_add_entity(core::iter::empty::<(A, B)>()).count(),
+            0
+        );
+
+        let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        assert!(a.sparse_set.sparse.pending_placement_pages().is_empty());
+        assert!(b.sparse_set.sparse.pending_placement_pages().is_empty());
     }
 }

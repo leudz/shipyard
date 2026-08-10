@@ -510,6 +510,88 @@ fn regroup_overlapping_groups(c: &mut Criterion) {
     group.finish();
 }
 
+#[derive(Clone, Copy)]
+enum PendingPageOrder {
+    Ascending,
+    Descending,
+    Shuffled,
+}
+
+fn pending_marking_world(
+    entity_count: usize,
+    page_order: PendingPageOrder,
+) -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+    create_regroup_pair!(&world, G0, G1);
+
+    let entities: Vec<_> = world
+        .bulk_add_entity((0..entity_count).map(|_| ()))
+        .collect();
+    let mut pages: Vec<_> = entities.chunks(32).map(|page| page.to_vec()).collect();
+
+    match page_order {
+        PendingPageOrder::Ascending => {}
+        PendingPageOrder::Descending => pages.reverse(),
+        PendingPageOrder::Shuffled => {
+            let mut state = 0x9e37_79b9_u32;
+
+            for index in (1..pages.len()).rev() {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                pages.swap(index, state as usize % (index + 1));
+            }
+        }
+    }
+
+    (world, pages.into_iter().flatten().collect())
+}
+
+fn grouped_empty_world() -> World {
+    let world = World::new();
+    create_regroup_pair!(&world, G0, G1);
+    world
+}
+
+fn pending_placement_marking(c: &mut Criterion) {
+    let mut group = c.benchmark_group("pending_placement_marking");
+    group.throughput(Throughput::Elements(MUTATION_COUNT as u64));
+
+    for (name, page_order) in [
+        ("ascending_pages", PendingPageOrder::Ascending),
+        ("descending_pages", PendingPageOrder::Descending),
+        ("shuffled_pages", PendingPageOrder::Shuffled),
+    ] {
+        group.bench_function(name, |b| {
+            b.iter_batched(
+                || pending_marking_world(MUTATION_COUNT, page_order),
+                |(mut world, entities)| {
+                    for entity in entities {
+                        world.add_component(entity, (G0,));
+                    }
+                    black_box(world);
+                },
+                BatchSize::LargeInput,
+            );
+        });
+    }
+
+    group.bench_function("bulk_grouped_entities", |b| {
+        b.iter_batched(
+            grouped_empty_world,
+            |mut world| {
+                black_box(
+                    world
+                        .bulk_add_entity((0..MUTATION_COUNT).map(|_| (G0,)))
+                        .count(),
+                );
+                black_box(world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.finish();
+}
+
 fn add_entities(c: &mut Criterion) {
     let mut group = c.benchmark_group("add_entities");
     group.throughput(Throughput::Elements(MUTATION_COUNT as u64));
@@ -1180,5 +1262,6 @@ criterion_group!(
     iterate_entities,
     iterate_components,
     regroup_overlapping_groups,
+    pending_placement_marking,
 );
 criterion_main!(benches);

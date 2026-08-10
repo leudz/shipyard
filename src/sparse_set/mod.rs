@@ -1316,6 +1316,29 @@ mod tests {
     }
 
     #[test]
+    fn collected_pending_page_can_be_appended_again_once() {
+        let mut sparse_set = SparseSet::new();
+        sparse_set.add_group(&[]);
+        let entity = EntityId::new(64);
+        sparse_set
+            .insert(entity, I32(1), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        let mut emitted = Vec::new();
+        sparse_set.private_collect_regroup(&mut |entity| emitted.push(entity), &mut |_| {});
+
+        assert_eq!(emitted, [entity]);
+        assert!(sparse_set.sparse.pending_placement_pages().is_empty());
+        assert_eq!(sparse_set.sparse.pending_placement_mask(2), 0);
+
+        sparse_set.sparse.set_pending_placement(entity);
+        sparse_set.sparse.set_pending_placement(entity);
+
+        assert_eq!(sparse_set.sparse.pending_placement_pages(), &[2]);
+        assert_eq!(sparse_set.sparse.pending_placement_mask(2), 1);
+    }
+
+    #[test]
     fn remove() {
         let mut array = SparseSet::new();
         array
