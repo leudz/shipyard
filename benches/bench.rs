@@ -297,6 +297,28 @@ fn overlap_regroup_world(entity_count: usize, group_count: usize) -> World {
     world
 }
 
+fn disjoint_regroup_world(entity_count: usize) -> World {
+    let mut world = World::new();
+    create_regroup_pair!(&world, G0, G1);
+    create_regroup_pair!(&world, G2, G3);
+    create_regroup_pair!(&world, G4, G5);
+    create_regroup_pair!(&world, G6, G7);
+    create_regroup_pair!(&world, G8, G9);
+    world
+        .bulk_add_entity((0..entity_count).map(|_| (G0, G1, G2, G3, G4, G5, G6, G7, G8, G9)))
+        .count();
+    world
+}
+
+fn mostly_incomplete_overlap_world(entity_count: usize) -> World {
+    let mut world = World::new();
+    register_overlap_groups(&world, 16);
+    world
+        .bulk_add_entity((0..entity_count).map(|_| (G0,)))
+        .count();
+    world
+}
+
 fn multiword_regroup_world(entity_count: usize) -> World {
     let mut world = World::new();
     register_multiword_groups(&world);
@@ -449,6 +471,28 @@ fn regroup_overlapping_groups(c: &mut Criterion) {
             },
         );
     }
+
+    group.bench_function("disjoint_two_storage_groups", |b| {
+        b.iter_batched(
+            || disjoint_regroup_world(entity_count),
+            |mut world| {
+                world.regroup();
+                black_box(&world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("overlap_groups_16_mostly_incomplete", |b| {
+        b.iter_batched(
+            || mostly_incomplete_overlap_world(entity_count),
+            |mut world| {
+                world.regroup();
+                black_box(&world);
+            },
+            BatchSize::LargeInput,
+        );
+    });
 
     let multiword_entity_count = 100;
     group.throughput(Throughput::Elements(multiword_entity_count as u64));

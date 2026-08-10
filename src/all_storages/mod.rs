@@ -26,7 +26,9 @@ use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
-use crate::sparse_set::{BulkAddEntity, SparseSet, TupleAddComponent, TupleDelete, TupleRemove};
+use crate::sparse_set::{
+    BulkAddEntity, SparseArray, SparseSet, TupleAddComponent, TupleDelete, TupleRemove,
+};
 #[cfg(feature = "thread_local")]
 use crate::std_thread_id_generator;
 use crate::storage::{SBox, Storage, StorageId};
@@ -107,6 +109,11 @@ impl StorageMask {
         }
     }
 
+    #[inline]
+    fn clear(&mut self) {
+        self.words_mut().fill(0);
+    }
+
     fn first_difference(&self, other: &Self) -> Option<usize> {
         debug_assert_eq!(self.words().len(), other.words().len());
         self.words().iter().zip(other.words()).enumerate().find_map(
@@ -145,6 +152,7 @@ impl StorageMask {
             .sum()
     }
 
+    #[inline]
     fn is_subset_of(&self, other: &Self) -> bool {
         debug_assert_eq!(self.words().len(), other.words().len());
         self.words()
@@ -194,6 +202,52 @@ fn insert_regroup_candidate(
     }
 
     candidates.push(candidate);
+}
+
+#[inline]
+fn seed_regroup_candidates_direct(
+    entity: EntityId,
+    group_masks: &[StorageMask],
+    sparse_arrays: &[Option<&SparseArray>],
+    candidates: &mut Vec<RegroupCandidate>,
+) {
+    for group_mask in group_masks {
+        let is_complete = group_mask.indices().all(|storage_index| {
+            sparse_arrays[storage_index]
+                .map(|sparse| sparse.contains(entity))
+                .unwrap_or(false)
+        });
+
+        if is_complete {
+            insert_regroup_candidate(candidates, RegroupCandidate::new(group_mask.clone()));
+        }
+    }
+}
+
+#[inline]
+fn seed_regroup_candidates_from_presence(
+    entity: EntityId,
+    group_masks: &[StorageMask],
+    sparse_arrays: &[Option<&SparseArray>],
+    presence_mask: &mut StorageMask,
+    candidates: &mut Vec<RegroupCandidate>,
+) {
+    presence_mask.clear();
+
+    for (storage_index, sparse_array) in sparse_arrays.iter().enumerate() {
+        if sparse_array
+            .map(|sparse| sparse.contains(entity))
+            .unwrap_or(false)
+        {
+            presence_mask.insert(storage_index);
+        }
+    }
+
+    for group_mask in group_masks {
+        if group_mask.is_subset_of(presence_mask) {
+            insert_regroup_candidate(candidates, RegroupCandidate::new(group_mask.clone()));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -2020,6 +2074,8 @@ for (i, j) in &mut iter {
                 mask
             })
             .collect();
+        let membership_edge_count: usize = group_masks.iter().map(StorageMask::count_ones).sum();
+        let build_presence_mask = membership_edge_count > storage_count;
 
         let storage_guards: Vec<_> = participating_storages
             .iter()
@@ -2029,31 +2085,36 @@ for (i, j) in &mut iter {
                     .map(|storage| unsafe { &*storage.0 }.borrow().unwrap())
             })
             .collect();
+        let sparse_arrays: Vec<_> = storage_guards
+            .iter()
+            .map(|guard| guard.as_ref().and_then(|storage| storage.sparse_array()))
+            .collect();
 
         let mut signature_indices: ShipHashMap<StorageMask, usize> = ShipHashMap::new();
         let mut batches = Vec::new();
         let mut candidates = Vec::new();
         let mut merged_candidates = Vec::new();
+        let mut presence_mask = build_presence_mask.then(|| StorageMask::new(storage_count));
 
         for entity in pending_entities {
             candidates.clear();
             merged_candidates.clear();
 
-            for group_mask in &group_masks {
-                let is_complete = group_mask.indices().all(|storage_index| {
-                    storage_guards[storage_index]
-                        .as_ref()
-                        .and_then(|storage| storage.sparse_array())
-                        .map(|sparse| sparse.contains(entity))
-                        .unwrap_or(false)
-                });
-
-                if is_complete {
-                    insert_regroup_candidate(
-                        &mut candidates,
-                        RegroupCandidate::new(group_mask.clone()),
-                    );
-                }
+            if let Some(presence_mask) = presence_mask.as_mut() {
+                seed_regroup_candidates_from_presence(
+                    entity,
+                    &group_masks,
+                    &sparse_arrays,
+                    presence_mask,
+                    &mut candidates,
+                );
+            } else {
+                seed_regroup_candidates_direct(
+                    entity,
+                    &group_masks,
+                    &sparse_arrays,
+                    &mut candidates,
+                );
             }
 
             for candidate in &mut candidates {
@@ -2116,6 +2177,7 @@ for (i, j) in &mut iter {
             }
         }
 
+        drop(sparse_arrays);
         drop(storage_guards);
 
         for batch in batches {
@@ -2654,6 +2716,89 @@ mod regroup_tests {
         });
     }
 
+    fn sparse_set_with_entities(entities: &[EntityId]) -> SparseSet<A> {
+        let mut sparse_set = SparseSet::new_custom_storage();
+        for &entity in entities {
+            let _ = sparse_set.insert(entity, A, TrackingTimestamp::new(1));
+        }
+        sparse_set
+    }
+
+    fn normalized_seed_batches(
+        entities: &[EntityId],
+        group_masks: &[StorageMask],
+        sparse_arrays: &[Option<&SparseArray>],
+        use_presence_mask: bool,
+    ) -> Vec<(Vec<usize>, Vec<EntityId>)> {
+        let mut batches: ShipHashMap<StorageMask, Vec<EntityId>> = ShipHashMap::new();
+        let mut candidates = Vec::new();
+        let mut presence_mask = StorageMask::new(sparse_arrays.len());
+
+        for &entity in entities {
+            candidates.clear();
+
+            if use_presence_mask {
+                seed_regroup_candidates_from_presence(
+                    entity,
+                    group_masks,
+                    sparse_arrays,
+                    &mut presence_mask,
+                    &mut candidates,
+                );
+            } else {
+                seed_regroup_candidates_direct(entity, group_masks, sparse_arrays, &mut candidates);
+            }
+
+            for candidate in candidates.drain(..) {
+                batches.entry(candidate.storages).or_default().push(entity);
+            }
+        }
+
+        let mut batches: Vec<_> = batches
+            .into_iter()
+            .map(|(signature, entities)| (signature.indices().collect(), entities))
+            .collect();
+        batches.sort_unstable();
+        batches
+    }
+
+    #[test]
+    fn direct_and_presence_seeding_produce_identical_signatures_and_batches() {
+        let entities = [0, 1, 2, 3].map(EntityId::new);
+        let storage0 = sparse_set_with_entities(&entities[..3]);
+        let storage1 = sparse_set_with_entities(&entities[..3]);
+        let storage2 = sparse_set_with_entities(&[entities[0], entities[2]]);
+        let storage3 = sparse_set_with_entities(&[entities[1], entities[3]]);
+        let storage4 = sparse_set_with_entities(&[entities[1], entities[3]]);
+        let sparse_arrays = [
+            Storage::sparse_array(&storage0),
+            Storage::sparse_array(&storage1),
+            Storage::sparse_array(&storage2),
+            Storage::sparse_array(&storage3),
+            Storage::sparse_array(&storage4),
+            None,
+        ];
+        let group_masks = [
+            mask(sparse_arrays.len(), &[0, 1]),
+            mask(sparse_arrays.len(), &[1, 2]),
+            mask(sparse_arrays.len(), &[3, 4]),
+            mask(sparse_arrays.len(), &[0, 5]),
+        ];
+
+        let direct = normalized_seed_batches(&entities, &group_masks, &sparse_arrays, false);
+        let presence = normalized_seed_batches(&entities, &group_masks, &sparse_arrays, true);
+
+        assert_eq!(direct, presence);
+        assert_eq!(
+            direct,
+            vec![
+                (vec![0, 1], vec![entities[1]]),
+                (vec![0, 1, 2], vec![entities[0], entities[2]]),
+                (vec![3, 4], vec![entities[1], entities[3]]),
+            ]
+        );
+    }
+
     #[test]
     fn canonical_groups_are_evaluated_once_and_committed_as_batches() {
         let mut world = World::new();
@@ -2690,6 +2835,108 @@ mod regroup_tests {
     }
 
     #[test]
+    fn overlapping_groups_cache_each_sparse_array_once_for_all_entities() {
+        let mut world = World::new();
+        let entities: Vec<_> = (0..8).map(|_| world.add_entity(())).collect();
+        let mut left_group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+        ];
+        let mut right_group = vec![
+            TypeId::of::<CountingStorage<B>>(),
+            TypeId::of::<CountingStorage<C>>(),
+        ];
+        let mut combined_group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+            TypeId::of::<CountingStorage<C>>(),
+        ];
+        left_group.sort_unstable();
+        right_group.sort_unstable();
+        combined_group.sort_unstable();
+
+        let a_checks = Arc::new(AtomicUsize::new(0));
+        let b_checks = Arc::new(AtomicUsize::new(0));
+        let c_checks = Arc::new(AtomicUsize::new(0));
+
+        {
+            let all_storages = world.all_storages.get_mut();
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<A>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, A)).collect(),
+                        entities.clone(),
+                        vec![left_group, right_group],
+                        a_checks.clone(),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<B>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, B)).collect(),
+                        Vec::new(),
+                        Vec::new(),
+                        b_checks.clone(),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+            all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<CountingStorage<C>>(),
+                || {
+                    counting_storage_with_batches(
+                        entities.iter().copied().map(|entity| (entity, C)).collect(),
+                        Vec::new(),
+                        Vec::new(),
+                        c_checks.clone(),
+                        Arc::new(AtomicUsize::new(0)),
+                    )
+                },
+            );
+        }
+
+        world.regroup();
+
+        assert_eq!(a_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(b_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(c_checks.load(Ordering::Relaxed), 1);
+        let expected = vec![(entities, combined_group)];
+        assert_eq!(received_batches::<A>(&world), expected);
+        assert_eq!(received_batches::<B>(&world), expected);
+        assert_eq!(received_batches::<C>(&world), expected);
+    }
+
+    #[test]
+    fn missing_participating_storage_keeps_group_incomplete() {
+        let mut world = World::new();
+        let entity = world.add_entity(());
+        let checks = Arc::new(AtomicUsize::new(0));
+        let batches = Arc::new(AtomicUsize::new(0));
+        let mut group = vec![
+            TypeId::of::<CountingStorage<A>>(),
+            TypeId::of::<CountingStorage<B>>(),
+        ];
+        group.sort_unstable();
+
+        world
+            .all_storages
+            .get_mut()
+            .exclusive_storage_or_insert_mut(StorageId::of::<CountingStorage<A>>(), || {
+                counting_storage(entity, A, &group, checks.clone(), batches.clone())
+            });
+
+        world.regroup();
+
+        assert_eq!(checks.load(Ordering::Relaxed), 1);
+        assert_eq!(batches.load(Ordering::Relaxed), 0);
+        assert!(received_batches::<A>(&world).is_empty());
+    }
+
+    #[test]
     fn wide_signature_is_committed_once_per_storage() {
         let mut world = World::new();
         let entities: Vec<_> = (0..8).map(|_| world.add_entity(())).collect();
@@ -2705,6 +2952,10 @@ mod regroup_tests {
         let b_batches = Arc::new(AtomicUsize::new(0));
         let c_batches = Arc::new(AtomicUsize::new(0));
         let d_batches = Arc::new(AtomicUsize::new(0));
+        let a_checks = Arc::new(AtomicUsize::new(0));
+        let b_checks = Arc::new(AtomicUsize::new(0));
+        let c_checks = Arc::new(AtomicUsize::new(0));
+        let d_checks = Arc::new(AtomicUsize::new(0));
 
         {
             let all_storages = world.all_storages.get_mut();
@@ -2715,7 +2966,7 @@ mod regroup_tests {
                         entities.iter().copied().map(|entity| (entity, A)).collect(),
                         entities.clone(),
                         vec![group.clone()],
-                        Arc::new(AtomicUsize::new(0)),
+                        a_checks.clone(),
                         a_batches.clone(),
                     )
                 },
@@ -2727,7 +2978,7 @@ mod regroup_tests {
                         entities.iter().copied().map(|entity| (entity, B)).collect(),
                         entities.clone(),
                         vec![group.clone()],
-                        Arc::new(AtomicUsize::new(0)),
+                        b_checks.clone(),
                         b_batches.clone(),
                     )
                 },
@@ -2739,7 +2990,7 @@ mod regroup_tests {
                         entities.iter().copied().map(|entity| (entity, C)).collect(),
                         entities.clone(),
                         vec![group.clone()],
-                        Arc::new(AtomicUsize::new(0)),
+                        c_checks.clone(),
                         c_batches.clone(),
                     )
                 },
@@ -2751,7 +3002,7 @@ mod regroup_tests {
                         entities.iter().copied().map(|entity| (entity, D)).collect(),
                         entities.clone(),
                         vec![group.clone()],
-                        Arc::new(AtomicUsize::new(0)),
+                        d_checks.clone(),
                         d_batches.clone(),
                     )
                 },
@@ -2769,6 +3020,10 @@ mod regroup_tests {
         assert_eq!(b_batches.load(Ordering::Relaxed), 1);
         assert_eq!(c_batches.load(Ordering::Relaxed), 1);
         assert_eq!(d_batches.load(Ordering::Relaxed), 1);
+        assert_eq!(a_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(b_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(c_checks.load(Ordering::Relaxed), 1);
+        assert_eq!(d_checks.load(Ordering::Relaxed), 1);
     }
 
     #[test]
