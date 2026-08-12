@@ -127,12 +127,11 @@ impl<T: Component> SparseSet<T> {
         self.group_buckets.push(ComponentBucket::new());
     }
 
-    fn move_entity_to_group(&mut self, entity: EntityId, group_index: usize) {
+    fn move_entity_to_bucket(&mut self, entity: EntityId, target: BucketIndex) {
         let dense_index = self.index_of(entity).unwrap();
         let source_bucket_index = self.sparse.bucket_index(entity);
-        let target_bucket_index = BucketIndex::from_group_index(group_index);
 
-        if source_bucket_index == target_bucket_index {
+        if source_bucket_index == target {
             // I'm not sure if this should be silent, it could be an assert instead
             return;
         }
@@ -170,7 +169,11 @@ impl<T: Component> SparseSet<T> {
             }
         }
 
-        let target_bucket = unsafe { self.group_buckets.get_unchecked_mut(group_index) };
+        let target_bucket = if let Some(group_index) = target.group_index() {
+            unsafe { self.group_buckets.get_unchecked_mut(group_index) }
+        } else {
+            &mut self.unclassified_bucket
+        };
         let target_dense_index = target_bucket.dense.len();
 
         target_bucket.dense.push(entity);
@@ -187,7 +190,7 @@ impl<T: Component> SparseSet<T> {
                 .get_mut_unchecked(entity)
                 .set_index(target_dense_index as u64);
         }
-        self.sparse.set_bucket_index(entity, target_bucket_index);
+        self.sparse.set_bucket_index(entity, target);
     }
 
     fn private_collect_regroup_pages(
@@ -1066,18 +1069,24 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
     }
 
     fn move_to_group_batch(&mut self, entities: &[EntityId], group: &[TypeId]) {
-        let group_index = self
-            .groups
-            .iter()
-            .position(|local_group| local_group == group);
-        let group_index = group_index.unwrap_or_else(|| {
-            let group_index = self.groups.add(group);
-            self.group_buckets.push(ComponentBucket::new());
-            group_index
-        });
+        let target_bucket_index = if group.is_empty() {
+            BucketIndex::UNCLASSIFIED
+        } else {
+            let group_index = self
+                .groups
+                .iter()
+                .position(|local_group| local_group == group);
+            let group_index = group_index.unwrap_or_else(|| {
+                let group_index = self.groups.add(group);
+                self.group_buckets.push(ComponentBucket::new());
+                group_index
+            });
+
+            BucketIndex::from_group_index(group_index)
+        };
 
         for &entity in entities {
-            self.move_entity_to_group(entity, group_index);
+            self.move_entity_to_bucket(entity, target_bucket_index);
         }
     }
 }
@@ -2165,6 +2174,98 @@ mod tests {
         );
         assert_eq!(views.0.sparse_set.group_buckets[0].dense, [remaining]);
         assert_eq!(views.2.sparse_set.group_buckets[0].dense, [remaining]);
+    }
+
+    #[test]
+    fn empty_group_movement_returns_to_unclassified_without_creating_a_group() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B));
+        world.regroup();
+
+        let view = world.borrow::<ViewMut<'_, A>>().unwrap();
+        assert_eq!(view.sparse_set.groups.iter().count(), 1);
+        assert_eq!(view.sparse_set.group_buckets[0].dense, [entity]);
+
+        Storage::move_to_group(view.sparse_set, entity, &[]);
+
+        assert_eq!(view.sparse_set.groups.iter().count(), 1);
+        assert_eq!(view.sparse_set.group_buckets.len(), 1);
+        assert!(view.sparse_set.group_buckets[0].dense.is_empty());
+        assert_eq!(view.sparse_set.unclassified_bucket.dense, [entity]);
+        assert!(view
+            .sparse_set
+            .sparse
+            .bucket_index(entity)
+            .is_unclassified());
+    }
+
+    #[test]
+    fn empty_group_movement_preserves_component_tracking() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, TrackedI32>, ViewMut<'_, STR>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((TrackedI32(10), STR("grouped")));
+        world.regroup();
+
+        let (insertion, modification) = {
+            let view = world.borrow::<View<'_, TrackedI32>>().unwrap();
+            assert_eq!(view.sparse_set.group_buckets[0].data, [TrackedI32(10)]);
+            (
+                view.sparse_set.group_buckets[0].insertion_data[0],
+                view.sparse_set.group_buckets[0].modification_data[0],
+            )
+        };
+
+        let view = world.borrow::<ViewMut<'_, TrackedI32>>().unwrap();
+        Storage::move_to_group(view.sparse_set, entity, &[]);
+
+        assert_eq!(view.sparse_set.unclassified_bucket.dense, [entity]);
+        assert_eq!(view.sparse_set.unclassified_bucket.data, [TrackedI32(10)]);
+        assert_eq!(
+            view.sparse_set.unclassified_bucket.insertion_data[0].get(),
+            insertion.get()
+        );
+        assert_eq!(
+            view.sparse_set.unclassified_bucket.modification_data[0].get(),
+            modification.get()
+        );
+    }
+
+    #[test]
+    fn empty_group_movement_repairs_the_source_bucket_sparse_index() {
+        let mut sparse_set = SparseSet::<I32>::new();
+        let group = [TypeId::of::<A>()];
+        sparse_set.add_group(&group);
+
+        let first = EntityId::new(0);
+        let second = EntityId::new(1);
+        sparse_set
+            .insert(first, I32(10), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(second, I32(20), TrackingTimestamp::new(0))
+            .assert_inserted();
+        Storage::move_to_group(&mut sparse_set, first, &group);
+        Storage::move_to_group(&mut sparse_set, second, &group);
+
+        Storage::move_to_group(&mut sparse_set, first, &[]);
+
+        assert_eq!(sparse_set.group_buckets[0].dense, [second]);
+        assert_eq!(sparse_set.sparse.get(second).unwrap().uindex(), 0);
+        assert_eq!(sparse_set.unclassified_bucket.dense, [first]);
+        assert_eq!(sparse_set.unclassified_bucket.data, [I32(10)]);
     }
 
     /// Checks that a 3 storage group is correctly populated after a regroup.

@@ -17,6 +17,8 @@ pub struct SparseArray {
     pub(super) pending_placement_masks: Vec<u32>,
     /// Unique list of pages containing components pending placement, in unspecified order.
     pub(super) pending_placement_pages: Vec<usize>,
+    /// Components removed from a grouped bucket, paired with their former local group index.
+    pub(super) removed_from_groups: Vec<(EntityId, usize)>,
 }
 
 impl SparseArray {
@@ -27,6 +29,7 @@ impl SparseArray {
             group_pages: Vec::new(),
             pending_placement_masks: Vec::new(),
             pending_placement_pages: Vec::new(),
+            removed_from_groups: Vec::new(),
         }
     }
     #[inline]
@@ -60,6 +63,7 @@ impl SparseArray {
             })
             + self.pending_placement_masks.len() * size_of::<u32>()
             + self.pending_placement_pages.len() * size_of::<usize>()
+            + self.removed_from_groups.len() * size_of::<(EntityId, usize)>()
     }
     pub(super) fn reserved_memory(&self) -> usize {
         self.ids.capacity() * size_of::<Option<Box<[EntityId; BUCKET_SIZE]>>>()
@@ -80,6 +84,7 @@ impl SparseArray {
             })
             + self.pending_placement_masks.capacity() * size_of::<u32>()
             + self.pending_placement_pages.capacity() * size_of::<usize>()
+            + self.removed_from_groups.capacity() * size_of::<(EntityId, usize)>()
     }
 }
 
@@ -457,5 +462,25 @@ mod tests {
         assert_eq!(array.bucket_index(entity), BucketIndex::UNCLASSIFIED);
         assert_eq!(array.pending_placement_mask(3), 0);
         assert!(array.pending_placement_pages().is_empty());
+    }
+
+    #[test]
+    fn removed_from_groups_starts_empty_is_cloned_and_is_accounted_for() {
+        let mut array = SparseArray::new();
+        assert!(array.removed_from_groups.is_empty());
+
+        array.removed_from_groups.reserve(3);
+        array.removed_from_groups.push((EntityId::new(42), 7));
+
+        let clone = array.clone();
+        assert_eq!(clone.removed_from_groups, array.removed_from_groups);
+
+        let empty = SparseArray::new();
+        let entry_size = size_of::<(EntityId, usize)>();
+        assert_eq!(array.used_memory() - empty.used_memory(), entry_size);
+        assert_eq!(
+            array.reserved_memory() - empty.reserved_memory(),
+            array.removed_from_groups.capacity() * entry_size
+        );
     }
 }
