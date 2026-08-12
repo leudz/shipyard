@@ -498,39 +498,64 @@ impl<T: Component> SparseSet<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
         if entity.gen() >= sparse_entity.gen() {
+            let source_bucket_index = self.sparse.bucket_index(entity);
+            let source_group_index = source_bucket_index.group_index();
+            let dense_index = sparse_entity.uindex();
+            let removed_entity = {
+                let source_bucket = if let Some(group_index) = source_group_index {
+                    self.group_buckets
+                        .get(group_index)
+                        .expect("A component's bucket index must reference an existing group.")
+                } else {
+                    &self.unclassified_bucket
+                };
+
+                unsafe { *source_bucket.dense.get_unchecked(dense_index) }
+            };
+
             unsafe {
                 *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
             }
+            self.sparse
+                .set_bucket_index(entity, BucketIndex::UNCLASSIFIED);
 
-            self.unclassified_bucket
-                .dense
-                .swap_remove(sparse_entity.uindex());
-            if self.is_tracking_insertion() {
-                self.unclassified_bucket
-                    .insertion_data
-                    .swap_remove(sparse_entity.uindex());
-            }
-            if self.is_tracking_modification() {
-                self.unclassified_bucket
-                    .modification_data
-                    .swap_remove(sparse_entity.uindex());
-            }
-            let component = self
-                .unclassified_bucket
-                .data
-                .swap_remove(sparse_entity.uindex());
+            let is_tracking_insertion = self.is_tracking_insertion();
+            let is_tracking_modification = self.is_tracking_modification();
+            let (component, replacement) = {
+                let source_bucket = if let Some(group_index) = source_group_index {
+                    self.group_buckets
+                        .get_mut(group_index)
+                        .expect("A component's bucket index must reference an existing group.")
+                } else {
+                    &mut self.unclassified_bucket
+                };
+
+                source_bucket.dense.swap_remove(dense_index);
+                if is_tracking_insertion {
+                    source_bucket.insertion_data.swap_remove(dense_index);
+                }
+                if is_tracking_modification {
+                    source_bucket.modification_data.swap_remove(dense_index);
+                }
+                let component = source_bucket.data.swap_remove(dense_index);
+                let replacement = source_bucket.dense.get(dense_index).copied();
+
+                (component, replacement)
+            };
 
             // The SparseSet could now be empty or the removed component could have been the last one
-            if sparse_entity.uindex() < self.unclassified_bucket.dense.len() {
+            if let Some(replacement) = replacement {
                 unsafe {
-                    let last = *self
-                        .unclassified_bucket
-                        .dense
-                        .get_unchecked(sparse_entity.uindex());
                     self.sparse
-                        .get_mut_unchecked(last)
+                        .get_mut_unchecked(replacement)
                         .copy_index(sparse_entity);
                 }
+            }
+
+            if let Some(group_index) = source_group_index {
+                self.sparse
+                    .removed_from_groups
+                    .push((removed_entity, group_index));
             }
 
             if entity.gen() == sparse_entity.gen() {
@@ -1097,6 +1122,7 @@ mod tests {
     use crate::{Component, Group, View, ViewMut, World};
     use alloc::vec;
     use std::println;
+    use std::sync::{Arc, Mutex};
 
     #[derive(PartialEq, Eq, Debug)]
     struct STR(&'static str);
@@ -1520,6 +1546,185 @@ mod tests {
             Some(&STR("10"))
         );
         assert_eq!(array.private_get(EntityId::new_from_parts(100, 0)), None);
+    }
+
+    #[test]
+    fn remove_grouped_component_returns_and_queues_exact_entity() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, I32>, ViewMut<'_, STR>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((I32(10), STR("grouped")));
+        world.regroup();
+
+        assert_eq!(world.remove::<(I32,)>(entity), (Some(I32(10)),));
+
+        let view = world.borrow::<View<'_, I32>>().unwrap();
+        assert_eq!(view.sparse_set.sparse.removed_from_groups, [(entity, 0)]);
+        assert!(view
+            .sparse_set
+            .sparse
+            .bucket_index(entity)
+            .is_unclassified());
+    }
+
+    #[test]
+    fn delete_grouped_component_queues_exact_entity_and_keeps_tracking_data() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, TrackedI32>, ViewMut<'_, STR>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let removed = world.add_entity((TrackedI32(10), STR("removed")));
+        let deleted = world.add_entity((TrackedI32(20), STR("deleted")));
+        world.regroup();
+
+        assert_eq!(
+            world.remove::<(TrackedI32,)>(removed),
+            (Some(TrackedI32(10)),)
+        );
+        world.delete_component::<(TrackedI32,)>(deleted);
+
+        let view = world.borrow::<View<'_, TrackedI32>>().unwrap();
+        assert_eq!(
+            view.sparse_set.sparse.removed_from_groups,
+            [(removed, 0), (deleted, 0)]
+        );
+        assert_eq!(view.sparse_set.removal_data.len(), 1);
+        assert_eq!(view.sparse_set.removal_data[0].0, removed);
+        assert_eq!(view.sparse_set.deletion_data.len(), 1);
+        assert_eq!(view.sparse_set.deletion_data[0].0, deleted);
+        assert_eq!(view.sparse_set.deletion_data[0].2, TrackedI32(20));
+    }
+
+    #[test]
+    fn unclassified_remove_does_not_queue_regroup_record() {
+        let mut sparse_set = SparseSet::<I32>::new();
+        let entity = EntityId::new(0);
+
+        sparse_set
+            .insert(entity, I32(10), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        assert_eq!(
+            sparse_set.dyn_remove(entity, TrackingTimestamp::new(1)),
+            Some(I32(10))
+        );
+        assert!(sparse_set.sparse.removed_from_groups.is_empty());
+    }
+
+    #[test]
+    fn grouped_remove_repairs_swapped_sparse_index_and_tracking_vectors() {
+        let mut sparse_set = SparseSet::<TrackedI32>::new();
+        let group = [TypeId::of::<SparseSet<TrackedI32>>()];
+        sparse_set.add_group(&group);
+
+        let first = EntityId::new(0);
+        let second = EntityId::new(1);
+        sparse_set
+            .insert(first, TrackedI32(10), TrackingTimestamp::new(1))
+            .assert_inserted();
+        sparse_set
+            .insert(second, TrackedI32(20), TrackingTimestamp::new(2))
+            .assert_inserted();
+        Storage::move_to_group(&mut sparse_set, first, &group);
+        Storage::move_to_group(&mut sparse_set, second, &group);
+
+        let insertion = sparse_set.group_buckets[0].insertion_data[1];
+        let modification = sparse_set.group_buckets[0].modification_data[1];
+
+        assert_eq!(
+            sparse_set.dyn_remove(first, TrackingTimestamp::new(3)),
+            Some(TrackedI32(10))
+        );
+        assert_eq!(sparse_set.group_buckets[0].dense, [second]);
+        assert_eq!(sparse_set.group_buckets[0].data, [TrackedI32(20)]);
+        assert_eq!(sparse_set.group_buckets[0].insertion_data.len(), 1);
+        assert_eq!(sparse_set.group_buckets[0].modification_data.len(), 1);
+        assert_eq!(
+            sparse_set.group_buckets[0].insertion_data[0].get(),
+            insertion.get()
+        );
+        assert_eq!(
+            sparse_set.group_buckets[0].modification_data[0].get(),
+            modification.get()
+        );
+        assert_eq!(sparse_set.sparse.get(second).unwrap().uindex(), 0);
+    }
+
+    #[test]
+    fn grouped_remove_resets_bucket_metadata_for_later_insertion() {
+        let mut sparse_set = SparseSet::<I32>::new();
+        let group = [TypeId::of::<SparseSet<I32>>()];
+        sparse_set.add_group(&group);
+
+        let old_entity = EntityId::new_from_parts(0, 0);
+        sparse_set
+            .insert(old_entity, I32(10), TrackingTimestamp::new(0))
+            .assert_inserted();
+        Storage::move_to_group(&mut sparse_set, old_entity, &group);
+
+        assert_eq!(
+            sparse_set.dyn_remove(old_entity, TrackingTimestamp::new(1)),
+            Some(I32(10))
+        );
+        assert!(sparse_set.sparse.bucket_index(old_entity).is_unclassified());
+
+        let new_entity = EntityId::new_from_parts(0, 1);
+        sparse_set
+            .insert(new_entity, I32(20), TrackingTimestamp::new(2))
+            .assert_inserted();
+        assert!(sparse_set.sparse.bucket_index(new_entity).is_unclassified());
+        assert_eq!(sparse_set.unclassified_bucket.dense, [new_entity]);
+    }
+
+    #[test]
+    fn stale_grouped_remove_queues_stored_generation_without_callback_or_tracking() {
+        let mut sparse_set = SparseSet::<TrackedI32>::new();
+        let group = [TypeId::of::<SparseSet<TrackedI32>>()];
+        sparse_set.add_group(&group);
+
+        let callbacks = Arc::new(Mutex::new(Vec::new()));
+        let callback_log = Arc::clone(&callbacks);
+        sparse_set.on_removal(move |entity, component| {
+            callback_log.lock().unwrap().push((entity, component.0));
+        });
+
+        let stored = EntityId::new_from_parts(0, 2);
+        let newer = EntityId::new_from_parts(0, 3);
+        sparse_set
+            .insert(stored, TrackedI32(10), TrackingTimestamp::new(0))
+            .assert_inserted();
+        Storage::move_to_group(&mut sparse_set, stored, &group);
+
+        assert_eq!(
+            sparse_set.dyn_remove(newer, TrackingTimestamp::new(1)),
+            None
+        );
+        assert_eq!(sparse_set.sparse.removed_from_groups, [(stored, 0)]);
+        assert!(callbacks.lock().unwrap().is_empty());
+        assert!(sparse_set.removal_data.is_empty());
+
+        let exact = EntityId::new_from_parts(1, 4);
+        sparse_set
+            .insert(exact, TrackedI32(20), TrackingTimestamp::new(2))
+            .assert_inserted();
+        Storage::move_to_group(&mut sparse_set, exact, &group);
+
+        assert_eq!(
+            sparse_set.dyn_remove(exact, TrackingTimestamp::new(3)),
+            Some(TrackedI32(20))
+        );
+        assert_eq!(*callbacks.lock().unwrap(), [(exact, 20)]);
     }
 
     #[test]
