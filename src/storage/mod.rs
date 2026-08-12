@@ -129,6 +129,11 @@ pub trait Storage: SizedAny {
         emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
     }
+    /// Consumes pending grouped removals, emitting their former group signatures.
+    #[doc(hidden)]
+    #[inline]
+    #[allow(unused_variables)]
+    fn collect_regroup_removals(&mut self, emit: &mut dyn FnMut(EntityId, &[TypeId])) {}
     /// Returns the group currently occupied by `entity`.
     #[doc(hidden)]
     #[inline]

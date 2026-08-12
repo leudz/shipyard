@@ -226,6 +226,14 @@ impl<T: Component> SparseSet<T> {
 
         self.sparse.pending_placement_pages.clear();
     }
+
+    fn private_collect_regroup_removals(&mut self, emit: &mut dyn FnMut(EntityId, &[TypeId])) {
+        let removed_from_groups = core::mem::take(&mut self.sparse.removed_from_groups);
+
+        for (entity, group_index) in removed_from_groups {
+            emit(entity, &self.groups[group_index]);
+        }
+    }
 }
 
 impl<T: Component> SparseSet<T> {
@@ -769,6 +777,29 @@ impl<T: Component> SparseSet<T> {
         }
     }
 
+    fn move_grouped_to_unclassified(&mut self) {
+        let grouped_entities: Vec<_> = self
+            .group_buckets
+            .iter()
+            .enumerate()
+            .flat_map(|(group_index, bucket)| {
+                bucket
+                    .dense
+                    .iter()
+                    .copied()
+                    .map(move |entity| (entity, group_index))
+            })
+            .collect();
+
+        for (entity, group_index) in grouped_entities {
+            debug_assert_eq!(
+                self.sparse.bucket_index(entity),
+                BucketIndex::from_group_index(group_index)
+            );
+            self.move_entity_to_bucket(entity, BucketIndex::UNCLASSIFIED);
+        }
+    }
+
     /// Applies the given function `f` to the entities `a` and `b`.\
     /// The two entities shouldn't point to the same component.  
     ///
@@ -856,6 +887,8 @@ impl<T: Component> SparseSet<T> {
 
     /// Deletes all components in this storage.
     pub(crate) fn private_clear(&mut self, current: TrackingTimestamp) {
+        self.move_grouped_to_unclassified();
+
         for &id in &self.unclassified_bucket.dense {
             unsafe {
                 *self.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -880,6 +913,8 @@ impl<T: Component> SparseSet<T> {
 
     /// Creates a draining iterator that empties the storage and yields the removed items.
     pub(crate) fn private_drain(&mut self, current: TrackingTimestamp) -> SparseSetDrain<'_, T> {
+        self.move_grouped_to_unclassified();
+
         if self.is_tracking_removal {
             self.removal_data.extend(
                 self.unclassified_bucket
@@ -918,16 +953,36 @@ impl<T: Component> SparseSet<T> {
         current: TrackingTimestamp,
         mut f: F,
     ) {
-        let mut removed = 0;
-        for i in 0..self.len() {
-            let i = i - removed;
+        for bucket_index in 0..=self.group_buckets.len() {
+            let bucket_index = if bucket_index == 0 {
+                BucketIndex::UNCLASSIFIED
+            } else {
+                BucketIndex::from_group_index(bucket_index - 1)
+            };
+            let mut component_index = 0;
 
-            let eid = unsafe { *self.unclassified_bucket.dense.get_unchecked(i) };
-            let component = unsafe { self.unclassified_bucket.data.get_unchecked(i) };
+            loop {
+                let Some(entity) = (match bucket_index.group_index() {
+                    Some(group_index) => self.group_buckets[group_index].dense.get(component_index),
+                    None => self.unclassified_bucket.dense.get(component_index),
+                })
+                .copied() else {
+                    break;
+                };
 
-            if !f(eid, component) {
-                self.dyn_delete(eid, current);
-                removed += 1;
+                let keep = match bucket_index.group_index() {
+                    Some(group_index) => f(
+                        entity,
+                        &self.group_buckets[group_index].data[component_index],
+                    ),
+                    None => f(entity, &self.unclassified_bucket.data[component_index]),
+                };
+
+                if keep {
+                    component_index += 1;
+                } else {
+                    self.dyn_delete(entity, current);
+                }
             }
         }
     }
@@ -937,20 +992,53 @@ impl<T: Component> SparseSet<T> {
         current: TrackingTimestamp,
         mut f: F,
     ) {
-        let mut removed = 0;
-        for i in 0..self.len() {
-            let i = i - removed;
-
-            let eid = unsafe { *self.unclassified_bucket.dense.get_unchecked(i) };
-            let component = Mut {
-                flag: self.unclassified_bucket.modification_data.get_mut(i),
-                current,
-                data: unsafe { self.unclassified_bucket.data.get_unchecked_mut(i) },
+        for bucket_index in 0..=self.group_buckets.len() {
+            let bucket_index = if bucket_index == 0 {
+                BucketIndex::UNCLASSIFIED
+            } else {
+                BucketIndex::from_group_index(bucket_index - 1)
             };
+            let mut component_index = 0;
 
-            if !f(eid, component) {
-                self.dyn_delete(eid, current);
-                removed += 1;
+            loop {
+                let Some(entity) = (match bucket_index.group_index() {
+                    Some(group_index) => self.group_buckets[group_index].dense.get(component_index),
+                    None => self.unclassified_bucket.dense.get(component_index),
+                })
+                .copied() else {
+                    break;
+                };
+
+                let keep = match bucket_index.group_index() {
+                    Some(group_index) => {
+                        let bucket = &mut self.group_buckets[group_index];
+                        f(
+                            entity,
+                            Mut {
+                                flag: bucket.modification_data.get_mut(component_index),
+                                current,
+                                data: &mut bucket.data[component_index],
+                            },
+                        )
+                    }
+                    None => f(
+                        entity,
+                        Mut {
+                            flag: self
+                                .unclassified_bucket
+                                .modification_data
+                                .get_mut(component_index),
+                            current,
+                            data: &mut self.unclassified_bucket.data[component_index],
+                        },
+                    ),
+                };
+
+                if keep {
+                    component_index += 1;
+                } else {
+                    self.dyn_delete(entity, current);
+                }
             }
         }
     }
@@ -1076,6 +1164,10 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
         emit_group: &mut dyn FnMut(&[TypeId]),
     ) {
         self.private_collect_regroup_pages(emit_page, emit_group);
+    }
+
+    fn collect_regroup_removals(&mut self, emit: &mut dyn FnMut(EntityId, &[TypeId])) {
+        self.private_collect_regroup_removals(emit);
     }
 
     fn entity_group(&self, entity: EntityId) -> Option<&[TypeId]> {
@@ -1725,6 +1817,97 @@ mod tests {
             Some(TrackedI32(20))
         );
         assert_eq!(*callbacks.lock().unwrap(), [(exact, 20)]);
+    }
+
+    #[test]
+    fn regroup_grouped_removal_uses_existing_subgroup() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+                .unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C));
+        world.regroup();
+        world.remove::<(C,)>(entity);
+        world.regroup();
+
+        let expected = sorted_group(vec![storage_id::<A>(), storage_id::<B>()]);
+        let views = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        assert_eq!(current_group(views.0.sparse_set, entity), expected);
+        assert_eq!(current_group(views.1.sparse_set, entity), expected);
+    }
+
+    #[test]
+    fn regroup_grouped_removal_moves_remaining_components_to_empty_signature() {
+        let mut world = World::new();
+
+        {
+            let mut views = world
+                .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+                .unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C));
+        world.regroup();
+        world.remove::<(C,)>(entity);
+        world.regroup();
+
+        let views = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        assert!(views
+            .0
+            .sparse_set
+            .sparse
+            .bucket_index(entity)
+            .is_unclassified());
+        assert!(views
+            .1
+            .sparse_set
+            .sparse
+            .bucket_index(entity)
+            .is_unclassified());
+        assert_eq!(views.0.sparse_set.unclassified_bucket.dense, [entity]);
+        assert_eq!(views.1.sparse_set.unclassified_bucket.dense, [entity]);
+    }
+
+    #[test]
+    fn regroup_grouped_removal_preserves_disjoint_group() {
+        let mut world = World::new();
+
+        {
+            let mut views = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+            views.create_group();
+        }
+        {
+            let mut views = world.borrow::<(ViewMut<'_, C>, ViewMut<'_, D>)>().unwrap();
+            views.create_group();
+        }
+
+        let entity = world.add_entity((A, B, C, D));
+        world.regroup();
+        world.remove::<(B,)>(entity);
+        world.regroup();
+
+        let expected = sorted_group(vec![storage_id::<C>(), storage_id::<D>()]);
+        let views = world
+            .borrow::<(View<'_, A>, View<'_, C>, View<'_, D>)>()
+            .unwrap();
+        assert!(views
+            .0
+            .sparse_set
+            .sparse
+            .bucket_index(entity)
+            .is_unclassified());
+        assert_eq!(current_group(views.1.sparse_set, entity), expected);
+        assert_eq!(current_group(views.2.sparse_set, entity), expected);
     }
 
     #[test]

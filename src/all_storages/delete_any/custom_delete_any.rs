@@ -19,6 +19,7 @@ impl<T: Component> CustomDeleteAny for SparseSet<T> {
     #[inline]
     fn delete_any(&mut self, ids: &mut ShipHashSet<EntityId>, current: TrackingTimestamp) {
         ids.extend(&self.unclassified_bucket.dense);
+        ids.extend(self.group_buckets.iter().flat_map(|bucket| &bucket.dense));
         self.private_clear(current);
     }
 }

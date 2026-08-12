@@ -156,6 +156,20 @@ impl StorageMask {
         }
     }
 
+    fn intersect_with(&mut self, other: &Self) {
+        debug_assert_eq!(self.words().len(), other.words().len());
+        for (word, &other_word) in self.words_mut().iter_mut().zip(other.words()) {
+            *word &= other_word;
+        }
+    }
+
+    fn difference_with(&mut self, other: &Self) {
+        debug_assert_eq!(self.words().len(), other.words().len());
+        for (word, &other_word) in self.words_mut().iter_mut().zip(other.words()) {
+            *word &= !other_word;
+        }
+    }
+
     #[inline]
     fn clear(&mut self) {
         self.words_mut().fill(0);
@@ -213,6 +227,19 @@ struct RegroupCandidate {
     storages: StorageMask,
     expanded_storages: StorageMask,
 }
+
+#[derive(Clone, Eq, Hash, PartialEq)]
+struct RegroupBatchKey {
+    moved_storages: StorageMask,
+    target_group: StorageMask,
+}
+
+struct RemovedGroupBatch {
+    type_ids: Vec<TypeId>,
+    entities: Vec<EntityId>,
+}
+
+type InvalidatedGroups = ShipHashMap<EntityId, StorageMask>;
 
 struct RegroupBatch {
     /// Dense indices into `participating_storages`.
@@ -2070,6 +2097,7 @@ for (i, j) in &mut iter {
         let mut pending_pages = PendingPageAccumulator::default();
         let mut pending_entities = Vec::new();
         let mut group_definitions = Vec::new();
+        let mut removed_group_batches = Vec::new();
 
         for storage in storage_map.values_mut() {
             let storage = unsafe { &mut *storage.0 }.get_mut();
@@ -2086,6 +2114,27 @@ for (i, j) in &mut iter {
                     }
                 },
             );
+
+            storage.collect_regroup_removals(&mut |entity, group| {
+                if let Some(batch) =
+                    removed_group_batches
+                        .iter_mut()
+                        .find(|batch: &&mut RemovedGroupBatch| {
+                            batch.type_ids.iter().all(|type_id| group.contains(type_id))
+                                && group.iter().all(|type_id| batch.type_ids.contains(type_id))
+                        })
+                {
+                    batch.entities.push(entity);
+                } else {
+                    let mut type_ids = group.to_vec();
+                    type_ids.sort_unstable();
+                    type_ids.dedup();
+                    removed_group_batches.push(RemovedGroupBatch {
+                        type_ids,
+                        entities: vec![entity],
+                    });
+                }
+            });
         }
 
         let entities = storage_map
@@ -2097,6 +2146,20 @@ for (i, j) in &mut iter {
             .downcast_ref::<Entities>()
             .expect("Entities storage must have the Entities type");
         pending_pages.append_live_entities(entities, &mut pending_entities);
+
+        for batch in &mut removed_group_batches {
+            batch.entities.retain(|&entity| {
+                if entities.is_alive(entity) {
+                    pending_entities.push(entity);
+                    true
+                } else {
+                    false
+                }
+            });
+        }
+
+        pending_entities.sort_unstable();
+        pending_entities.dedup();
 
         group_definitions.sort_unstable();
         group_definitions.dedup();
@@ -2133,6 +2196,25 @@ for (i, j) in &mut iter {
                 mask
             })
             .collect();
+
+        let mut invalidated_groups: InvalidatedGroups = ShipHashMap::new();
+        for batch in &removed_group_batches {
+            let mut invalidated = StorageMask::new(storage_count);
+
+            for type_id in &batch.type_ids {
+                if let Some(&storage_index) = storage_indices.get(type_id) {
+                    invalidated.insert(storage_index);
+                }
+            }
+
+            for &entity in &batch.entities {
+                invalidated_groups
+                    .entry(entity)
+                    .and_modify(|groups| groups.union_with(&invalidated))
+                    .or_insert_with(|| invalidated.clone());
+            }
+        }
+
         let membership_edge_count: usize = group_masks.iter().map(StorageMask::count_ones).sum();
         let build_presence_mask = membership_edge_count > storage_count;
 
@@ -2149,7 +2231,7 @@ for (i, j) in &mut iter {
             .map(|guard| guard.as_ref().and_then(|storage| storage.sparse_array()))
             .collect();
 
-        let mut signature_indices: ShipHashMap<StorageMask, usize> = ShipHashMap::new();
+        let mut signature_indices: ShipHashMap<RegroupBatchKey, usize> = ShipHashMap::new();
         let mut batches = Vec::new();
         let mut candidates = Vec::new();
         let mut merged_candidates = Vec::new();
@@ -2176,6 +2258,20 @@ for (i, j) in &mut iter {
                 );
             }
 
+            let mut containing_storages = StorageMask::new(storage_count);
+            if let Some(presence_mask) = presence_mask.as_ref() {
+                containing_storages.union_with(presence_mask);
+            } else {
+                for (storage_index, sparse_array) in sparse_arrays.iter().enumerate() {
+                    if sparse_array
+                        .map(|sparse| sparse.contains(entity))
+                        .unwrap_or(false)
+                    {
+                        containing_storages.insert(storage_index);
+                    }
+                }
+            }
+
             for candidate in &mut candidates {
                 while let Some(storage_index) = candidate
                     .storages
@@ -2189,7 +2285,12 @@ for (i, j) in &mut iter {
                     {
                         for storage_id in current_group {
                             if let Some(&current_storage_index) = storage_indices.get(storage_id) {
-                                candidate.storages.insert(current_storage_index);
+                                if sparse_arrays[current_storage_index]
+                                    .map(|sparse| sparse.contains(entity))
+                                    .unwrap_or(false)
+                                {
+                                    candidate.storages.insert(current_storage_index);
+                                }
                             }
                         }
                     }
@@ -2208,31 +2309,69 @@ for (i, j) in &mut iter {
                 insert_regroup_candidate(&mut merged_candidates, candidate);
             }
 
+            let mut assigned_storages = StorageMask::new(storage_count);
             for candidate in merged_candidates.drain(..) {
-                let signature_index =
-                    if let Some(&signature_index) = signature_indices.get(&candidate.storages) {
-                        signature_index
-                    } else {
-                        let signature_index = batches.len();
-                        let storage_indices: Vec<_> = candidate.storages.indices().collect();
-                        let type_ids = storage_indices
-                            .iter()
-                            .map(|&storage_index| participating_storages[storage_index])
-                            .collect();
+                assigned_storages.union_with(&candidate.storages);
 
-                        debug_assert!(!storage_indices.is_empty());
-                        batches.push(RegroupBatch {
-                            storage_indices,
-                            type_ids,
-                            entities: Vec::new(),
-                        });
-                        signature_indices.insert(candidate.storages, signature_index);
-                        signature_index
-                    };
+                let key = RegroupBatchKey {
+                    moved_storages: candidate.storages.clone(),
+                    target_group: candidate.storages,
+                };
+                let signature_index = if let Some(&signature_index) = signature_indices.get(&key) {
+                    signature_index
+                } else {
+                    let signature_index = batches.len();
+                    let storage_indices: Vec<_> = key.moved_storages.indices().collect();
+                    let type_ids = key
+                        .target_group
+                        .indices()
+                        .map(|storage_index| participating_storages[storage_index])
+                        .collect();
+
+                    batches.push(RegroupBatch {
+                        storage_indices,
+                        type_ids,
+                        entities: Vec::new(),
+                    });
+                    signature_indices.insert(key, signature_index);
+                    signature_index
+                };
 
                 let batch = &mut batches[signature_index];
                 debug_assert_ne!(batch.entities.last(), Some(&entity));
                 batch.entities.push(entity);
+            }
+
+            if let Some(invalidated) = invalidated_groups.get(&entity) {
+                let mut moved_to_unclassified = invalidated.clone();
+                moved_to_unclassified.intersect_with(&containing_storages);
+                moved_to_unclassified.difference_with(&assigned_storages);
+
+                if moved_to_unclassified.count_ones() != 0 {
+                    let key = RegroupBatchKey {
+                        moved_storages: moved_to_unclassified,
+                        target_group: StorageMask::new(storage_count),
+                    };
+                    let signature_index =
+                        if let Some(&signature_index) = signature_indices.get(&key) {
+                            signature_index
+                        } else {
+                            let signature_index = batches.len();
+                            let storage_indices: Vec<_> = key.moved_storages.indices().collect();
+
+                            batches.push(RegroupBatch {
+                                storage_indices,
+                                type_ids: Vec::new(),
+                                entities: Vec::new(),
+                            });
+                            signature_indices.insert(key, signature_index);
+                            signature_index
+                        };
+
+                    let batch = &mut batches[signature_index];
+                    debug_assert_ne!(batch.entities.last(), Some(&entity));
+                    batch.entities.push(entity);
+                }
             }
         }
 
