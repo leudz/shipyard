@@ -25,7 +25,7 @@ serde = { version = "1", optional = true, default-features = false, features = [
     "alloc",
     "derive",
 ] }
-shipyard_proc = { git = "https://github.com/leudz/shipyard", optional = true }
+shipyard_proc = { path = "./shipyard_proc", optional = true }
 tracing = { version = "0.1.44", default-features = false, optional = true }
 
 [features]
