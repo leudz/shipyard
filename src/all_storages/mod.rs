@@ -2,7 +2,10 @@ mod builder;
 mod clone;
 mod custom_storage;
 mod delete_any;
+mod pending_page_accumulator;
+mod regroup;
 mod retain;
+mod storage_mask;
 
 pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
@@ -27,7 +30,7 @@ use crate::public_transport::RwLock;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{
-    BulkAddEntity, SparseArray, SparseSet, TupleAddComponent, TupleDelete, TupleRemove, BUCKET_SIZE,
+    BulkAddEntity, SparseArray, SparseSet, TupleAddComponent, TupleDelete, TupleRemove,
 };
 #[cfg(feature = "thread_local")]
 use crate::std_thread_id_generator;
@@ -41,296 +44,14 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::any::{type_name, TypeId};
+use core::any::type_name;
 use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use hashbrown::hash_map::Entry;
-
-#[derive(Default)]
-struct PendingPageAccumulator {
-    masks: Vec<u32>,
-    active_pages: Vec<usize>,
-}
-
-impl PendingPageAccumulator {
-    #[inline]
-    fn union_page(&mut self, page_index: usize, mask: u32) {
-        if mask == 0 {
-            return;
-        }
-
-        if page_index >= self.masks.len() {
-            self.masks.resize(page_index + 1, 0);
-        }
-
-        let aggregate = &mut self.masks[page_index];
-        if *aggregate == 0 {
-            self.active_pages.push(page_index);
-        }
-        *aggregate |= mask;
-    }
-
-    fn append_live_entities(&mut self, entities: &Entities, out: &mut Vec<EntityId>) {
-        debug_assert_eq!(BUCKET_SIZE, u32::BITS as usize);
-
-        self.active_pages.sort_unstable();
-
-        for page_index in self.active_pages.drain(..) {
-            let mut mask = core::mem::take(&mut self.masks[page_index]);
-
-            while mask != 0 {
-                let bit_index = mask.trailing_zeros() as usize;
-                mask &= mask - 1;
-
-                let entity_index = page_index * BUCKET_SIZE + bit_index;
-                if let Some(&entity) = entities.data.get(entity_index) {
-                    if entity.uindex() == entity_index {
-                        out.push(entity);
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[derive(Clone, Eq, Hash, PartialEq)]
-enum StorageMask {
-    Inline(u64),
-    Heap(Box<[u64]>),
-}
-
-impl StorageMask {
-    fn new(storage_count: usize) -> Self {
-        if storage_count <= u64::BITS as usize {
-            Self::Inline(0)
-        } else {
-            Self::Heap(vec![0; storage_count.div_ceil(u64::BITS as usize)].into_boxed_slice())
-        }
-    }
-
-    fn zero_like(other: &Self) -> Self {
-        match other {
-            Self::Inline(_) => Self::Inline(0),
-            Self::Heap(words) => Self::Heap(vec![0; words.len()].into_boxed_slice()),
-        }
-    }
-
-    #[inline]
-    fn words(&self) -> &[u64] {
-        match self {
-            Self::Inline(word) => core::slice::from_ref(word),
-            Self::Heap(words) => words,
-        }
-    }
-
-    #[inline]
-    fn words_mut(&mut self) -> &mut [u64] {
-        match self {
-            Self::Inline(word) => core::slice::from_mut(word),
-            Self::Heap(words) => words,
-        }
-    }
-
-    #[inline]
-    fn insert(&mut self, storage_index: usize) -> bool {
-        let word_index = storage_index / u64::BITS as usize;
-        let bit = 1u64 << (storage_index % u64::BITS as usize);
-        let word = &mut self.words_mut()[word_index];
-        let was_missing = *word & bit == 0;
-        *word |= bit;
-        was_missing
-    }
-
-    #[inline]
-    fn intersects(&self, other: &Self) -> bool {
-        debug_assert_eq!(self.words().len(), other.words().len());
-        self.words()
-            .iter()
-            .zip(other.words())
-            .any(|(&left, &right)| left & right != 0)
-    }
-
-    fn union_with(&mut self, other: &Self) {
-        debug_assert_eq!(self.words().len(), other.words().len());
-        for (word, &other_word) in self.words_mut().iter_mut().zip(other.words()) {
-            *word |= other_word;
-        }
-    }
-
-    fn intersect_with(&mut self, other: &Self) {
-        debug_assert_eq!(self.words().len(), other.words().len());
-        for (word, &other_word) in self.words_mut().iter_mut().zip(other.words()) {
-            *word &= other_word;
-        }
-    }
-
-    fn difference_with(&mut self, other: &Self) {
-        debug_assert_eq!(self.words().len(), other.words().len());
-        for (word, &other_word) in self.words_mut().iter_mut().zip(other.words()) {
-            *word &= !other_word;
-        }
-    }
-
-    #[inline]
-    fn clear(&mut self) {
-        self.words_mut().fill(0);
-    }
-
-    fn first_difference(&self, other: &Self) -> Option<usize> {
-        debug_assert_eq!(self.words().len(), other.words().len());
-        self.words().iter().zip(other.words()).enumerate().find_map(
-            |(word_index, (&word, &other_word))| {
-                let difference = word & !other_word;
-
-                (difference != 0)
-                    .then(|| word_index * u64::BITS as usize + difference.trailing_zeros() as usize)
-            },
-        )
-    }
-
-    fn indices(&self) -> impl Iterator<Item = usize> + '_ {
-        self.words()
-            .iter()
-            .copied()
-            .enumerate()
-            .flat_map(|(word_index, mut word)| {
-                core::iter::from_fn(move || {
-                    if word == 0 {
-                        return None;
-                    }
-
-                    let bit_index = word.trailing_zeros() as usize;
-                    word &= word - 1;
-
-                    Some(word_index * u64::BITS as usize + bit_index)
-                })
-            })
-    }
-
-    fn count_ones(&self) -> usize {
-        self.words()
-            .iter()
-            .map(|word| word.count_ones() as usize)
-            .sum()
-    }
-
-    #[inline]
-    fn is_subset_of(&self, other: &Self) -> bool {
-        debug_assert_eq!(self.words().len(), other.words().len());
-        self.words()
-            .iter()
-            .zip(other.words())
-            .all(|(&left, &right)| left & !right == 0)
-    }
-}
-
-struct RegroupCandidate {
-    storages: StorageMask,
-    expanded_storages: StorageMask,
-}
-
-#[derive(Clone, Eq, Hash, PartialEq)]
-struct RegroupBatchKey {
-    moved_storages: StorageMask,
-    target_group: StorageMask,
-}
-
-struct RemovedGroupBatch {
-    type_ids: Vec<TypeId>,
-    entities: Vec<EntityId>,
-}
-
-type InvalidatedGroups = ShipHashMap<EntityId, StorageMask>;
-
-struct RegroupBatch {
-    /// Dense indices into `participating_storages`.
-    storage_indices: Vec<usize>,
-    /// Sorted storage `TypeId`s passed to each storage as its group signature.
-    type_ids: Vec<TypeId>,
-    /// Entities that resolved to this exact signature.
-    entities: Vec<EntityId>,
-}
-
-impl RegroupCandidate {
-    fn new(storages: StorageMask) -> Self {
-        Self {
-            expanded_storages: StorageMask::zero_like(&storages),
-            storages,
-        }
-    }
-
-    fn merge(&mut self, other: RegroupCandidate) {
-        self.storages.union_with(&other.storages);
-        self.expanded_storages.union_with(&other.expanded_storages);
-    }
-}
-
-fn insert_regroup_candidate(
-    candidates: &mut Vec<RegroupCandidate>,
-    mut candidate: RegroupCandidate,
-) {
-    while let Some(index) = candidates
-        .iter()
-        .position(|existing| existing.storages.intersects(&candidate.storages))
-    {
-        candidate.merge(candidates.swap_remove(index));
-    }
-
-    candidates.push(candidate);
-}
-
-#[inline]
-fn seed_regroup_candidates_direct(
-    entity: EntityId,
-    group_masks: &[StorageMask],
-    sparse_arrays: &[Option<&SparseArray>],
-    candidates: &mut Vec<RegroupCandidate>,
-) {
-    for group_mask in group_masks {
-        let is_complete = group_mask.indices().all(|storage_index| {
-            sparse_arrays[storage_index]
-                .map(|sparse| sparse.contains(entity))
-                .unwrap_or(false)
-        });
-
-        if is_complete {
-            insert_regroup_candidate(candidates, RegroupCandidate::new(group_mask.clone()));
-        }
-    }
-}
-
-#[inline]
-fn seed_regroup_candidates_from_presence(
-    entity: EntityId,
-    group_masks: &[StorageMask],
-    sparse_arrays: &[Option<&SparseArray>],
-    presence_mask: &mut StorageMask,
-    candidates: &mut Vec<RegroupCandidate>,
-) {
-    presence_mask.clear();
-
-    for (storage_index, sparse_array) in sparse_arrays.iter().enumerate() {
-        if sparse_array
-            .map(|sparse| sparse.contains(entity))
-            .unwrap_or(false)
-        {
-            presence_mask.insert(storage_index);
-        }
-    }
-
-    for group_mask in group_masks {
-        if group_mask.is_subset_of(presence_mask) {
-            insert_regroup_candidate(candidates, RegroupCandidate::new(group_mask.clone()));
-        }
-    }
-}
-
-#[cfg(test)]
-fn regroup_candidate_capacities(
-    candidates: &Vec<RegroupCandidate>,
-    merged_candidates: &Vec<RegroupCandidate>,
-) -> (usize, usize) {
-    (candidates.capacity(), merged_candidates.capacity())
-}
+use pending_page_accumulator::PendingPageAccumulator;
+use regroup::{
+    InvalidatedGroups, RegroupBatch, RegroupBatchKey, RegroupCandidate, RemovedGroupBatch,
+};
+use storage_mask::StorageMask;
 
 #[allow(missing_docs)]
 pub struct MissingLock;
@@ -2397,6 +2118,74 @@ for (i, j) in &mut iter {
     }
 }
 
+fn insert_regroup_candidate(
+    candidates: &mut Vec<RegroupCandidate>,
+    mut candidate: RegroupCandidate,
+) {
+    while let Some(index) = candidates
+        .iter()
+        .position(|existing| existing.storages.intersects(&candidate.storages))
+    {
+        candidate.merge(candidates.swap_remove(index));
+    }
+
+    candidates.push(candidate);
+}
+
+#[inline]
+fn seed_regroup_candidates_direct(
+    entity: EntityId,
+    group_masks: &[StorageMask],
+    sparse_arrays: &[Option<&SparseArray>],
+    candidates: &mut Vec<RegroupCandidate>,
+) {
+    for group_mask in group_masks {
+        let is_complete = group_mask.indices().all(|storage_index| {
+            sparse_arrays[storage_index]
+                .map(|sparse| sparse.contains(entity))
+                .unwrap_or(false)
+        });
+
+        if is_complete {
+            insert_regroup_candidate(candidates, RegroupCandidate::new(group_mask.clone()));
+        }
+    }
+}
+
+#[inline]
+fn seed_regroup_candidates_from_presence(
+    entity: EntityId,
+    group_masks: &[StorageMask],
+    sparse_arrays: &[Option<&SparseArray>],
+    presence_mask: &mut StorageMask,
+    candidates: &mut Vec<RegroupCandidate>,
+) {
+    presence_mask.clear();
+
+    for (storage_index, sparse_array) in sparse_arrays.iter().enumerate() {
+        if sparse_array
+            .map(|sparse| sparse.contains(entity))
+            .unwrap_or(false)
+        {
+            presence_mask.insert(storage_index);
+        }
+    }
+
+    for group_mask in group_masks {
+        if group_mask.is_subset_of(presence_mask) {
+            insert_regroup_candidate(candidates, RegroupCandidate::new(group_mask.clone()));
+        }
+    }
+}
+
+#[cfg(test)]
+fn regroup_candidate_capacities(
+    candidates: &Vec<RegroupCandidate>,
+    merged_candidates: &Vec<RegroupCandidate>,
+) -> (usize, usize) {
+    (candidates.capacity(), merged_candidates.capacity())
+}
+
 impl core::fmt::Debug for AllStorages {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut debug_struct = f.debug_struct("AllStorages");
@@ -2444,9 +2233,10 @@ mod regroup_tests {
     use super::*;
     use crate::all_storages::CustomStorageAccess;
     use crate::component::Component;
-    use crate::sparse_set::SparseArray;
+    use crate::sparse_set::{SparseArray, BUCKET_SIZE};
     use crate::track;
     use crate::{View, ViewMut, World};
+    use core::any::TypeId;
     use core::hash::{Hash, Hasher};
 
     #[cfg(feature = "std")]
