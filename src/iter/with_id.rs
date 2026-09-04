@@ -92,7 +92,7 @@ where
 impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for WithId<Shiperator<S>> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let Some(item) = self.0.next_back() {
-            let entity_id = unsafe { self.0.entities.get(self.0.end + 1) };
+            let entity_id = unsafe { self.0.entities.get(self.0.end) };
 
             Some((entity_id, item))
         } else {

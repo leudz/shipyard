@@ -159,6 +159,13 @@ fn with_id() {
     assert_eq!(iter.next().unwrap(), (id2, (&U32(2), &I16(12))));
     assert_eq!(iter.next().unwrap(), (id4, (&U32(4), &I16(14))));
     assert!(iter.next().is_none());
+
+    let mut iter = (&u32s, &i16s).iter().with_id();
+    assert_eq!(iter.next_back().unwrap(), (id4, (&U32(4), &I16(14))));
+    assert_eq!(iter.next_back().unwrap(), (id2, (&U32(2), &I16(12))));
+    assert_eq!(iter.next_back().unwrap(), (id0, (&U32(0), &I16(10))));
+    assert!(iter.next_back().is_none());
+
     let mut iter = (&mut u32s, &mut i16s).iter().with_id();
     assert_eq!(
         iter.next().map(|(id, (x, y))| (id, (*x, *y))).unwrap(),
