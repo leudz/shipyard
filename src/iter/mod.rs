@@ -40,7 +40,7 @@ pub struct Shiperator<S> {
 impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for Shiperator<S> {
     type Item = S::Out;
 
-    #[inline]
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if self.start == self.end {
@@ -121,7 +121,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for Shiperator<S> {
 }
 
 impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for Shiperator<S> {
-    #[inline]
+    #[inline(always)]
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
             if self.start == self.end {

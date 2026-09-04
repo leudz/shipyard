@@ -23,6 +23,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> Shiperator<S> {
 impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for WithId<Shiperator<S>> {
     type Item = (EntityId, S::Out);
 
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(item) = self.0.next() {
             let entity_id = unsafe { self.0.entities.get(self.0.start - 1) };
@@ -90,6 +91,7 @@ where
 }
 
 impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for WithId<Shiperator<S>> {
+    #[inline(always)]
     fn next_back(&mut self) -> Option<Self::Item> {
         if let Some(item) = self.0.next_back() {
             let entity_id = unsafe { self.0.entities.get(self.0.end) };
