@@ -16,6 +16,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
 {
     type Item = S::Out;
 
+    #[inline]
     fn split(self) -> (Self, Option<Self>) {
         let follow_up_len = self.entities.follow_up_len();
         let remaining = self.end - self.start;
@@ -47,6 +48,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
         )
     }
 
+    #[inline]
     fn fold_with<F>(self, folder: F) -> F
     where
         F: rayon::iter::plumbing::Folder<Self::Item>,

@@ -34,10 +34,12 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for WithId<Shiperator<S>>
         }
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
     }
 
+    #[inline]
     fn fold<B, F>(mut self, mut init: B, mut f: F) -> B
     where
         Self: Sized,
@@ -85,6 +87,7 @@ impl<I: ExactSizeIterator> ExactSizeIterator for WithId<I>
 where
     WithId<I>: Iterator,
 {
+    #[inline]
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -102,6 +105,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for WithId<Shi
         }
     }
 
+    #[inline]
     fn rfold<B, F>(mut self, mut init: B, mut f: F) -> B
     where
         Self: Sized,
@@ -153,12 +157,14 @@ impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
 {
     type Item = (EntityId, S::Out);
 
+    #[inline]
     fn split(self) -> (Self, Option<Self>) {
         let (left, right) = self.0.split();
 
         (WithId(left), right.map(WithId))
     }
 
+    #[inline]
     fn fold_with<F>(self, folder: F) -> F
     where
         F: rayon::iter::plumbing::Folder<Self::Item>,

@@ -190,6 +190,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for Shiperator
 impl<S: ShiperatorCaptain + ShiperatorSailor> FusedIterator for Shiperator<S> {}
 
 impl<'tmp, T: Component> ExactSizeIterator for Shiperator<FullRawWindow<'tmp, T>> {
+    #[inline]
     fn len(&self) -> usize {
         self.end - self.start
     }
@@ -199,6 +200,7 @@ impl<'tmp, T: Component, Track> ExactSizeIterator for Shiperator<FullRawWindowMu
 where
     Self: Iterator,
 {
+    #[inline]
     fn len(&self) -> usize {
         self.end - self.start
     }

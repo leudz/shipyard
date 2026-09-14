@@ -123,38 +123,48 @@ macro_rules! impl_shiperator_captain_mut {
 impl_shiperator_captain_mut![track::Modification track::InsertionAndModification track::InsertionAndModificationAndDeletion track::InsertionAndModificationAndRemoval track::ModificationAndDeletion track::ModificationAndRemoval track::ModificationAndDeletionAndRemoval track::All];
 
 impl<'tmp> ShiperatorCaptain for &'tmp [EntityId] {
+    #[inline]
     unsafe fn get_captain_data(&self, index: usize) -> Self::Out {
         *self.get_unchecked(index)
     }
 
+    #[inline]
     fn next_slice(&mut self) {}
 
+    #[inline]
     fn sail_time(&self) -> usize {
         self.len()
     }
 
+    #[inline]
     fn is_exact_sized(&self) -> bool {
         false
     }
 
+    #[inline]
     fn unpick(&mut self) {}
 }
 
 impl<'tmp, T: Component> ShiperatorCaptain for Optional<FullRawWindow<'tmp, T>> {
+    #[inline]
     unsafe fn get_captain_data(&self, _index: usize) -> Self::Out {
         unreachable!()
     }
 
+    #[inline]
     fn next_slice(&mut self) {}
 
+    #[inline]
     fn sail_time(&self) -> usize {
         self.0.sail_time()
     }
 
+    #[inline]
     fn is_exact_sized(&self) -> bool {
         false
     }
 
+    #[inline]
     fn unpick(&mut self) {}
 }
 
@@ -163,19 +173,24 @@ where
     Optional<FullRawWindowMut<'tmp, T, Track>>: ShiperatorOutput,
     FullRawWindowMut<'tmp, T, Track>: ShiperatorCaptain,
 {
+    #[inline]
     unsafe fn get_captain_data(&self, _index: usize) -> Self::Out {
         unreachable!()
     }
 
+    #[inline]
     fn next_slice(&mut self) {}
 
+    #[inline]
     fn sail_time(&self) -> usize {
         self.0.sail_time()
     }
 
+    #[inline]
     fn is_exact_sized(&self) -> bool {
         false
     }
 
+    #[inline]
     fn unpick(&mut self) {}
 }
