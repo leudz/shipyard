@@ -36,14 +36,15 @@ impl<T: ShiperatorCaptain + ShiperatorSailor, U: ShiperatorCaptain + ShiperatorS
                 Some(OneOfTwo::One(index))
             }
         } else {
-            let index0 = (self.storages).0.indices_of(eid, index);
-            let index1 = (self.storages).1.indices_of(eid, index);
-
-            match (index0, index1) {
-                (None, None) => None,
-                (None, Some(index1)) => Some(OneOfTwo::Two(index1)),
-                (Some(index0), None) => Some(OneOfTwo::One(index0)),
-                (Some(index0), Some(_)) => Some(OneOfTwo::One(index0)),
+            // Option::map can throw the compiler off
+            // I prefer taking the readability hit
+            #[allow(clippy::manual_map)]
+            if let Some(index) = (self.storages).0.indices_of(eid, index) {
+                Some(OneOfTwo::One(index))
+            } else if let Some(index) = (self.storages).1.indices_of(eid, index) {
+                Some(OneOfTwo::Two(index))
+            } else {
+                None
             }
         }
     }
