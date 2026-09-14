@@ -92,33 +92,17 @@ macro_rules! impl_shiperator_output {
 
             #[inline]
             fn indices_of(&self, eid: EntityId, index: usize, ) -> Option<Self::Index> {
-                if self.mask.count_ones() == 1 {
-                    let one = self.mask.trailing_zeros();
-
-                    Some(($(
-                        if one == $index {
-                            $type::index_from_usize(index)
+                Some(($(
+                    if self.mask & (1 << $index) != 0 {
+                        $type::index_from_usize(index)
+                    } else {
+                        if let Some(index) = self.shiperator.$index.indices_of(eid, index) {
+                            index
                         } else {
-                            if let Some(index) = self.shiperator.$index.indices_of(eid, index) {
-                                index
-                            } else {
-                                return None
-                            }
-                        },
-                    )+))
-                } else {
-                    Some(($(
-                        if self.mask & (1 << $index) != 0 {
-                            $type::index_from_usize(index)
-                        } else {
-                            if let Some(index) = self.shiperator.$index.indices_of(eid, index) {
-                                index
-                            } else {
-                                return None
-                            }
-                        },
-                    )+))
-                }
+                            return None
+                        }
+                    },
+                )+))
             }
 
             #[inline]
