@@ -9,6 +9,15 @@ miri: clean _miri
 _miri:
     cargo +nightly miri test --tests --lib --no-default-features --features=std
 
+working_miri: clean _working_miri
+
+# Nightly is making big changes
+# It currently cannot compile shipyard
+# Miri is nightly only so we need a working version (2026-08-09)
+# https://github.com/rust-lang/rust/issues/161913
+_working_miri:
+    cargo +nightly-2026-08-09 miri test --tests --lib --no-default-features --features=std
+
 clean:
     cargo clean -p shipyard
 
@@ -30,7 +39,7 @@ move_square_eater:
 
 square_eater: build_square_eater move_square_eater
 
-test: fmt check-no-default test-all doc miri clippy clean
+test: fmt check-no-default test-all doc working_miri clippy clean
 
 dev_visualizer $RUSTFLAGS = "--cfg=web_sys_unstable_apis":
     trunk serve visualizer/index.html
