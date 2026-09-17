@@ -52,7 +52,7 @@ pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 // We can't be limited to store solely integers, this is why there is a third vector.
 // It mimics the dense vector in regard to insertion/deletion.
 pub struct SparseSet<T: Component> {
-    pub(crate) sparse: SparseArray<EntityId, BUCKET_SIZE>,
+    pub(crate) sparse: SparseArray,
     pub(crate) dense: Vec<EntityId>,
     pub(crate) data: Vec<T>,
     pub(crate) last_insert: TrackingTimestamp,
@@ -789,7 +789,7 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
     fn clear(&mut self, current: TrackingTimestamp) {
         self.private_clear(current);
     }
-    fn sparse_array(&self) -> Option<&SparseArray<EntityId, BUCKET_SIZE>> {
+    fn sparse_array(&self) -> Option<&SparseArray> {
         Some(&self.sparse)
     }
     fn memory_usage(&self) -> Option<StorageMemoryUsage> {
