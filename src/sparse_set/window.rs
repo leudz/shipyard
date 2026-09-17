@@ -1,6 +1,7 @@
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::sparse_set::sparse_array::Page;
 use crate::tracking::{Tracking, TrackingTimestamp};
 use crate::views::{View, ViewMut};
 use alloc::boxed::Box;
@@ -28,7 +29,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
     #[inline]
     pub(crate) fn from_view<Track: Tracking>(view: &View<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
-        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
+        let sparse: *const Option<Box<Page>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
         FullRawWindow {
@@ -61,7 +62,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         } = view;
 
         let sparse_len = sparse_set.len();
-        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = sparse_set.sparse.as_ptr();
+        let sparse: *const Option<Box<Page>> = sparse_set.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
         (
@@ -86,7 +87,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
     #[inline]
     pub(crate) fn from_view_mut<Track: Tracking>(view: &ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
-        let sparse: *const Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_ptr();
+        let sparse: *const Option<Box<Page>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
         FullRawWindow {
@@ -181,7 +182,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
     #[inline]
     pub(crate) fn new(view: &mut ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
-        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> = view.sparse.as_mut_ptr();
+        let sparse: *mut Option<Box<Page>> = view.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
 
         FullRawWindowMut {
@@ -215,8 +216,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
         } = view;
 
         let sparse_len = sparse_set.len();
-        let sparse: *mut Option<Box<[EntityId; super::BUCKET_SIZE]>> =
-            sparse_set.sparse.as_mut_ptr();
+        let sparse: *mut Option<Box<Page>> = sparse_set.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
 
         (

@@ -20,6 +20,7 @@ pub use sparse_array::SparseArray;
 #[doc(hidden)]
 pub use window::RawEntityIdAccess;
 
+pub(crate) use sparse_array::BUCKET_SIZE;
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
 use crate::all_storages::AllStorages;
@@ -34,13 +35,10 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use clone::SparseSetCloneFunctions;
 use core::any::type_name;
-use core::mem::size_of;
 use core::{
     cmp::{Ord, Ordering},
     fmt,
 };
-
-pub(crate) const BUCKET_SIZE: usize = 256 / size_of::<EntityId>();
 
 /// Default component storage.
 // A sparse array is a data structure with 2 vectors: one sparse, the other dense.
