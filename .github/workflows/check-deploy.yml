@@ -62,9 +62,10 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly-2026-08-09
+      - uses: dtolnay/rust-toolchain@master
         with:
           components: miri
+          toolchain: nightly-2026-08-09
 
       - run: cargo miri test --tests --lib --no-default-features --features=std
   clippy:
