@@ -2,10 +2,8 @@ use crate::component::Component;
 use crate::iter::IntoShiperator;
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
-use crate::storage::StorageId;
 use crate::tracking::{Inserted, InsertedOrModified, Modified, Tracking};
 use crate::views::{View, ViewMut};
-use crate::ShipHashSet;
 
 impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Not<&'tmp View<'v, T, Track>>
@@ -13,11 +11,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = Not<FullRawWindow<'tmp, T>>;
 
     #[inline]
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (window, len, entity_access) = self.0.into_shiperator(storage_ids);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let (window, len, entity_access) = self.0.into_shiperator();
 
         (Not(window), len, entity_access)
     }
@@ -39,11 +34,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = Not<FullRawWindow<'tmp, T>>;
 
     #[inline]
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (window, len, entity_access) = self.0.into_shiperator(storage_ids);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let (window, len, entity_access) = self.0.into_shiperator();
 
         (Not(window), len, entity_access)
     }
@@ -65,11 +57,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = Not<FullRawWindowMut<'tmp, T, Track>>;
 
     #[inline]
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (window, len, entity_access) = self.0.into_shiperator(storage_ids);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let (window, len, entity_access) = self.0.into_shiperator();
 
         (Not(window), len, entity_access)
     }
@@ -95,9 +84,8 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-                storage_ids: &mut ShipHashSet<StorageId>,
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = (self.0).0.into_shiperator(storage_ids);
+                let (window, len, entity_access) = (self.0).0.into_shiperator();
 
                 (Not($type(window)), len, entity_access)
             }
@@ -121,9 +109,8 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-                storage_ids: &mut ShipHashSet<StorageId>,
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = (self.0).0.into_shiperator(storage_ids);
+                let (window, len, entity_access) = (self.0).0.into_shiperator();
 
                 (Not($type(window)), len, entity_access)
             }
@@ -147,9 +134,8 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-                storage_ids: &mut ShipHashSet<StorageId>,
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = (self.0).0.into_shiperator(storage_ids);
+                let (window, len, entity_access) = (self.0).0.into_shiperator();
 
                 (Not($type(window)), len, entity_access)
             }

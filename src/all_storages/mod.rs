@@ -20,7 +20,7 @@ use crate::entities::Entities;
 use crate::entity_id::EntityId;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
-use crate::iter::{ShiperatorCaptain, ShiperatorSailor};
+use crate::iter::Shiperator;
 use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
 use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
@@ -1470,7 +1470,7 @@ for (i, j) in &mut iter {
     #[track_caller]
     pub fn iter<'a, T: IterComponent>(&'a self) -> IntoIterRef<'a, T>
     where
-        <T as IterComponent>::Shiperator<'a>: ShiperatorCaptain + ShiperatorSailor,
+        <T as IterComponent>::Shiperator<'a>: Shiperator,
     {
         let current = self.get_current();
 

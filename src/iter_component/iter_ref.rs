@@ -1,5 +1,5 @@
 use crate::atomic_refcell::SharedBorrow;
-use crate::iter::{Shiperator, ShiperatorCaptain, ShiperatorOutput, ShiperatorSailor};
+use crate::iter::{Shiper, Shiperator};
 use crate::iter_component::IterComponent;
 use crate::sparse_set::RawEntityIdAccess;
 use core::marker::PhantomData;
@@ -29,13 +29,13 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
     /// - Storage borrow failed.
     #[inline]
     #[track_caller]
-    pub fn iter(&'b mut self) -> Shiperator<T::Shiperator<'b>>
+    pub fn iter(&'b mut self) -> Shiper<T::Shiperator<'b>>
     where
         for<'any> <T as IterComponent>::Shiperator<'any>: Clone,
     {
         let shiperator = self.shiperator.clone();
 
-        Shiperator {
+        Shiper {
             // SAFETY: We shorten the lifetime here. To me this is okay.
             //         IntoIterRef only works with SparseSet, its shiperator doesn't contain any reference.
             //         All components are 'static so this transmute shouldn't allow a shorter lifetime to be stored.
@@ -52,11 +52,11 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
 
 impl<'a, 'b, T: IterComponent> IntoIterator for &'b mut IntoIterRef<'a, T>
 where
-    <T as IterComponent>::Shiperator<'b>: ShiperatorCaptain + ShiperatorSailor,
+    <T as IterComponent>::Shiperator<'b>: Shiperator,
     for<'any> <T as IterComponent>::Shiperator<'any>: Clone,
 {
-    type Item = <T::Shiperator<'b> as ShiperatorOutput>::Out;
-    type IntoIter = Shiperator<T::Shiperator<'b>>;
+    type Item = <T::Shiperator<'b> as Shiperator>::Out;
+    type IntoIter = Shiper<T::Shiperator<'b>>;
 
     #[inline]
     #[track_caller]

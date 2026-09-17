@@ -1,8 +1,8 @@
 use crate::entity_id::EntityId;
-use crate::iter::{Shiperator, ShiperatorCaptain, ShiperatorSailor, WithId};
+use crate::iter::{Shiper, Shiperator, WithId};
 
 #[allow(missing_docs)]
-pub struct ParShiperator<S>(pub(crate) Shiperator<S>);
+pub struct ParShiperator<S>(pub(crate) Shiper<S>);
 
 impl<S> ParShiperator<S> {
     /// Returns the [`EntityId`] alongside the component(s).
@@ -11,9 +11,7 @@ impl<S> ParShiperator<S> {
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
-    rayon::iter::plumbing::UnindexedProducer for Shiperator<S>
-{
+impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for Shiper<S> {
     type Item = S::Out;
 
     #[inline]
@@ -31,14 +29,14 @@ impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
         let (entities, other_entities) = self.entities.split_at(follow_up_len / 2);
 
         (
-            Shiperator {
+            Shiper {
                 shiperator: self.shiperator.clone(),
                 entities,
                 is_exact_sized: self.is_exact_sized,
                 start: self.start,
                 end: new_end,
             },
-            Some(Shiperator {
+            Some(Shiper {
                 shiperator: self.shiperator,
                 entities: other_entities,
                 is_exact_sized: self.is_exact_sized,
@@ -57,8 +55,7 @@ impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone> rayon::iter::ParallelIterator
-    for WithId<ParShiperator<S>>
+impl<S: Shiperator + Send + Clone> rayon::iter::ParallelIterator for WithId<ParShiperator<S>>
 where
     S::Out: Send,
 {
@@ -75,8 +72,7 @@ where
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone> rayon::iter::ParallelIterator
-    for ParShiperator<S>
+impl<S: Shiperator + Send + Clone> rayon::iter::ParallelIterator for ParShiperator<S>
 where
     S::Out: Send,
 {

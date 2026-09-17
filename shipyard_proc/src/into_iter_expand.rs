@@ -157,7 +157,7 @@ pub(crate) fn expand_into_iter(
                                 field_name.span(),
                             )
                         });
-                        let item_ty = parse_quote!(#field_vis #trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
+                        let item_ty = parse_quote!(#field_vis #trimmed_field_name: <<&'__tmp shipyard::View<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::Shiperator>::Out);
                         item_fields.push(item_ty);
 
                         let abstract_view_ty =
@@ -211,7 +211,7 @@ pub(crate) fn expand_into_iter(
                                 field_name.span(),
                             )
                         });
-                        let item_ty = parse_quote!(#field_vis #trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorOutput>::Out);
+                        let item_ty = parse_quote!(#field_vis #trimmed_field_name: <<&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty> as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::Shiperator>::Out);
                         item_fields.push(item_ty);
 
                         let abtract_view_ty = parse_quote!(&'__tmp mut shipyard::ViewMut<'__view, #comp_ty, #tracking_ty>);
@@ -253,8 +253,8 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     #[track_caller]
-                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::advanced::StorageId>) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
-                        let (shiperator, end, entities) = (#iter_fields_access).into_shiperator(storage_ids);
+                    fn into_shiperator(self) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
+                        let (shiperator, end, entities) = (#iter_fields_access).into_shiperator();
 
                         (#iter_name (shiperator), end, entities)
                     }
@@ -270,17 +270,9 @@ pub(crate) fn expand_into_iter(
                     }
                 }
 
-                impl #iter_impl_generics shipyard::iter::ShiperatorOutput for #iter_name #iter_ty_generics #iter_where_clause {
+                impl #iter_impl_generics shipyard::iter::Shiperator for #iter_name #iter_ty_generics #iter_where_clause {
                     type Out = #item_name #iter_ty_generics;
-                }
-
-                impl #iter_impl_generics shipyard::iter::ShiperatorCaptain for #iter_name #iter_ty_generics #iter_where_clause {
-                    #[inline]
-                    unsafe fn get_captain_data(&self, index: usize) -> Self::Out {
-                        let (#iter_fields_variable) = self.0.get_captain_data(index);
-
-                        #item_name { #iter_fields_variable }
-                    }
+                    type Index = <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::Shiperator>::Index;
 
                     #[inline]
                     fn next_slice(&mut self) {
@@ -298,29 +290,20 @@ pub(crate) fn expand_into_iter(
                     }
 
                     #[inline]
-                    fn unpick(&mut self) {
-                        self.0.unpick()
+                    unsafe fn captain_indices_of(&self, entities: &mut shipyard::iter::RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                        self.0.captain_indices_of(entities, index)
                     }
-                }
-
-                impl #iter_impl_generics shipyard::iter::ShiperatorSailor for #iter_name #iter_ty_generics #iter_where_clause {
-                    type Index = <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorSailor>::Index;
 
                     #[inline]
-                    unsafe fn get_sailor_data(&self, index: Self::Index) -> Self::Out {
-                        let (#iter_fields_variable) = self.0.get_sailor_data(index);
+                    fn sailor_indices_of(&self, entity_id: shipyard::EntityId) -> Option<Self::Index> {
+                        self.0.sailor_indices_of(entity_id)
+                    }
+
+                    #[inline]
+                    unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
+                        let (#iter_fields_variable) = self.0.get_data(index);
 
                         #item_name { #iter_fields_variable }
-                    }
-
-                    #[inline]
-                    fn indices_of(&self, entity_id: shipyard::EntityId, index: usize) -> Option<Self::Index> {
-                        self.0.indices_of(entity_id, index)
-                    }
-
-                    #[inline]
-                    fn index_from_usize(index: usize) -> Self::Index {
-                        <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::ShiperatorSailor>::index_from_usize(index)
                     }
                 }
             ))
@@ -393,8 +376,8 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     #[track_caller]
-                    fn into_shiperator(self, storage_ids: &mut shipyard::ShipHashSet<shipyard::advanced::StorageId>) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
-                        #tuple.into_shiperator(storage_ids)
+                    fn into_shiperator(self) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
+                        #tuple.into_shiperator()
                     }
 
                     fn can_captain() -> bool {

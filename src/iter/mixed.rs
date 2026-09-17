@@ -1,15 +1,17 @@
 use crate::entity_id::EntityId;
-use crate::iter::{
-    captain::ShiperatorCaptain, into_shiperator::strip_plus, output::ShiperatorOutput,
-    sailor::ShiperatorSailor,
-};
+use crate::iter::{into_shiperator::strip_plus, Shiperator};
+use crate::sparse_set::RawEntityIdAccess;
 
 const NON_CAPTAIN_FACTOR: f32 = 0.5;
 
 /// Iterator over multiple storages.
 pub struct Mixed<S> {
     pub(crate) shiperator: S,
-    pub(crate) mask: u32,
+    /// Flags the Shiperator acting as Captain.\
+    /// This can currently only be a single Shiperator.
+    ///
+    /// Captains can usually skip costly checks.
+    pub(crate) captain_mask: u32,
 }
 
 unsafe impl<S: Send> Send for Mixed<S> {}
@@ -19,28 +21,16 @@ impl<S: Clone> Clone for Mixed<S> {
     fn clone(&self) -> Self {
         Self {
             shiperator: self.shiperator.clone(),
-            mask: self.mask,
+            captain_mask: self.captain_mask,
         }
     }
 }
 
-impl<S: ShiperatorOutput> ShiperatorOutput for Mixed<S> {
-    type Out = S::Out;
-}
-
 macro_rules! impl_shiperator_output {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: ShiperatorOutput),+> ShiperatorOutput for Mixed<($($type,)+)> {
+        impl<$($type: Shiperator),+> Shiperator for Mixed<($($type,)+)> {
             type Out = ($($type::Out,)+);
-        }
-
-        impl<$($type: ShiperatorCaptain),+> ShiperatorCaptain for Mixed<($($type,)+)> {
-            #[inline]
-            unsafe fn get_captain_data(&self, index: usize) -> Self::Out {
-                ($(
-                    self.shiperator.$index.get_captain_data(index),
-                )+)
-            }
+            type Index = ($($type::Index,)+);
 
             #[inline]
             fn next_slice(&mut self) {
@@ -52,51 +42,36 @@ macro_rules! impl_shiperator_output {
             #[inline]
             #[allow(clippy::cast_precision_loss)]
             fn sail_time(&self) -> usize {
-                strip_plus!($(+{
+                strip_plus!($(+({
                     let sail_time = self.shiperator.$index.sail_time() as f32;
 
-                    if self.mask & (1 << $index) != 0 {
+                    if self.captain_mask & (1 << $index) != 0 {
                         sail_time as usize
                     } else {
                         (sail_time * NON_CAPTAIN_FACTOR) as usize
                     }
-                }
-                )+)
+                }))+)
             }
 
             #[inline]
             fn is_exact_sized(&self) -> bool {
-                // True if mask flags all iterated storages
-                self.mask.count_ones() == strip_plus!($(+{let _: $type; 1})+)
+                // True if direct_mask flags all iterated storages
+                self.captain_mask.count_ones() == strip_plus!($(+{let _: $type; 1})+)
             }
 
             #[inline]
-            fn unpick(&mut self) {
-                self.mask = 0;
-
-                $(
-                    self.shiperator.$index.unpick();
-                )+
-            }
-        }
-
-        impl<$($type: ShiperatorSailor),+> ShiperatorSailor for Mixed<($($type,)+)> {
-            type Index = ($($type::Index,)+);
-
-            #[inline]
-            unsafe fn get_sailor_data(&self, index: Self::Index) -> Self::Out {
-                ($(
-                    self.shiperator.$index.get_sailor_data(index.$index),
-                )+)
-            }
-
-            #[inline]
-            fn indices_of(&self, eid: EntityId, index: usize, ) -> Option<Self::Index> {
-                Some(($(
-                    if self.mask & (1 << $index) != 0 {
-                        $type::index_from_usize(index)
+            unsafe fn captain_indices_of(&self, entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                 Some(($(
+                    if self.captain_mask & (1 << $index) != 0 {
+                        if let Some(index) = unsafe { self.shiperator.$index.captain_indices_of(entities, index) } {
+                           index
+                        } else {
+                            return None
+                        }
                     } else {
-                        if let Some(index) = self.shiperator.$index.indices_of(eid, index) {
+                        let eid = entities.get(index);
+
+                        if let Some(index) = self.shiperator.$index.sailor_indices_of(eid) {
                             index
                         } else {
                             return None
@@ -106,9 +81,20 @@ macro_rules! impl_shiperator_output {
             }
 
             #[inline]
-            fn index_from_usize(index: usize) -> Self::Index {
+            fn sailor_indices_of(&self, eid: EntityId) -> Option<Self::Index> {
+                Some(($(
+                    if let Some(index) = self.shiperator.$index.sailor_indices_of(eid) {
+                        index
+                    } else {
+                        return None
+                    },
+                )+))
+            }
+
+            #[inline]
+            unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
                 ($(
-                    $type::index_from_usize(index),
+                    self.shiperator.$index.get_data(index.$index),
                 )+)
             }
         }

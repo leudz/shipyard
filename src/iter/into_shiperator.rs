@@ -6,13 +6,11 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 #[cfg(feature = "parallel")]
 use crate::iter::ParShiperator;
-use crate::iter::{captain::ShiperatorCaptain, mixed::Mixed, Shiperator};
+use crate::iter::{mixed::Mixed, Shiper, Shiperator};
 use crate::optional::Optional;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
-use crate::storage::StorageId;
 use crate::tracking::Tracking;
 use crate::views::{View, ViewMut};
-use crate::ShipHashSet;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
 
@@ -42,7 +40,7 @@ pub trait IntoIter: IntoShiperator {
     ///     x.0 += y.0 as usize;
     /// });
     /// ```
-    fn iter(self) -> Shiperator<Self::Shiperator>;
+    fn iter(self) -> Shiper<Self::Shiperator>;
     /// ### Example
     /// ```
     /// use rayon::prelude::ParallelIterator;
@@ -72,17 +70,16 @@ pub trait IntoIter: IntoShiperator {
 
 impl<T: IntoShiperator> IntoIter for T
 where
-    <T as IntoShiperator>::Shiperator: ShiperatorCaptain,
+    <T as IntoShiperator>::Shiperator: Shiperator,
 {
     #[inline]
-    fn iter(self) -> Shiperator<Self::Shiperator> {
-        let mut storage_ids = ShipHashSet::new();
-        let (shiperator, len, entities) = self.into_shiperator(&mut storage_ids);
-        let is_infallible = shiperator.is_exact_sized();
+    fn iter(self) -> Shiper<Self::Shiperator> {
+        let (shiperator, len, entities) = self.into_shiperator();
+        let is_exact_sized = shiperator.is_exact_sized();
 
-        Shiperator {
+        Shiper {
             shiperator,
-            is_exact_sized: is_infallible,
+            is_exact_sized,
             entities,
             start: 0,
             end: len,
@@ -102,10 +99,7 @@ pub trait IntoShiperator {
     type Shiperator;
 
     /// Returns the Shiperator, its maximum length and `RawEntityIdAccess`.
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess);
     /// Returns `true` if the Shiperator can be a captain.
     fn can_captain() -> bool;
     /// Returns `true` if the Shiperator can be a sailor.
@@ -116,10 +110,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     type Shiperator = FullRawWindow<'tmp, T>;
 
     #[inline]
-    fn into_shiperator(
-        self,
-        _storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let window = FullRawWindow::from_view(self);
         let len = window.len();
         let iter = window.entity_iter();
@@ -142,10 +133,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     type Shiperator = FullRawWindow<'tmp, T>;
 
     #[inline]
-    fn into_shiperator(
-        self,
-        _storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let window = FullRawWindow::from_view_mut(self);
         let len = window.len();
         let iter = window.entity_iter();
@@ -168,10 +156,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track> IntoShiperator for &'tmp mut ViewMut<'
     type Shiperator = FullRawWindowMut<'tmp, T, Track>;
 
     #[inline]
-    fn into_shiperator(
-        self,
-        _storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let window = FullRawWindowMut::new(self);
         let len = window.len();
         let iter = window.entity_iter();
@@ -194,10 +179,7 @@ impl<'tmp> IntoShiperator for &'tmp [EntityId] {
     type Shiperator = &'tmp [EntityId];
 
     #[inline]
-    fn into_shiperator(
-        self,
-        _storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let len = self.len();
         let iter =
             RawEntityIdAccess::new(NonNull::new(self.as_ptr().cast_mut()).unwrap(), Vec::new());
@@ -219,11 +201,8 @@ impl<'tmp> IntoShiperator for &'tmp [EntityId] {
 impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>> {
     type Shiperator = Optional<FullRawWindow<'tmp, T>>;
 
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator, len, entities) = self.0.into_shiperator(storage_ids);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let (shiperator, len, entities) = self.0.into_shiperator();
 
         (Optional(shiperator), len, entities)
     }
@@ -242,11 +221,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 {
     type Shiperator = Optional<FullRawWindow<'tmp, T>>;
 
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator, len, entities) = self.0.into_shiperator(storage_ids);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let (shiperator, len, entities) = self.0.into_shiperator();
 
         (Optional(shiperator), len, entities)
     }
@@ -265,11 +241,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 {
     type Shiperator = Optional<FullRawWindowMut<'tmp, T, Track>>;
 
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator, len, entities) = self.0.into_shiperator(storage_ids);
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let (shiperator, len, entities) = self.0.into_shiperator();
 
         (Optional(shiperator), len, entities)
     }
@@ -286,11 +259,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 impl<T: IntoShiperator> IntoShiperator for (T,) {
     type Shiperator = T::Shiperator;
 
-    fn into_shiperator(
-        self,
-        storage_ids: &mut ShipHashSet<StorageId>,
-    ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        self.0.into_shiperator(storage_ids)
+    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        self.0.into_shiperator()
     }
 
     fn can_captain() -> bool {
@@ -315,16 +285,15 @@ pub(crate) use strip_plus;
 
 macro_rules! impl_into_shiperator_tuple {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: IntoShiperator),+> IntoShiperator for ($($type,)+) where $(<$type as IntoShiperator>::Shiperator: ShiperatorCaptain),+ {
+        impl<$($type: IntoShiperator),+> IntoShiperator for ($($type,)+) where $(<$type as IntoShiperator>::Shiperator: Shiperator),+ {
             type Shiperator = Mixed<($($type::Shiperator,)+)>;
 
             #[inline]
             #[track_caller]
             fn into_shiperator(
                 self,
-                storage_ids: &mut ShipHashSet<StorageId>,
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let mut shiperators = ($(self.$index.into_shiperator(storage_ids),)+);
+                let shiperators = ($(self.$index.into_shiperator(),)+);
 
                 let can_captains = ($(
                     $type::can_captain(),
@@ -335,7 +304,7 @@ macro_rules! impl_into_shiperator_tuple {
                 )||+;
 
                 if !can_any_captain {
-                    panic!("Unable to build a Shiperator: None of the views could be a Captain.")
+                    panic!("Unable to build a Shiperator: None of the views can be a Captain.")
                 }
 
                 let can_sailors = ($(
@@ -344,7 +313,7 @@ macro_rules! impl_into_shiperator_tuple {
 
                 $(
                     if !can_captains.$index && !can_sailors.$index {
-                        panic!("Unable to build a Shiperator: View at index {} could neither be a Captain nor a Sailor.", $index)
+                        panic!("Unable to build a Shiperator: View at index {} can neither be a Captain nor a Sailor.", $index)
                     }
                 )+
 
@@ -353,82 +322,45 @@ macro_rules! impl_into_shiperator_tuple {
                 )+);
 
                 if unable_sailor > 1 {
-                    panic!("Unable to build a Shiperator: Multiple views were unable to be Sailors.")
+                    panic!("Unable to build a Shiperator: Multiple views are unable to be Sailors.")
                 }
 
                 let sail_times = ($(
                     shiperators.$index.0.sail_time(),
                 )+);
 
+                let mut captain_mask = 0;
+                let mut len = 0;
+                let mut entity_iter = RawEntityIdAccess::dangling();
+
                 if unable_sailor == 1 {
-                    let mut mask = 0;
-                    let mut len = 0;
-                    let  mut entity_iter = RawEntityIdAccess::dangling();
-
-                    for (index, (can_sailor, shiperator_len, shiperator_entity_iter)) in
-                        [$((can_sailors.$index, shiperators.$index.1, shiperators.$index.2)),+]
-                            .into_iter()
-                            .enumerate()
-                    {
-                        if !can_sailor {
-                            mask = 1 << index;
-                            len = shiperator_len;
-                            entity_iter = shiperator_entity_iter;
-
-                            break;
+                    $(
+                        if !can_sailors.$index {
+                            captain_mask = 1 << $index;
+                            len = shiperators.$index.1;
+                            entity_iter = shiperators.$index.2;
                         }
-                    }
+                    )+
+                } else {
+                    let mut min_sail_time = usize::MAX;
 
                     $(
-                        if mask & (1 << $index) == 0 {
-                            shiperators.$index.0.unpick();
-                        } else {
-                            if !shiperators.$index.0.is_exact_sized() {
-                                mask = 0;
-                            }
+                        if can_captains.$index && sail_times.$index < min_sail_time {
+                            captain_mask = 1 << $index;
+                            len = shiperators.$index.1;
+                            entity_iter = shiperators.$index.2;
+                            min_sail_time = sail_times.$index;
                         }
                     )+
 
-                    return (
-                        Mixed {
-                            shiperator: ($(shiperators.$index.0,)+),
-                            mask
-                        },
-                        len,
-                        entity_iter,
-                    );
+                    // Silence unused warning
+                    let _ = min_sail_time;
                 }
-
-                let mut mask = 0;
-                let mut len = 0;
-                let mut entity_iter = RawEntityIdAccess::dangling();
-                let mut min_sail_time = usize::MAX;
-
-                $(
-                    if can_captains.$index && sail_times.$index < min_sail_time {
-                        mask = 1 << $index;
-                        len = shiperators.$index.1;
-                        entity_iter = shiperators.$index.2;
-                        min_sail_time = sail_times.$index;
-                    }
-                )+
-
-                let _ = min_sail_time;
-
-                $(
-                    if mask & (1 << $index) == 0 {
-                        shiperators.$index.0.unpick();
-                    } else {
-                        if !shiperators.$index.0.is_exact_sized() {
-                            mask = 0;
-                        }
-                    }
-                )+
 
                 (
                     Mixed {
                         shiperator: ($(shiperators.$index.0,)+),
-                        mask,
+                        captain_mask,
                     },
                     len,
                     entity_iter,

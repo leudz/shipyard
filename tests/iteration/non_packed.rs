@@ -255,7 +255,6 @@ fn or() {
 
     let mut iter = (&u32s | &i16s, &usizes).iter();
     assert_eq!(iter.next().unwrap(), (OneOfTwo::One(&U32(4)), &USIZE(24)));
-    dbg!("now");
     assert_eq!(iter.next().unwrap(), (OneOfTwo::Two(&I16(15)), &USIZE(25)));
     assert!(iter.next().is_none());
 }

@@ -1,10 +1,8 @@
-mod captain;
 mod into_shiperator;
 mod mixed;
-mod output;
 #[cfg(feature = "parallel")]
 mod parallel;
-mod sailor;
+mod shiperator;
 mod with_id;
 
 pub use crate::iter_component::{IntoIterRef, IterComponent};
@@ -14,14 +12,12 @@ pub use crate::or::{OneOfTwo, Or};
 #[doc(inline)]
 pub use crate::sparse_set::RawEntityIdAccess;
 pub use crate::tracking::{Inserted, InsertedOrModified, Modified};
-pub use captain::ShiperatorCaptain;
 pub use into_shiperator::{IntoIter, IntoShiperator};
 pub use mixed::Mixed;
-pub use output::ShiperatorOutput;
 #[cfg(feature = "parallel")]
 #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
 pub use parallel::ParShiperator;
-pub use sailor::ShiperatorSailor;
+pub use shiperator::Shiperator;
 pub use with_id::WithId;
 
 use crate::component::Component;
@@ -29,7 +25,7 @@ use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use core::iter::FusedIterator;
 
 /// Handles storages iteration.
-pub struct Shiperator<S> {
+pub struct Shiper<S> {
     pub(crate) shiperator: S,
     pub(crate) entities: RawEntityIdAccess,
     pub(crate) is_exact_sized: bool,
@@ -37,7 +33,7 @@ pub struct Shiperator<S> {
     pub(crate) end: usize,
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for Shiperator<S> {
+impl<S: Shiperator> Iterator for Shiper<S> {
     type Item = S::Out;
 
     #[inline(always)]
@@ -57,14 +53,11 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for Shiperator<S> {
             let current = self.start;
             self.start += 1;
 
-            if self.is_exact_sized {
-                return unsafe { Some(self.shiperator.get_captain_data(current)) };
-            } else {
-                let entity_id = unsafe { self.entities.get(current) };
-
-                if let Some(indices) = self.shiperator.indices_of(entity_id, current) {
-                    return unsafe { Some(self.shiperator.get_sailor_data(indices)) };
-                }
+            if let Some(indices) = unsafe {
+                self.shiperator
+                    .captain_indices_of(&mut self.entities, current)
+            } {
+                return unsafe { Some(self.shiperator.get_data(indices)) };
             }
         }
     }
@@ -98,29 +91,22 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for Shiperator<S> {
                 }
             };
 
-            if self.is_exact_sized {
-                while self.start < self.end {
-                    let current = self.start;
-                    self.start += 1;
+            while self.start < self.end {
+                let current = self.start;
+                self.start += 1;
 
-                    init = f(init, unsafe { self.shiperator.get_captain_data(current) });
-                }
-            } else {
-                while self.start < self.end {
-                    let current = self.start;
-                    self.start += 1;
-                    let entity_id = unsafe { self.entities.get(current) };
-
-                    if let Some(indices) = self.shiperator.indices_of(entity_id, current) {
-                        init = f(init, unsafe { self.shiperator.get_sailor_data(indices) });
-                    }
+                if let Some(indices) = unsafe {
+                    self.shiperator
+                        .captain_indices_of(&mut self.entities, current)
+                } {
+                    init = f(init, unsafe { self.shiperator.get_data(indices) });
                 }
             }
         }
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for Shiperator<S> {
+impl<S: Shiperator> DoubleEndedIterator for Shiper<S> {
     #[inline(always)]
     fn next_back(&mut self) -> Option<Self::Item> {
         loop {
@@ -137,14 +123,11 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for Shiperator
 
             self.end -= 1;
 
-            if self.is_exact_sized {
-                return unsafe { Some(self.shiperator.get_captain_data(self.end)) };
-            } else {
-                let entity_id = unsafe { self.entities.get(self.end) };
-
-                if let Some(indices) = self.shiperator.indices_of(entity_id, self.end) {
-                    return unsafe { Some(self.shiperator.get_sailor_data(indices)) };
-                }
+            if let Some(indices) = unsafe {
+                self.shiperator
+                    .captain_indices_of(&mut self.entities, self.end)
+            } {
+                return unsafe { Some(self.shiperator.get_data(indices)) };
             }
         }
     }
@@ -167,36 +150,30 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for Shiperator
                 }
             };
 
-            if self.is_exact_sized {
-                while self.start < self.end {
-                    self.end -= 1;
+            while self.start < self.end {
+                self.end -= 1;
 
-                    init = f(init, unsafe { self.shiperator.get_captain_data(self.end) });
-                }
-            } else {
-                while self.start < self.end {
-                    self.end -= 1;
-                    let entity_id = unsafe { self.entities.get(self.end) };
-
-                    if let Some(indices) = self.shiperator.indices_of(entity_id, self.end) {
-                        init = f(init, unsafe { self.shiperator.get_sailor_data(indices) });
-                    }
+                if let Some(indices) = unsafe {
+                    self.shiperator
+                        .captain_indices_of(&mut self.entities, self.end)
+                } {
+                    init = f(init, unsafe { self.shiperator.get_data(indices) });
                 }
             }
         }
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> FusedIterator for Shiperator<S> {}
+impl<S: Shiperator> FusedIterator for Shiper<S> {}
 
-impl<'tmp, T: Component> ExactSizeIterator for Shiperator<FullRawWindow<'tmp, T>> {
+impl<'tmp, T: Component> ExactSizeIterator for Shiper<FullRawWindow<'tmp, T>> {
     #[inline]
     fn len(&self) -> usize {
         self.end - self.start
     }
 }
 
-impl<'tmp, T: Component, Track> ExactSizeIterator for Shiperator<FullRawWindowMut<'tmp, T, Track>>
+impl<'tmp, T: Component, Track> ExactSizeIterator for Shiper<FullRawWindowMut<'tmp, T, Track>>
 where
     Self: Iterator,
 {

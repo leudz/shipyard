@@ -91,6 +91,5 @@ impl From<usize> for OneOfTwo<usize, usize> {
 
 pub struct OrWindow<T> {
     pub(crate) storages: T,
-    pub(crate) is_captain: bool,
     pub(crate) is_past_first_storage: bool,
 }

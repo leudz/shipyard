@@ -1,26 +1,26 @@
 use crate::entity_id::EntityId;
-use crate::iter::{Shiperator, ShiperatorCaptain, ShiperatorSailor};
+use crate::iter::{Shiper, Shiperator};
 use core::iter::FusedIterator;
 
 /// Iterator that returns the [`EntityId`] alongside the component(s).
 pub struct WithId<S>(pub(crate) S);
 
-impl<S> Shiperator<S> {
+impl<S> Shiper<S> {
     /// Returns the [`EntityId`] alongside the component(s).
-    pub fn with_id(self) -> WithId<Shiperator<S>> {
+    pub fn with_id(self) -> WithId<Shiper<S>> {
         WithId(self)
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> Shiperator<S> {
+impl<S: Shiperator> Shiper<S> {
     /// Returns the [`EntityId`] of the matching components.
     #[allow(clippy::type_complexity)]
-    pub fn ids(self) -> core::iter::Map<WithId<Shiperator<S>>, fn((EntityId, S::Out)) -> EntityId> {
+    pub fn ids(self) -> core::iter::Map<WithId<Shiper<S>>, fn((EntityId, S::Out)) -> EntityId> {
         WithId(self).map(|(eid, _)| eid)
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for WithId<Shiperator<S>> {
+impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
     type Item = (EntityId, S::Out);
 
     #[inline(always)]
@@ -50,33 +50,26 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> Iterator for WithId<Shiperator<S>>
                 if let Some(new_end) = self.0.entities.next_slice() {
                     self.0.start = 0;
                     self.0.end = new_end;
+
+                    self.0.shiperator.next_slice();
                 } else {
                     return init;
                 }
             };
 
-            if self.0.is_exact_sized {
-                while self.0.start < self.0.end {
-                    let current = self.0.start;
-                    self.0.start += 1;
+            while self.0.start < self.0.end {
+                let current = self.0.start;
+                self.0.start += 1;
 
-                    let entity_id = unsafe { self.0.entities.get(current) };
-                    let data = unsafe { self.0.shiperator.get_captain_data(current) };
+                if let Some(indices) = unsafe {
+                    self.0
+                        .shiperator
+                        .captain_indices_of(&mut self.0.entities, current)
+                } {
+                    let eid = unsafe { self.0.entities.get(current) };
+                    let data = unsafe { self.0.shiperator.get_data(indices) };
 
-                    init = f(init, (entity_id, data));
-                }
-            } else {
-                while self.0.start < self.0.end {
-                    let current = self.0.start;
-                    self.0.start += 1;
-
-                    let entity_id = unsafe { self.0.entities.get(current) };
-
-                    if let Some(indices) = self.0.shiperator.indices_of(entity_id, current) {
-                        let data = unsafe { self.0.shiperator.get_sailor_data(indices) };
-
-                        init = f(init, (entity_id, data));
-                    }
+                    init = f(init, (eid, data));
                 }
             }
         }
@@ -93,7 +86,7 @@ where
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for WithId<Shiperator<S>> {
+impl<S: Shiperator> DoubleEndedIterator for WithId<Shiper<S>> {
     #[inline(always)]
     fn next_back(&mut self) -> Option<Self::Item> {
         if let Some(item) = self.0.next_back() {
@@ -123,38 +116,28 @@ impl<S: ShiperatorCaptain + ShiperatorSailor> DoubleEndedIterator for WithId<Shi
                 }
             };
 
-            if self.0.is_exact_sized {
-                while self.0.start < self.0.end {
-                    self.0.end -= 1;
+            while self.0.start < self.0.end {
+                self.0.end -= 1;
 
-                    let entity_id = unsafe { self.0.entities.get(self.0.end) };
-                    let data = unsafe { self.0.shiperator.get_captain_data(self.0.end) };
+                if let Some(indices) = unsafe {
+                    self.0
+                        .shiperator
+                        .captain_indices_of(&mut self.0.entities, self.0.end)
+                } {
+                    let eid = unsafe { self.0.entities.get(self.0.end) };
+                    let data = unsafe { self.0.shiperator.get_data(indices) };
 
-                    init = f(init, (entity_id, data));
-                }
-            } else {
-                while self.0.start < self.0.end {
-                    self.0.end -= 1;
-
-                    let entity_id = unsafe { self.0.entities.get(self.0.end) };
-
-                    if let Some(indices) = self.0.shiperator.indices_of(entity_id, self.0.end) {
-                        let data = unsafe { self.0.shiperator.get_sailor_data(indices) };
-
-                        init = f(init, (entity_id, data));
-                    }
+                    init = f(init, (eid, data));
                 }
             }
         }
     }
 }
 
-impl<S: ShiperatorCaptain + ShiperatorSailor> FusedIterator for WithId<Shiperator<S>> {}
+impl<S: Shiperator> FusedIterator for WithId<Shiper<S>> {}
 
 #[cfg(feature = "parallel")]
-impl<S: ShiperatorCaptain + ShiperatorSailor + Send + Clone>
-    rayon::iter::plumbing::UnindexedProducer for WithId<Shiperator<S>>
-{
+impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for WithId<Shiper<S>> {
     type Item = (EntityId, S::Out);
 
     #[inline]

@@ -299,8 +299,10 @@ impl<T: Component, Track> Clone for FullRawWindowMut<'_, T, Track> {
 #[derive(Clone)]
 #[doc(hidden)]
 pub struct RawEntityIdAccess {
-    pub ptr: NonNull<EntityId>,
-    pub follow_up_ptrs: Vec<(NonNull<EntityId>, usize)>,
+    ptr: NonNull<EntityId>,
+    follow_up_ptrs: Vec<(NonNull<EntityId>, usize)>,
+    current_index: usize,
+    current_entity: EntityId,
 }
 
 unsafe impl Send for RawEntityIdAccess {}
@@ -315,7 +317,14 @@ impl RawEntityIdAccess {
         RawEntityIdAccess {
             ptr,
             follow_up_ptrs,
+            current_index: usize::MAX,
+            current_entity: EntityId::dead(),
         }
+    }
+
+    #[inline]
+    pub fn ptr(&self) -> NonNull<EntityId> {
+        self.ptr
     }
 
     #[inline]
@@ -324,13 +333,24 @@ impl RawEntityIdAccess {
         RawEntityIdAccess {
             ptr: NonNull::dangling(),
             follow_up_ptrs: Vec::new(),
+            current_index: usize::MAX,
+            current_entity: EntityId::dead(),
         }
     }
 
     #[inline]
     #[doc(hidden)]
-    pub unsafe fn get(&self, index: usize) -> EntityId {
-        self.ptr.add(index).read()
+    pub unsafe fn get(&mut self, index: usize) -> EntityId {
+        if self.current_index == index {
+            self.current_entity
+        } else {
+            let eid = self.ptr.add(index).read();
+
+            self.current_index = index;
+            self.current_entity = eid;
+
+            eid
+        }
     }
 
     #[inline]
@@ -350,6 +370,7 @@ impl RawEntityIdAccess {
         };
 
         self.ptr = new_start;
+        self.current_index = usize::MAX;
 
         Some(new_end)
     }
@@ -386,6 +407,8 @@ impl RawEntityIdAccess {
         let other = RawEntityIdAccess {
             ptr: self.ptr,
             follow_up_ptrs: follow_up2,
+            current_index: usize::MAX,
+            current_entity: EntityId::dead(),
         };
 
         (self, other)

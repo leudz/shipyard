@@ -14,7 +14,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
-use crate::iter::{ShiperatorCaptain, ShiperatorSailor};
+use crate::iter::Shiperator;
 use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
 use crate::memory_usage::WorldMemoryUsage;
 use crate::r#mut::Mut;
@@ -1525,7 +1525,7 @@ for (i, j) in &mut iter {
     #[track_caller]
     pub fn iter<'a, T: IterComponent>(&'a self) -> IntoIterRef<'a, T>
     where
-        <T as IterComponent>::Shiperator<'a>: ShiperatorCaptain + ShiperatorSailor,
+        <T as IterComponent>::Shiperator<'a>: Shiperator,
     {
         let (all_storages, all_borrow) = unsafe {
             ARef::destructure(

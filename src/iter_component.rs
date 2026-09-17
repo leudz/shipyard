@@ -8,7 +8,7 @@ use crate::borrow::Borrow;
 #[cfg(feature = "thread_local")]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
-use crate::iter::{Mixed, ShiperatorCaptain};
+use crate::iter::{Mixed, Shiperator};
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
 use crate::storage::StorageId;
@@ -53,7 +53,7 @@ pub(crate) fn into_iter<'a, T: IterComponent>(
     current: TrackingTimestamp,
 ) -> Result<IntoIterRef<'a, T>, error::GetStorage>
 where
-    <T as IterComponent>::Shiperator<'a>: ShiperatorCaptain,
+    <T as IterComponent>::Shiperator<'a>: Shiperator,
 {
     let mut storage_ids = ShipHashSet::new();
     let (shiperator, all_borrow, borrow, end, entities) =
@@ -480,7 +480,7 @@ impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
 
 macro_rules! impl_iter_component {
     ($(($type: ident, $raw_window: ident, $borrow: ident, $len: ident, $entity_iter: ident, $index: tt))+) => {
-        impl<$($type: IterComponent),+> IterComponent for ($($type,)+) where $(for<'a> $type::Shiperator<'a>: ShiperatorCaptain,)+ {
+        impl<$($type: IterComponent),+> IterComponent for ($($type,)+) where $(for<'a> $type::Shiperator<'a>: Shiperator,)+ {
             type Shiperator<'a> = Mixed<($($type::Shiperator<'a>,)+)>;
             type Borrow<'a> = ($($type::Borrow<'a>,)+);
 
@@ -500,18 +500,19 @@ macro_rules! impl_iter_component {
                 error::GetStorage,
             > {
                 $(
-                    let (mut $raw_window, _, $borrow, $len, $entity_iter) = $type::into_shiperator(all_storages, all_borrow.clone(), current, storage_ids)?;
+                    let ($raw_window, _, $borrow, $len, $entity_iter) = $type::into_shiperator(all_storages, all_borrow.clone(), current, storage_ids)?;
                 )+
 
-                let mut mask = 0;
+                let mut captain_mask = 0;
                 let mut len = 0;
                 let mut entity_iter = RawEntityIdAccess::dangling();
                 let mut min_sail_time = usize::MAX;
 
                 $(
                     let sail_time = $raw_window.sail_time();
+
                     if sail_time < min_sail_time {
-                        mask = 1 << $index;
+                        captain_mask = 1 << $index;
                         len = $len;
                         entity_iter = $entity_iter;
                         min_sail_time = sail_time;
@@ -520,17 +521,7 @@ macro_rules! impl_iter_component {
 
                 let _ = min_sail_time;
 
-                $(
-                    if mask & (1 << $index) == 0 {
-                        $raw_window.unpick();
-                    } else {
-                        if !$raw_window.is_exact_sized() {
-                            mask = 0;
-                        }
-                    }
-                )+
-
-                Ok((Mixed {shiperator: ($($raw_window,)+), mask }, all_borrow, ($($borrow,)+), len, entity_iter))
+                Ok((Mixed {shiperator: ($($raw_window,)+), captain_mask }, all_borrow, ($($borrow,)+), len, entity_iter))
             }
         }
     }
