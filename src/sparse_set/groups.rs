@@ -37,16 +37,24 @@ pub(crate) struct GroupRange {
     )]
     pub(crate) shift: isize,
     /// Length of the prefix that is unchanged since the last regroup.
-    #[allow(
-        dead_code,
-        reason = "Only read by debug assertions until regroup lands."
-    )]
     pub(crate) trust: usize,
+}
+
+/// A region of a grouped storage, used as the destination of a regroup move.
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+pub enum GroupRegion<'a> {
+    /// The range of the group with these sorted member ids.
+    Range(&'a Arc<[StorageId]>),
+    /// Components that regroup evaluated and found to belong to no group.
+    Ungrouped,
+    /// Components that regroup hasn't looked at yet.
+    Unevaluated,
 }
 
 impl GroupRange {
     /// Returns the physical index right after this range.
-    fn end(&self) -> usize {
+    pub(crate) fn end(&self) -> usize {
         self.start + self.len
     }
 }
@@ -64,21 +72,35 @@ impl Groups {
     }
 
     /// Returns the physical indices of the ungrouped region.
-    #[allow(dead_code, reason = "Used once regroup lands.")]
+    #[allow(dead_code, reason = "Used once grouped iteration lands.")]
     pub(crate) fn ungrouped_range(&self) -> Range<usize> {
         self.grouped_end()..self.unevaluated_start
     }
 
     /// Returns the physical indices of the unevaluated region.
-    #[allow(dead_code, reason = "Used once regroup lands.")]
+    #[allow(dead_code, reason = "Used once grouped iteration lands.")]
     pub(crate) fn unevaluated_range(&self, dense_len: usize) -> Range<usize> {
         self.unevaluated_start..dense_len
+    }
+
+    /// Returns the region holding the component at physical `index`.
+    pub(crate) fn region_of(&self, index: usize) -> GroupRegion<'_> {
+        if let Some(range) = self
+            .ranges
+            .iter()
+            .find(|range| range.start <= index && index < range.end())
+        {
+            GroupRegion::Range(&range.group)
+        } else if index < self.unevaluated_start {
+            GroupRegion::Ungrouped
+        } else {
+            GroupRegion::Unevaluated
+        }
     }
 
     /// Returns `group`'s range in this storage.
     ///
     /// Groups are compared by pointer, an equal group allocated separately doesn't match.
-    #[allow(dead_code, reason = "Used once regroup lands.")]
     pub(crate) fn range(&self, group: &Arc<[StorageId]>) -> Option<&GroupRange> {
         self.ranges
             .iter()
@@ -88,7 +110,7 @@ impl Groups {
     /// Returns `group`'s range in this storage.
     ///
     /// Groups are compared by pointer, an equal group allocated separately doesn't match.
-    #[allow(dead_code, reason = "Used once regroup lands.")]
+    #[allow(dead_code, reason = "Used once storages can hold several ranges.")]
     pub(crate) fn range_mut(&mut self, group: &Arc<[StorageId]>) -> Option<&mut GroupRange> {
         self.ranges
             .iter_mut()
@@ -245,6 +267,37 @@ mod tests {
         assert_eq!(groups.grouped_end(), 5);
         assert_eq!(groups.ungrouped_range(), 5..6);
         assert_eq!(groups.unevaluated_range(9), 6..9);
+    }
+
+    /// Asserts that with one range of 2 and 2 ungrouped components,
+    /// `region_of` maps indices 0 and 1 to the range, 2 and 3 to the ungrouped region and 4 to the unevaluated region.
+    #[test]
+    fn region_of() {
+        let ab = group(&[0, 1]);
+        let groups = Groups {
+            storage_id: None,
+            ranges: vec![range(&ab, 0, 2)],
+            unevaluated_start: 4,
+        };
+
+        for index in 0..2 {
+            assert!(
+                matches!(groups.region_of(index), GroupRegion::Range(group) if Arc::ptr_eq(group, &ab))
+            );
+        }
+        for index in 2..4 {
+            assert!(matches!(groups.region_of(index), GroupRegion::Ungrouped));
+        }
+        assert!(matches!(groups.region_of(4), GroupRegion::Unevaluated));
+    }
+
+    /// Asserts that `region_of` maps every index of a storage without ranges to the unevaluated region.
+    #[test]
+    fn region_of_empty() {
+        let groups = Groups::default();
+
+        assert!(matches!(groups.region_of(0), GroupRegion::Unevaluated));
+        assert!(matches!(groups.region_of(3), GroupRegion::Unevaluated));
     }
 
     /// Asserts that `range` finds a group by pointer, among several ranges.

@@ -9,7 +9,7 @@ pub(crate) use sbox::SBox;
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::sparse_set::{Groups, SparseArray};
+use crate::sparse_set::{GroupRegion, Groups, SparseArray};
 use crate::tracking::TrackingTimestamp;
 use alloc::borrow::Cow;
 use core::any::Any;
@@ -139,5 +139,19 @@ pub trait Storage: SizedAny {
     #[inline]
     fn dense(&self) -> Option<&[EntityId]> {
         None
+    }
+
+    /// Moves `entity`'s component to `destination`, wherever it currently is in this storage.
+    ///
+    /// Regroup only calls it on storages that support grouping.
+    ///
+    /// ### Panics
+    ///
+    /// - The storage doesn't support grouping.
+    #[doc(hidden)]
+    #[allow(unused_variables)]
+    #[track_caller]
+    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        panic!("grouping only supports SparseSet storages");
     }
 }

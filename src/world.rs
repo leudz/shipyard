@@ -1314,7 +1314,8 @@ impl World {
 
     /// Declares a group made of the given storages, creating the ones that don't exist yet.
     ///
-    /// Declaring a group that already exists does nothing.
+    /// Declaring a group that already exists does nothing.\
+    /// Declaring a new group runs a full [`regroup`](World::regroup).
     ///
     /// ### Panics
     ///
@@ -1325,6 +1326,12 @@ impl World {
     pub fn group<G: TupleGroup>(&mut self) -> &mut World {
         self.all_storages.get_mut().group::<G>();
         self
+    }
+
+    /// Moves every grouped component to where it belongs.
+    #[doc(hidden)]
+    pub fn regroup(&mut self) {
+        self.all_storages.get_mut().regroup();
     }
 
     #[doc = "Retrieve components of `entity`.

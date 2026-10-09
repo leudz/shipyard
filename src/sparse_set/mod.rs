@@ -16,13 +16,14 @@ pub use bulk_add_entity::BulkAddEntity;
 pub use delete::TupleDelete;
 pub use drain::SparseSetDrain;
 #[doc(hidden)]
-pub use groups::Groups;
+pub use groups::{GroupRegion, Groups};
 pub use memory_usage::{SparseSetMemory, SparseSetMemoryUsage};
 pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
 #[doc(hidden)]
 pub use window::RawEntityIdAccess;
 
+pub(crate) use groups::GroupRange;
 pub(crate) use sparse_array::BUCKET_SIZE;
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 
@@ -35,6 +36,7 @@ use crate::r#mut::Mut;
 use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use clone::SparseSetCloneFunctions;
 use core::any::type_name;
@@ -136,7 +138,7 @@ impl<T: Component> SparseSet<T> {
 }
 
 impl<T: Component> SparseSet<T> {
-    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
+    /// Returns the index of `entity`'s component in the `dense` and `data` vectors.\
     /// This index is only valid for this storage and until a modification happens.
     #[inline]
     pub fn index_of(&self, entity: EntityId) -> Option<usize> {
@@ -417,6 +419,160 @@ impl<T: Component> SparseSet<T> {
 
         #[cfg(debug_assertions)]
         self.groups.assert_invariants(self.dense.len());
+    }
+}
+
+impl<T: Component> SparseSet<T> {
+    /// Swaps the components at physical indices `i` and `j`, along with their entities and timestamps.
+    ///
+    /// Both entities' sparse entries are updated to their new index.
+    fn swap_rows(&mut self, i: usize, j: usize) {
+        if i == j {
+            return;
+        }
+
+        self.dense.swap(i, j);
+        self.data.swap(i, j);
+        if self.is_tracking_insertion {
+            self.insertion_data.swap(i, j);
+        }
+        if self.is_tracking_modification {
+            self.modification_data.swap(i, j);
+        }
+
+        let entity_i = self.dense[i];
+        let entity_j = self.dense[j];
+
+        // SAFE: both entities were just read from `dense`, so they own a component in this storage
+        // and their sparse page is allocated.
+        unsafe {
+            self.sparse.get_mut_unchecked(entity_i).set_index(i as u64);
+            self.sparse.get_mut_unchecked(entity_j).set_index(j as u64);
+        }
+    }
+
+    /// Moves `entity`'s component to `destination`, wherever it currently is in this storage.
+    ///
+    /// A move into a range appends the component at the range's end.\
+    /// Timestamps move with the component. A move isn't a modification and doesn't call any callback.
+    ///
+    /// ### Panics
+    ///
+    /// - `entity` doesn't have a component in this storage.
+    /// - `destination` is a group without a range in this storage.
+    #[track_caller]
+    pub(crate) fn private_move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        let index = self
+            .index_of(entity)
+            .expect("only components present in the storage can be moved");
+
+        if let GroupRegion::Range(group) = destination {
+            assert!(
+                self.groups.range(group).is_some(),
+                "the destination group has no range in this storage"
+            );
+        }
+
+        // The ungrouped region sits between the range and the unevaluated region,
+        // so every move is made of steps into or out of it.
+        // With a single range per storage, the range always borders the ungrouped region,
+        // and the step helpers below rely on that.
+        match (self.groups.region_of(index), destination) {
+            (GroupRegion::Range(source), GroupRegion::Range(group)) => {
+                if !Arc::ptr_eq(source, group) {
+                    unreachable!(
+                        "moving a component between two group ranges requires several ranges per storage, which isn't supported yet"
+                    );
+                }
+            }
+            (GroupRegion::Range(_), GroupRegion::Ungrouped) => {
+                self.range_to_ungrouped(index);
+            }
+            (GroupRegion::Range(_), GroupRegion::Unevaluated) => {
+                let index = self.range_to_ungrouped(index);
+                self.ungrouped_to_unevaluated(index);
+            }
+            (GroupRegion::Ungrouped, GroupRegion::Range(_)) => {
+                self.ungrouped_to_range(index);
+            }
+            (GroupRegion::Ungrouped, GroupRegion::Unevaluated) => {
+                self.ungrouped_to_unevaluated(index);
+            }
+            (GroupRegion::Unevaluated, GroupRegion::Range(_)) => {
+                let index = self.unevaluated_to_ungrouped(index);
+                self.ungrouped_to_range(index);
+            }
+            (GroupRegion::Unevaluated, GroupRegion::Ungrouped) => {
+                self.unevaluated_to_ungrouped(index);
+            }
+            (GroupRegion::Ungrouped, GroupRegion::Ungrouped)
+            | (GroupRegion::Unevaluated, GroupRegion::Unevaluated) => {}
+        }
+
+        #[cfg(debug_assertions)]
+        self.groups.assert_invariants(self.dense.len());
+    }
+
+    /// Moves the component at `index`, inside the last range, to the ungrouped region.\
+    /// Returns its new index.
+    fn range_to_ungrouped(&mut self, index: usize) -> usize {
+        // We swap it with the range's last component, then shrink the range to leave it out.
+        let new_index = self.groups.grouped_end() - 1;
+        self.swap_rows(index, new_index);
+
+        let range = self
+            .groups
+            .ranges
+            .last_mut()
+            .expect("the component is inside a range");
+        debug_assert!(range.start <= index);
+
+        range.len -= 1;
+        // Only positions from `index` onward changed, so at most the ones before it are still trusted.
+        range.trust = range.trust.min(index - range.start);
+
+        new_index
+    }
+
+    /// Appends the ungrouped component at `index` to the last range.
+    fn ungrouped_to_range(&mut self, index: usize) {
+        // We swap it with the first ungrouped component, then grow the range over it.
+        let new_index = self.groups.grouped_end();
+        self.swap_rows(index, new_index);
+
+        let range = self
+            .groups
+            .ranges
+            .last_mut()
+            .expect("the destination range exists");
+
+        // Every member appends the same entity at the same logical end,
+        // so a fully trusted range stays fully trusted.
+        if range.trust == range.len {
+            range.trust += 1;
+        }
+        range.len += 1;
+    }
+
+    /// Moves the ungrouped component at `index` to the unevaluated region.
+    fn ungrouped_to_unevaluated(&mut self, index: usize) {
+        // We swap it with the last ungrouped component, then grow the unevaluated region over it.
+        let new_index = self.groups.unevaluated_start - 1;
+        self.swap_rows(index, new_index);
+
+        self.groups.unevaluated_start = new_index;
+    }
+
+    /// Moves the unevaluated component at `index` to the ungrouped region.
+    /// Returns its new index.
+    fn unevaluated_to_ungrouped(&mut self, index: usize) -> usize {
+        // We swap it with the first unevaluated component, then grow the ungrouped region over it.
+        let new_index = self.groups.unevaluated_start;
+        self.swap_rows(index, new_index);
+
+        self.groups.unevaluated_start += 1;
+
+        new_index
     }
 }
 
@@ -923,6 +1079,11 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
     fn dense(&self) -> Option<&[EntityId]> {
         Some(&self.dense)
     }
+
+    #[track_caller]
+    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        self.private_move_to(entity, destination);
+    }
 }
 
 #[cfg(test)]
@@ -931,6 +1092,7 @@ mod tests {
     use super::*;
     use crate::Component;
     use alloc::sync::Arc;
+    use alloc::vec;
     use std::println;
 
     #[derive(PartialEq, Eq, Debug)]
@@ -1626,6 +1788,356 @@ mod tests {
         assert_eq!(
             Storage::dense(&sparse_set),
             Some(&[EntityId::new(0), EntityId::new(5)][..])
+        );
+    }
+
+    /// Asserts that swapping two rows of a tracked storage keeps every entity's component,
+    /// insertion and modification state, and points the sparse array at the new indices.
+    #[test]
+    fn swap_rows() {
+        let mut sparse_set = SparseSet::new();
+        let e0 = EntityId::new(0);
+        let e1 = EntityId::new(1);
+        let e2 = EntityId::new(2);
+        let last = TrackingTimestamp::new(1);
+        let current = TrackingTimestamp::new(2);
+
+        sparse_set
+            .insert(e0, TrackedI32(0), current)
+            .assert_inserted();
+        sparse_set.insert(e1, TrackedI32(1), last).assert_inserted();
+        sparse_set.insert(e2, TrackedI32(2), last).assert_inserted();
+        let _ = sparse_set.insert(e2, TrackedI32(20), current);
+
+        sparse_set.swap_rows(0, 2);
+
+        assert_eq!(sparse_set.index_of(e0), Some(2));
+        assert_eq!(sparse_set.index_of(e1), Some(1));
+        assert_eq!(sparse_set.index_of(e2), Some(0));
+        assert_eq!(sparse_set.private_get(e0), Some(&TrackedI32(0)));
+        assert_eq!(sparse_set.private_get(e2), Some(&TrackedI32(20)));
+        assert!(<crate::track::All as Tracking>::is_inserted(
+            &sparse_set,
+            e0,
+            last,
+            current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_inserted(
+            &sparse_set,
+            e2,
+            last,
+            current
+        ));
+        assert!(!<crate::track::All as Tracking>::is_modified(
+            &sparse_set,
+            e0,
+            last,
+            current
+        ));
+        assert!(<crate::track::All as Tracking>::is_modified(
+            &sparse_set,
+            e2,
+            last,
+            current
+        ));
+    }
+
+    /// Asserts that swapping a row with itself changes nothing.
+    #[test]
+    fn swap_rows_same() {
+        let mut sparse_set = SparseSet::new();
+        sparse_set
+            .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(1), I32(1), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        sparse_set.swap_rows(1, 1);
+
+        assert_eq!(sparse_set.dense, [EntityId::new(0), EntityId::new(1)]);
+        assert_eq!(sparse_set.index_of(EntityId::new(1)), Some(1));
+    }
+
+    /// Builds a storage holding entities `0..n` in order, each with `I32(index)`.
+    /// The first `range_len` are in a fully trusted range, the next `ungrouped_len` are ungrouped
+    /// and the last `unevaluated_len` are unevaluated.
+    fn layout(
+        range_len: usize,
+        ungrouped_len: usize,
+        unevaluated_len: usize,
+    ) -> (SparseSet<I32>, Arc<[StorageId]>) {
+        let mut sparse_set = SparseSet::new();
+        for index in 0..range_len + ungrouped_len + unevaluated_len {
+            sparse_set
+                .insert(
+                    EntityId::new(index as u64),
+                    I32(i32::try_from(index).unwrap()),
+                    TrackingTimestamp::new(0),
+                )
+                .assert_inserted();
+        }
+
+        let group: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(1)]);
+        sparse_set.groups.ranges.push(GroupRange {
+            group: group.clone(),
+            start: 0,
+            len: range_len,
+            shift: 0,
+            trust: range_len,
+        });
+        sparse_set.groups.unevaluated_start = range_len + ungrouped_len;
+
+        (sparse_set, group)
+    }
+
+    /// Returns the sorted entity indices of the range, the ungrouped region and the unevaluated region.
+    fn regions(sparse_set: &SparseSet<I32>) -> [Vec<u64>; 3] {
+        let grouped_end = sparse_set.groups.grouped_end();
+        let unevaluated_start = sparse_set.groups.unevaluated_start;
+
+        let sorted = |entities: &[EntityId]| {
+            let mut indices: Vec<u64> = entities.iter().map(|entity| entity.index()).collect();
+            indices.sort_unstable();
+            indices
+        };
+
+        [
+            sorted(&sparse_set.dense[..grouped_end]),
+            sorted(&sparse_set.dense[grouped_end..unevaluated_start]),
+            sorted(&sparse_set.dense[unevaluated_start..]),
+        ]
+    }
+
+    /// Panics if an entity of a storage built by `layout` lost its component.
+    fn assert_reachable(sparse_set: &SparseSet<I32>) {
+        for index in 0..sparse_set.len() {
+            assert_eq!(
+                sparse_set.private_get(EntityId::new(index as u64)),
+                Some(&I32(i32::try_from(index).unwrap()))
+            );
+        }
+    }
+
+    /// Asserts that moving an unevaluated component to the range appends it,
+    /// keeps the range fully trusted and pushes an ungrouped component into the grown ungrouped region.
+    #[test]
+    fn move_unevaluated_to_range() {
+        let (mut sparse_set, group) = layout(2, 2, 3);
+
+        sparse_set.private_move_to(EntityId::new(5), GroupRegion::Range(&group));
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 3);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 3);
+        assert_eq!(sparse_set.groups.unevaluated_start, 5);
+        assert_eq!(sparse_set.dense[2], EntityId::new(5));
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 1, 5], vec![2, 3], vec![4, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving an unevaluated component to the range works without any ungrouped component.
+    #[test]
+    fn move_unevaluated_to_range_no_ungrouped() {
+        let (mut sparse_set, group) = layout(2, 0, 3);
+
+        sparse_set.private_move_to(EntityId::new(3), GroupRegion::Range(&group));
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 3);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 3);
+        assert_eq!(sparse_set.groups.unevaluated_start, 3);
+        assert_eq!(regions(&sparse_set), [vec![0, 1, 3], vec![], vec![2, 4]]);
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving an ungrouped component to the range appends it and keeps the range fully trusted.
+    #[test]
+    fn move_ungrouped_to_range() {
+        let (mut sparse_set, group) = layout(2, 2, 3);
+
+        sparse_set.private_move_to(EntityId::new(3), GroupRegion::Range(&group));
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 3);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 3);
+        assert_eq!(sparse_set.groups.unevaluated_start, 4);
+        assert_eq!(sparse_set.dense[2], EntityId::new(3));
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 1, 3], vec![2], vec![4, 5, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that appending to a damaged range leaves its trust unchanged.
+    #[test]
+    fn move_to_damaged_range() {
+        let (mut sparse_set, group) = layout(3, 2, 2);
+        sparse_set.groups.ranges[0].trust = 1;
+
+        sparse_set.private_move_to(EntityId::new(3), GroupRegion::Range(&group));
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 4);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 1);
+    }
+
+    /// Asserts that moving an unevaluated component to the ungrouped region grows it by one.
+    #[test]
+    fn move_unevaluated_to_ungrouped() {
+        let (mut sparse_set, _) = layout(2, 2, 3);
+
+        sparse_set.private_move_to(EntityId::new(5), GroupRegion::Ungrouped);
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.unevaluated_start, 5);
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 1], vec![2, 3, 5], vec![4, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving a component from the middle of the range to the unevaluated region
+    /// shrinks the range and drops its trust to the component's old position.
+    #[test]
+    fn move_range_to_unevaluated() {
+        let (mut sparse_set, _) = layout(3, 2, 2);
+
+        sparse_set.private_move_to(EntityId::new(1), GroupRegion::Unevaluated);
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 1);
+        assert_eq!(sparse_set.groups.unevaluated_start, 4);
+        assert_eq!(sparse_set.dense[..2], [EntityId::new(0), EntityId::new(2)]);
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 2], vec![3, 4], vec![1, 5, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving a component from the range to the unevaluated region works without any ungrouped component.
+    #[test]
+    fn move_range_to_unevaluated_no_ungrouped() {
+        let (mut sparse_set, _) = layout(3, 0, 2);
+
+        sparse_set.private_move_to(EntityId::new(0), GroupRegion::Unevaluated);
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 0);
+        assert_eq!(sparse_set.groups.unevaluated_start, 2);
+        assert_eq!(regions(&sparse_set), [vec![1, 2], vec![], vec![0, 3, 4]]);
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that evicting the range's last component keeps the rest of the range fully trusted.
+    #[test]
+    fn move_range_last_to_unevaluated() {
+        let (mut sparse_set, _) = layout(3, 2, 2);
+
+        sparse_set.private_move_to(EntityId::new(2), GroupRegion::Unevaluated);
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 2);
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 1], vec![3, 4], vec![2, 5, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving a component from the range to the ungrouped region shrinks the range
+    /// and drops its trust to the component's old position.
+    #[test]
+    fn move_range_to_ungrouped() {
+        let (mut sparse_set, _) = layout(3, 2, 2);
+
+        sparse_set.private_move_to(EntityId::new(1), GroupRegion::Ungrouped);
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 1);
+        assert_eq!(sparse_set.groups.unevaluated_start, 5);
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 2], vec![1, 3, 4], vec![5, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving an ungrouped component to the unevaluated region shrinks the ungrouped region by one.
+    #[test]
+    fn move_ungrouped_to_unevaluated() {
+        let (mut sparse_set, _) = layout(2, 2, 3);
+
+        sparse_set.private_move_to(EntityId::new(2), GroupRegion::Unevaluated);
+
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.unevaluated_start, 3);
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 1], vec![3], vec![2, 4, 5, 6]]
+        );
+        assert_reachable(&sparse_set);
+    }
+
+    /// Asserts that moving components to the region they're already in doesn't move anything.
+    #[test]
+    fn move_in_place() {
+        let (mut sparse_set, group) = layout(2, 2, 3);
+        let dense = sparse_set.dense.clone();
+
+        sparse_set.private_move_to(EntityId::new(0), GroupRegion::Range(&group));
+        sparse_set.private_move_to(EntityId::new(2), GroupRegion::Ungrouped);
+        sparse_set.private_move_to(EntityId::new(4), GroupRegion::Unevaluated);
+
+        assert_eq!(sparse_set.dense, dense);
+        assert_eq!(sparse_set.groups.ranges[0].len, 2);
+        assert_eq!(sparse_set.groups.ranges[0].trust, 2);
+        assert_eq!(sparse_set.groups.unevaluated_start, 4);
+    }
+
+    /// Asserts that moving to a group without a range in the storage panics,
+    /// even when an equal group exists, since groups are compared by pointer.
+    #[test]
+    #[should_panic(expected = "the destination group has no range in this storage")]
+    fn move_to_other_group() {
+        let (mut sparse_set, _) = layout(2, 2, 3);
+        let other_group: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(1)]);
+
+        sparse_set.private_move_to(EntityId::new(4), GroupRegion::Range(&other_group));
+    }
+
+    /// Asserts that moving an entity without a component in the storage panics.
+    #[test]
+    #[should_panic(expected = "only components present in the storage can be moved")]
+    fn move_missing() {
+        let (mut sparse_set, _) = layout(2, 2, 3);
+
+        sparse_set.private_move_to(EntityId::new(10), GroupRegion::Ungrouped);
+    }
+
+    /// Asserts that `Storage::move_to` panics on storages that don't support grouping.
+    #[test]
+    #[should_panic(expected = "grouping only supports SparseSet storages")]
+    fn move_unsupported() {
+        let mut entities = crate::entities::Entities::new();
+
+        Storage::move_to(&mut entities, EntityId::new(0), GroupRegion::Ungrouped);
+    }
+
+    /// Asserts that `Storage::move_to` on a `NonSend` `SparseSet` moves the component.
+    #[cfg(feature = "thread_local")]
+    #[test]
+    fn move_non_send() {
+        let (sparse_set, _) = layout(2, 2, 3);
+        let mut sparse_set = crate::borrow::NonSend(sparse_set);
+
+        Storage::move_to(&mut sparse_set, EntityId::new(5), GroupRegion::Ungrouped);
+
+        assert_eq!(
+            regions(&sparse_set),
+            [vec![0, 1], vec![2, 3, 5], vec![4, 6]]
         );
     }
 }

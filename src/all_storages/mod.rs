@@ -3,6 +3,7 @@ mod clone;
 mod custom_storage;
 mod delete_any;
 mod group;
+mod regroup;
 mod retain;
 
 pub use custom_storage::CustomStorageAccess;
@@ -1278,7 +1279,8 @@ let i = all_storages.run(sys1);
 
     /// Declares a group made of the given storages, creating the ones that don't exist yet.
     ///
-    /// Declaring a group that already exists does nothing.
+    /// Declaring a group that already exists does nothing.\
+    /// Declaring a new group runs a full [`regroup`](AllStorages::regroup).
     ///
     /// ### Panics
     ///
@@ -1292,7 +1294,7 @@ let i = all_storages.run(sys1);
         self
     }
 
-    /// Attaches an empty range for the group made of `ids` to every member.
+    /// Attaches an empty range for the group made of `ids` to every member, then regroups.
     ///
     /// Every member storage must already exist.
     #[track_caller]
@@ -1326,6 +1328,9 @@ let i = all_storages.run(sys1);
         for &storage_id in group.iter() {
             member_groups(storages, storage_id).attach(group.clone(), storage_id);
         }
+
+        // A new member had no range before, so all its components are already unevaluated.
+        self.regroup();
     }
 
     #[doc = "Retrieve components of `entity`.

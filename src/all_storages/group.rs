@@ -155,8 +155,8 @@ mod tests {
         type Tracking = track::Untracked;
     }
 
-    /// Asserts that grouping storages that already hold components attaches one empty range
-    /// sharing the same `Arc` to each member, and leaves every component unevaluated and reachable.
+    /// Asserts that grouping storages that already hold components attaches one range
+    /// sharing the same `Arc` to each member, regroups them, and keeps every component reachable.
     #[test]
     fn basic() {
         let mut world = World::new();
@@ -173,10 +173,10 @@ mod tests {
             &a.groups.ranges[0].group,
             &b.groups.ranges[0].group
         ));
-        assert_eq!(a.groups.ranges[0].len, 0);
-        assert_eq!(b.groups.ranges[0].len, 0);
-        assert_eq!(a.groups.unevaluated_start, 0);
-        assert_eq!(b.groups.unevaluated_start, 0);
+        assert_eq!(a.groups.ranges[0].len, 1);
+        assert_eq!(b.groups.ranges[0].len, 1);
+        assert_eq!(a.groups.unevaluated_start, 2);
+        assert_eq!(b.groups.unevaluated_start, 1);
         assert_eq!(a.get(e0).unwrap(), &A(0));
         assert_eq!(a.get(e1).unwrap(), &A(1));
         assert_eq!(b.get(e0).unwrap(), &B(0));
@@ -296,7 +296,7 @@ mod tests {
     }
 
     /// Asserts that iterating grouped storages yields the same components as before grouping,
-    /// since nothing reads the ranges yet.
+    /// in any order since regroup can reorder them and iteration doesn't read the ranges yet.
     #[test]
     fn iteration() {
         let mut world = World::new();
@@ -307,7 +307,9 @@ mod tests {
 
         let collect = |world: &World| {
             let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-            (&a, &b).iter().map(|(a, b)| (a.0, b.0)).collect::<Vec<_>>()
+            let mut items = (&a, &b).iter().map(|(a, b)| (a.0, b.0)).collect::<Vec<_>>();
+            items.sort_unstable();
+            items
         };
 
         let before = collect(&world);

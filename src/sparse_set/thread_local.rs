@@ -3,7 +3,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::sparse_set::{sparse_array::SparseArray, Groups, SparseSet};
+use crate::sparse_set::{sparse_array::SparseArray, GroupRegion, Groups, SparseSet};
 use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::tracking::TrackingTimestamp;
 
@@ -120,6 +120,11 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
     fn dense(&self) -> Option<&[EntityId]> {
         Some(&self.dense)
     }
+
+    #[track_caller]
+    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        self.private_move_to(entity, destination);
+    }
 }
 
 impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
@@ -233,6 +238,11 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
 
     fn dense(&self) -> Option<&[EntityId]> {
         Some(&self.dense)
+    }
+
+    #[track_caller]
+    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        self.private_move_to(entity, destination);
     }
 }
 
@@ -350,5 +360,10 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
 
     fn dense(&self) -> Option<&[EntityId]> {
         Some(&self.dense)
+    }
+
+    #[track_caller]
+    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        self.private_move_to(entity, destination);
     }
 }
