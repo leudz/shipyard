@@ -3,6 +3,7 @@ mod bulk_add_entity;
 mod clone;
 mod delete;
 mod drain;
+mod groups;
 mod memory_usage;
 mod remove;
 mod sparse_array;
@@ -14,6 +15,8 @@ pub use add_component::TupleAddComponent;
 pub use bulk_add_entity::BulkAddEntity;
 pub use delete::TupleDelete;
 pub use drain::SparseSetDrain;
+#[doc(hidden)]
+pub use groups::Groups;
 pub use memory_usage::{SparseSetMemory, SparseSetMemoryUsage};
 pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
@@ -68,6 +71,7 @@ pub struct SparseSet<T: Component> {
     #[allow(clippy::type_complexity)]
     on_removal: Option<Box<dyn FnMut(EntityId, &T) + Send + Sync>>,
     clone: Option<SparseSetCloneFunctions<T>>,
+    pub(crate) groups: Groups,
 }
 
 impl<T: fmt::Debug + Component> fmt::Debug for SparseSet<T> {
@@ -98,6 +102,7 @@ impl<T: Component> SparseSet<T> {
             on_insertion: None,
             on_removal: None,
             clone: None,
+            groups: Groups::default(),
         }
     }
     /// Returns a new [`SparseSet`] to be used in custom storage.
@@ -316,6 +321,9 @@ impl<T: Component> SparseSet<T> {
             }
 
             dense_entity.copy_index_gen(entity);
+
+            // A different entity now sits in this slot, so a range holding it isn't aligned anymore.
+            self.reset_groups();
         } else {
             old_component = InsertionResult::NotInserted;
         }
@@ -356,6 +364,8 @@ impl<T: Component> SparseSet<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
         if entity.gen() >= sparse_entity.gen() {
+            self.reset_groups();
+
             unsafe {
                 *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
             }
@@ -391,6 +401,22 @@ impl<T: Component> SparseSet<T> {
         } else {
             None
         }
+    }
+
+    /// Makes the whole storage unevaluated if it has any group range.
+    ///
+    /// Called before any mutation that changes the layout of the storage, see [`Groups::reset`].
+    #[inline]
+    fn reset_groups(&mut self) {
+        // Most storages have no group, we keep their cost to this single branch.
+        if !self.groups.has_ranges() {
+            return;
+        }
+
+        self.groups.reset();
+
+        #[cfg(debug_assertions)]
+        self.groups.assert_invariants(self.dense.len());
     }
 }
 
@@ -551,6 +577,8 @@ impl<T: Component> SparseSet<T> {
     }
     /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
     pub fn sort_unstable_by<F: FnMut(&T, &T) -> Ordering>(&mut self, mut compare: F) {
+        self.reset_groups();
+
         let mut transform: Vec<usize> = (0..self.dense.len()).collect();
 
         transform.sort_unstable_by(|&i, &j| {
@@ -672,6 +700,8 @@ impl<T: Component> SparseSet<T> {
 
     /// Deletes all components in this storage.
     pub(crate) fn private_clear(&mut self, current: TrackingTimestamp) {
+        self.reset_groups();
+
         for &id in &self.dense {
             unsafe {
                 *self.sparse.get_mut_unchecked(id) = EntityId::dead();
@@ -696,6 +726,8 @@ impl<T: Component> SparseSet<T> {
 
     /// Creates a draining iterator that empties the storage and yields the removed items.
     pub(crate) fn private_drain(&mut self, current: TrackingTimestamp) -> SparseSetDrain<'_, T> {
+        self.reset_groups();
+
         if self.is_tracking_removal {
             self.removal_data
                 .extend(self.dense.iter().map(|&entity| (entity, current)));
@@ -879,12 +911,26 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
             }
         }
     }
+
+    fn groups(&self) -> Option<&Groups> {
+        Some(&self.groups)
+    }
+
+    fn groups_mut(&mut self) -> Option<&mut Groups> {
+        Some(&mut self.groups)
+    }
+
+    fn dense(&self) -> Option<&[EntityId]> {
+        Some(&self.dense)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::groups::GroupRange;
     use super::*;
     use crate::Component;
+    use alloc::sync::Arc;
     use std::println;
 
     #[derive(PartialEq, Eq, Debug)]
@@ -1383,5 +1429,203 @@ mod tests {
 
         assert_eq!(sparse_set.insertion_data.len(), 1);
         assert_eq!(sparse_set.modification_data.len(), 1);
+    }
+
+    /// Builds a storage with entities 0, 1 and 2, all placed in a single fully trusted group range.
+    fn grouped_sparse_set() -> SparseSet<I32> {
+        let mut sparse_set = SparseSet::new();
+        for index in 0..3 {
+            sparse_set
+                .insert(
+                    EntityId::new_from_parts(index, 0),
+                    I32(index as i32),
+                    TrackingTimestamp::new(0),
+                )
+                .assert_inserted();
+        }
+
+        sparse_set.groups.ranges.push(GroupRange {
+            group: Arc::from([StorageId::Custom(0), StorageId::Custom(1)]),
+            start: 0,
+            len: 3,
+            shift: 0,
+            trust: 3,
+        });
+        sparse_set.groups.unevaluated_start = 3;
+
+        sparse_set
+    }
+
+    fn assert_reset(groups: &Groups) {
+        assert_eq!(groups.ranges.len(), 1);
+        assert_eq!(groups.ranges[0].start, 0);
+        assert_eq!(groups.ranges[0].len, 0);
+        assert_eq!(groups.ranges[0].trust, 0);
+        assert_eq!(groups.unevaluated_start, 0);
+    }
+
+    fn assert_untouched(groups: &Groups) {
+        assert_eq!(groups.ranges.len(), 1);
+        assert_eq!(groups.ranges[0].start, 0);
+        assert_eq!(groups.ranges[0].len, 3);
+        assert_eq!(groups.ranges[0].trust, 3);
+        assert_eq!(groups.unevaluated_start, 3);
+    }
+
+    /// Asserts that removing a component from a grouped storage resets its groups.
+    #[test]
+    fn groups_remove() {
+        let mut sparse_set = grouped_sparse_set();
+
+        let removed =
+            sparse_set.dyn_remove(EntityId::new_from_parts(1, 0), TrackingTimestamp::new(0));
+
+        assert_eq!(removed, Some(I32(1)));
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that deleting a component from a grouped storage resets its groups.
+    #[test]
+    fn groups_delete() {
+        let mut sparse_set = grouped_sparse_set();
+
+        let deleted =
+            sparse_set.dyn_delete(EntityId::new_from_parts(1, 0), TrackingTimestamp::new(0));
+
+        assert!(deleted);
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that `retain` removing a single component from a grouped storage resets its groups.
+    #[test]
+    fn groups_retain() {
+        let mut sparse_set = grouped_sparse_set();
+
+        sparse_set.private_retain(TrackingTimestamp::new(0), |_, component| component.0 != 1);
+
+        assert_eq!(sparse_set.len(), 2);
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that inserting over the slot of an entity with a smaller generation
+    /// resets the storage's groups, since a different entity now sits in the range.
+    #[test]
+    fn groups_other_override() {
+        let mut sparse_set = grouped_sparse_set();
+
+        let result = sparse_set.insert(
+            EntityId::new_from_parts(1, 1),
+            I32(10),
+            TrackingTimestamp::new(0),
+        );
+
+        assert!(matches!(result, InsertionResult::OtherComponentOverride));
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that sorting a grouped storage resets its groups.
+    #[test]
+    fn groups_sort() {
+        let mut sparse_set = grouped_sparse_set();
+
+        sparse_set.sort_unstable();
+
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that clearing a grouped storage resets its groups.
+    #[test]
+    fn groups_clear() {
+        let mut sparse_set = grouped_sparse_set();
+
+        sparse_set.private_clear(TrackingTimestamp::new(0));
+
+        assert!(sparse_set.is_empty());
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that draining a grouped storage resets its groups.
+    #[test]
+    fn groups_drain() {
+        let mut sparse_set = grouped_sparse_set();
+
+        sparse_set.private_drain(TrackingTimestamp::new(0));
+
+        assert!(sparse_set.is_empty());
+        assert_reset(&sparse_set.groups);
+    }
+
+    /// Asserts that inserting a new entity in a grouped storage leaves its groups untouched,
+    /// the component lands in the unevaluated region.
+    #[test]
+    fn groups_insert_new() {
+        let mut sparse_set = grouped_sparse_set();
+
+        sparse_set
+            .insert(
+                EntityId::new_from_parts(3, 0),
+                I32(3),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+
+        assert_eq!(sparse_set.len(), 4);
+        assert_untouched(&sparse_set.groups);
+    }
+
+    /// Asserts that overwriting an entity's component in a grouped storage leaves its groups untouched.
+    #[test]
+    fn groups_insert_same() {
+        let mut sparse_set = grouped_sparse_set();
+
+        let result = sparse_set.insert(
+            EntityId::new_from_parts(1, 0),
+            I32(10),
+            TrackingTimestamp::new(0),
+        );
+
+        assert!(matches!(result, InsertionResult::ComponentOverride(I32(1))));
+        assert_untouched(&sparse_set.groups);
+    }
+
+    /// Asserts that a `SparseSet` exposes its grouping metadata and entities through `Storage`,
+    /// with `dense` listing the inserted entities in order.
+    #[test]
+    fn storage_groups() {
+        let mut sparse_set = SparseSet::new();
+        sparse_set
+            .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(5), I32(5), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        assert!(Storage::groups(&sparse_set).is_some());
+        assert!(Storage::groups_mut(&mut sparse_set).is_some());
+        assert_eq!(
+            Storage::dense(&sparse_set),
+            Some(&[EntityId::new(0), EntityId::new(5)][..])
+        );
+    }
+
+    /// Asserts that a `NonSend` `SparseSet` exposes its grouping metadata and entities through `Storage`,
+    /// with `dense` listing the inserted entities in order.
+    #[cfg(feature = "thread_local")]
+    #[test]
+    fn storage_groups_non_send() {
+        let mut sparse_set = crate::borrow::NonSend(SparseSet::new());
+        sparse_set
+            .insert(EntityId::new(0), I32(0), TrackingTimestamp::new(0))
+            .assert_inserted();
+        sparse_set
+            .insert(EntityId::new(5), I32(5), TrackingTimestamp::new(0))
+            .assert_inserted();
+
+        assert!(Storage::groups(&sparse_set).is_some());
+        assert!(Storage::groups_mut(&mut sparse_set).is_some());
+        assert_eq!(
+            Storage::dense(&sparse_set),
+            Some(&[EntityId::new(0), EntityId::new(5)][..])
+        );
     }
 }

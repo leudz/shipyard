@@ -1,6 +1,7 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::{MemoryUsageDetail, StorageMemoryUsage};
+use crate::sparse_set::groups::GroupRange;
 use crate::sparse_set::SparseSet;
 use crate::tracking::TrackingTimestamp;
 use core::any::type_name;
@@ -25,6 +26,7 @@ impl<T: Component> SparseSet<T> {
             + (self.modification_data.capacity() * size_of::<TrackingTimestamp>())
             + (self.deletion_data.capacity() * size_of::<(EntityId, TrackingTimestamp, T)>())
             + (self.removal_data.capacity() * size_of::<(EntityId, TrackingTimestamp)>())
+            + (self.groups.ranges.capacity() * size_of::<GroupRange>())
             + size_of::<Self>()
     }
 
@@ -36,6 +38,7 @@ impl<T: Component> SparseSet<T> {
             + (self.modification_data.len() * size_of::<TrackingTimestamp>())
             + (self.deletion_data.len() * size_of::<(EntityId, TrackingTimestamp, T)>())
             + (self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>())
+            + (self.groups.ranges.len() * size_of::<GroupRange>())
             + size_of::<Self>()
     }
 }
@@ -75,6 +78,8 @@ pub struct SparseSetMemory {
     pub deletion_data: usize,
     #[allow(missing_docs)]
     pub removal_data: usize,
+    /// Group ranges metadata. Group member lists are shared between storages and not counted.
+    pub groups: usize,
     #[allow(missing_docs)]
     pub itself: usize,
 }
@@ -82,8 +87,8 @@ pub struct SparseSetMemory {
 impl fmt::Debug for SparseSetMemory {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
-            "(sparse: {}, dense: {}, data: {}, insertion: {}, modification: {}, deletion: {}, removal: {}, self: {})",
-            self.sparse, self.dense, self.data, self.insertion_data, self.modification_data, self.deletion_data, self.removal_data, self.itself
+            "(sparse: {}, dense: {}, data: {}, insertion: {}, modification: {}, deletion: {}, removal: {}, groups: {}, self: {})",
+            self.sparse, self.dense, self.data, self.insertion_data, self.modification_data, self.deletion_data, self.removal_data, self.groups, self.itself
         ))
     }
 }
@@ -105,6 +110,7 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                     * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.capacity()
                     * size_of::<(EntityId, TrackingTimestamp)>(),
+                groups: self.groups.ranges.capacity() * size_of::<GroupRange>(),
                 itself: size_of::<SparseSet<T>>(),
             },
             used: SparseSetMemory {
@@ -116,6 +122,7 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
                 deletion_data: self.deletion_data.len()
                     * size_of::<(EntityId, TrackingTimestamp, T)>(),
                 removal_data: self.removal_data.len() * size_of::<(EntityId, TrackingTimestamp)>(),
+                groups: self.groups.ranges.len() * size_of::<GroupRange>(),
                 itself: size_of::<SparseSet<T>>(),
             },
         }
@@ -125,7 +132,8 @@ impl<T: Component> MemoryUsageDetail for SparseSet<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::Storage;
+    use crate::storage::{Storage, StorageId};
+    use alloc::sync::Arc;
 
     #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
     struct I32(i32);
@@ -179,6 +187,7 @@ mod tests {
         let expected_modification_tracking_memory = 1 * size_of::<TrackingTimestamp>();
         let expected_deletion_tracking_memory = 1 * size_of::<(EntityId, TrackingTimestamp, I32)>();
         let expected_removal_tracking_memory = 1 * size_of::<(EntityId, TrackingTimestamp)>();
+        let expected_groups_memory = 0;
         let expected_self_memory = size_of::<SparseSet<I32>>();
         let expected_total_memory = expected_sparse_memory
             + expected_dense_memory
@@ -187,6 +196,7 @@ mod tests {
             + expected_modification_tracking_memory
             + expected_deletion_tracking_memory
             + expected_removal_tracking_memory
+            + expected_groups_memory
             + expected_self_memory;
 
         let memory_usage = sparse_set.private_memory_usage();
@@ -281,6 +291,7 @@ mod tests {
                 + detailed_usage.used.modification_data
                 + detailed_usage.used.deletion_data
                 + detailed_usage.used.removal_data
+                + detailed_usage.used.groups
                 + detailed_usage.used.itself)
         );
         assert_eq!(
@@ -292,6 +303,7 @@ mod tests {
                 + detailed_usage.allocated.modification_data
                 + detailed_usage.allocated.deletion_data
                 + detailed_usage.allocated.removal_data
+                + detailed_usage.allocated.groups
                 + detailed_usage.allocated.itself)
         );
 
@@ -325,5 +337,32 @@ mod tests {
         );
         assert_eq!(detailed_usage.used.deletion_data, expected_deletion_used);
         assert_eq!(detailed_usage.used.removal_data, expected_removal_used);
+        assert_eq!(detailed_usage.used.groups, 0);
+    }
+
+    /// Asserts that one attached group range is reported as used memory,
+    /// and that the detailed and total reports agree.
+    #[test]
+    fn groups_memory_usage() {
+        let mut sparse_set = SparseSet::<I32>::new();
+        sparse_set.groups.ranges.push(GroupRange {
+            group: Arc::from([StorageId::Custom(0), StorageId::Custom(1)]),
+            start: 0,
+            len: 0,
+            shift: 0,
+            trust: 0,
+        });
+
+        let detailed_usage = sparse_set.detailed_memory_usage();
+
+        assert_eq!(detailed_usage.used.groups, size_of::<GroupRange>());
+        assert_eq!(
+            detailed_usage.allocated.groups,
+            sparse_set.groups.ranges.capacity() * size_of::<GroupRange>()
+        );
+        assert_eq!(
+            detailed_usage.base.used_memory_bytes,
+            sparse_set.sparse.used_memory() + size_of::<GroupRange>() + size_of::<SparseSet<I32>>()
+        );
     }
 }

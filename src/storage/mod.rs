@@ -9,7 +9,7 @@ pub(crate) use sbox::SBox;
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::sparse_set::SparseArray;
+use crate::sparse_set::{Groups, SparseArray};
 use crate::tracking::TrackingTimestamp;
 use alloc::borrow::Cow;
 use core::any::Any;
@@ -118,5 +118,26 @@ pub trait Storage: SizedAny {
         to: EntityId,
         other_current: TrackingTimestamp,
     ) {
+    }
+
+    /// Returns the storage's grouping metadata, if it supports grouping.
+    #[doc(hidden)]
+    #[inline]
+    fn groups(&self) -> Option<&Groups> {
+        None
+    }
+
+    /// Returns the storage's grouping metadata, if it supports grouping.
+    #[doc(hidden)]
+    #[inline]
+    fn groups_mut(&mut self) -> Option<&mut Groups> {
+        None
+    }
+
+    /// Returns the `EntityId` of every component, in physical order, if the storage supports grouping.
+    #[doc(hidden)]
+    #[inline]
+    fn dense(&self) -> Option<&[EntityId]> {
+        None
     }
 }
