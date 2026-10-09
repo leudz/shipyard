@@ -2,10 +2,13 @@ mod builder;
 mod clone;
 mod custom_storage;
 mod delete_any;
+mod group;
 mod retain;
 
 pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
+#[doc(hidden)]
+pub use group::{GroupMember, TupleGroup};
 pub use retain::TupleRetainStorage;
 
 pub(crate) use builder::AllStoragesBuilder;
@@ -26,7 +29,9 @@ use crate::memory_usage::AllStoragesMemoryUsage;
 use crate::public_transport::RwLock;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
-use crate::sparse_set::{BulkAddEntity, SparseSet, TupleAddComponent, TupleDelete, TupleRemove};
+use crate::sparse_set::{
+    BulkAddEntity, Groups, SparseSet, TupleAddComponent, TupleDelete, TupleRemove,
+};
 #[cfg(feature = "thread_local")]
 use crate::std_thread_id_generator;
 use crate::storage::{SBox, Storage, StorageId};
@@ -37,6 +42,7 @@ use crate::views::EntitiesViewMut;
 use crate::{error, ShipHashMap};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::any::type_name;
 use core::sync::atomic::AtomicU64;
 use hashbrown::hash_map::Entry;
@@ -1270,6 +1276,58 @@ let i = all_storages.run(sys1);
         T::track_all(self);
     }
 
+    /// Declares a group made of the given storages, creating the ones that don't exist yet.
+    ///
+    /// Declaring a group that already exists does nothing.
+    ///
+    /// ### Panics
+    ///
+    /// - The same storage is listed twice.
+    /// - A storage already belongs to another group.
+    #[doc(hidden)]
+    #[track_caller]
+    pub fn group<G: TupleGroup>(&mut self) -> &mut AllStorages {
+        G::get_or_insert_storages(self);
+        self.group_by_id(G::storage_ids());
+        self
+    }
+
+    /// Attaches an empty range for the group made of `ids` to every member.
+    ///
+    /// Every member storage must already exist.
+    #[track_caller]
+    fn group_by_id(&mut self, mut ids: Vec<StorageId>) {
+        // Sorted ids are the group's identity, `(A, B)` and `(B, A)` are the same group.
+        ids.sort_unstable();
+
+        assert!(
+            ids.windows(2).all(|pair| pair[0] != pair[1]),
+            "a group cannot contain identical storages"
+        );
+
+        let storages = self.storages.get_mut();
+
+        // Every member holds a range for each of its groups, so checking one member is enough.
+        if member_groups(storages, ids[0])
+            .find_by_value(&ids)
+            .is_some()
+        {
+            return;
+        }
+
+        for &storage_id in &ids {
+            assert!(
+                !member_groups(storages, storage_id).has_ranges(),
+                "a storage can only belong to one group for now"
+            );
+        }
+
+        let group: Arc<[StorageId]> = Arc::from(ids);
+        for &storage_id in group.iter() {
+            member_groups(storages, storage_id).attach(group.clone(), storage_id);
+        }
+    }
+
     #[doc = "Retrieve components of `entity`.
 
 Multiple components can be queried at the same time using a tuple.
@@ -1769,6 +1827,30 @@ for (i, j) in &mut iter {
                 .clone_component_to(other_all_storages, from, to, other_current);
         }
     }
+}
+
+/// Returns the grouping metadata of the storage stored under `storage_id`.
+///
+/// ### Panics
+///
+/// - The storage doesn't exist.
+/// - The storage doesn't support grouping.
+#[track_caller]
+fn member_groups(
+    storages: &mut ShipHashMap<StorageId, SBox>,
+    storage_id: StorageId,
+) -> &mut Groups {
+    let sbox = storages
+        .get_mut(&storage_id)
+        .expect("group members are created before being grouped");
+
+    // SAFE: `sbox.0` comes from a `Box` that lives as long as its entry in the map,
+    // and we borrow the map mutably for the whole lifetime of the returned reference,
+    // so no other reference to this storage can exist.
+    unsafe { &mut *sbox.0 }
+        .get_mut()
+        .groups_mut()
+        .expect("grouping only supports SparseSet storages")
 }
 
 impl core::fmt::Debug for AllStorages {

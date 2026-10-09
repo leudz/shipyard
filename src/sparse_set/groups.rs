@@ -16,7 +16,7 @@ use core::ops::Range;
 #[derive(Default)]
 pub struct Groups {
     /// This storage's own id.
-    #[allow(dead_code, reason = "Read once groups can be declared.")]
+    #[allow(dead_code, reason = "Read once regroup lands.")]
     pub(crate) storage_id: Option<StorageId>,
     /// In physical order, contiguous from index 0.
     pub(crate) ranges: Vec<GroupRange>,
@@ -95,6 +95,33 @@ impl Groups {
             .find(|range| Arc::ptr_eq(&range.group, group))
     }
 
+    /// Attaches an empty range for `group` after the last range.
+    ///
+    /// No component moves. Components that were never grouped stay in the unevaluated region.
+    pub(crate) fn attach(&mut self, group: Arc<[StorageId]>, storage_id: StorageId) {
+        let start = self.grouped_end();
+
+        self.ranges.push(GroupRange {
+            group,
+            start,
+            len: 0,
+            shift: 0,
+            trust: 0,
+        });
+        self.storage_id = Some(storage_id);
+    }
+
+    /// Returns the group of a range whose member ids are equal to `ids`.
+    ///
+    /// This compares by value and is only meant to detect duplicate declarations.\
+    /// Everywhere else groups are compared by pointer.
+    pub(crate) fn find_by_value(&self, ids: &[StorageId]) -> Option<&Arc<[StorageId]>> {
+        self.ranges
+            .iter()
+            .map(|range| &range.group)
+            .find(|group| group[..] == *ids)
+    }
+
     /// Makes the whole storage unevaluated, without moving any component.
     ///
     /// Ranges stay attached, so group definitions survive.
@@ -131,6 +158,12 @@ impl Groups {
 
             previous_end = range.end();
         }
+
+        // Temporary until ranges become rings and storages can hold several of them.
+        assert!(
+            self.ranges.len() <= 1,
+            "a storage can only belong to one group for now"
+        );
 
         if self.ranges.is_empty() {
             assert_eq!(
@@ -285,13 +318,56 @@ mod tests {
         assert_eq!(groups.storage_id, Some(StorageId::Custom(0)));
     }
 
+    /// Asserts that `attach` on a storage without ranges adds an empty range at index 0,
+    /// keeps every component unevaluated and records the storage's id.
+    #[test]
+    fn attach() {
+        let ab = group(&[0, 1]);
+        let mut groups = Groups::default();
+
+        groups.attach(ab.clone(), StorageId::Custom(0));
+
+        assert_eq!(groups.ranges.len(), 1);
+        assert!(Arc::ptr_eq(&groups.ranges[0].group, &ab));
+        assert_eq!(groups.ranges[0].start, 0);
+        assert_eq!(groups.ranges[0].len, 0);
+        assert_eq!(groups.ranges[0].shift, 0);
+        assert_eq!(groups.ranges[0].trust, 0);
+        assert_eq!(groups.unevaluated_start, 0);
+        assert_eq!(groups.storage_id, Some(StorageId::Custom(0)));
+    }
+
+    /// Asserts that `find_by_value` matches an equal group that was allocated separately.
+    #[test]
+    fn find_by_value() {
+        let ab = group(&[0, 1]);
+        let mut groups = Groups::default();
+        groups.attach(ab.clone(), StorageId::Custom(0));
+
+        let other_ab = [StorageId::Custom(0), StorageId::Custom(1)];
+
+        assert!(Arc::ptr_eq(groups.find_by_value(&other_ab).unwrap(), &ab));
+    }
+
+    /// Asserts that `find_by_value` doesn't match a different group.
+    #[test]
+    fn find_by_value_other() {
+        let mut groups = Groups::default();
+        groups.attach(group(&[0, 1]), StorageId::Custom(0));
+
+        let ac = [StorageId::Custom(0), StorageId::Custom(2)];
+
+        assert!(groups.find_by_value(&ac).is_none());
+    }
+
     #[cfg(debug_assertions)]
     mod invariants {
         use super::*;
 
-        /// Asserts that two ranges placed back to back from index 0 are accepted.
+        /// Asserts that two ranges are rejected while a storage can only belong to one group.
         #[test]
-        fn tiling() {
+        #[should_panic(expected = "a storage can only belong to one group for now")]
+        fn two_ranges() {
             let ab = group(&[0, 1]);
             let ac = group(&[0, 2]);
             let groups = Groups {

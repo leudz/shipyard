@@ -4,7 +4,7 @@ mod run_batches;
 pub use builder::WorldBuilder;
 
 use crate::all_storages::{
-    AllStorages, CustomStorageAccess, TupleClone, TupleDeleteAny, TupleRetainStorage,
+    AllStorages, CustomStorageAccess, TupleClone, TupleDeleteAny, TupleGroup, TupleRetainStorage,
 };
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
@@ -1310,6 +1310,21 @@ impl World {
     #[track_caller]
     pub fn track_all<T: TupleTrack>(&mut self) {
         self.all_storages.get_mut().track_all::<T>();
+    }
+
+    /// Declares a group made of the given storages, creating the ones that don't exist yet.
+    ///
+    /// Declaring a group that already exists does nothing.
+    ///
+    /// ### Panics
+    ///
+    /// - The same storage is listed twice.
+    /// - A storage already belongs to another group.
+    #[doc(hidden)]
+    #[track_caller]
+    pub fn group<G: TupleGroup>(&mut self) -> &mut World {
+        self.all_storages.get_mut().group::<G>();
+        self
     }
 
     #[doc = "Retrieve components of `entity`.
