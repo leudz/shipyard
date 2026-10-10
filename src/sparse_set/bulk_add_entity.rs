@@ -84,14 +84,16 @@ impl<T: Send + Sync + Component> BulkInsert for T {
 
         // add tracking info if needed
         if sparse_set.is_tracking_insertion() {
-            sparse_set
-                .insertion_data
-                .extend(new_entities.iter().map(|_| current));
+            let new_len = sparse_set.insertion_data.len() + new_entities.len();
+
+            sparse_set.insertion_data.resize(new_len, current);
         }
         if sparse_set.is_tracking_modification() {
+            let new_len = sparse_set.modification_data.len() + new_entities.len();
+
             sparse_set
                 .modification_data
-                .extend(new_entities.iter().map(|_| TrackingTimestamp::origin()));
+                .resize(new_len, TrackingTimestamp::origin());
         }
 
         let SparseSet { sparse, dense, .. } = &mut *sparse_set;
@@ -131,6 +133,7 @@ macro_rules! impl_bulk_insert {
             fn bulk_insert<Source: IntoIterator<Item = Self>>(all_storages: &mut AllStorages, iter: Source) -> BulkEntityIter<'_> {
                 let iter = iter.into_iter();
                 let size_hint = iter.size_hint().0;
+                let current = all_storages.get_current();
                 let mut entities = all_storages.entities_mut().unwrap();
                 let mut $sparse_set1 = all_storages.custom_storage_or_insert_mut(SparseSet::<$type1>::new).unwrap();
                 $(
@@ -159,17 +162,25 @@ macro_rules! impl_bulk_insert {
                 )*
 
                 if $sparse_set1.is_tracking_insertion() {
-                    $sparse_set1.insertion_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                    let new_len = $sparse_set1.insertion_data.len() + new_entities.len();
+
+                    $sparse_set1.insertion_data.resize(new_len, current);
                 }
                 if $sparse_set1.is_tracking_modification() {
-                    $sparse_set1.modification_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                    let new_len = $sparse_set1.modification_data.len() + new_entities.len();
+
+                    $sparse_set1.modification_data.resize(new_len, TrackingTimestamp::origin());
                 }
                 $(
                     if $sparse_set.is_tracking_insertion() {
-                        $sparse_set.insertion_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                        let new_len = $sparse_set.insertion_data.len() + new_entities.len();
+
+                        $sparse_set.insertion_data.resize(new_len, current);
                     }
                     if $sparse_set.is_tracking_modification() {
-                        $sparse_set.modification_data.extend(new_entities.iter().map(|_| TrackingTimestamp::new(0)));
+                        let new_len = $sparse_set.modification_data.len() + new_entities.len();
+
+                        $sparse_set.modification_data.resize(new_len, TrackingTimestamp::origin());
                     }
                 )*
 

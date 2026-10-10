@@ -172,3 +172,25 @@ fn bulk() {
     assert_eq!(u32s.len(), 10);
     assert_eq!(usizes.len(), 10);
 }
+
+/// Asserts that bulk adding entities with multiple components marks every component as inserted
+/// in each storage.
+#[test]
+fn bulk_inserted() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::new();
+    world.track_insertion::<(U32, USIZE)>();
+
+    world.bulk_add_entity((0..5).map(|i| (U32(i), USIZE(i as usize))));
+
+    let (u32s, usizes) = world
+        .borrow::<(View<U32, track::Insertion>, View<USIZE, track::Insertion>)>()
+        .unwrap();
+    assert_eq!(u32s.inserted().iter().count(), 5);
+    assert_eq!(usizes.inserted().iter().count(), 5);
+}
