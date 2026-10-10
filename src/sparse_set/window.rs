@@ -61,7 +61,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
             ..
         } = view;
 
-        let sparse_len = sparse_set.len();
+        let sparse_len = sparse_set.sparse.len();
         let sparse: *const Option<Box<Page>> = sparse_set.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
 
@@ -215,7 +215,7 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
             ..
         } = view;
 
-        let sparse_len = sparse_set.len();
+        let sparse_len = sparse_set.sparse.len();
         let sparse: *mut Option<Box<Page>> = sparse_set.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
 

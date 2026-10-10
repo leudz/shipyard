@@ -284,6 +284,36 @@ fn world_iter_correct_borrow() {
     }
 }
 
+/// Asserts that `World::iter` over shared views yields an entity living past the first sparse page
+/// even when the storages hold fewer components than they have sparse pages.
+#[test]
+fn world_iter_far_entity() {
+    let mut world = World::new();
+
+    // 512 entities fill the first sparse page, even without `memory_constrained`,
+    // so the next entity lands on a later page.
+    world.bulk_add_entity((0..512).map(|_| ()));
+    world.add_entity((USIZE(0), U32(0)));
+
+    let mut iter = world.iter::<(&USIZE, &U32)>();
+    assert_eq!(iter.into_iter().count(), 1);
+}
+
+/// Asserts that `World::iter` over exclusive views yields an entity living past the first sparse page
+/// even when the storages hold fewer components than they have sparse pages.
+#[test]
+fn world_iter_mut_far_entity() {
+    let mut world = World::new();
+
+    // 512 entities fill the first sparse page, even without `memory_constrained`,
+    // so the next entity lands on a later page.
+    world.bulk_add_entity((0..512).map(|_| ()));
+    world.add_entity((USIZE(0), U32(0)));
+
+    let mut iter = world.iter::<(&mut USIZE, &mut U32)>();
+    assert_eq!(iter.into_iter().count(), 1);
+}
+
 // #[test]
 // fn chunk() {
 //     let mut world = World::new();
