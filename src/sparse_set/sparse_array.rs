@@ -15,8 +15,8 @@ pub(crate) const BUCKET_SIZE: usize = 4096 / size_of::<EntityId>();
 #[derive(Clone)]
 pub struct SparseArray(Vec<Option<Box<Page>>>);
 
-#[cfg_attr(feature = "memory_constrained", repr(align(256)))]
-#[cfg_attr(not(feature = "memory_constrained"), repr(align(4096)))]
+#[cfg_attr(feature = "memory_constrained", repr(C, align(256)))]
+#[cfg_attr(not(feature = "memory_constrained"), repr(C, align(4096)))]
 #[derive(Clone)]
 pub(crate) struct Page([EntityId; BUCKET_SIZE]);
 
