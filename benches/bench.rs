@@ -4,10 +4,10 @@ use shipyard::{
 };
 use std::hint::black_box;
 
-const ENTITY_COUNT: usize = 1_000_000;
-const PARTIAL_VELOCITY_COUNT: usize = 100_000;
-const DEAD_COUNT: usize = 100_000;
-const CHURN_COUNT: usize = 100_000;
+const ENTITY_COUNT: usize = 100_000;
+const PARTIAL_VELOCITY_COUNT: usize = 10_000;
+const DEAD_COUNT: usize = 10_000;
+const CHURN_COUNT: usize = 10_000;
 
 #[derive(Component, Clone, Copy)]
 struct Position(f32, f32);
