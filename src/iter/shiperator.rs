@@ -296,6 +296,10 @@ where
 
     #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-        index.map(|index| self.0.get_data(index))
+        if let Some(index) = index {
+            Some(self.0.get_data(index))
+        } else {
+            None
+        }
     }
 }

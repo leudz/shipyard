@@ -80,12 +80,12 @@ impl<'a, 'b, T: Component, Track: Tracking> Get for &'b mut ViewMut<'a, T, Track
 
     #[inline]
     fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-        let index = self
-            .index_of(entity)
-            .ok_or_else(|| error::MissingComponent {
+        let Some(index) = self.index_of(entity) else {
+            return Err(error::MissingComponent {
                 id: entity,
                 name: type_name::<T>(),
-            })?;
+            });
+        };
 
         let SparseSet {
             data,
@@ -107,9 +107,15 @@ macro_rules! impl_get_component {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Get),+> Get for ($($type,)+) {
             type Out = ($($type::Out,)+);
+
             #[inline]
             fn get(self, entity: EntityId) -> Result<Self::Out, error::MissingComponent> {
-                Ok(($(self.$index.get(entity)?,)+))
+                Ok(($({
+                    match self.$index.get(entity) {
+                        Ok(component) => component,
+                        Err(err) => return Err(err)
+                    }
+                },)+))
             }
         }
     }

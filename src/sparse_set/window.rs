@@ -107,13 +107,15 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
 
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
-        self.sparse_index(entity).and_then(|sparse_entity| {
+        if let Some(sparse_entity) = self.sparse_index(entity) {
             if entity.gen() == sparse_entity.gen() {
                 Some(sparse_entity.uindex())
             } else {
                 None
             }
-        })
+        } else {
+            None
+        }
     }
 
     #[inline]
@@ -241,13 +243,15 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
 
     #[inline]
     pub(crate) fn index_of(&self, entity: EntityId) -> Option<usize> {
-        self.sparse_index(entity).and_then(|sparse_entity| {
+        if let Some(sparse_entity) = self.sparse_index(entity) {
             if entity.gen() == sparse_entity.gen() {
                 Some(sparse_entity.uindex())
             } else {
                 None
             }
-        })
+        } else {
+            None
+        }
     }
 
     #[inline]

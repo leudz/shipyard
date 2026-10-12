@@ -135,13 +135,15 @@ impl<T: Component> SparseSet<T> {
     /// This index is only valid for this storage and until a modification happens.
     #[inline]
     pub fn index_of(&self, entity: EntityId) -> Option<usize> {
-        self.sparse.get(entity).and_then(|sparse_entity| {
+        if let Some(sparse_entity) = self.sparse.get(entity) {
             if entity.gen() == sparse_entity.gen() {
                 Some(sparse_entity.uindex())
             } else {
                 None
             }
-        })
+        } else {
+            None
+        }
     }
     /// Returns the index of `entity`'s component in the `dense` and `data` vectors.  
     /// This index is only valid for this storage and until a modification happens.
@@ -188,8 +190,11 @@ impl<T: Component> SparseSet<T> {
 
     #[inline]
     pub(crate) fn private_get(&self, entity: EntityId) -> Option<&T> {
-        self.index_of(entity)
-            .map(|index| unsafe { self.data.get_unchecked(index) })
+        if let Some(index) = self.index_of(entity) {
+            Some(unsafe { self.data.get_unchecked(index) })
+        } else {
+            None
+        }
     }
 }
 

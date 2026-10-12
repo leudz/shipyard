@@ -1380,11 +1380,14 @@ assert!(*j == &U32(1));
         entity: EntityId,
     ) -> Result<T::Out<'_>, error::GetComponent> {
         let (all_storages, all_borrow) = unsafe {
-            ARef::destructure(
-                self.all_storages
-                    .borrow()
-                    .map_err(error::GetStorage::AllStoragesBorrow)?,
-            )
+            ARef::destructure(match self.all_storages.borrow() {
+                Ok(all_storages) => all_storages,
+                Err(err) => {
+                    return Err(error::GetComponent::StorageBorrow(
+                        error::GetStorage::AllStoragesBorrow(err),
+                    ))
+                }
+            })
         };
 
         let current = self.get_current();
@@ -1450,11 +1453,10 @@ assert!(*i == U32(0));
     #[inline]
     pub fn get_unique<T: GetUnique>(&self) -> Result<T::Out<'_>, error::GetStorage> {
         let (all_storages, all_borrow) = unsafe {
-            ARef::destructure(
-                self.all_storages
-                    .borrow()
-                    .map_err(error::GetStorage::AllStoragesBorrow)?,
-            )
+            ARef::destructure(match self.all_storages.borrow() {
+                Ok(all_storages) => all_storages,
+                Err(err) => return Err(error::GetStorage::AllStoragesBorrow(err)),
+            })
         };
 
         T::get_unique(all_storages, Some(all_borrow))

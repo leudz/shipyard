@@ -93,10 +93,11 @@ impl SparseArray {
     }
     #[inline]
     pub(crate) fn get(&self, entity: EntityId) -> Option<EntityId> {
-        self.0
-            .get(entity.bucket())?
-            .as_ref()
-            .map(|bucket| unsafe { *bucket.0.get_unchecked(entity.bucket_index()) })
+        let Some(Some(bucket)) = self.0.get(entity.bucket()) else {
+            return None;
+        };
+
+        Some(unsafe { *bucket.0.get_unchecked(entity.bucket_index()) })
     }
     #[inline]
     pub(super) unsafe fn get_unchecked(&self, entity: EntityId) -> EntityId {
