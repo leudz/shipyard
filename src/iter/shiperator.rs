@@ -29,16 +29,20 @@ pub trait Shiperator {
     fn sail_time(&self) -> usize;
     /// `true` when this Shiperator cannot return `None`.
     fn is_exact_sized(&self) -> bool;
-    /// Returns the indices of the components matching `entity_id`.
+    /// Returns the indices of the components matching the entity at `index` in `entities`.
     ///
-    /// `entity_id` is the entity present at `index` in the Captain Shiperator.
+    /// `index` is local to the segment currently iterated.\
+    /// Shiperators resolve it to the absolute index of their component by adding
+    /// the start of their segment.
+    ///
+    /// The returned indices are absolute and are passed as is to [`get_data`](Shiperator::get_data).
     ///
     /// This function is only called when this Shiperator is the Captain.
     ///
     /// # Safety
     ///
-    /// `index` must be the current dense index of this Shiperator's entity list.\
-    /// `entity_id` must be at `index` in the Captain Shiperator.
+    /// - `index` must be a local index of the segment currently iterated
+    /// - `entities` must hold the entity matching `index` at `index`
     unsafe fn captain_indices_of(
         &self,
         entities: &mut RawEntityIdAccess,
@@ -48,9 +52,13 @@ pub trait Shiperator {
     ///
     /// This function is only called when this Shiperator is a Sailor.
     ///
-    /// Returns the index of the component owned by `entity_id`.
+    /// Returns the absolute index of the component owned by `entity_id`.
+    ///
+    /// The result doesn't depend on the segment currently iterated.
     fn sailor_indices_of(&self, entity_id: EntityId) -> Option<Self::Index>;
     /// Returns the component at `index`.
+    ///
+    /// `index` is already resolved, implementations must not add their segment start again.
     ///
     /// # Safety
     ///
@@ -82,7 +90,7 @@ impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {
         _entities: &mut RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
-        Some(index)
+        Some(self.resolve_index(index))
     }
 
     #[inline]
@@ -118,7 +126,7 @@ macro_rules! impl_shiperator_no_mut {
 
                 #[inline]
                 unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
-                    Some(index)
+                    Some(self.resolve_index(index))
                 }
 
                 #[inline]
@@ -159,7 +167,7 @@ macro_rules! impl_shiperator_mut {
 
                 #[inline]
                 unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
-                    Some(index)
+                    Some(self.resolve_index(index))
                 }
 
                 #[inline]
@@ -199,6 +207,7 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
         true
     }
 
+    // An entity slice has no segment state, `index` is always an index of the whole slice.
     #[inline]
     unsafe fn captain_indices_of(
         &self,

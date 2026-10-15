@@ -31,6 +31,9 @@ impl<'tmp, T: Component> Shiperator for Inserted<FullRawWindow<'tmp, T>> {
         _entities: &mut RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
+        // Timestamps are stored at the component's absolute index
+        let index = self.0.resolve_index(index);
+
         if unsafe { *self.0.insertion_data.add(index) }
             .is_within(self.0.last_insertion, self.0.current)
         {
@@ -84,6 +87,9 @@ macro_rules! impl_shiperator_inserted {
 
                 #[inline]
                 unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize,) -> Option<Self::Index> {
+                    // Timestamps are stored at the component's absolute index
+                    let index = self.0.resolve_index(index);
+
                     if unsafe { *self.0.insertion_data.add(index) }
                         .is_within(self.0.last_insertion, self.0.current)
                     {
@@ -143,6 +149,9 @@ impl<'tmp, T: Component> Shiperator for Modified<FullRawWindow<'tmp, T>> {
         _entities: &mut RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
+        // Timestamps are stored at the component's absolute index
+        let index = self.0.resolve_index(index);
+
         if unsafe { *self.0.modification_data.add(index) }
             .is_within(self.0.last_modification, self.0.current)
         {
@@ -196,6 +205,9 @@ macro_rules! impl_shiperator_modified {
 
                 #[inline]
                 unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize,) -> Option<Self::Index> {
+                    // Timestamps are stored at the component's absolute index
+                    let index = self.0.resolve_index(index);
+
                     if unsafe { *self.0.modification_data.add(index) }
                     .is_within(self.0.last_modification, self.0.current)
                     {
@@ -255,6 +267,9 @@ impl<'tmp, T: Component> Shiperator for InsertedOrModified<FullRawWindow<'tmp, T
         _entities: &mut RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
+        // Timestamps are stored at the component's absolute index
+        let index = self.0.resolve_index(index);
+
         if unsafe { *self.0.insertion_data.add(index) }
             .is_within(self.0.last_insertion, self.0.current)
             || unsafe { *self.0.modification_data.add(index) }
@@ -312,6 +327,9 @@ macro_rules! impl_shiperator_inserted_or_modified {
 
                 #[inline]
                 unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize,) -> Option<Self::Index> {
+                    // Timestamps are stored at the component's absolute index
+                    let index = self.0.resolve_index(index);
+
                     if unsafe { *self.0.insertion_data.add(index) }
                         .is_within(self.0.last_insertion, self.0.current)
                         || unsafe { *self.0.modification_data.add(index) }
