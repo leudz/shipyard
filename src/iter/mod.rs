@@ -106,64 +106,6 @@ impl<S: Shiperator> Iterator for Shiper<S> {
     }
 }
 
-impl<S: Shiperator> DoubleEndedIterator for Shiper<S> {
-    #[inline(always)]
-    fn next_back(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.start == self.end {
-                if let Some(new_end) = self.entities.next_slice() {
-                    self.start = 0;
-                    self.end = new_end;
-
-                    self.shiperator.next_slice();
-                } else {
-                    return None;
-                }
-            };
-
-            self.end -= 1;
-
-            if let Some(indices) = unsafe {
-                self.shiperator
-                    .captain_indices_of(&mut self.entities, self.end)
-            } {
-                return unsafe { Some(self.shiperator.get_data(indices)) };
-            }
-        }
-    }
-
-    #[inline]
-    fn rfold<B, F>(mut self, mut init: B, mut f: F) -> B
-    where
-        Self: Sized,
-        F: FnMut(B, Self::Item) -> B,
-    {
-        loop {
-            if self.start == self.end {
-                if let Some(new_end) = self.entities.next_slice() {
-                    self.start = 0;
-                    self.end = new_end;
-
-                    self.shiperator.next_slice();
-                } else {
-                    return init;
-                }
-            };
-
-            while self.start < self.end {
-                self.end -= 1;
-
-                if let Some(indices) = unsafe {
-                    self.shiperator
-                        .captain_indices_of(&mut self.entities, self.end)
-                } {
-                    init = f(init, unsafe { self.shiperator.get_data(indices) });
-                }
-            }
-        }
-    }
-}
-
 impl<S: Shiperator> FusedIterator for Shiper<S> {}
 
 impl<'tmp, T: Component> ExactSizeIterator for Shiper<FullRawWindow<'tmp, T>> {
