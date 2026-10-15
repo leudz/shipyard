@@ -11,7 +11,6 @@ pub struct IntoIterRef<'a, T: IterComponent> {
     pub(crate) _borrow: T::Borrow<'a>,
     pub(crate) entities: RawEntityIdAccess,
     pub(crate) is_exact_sized: bool,
-    pub(crate) end: usize,
     pub(crate) phantom: PhantomData<T>,
 }
 
@@ -44,8 +43,6 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
             },
             entities: self.entities.clone(),
             is_exact_sized: self.is_exact_sized,
-            start: 0,
-            end: self.end,
         }
     }
 }

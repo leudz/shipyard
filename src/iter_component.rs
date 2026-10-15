@@ -56,9 +56,10 @@ where
     <T as IterComponent>::Shiperator<'a>: Shiperator,
 {
     let mut storage_ids = ShipHashSet::new();
-    let (shiperator, all_borrow, borrow, end, entities) =
+    let (shiperator, all_borrow, borrow, current_len, entities) =
         T::into_shiperator(all_storages, all_borrow, current, &mut storage_ids)?;
 
+    debug_assert_eq!(current_len, entities.current_len());
     let is_exact_sized = shiperator.is_exact_sized();
 
     Ok(IntoIterRef {
@@ -67,7 +68,6 @@ where
         _borrow: borrow,
         entities,
         is_exact_sized,
-        end,
         phantom: core::marker::PhantomData,
     })
 }

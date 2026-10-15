@@ -149,9 +149,12 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         self.dense_len
     }
 
+    /// Returns an entity source over the whole storage.
     #[inline]
     pub(crate) fn entity_iter(&self) -> RawEntityIdAccess {
-        RawEntityIdAccess::new(self.dense, Vec::new())
+        // SAFE: `dense` points to the `dense_len` entities of the storage this window borrows for `'w`.
+        // The access is only used by iterators holding that borrow, which prevents any modification.
+        unsafe { RawEntityIdAccess::new(self.dense, self.dense_len) }
     }
 
     /// Converts an index local to the current segment into an absolute storage index.
@@ -313,9 +316,12 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
         self.dense_len
     }
 
+    /// Returns an entity source over the whole storage.
     #[inline]
     pub(crate) fn entity_iter(&self) -> RawEntityIdAccess {
-        RawEntityIdAccess::new(self.dense, Vec::new())
+        // SAFE: `dense` points to the `dense_len` entities of the storage this window borrows for `'w`.
+        // The access is only used by iterators holding that borrow, which prevents any modification.
+        unsafe { RawEntityIdAccess::new(self.dense, self.dense_len) }
     }
 
     /// Converts an index local to the current segment into an absolute storage index.
@@ -360,104 +366,402 @@ impl<T: Component, Track> Clone for FullRawWindowMut<'_, T, Track> {
     }
 }
 
+/// Non-owning cursor over a range of entities.
+///
+/// It points to the next unconsumed entity and one past the last one.\
+/// It also tracks the local index of the next entity within the segment the range started at.\
+/// This offset is independent from the windows' segment starts.
+///
+/// Empty cursors are valid, their pointers might be dangling and are never dereferenced.
+#[derive(Clone, Copy)]
+pub(crate) struct EntityCursor {
+    next: NonNull<EntityId>,
+    end: NonNull<EntityId>,
+    local_index: usize,
+}
+
+impl EntityCursor {
+    /// Returns a cursor without any entity.
+    #[inline]
+    pub(crate) fn empty() -> EntityCursor {
+        EntityCursor {
+            next: NonNull::dangling(),
+            end: NonNull::dangling(),
+            local_index: 0,
+        }
+    }
+
+    /// Returns a cursor over the `len` entities starting at `start`.
+    ///
+    /// The first entity has local index 0.
+    ///
+    /// ### Safety
+    ///
+    /// When `len` isn't 0:
+    /// - `start` must point to `len` consecutive initialized entities within a single allocation
+    /// - these entities must not be deallocated or modified while this cursor or any copy of it is used
+    #[inline]
+    pub(crate) unsafe fn new(start: NonNull<EntityId>, len: usize) -> EntityCursor {
+        if len == 0 {
+            return EntityCursor::empty();
+        }
+
+        EntityCursor {
+            next: start,
+            // SAFE: The caller guarantees `start..start + len` is within a single allocation,
+            // the result is at most one past its end.
+            end: unsafe { start.add(len) },
+            local_index: 0,
+        }
+    }
+
+    /// Returns `true` when all entities have been consumed.
+    #[inline]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.next == self.end
+    }
+
+    /// Returns the number of unconsumed entities.
+    #[inline]
+    pub(crate) fn len(&self) -> usize {
+        // SAFE: The pointers are equal, or bound a remaining range
+        // within the same allocation. EntityId is not zero-sized.
+        unsafe { self.end.offset_from(self.next) as usize }
+    }
+
+    /// Returns the local index of the next unconsumed entity.
+    #[inline]
+    pub(crate) fn local_index(&self) -> usize {
+        self.local_index
+    }
+
+    /// Returns the next unconsumed entity.
+    ///
+    /// ### Safety
+    ///
+    /// The cursor must not be empty.
+    #[inline]
+    pub(crate) unsafe fn current(&self) -> EntityId {
+        debug_assert!(!self.is_empty());
+
+        // SAFE: The caller guarantees the cursor isn't empty so `next` points to an initialized
+        // entity that `new`'s caller keeps alive.
+        unsafe { self.next.read() }
+    }
+
+    /// Consumes the next entity.
+    ///
+    /// Returns `false` without moving when the cursor is empty.
+    #[inline]
+    pub(crate) fn advance(&mut self) -> bool {
+        if self.is_empty() {
+            return false;
+        }
+
+        // SAFE: The cursor isn't empty so `next < end` and both are within the same allocation.
+        // The result is at most `end`.
+        self.next = unsafe { self.next.add(1) };
+        self.local_index += 1;
+
+        true
+    }
+
+    /// Splits the unconsumed entities in two halves.
+    ///
+    /// Both halves keep the local indices of the original range.\
+    /// Returns `None` when there are fewer than 2 entities left.
+    #[inline]
+    pub(crate) fn split(self) -> Option<(EntityCursor, EntityCursor)> {
+        let len = self.len();
+        if len < 2 {
+            return None;
+        }
+
+        let left_len = len / 2;
+        // SAFE: `left_len < len` so the result is within `next..end`.
+        let middle = unsafe { self.next.add(left_len) };
+
+        let left = EntityCursor {
+            next: self.next,
+            end: middle,
+            local_index: self.local_index,
+        };
+        let right = EntityCursor {
+            next: middle,
+            end: self.end,
+            local_index: self.local_index + left_len,
+        };
+
+        Some((left, right))
+    }
+}
+
+/// Entities driving an iteration.
+///
+/// The current range is consumed through a cursor.
+/// Once it's exhausted, the iteration continues with the follow-up ranges.
 #[derive(Clone)]
 #[doc(hidden)]
 pub struct RawEntityIdAccess {
-    ptr: NonNull<EntityId>,
-    follow_up_ptrs: Vec<(NonNull<EntityId>, usize)>,
+    cursor: EntityCursor,
+    follow_ups: Vec<EntityCursor>,
 }
 
 unsafe impl Send for RawEntityIdAccess {}
 
 impl RawEntityIdAccess {
+    /// Returns an access over the `len` entities starting at `start`, without follow-ups.
+    ///
+    /// ### Safety
+    ///
+    /// When `len` isn't 0:
+    /// - `start` must point to `len` consecutive initialized entities within a single allocation
+    /// - these entities must not be deallocated or modified while this access or any clone of it is used
     #[inline]
-    #[doc(hidden)]
-    pub fn new(
-        ptr: NonNull<EntityId>,
-        follow_up_ptrs: Vec<(NonNull<EntityId>, usize)>,
-    ) -> RawEntityIdAccess {
+    pub(crate) unsafe fn new(start: NonNull<EntityId>, len: usize) -> RawEntityIdAccess {
         RawEntityIdAccess {
-            ptr,
-            follow_up_ptrs,
+            // SAFE: Our caller upholds `EntityCursor::new`'s requirements, they are the same as ours.
+            cursor: unsafe { EntityCursor::new(start, len) },
+            follow_ups: Vec::new(),
         }
     }
 
-    #[inline]
-    pub fn ptr(&self) -> NonNull<EntityId> {
-        self.ptr
-    }
-
+    /// Returns an access without any entity.
     #[inline]
     #[doc(hidden)]
     pub fn dangling() -> RawEntityIdAccess {
         RawEntityIdAccess {
-            ptr: NonNull::dangling(),
-            follow_up_ptrs: Vec::new(),
+            cursor: EntityCursor::empty(),
+            follow_ups: Vec::new(),
         }
     }
 
+    /// Adds the unconsumed entities of `cursor` as a range to iterate after the current ones.
     #[inline]
-    #[doc(hidden)]
-    pub unsafe fn get(&self, index: usize) -> EntityId {
-        self.ptr.add(index).read()
+    pub(crate) fn push_follow_up(&mut self, cursor: EntityCursor) {
+        self.follow_ups.push(cursor);
     }
 
+    /// Returns the cursor over the current range.
     #[inline]
-    #[doc(hidden)]
-    pub fn follow_up_len(&self) -> usize {
-        self.follow_up_ptrs
-            .iter()
-            .map(|(_, len)| len)
-            .sum::<usize>()
+    pub(crate) fn cursor(&self) -> EntityCursor {
+        self.cursor
     }
 
+    /// Returns `true` when the current range has been fully consumed.
+    #[inline]
+    pub(crate) fn is_current_empty(&self) -> bool {
+        self.cursor.is_empty()
+    }
+
+    /// Returns the local index of the current candidate.
     #[inline]
     #[doc(hidden)]
-    pub fn next_slice(&mut self) -> Option<usize> {
-        let Some((new_start, new_end)) = self.follow_up_ptrs.pop() else {
-            return None;
+    pub fn local_index(&self) -> usize {
+        self.cursor.local_index()
+    }
+
+    /// Returns the current candidate.
+    ///
+    /// ### Safety
+    ///
+    /// The current range must not be exhausted.
+    #[inline]
+    #[doc(hidden)]
+    pub unsafe fn current(&self) -> EntityId {
+        // SAFE: The caller guarantees the current range isn't exhausted.
+        unsafe { self.cursor.current() }
+    }
+
+    /// Consumes the current candidate.
+    ///
+    /// Returns `false` without moving when the current range is exhausted.
+    #[inline]
+    pub(crate) fn advance(&mut self) -> bool {
+        self.cursor.advance()
+    }
+
+    /// Returns the number of candidates left in the current range.
+    #[inline]
+    pub(crate) fn current_len(&self) -> usize {
+        self.cursor.len()
+    }
+
+    /// Returns the number of candidates left, follow-up ranges included.
+    #[inline]
+    pub(crate) fn remaining_len(&self) -> usize {
+        let follow_ups_len = self.follow_ups.iter().map(EntityCursor::len).sum::<usize>();
+
+        self.cursor.len() + follow_ups_len
+    }
+
+    /// Replaces the current range with the next follow-up.
+    ///
+    /// Returns `false` when there is no follow-up left.
+    #[inline]
+    pub(crate) fn next_slice(&mut self) -> bool {
+        let Some(follow_up) = self.follow_ups.pop() else {
+            return false;
         };
 
-        self.ptr = new_start;
+        self.cursor = follow_up;
 
-        Some(new_end)
+        true
     }
 
+    /// Splits the current range in two halves.
+    ///
+    /// `self` keeps the first half and no follow-ups.
+    /// The returned access gets the second half and all follow-ups.\
+    /// Returns `None`, leaving `self` untouched, when the current range has fewer than 2 candidates.
     #[inline]
-    #[doc(hidden)]
-    pub fn split_at(mut self, count: usize) -> (RawEntityIdAccess, RawEntityIdAccess) {
-        let mut total_len = 0;
-        let mut remaining = 0;
-        let split_point = self.follow_up_ptrs.iter().position(|(_, len)| {
-            total_len += len;
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
+    pub(crate) fn split(&mut self) -> Option<RawEntityIdAccess> {
+        let (left, right) = self.cursor.split()?;
 
-            if total_len >= count {
-                remaining = count - (total_len - len);
+        self.cursor = left;
 
-                true
-            } else {
-                false
-            }
-        });
+        Some(RawEntityIdAccess {
+            cursor: right,
+            follow_ups: core::mem::take(&mut self.follow_ups),
+        })
+    }
+}
 
-        let mut follow_up2 = if let Some(split_point) = split_point {
-            self.follow_up_ptrs.split_off(split_point)
-        } else {
-            core::mem::take(&mut self.follow_up_ptrs)
-        };
+#[cfg(test)]
+mod grouping_cursor {
+    use super::{EntityCursor, RawEntityIdAccess};
+    use crate::EntityId;
+    use alloc::vec::Vec;
+    use core::ptr::NonNull;
 
-        if remaining != 0 {
-            let right = &mut follow_up2[0];
-            self.follow_up_ptrs.push((right.0, remaining));
-            right.1 -= remaining;
+    fn entities(len: u64) -> Vec<EntityId> {
+        (0..len).map(EntityId::new).collect()
+    }
+
+    fn cursor(entities: &[EntityId]) -> EntityCursor {
+        // SAFE: `entities` is a live slice that outlives every use of the cursor in these tests
+        // and isn't modified meanwhile.
+        unsafe { EntityCursor::new(NonNull::from(entities).cast(), entities.len()) }
+    }
+
+    /// Asserts that empty cursors report no entity, never move and never split,
+    /// whether built empty, from a dangling pointer or from an empty slice.
+    #[test]
+    fn empty() {
+        // SAFE: `len` is 0 so the pointer is never read.
+        let from_dangling = unsafe { EntityCursor::new(NonNull::dangling(), 0) };
+        let from_slice = cursor(&[]);
+
+        for mut cursor in [EntityCursor::empty(), from_dangling, from_slice] {
+            assert!(cursor.is_empty());
+            assert_eq!(cursor.len(), 0);
+            assert!(!cursor.advance());
+            assert_eq!(cursor.local_index(), 0);
+            assert!(cursor.split().is_none());
+        }
+    }
+
+    /// Asserts that a single entity cursor yields its entity once then stays exhausted.
+    #[test]
+    fn one() {
+        let entities = entities(1);
+        let mut cursor = cursor(&entities);
+
+        assert_eq!(cursor.len(), 1);
+        // SAFE: The cursor holds one entity.
+        assert_eq!(unsafe { cursor.current() }, entities[0]);
+        assert!(cursor.split().is_none());
+
+        assert!(cursor.advance());
+        assert!(cursor.is_empty());
+        assert_eq!(cursor.local_index(), 1);
+    }
+
+    /// Asserts that advancing an exhausted cursor repeatedly doesn't move it.
+    #[test]
+    fn exhausted_advance() {
+        let entities = entities(2);
+        let mut cursor = cursor(&entities);
+
+        assert!(cursor.advance());
+        assert!(cursor.advance());
+        for _ in 0..3 {
+            assert!(!cursor.advance());
+            assert_eq!(cursor.len(), 0);
+            assert_eq!(cursor.local_index(), 2);
+        }
+    }
+
+    /// Asserts that a partially consumed cursor reads the next unconsumed entity
+    /// and reports its local index and remaining length.
+    #[test]
+    fn partial() {
+        let entities = entities(5);
+        let mut cursor = cursor(&entities);
+
+        cursor.advance();
+        cursor.advance();
+
+        assert_eq!(cursor.len(), 3);
+        assert_eq!(cursor.local_index(), 2);
+        // SAFE: 3 entities are left.
+        assert_eq!(unsafe { cursor.current() }, entities[2]);
+    }
+
+    /// Asserts that splitting a range whose next local index is 3 keeps the original
+    /// local indices on both halves instead of restarting the right one at zero.
+    #[test]
+    fn split_offsets() {
+        let entities = entities(8);
+        let mut cursor = cursor(&entities);
+        for _ in 0..3 {
+            cursor.advance();
         }
 
-        let other = RawEntityIdAccess {
-            ptr: self.ptr,
-            follow_up_ptrs: follow_up2,
-        };
+        let (left, right) = cursor.split().unwrap();
 
-        (self, other)
+        assert_eq!((left.local_index(), left.len()), (3, 2));
+        assert_eq!((right.local_index(), right.len()), (5, 3));
+        // SAFE: Both halves are nonempty.
+        unsafe {
+            assert_eq!(left.current(), entities[3]);
+            assert_eq!(right.current(), entities[5]);
+        }
+    }
+
+    /// Asserts that splitting an access gives all follow-ups to the right half and none
+    /// to the left one, without moving either to another range.
+    #[test]
+    fn split_follow_ups() {
+        let first = entities(4);
+        let second = entities(3);
+        let mut left = RawEntityIdAccess {
+            cursor: cursor(&first),
+            follow_ups: Vec::new(),
+        };
+        left.push_follow_up(cursor(&second));
+
+        let right = left.split().unwrap();
+
+        assert_eq!((left.current_len(), left.remaining_len()), (2, 2));
+        assert_eq!((right.current_len(), right.remaining_len()), (2, 5));
+        assert_eq!(right.local_index(), 2);
+    }
+
+    /// Asserts that an access with a single current candidate and a long follow-up doesn't split.
+    #[test]
+    fn split_single() {
+        let first = entities(1);
+        let second = entities(10);
+        let mut access = RawEntityIdAccess {
+            cursor: cursor(&first),
+            follow_ups: Vec::new(),
+        };
+        access.push_follow_up(cursor(&second));
+
+        assert!(access.split().is_none());
+        assert_eq!(access.remaining_len(), 11);
     }
 }
 
@@ -509,9 +813,12 @@ mod grouping_coordinates {
         (world, entities)
     }
 
-    /// Returns an entity source starting at index `start` of `dense`.
-    fn entities_from(dense: &[EntityId], start: usize) -> RawEntityIdAccess {
-        RawEntityIdAccess::new(NonNull::from(&dense[start..]).cast(), Vec::new())
+    /// Returns an entity source over the `len` entities starting at index `start` of `dense`.
+    fn entities_from(dense: &[EntityId], start: usize, len: usize) -> RawEntityIdAccess {
+        let segment = &dense[start..start + len];
+
+        // SAFE: The storage `dense` belongs to stays borrowed while the tests use the access.
+        unsafe { RawEntityIdAccess::new(NonNull::from(segment).cast(), len) }
     }
 
     /// Iterates `len` items of `shiperator`, reading entities from `dense` starting at `start`.
@@ -527,10 +834,8 @@ mod grouping_coordinates {
 
         Shiper {
             shiperator,
-            entities: entities_from(dense, start),
+            entities: entities_from(dense, start, len),
             is_exact_sized,
-            start: 0,
-            end: len,
         }
     }
 
@@ -541,7 +846,7 @@ mod grouping_coordinates {
         let (world, _) = world();
         let a = world.borrow::<View<'_, A>>().unwrap();
         let b = world.borrow::<View<'_, B>>().unwrap();
-        let mut entities = entities_from(&a.dense, 2);
+        let mut entities = entities_from(&a.dense, 2, 4);
 
         let mut a_window = FullRawWindow::from_view(&a);
         let mut b_window = FullRawWindow::from_view(&b);
@@ -553,16 +858,21 @@ mod grouping_coordinates {
         }
 
         for local in 0..4 {
-            // SAFE: `local` is within the 4 components long segments.
+            assert_eq!(entities.local_index(), local);
+
+            // SAFE: `local` is within the 4 components long segments
+            // and is the local index of the current candidate of `entities`.
             let (a_component, b_component) = unsafe {
-                let a_index = a_window.captain_indices_of(&mut entities, local).unwrap();
-                let b_index = b_window.captain_indices_of(&mut entities, local).unwrap();
+                let a_index = a_window.captain_indices_of(&entities, local).unwrap();
+                let b_index = b_window.captain_indices_of(&entities, local).unwrap();
 
                 (a_window.get_data(a_index), b_window.get_data(b_index))
             };
 
             assert_eq!(a_component, &A(2 + local as u32));
             assert_eq!(b_component, &B(12 + local as u32));
+
+            entities.advance();
         }
     }
 
@@ -654,7 +964,7 @@ mod grouping_coordinates {
         let mut world = World::new();
         let entities: Vec<EntityId> = (0..4).map(|i| world.add_entity(Tracked(i))).collect();
         let mut tracked = world.borrow::<ViewMut<'_, Tracked>>().unwrap();
-        let mut segment_entities = entities_from(&tracked.dense, 1);
+        let mut segment_entities = entities_from(&tracked.dense, 1, 3);
 
         let mut window = FullRawWindowMut::new(&mut tracked);
         // SAFE: The segment is 3 components long and covers entities 1 to 3,
@@ -664,14 +974,15 @@ mod grouping_coordinates {
         }
 
         for local in 0..3 {
-            // SAFE: `local` is within the 3 components long segment.
+            // SAFE: `local` is within the 3 components long segment
+            // and is the local index of the current candidate of `segment_entities`.
             // Each `Mut` is dropped before the next one is created.
             unsafe {
-                let index = window
-                    .captain_indices_of(&mut segment_entities, local)
-                    .unwrap();
+                let index = window.captain_indices_of(&segment_entities, local).unwrap();
                 let _ = window.get_data(index);
             }
+
+            segment_entities.advance();
         }
 
         for entity in entities {
@@ -686,7 +997,7 @@ mod grouping_coordinates {
         let mut world = World::new();
         let entities: Vec<EntityId> = (0..4).map(|i| world.add_entity(Tracked(i))).collect();
         let mut tracked = world.borrow::<ViewMut<'_, Tracked>>().unwrap();
-        let mut segment_entities = entities_from(&tracked.dense, 1);
+        let mut segment_entities = entities_from(&tracked.dense, 1, 3);
 
         let mut window = FullRawWindowMut::new(&mut tracked);
         // SAFE: The segment is 3 components long and covers entities 1 to 3,
@@ -695,18 +1006,27 @@ mod grouping_coordinates {
             window.set_segment_start(1);
         }
 
-        // SAFE: Local index 1 is within the 3 components long segment.
+        segment_entities.advance();
+        // SAFE: Local index 1 is within the 3 components long segment
+        // and is the local index of the current candidate of `segment_entities`.
         // No other reference to the component exists while `component` lives.
         unsafe {
-            let index = window.captain_indices_of(&mut segment_entities, 1).unwrap();
+            let index = window.captain_indices_of(&segment_entities, 1).unwrap();
             let mut component = window.get_data(index);
             component.0 = 42;
         }
 
         let modified = Modified(window);
-        // SAFE: Local indices 0 to 2 are within the 3 components long segment.
+        let mut segment_entities = entities_from(&tracked.dense, 1, 3);
         let modified_indices: Vec<_> = (0..3)
-            .map(|local| unsafe { modified.captain_indices_of(&mut segment_entities, local) })
+            .map(|local| {
+                // SAFE: `local` is within the 3 components long segment
+                // and is the local index of the current candidate of `segment_entities`.
+                let index = unsafe { modified.captain_indices_of(&segment_entities, local) };
+                segment_entities.advance();
+
+                index
+            })
             .collect();
         assert_eq!(modified_indices, [None, Some(2), None]);
 

@@ -27,10 +27,28 @@ use core::iter::FusedIterator;
 /// Handles storages iteration.
 pub struct Shiper<S> {
     pub(crate) shiperator: S,
+    /// Candidates left to iterate.
     pub(crate) entities: RawEntityIdAccess,
     pub(crate) is_exact_sized: bool,
-    pub(crate) start: usize,
-    pub(crate) end: usize,
+}
+
+impl<S: Shiperator> Shiper<S> {
+    /// Makes sure the current range has a candidate, moving to the follow-up ranges as needed.
+    ///
+    /// Returns `false` once all ranges are exhausted.
+    #[inline(always)]
+    pub(crate) fn has_candidate(&mut self) -> bool {
+        // Follow-ups can be empty, we skip them until we find a candidate.
+        while self.entities.is_current_empty() {
+            if !self.entities.next_slice() {
+                return false;
+            }
+
+            self.shiperator.next_slice();
+        }
+
+        true
+    }
 }
 
 impl<S: Shiperator> Iterator for Shiper<S> {
@@ -38,33 +56,30 @@ impl<S: Shiperator> Iterator for Shiper<S> {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.start == self.end {
-                if let Some(new_end) = self.entities.next_slice() {
-                    self.start = 0;
-                    self.end = new_end;
-
-                    self.shiperator.next_slice();
-                } else {
-                    return None;
-                }
+        while self.has_candidate() {
+            let local_index = self.entities.local_index();
+            // SAFE: `has_candidate` returned `true` so the current range isn't exhausted
+            // and `local_index` is the local index of its current candidate.
+            let indices = unsafe {
+                self.shiperator
+                    .captain_indices_of(&self.entities, local_index)
             };
 
-            let current = self.start;
-            self.start += 1;
+            // The candidate is consumed whether it matched or not.
+            self.entities.advance();
 
-            if let Some(indices) = unsafe {
-                self.shiperator
-                    .captain_indices_of(&mut self.entities, current)
-            } {
-                return unsafe { Some(self.shiperator.get_data(indices)) };
+            if let Some(indices) = indices {
+                // SAFE: `indices` was just returned by `captain_indices_of`.
+                return Some(unsafe { self.shiperator.get_data(indices) });
             }
         }
+
+        None
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let max_len = self.end - self.start + self.entities.follow_up_len();
+        let max_len = self.entities.remaining_len();
 
         if self.is_exact_sized {
             (max_len, Some(max_len))
@@ -79,30 +94,26 @@ impl<S: Shiperator> Iterator for Shiper<S> {
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        loop {
-            if self.start == self.end {
-                if let Some(new_end) = self.entities.next_slice() {
-                    self.start = 0;
-                    self.end = new_end;
-
-                    self.shiperator.next_slice();
-                } else {
-                    return init;
-                }
+        // We start at the first unconsumed candidate, `next` might have consumed a prefix.
+        while self.has_candidate() {
+            let local_index = self.entities.local_index();
+            // SAFE: `has_candidate` returned `true` so the current range isn't exhausted
+            // and `local_index` is the local index of its current candidate.
+            let indices = unsafe {
+                self.shiperator
+                    .captain_indices_of(&self.entities, local_index)
             };
 
-            while self.start < self.end {
-                let current = self.start;
-                self.start += 1;
+            // We consume the candidate before creating any output or calling `f`.
+            self.entities.advance();
 
-                if let Some(indices) = unsafe {
-                    self.shiperator
-                        .captain_indices_of(&mut self.entities, current)
-                } {
-                    init = f(init, unsafe { self.shiperator.get_data(indices) });
-                }
+            if let Some(indices) = indices {
+                // SAFE: `indices` was just returned by `captain_indices_of`.
+                init = f(init, unsafe { self.shiperator.get_data(indices) });
             }
         }
+
+        init
     }
 }
 
@@ -111,7 +122,7 @@ impl<S: Shiperator> FusedIterator for Shiper<S> {}
 impl<'tmp, T: Component> ExactSizeIterator for Shiper<FullRawWindow<'tmp, T>> {
     #[inline]
     fn len(&self) -> usize {
-        self.end - self.start
+        self.entities.remaining_len()
     }
 }
 
@@ -121,6 +132,6 @@ where
 {
     #[inline]
     fn len(&self) -> usize {
-        self.end - self.start
+        self.entities.remaining_len()
     }
 }

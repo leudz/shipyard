@@ -60,7 +60,7 @@ macro_rules! impl_shiperator_output {
             }
 
             #[inline]
-            unsafe fn captain_indices_of(&self, entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+            unsafe fn captain_indices_of(&self, entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                  Some(($(
                     if self.captain_mask & (1 << $index) != 0 {
                         if let Some(index) = unsafe { self.shiperator.$index.captain_indices_of(entities, index) } {
@@ -69,7 +69,8 @@ macro_rules! impl_shiperator_output {
                             return None
                         }
                     } else {
-                        let eid = entities.get(index);
+                        // SAFE: Our caller guarantees the current range of `entities` isn't exhausted.
+                        let eid = unsafe { entities.current() };
 
                         if let Some(index) = self.shiperator.$index.sailor_indices_of(eid) {
                             index

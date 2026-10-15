@@ -29,11 +29,14 @@ pub trait Shiperator {
     fn sail_time(&self) -> usize;
     /// `true` when this Shiperator cannot return `None`.
     fn is_exact_sized(&self) -> bool;
-    /// Returns the indices of the components matching the entity at `index` in `entities`.
+    /// Returns the indices of the components matching the current candidate of `entities`.
     ///
-    /// `index` is local to the segment currently iterated.\
+    /// `index` is the candidate's index local to the segment currently iterated.\
     /// Shiperators resolve it to the absolute index of their component by adding
-    /// the start of their segment.
+    /// the start of their segment.\
+    /// The candidate's [`EntityId`] is read with [`RawEntityIdAccess::current`].
+    ///
+    /// This doesn't consume the candidate, the caller advances `entities` afterwards.
     ///
     /// The returned indices are absolute and are passed as is to [`get_data`](Shiperator::get_data).
     ///
@@ -41,11 +44,11 @@ pub trait Shiperator {
     ///
     /// # Safety
     ///
-    /// - `index` must be a local index of the segment currently iterated
-    /// - `entities` must hold the entity matching `index` at `index`
+    /// - the current range of `entities` must not be exhausted
+    /// - `index` must be the local index of the current candidate of `entities`
     unsafe fn captain_indices_of(
         &self,
-        entities: &mut RawEntityIdAccess,
+        entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index>;
     /// Provides access to components when the storage doesn't drive the iteration.
@@ -87,7 +90,7 @@ impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
         Some(self.resolve_index(index))
@@ -125,7 +128,7 @@ macro_rules! impl_shiperator_no_mut {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                     Some(self.resolve_index(index))
                 }
 
@@ -166,7 +169,7 @@ macro_rules! impl_shiperator_mut {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                     Some(self.resolve_index(index))
                 }
 
@@ -211,7 +214,7 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
         Some(index)
@@ -248,7 +251,7 @@ impl<'tmp, T: Component> Shiperator for Optional<FullRawWindow<'tmp, T>> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         _index: usize,
     ) -> Option<Self::Index> {
         unreachable!()
@@ -292,7 +295,7 @@ where
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        entities: &mut RawEntityIdAccess,
+        entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
         Some(self.0.captain_indices_of(entities, index))

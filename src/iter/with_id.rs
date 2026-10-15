@@ -25,13 +25,35 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
 
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(item) = self.0.next() {
-            let entity_id = unsafe { self.0.entities.get(self.0.start - 1) };
+        let shiper = &mut self.0;
 
-            Some((entity_id, item))
-        } else {
-            None
+        while shiper.has_candidate() {
+            let local_index = shiper.entities.local_index();
+            // SAFE: `has_candidate` returned `true` so the current range isn't exhausted
+            // and `local_index` is the local index of its current candidate.
+            let indices = unsafe {
+                shiper
+                    .shiperator
+                    .captain_indices_of(&shiper.entities, local_index)
+            };
+
+            let Some(indices) = indices else {
+                shiper.entities.advance();
+                continue;
+            };
+
+            // We have to read the id before consuming the candidate.
+            // SAFE: The current range isn't exhausted, we haven't advanced yet.
+            let entity_id = unsafe { shiper.entities.current() };
+            shiper.entities.advance();
+
+            // SAFE: `indices` was just returned by `captain_indices_of`.
+            let data = unsafe { shiper.shiperator.get_data(indices) };
+
+            return Some((entity_id, data));
         }
+
+        None
     }
 
     #[inline]
@@ -40,39 +62,41 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
     }
 
     #[inline]
-    fn fold<B, F>(mut self, mut init: B, mut f: F) -> B
+    fn fold<B, F>(self, mut init: B, mut f: F) -> B
     where
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        loop {
-            if self.0.start == self.0.end {
-                if let Some(new_end) = self.0.entities.next_slice() {
-                    self.0.start = 0;
-                    self.0.end = new_end;
+        let mut shiper = self.0;
 
-                    self.0.shiperator.next_slice();
-                } else {
-                    return init;
-                }
+        // We start at the first unconsumed candidate, `next` might have consumed a prefix.
+        while shiper.has_candidate() {
+            let local_index = shiper.entities.local_index();
+            // SAFE: `has_candidate` returned `true` so the current range isn't exhausted
+            // and `local_index` is the local index of its current candidate.
+            let indices = unsafe {
+                shiper
+                    .shiperator
+                    .captain_indices_of(&shiper.entities, local_index)
             };
 
-            while self.0.start < self.0.end {
-                let current = self.0.start;
-                self.0.start += 1;
+            let Some(indices) = indices else {
+                shiper.entities.advance();
+                continue;
+            };
 
-                if let Some(indices) = unsafe {
-                    self.0
-                        .shiperator
-                        .captain_indices_of(&mut self.0.entities, current)
-                } {
-                    let eid = unsafe { self.0.entities.get(current) };
-                    let data = unsafe { self.0.shiperator.get_data(indices) };
+            // SAFE: The current range isn't exhausted, we haven't advanced yet.
+            let entity_id = unsafe { shiper.entities.current() };
+            // We consume the candidate before creating any output or calling `f`.
+            shiper.entities.advance();
 
-                    init = f(init, (eid, data));
-                }
-            }
+            // SAFE: `indices` was just returned by `captain_indices_of`.
+            let data = unsafe { shiper.shiperator.get_data(indices) };
+
+            init = f(init, (entity_id, data));
         }
+
+        init
     }
 }
 

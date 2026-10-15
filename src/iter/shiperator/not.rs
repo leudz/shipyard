@@ -29,7 +29,7 @@ impl<'tmp, T: Component> Shiperator for Not<FullRawWindow<'tmp, T>> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         _index: usize,
     ) -> Option<Self::Index> {
         unreachable!()
@@ -68,7 +68,7 @@ impl<'tmp, T: Component, Track> Shiperator for Not<FullRawWindowMut<'tmp, T, Tra
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         _index: usize,
     ) -> Option<Self::Index> {
         unreachable!()
@@ -108,7 +108,7 @@ impl<'tmp, T: Component> Shiperator for Not<Inserted<FullRawWindow<'tmp, T>>> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
         // Timestamps are stored at the component's absolute index
@@ -166,7 +166,7 @@ macro_rules! impl_shiperator_not_inserted {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                     // Timestamps are stored at the component's absolute index
                     let index = (self.0).0.resolve_index(index);
 
@@ -226,7 +226,7 @@ impl<'tmp, T: Component> Shiperator for Not<Modified<FullRawWindow<'tmp, T>>> {
 
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
         // Timestamps are stored at the component's absolute index
@@ -283,7 +283,7 @@ macro_rules! impl_shiperator_not_modified {
                     false
                 }
 
-                unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                     // Timestamps are stored at the component's absolute index
                     let index = (self.0).0.resolve_index(index);
 
@@ -343,7 +343,7 @@ impl<'tmp, T: Component> Shiperator for Not<InsertedOrModified<FullRawWindow<'tm
 
     unsafe fn captain_indices_of(
         &self,
-        _entities: &mut RawEntityIdAccess,
+        _entities: &RawEntityIdAccess,
         index: usize,
     ) -> Option<Self::Index> {
         // Timestamps are stored at the component's absolute index
@@ -404,7 +404,7 @@ macro_rules! impl_shiperator_not_inserted_or_modified {
                     false
                 }
 
-                unsafe fn captain_indices_of(&self, _entities: &mut RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                     // Timestamps are stored at the component's absolute index
                     let index = (self.0).0.resolve_index(index);
 

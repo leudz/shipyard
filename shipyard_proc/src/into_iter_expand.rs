@@ -290,7 +290,7 @@ pub(crate) fn expand_into_iter(
                     }
 
                     #[inline]
-                    unsafe fn captain_indices_of(&self, entities: &mut shipyard::iter::RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                    unsafe fn captain_indices_of(&self, entities: &shipyard::iter::RawEntityIdAccess, index: usize) -> Option<Self::Index> {
                         self.0.captain_indices_of(entities, index)
                     }
 

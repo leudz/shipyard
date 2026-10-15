@@ -89,6 +89,7 @@ impl From<usize> for OneOfTwo<usize, usize> {
     }
 }
 
+#[derive(Clone)]
 pub struct OrWindow<T> {
     pub(crate) storages: T,
     pub(crate) is_past_first_storage: bool,

@@ -11,7 +11,6 @@ use crate::optional::Optional;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
 use crate::tracking::Tracking;
 use crate::views::{View, ViewMut};
-use alloc::vec::Vec;
 use core::ptr::NonNull;
 
 /// Creates view iterators.
@@ -74,15 +73,14 @@ where
 {
     #[inline]
     fn iter(self) -> Shiper<Self::Shiperator> {
-        let (shiperator, len, entities) = self.into_shiperator();
+        let (shiperator, current_len, entities) = self.into_shiperator();
+        debug_assert_eq!(current_len, entities.current_len());
         let is_exact_sized = shiperator.is_exact_sized();
 
         Shiper {
             shiperator,
             is_exact_sized,
             entities,
-            start: 0,
-            end: len,
         }
     }
 
@@ -98,7 +96,11 @@ pub trait IntoShiperator {
     #[allow(missing_docs)]
     type Shiperator;
 
-    /// Returns the Shiperator, its maximum length and `RawEntityIdAccess`.
+    /// Returns the Shiperator, the number of candidates in its current entity range
+    /// and the entities driving the iteration.
+    ///
+    /// The returned length doesn't count follow-up ranges,
+    /// the total number of remaining candidates can be larger.
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess);
     /// Returns `true` if the Shiperator can be a captain.
     fn can_captain() -> bool;
@@ -181,8 +183,9 @@ impl<'tmp> IntoShiperator for &'tmp [EntityId] {
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let len = self.len();
-        let iter =
-            RawEntityIdAccess::new(NonNull::new(self.as_ptr().cast_mut()).unwrap(), Vec::new());
+        // SAFE: The slice is borrowed for `'tmp` and the access is only used by iterators
+        // over this Shiperator, which hold that borrow.
+        let iter = unsafe { RawEntityIdAccess::new(NonNull::from(self).cast(), len) };
 
         (self, len, iter)
     }

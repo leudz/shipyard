@@ -25,15 +25,16 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        entities: &mut RawEntityIdAccess,
-        current: usize,
+        entities: &RawEntityIdAccess,
+        index: usize,
     ) -> Option<Self::Index> {
         if self.is_past_first_storage {
-            let Some(index) = (self.storages).1.captain_indices_of(entities, current) else {
+            let Some(index) = (self.storages).1.captain_indices_of(entities, index) else {
                 return None;
             };
 
-            let eid = entities.get(current);
+            // SAFE: Our caller guarantees the current range of `entities` isn't exhausted.
+            let eid = unsafe { entities.current() };
 
             if (self.storages).0.sailor_indices_of(eid).is_some() {
                 return None;
@@ -41,7 +42,7 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
 
             Some(OneOfTwo::Two(index))
         } else {
-            let Some(index) = (self.storages).0.captain_indices_of(entities, current) else {
+            let Some(index) = (self.storages).0.captain_indices_of(entities, index) else {
                 return None;
             };
 
