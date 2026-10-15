@@ -2,6 +2,7 @@ mod into_shiperator;
 mod mixed;
 #[cfg(feature = "parallel")]
 mod parallel;
+mod plan;
 mod shiperator;
 mod with_id;
 

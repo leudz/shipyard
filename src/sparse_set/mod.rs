@@ -25,7 +25,7 @@ pub use window::RawEntityIdAccess;
 
 pub(crate) use groups::GroupRange;
 pub(crate) use sparse_array::BUCKET_SIZE;
-pub(crate) use window::{FullRawWindow, FullRawWindowMut};
+pub(crate) use window::{EntityCursor, FullRawWindow, FullRawWindowMut};
 
 use crate::all_storages::AllStorages;
 use crate::component::Component;
