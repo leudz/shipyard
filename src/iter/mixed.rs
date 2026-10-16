@@ -1,5 +1,6 @@
 use crate::entity_id::EntityId;
 use crate::iter::plan::{Coverage, CoverageSpan, NodeKind, NodeState, PlanBuilder};
+use crate::iter::shiperator::fold_candidates;
 use crate::iter::{into_shiperator::strip_plus, Shiperator};
 use crate::iter::{EntityCursor, RawEntityIdAccess, SegmentEntry, SegmentRow};
 use core::ptr::NonNull;
@@ -8,6 +9,21 @@ const NON_CAPTAIN_FACTOR: f32 = 0.5;
 
 /// [`Mixed::single_captain`] of a segment that needs the general resolver.
 pub(crate) const NO_SINGLE_CAPTAIN: u32 = u32::MAX;
+
+/// Loop a `Mixed` folds its current segment with.
+///
+/// It's selected once per segment, outside the loop.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum BulkStrategy {
+    /// Every child drives the segment and none can reject: no lookup, no coverage check.
+    Aligned,
+    /// A single captain, the other children are looked up. No coverage check.
+    SingleCaptain,
+    /// Several captains or a captain that can reject, sailors are looked up. No coverage check.
+    Partial,
+    /// Like `Partial` but candidates an earlier segment walked are rejected.
+    Checked,
+}
 
 /// Iterator over multiple storages.
 pub struct Mixed<S> {
@@ -143,6 +159,60 @@ macro_rules! impl_shiperator_output {
                 )+))
             }
 
+            /// Resolves the current candidate of `entities` with every child as a captain.
+            ///
+            /// Nothing is looked up and coverage isn't checked,
+            /// `bulk_strategy` only selects it for segments without any.
+            ///
+            /// ### Safety
+            ///
+            /// - `entities` must not be empty
+            /// - `index` must be the local index of the current candidate of `entities`
+            /// - the plan of the last segment we entered, if any, must still be alive
+            #[inline(always)]
+            unsafe fn aligned_indices_of(
+                &self,
+                entities: &EntityCursor,
+                index: usize,
+            ) -> Option<($($type::Index,)+)> {
+                // Windows always resolve, children are still allowed to reject.
+                // `bulk_strategy` selects this resolver only when none of them can,
+                // this isn't a promise the loop relies on.
+                // SAFE: Our caller's guarantees are the captains' own.
+                Some(($(
+                    unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?,
+                )+))
+            }
+
+            /// Resolves the current candidate of `entities` for any captain mask,
+            /// without checking coverage.
+            ///
+            /// ### Safety
+            ///
+            /// - `entities` must not be empty
+            /// - `index` must be the local index of the current candidate of `entities`
+            /// - the plan of the last segment we entered, if any, must still be alive
+            #[inline]
+            unsafe fn masked_indices_of(
+                &self,
+                entities: &EntityCursor,
+                index: usize,
+            ) -> Option<($($type::Index,)+)> {
+                // Captains can reject too, a tracking filter or a nested `Mixed` for example.
+                // Only sailors read the entity, a loop where every child drives doesn't load it.
+                Some(($(
+                    if self.captain_mask & (1 << $index) != 0 {
+                        // SAFE: Our caller's guarantees are the captain's own.
+                        unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?
+                    } else {
+                        // SAFE: Our caller guarantees `entities` isn't empty.
+                        let eid = unsafe { entities.current() };
+
+                        self.shiperator.$index.sailor_indices_of(eid)?
+                    },
+                )+))
+            }
+
             /// Resolves the current candidate of `entities` for any captain mask then rejects it
             /// if an earlier segment already walked it.
             ///
@@ -157,18 +227,8 @@ macro_rules! impl_shiperator_output {
                 entities: &EntityCursor,
                 index: usize,
             ) -> Option<($($type::Index,)+)> {
-                // SAFE: Our caller guarantees `entities` isn't empty.
-                let eid = unsafe { entities.current() };
-
-                // Captains can reject too, a tracking filter or a nested `Mixed` for example.
-                let indices = ($(
-                    if self.captain_mask & (1 << $index) != 0 {
-                        // SAFE: Our caller's guarantees are the captain's own.
-                        unsafe { self.shiperator.$index.captain_indices_of(entities, index) }?
-                    } else {
-                        self.shiperator.$index.sailor_indices_of(eid)?
-                    },
-                )+);
+                // SAFE: Our caller's guarantees are the resolver's own.
+                let indices = unsafe { self.masked_indices_of(entities, index) }?;
 
                 // All indices are resolved but no component reference exists yet.
                 // Rejecting here means a duplicate is never created, not even to be discarded.
@@ -204,6 +264,56 @@ macro_rules! impl_shiperator_output {
 
                     (record.start..record.end).contains(&storage_index)
                 })
+            }
+
+            /// Returns the loop `fold_segment` uses for the current segment.
+            #[inline]
+            pub(crate) fn bulk_strategy(&self) -> BulkStrategy {
+                if self.coverage.len() != 0 {
+                    return BulkStrategy::Checked;
+                }
+
+                // Exactness is recursive: every child drives the segment and none of them,
+                // nested `Mixed`s' own children included, can reject.
+                // The mask alone isn't enough, a tracking filter or a nested `Mixed` with
+                // a sailor can drive the segment and still reject.
+                if self.is_exact_sized() {
+                    return BulkStrategy::Aligned;
+                }
+
+                if self.single_captain != NO_SINGLE_CAPTAIN {
+                    return BulkStrategy::SingleCaptain;
+                }
+
+                BulkStrategy::Partial
+            }
+
+            /// Folds the rest of the segment with child `CAPTAIN` as the only captain.
+            ///
+            /// ### Safety
+            ///
+            /// - `entities`' local indices must be local indices of our current segment
+            /// - `CAPTAIN` must be the position of our single captain and we must have no coverage
+            /// - the plan of the last segment we entered, if any, must still be alive
+            #[inline]
+            unsafe fn fold_single_captain<const CAPTAIN: u32, const WITH_ID: bool, Acc, Fold>(
+                &self,
+                entities: &mut EntityCursor,
+                init: Acc,
+                f: Fold,
+            ) -> Acc
+            where
+                Fold: FnMut(Acc, Option<EntityId>, ($($type::Out,)+)) -> Acc,
+            {
+                // SAFE: `fold_candidates` only resolves non-empty cursors at their current
+                // candidate's local index, a local index of our segment per our caller.
+                // Our caller keeps our plan alive. The resolver's indices come from
+                // `captain_indices_of` and `sailor_indices_of`, valid for `get_data`.
+                unsafe {
+                    fold_candidates::<Self, WITH_ID, Acc, Fold, _>(self, entities, init, f, |entities, index| {
+                        self.single_captain_indices_of::<CAPTAIN>(entities, index)
+                    })
+                }
             }
         }
 
@@ -316,6 +426,48 @@ macro_rules! impl_shiperator_output {
                 ($(
                     self.shiperator.$index.get_data(index.$index),
                 )+)
+            }
+
+            // The loop is picked once for the whole segment, each one only does the checks
+            // its segment needs.
+            #[inline]
+            unsafe fn fold_segment<const WITH_ID: bool, Acc, Fold>(
+                &self,
+                entities: &mut EntityCursor,
+                init: Acc,
+                f: Fold,
+            ) -> Acc
+            where
+                Fold: FnMut(Acc, Option<EntityId>, Self::Out) -> Acc,
+            {
+                // SAFE: `fold_candidates` only resolves non-empty cursors at their current
+                // candidate's local index, a local index of our segment per our caller.
+                // Our caller keeps our plan alive. Every resolver's indices come from our
+                // children's `captain_indices_of` and `sailor_indices_of`, valid for `get_data`.
+                unsafe {
+                    match self.bulk_strategy() {
+                        BulkStrategy::Aligned => {
+                            fold_candidates::<Self, WITH_ID, Acc, Fold, _>(self, entities, init, f, |entities, index| {
+                                self.aligned_indices_of(entities, index)
+                            })
+                        }
+                        // `single_captain` holds our only captain's position and we have no coverage.
+                        BulkStrategy::SingleCaptain => match self.single_captain {
+                            $($index => self.fold_single_captain::<$index, WITH_ID, Acc, Fold>(entities, init, f),)+
+                            _ => unreachable!("a single captain is one of our children"),
+                        },
+                        BulkStrategy::Partial => {
+                            fold_candidates::<Self, WITH_ID, Acc, Fold, _>(self, entities, init, f, |entities, index| {
+                                self.masked_indices_of(entities, index)
+                            })
+                        }
+                        BulkStrategy::Checked => {
+                            fold_candidates::<Self, WITH_ID, Acc, Fold, _>(self, entities, init, f, |entities, index| {
+                                self.checked_captain_indices_of(entities, index)
+                            })
+                        }
+                    }
+                }
             }
         }
     };

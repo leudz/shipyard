@@ -99,6 +99,94 @@ pub trait Shiperator {
     /// `index` must be a value returned by `captain_indices_of` or `sailor_indices_of`
     /// for this Shiperator.
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out;
+    /// Folds the items of the candidates left in `entities`, without entering any other segment.
+    ///
+    /// Every candidate left is consumed, accepted or not, `entities` is empty afterwards.\
+    /// `f` receives the accumulator, the candidate's [`EntityId`] and its item.
+    /// The id is only captured when `WITH_ID` is `true`, `f` receives `None` otherwise.
+    ///
+    /// The default implementation resolves each candidate with
+    /// [`captain_indices_of`](Shiperator::captain_indices_of).
+    /// Composite Shiperators override it to pick a loop suited to the segment once,
+    /// outside the loop.
+    ///
+    /// ### Safety
+    ///
+    /// - `entities`' local indices must be local indices of the segment this Shiperator
+    ///   currently iterates, `entities` doesn't have to start at its beginning
+    /// - the plan of the last segment this Shiperator entered, if any, must still be alive
+    #[inline]
+    unsafe fn fold_segment<const WITH_ID: bool, B, F>(
+        &self,
+        entities: &mut EntityCursor,
+        init: B,
+        f: F,
+    ) -> B
+    where
+        F: FnMut(B, Option<EntityId>, Self::Out) -> B,
+    {
+        // SAFE: `fold_candidates` calls the resolver with a non-empty cursor and its current
+        // candidate's local index, a local index of our current segment per our caller.
+        // Our caller keeps the plan of our last segment alive.
+        // `captain_indices_of`'s results are valid for `get_data`.
+        unsafe {
+            fold_candidates::<Self, WITH_ID, B, F, _>(self, entities, init, f, |entities, index| {
+                self.captain_indices_of(entities, index)
+            })
+        }
+    }
+}
+
+/// Folds the items of the candidates left in `entities`, resolving each with `resolve`.
+///
+/// Every bulk loop goes through here so they all consume candidates in the same order:
+/// resolve the indices, which includes rejecting covered candidates, capture the id when
+/// `WITH_ID` is `true`, consume the candidate, create the item and finally call `f`.
+///
+/// ### Safety
+///
+/// Calling `resolve` with a non-empty cursor and the local index of its current candidate
+/// must be safe, and the indices it returns must be valid indices for `shiperator.get_data`.
+#[inline(always)]
+pub(crate) unsafe fn fold_candidates<S, const WITH_ID: bool, B, F, R>(
+    shiperator: &S,
+    entities: &mut EntityCursor,
+    init: B,
+    mut f: F,
+    resolve: R,
+) -> B
+where
+    S: Shiperator + ?Sized,
+    F: FnMut(B, Option<EntityId>, S::Out) -> B,
+    R: Fn(&EntityCursor, usize) -> Option<S::Index>,
+{
+    let mut acc = init;
+
+    while !entities.is_empty() {
+        let Some(indices) = resolve(entities, entities.local_index()) else {
+            // Rejected candidates are consumed too.
+            entities.advance();
+            continue;
+        };
+
+        let entity_id = if WITH_ID {
+            // SAFE: The cursor isn't empty, we haven't consumed its current candidate yet.
+            Some(unsafe { entities.current() })
+        } else {
+            None
+        };
+
+        // The candidate is consumed before its item exists. If `f` panics, nothing can
+        // resume from this candidate and create its item a second time.
+        entities.advance();
+
+        // SAFE: Our caller guarantees `resolve`'s indices are valid for `get_data`.
+        let item = unsafe { shiperator.get_data(indices) };
+
+        acc = f(acc, entity_id, item);
+    }
+
+    acc
 }
 
 impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {

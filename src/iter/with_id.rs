@@ -88,43 +88,37 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
     }
 
     #[inline]
-    fn fold<B, F>(self, mut init: B, mut f: F) -> B
+    fn fold<B, F>(self, init: B, mut f: F) -> B
     where
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        let mut shiper = self.0;
+        // The adapters own their callback with `move`, see `Shiper::fold_segments`.
+        self.0
+            .fold_segments::<true, B, _>(init, move |acc, entity_id, item| {
+                f(acc, (with_id(entity_id), item))
+            })
+    }
 
-        // We start at the first unconsumed candidate, `next` might have consumed a prefix.
-        while shiper.has_candidate() {
-            let local_index = shiper.cursor.local_index();
-            // SAFE: `has_candidate` returned `true` so the cursor isn't empty
-            // and `local_index` is the local index of its current candidate.
-            // We own the schedule holding the plan of the last segment we entered, if any.
-            // We own the schedule holding the plan of the last segment we entered, if any.
-            let indices = unsafe {
-                shiper
-                    .shiperator
-                    .captain_indices_of(&shiper.cursor, local_index)
-            };
+    #[inline]
+    fn for_each<F>(self, mut f: F)
+    where
+        Self: Sized,
+        F: FnMut(Self::Item),
+    {
+        self.0
+            .fold_segments::<true, (), _>((), move |(), entity_id, item| {
+                f((with_id(entity_id), item))
+            })
+    }
+}
 
-            let Some(indices) = indices else {
-                shiper.cursor.advance();
-                continue;
-            };
-
-            // SAFE: The cursor isn't empty, we haven't advanced yet.
-            let entity_id = unsafe { shiper.cursor.current() };
-            // We consume the candidate before creating any output or calling `f`.
-            shiper.cursor.advance();
-
-            // SAFE: `indices` was just returned by `captain_indices_of`.
-            let data = unsafe { shiper.shiperator.get_data(indices) };
-
-            init = f(init, (entity_id, data));
-        }
-
-        init
+/// Unwraps the id `fold_segment` captures when asked to.
+#[inline(always)]
+fn with_id(entity_id: Option<EntityId>) -> EntityId {
+    match entity_id {
+        Some(entity_id) => entity_id,
+        None => unreachable!("`fold_segment` captures ids when `WITH_ID` is true"),
     }
 }
 

@@ -56,6 +56,27 @@ fn named_with_id() {
     assert_eq!(rest, [(e[3], 3, 13)]);
 }
 
+/// Asserts that a named derived iterator forwards bulk consumption to its tuple:
+/// `fold` and `WithId::for_each` skip the rejected candidates like `next` does.
+#[test]
+fn named_bulk() {
+    let (world, e) = derive_world();
+    let mut motion = world.borrow::<MotionView>().unwrap();
+
+    let fold = (&mut motion).iter().fold(Vec::new(), |mut acc, motion| {
+        acc.push((motion.pos.0, motion.vel.0));
+        acc
+    });
+    assert_eq!(fold, [(1, 11), (3, 13)]);
+
+    let mut with_ids = Vec::new();
+    (&mut motion)
+        .iter()
+        .with_id()
+        .for_each(|(id, motion)| with_ids.push((id, motion.pos.0, motion.vel.0)));
+    assert_eq!(with_ids, [(e[1], 1, 11), (e[3], 3, 13)]);
+}
+
 /// Asserts that a tuple derived iterator skips rejected candidates and yields
 /// the ids of the accepted entities.
 #[test]

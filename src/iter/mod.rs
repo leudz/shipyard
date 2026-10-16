@@ -30,6 +30,7 @@ pub use shiperator::Shiperator;
 pub use with_id::WithId;
 
 use crate::component::Component;
+use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use core::iter::FusedIterator;
 use plan::SegmentSchedule;
@@ -61,14 +62,6 @@ impl<S: Shiperator> Shiper<S> {
             schedule: entities.schedule,
             is_exact_sized,
         }
-    }
-
-    /// Makes sure the current segment has a candidate, entering the next follow-up as needed.
-    ///
-    /// Returns `false` once all segments are exhausted.
-    #[inline(always)]
-    pub(crate) fn has_candidate(&mut self) -> bool {
-        !self.cursor.is_empty() || self.enter_next_segment()
     }
 
     /// Enters the next follow-up segment.
@@ -195,33 +188,57 @@ impl<S: Shiperator> Iterator for Shiper<S> {
     }
 
     #[inline]
-    fn fold<B, F>(mut self, mut init: B, mut f: F) -> B
+    fn fold<B, F>(self, init: B, mut f: F) -> B
     where
         Self: Sized,
         F: FnMut(B, Self::Item) -> B,
     {
-        // We start at the first unconsumed candidate, `next` might have consumed a prefix.
-        while self.has_candidate() {
-            let local_index = self.cursor.local_index();
-            // SAFE: `has_candidate` returned `true` so the cursor isn't empty
-            // and `local_index` is the local index of its current candidate.
-            // We own the schedule holding the plan of the last segment we entered, if any.
-            // We own the schedule holding the plan of the last segment we entered, if any.
-            let indices = unsafe {
-                self.shiperator
-                    .captain_indices_of(&self.cursor, local_index)
+        // The adapters own their callback with `move`, see `fold_segments`.
+        self.fold_segments::<false, B, _>(init, move |acc, _, item| f(acc, item))
+    }
+
+    #[inline]
+    fn for_each<F>(self, mut f: F)
+    where
+        Self: Sized,
+        F: FnMut(Self::Item),
+    {
+        self.fold_segments::<false, (), _>((), move |(), _, item| f(item))
+    }
+}
+
+impl<S: Shiperator> Shiper<S> {
+    /// Folds every item left, segment after segment.
+    ///
+    /// `f` receives the item's [`EntityId`] when `WITH_ID` is `true`, `None` otherwise.
+    #[inline]
+    pub(crate) fn fold_segments<const WITH_ID: bool, B, F>(mut self, init: B, f: F) -> B
+    where
+        F: FnMut(B, Option<EntityId>, S::Out) -> B,
+    {
+        // `fold_segment` owns its callback for a single segment, we need `f` back for the
+        // next one. Lending it as `&mut f` would add a reference layer between the loop and the
+        // state `f` captures, in the exploration that layer kept aligned loops from vectorizing.
+        // So `f` travels by value inside the accumulator and each segment hands it back.
+        let mut acc_and_f = (init, f);
+
+        loop {
+            // We start at the first unconsumed candidate, `next` might have consumed a prefix.
+            // SAFE: Our cursor only ever holds candidates of the segment `shiperator` last
+            // entered, with that segment's local indices, even after `next` or a split.
+            // We own the schedule holding the plan of that segment, if any.
+            acc_and_f = unsafe {
+                self.shiperator.fold_segment::<WITH_ID, _, _>(
+                    &mut self.cursor,
+                    acc_and_f,
+                    |(acc, mut f), entity_id, item| (f(acc, entity_id, item), f),
+                )
             };
 
-            // We consume the candidate before creating any output or calling `f`.
-            self.cursor.advance();
-
-            if let Some(indices) = indices {
-                // SAFE: `indices` was just returned by `captain_indices_of`.
-                init = f(init, unsafe { self.shiperator.get_data(indices) });
+            if !self.enter_next_segment() {
+                return acc_and_f.0;
             }
         }
-
-        init
     }
 }
 

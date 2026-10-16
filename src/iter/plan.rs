@@ -480,6 +480,12 @@ impl SegmentSchedule {
 
         follow_ups
     }
+
+    /// Returns a weak reference to the shared plan, to check when it's released.
+    #[cfg(test)]
+    pub(crate) fn downgrade(&self) -> alloc::sync::Weak<Plan> {
+        Arc::downgrade(&self.plan)
+    }
 }
 
 impl Clone for SegmentSchedule {

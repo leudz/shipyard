@@ -321,6 +321,29 @@ pub(crate) fn expand_into_iter(
 
                         #item_name { #iter_fields_variable }
                     }
+
+                    #[inline]
+                    unsafe fn fold_segment<const __WITH_ID: bool, __B, __F>(
+                        &self,
+                        entities: &mut shipyard::iter::EntityCursor,
+                        init: __B,
+                        mut __f: __F,
+                    ) -> __B
+                    where
+                        __F: FnMut(__B, Option<shipyard::EntityId>, Self::Out) -> __B,
+                    {
+                        // The adapter owns `__f` with `move`, a borrowed callback can keep bulk loops from vectorizing.
+                        // SAFE: We're a newtype around our inner Shiperator, our caller's guarantees are its own.
+                        unsafe {
+                            self.0.fold_segment::<__WITH_ID, __B, _>(
+                                entities,
+                                init,
+                                move |__acc, __entity_id, (#iter_fields_variable)| {
+                                    __f(__acc, __entity_id, #item_name { #iter_fields_variable })
+                                },
+                            )
+                        }
+                    }
                 }
             ))
         }
