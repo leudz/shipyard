@@ -519,21 +519,20 @@ impl EntityCursor {
         true
     }
 
-    /// Splits the unconsumed entities in two halves.
+    /// Splits the unconsumed entities after the first `index` of them.
     ///
-    /// Both halves keep the local indices of the original range.\
-    /// Returns `None` when there are fewer than 2 entities left.
+    /// Both halves keep the local indices of the original range, either can be empty.
+    ///
+    /// ### Panics
+    ///
+    /// Panics when `index` is greater than the number of unconsumed entities.
     #[inline]
     #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
-    pub(crate) fn split(self) -> Option<(EntityCursor, EntityCursor)> {
-        let len = self.len();
-        if len < 2 {
-            return None;
-        }
+    pub(crate) fn split_at(self, index: usize) -> (EntityCursor, EntityCursor) {
+        assert!(index <= self.len(), "split index out of bounds");
 
-        let left_len = len / 2;
-        // SAFE: `left_len < len` so the result is within `next..end`.
-        let middle = unsafe { self.next.add(left_len) };
+        // SAFE: `index <= len` so the result is within `next..=end`.
+        let middle = unsafe { self.next.add(index) };
 
         let left = EntityCursor {
             next: self.next,
@@ -543,10 +542,10 @@ impl EntityCursor {
         let right = EntityCursor {
             next: middle,
             end: self.end,
-            local_index: self.local_index + left_len,
+            local_index: self.local_index + index,
         };
 
-        Some((left, right))
+        (left, right)
     }
 }
 
@@ -567,7 +566,7 @@ mod grouping_cursor {
         unsafe { EntityCursor::new(NonNull::from(entities).cast(), entities.len()) }
     }
 
-    /// Asserts that empty cursors report no entity, never move and never split,
+    /// Asserts that empty cursors report no entity and never move,
     /// whether built empty, from a dangling pointer or from an empty slice.
     #[test]
     fn empty() {
@@ -580,7 +579,6 @@ mod grouping_cursor {
             assert_eq!(cursor.len(), 0);
             assert!(!cursor.advance());
             assert_eq!(cursor.local_index(), 0);
-            assert!(cursor.split().is_none());
         }
     }
 
@@ -593,7 +591,6 @@ mod grouping_cursor {
         assert_eq!(cursor.len(), 1);
         // SAFE: The cursor holds one entity.
         assert_eq!(unsafe { cursor.current() }, entities[0]);
-        assert!(cursor.split().is_none());
 
         assert!(cursor.advance());
         assert!(cursor.is_empty());
@@ -641,7 +638,7 @@ mod grouping_cursor {
             cursor.advance();
         }
 
-        let (left, right) = cursor.split().unwrap();
+        let (left, right) = cursor.split_at(2);
 
         assert_eq!((left.local_index(), left.len()), (3, 2));
         assert_eq!((right.local_index(), right.len()), (5, 3));
@@ -650,6 +647,36 @@ mod grouping_cursor {
             assert_eq!(left.current(), entities[3]);
             assert_eq!(right.current(), entities[5]);
         }
+    }
+
+    /// Asserts that splitting at either end gives an empty half and a half with every entity,
+    /// both keeping the right local indices.
+    #[test]
+    fn split_ends() {
+        let entities = entities(3);
+        let mut cursor = cursor(&entities);
+        cursor.advance();
+
+        let (left, right) = cursor.split_at(0);
+        assert_eq!((left.local_index(), left.len()), (1, 0));
+        assert_eq!((right.local_index(), right.len()), (1, 2));
+
+        let (left, right) = cursor.split_at(2);
+        assert_eq!((left.local_index(), left.len()), (1, 2));
+        assert_eq!((right.local_index(), right.len()), (3, 0));
+        assert!(right.is_empty());
+    }
+
+    /// Asserts that splitting past the unconsumed entities panics instead of creating
+    /// an out of bounds cursor.
+    #[test]
+    #[should_panic(expected = "split index out of bounds")]
+    fn split_out_of_bounds() {
+        let entities = entities(3);
+        let mut cursor = cursor(&entities);
+        cursor.advance();
+
+        let _ = cursor.split_at(3);
     }
 }
 

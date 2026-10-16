@@ -146,6 +146,86 @@ impl<S: Shiperator> Shiper<S> {
     }
 }
 
+impl<S: Clone> Shiper<S> {
+    /// Splits the candidates left in the current segment in two halves.
+    ///
+    /// The first half keeps `floor(n / 2)` candidates and no follow-up, the second half gets
+    /// the rest of the segment followed by every follow-up left.\
+    /// Returns `self` unchanged with `None` when fewer than 2 candidates are left in the current
+    /// segment, even if follow-ups are left.
+    #[inline]
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
+    pub(crate) fn split_current_segment(self) -> (Self, Option<Self>) {
+        // We never enter a segment here. A long follow-up behind a short current segment
+        // doesn't allow a split, that's the contract, not a balancing problem to fix.
+        let len = self.cursor.len();
+        if len < 2 {
+            return (self, None);
+        }
+
+        let (left, right) = self.split_current_segment_at(len / 2);
+
+        (left, Some(right))
+    }
+
+    /// Splits the candidates left in the current segment after the first `index` of them.
+    ///
+    /// The first half keeps no follow-up, the second half gets every follow-up left.\
+    /// Either half can be left without candidates in the current segment.
+    ///
+    /// ### Panics
+    ///
+    /// Panics when `index` is greater than the number of candidates left in the current segment.
+    #[inline]
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
+    pub(crate) fn split_current_segment_at(mut self, index: usize) -> (Self, Self) {
+        let (left_cursor, right_cursor) = self.cursor.split_at(index);
+
+        // Both halves keep the original segment's local indices and our windows keep their
+        // segment starts, so the right half still resolves `segment_start + local_index`.
+        // Only the cursors and the follow-ups change hands.
+        //
+        // The left half keeps a share of the plan even without follow-ups:
+        // our current state, coverage included, might point into it.
+        let right_schedule = self
+            .schedule
+            .as_mut()
+            .map(SegmentSchedule::split_follow_ups);
+        self.cursor = left_cursor;
+
+        let right = Shiper {
+            shiperator: self.shiperator.clone(),
+            cursor: right_cursor,
+            schedule: right_schedule,
+            is_exact_sized: self.is_exact_sized,
+        };
+
+        (self, right)
+    }
+}
+
+impl<S> Shiper<S> {
+    /// Returns the number of items left when they're all in the current segment
+    /// and every candidate yields one.
+    ///
+    /// Parallel iterators drive these traversals as indexed: the item at index `i` is
+    /// the candidate at index `i`, Rayon can split them anywhere without us entering a segment.
+    #[inline]
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
+    pub(crate) fn exact_len(&self) -> Option<usize> {
+        let has_follow_ups = self
+            .schedule
+            .as_ref()
+            .is_some_and(|schedule| !schedule.follow_ups().is_empty());
+
+        if !self.is_exact_sized || has_follow_ups {
+            return None;
+        }
+
+        Some(self.cursor.len())
+    }
+}
+
 /// Returns `true` when every candidate of `entities`, follow-ups included, yields an item.
 ///
 /// `shiperator` only knows if its current state can reject. Follow-ups install new states and

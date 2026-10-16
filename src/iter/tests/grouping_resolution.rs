@@ -666,23 +666,15 @@ fn split_in_coverage<'a>(a: &'a View<'_, A>, b: &'a View<'_, B>) -> (PairIter<'a
     );
     let segments: [(&[EntityId], &[NodeState]); 2] =
         [(&a.dense[2..5], &A_WALK), (&b.dense[..], &B_WALK)];
-    let mut left = planned(windows, &PAIR_LAYOUT, &segments, &A_UNEVALUATED);
+    let mut iter = planned(windows, &PAIR_LAYOUT, &segments, &A_UNEVALUATED);
 
     // `e2` and `e5` from `A`'s walk, then `e1` once in `B`'s.
-    let values: Vec<_> = left.by_ref().take(3).map(|(a, b)| (a.0, b.0)).collect();
+    let values: Vec<_> = iter.by_ref().take(3).map(|(a, b)| (a.0, b.0)).collect();
     assert_eq!(values, [(2, 12), (5, 15), (1, 11)]);
 
-    let (left_cursor, right_cursor) = left.cursor.split().unwrap();
-    let right_schedule = left.schedule.as_mut().unwrap().split_follow_ups();
-    left.cursor = left_cursor;
-    let right = Shiper {
-        shiperator: left.shiperator.clone(),
-        cursor: right_cursor,
-        schedule: Some(right_schedule),
-        is_exact_sized: left.is_exact_sized,
-    };
+    let (left, right) = iter.split_current_segment();
 
-    (left, right)
+    (left, right.unwrap())
 }
 
 /// Asserts that the right half of a split still reads the current coverage

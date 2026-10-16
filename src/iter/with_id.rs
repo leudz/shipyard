@@ -140,7 +140,7 @@ impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for 
 
     #[inline]
     fn split(self) -> (Self, Option<Self>) {
-        let (left, right) = self.0.split();
+        let (left, right) = self.0.split_current_segment();
 
         (WithId(left), right.map(WithId))
     }
@@ -150,6 +150,7 @@ impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for 
     where
         F: rayon::iter::plumbing::Folder<Self::Item>,
     {
+        // Like `Shiper`'s producer, the folder has to be able to stop once it's `full`.
         folder.consume_iter(self)
     }
 }

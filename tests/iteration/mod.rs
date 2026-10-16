@@ -6,6 +6,8 @@ mod grouped;
 mod non_packed;
 mod or;
 mod owned;
+#[cfg(feature = "parallel")]
+mod parallel;
 mod tracking;
 mod update;
 pub(crate) mod ways;

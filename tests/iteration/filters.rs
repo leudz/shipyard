@@ -353,7 +353,8 @@ fn exactness() {
     assert_eq!((&tracked | &small).iter().size_hint(), (0, Some(6)));
 }
 
-/// Asserts that parallel iterators only report a length when the traversal can't reject.
+/// Asserts that parallel iterators only report a length when the traversal can't reject,
+/// with or without ids.
 #[cfg(feature = "parallel")]
 #[test]
 fn parallel_exactness() {
@@ -363,6 +364,8 @@ fn parallel_exactness() {
     let (tracked, a) = world.borrow::<(View<Tracked>, View<A>)>().unwrap();
 
     assert_eq!(a.par_iter().opt_len(), Some(10));
+    assert_eq!(a.par_iter().with_id().opt_len(), Some(10));
+    assert_eq!(tracked.inserted().par_iter().with_id().opt_len(), None);
     assert_eq!(tracked.inserted().par_iter().opt_len(), None);
     assert_eq!((tracked.inserted(), &a).par_iter().opt_len(), None);
 }
