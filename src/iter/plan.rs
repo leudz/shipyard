@@ -289,6 +289,12 @@ impl Plan {
     pub(crate) fn coverage(&self, span: CoverageSpan) -> &[Coverage] {
         coverage_records(&self.coverage, span).expect("coverage span validated by Plan::new")
     }
+
+    /// Returns every segment, the ones schedules already took included.
+    #[cfg(test)]
+    pub(crate) fn segments(&self) -> &[SegmentDescriptor] {
+        &self.segments
+    }
 }
 
 /// Returns the records of `span`, `None` when it's outside `coverage`.

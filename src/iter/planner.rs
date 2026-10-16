@@ -7,17 +7,21 @@
 //! Both alternatives are kept in a [`Selection`] until the query decides which one drives.
 //!
 //! Nothing here reads entities. Estimates only use group metadata, and the metadata is
-//! released once the iterator is built.
+//! released once the iterator is built.\
+//! The winning walks become segments in [`regions::grouped_entities`].
+
+pub(crate) mod regions;
 
 use crate::component::Component;
 use crate::iter::mixed::NON_CAPTAIN_FACTOR;
-use crate::iter::RawEntityIdAccess;
+use crate::iter::{EntityCursor, RawEntityIdAccess};
 use crate::sparse_set::{Groups, SparseSet};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cmp::Reverse;
+use core::fmt;
 
 /// What a query node knows about grouping, reported while its storages are borrowed.
 ///
@@ -141,6 +145,11 @@ pub(crate) struct Child {
     pub(crate) sail_time: usize,
     /// Number of candidates the child walks when it drives, `None` when it overflows.
     pub(crate) candidates: Option<usize>,
+    /// The first entities the child walks when it drives.
+    ///
+    /// For a window over a grouped storage, every entity of that storage.\
+    /// Grouped walks take their segments from it.
+    pub(crate) entities: EntityCursor,
     pub(crate) metadata: NodeMetadata,
 }
 
@@ -160,6 +169,7 @@ impl Child {
             can_sailor,
             sail_time,
             candidates: entities.candidate_count(),
+            entities: entities.cursor,
             metadata: core::mem::take(&mut entities.metadata),
         }
     }
@@ -202,18 +212,28 @@ pub(crate) struct GroupedCandidate {
     /// The group's members in child order, with their storage's regions.
     pub(crate) members: Vec<Member>,
     /// Walks in emission order, empty ones are left out.
-    #[allow(dead_code, reason = "Read once grouped traversals are installed.")]
     pub(crate) walks: Vec<Walk>,
     /// Estimated work of all walks, see [`walk_work`].
     pub(crate) work: u64,
 }
 
 /// A group member and the child holding it.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy)]
 pub(crate) struct Member {
     /// Position of the child among the `Mixed`'s children.
     pub(crate) child: usize,
     pub(crate) regions: MemberRegions,
+    /// Every entity of the member's storage, `regions` describes them.
+    pub(crate) entities: EntityCursor,
+}
+
+impl fmt::Debug for Member {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Member")
+            .field("child", &self.child)
+            .field("regions", &self.regions)
+            .finish_non_exhaustive()
+    }
 }
 
 /// One walk of a grouped alternative.
@@ -443,6 +463,7 @@ fn group_members(children: &[Child], group: &Arc<[StorageId]>) -> Option<Vec<Mem
         members.push(Member {
             child: position,
             regions: window.regions,
+            entities: child.entities,
         });
     }
 
@@ -549,6 +570,7 @@ mod grouping_selection_arithmetic {
             can_sailor: true,
             sail_time: len,
             candidates: Some(len),
+            entities: EntityCursor::empty(),
             metadata: NodeMetadata::Window(WindowMetadata {
                 storage_id: group[member],
                 group: group.clone(),
@@ -578,6 +600,7 @@ mod grouping_selection_arithmetic {
             can_sailor: true,
             sail_time: len,
             candidates: Some(len),
+            entities: EntityCursor::empty(),
             metadata: NodeMetadata::Ungrouped,
         }
     }

@@ -527,7 +527,6 @@ impl EntityCursor {
     ///
     /// Panics when `index` is greater than the number of unconsumed entities.
     #[inline]
-    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     pub(crate) fn split_at(self, index: usize) -> (EntityCursor, EntityCursor) {
         assert!(index <= self.len(), "split index out of bounds");
 
@@ -546,6 +545,30 @@ impl EntityCursor {
         };
 
         (left, right)
+    }
+
+    /// Returns a cursor over `len` unconsumed entities, after skipping the first `start` of them.
+    ///
+    /// The new cursor starts a segment: its first entity has local index 0.
+    ///
+    /// ### Panics
+    ///
+    /// Panics when the range goes past the unconsumed entities.
+    #[inline]
+    pub(crate) fn segment(self, start: usize, len: usize) -> EntityCursor {
+        let end = start.checked_add(len);
+        assert!(
+            end.is_some_and(|end| end <= self.len()),
+            "segment out of bounds"
+        );
+
+        let (_, rest) = self.split_at(start);
+        let (segment, _) = rest.split_at(len);
+
+        EntityCursor {
+            local_index: 0,
+            ..segment
+        }
     }
 }
 
@@ -677,6 +700,40 @@ mod grouping_cursor {
         cursor.advance();
 
         let _ = cursor.split_at(3);
+    }
+
+    /// Asserts that a segment taken from a partially consumed cursor starts after the
+    /// skipped entities and restarts local indices at 0.
+    #[test]
+    fn segment() {
+        let entities = entities(6);
+        let mut cursor = cursor(&entities);
+        cursor.advance();
+
+        let segment = cursor.segment(2, 3);
+
+        assert_eq!((segment.local_index(), segment.len()), (0, 3));
+        // SAFE: The segment holds 3 entities.
+        assert_eq!(unsafe { segment.current() }, entities[3]);
+    }
+
+    /// Asserts that a segment ending past the unconsumed entities panics instead of creating
+    /// an out of bounds cursor.
+    #[test]
+    #[should_panic(expected = "segment out of bounds")]
+    fn segment_out_of_bounds() {
+        let entities = entities(4);
+
+        let _ = cursor(&entities).segment(2, 3);
+    }
+
+    /// Asserts that a segment whose end overflows panics instead of wrapping.
+    #[test]
+    #[should_panic(expected = "segment out of bounds")]
+    fn segment_overflow() {
+        let entities = entities(4);
+
+        let _ = cursor(&entities).segment(1, usize::MAX);
     }
 }
 
