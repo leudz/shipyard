@@ -1,10 +1,12 @@
-use shipyard::iter::OneOfTwo;
+use super::ways::every_way;
+use shipyard::iter::{IntoShiperator, Mixed, OneOfTwo};
 use shipyard::*;
 
 #[derive(Component, Debug, PartialEq)]
 struct Pos(u32);
 
 #[derive(Component, Debug, PartialEq)]
+#[track(Modification)]
 struct Vel(u32);
 
 #[derive(Component, Debug, PartialEq)]
@@ -147,4 +149,112 @@ fn tuple_or() {
         .collect();
 
     assert_eq!(items, [(e[1], 21), (e[3], 23), (alone, 20)]);
+}
+
+/// `e0` to `e3` own `Pos(i)`, `e1` and `e3` also own `Vel(10 + i)`.
+/// Only `e3` owns a `Tag`, `Tag(23)`. Six more entities only own `Vel(0)`.
+///
+/// `Pos` drives the views below, rejecting `e0` and `e2`. No `Vel` is flagged as modified.
+fn tracked_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+
+    let e: Vec<EntityId> = (0..4).map(|i| world.add_entity(Pos(i))).collect();
+    for i in [1, 3] {
+        world.add_component(e[i], Vel(10 + i as u32));
+    }
+    world.add_component(e[3], Tag(23));
+    for _ in 0..6 {
+        world.add_entity(Vel(0));
+    }
+    world.borrow::<ViewMut<Vel>>().unwrap().clear_all_modified();
+
+    (world, e)
+}
+
+/// `_tag` is skipped, entities without a `Tag` are still yielded.
+#[derive(Borrow, IntoIter)]
+#[shipyard(item_name = "Renamed")]
+struct RenamedView<'v> {
+    #[shipyard(item_field_name = "position")]
+    v_pos: View<'v, Pos>,
+    vm_vel: ViewMut<'v, Vel>,
+    #[shipyard(item_field_skip)]
+    _tag: View<'v, Tag>,
+}
+
+/// Asserts that a named derived view yields its renamed fields in every way,
+/// ignoring the skipped field's storage, and that reading its `Mut`s flags nothing.
+#[test]
+fn renamed_skipped() {
+    let (world, e) = tracked_world();
+    let mut renamed = world.borrow::<RenamedView>().unwrap();
+
+    let items = every_way!((&mut renamed).iter(), |renamed: Renamed| (
+        renamed.position.0,
+        renamed.vel.0
+    ));
+
+    assert_eq!(items, [(e[1], (1, 11)), (e[3], (3, 13))]);
+    assert!(!renamed.vm_vel.is_modified(e[1]));
+    assert!(!renamed.vm_vel.is_modified(e[3]));
+}
+
+/// Asserts that writing through a named derived view's `Mut` in bulk flags only that component.
+#[test]
+fn named_mut() {
+    let (world, e) = tracked_world();
+    let mut renamed = world.borrow::<RenamedView>().unwrap();
+
+    (&mut renamed)
+        .iter()
+        .with_id()
+        .for_each(|(id, mut renamed)| {
+            if id == e[3] {
+                renamed.vel.0 += 100;
+            }
+        });
+
+    assert!(!renamed.vm_vel.is_modified(e[1]));
+    assert!(renamed.vm_vel.is_modified(e[3]));
+    assert_eq!((&renamed.vm_vel).get(e[3]).unwrap().0, 113);
+}
+
+/// Asserts that a tuple derived view uses the tuple's own `Mixed`, not an iterator of its own.
+#[test]
+fn tuple_reuses_tuple() {
+    let (world, _) = tracked_world();
+    let motion = world.borrow::<MotionTuple>().unwrap();
+
+    let (shiperator, _, _) = (&motion).into_shiperator();
+    let _: Mixed<_> = shiperator;
+}
+
+/// Asserts that a tuple derived view yields the same items in every way.
+#[test]
+fn tuple_every_way() {
+    let (world, e) = tracked_world();
+    let motion = world.borrow::<MotionTuple>().unwrap();
+
+    let items = every_way!((&motion).iter(), |(pos, vel): (&Pos, &Vel)| (pos.0, vel.0));
+
+    assert_eq!(items, [(e[1], (1, 11)), (e[3], (3, 13))]);
+}
+
+/// Asserts that a mutable named derived view nested in a tuple yields the same items in
+/// every way, with the outer storage rejecting `e1`.
+#[test]
+fn nested_mut() {
+    let (world, e) = tracked_world();
+    let (mut renamed, tags) = world.borrow::<(RenamedView, View<Tag>)>().unwrap();
+
+    let items = every_way!((&mut renamed, &tags).iter(), |(renamed, tag): (
+        Renamed,
+        &Tag
+    )| (
+        renamed.position.0,
+        renamed.vel.0,
+        tag.0
+    ));
+
+    assert_eq!(items, [(e[3], (3, 13, 23))]);
 }

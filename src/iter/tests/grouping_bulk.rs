@@ -58,7 +58,7 @@ impl Component for Zst {
     type Tracking = track::Untracked;
 }
 
-const PAIR_LAYOUT: [NodeKind; 3] = [
+pub(super) const PAIR_LAYOUT: [NodeKind; 3] = [
     NodeKind::Mixed { children: 2 },
     NodeKind::Window,
     NodeKind::Window,
@@ -80,16 +80,16 @@ const NESTED_LAYOUT: [NodeKind; 5] = [
     NodeKind::Window,
 ];
 
-fn cursor(entities: &[EntityId]) -> EntityCursor {
+pub(super) fn cursor(entities: &[EntityId]) -> EntityCursor {
     // SAFE: Every test keeps the storage `entities` belongs to borrowed while its iterators are used.
     unsafe { EntityCursor::new(NonNull::from(entities).cast(), entities.len()) }
 }
 
-fn window(segment_start: usize) -> NodeState {
+pub(super) fn window(segment_start: usize) -> NodeState {
     NodeState::Window { segment_start }
 }
 
-fn mixed(captain_mask: u32) -> NodeState {
+pub(super) fn mixed(captain_mask: u32) -> NodeState {
     NodeState::Mixed {
         captain_mask,
         coverage: CoverageSpan::EMPTY,
@@ -99,7 +99,7 @@ fn mixed(captain_mask: u32) -> NodeState {
 /// Returns an iterator walking `segments` in order, each installing its row.
 ///
 /// The iterator starts without any candidate so even the first segment is entered.
-fn planned<S: Shiperator>(
+pub(super) fn planned<S: Shiperator>(
     shiperator: S,
     layout: &[NodeKind],
     segments: &[(&[EntityId], &[NodeState])],
@@ -128,7 +128,10 @@ fn planned<S: Shiperator>(
 /// the same items in the same order.
 ///
 /// Returns the items with their ids, as `WithId::next` yields them.
-fn every_way<S, T>(iter: impl Fn() -> Shiper<S>, value: impl Fn(S::Out) -> T) -> Vec<(EntityId, T)>
+pub(super) fn every_way<S, T>(
+    iter: impl Fn() -> Shiper<S>,
+    value: impl Fn(S::Out) -> T,
+) -> Vec<(EntityId, T)>
 where
     S: Shiperator,
     T: PartialEq + Debug + Clone,
@@ -179,8 +182,11 @@ where
 /// Takes `prefix` items with `next` then consumes the rest in bulk, in every way.
 ///
 /// Asserts each way ends up with exactly the items of a full traversal, in order.
-fn assert_prefix<S, T>(iter: impl Fn() -> Shiper<S>, value: impl Fn(S::Out) -> T, prefix: usize)
-where
+pub(super) fn assert_prefix<S, T>(
+    iter: impl Fn() -> Shiper<S>,
+    value: impl Fn(S::Out) -> T,
+    prefix: usize,
+) where
     S: Shiperator,
     T: PartialEq + Debug + Clone,
 {

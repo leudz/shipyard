@@ -302,7 +302,8 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     unsafe fn captain_indices_of(&self, entities: &shipyard::iter::EntityCursor, index: usize) -> Option<Self::Index> {
-                        self.0.captain_indices_of(entities, index)
+                        // SAFE: We're a newtype around our inner Shiperator, our caller's guarantees are its own.
+                        unsafe { self.0.captain_indices_of(entities, index) }
                     }
 
                     #[inline]
@@ -317,7 +318,8 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-                        let (#iter_fields_variable) = self.0.get_data(index);
+                        // SAFE: Our indices are our inner Shiperator's, our caller's guarantees are its own.
+                        let (#iter_fields_variable) = unsafe { self.0.get_data(index) };
 
                         #item_name { #iter_fields_variable }
                     }

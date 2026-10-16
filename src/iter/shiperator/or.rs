@@ -1,5 +1,6 @@
 use crate::entity_id::EntityId;
 use crate::iter::plan::{NodeKind, NodeState, OrBranch};
+use crate::iter::shiperator::fold_candidates;
 use crate::iter::{EntityCursor, SegmentEntry, SegmentRow, Shiperator};
 use crate::or::{OneOfTwo, OrWindow};
 
@@ -117,6 +118,48 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
         match index {
             OneOfTwo::One(index) => OneOfTwo::One((self.storages).0.get_data(index)),
             OneOfTwo::Two(index) => OneOfTwo::Two((self.storages).1.get_data(index)),
+        }
+    }
+
+    #[inline]
+    unsafe fn fold_segment<const WITH_ID: bool, Acc, Fold>(
+        &self,
+        entities: &mut EntityCursor,
+        init: Acc,
+        mut f: Fold,
+    ) -> Acc
+    where
+        Fold: FnMut(Acc, Option<EntityId>, Self::Out) -> Acc,
+    {
+        match self.branch {
+            // The first branch accepts exactly the candidates its own captain accepts,
+            // so it can fold with its own loops. A nested `Mixed` keeps picking its loop
+            // once per segment instead of resolving each candidate through us.
+            // The adapter owns `f` with `move`, see `Shiper::fold_segments`.
+            // SAFE: When the first branch drives, we entered it with our own segment,
+            // `entities`' local indices are its local indices too.
+            // Our caller keeps the plan of that segment alive.
+            OrBranch::A => unsafe {
+                (self.storages).0.fold_segment::<WITH_ID, Acc, _>(
+                    entities,
+                    init,
+                    move |acc, entity_id, item| f(acc, entity_id, OneOfTwo::One(item)),
+                )
+            },
+            // The second branch also rejects the entities the first one matches,
+            // that check has to happen before any item is created.
+            // SAFE: `fold_candidates` only resolves non-empty cursors at their current
+            // candidate's local index, a local index of our segment per our caller.
+            // Our caller keeps our plan alive. `captain_indices_of`'s results are valid for `get_data`.
+            OrBranch::B => unsafe {
+                fold_candidates::<Self, WITH_ID, Acc, Fold, _>(
+                    self,
+                    entities,
+                    init,
+                    f,
+                    |entities, index| self.captain_indices_of(entities, index),
+                )
+            },
         }
     }
 }

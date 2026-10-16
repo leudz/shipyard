@@ -32,11 +32,15 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
     where
         for<'any> <T as IterComponent>::Shiperator<'any>: Clone,
     {
+        // We clone the shiperator we saved in its initial state, never one a previous iterator
+        // moved to another segment.
         let shiperator = self.shiperator.clone();
 
-        // SAFETY: We shorten the lifetime here. To me this is okay.
-        //         IntoIterRef only works with SparseSet, its shiperator doesn't contain any reference.
-        //         All components are 'static so this transmute shouldn't allow a shorter lifetime to be stored.
+        // SAFE: We only shorten the lifetime, 'a outlives 'b.
+        // `IntoIterRef` only works with `SparseSet`, its shiperator only holds raw pointers into
+        // storages we keep borrowed for 'a and into the plan our `entities` share.
+        // All components are 'static so the shorter lifetime can't let anything be stored
+        // that wouldn't fit the longer one.
         let shiperator =
             unsafe { core::mem::transmute::<T::Shiperator<'a>, T::Shiperator<'b>>(shiperator) };
 
