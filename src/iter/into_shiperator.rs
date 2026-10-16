@@ -5,6 +5,7 @@ mod tracking;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::iter::mixed::{embed_captain_entities, Mixed};
+use crate::iter::planner::{self, Child, NodeMetadata};
 #[cfg(feature = "parallel")]
 use crate::iter::ParShiperator;
 use crate::iter::{RawEntityIdAccess, Shiper, Shiperator};
@@ -112,7 +113,9 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let window = FullRawWindow::from_view(self);
         let len = window.len();
-        let iter = window.entity_iter();
+        let iter = window
+            .entity_iter()
+            .with_metadata(NodeMetadata::window(self.sparse_set));
 
         (window, len, iter)
     }
@@ -135,7 +138,9 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let window = FullRawWindow::from_view_mut(self);
         let len = window.len();
-        let iter = window.entity_iter();
+        let iter = window
+            .entity_iter()
+            .with_metadata(NodeMetadata::window(self.sparse_set));
 
         (window, len, iter)
     }
@@ -156,9 +161,10 @@ impl<'tmp, 'v: 'tmp, T: Component, Track> IntoShiperator for &'tmp mut ViewMut<'
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+        let metadata = NodeMetadata::window(self.sparse_set);
         let window = FullRawWindowMut::new(self);
         let len = window.len();
-        let iter = window.entity_iter();
+        let iter = window.entity_iter().with_metadata(metadata);
 
         (window, len, iter)
     }
@@ -204,7 +210,7 @@ impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (shiperator, len, entities) = self.0.into_shiperator();
 
-        (Optional(shiperator), len, entities)
+        (Optional(shiperator), len, entities.filtered())
     }
 
     fn can_captain() -> bool {
@@ -224,7 +230,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (shiperator, len, entities) = self.0.into_shiperator();
 
-        (Optional(shiperator), len, entities)
+        (Optional(shiperator), len, entities.filtered())
     }
 
     fn can_captain() -> bool {
@@ -244,7 +250,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (shiperator, len, entities) = self.0.into_shiperator();
 
-        (Optional(shiperator), len, entities)
+        (Optional(shiperator), len, entities.filtered())
     }
 
     fn can_captain() -> bool {
@@ -293,7 +299,7 @@ macro_rules! impl_into_shiperator_tuple {
             fn into_shiperator(
                 self,
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let shiperators = ($(self.$index.into_shiperator(),)+);
+                let mut shiperators = ($(self.$index.into_shiperator(),)+);
 
                 let can_captains = ($(
                     $type::can_captain(),
@@ -325,9 +331,15 @@ macro_rules! impl_into_shiperator_tuple {
                     panic!("Unable to build a Shiperator: Multiple views are unable to be Sailors.")
                 }
 
-                let sail_times = ($(
-                    shiperators.$index.0.sail_time(),
-                )+);
+                let children = [$(
+                    Child::new(
+                        can_captains.$index,
+                        can_sailors.$index,
+                        shiperators.$index.0.sail_time(),
+                        &mut shiperators.$index.2,
+                    ),
+                )+];
+                let selection = planner::select(&children);
 
                 // Preorder position of each child's states in the Mixed's rows.
                 let mut next_slot = 1;
@@ -338,39 +350,25 @@ macro_rules! impl_into_shiperator_tuple {
                 },)+);
                 let _ = next_slot;
 
+                // Grouped traversals aren't installed yet, the ordinary walk always drives.
+                let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;
                 let mut len = 0;
                 let mut entity_iter = RawEntityIdAccess::empty();
 
-                if unable_sailor == 1 {
-                    $(
-                        if !can_sailors.$index {
-                            captain_mask = 1 << $index;
-                            captain_slot = slots.$index;
-                            len = shiperators.$index.1;
-                            entity_iter = shiperators.$index.2;
-                        }
-                    )+
-                } else {
-                    let mut min_sail_time = usize::MAX;
-
-                    $(
-                        if can_captains.$index && sail_times.$index < min_sail_time {
-                            captain_mask = 1 << $index;
-                            captain_slot = slots.$index;
-                            len = shiperators.$index.1;
-                            entity_iter = shiperators.$index.2;
-                            min_sail_time = sail_times.$index;
-                        }
-                    )+
-
-                    // Silence unused warning
-                    let _ = min_sail_time;
-                }
+                $(
+                    if captain == $index {
+                        captain_mask = 1 << $index;
+                        captain_slot = slots.$index;
+                        len = shiperators.$index.1;
+                        entity_iter = shiperators.$index.2;
+                    }
+                )+
 
                 let mixed = Mixed::new(($(shiperators.$index.0,)+), captain_mask);
-                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
+                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter)
+                    .with_metadata(selection.into_metadata());
 
                 (mixed, len, entity_iter)
             }

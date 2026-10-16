@@ -3,6 +3,7 @@ pub(crate) mod mixed;
 #[cfg(feature = "parallel")]
 mod parallel;
 pub(crate) mod plan;
+pub(crate) mod planner;
 mod raw_entity_id_access;
 mod shiperator;
 mod with_id;
@@ -47,6 +48,8 @@ pub struct Shiper<S> {
 
 impl<S: Shiperator> Shiper<S> {
     /// Returns an iterator starting with `entities`' initial cursor then entering its follow-ups.
+    ///
+    /// `entities`' construction metadata is dropped, the iterator doesn't keep it.
     ///
     /// ### Safety
     ///

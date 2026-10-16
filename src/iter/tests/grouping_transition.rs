@@ -454,6 +454,7 @@ fn replay() {
     iter_ref.entities = RawEntityIdAccess {
         cursor: cursor(&a.dense[..2]),
         schedule: plan.finish(),
+        metadata: Default::default(),
     };
 
     let first: Vec<_> = iter_ref.iter().map(|a| a.0).collect();

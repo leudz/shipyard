@@ -766,6 +766,7 @@ fn exact_follow_ups() {
     let entities = RawEntityIdAccess {
         cursor: cursor(&a.dense[2..6]),
         schedule: planned_pair.schedule,
+        metadata: Default::default(),
     };
 
     assert!(windows.is_exact_sized());
@@ -781,6 +782,7 @@ fn exact_follow_ups() {
     let entities = RawEntityIdAccess {
         cursor: cursor(&a.dense[..4]),
         schedule: planned_window.schedule,
+        metadata: Default::default(),
     };
 
     assert!(is_exact_traversal(&a_window, &entities));

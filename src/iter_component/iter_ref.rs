@@ -47,7 +47,9 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
         // Each iterator starts from its own copy of the entities: a fresh cursor and fresh
         // follow-up positions. It borrows `self` for 'b, so even sharing the plan it can't
         // outlive the borrows we hold.
-        let RawEntityIdAccess { cursor, schedule } = self.entities.clone();
+        let RawEntityIdAccess {
+            cursor, schedule, ..
+        } = self.entities.clone();
 
         Shiper {
             shiperator,

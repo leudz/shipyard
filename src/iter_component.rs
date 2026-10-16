@@ -10,6 +10,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::iter::is_exact_traversal;
 use crate::iter::mixed::embed_captain_entities;
+use crate::iter::planner::{self, Child, NodeMetadata};
 use crate::iter::{Mixed, RawEntityIdAccess, Shiperator};
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
@@ -68,7 +69,8 @@ where
         shiperator,
         _all_borrow: all_borrow,
         _borrow: borrow,
-        entities,
+        // Every iterator starts from these entities, the construction metadata isn't part of them.
+        entities: entities.without_metadata(),
         is_exact_sized,
         phantom: core::marker::PhantomData,
     })
@@ -94,10 +96,11 @@ impl<T: Component + Send + Sync> IterComponent for &'_ T {
         error::GetStorage,
     > {
         let view = View::<'a, T>::borrow(all_storages, all_borrow, None, current)?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -124,10 +127,11 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
         error::GetStorage,
     > {
         let view = NonSend::<View<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -154,10 +158,11 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
         error::GetStorage,
     > {
         let view = NonSync::<View<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -184,10 +189,11 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
         error::GetStorage,
     > {
         let view = NonSendSync::<View<'a, T>>::borrow(all_storages, all_borrow, None, current)?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindow::from_owned_view(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -222,10 +228,11 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
             );
         }
 
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -260,10 +267,11 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
             );
         }
 
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -298,10 +306,11 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
             );
         }
 
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -336,10 +345,11 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
             );
         }
 
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -366,10 +376,11 @@ impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
     > {
         let view =
             ViewMut::<'a, T, track::Modification>::borrow(all_storages, all_borrow, None, current)?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -401,10 +412,11 @@ impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
             None,
             current,
         )?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -436,10 +448,11 @@ impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
             None,
             current,
         )?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -471,10 +484,11 @@ impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
             None,
             current,
         )?;
+        let metadata = NodeMetadata::window(&view);
         let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
 
         let len = window.len();
-        let entities = window.entity_iter();
+        let entities = window.entity_iter().with_metadata(metadata);
 
         Ok((window, all_borrow, borrow, len, entities))
     }
@@ -502,35 +516,41 @@ macro_rules! impl_iter_component {
                 error::GetStorage,
             > {
                 $(
-                    let ($raw_window, _, $borrow, $len, $entity_iter) = $type::into_shiperator(all_storages, all_borrow.clone(), current, storage_ids)?;
+                    let ($raw_window, _, $borrow, $len, mut $entity_iter) = $type::into_shiperator(all_storages, all_borrow.clone(), current, storage_ids)?;
                 )+
 
+                // Owned iteration only builds windows and tuples of them,
+                // they can all be captains and sailors.
+                let children = [$(
+                    Child::new(true, true, $raw_window.sail_time(), &mut $entity_iter),
+                )+];
+                let selection = planner::select(&children);
+
+                // Grouped traversals aren't installed yet, the ordinary walk always drives.
+                let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;
                 let mut len = 0;
                 let mut entity_iter = RawEntityIdAccess::empty();
-                let mut min_sail_time = usize::MAX;
                 // Preorder position of the current child's states in the Mixed's rows.
                 let mut slot = 1;
 
                 $(
-                    let sail_time = $raw_window.sail_time();
-
-                    if sail_time < min_sail_time {
+                    if captain == $index {
                         captain_mask = 1 << $index;
                         captain_slot = slot;
                         len = $len;
                         entity_iter = $entity_iter;
-                        min_sail_time = sail_time;
                     }
 
                     slot += <$type::Shiperator<'a> as Shiperator>::node_count();
                 )+
 
-                let _ = (min_sail_time, slot);
+                let _ = slot;
 
                 let mixed = Mixed::new(($($raw_window,)+), captain_mask);
-                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
+                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter)
+                    .with_metadata(selection.into_metadata());
 
                 Ok((mixed, all_borrow, ($($borrow,)+), len, entity_iter))
             }

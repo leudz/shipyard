@@ -18,7 +18,7 @@ macro_rules! impl_into_shiperator_tracking {
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
                 let (window, len, entity_access) = self.0.into_shiperator();
 
-                ($type(window), len, entity_access)
+                ($type(window), len, entity_access.filtered())
             }
 
             #[inline]
@@ -43,7 +43,7 @@ macro_rules! impl_into_shiperator_tracking {
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
                 let (window, len, entity_access) = self.0.into_shiperator();
 
-                ($type(window), len, entity_access)
+                ($type(window), len, entity_access.filtered())
             }
 
             #[inline]
@@ -68,7 +68,7 @@ macro_rules! impl_into_shiperator_tracking {
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
                 let (window, len, entity_access) = self.0.into_shiperator();
 
-                ($type(window), len, entity_access)
+                ($type(window), len, entity_access.filtered())
             }
 
             #[inline]

@@ -5,7 +5,8 @@ use crate::iter::{into_shiperator::strip_plus, Shiperator};
 use crate::iter::{EntityCursor, RawEntityIdAccess, SegmentEntry, SegmentRow};
 use core::ptr::NonNull;
 
-const NON_CAPTAIN_FACTOR: f32 = 0.5;
+/// Weight of a sailor child next to a captain, the planner's estimates use it too.
+pub(crate) const NON_CAPTAIN_FACTOR: f32 = 0.5;
 
 /// [`Mixed::single_captain`] of a segment that needs the general resolver.
 pub(crate) const NO_SINGLE_CAPTAIN: u32 = u32::MAX;
@@ -123,6 +124,7 @@ pub(crate) fn embed_captain_entities<S: Shiperator>(
     RawEntityIdAccess {
         cursor: entities.cursor,
         schedule: plan.finish(),
+        metadata: entities.metadata,
     }
 }
 

@@ -16,7 +16,6 @@ use core::ops::Range;
 #[derive(Default)]
 pub struct Groups {
     /// This storage's own id.
-    #[allow(dead_code, reason = "Read once regroup lands.")]
     pub(crate) storage_id: Option<StorageId>,
     /// In physical order, contiguous from index 0.
     pub(crate) ranges: Vec<GroupRange>,
@@ -31,10 +30,6 @@ pub(crate) struct GroupRange {
     pub(crate) start: usize,
     pub(crate) len: usize,
     /// Rotation of the range once ranges become rings. Always 0 for now.
-    #[allow(
-        dead_code,
-        reason = "Only read by debug assertions until ranges become rings."
-    )]
     pub(crate) shift: isize,
     /// Length of the prefix that is unchanged since the last regroup.
     pub(crate) trust: usize,

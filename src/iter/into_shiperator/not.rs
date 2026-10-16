@@ -15,7 +15,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (window, len, entity_access) = self.0.into_shiperator();
 
-        (Not(window), len, entity_access)
+        (Not(window), len, entity_access.filtered())
     }
 
     #[inline]
@@ -38,7 +38,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (window, len, entity_access) = self.0.into_shiperator();
 
-        (Not(window), len, entity_access)
+        (Not(window), len, entity_access.filtered())
     }
 
     #[inline]
@@ -61,7 +61,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (window, len, entity_access) = self.0.into_shiperator();
 
-        (Not(window), len, entity_access)
+        (Not(window), len, entity_access.filtered())
     }
 
     #[inline]
@@ -88,7 +88,7 @@ macro_rules! impl_into_shiperator_tracking {
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
                 let (window, len, entity_access) = (self.0).0.into_shiperator();
 
-                (Not($type(window)), len, entity_access)
+                (Not($type(window)), len, entity_access.filtered())
             }
 
             #[inline]
@@ -113,7 +113,7 @@ macro_rules! impl_into_shiperator_tracking {
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
                 let (window, len, entity_access) = (self.0).0.into_shiperator();
 
-                (Not($type(window)), len, entity_access)
+                (Not($type(window)), len, entity_access.filtered())
             }
 
             #[inline]
@@ -138,7 +138,7 @@ macro_rules! impl_into_shiperator_tracking {
             ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
                 let (window, len, entity_access) = (self.0).0.into_shiperator();
 
-                (Not($type(window)), len, entity_access)
+                (Not($type(window)), len, entity_access.filtered())
             }
 
             #[inline]

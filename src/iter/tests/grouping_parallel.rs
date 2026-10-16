@@ -251,6 +251,7 @@ fn opt_len_follow_ups() {
             RawEntityIdAccess {
                 cursor: EntityCursor::empty(),
                 schedule,
+                metadata: Default::default(),
             },
         )
     };
@@ -283,6 +284,7 @@ fn opt_len_mixed() {
         RawEntityIdAccess {
             cursor: EntityCursor::empty(),
             schedule,
+            metadata: Default::default(),
         },
     );
 
@@ -341,6 +343,7 @@ fn indexed_collect() {
             RawEntityIdAccess {
                 cursor: cursor(&a.dense),
                 schedule: None,
+                metadata: Default::default(),
             },
         )
     };

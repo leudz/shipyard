@@ -1,4 +1,5 @@
 use crate::iter::plan::{OrBranch, PlanBuilder, SegmentRow};
+use crate::iter::planner::NodeMetadata;
 use crate::iter::{IntoShiperator, RawEntityIdAccess, Shiperator};
 use crate::or::{Or, OrWindow};
 
@@ -55,16 +56,18 @@ where
             }
         }
 
+        // `Or` keeps ordinary selection, with or without candidates.
         let Some((branch, cursor)) = initial else {
             or.branch = OrBranch::A;
 
-            return (or, 0, RawEntityIdAccess::empty());
+            return (or, 0, RawEntityIdAccess::empty().filtered());
         };
 
         or.branch = branch;
         let entities = RawEntityIdAccess {
             cursor,
             schedule: plan.finish(),
+            metadata: NodeMetadata::Filtered,
         };
 
         (or, cursor.len(), entities)
