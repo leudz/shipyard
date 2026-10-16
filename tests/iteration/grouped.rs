@@ -1,4 +1,6 @@
-//! Queries over grouped storages, while iteration doesn't read the group ranges yet.
+//! Queries over grouped storages compared with the same queries without group.
+//!
+//! In this world the ordinary walks are cheaper, grouped walks are tested in `automatic`.
 //!
 //! Regrouping reorders components, so results are compared sorted by entity
 //! against a world built the same way without the group.

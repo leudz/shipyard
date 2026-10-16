@@ -1,7 +1,8 @@
 //! Selection between ordinary and grouped walks, on worlds grouped by `group` and `regroup`.
 //!
 //! Queries are built through their real constructors. We read the selection a `Mixed`
-//! reports in its construction metadata, while iterators still install the ordinary walk.
+//! reports in its construction metadata, constructors always install the ordinary walk.\
+//! Installing the winner is tested in `grouping_automatic`.
 
 use crate::component::Component;
 use crate::entity_id::EntityId;

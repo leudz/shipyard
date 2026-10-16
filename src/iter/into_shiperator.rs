@@ -75,8 +75,11 @@ where
 {
     #[inline]
     fn iter(self) -> Shiper<Self::Shiperator> {
-        let (shiperator, current_len, entities) = self.into_shiperator();
+        let (mut shiperator, current_len, entities) = self.into_shiperator();
         debug_assert_eq!(current_len, entities.cursor.len());
+
+        // We're the query's root, every node has been built and nothing will pick another walk.
+        let entities = planner::install_winner(&mut shiperator, entities);
 
         Shiper::new(shiperator, entities)
     }
@@ -350,7 +353,8 @@ macro_rules! impl_into_shiperator_tuple {
                 },)+);
                 let _ = next_slot;
 
-                // Grouped traversals aren't installed yet, the ordinary walk always drives.
+                // We always install the ordinary walk, our parent may drive through it.
+                // A cheaper grouped walk is only installed by the query's root, `IntoIter::iter`.
                 let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;

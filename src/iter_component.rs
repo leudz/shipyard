@@ -59,18 +59,23 @@ where
     <T as IterComponent>::Shiperator<'a>: Shiperator,
 {
     let mut storage_ids = ShipHashSet::new();
-    let (shiperator, all_borrow, borrow, current_len, entities) =
+    let (mut shiperator, all_borrow, borrow, current_len, entities) =
         T::into_shiperator(all_storages, all_borrow, current, &mut storage_ids)?;
-
     debug_assert_eq!(current_len, entities.cursor.len());
+
+    // We're the query's root, every node has been built and nothing will pick another walk.
+    // The construction metadata is dropped, every iterator starts from these entities.
+    let entities = planner::install_winner(&mut shiperator, entities);
     let is_exact_sized = is_exact_traversal(&shiperator, &entities);
 
     Ok(IntoIterRef {
+        // Holds the first segment's state, each iterator starts from a clone of it.
+        // Our borrows keep the storages from changing layout, so the plan built from them
+        // stays accurate, and `entities` keeps that plan alive.
         shiperator,
         _all_borrow: all_borrow,
         _borrow: borrow,
-        // Every iterator starts from these entities, the construction metadata isn't part of them.
-        entities: entities.without_metadata(),
+        entities,
         is_exact_sized,
         phantom: core::marker::PhantomData,
     })
@@ -526,7 +531,8 @@ macro_rules! impl_iter_component {
                 )+];
                 let selection = planner::select(&children);
 
-                // Grouped traversals aren't installed yet, the ordinary walk always drives.
+                // We always install the ordinary walk, our parent may drive through it.
+                // A cheaper grouped walk is only installed by the query's root, `into_iter`.
                 let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;

@@ -56,7 +56,7 @@ fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
 
 /// A segment as tests compare it.
 #[derive(Debug, PartialEq)]
-struct Segment {
+pub(super) struct Segment {
     /// Query child whose storage holds the walked entities, and their indices in it.
     walks: (usize, Range<usize>),
     captain_mask: u32,
@@ -65,7 +65,7 @@ struct Segment {
     coverage: Vec<Coverage>,
 }
 
-fn segment(
+pub(super) fn segment(
     walks: (usize, Range<usize>),
     captain_mask: u32,
     starts: &[Option<usize>],
@@ -79,14 +79,14 @@ fn segment(
     }
 }
 
-fn record(child: u32, start: usize, end: usize) -> Coverage {
+pub(super) fn record(child: u32, start: usize, end: usize) -> Coverage {
     Coverage { child, start, end }
 }
 
 /// Describes every segment of the plan of `iter`, a flat query over `storages`.
 ///
 /// Also asserts that `iter` was installed for the first segment.
-fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]) -> Vec<Segment> {
+pub(super) fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]) -> Vec<Segment> {
     let Some(schedule) = &iter.schedule else {
         return Vec::new();
     };
@@ -154,7 +154,7 @@ fn pair_segments(a: &View<'_, A>, b: &View<'_, B>) -> Vec<Segment> {
 }
 
 /// Asserts that no segment walks `span` of child `child`'s storage and no record covers it.
-fn assert_skipped(segments: &[Segment], child: usize, span: Range<usize>) {
+pub(super) fn assert_skipped(segments: &[Segment], child: usize, span: Range<usize>) {
     let overlaps = |range: &Range<usize>| range.start < span.end && span.start < range.end;
 
     for segment in segments {

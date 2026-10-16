@@ -1,0 +1,770 @@
+//! Grouped walks picked by the normal constructors, through public construction only.
+//!
+//! Worlds are grouped with `World::group` and `World::regroup`, then queried as usual.
+//! Expected items are looked up entity by entity.\
+//! Which walk won is checked by the library's `grouping_automatic` tests. Here, `size_hint`
+//! tells it apart when it can: a grouped walk counts its own candidates, an ordinary walk
+//! counts its captain's, and only a fully aligned group knows its exact length.
+
+use super::ways::every_way;
+use shipyard::advanced::Mut;
+use shipyard::iter::OneOfTwo;
+use shipyard::*;
+
+#[derive(Debug, PartialEq)]
+struct A(u32);
+impl Component for A {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct B(u32);
+impl Component for B {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct C(u32);
+impl Component for C {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct D(u32);
+impl Component for D {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct Tracked(u32);
+impl Component for Tracked {
+    type Tracking = track::Modification;
+}
+
+struct Zst0;
+impl Component for Zst0 {
+    type Tracking = track::Untracked;
+}
+
+struct Zst1;
+impl Component for Zst1 {
+    type Tracking = track::Untracked;
+}
+
+fn sorted<T: Ord>(mut items: Vec<T>) -> Vec<T> {
+    items.sort_unstable();
+    items
+}
+
+/// Adds `count` entities owning `A(start + i)` and `B(start + i)`.
+fn add_ab(world: &mut World, start: u32, count: u32) -> Vec<EntityId> {
+    (start..start + count)
+        .map(|i| world.add_entity((A(i), B(i))))
+        .collect()
+}
+
+/// Returns `ids` with their A and B values, looked up one by one and sorted by id.
+fn pair_values(world: &World, ids: &[EntityId]) -> Vec<(EntityId, (u32, u32))> {
+    let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+
+    sorted(
+        ids.iter()
+            .map(|&id| (id, (a.get(id).unwrap().0, b.get(id).unwrap().0)))
+            .collect(),
+    )
+}
+
+/// Runs `(&a, &b)` in every way and returns its sorted items.
+fn pair_items(world: &World) -> Vec<(EntityId, (u32, u32))> {
+    let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+
+    sorted(every_way!((&a, &b).iter(), |(a, b): (&A, &B)| (a.0, b.0)))
+}
+
+/// 10 pairs and 2 A-only entities are grouped, then a pair and 2 B-only entities are added.
+///
+/// The grouped walks are the aligned pairs, then A's and B's unevaluated regions.
+/// They cost 32 against 39 for A or B captaining alone.
+///
+/// Returns the pairs.
+fn follow_ups_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    world.add_entity(A(100));
+    world.add_entity(A(101));
+    world.group::<(A, B)>();
+    pairs.extend(add_ab(&mut world, 10, 1));
+    world.add_entity(B(100));
+    world.add_entity(B(101));
+
+    (world, pairs)
+}
+
+/// Asserts that a regrouped pair yields every pair in every way, as a single exact walk.
+#[test]
+fn aligned() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 6);
+    world.add_entity(A(100));
+    world.add_entity(B(100));
+    world.group::<(A, B)>();
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    // Captaining alone, A or B would count 7 candidates and reject one.
+    let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+    assert_eq!((&a, &b).iter().size_hint(), (6, Some(6)));
+}
+
+/// Asserts that mutable outputs of a regrouped pair reach every pair in every way,
+/// and that outputs held all at once each write their own entity's components.
+#[test]
+fn aligned_mut() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 6);
+    let lone = world.add_entity(A(100));
+    world.group::<(A, B)>();
+    let expected = pair_values(&world, &pairs);
+
+    let (mut a, mut b) = world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
+    let items = every_way!((&mut a, &mut b).iter(), |(a, b): (&mut A, &mut B)| (
+        a.0, b.0
+    ));
+    assert_eq!(sorted(items), expected);
+
+    let held: Vec<(&mut A, &mut B)> = (&mut a, &mut b).iter().collect();
+    for (a, b) in held {
+        a.0 += 1000;
+        b.0 += 2000;
+    }
+    drop((a, b));
+
+    let written: Vec<_> = expected
+        .iter()
+        .map(|&(id, (a, b))| (id, (a + 1000, b + 2000)))
+        .collect();
+    assert_eq!(pair_values(&world, &pairs), written);
+    assert_eq!(world.get::<&A>(lone).unwrap().0, 100);
+}
+
+/// Asserts that an ABC query with an AB group and a larger C yields the pairs owning a C.
+#[test]
+fn sailor() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 4);
+    world.add_component(pairs[1], C(1));
+    world.add_component(pairs[3], C(3));
+    for i in 0..5 {
+        world.add_entity(C(10 + i));
+    }
+    world.group::<(A, B)>();
+
+    let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+    let items = every_way!((&a, &b, &c).iter(), |(a, b, c): (&A, &B, &C)| (
+        a.0, b.0, c.0
+    ));
+
+    assert_eq!(
+        sorted(items),
+        [(pairs[1], (1, 1, 1)), (pairs[3], (3, 3, 3))]
+    );
+}
+
+/// Asserts that an ABC query with an AB group and a single C yields that C's pair.
+#[test]
+fn small_captain() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 4);
+    world.add_component(pairs[2], C(2));
+    world.group::<(A, B)>();
+
+    let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+    let items = every_way!((&a, &b, &c).iter(), |(a, b, c): (&A, &B, &C)| (
+        a.0, b.0, c.0
+    ));
+
+    assert_eq!(items, [(pairs[2], (2, 2, 2))]);
+}
+
+/// Returns the sorted items of the ABCD query on `world`.
+fn abcd_items(world: &World) -> Vec<(EntityId, u32)> {
+    let (a, b, c, d) = world
+        .borrow::<(View<A>, View<B>, View<C>, View<D>)>()
+        .unwrap();
+
+    sorted(every_way!((&a, &b, &c, &d).iter(), |(a, b, c, d): (
+        &A,
+        &B,
+        &C,
+        &D
+    )| a.0
+        + b.0
+        + c.0
+        + d.0))
+}
+
+/// Adds 4 entities owning `A(i)`, `B(i)`, `C(i)` and `D(i)` and groups AB and CD.
+fn abcd_world() -> (World, Vec<(EntityId, u32)>) {
+    let mut world = World::new();
+    let all = (0..4)
+        .map(|i| (world.add_entity((A(i), B(i), C(i), D(i))), 4 * i))
+        .collect();
+    world.group::<(A, B)>();
+    world.group::<(C, D)>();
+
+    (world, all)
+}
+
+/// Asserts that an ABCD query yields the same entities whichever of its AB and CD groups
+/// has entities left in its unevaluated regions.
+#[test]
+fn two_groups() {
+    let (mut world, all) = abcd_world();
+    add_ab(&mut world, 10, 2);
+    assert_eq!(abcd_items(&world), all);
+
+    let (mut world, all) = abcd_world();
+    world.add_entity((C(10), D(10)));
+    world.add_entity((C(11), D(11)));
+    assert_eq!(abcd_items(&world), all);
+}
+
+/// Asserts that a group of other storages doesn't change what an AB query yields.
+#[test]
+fn unrelated_group() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 4);
+    world.add_entity(A(100));
+    world.add_entity((C(0), D(0)));
+    world.group::<(C, D)>();
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that an AB query with only an ABC group yields the pairs lacking C,
+/// which sit outside the group range.
+#[test]
+fn projection() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 5);
+    for &id in &pairs[..3] {
+        world.add_component(id, C(0));
+    }
+    world.group::<(A, B, C)>();
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that an empty grouped pair yields nothing.
+#[test]
+fn empty() {
+    let mut world = World::new();
+    world.group::<(A, B)>();
+
+    assert_eq!(pair_items(&world), []);
+}
+
+/// Asserts that a group of zero sized components yields every pair in every way.
+#[test]
+fn zero_sized() {
+    let mut world = World::new();
+    let pairs: Vec<EntityId> = (0..4).map(|_| world.add_entity((Zst0, Zst1))).collect();
+    world.add_entity(Zst0);
+    world.add_entity(Zst1);
+    world.group::<(Zst0, Zst1)>();
+
+    let (z0, z1) = world.borrow::<(View<Zst0>, View<Zst1>)>().unwrap();
+    let items = every_way!((&z0, &z1).iter(), |_: (&Zst0, &Zst1)| ());
+
+    assert_eq!(
+        sorted(items),
+        sorted(pairs.into_iter().map(|id| (id, ())).collect())
+    );
+    assert_eq!((&z0, &z1).iter().size_hint(), (4, Some(4)));
+}
+
+/// Asserts that pairs added after a regroup are yielded once each, along with the regrouped ones.
+#[test]
+fn new_entities() {
+    let (world, pairs) = follow_ups_world();
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    // 10 aligned candidates, then one in A's unevaluated region and 3 in B's.
+    // Captaining alone, A or B would count 13 candidates.
+    let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+    assert_eq!((&a, &b).iter().size_hint(), (0, Some(14)));
+}
+
+/// Asserts that an entity whose A was evaluated as ungrouped before it gained B is yielded.
+#[test]
+fn a_ungrouped_then_b() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    let late = world.add_entity(A(10));
+    world.group::<(A, B)>();
+    world.add_component(late, B(10));
+    pairs.push(late);
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that an entity whose B was evaluated as ungrouped before it gained A is yielded.
+#[test]
+fn b_ungrouped_then_a() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    let late = world.add_entity(B(10));
+    world.group::<(A, B)>();
+    world.add_component(late, A(10));
+    pairs.push(late);
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that once a removal resets A, the remaining pairs are yielded,
+/// and still are after a new pair and a full regroup.
+#[test]
+fn reset_then_regroup() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    world.group::<(A, B)>();
+    world.remove::<A>(pairs.remove(0));
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    pairs.extend(add_ab(&mut world, 10, 1));
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    world.regroup();
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+    let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+    assert_eq!((&a, &b).iter().size_hint(), (10, Some(10)));
+}
+
+/// Asserts that an entity reusing a deleted pair's index is yielded with its new generation,
+/// before and after a regroup, and the deleted one never is.
+#[test]
+fn generation_reuse() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    world.group::<(A, B)>();
+    world.delete_entity(pairs[0]);
+    let reused = world.add_entity((A(99), B(99)));
+    assert_eq!(reused.index(), pairs[0].index());
+    pairs[0] = reused;
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    world.regroup();
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that writing through `Mut` in every segment of the grouped walks flags exactly
+/// the written components, reading flags nothing.
+#[test]
+fn tracked_mutation() {
+    let mut world = World::new();
+    let mut pairs: Vec<EntityId> = (0..10)
+        .map(|i| world.add_entity((A(i), Tracked(i))))
+        .collect();
+    world.add_entity(A(100));
+    world.group::<(A, Tracked)>();
+    pairs.push(world.add_entity((A(10), Tracked(10))));
+    world.add_entity(Tracked(100));
+    world
+        .borrow::<ViewMut<Tracked>>()
+        .unwrap()
+        .clear_all_modified();
+
+    let (a, mut tracked) = world.borrow::<(View<A>, ViewMut<Tracked>)>().unwrap();
+    let items = every_way!((&a, &mut tracked).iter(), |(a, t): (&A, Mut<Tracked>)| (
+        a.0, t.0
+    ));
+    assert_eq!(items.len(), 11);
+    assert!(pairs.iter().all(|&id| !tracked.is_modified(id)));
+
+    // `pairs[3]` is in the aligned segment. `pairs[10]` is in `Tracked`'s unevaluated region,
+    // walked before A's since it's longer, so `Tracked` drives when it's written.
+    (&a, &mut tracked).iter().for_each(|(a, mut t)| {
+        if a.0 == 3 || a.0 == 10 {
+            t.0 += 100;
+        }
+    });
+
+    for (i, &id) in (0..).zip(&pairs) {
+        let written = i == 3 || i == 10;
+        assert_eq!(tracked.is_modified(id), written, "{i}");
+        assert_eq!(
+            (&tracked).get(id).unwrap().0,
+            if written { 100 + i } else { i }
+        );
+    }
+}
+
+/// Asserts that filters and `Or` in a query over a grouped pair keep every match.
+#[test]
+fn filters() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 4);
+    world.add_entity(A(100));
+    world.add_component(pairs[0], C(0));
+    world.add_entity(D(0));
+    world.group::<(A, B)>();
+
+    let (a, b, c, d) = world
+        .borrow::<(View<A>, View<B>, View<C>, View<D>)>()
+        .unwrap();
+
+    let not = every_way!((&a, &b, !&c).iter(), |(a, _, ()): (&A, &B, ())| a.0);
+    assert_eq!(sorted(not), [(pairs[1], 1), (pairs[2], 2), (pairs[3], 3)]);
+
+    let optional = every_way!((&a, &b, c.as_optional()).iter(), |(a, _, c): (
+        &A,
+        &B,
+        Option<&C>
+    )| (a.0, c.is_some()));
+    assert_eq!(optional.len(), 4);
+
+    let or = every_way!((&a, &b, &c | &d).iter(), |(a, _, cd): (
+        &A,
+        &B,
+        OneOfTwo<&C, &D>
+    )| (
+        a.0,
+        matches!(cd, OneOfTwo::One(_))
+    ));
+    assert_eq!(or, [(pairs[0], (0, true))]);
+}
+
+/// Asserts that a grouped pair nested in a query yields its matches.
+#[test]
+fn nested() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 4);
+    world.add_entity(A(100));
+    for &id in &pairs[1..] {
+        world.add_component(id, C(0));
+    }
+    world.add_entity(C(100));
+    world.group::<(A, B)>();
+
+    let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+    let items = every_way!(((&a, &b), &c).iter(), |((a, b), _): ((&A, &B), &C)| (
+        a.0, b.0
+    ));
+
+    assert_eq!(sorted(items), pair_values(&world, &pairs[1..]));
+}
+
+/// Asserts that `World::iter` and `AllStorages::iter` yield the grouped walks every time.
+#[test]
+fn owned() {
+    let (world, pairs) = follow_ups_world();
+    let expected = pair_values(&world, &pairs);
+
+    let mut iter = world.iter::<(&A, &B)>();
+    for _ in 0..2 {
+        let items = every_way!(iter.iter(), |(a, b): (&A, &B)| (a.0, b.0));
+        assert_eq!(sorted(items), expected);
+    }
+    drop(iter);
+
+    let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    let mut iter = all_storages.iter::<(&A, &mut B)>();
+    for _ in 0..2 {
+        let items = every_way!(iter.iter(), |(a, b): (&A, &mut B)| (a.0, b.0));
+        assert_eq!(sorted(items), expected);
+    }
+}
+
+/// 500 pairs, 50 A-only and 50 B-only entities are grouped, then 100 more pairs are added.
+///
+/// The grouped walks cost 1600 against 1950 for A captaining alone.
+#[cfg(feature = "parallel")]
+fn parallel_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 500);
+    for i in 0..50 {
+        world.add_entity(A(1000 + i));
+        world.add_entity(B(1000 + i));
+    }
+    world.group::<(A, B)>();
+    pairs.extend(add_ab(&mut world, 500, 100));
+
+    (world, pairs)
+}
+
+/// Asserts that the grouped walks yield the same ids and values in parallel and
+/// sequentially, each entity once.
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel() {
+    use rayon::prelude::*;
+
+    let (world, pairs) = parallel_world();
+    let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
+    assert_eq!((&a, &b).iter().size_hint(), (0, Some(700)));
+
+    let parallel: Vec<_> = (&a, &b)
+        .par_iter()
+        .with_id()
+        .map(|(id, (a, b))| (id, (a.0, b.0)))
+        .collect();
+    assert_eq!(sorted(parallel), pair_values(&world, &pairs));
+
+    let parallel: Vec<_> = (&a, &b).par_iter().map(|(a, b)| (a.0, b.0)).collect();
+    let sequential: Vec<_> = (&a, &b).iter().map(|(a, b)| (a.0, b.0)).collect();
+    assert_eq!(sorted(parallel), sorted(sequential));
+}
+
+/// Asserts that parallel mutable outputs of the grouped walks write every pair once.
+#[cfg(feature = "parallel")]
+#[test]
+fn parallel_mut() {
+    use rayon::prelude::*;
+
+    let (world, pairs) = parallel_world();
+    let expected: Vec<_> = pair_values(&world, &pairs)
+        .into_iter()
+        .map(|(id, (a, b))| (id, (a + b, b)))
+        .collect();
+
+    world.run(|(mut a, b): (ViewMut<A>, View<B>)| {
+        (&mut a, &b).par_iter().for_each(|(a, b)| a.0 += b.0);
+    });
+
+    assert_eq!(pair_values(&world, &pairs), expected);
+}
+
+#[cfg(feature = "proc")]
+mod derived {
+    use super::sorted;
+    use crate::iteration::ways::every_way;
+    use shipyard::*;
+
+    #[derive(Component, Debug, PartialEq)]
+    struct Pos(u32);
+
+    #[derive(Component, Debug, PartialEq)]
+    #[track(Modification)]
+    struct Vel(u32);
+
+    #[derive(Component, Debug, PartialEq)]
+    struct Tag(u32);
+
+    /// `_tag` is skipped, entities without a `Tag` are still yielded.
+    #[derive(Borrow, IntoIter)]
+    #[shipyard(item_name = "Motion")]
+    struct MotionView<'v> {
+        #[shipyard(item_field_name = "position")]
+        v_pos: View<'v, Pos>,
+        vm_vel: ViewMut<'v, Vel>,
+        #[shipyard(item_field_skip)]
+        _tag: View<'v, Tag>,
+    }
+
+    #[derive(Borrow, IntoIter)]
+    struct MotionTuple<'v>(View<'v, Pos>, View<'v, Vel>);
+
+    /// Every entity owning a `Pos` and a `Vel`, by segment of the grouped walks.
+    struct Matches {
+        /// `Pos(i)` and `Vel(10 + i)`, in the group range.
+        aligned: Vec<EntityId>,
+        /// `Pos(100)`, evaluated as ungrouped before gaining `Vel(110)`.
+        /// Found by `Vel`'s unevaluated walk, which looks `Pos` up.
+        vel_walk: EntityId,
+        /// `Vel(111)`, evaluated as ungrouped before gaining `Pos(101)`.
+        /// Found by `Pos`'s unevaluated walk, which looks the tracked `Vel` up.
+        pos_walk: EntityId,
+    }
+
+    impl Matches {
+        fn all(&self) -> Vec<EntityId> {
+            let mut all = self.aligned.clone();
+            all.push(self.vel_walk);
+            all.push(self.pos_walk);
+            all
+        }
+    }
+
+    /// 10 entities own `Pos` and `Vel` and get grouped, along with a `Pos`-only and
+    /// a `Vel`-only entity which later gain the missing component. Two more `Pos`-only and
+    /// `Vel`-only entities never match. Every entity owns a `Tag`.
+    ///
+    /// The unevaluated walks start past the group range and the ungrouped components.\
+    /// The grouped walks cost 26 against 39 for `Pos` captaining alone.
+    fn world() -> (World, Matches) {
+        let mut world = World::new();
+
+        let aligned = (0..10)
+            .map(|i| world.add_entity((Pos(i), Vel(10 + i), Tag(i))))
+            .collect();
+        let vel_walk = world.add_entity((Pos(100), Tag(0)));
+        let pos_walk = world.add_entity((Vel(111), Tag(0)));
+        world.add_entity((Pos(200), Tag(0)));
+        world.add_entity((Vel(201), Tag(0)));
+        world.group::<(Pos, Vel)>();
+        world.add_component(vel_walk, Vel(110));
+        world.add_component(pos_walk, Pos(101));
+        world.borrow::<ViewMut<Vel>>().unwrap().clear_all_modified();
+
+        let matches = Matches {
+            aligned,
+            vel_walk,
+            pos_walk,
+        };
+
+        (world, matches)
+    }
+
+    /// Returns `ids` with their `Pos` and `Vel` values, looked up one by one and sorted by id.
+    fn values(world: &World, ids: &[EntityId]) -> Vec<(EntityId, (u32, u32))> {
+        let (pos, vel) = world.borrow::<(View<Pos>, View<Vel>)>().unwrap();
+
+        sorted(
+            ids.iter()
+                .map(|&id| (id, (pos.get(id).unwrap().0, vel.get(id).unwrap().0)))
+                .collect(),
+        )
+    }
+
+    /// Asserts that a named derived view over the grouped walks yields every match in every
+    /// way, and that reading its `Mut`s flags nothing.
+    #[test]
+    fn named_reads() {
+        let (world, matches) = world();
+        let expected = values(&world, &matches.all());
+
+        let mut motion = world.borrow::<MotionView>().unwrap();
+        // 10 aligned candidates and one in each unevaluated region.
+        // Captaining alone, `Pos` would count 13 candidates.
+        assert_eq!((&mut motion).iter().size_hint(), (0, Some(12)));
+
+        let items = every_way!((&mut motion).iter(), |motion: Motion| (
+            motion.position.0,
+            motion.vel.0
+        ));
+
+        assert_eq!(sorted(items), expected);
+        for id in matches.all() {
+            assert!(!motion.vm_vel.is_modified(id));
+        }
+    }
+
+    /// Ways of consuming a derived iterator.
+    #[derive(Clone, Copy, Debug)]
+    enum Way {
+        Next,
+        Fold,
+        ForEach,
+        IdNext,
+        IdFold,
+        IdForEach,
+    }
+
+    const WAYS: [Way; 6] = [
+        Way::Next,
+        Way::Fold,
+        Way::ForEach,
+        Way::IdNext,
+        Way::IdFold,
+        Way::IdForEach,
+    ];
+
+    /// Consumes `motion`'s iterator with `next` for `prefix` items, then in `way`,
+    /// adding 1000 to the `Vel` of the item whose `Pos` is `target`.
+    fn write(motion: &mut MotionView<'_>, way: Way, prefix: usize, target: u32) {
+        let write = |mut motion: Motion| {
+            if motion.position.0 == target {
+                motion.vel.0 += 1000;
+            }
+        };
+
+        match way {
+            Way::Next | Way::Fold | Way::ForEach => {
+                let mut iter = (&mut *motion).iter();
+                (&mut iter).take(prefix).for_each(&write);
+
+                match way {
+                    Way::Next => {
+                        for motion in iter {
+                            write(motion);
+                        }
+                    }
+                    Way::Fold => iter.fold((), |(), motion| write(motion)),
+                    _ => iter.for_each(&write),
+                }
+            }
+            Way::IdNext | Way::IdFold | Way::IdForEach => {
+                let mut iter = (&mut *motion).iter().with_id();
+                for (_, motion) in (&mut iter).take(prefix) {
+                    write(motion);
+                }
+
+                match way {
+                    Way::IdNext => {
+                        for (_, motion) in iter {
+                            write(motion);
+                        }
+                    }
+                    Way::IdFold => iter.fold((), |(), (_, motion)| write(motion)),
+                    _ => iter.for_each(|(_, motion)| write(motion)),
+                }
+            }
+        }
+    }
+
+    /// Asserts that writing through one item's `Mut`, in every way and after every interesting
+    /// `next` prefix, flags only that entity's `Vel`.
+    ///
+    /// The targets cover both members driving the aligned segment, the untracked `Pos`
+    /// driving with `Vel` looked up, and the tracked `Vel` driving with `Pos` looked up.
+    /// The last two walks start past index 0, a write at a segment local index would land
+    /// on another entity.
+    #[test]
+    fn named_writes() {
+        let (_, matches) = world();
+        let targets = [
+            (matches.aligned[4], 4),
+            (matches.pos_walk, 101),
+            (matches.vel_walk, 100),
+        ];
+
+        for way in WAYS {
+            for prefix in [0, 1, 5, 10, 11, 12, 13] {
+                for (target, target_pos) in targets {
+                    let (world, matches) = world();
+                    let mut expected = values(&world, &matches.all());
+                    for (id, (_, vel)) in &mut expected {
+                        if *id == target {
+                            *vel += 1000;
+                        }
+                    }
+
+                    let mut motion = world.borrow::<MotionView>().unwrap();
+                    write(&mut motion, way, prefix, target_pos);
+
+                    let context = format!("{way:?} after {prefix}, writing {target_pos}");
+                    for id in matches.all() {
+                        assert_eq!(motion.vm_vel.is_modified(id), id == target, "{context}");
+                    }
+                    drop(motion);
+                    assert_eq!(values(&world, &matches.all()), expected, "{context}");
+                }
+            }
+        }
+    }
+
+    /// Asserts that a tuple derived view over the grouped walks yields every match in every way.
+    #[test]
+    fn tuple() {
+        let (world, matches) = world();
+        let expected = values(&world, &matches.all());
+
+        let motion = world.borrow::<MotionTuple>().unwrap();
+        let items = every_way!((&motion).iter(), |(pos, vel): (&Pos, &Vel)| (pos.0, vel.0));
+
+        assert_eq!(sorted(items), expected);
+    }
+}

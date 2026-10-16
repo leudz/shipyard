@@ -22,10 +22,6 @@ use alloc::vec::Vec;
 ///
 /// When `candidate` has no walk, the returned entities have no candidate and no plan,
 /// `mixed` is left as is.
-#[allow(
-    dead_code,
-    reason = "Installed by constructors once grouped selection is activated."
-)]
 pub(crate) fn grouped_entities<S: Shiperator>(
     mixed: &mut S,
     candidate: &GroupedCandidate,

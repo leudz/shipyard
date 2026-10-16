@@ -8,13 +8,15 @@
 //!
 //! Nothing here reads entities. Estimates only use group metadata, and the metadata is
 //! released once the iterator is built.\
-//! The winning walks become segments in [`regions::grouped_entities`].
+//! Constructors always install their ordinary walk. Once the whole query is built,
+//! [`install_winner`] swaps in its root's grouped walks when they're cheaper,
+//! [`regions::grouped_entities`] turning them into segments.
 
 pub(crate) mod regions;
 
 use crate::component::Component;
 use crate::iter::mixed::NON_CAPTAIN_FACTOR;
-use crate::iter::{EntityCursor, RawEntityIdAccess};
+use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
 use crate::sparse_set::{Groups, SparseSet};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
@@ -43,10 +45,7 @@ pub(crate) enum NodeMetadata {
     /// A `Mixed` with a grouped alternative to its ordinary walk.
     ///
     /// Parents don't compose it yet, to them it's a child like any other non member.
-    #[allow(
-        dead_code,
-        reason = "Read once parents compose their children's grouped walks."
-    )]
+    /// Only the query's root can install it, see [`install_winner`].
     Mixed(Box<Selection>),
 }
 
@@ -199,7 +198,6 @@ pub(crate) struct OrdinaryCandidate {
     /// Position of the captain among the `Mixed`'s children.
     pub(crate) captain: usize,
     /// Estimated work, see [`walk_work`]. `None` when it doesn't fit in a `u64`.
-    #[allow(dead_code, reason = "Read once grouped traversals are installed.")]
     pub(crate) work: Option<u64>,
 }
 
@@ -344,7 +342,6 @@ impl Selection {
     /// Returns the grouped alternative when it's cheaper than the ordinary walk.
     ///
     /// The ordinary walk wins ties and estimates that don't fit in a `u64`.
-    #[allow(dead_code, reason = "Read once grouped traversals are installed.")]
     pub(crate) fn grouped_winner(&self) -> Option<&GroupedCandidate> {
         let grouped = self.grouped.as_ref()?;
         let ordinary_work = self.ordinary.work?;
@@ -362,6 +359,33 @@ impl Selection {
             NodeMetadata::Ungrouped
         }
     }
+}
+
+/// Returns the entities driving a whole query, installing its grouped walks on `root`
+/// when they're cheaper than its ordinary walk.
+///
+/// `root` and `entities` are what the query's constructor returned, `root` still in the state
+/// it built.\
+/// The returned entities never carry metadata, the losing alternative is dropped here.
+///
+/// Only the root may call this. A nested `Mixed` keeps the ordinary walk its constructor
+/// installed: its parent estimated its own alternatives with that walk and may drive through it.
+pub(crate) fn install_winner<S: Shiperator>(
+    root: &mut S,
+    entities: RawEntityIdAccess,
+) -> RawEntityIdAccess {
+    // Only a `Mixed` reports a selection. Wrappers either forward their child's report
+    // untouched or mark it filtered, so this one is about `root`'s own immediate children.
+    let NodeMetadata::Mixed(selection) = &entities.metadata else {
+        return entities.without_metadata();
+    };
+    let Some(winner) = selection.grouped_winner() else {
+        return entities.without_metadata();
+    };
+
+    // `root` gets the first grouped segment's state, overwriting the ordinary one.
+    // The ordinary entities, and any plan they embed, are dropped with `entities`.
+    regions::grouped_entities(root, winner)
 }
 
 /// Returns the ordinary walk of `children`.
@@ -492,7 +516,7 @@ impl GroupedCandidate {
     }
 
     /// Returns the children holding the group's members, bit `i` for child `i`.
-    #[allow(dead_code, reason = "Read once grouped traversals are installed.")]
+    #[allow(dead_code, reason = "Only tests read it for now.")]
     pub(crate) fn member_mask(&self) -> u32 {
         self.members
             .iter()

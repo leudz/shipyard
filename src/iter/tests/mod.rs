@@ -1,4 +1,5 @@
 mod grouping_adapters;
+mod grouping_automatic;
 mod grouping_bulk;
 #[cfg(feature = "parallel")]
 mod grouping_parallel;

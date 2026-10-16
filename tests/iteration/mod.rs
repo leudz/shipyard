@@ -1,3 +1,4 @@
+mod automatic;
 mod cursor;
 #[cfg(feature = "proc")]
 mod derived;
