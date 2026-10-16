@@ -92,9 +92,14 @@ impl CoverageSpan {
 }
 
 /// Physical region of a storage owned by an earlier segment.
+///
+/// The earlier segment already walked every candidate whose component in that storage
+/// lies in the region, later segments must reject them.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Coverage {
     /// Immediate child of the `Mixed` holding this record, whose storage contains the region.
+    ///
+    /// It's always a window, other nodes don't have a single storage.
     pub(crate) child: u32,
     /// Absolute index of the region's first component.
     pub(crate) start: usize,
@@ -177,7 +182,8 @@ pub(crate) enum PlanError {
     InvalidCaptainMask,
     /// A coverage span is outside the pool.
     CoverageOutOfBounds,
-    /// A coverage record has an empty region or names a child its `Mixed` doesn't have.
+    /// A coverage record has an empty region or names a child its `Mixed` doesn't have
+    /// or that isn't a window.
     InvalidCoverage,
 }
 
@@ -280,13 +286,6 @@ impl Plan {
     /// `span` must come from one of this plan's rows.\
     /// The records don't move while the plan is alive.
     #[inline]
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "grouping plan 05 resolves coverage on segment entry"
-        )
-    )]
     pub(crate) fn coverage(&self, span: CoverageSpan) -> &[Coverage] {
         coverage_records(&self.coverage, span).expect("coverage span validated by Plan::new")
     }
@@ -342,10 +341,28 @@ fn validate_subtree(
         return Err(PlanError::StateMismatch);
     };
 
+    // Bit `i` flags child `i` as a window.
+    let mut window_children = 0u32;
     let mut next = node + 1;
     for child in 0..arity {
+        if layout.get(next) == Some(&NodeKind::Window) {
+            window_children |= 1 << child;
+        }
+
         let child_active = active_children & (1 << child) != 0;
         next = validate_subtree(layout, row, coverage, next, child_active)?;
+    }
+
+    // Coverage is matched against a child's storage index, only windows have one.
+    if let (true, NodeState::Mixed { coverage: span, .. }) = (active, state) {
+        let records = coverage_records(coverage, span).ok_or(PlanError::CoverageOutOfBounds)?;
+
+        if records
+            .iter()
+            .any(|record| window_children & (1 << record.child) == 0)
+        {
+            return Err(PlanError::InvalidCoverage);
+        }
     }
 
     Ok(next)
@@ -493,14 +510,20 @@ impl Drop for SegmentSchedule {
 /// Sailor subtrees are skipped as a whole.
 #[doc(hidden)]
 pub struct SegmentEntry<'a> {
+    plan: &'a Plan,
     states: &'a [NodeState],
 }
 
 impl<'a> SegmentEntry<'a> {
-    /// Returns a reader over `row`, a full row of a plan.
+    /// Returns a reader over the row `segment` installs.
+    ///
+    /// `segment` must come from `plan`.
     #[inline]
-    pub(crate) fn new(row: &'a [NodeState]) -> SegmentEntry<'a> {
-        SegmentEntry { states: row }
+    pub(crate) fn new(plan: &'a Plan, segment: &SegmentDescriptor) -> SegmentEntry<'a> {
+        SegmentEntry {
+            plan,
+            states: plan.row(segment),
+        }
     }
 
     /// Returns the state of the next node in preorder.
@@ -524,14 +547,16 @@ impl<'a> SegmentEntry<'a> {
         }
     }
 
-    /// Returns the captain mask and coverage of the next node, an active `Mixed`.
+    /// Returns the captain mask and coverage records of the next node, an active `Mixed`.
+    ///
+    /// The records live in the plan, they don't move while it's alive.
     #[inline]
-    pub(crate) fn next_mixed(&mut self) -> (u32, CoverageSpan) {
+    pub(crate) fn next_mixed(&mut self) -> (u32, &'a [Coverage]) {
         match self.next_state() {
             NodeState::Mixed {
                 captain_mask,
                 coverage,
-            } => (captain_mask, coverage),
+            } => (captain_mask, self.plan.coverage(coverage)),
             state => unreachable!("expected an active Mixed state, got {state:?}"),
         }
     }
@@ -1111,6 +1136,35 @@ mod grouping_plan_owner {
                 Some(PlanError::InvalidCoverage)
             );
         }
+    }
+
+    /// Asserts that a coverage record naming a nested `Mixed` is rejected,
+    /// only window children have a storage index to match.
+    #[test]
+    fn coverage_child_kind() {
+        // Mixed(Window, Mixed(Window)), the outer Mixed has a record on its second child.
+        let layout = [
+            NodeKind::Mixed { children: 2 },
+            NodeKind::Window,
+            NodeKind::Mixed { children: 1 },
+            NodeKind::Window,
+        ];
+        let entities = entities(1);
+        let row = vec![
+            mixed(0b01, 0, 1),
+            window(0),
+            NodeState::Sailor,
+            NodeState::Sailor,
+        ];
+        let record = Coverage {
+            child: 1,
+            start: 0,
+            end: 1,
+        };
+
+        let result = Plan::new(&layout, vec![segment(&entities, 0)], row, vec![record]);
+
+        assert_eq!(result.err(), Some(PlanError::InvalidCoverage));
     }
 
     /// Asserts that the total candidate count overflowing a `usize` is rejected.

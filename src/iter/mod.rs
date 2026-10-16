@@ -53,7 +53,7 @@ impl<S: Shiperator> Shiper<S> {
     /// and `shiperator` must be able to enter every follow-up of `entities`.
     #[inline]
     pub(crate) fn new(shiperator: S, entities: RawEntityIdAccess) -> Shiper<S> {
-        let is_exact_sized = shiperator.is_exact_sized();
+        let is_exact_sized = is_exact_traversal(&shiperator, &entities);
 
         Shiper {
             shiperator,
@@ -86,10 +86,12 @@ impl<S: Shiperator> Shiper<S> {
             return false;
         };
 
-        let mut entry = SegmentEntry::new(schedule.plan().row(&segment));
+        let mut entry = SegmentEntry::new(schedule.plan(), &segment);
         // SAFE: Schedules are only built by this Shiperator's constructors (`IntoShiperator`),
         // they pair each row with the entities its own nodes resolve:
         // windows' segment starts are the storage indices of the segment's first entity.
+        // We own the schedule sharing the plan, it stays alive as long as we use `shiperator`.
+        // A split half gets its own share along with its clone of `shiperator`.
         unsafe { self.shiperator.enter_segment(&mut entry) };
         debug_assert!(entry.is_done());
 
@@ -111,17 +113,14 @@ impl<S: Shiperator> Shiper<S> {
 
         self.cursor.len().checked_add(follow_ups_len)
     }
-}
 
-impl<S: Shiperator> Iterator for Shiper<S> {
-    type Item = S::Out;
-
+    /// Returns the next item of the current segment, without entering any other segment.
     #[inline(always)]
-    fn next(&mut self) -> Option<Self::Item> {
-        while self.has_candidate() {
+    fn next_in_segment(&mut self) -> Option<S::Out> {
+        while !self.cursor.is_empty() {
             let local_index = self.cursor.local_index();
-            // SAFE: `has_candidate` returned `true` so the cursor isn't empty
-            // and `local_index` is the local index of its current candidate.
+            // SAFE: The cursor isn't empty and `local_index` is the local index of its current candidate.
+            // We own the schedule holding the plan of the last segment we entered, if any.
             let indices = unsafe {
                 self.shiperator
                     .captain_indices_of(&self.cursor, local_index)
@@ -137,6 +136,52 @@ impl<S: Shiperator> Iterator for Shiper<S> {
         }
 
         None
+    }
+
+    /// Returns the next item, entering follow-up segments once the current one is exhausted.
+    #[inline]
+    fn next_planned(&mut self) -> Option<S::Out> {
+        loop {
+            if let Some(item) = self.next_in_segment() {
+                return Some(item);
+            }
+
+            if !self.enter_next_segment() {
+                return None;
+            }
+        }
+    }
+}
+
+/// Returns `true` when every candidate of `entities`, follow-ups included, yields an item.
+///
+/// `shiperator` only knows if its current state can reject. Follow-ups install new states and
+/// a composite node might reject in some of them.\
+/// A single node's exactness doesn't depend on its state, a window stays exact in every segment.
+pub(crate) fn is_exact_traversal<S: Shiperator>(
+    shiperator: &S,
+    entities: &RawEntityIdAccess,
+) -> bool {
+    let has_follow_ups = entities
+        .schedule
+        .as_ref()
+        .is_some_and(|schedule| !schedule.follow_ups().is_empty());
+
+    shiperator.is_exact_sized() && (S::node_count() == 1 || !has_follow_ups)
+}
+
+impl<S: Shiperator> Iterator for Shiper<S> {
+    type Item = S::Out;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        // Having a plan never changes during the iteration. Without one, there is only
+        // the current segment to walk.
+        if self.schedule.is_none() {
+            return self.next_in_segment();
+        }
+
+        self.next_planned()
     }
 
     #[inline]
@@ -160,6 +205,8 @@ impl<S: Shiperator> Iterator for Shiper<S> {
             let local_index = self.cursor.local_index();
             // SAFE: `has_candidate` returned `true` so the cursor isn't empty
             // and `local_index` is the local index of its current candidate.
+            // We own the schedule holding the plan of the last segment we entered, if any.
+            // We own the schedule holding the plan of the last segment we entered, if any.
             let indices = unsafe {
                 self.shiperator
                     .captain_indices_of(&self.cursor, local_index)

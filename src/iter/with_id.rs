@@ -20,6 +20,53 @@ impl<S: Shiperator> Shiper<S> {
     }
 }
 
+impl<S: Shiperator> Shiper<S> {
+    /// Returns the next item of the current segment and its id, without entering any other segment.
+    #[inline(always)]
+    fn next_with_id_in_segment(&mut self) -> Option<(EntityId, S::Out)> {
+        while !self.cursor.is_empty() {
+            let local_index = self.cursor.local_index();
+            // SAFE: The cursor isn't empty and `local_index` is the local index of its current candidate.
+            // We own the schedule holding the plan of the last segment we entered, if any.
+            let indices = unsafe {
+                self.shiperator
+                    .captain_indices_of(&self.cursor, local_index)
+            };
+
+            let Some(indices) = indices else {
+                self.cursor.advance();
+                continue;
+            };
+
+            // We have to read the id before consuming the candidate.
+            // SAFE: The cursor isn't empty, we haven't advanced yet.
+            let entity_id = unsafe { self.cursor.current() };
+            self.cursor.advance();
+
+            // SAFE: `indices` was just returned by `captain_indices_of`.
+            let data = unsafe { self.shiperator.get_data(indices) };
+
+            return Some((entity_id, data));
+        }
+
+        None
+    }
+
+    /// Returns the next item and its id, entering follow-up segments once the current one is exhausted.
+    #[inline]
+    fn next_with_id_planned(&mut self) -> Option<(EntityId, S::Out)> {
+        loop {
+            if let Some(item) = self.next_with_id_in_segment() {
+                return Some(item);
+            }
+
+            if !self.enter_next_segment() {
+                return None;
+            }
+        }
+    }
+}
+
 impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
     type Item = (EntityId, S::Out);
 
@@ -27,33 +74,12 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
     fn next(&mut self) -> Option<Self::Item> {
         let shiper = &mut self.0;
 
-        while shiper.has_candidate() {
-            let local_index = shiper.cursor.local_index();
-            // SAFE: `has_candidate` returned `true` so the cursor isn't empty
-            // and `local_index` is the local index of its current candidate.
-            let indices = unsafe {
-                shiper
-                    .shiperator
-                    .captain_indices_of(&shiper.cursor, local_index)
-            };
-
-            let Some(indices) = indices else {
-                shiper.cursor.advance();
-                continue;
-            };
-
-            // We have to read the id before consuming the candidate.
-            // SAFE: The cursor isn't empty, we haven't advanced yet.
-            let entity_id = unsafe { shiper.cursor.current() };
-            shiper.cursor.advance();
-
-            // SAFE: `indices` was just returned by `captain_indices_of`.
-            let data = unsafe { shiper.shiperator.get_data(indices) };
-
-            return Some((entity_id, data));
+        // Same as `Shiper::next`, without a plan there is only the current segment to walk.
+        if shiper.schedule.is_none() {
+            return shiper.next_with_id_in_segment();
         }
 
-        None
+        shiper.next_with_id_planned()
     }
 
     #[inline]
@@ -74,6 +100,8 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
             let local_index = shiper.cursor.local_index();
             // SAFE: `has_candidate` returned `true` so the cursor isn't empty
             // and `local_index` is the local index of its current candidate.
+            // We own the schedule holding the plan of the last segment we entered, if any.
+            // We own the schedule holding the plan of the last segment we entered, if any.
             let indices = unsafe {
                 shiper
                     .shiperator

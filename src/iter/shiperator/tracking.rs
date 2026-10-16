@@ -73,6 +73,11 @@ impl<'tmp, T: Component> Shiperator for Inserted<FullRawWindow<'tmp, T>> {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         self.0.get_data(index)
     }
@@ -138,6 +143,11 @@ macro_rules! impl_shiperator_inserted {
                     } else {
                         None
                     }
+                }
+
+                #[inline]
+                fn storage_index(_index: &Self::Index) -> Option<usize> {
+                    None
                 }
 
                 #[inline]
@@ -217,6 +227,11 @@ impl<'tmp, T: Component> Shiperator for Modified<FullRawWindow<'tmp, T>> {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         self.0.get_data(index)
     }
@@ -282,6 +297,11 @@ macro_rules! impl_shiperator_modified {
                     } else {
                         None
                     }
+                }
+
+                #[inline]
+                fn storage_index(_index: &Self::Index) -> Option<usize> {
+                    None
                 }
 
                 #[inline]
@@ -365,6 +385,11 @@ impl<'tmp, T: Component> Shiperator for InsertedOrModified<FullRawWindow<'tmp, T
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         self.0.get_data(index)
     }
@@ -434,6 +459,11 @@ macro_rules! impl_shiperator_inserted_or_modified {
                     } else {
                         None
                     }
+                }
+
+                #[inline]
+                fn storage_index(_index: &Self::Index) -> Option<usize> {
+                    None
                 }
 
                 #[inline]

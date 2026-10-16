@@ -311,6 +311,11 @@ pub(crate) fn expand_into_iter(
                     }
 
                     #[inline]
+                    fn storage_index(index: &Self::Index) -> Option<usize> {
+                        <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::Shiperator>::storage_index(index)
+                    }
+
+                    #[inline]
                     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
                         let (#iter_fields_variable) = self.0.get_data(index);
 

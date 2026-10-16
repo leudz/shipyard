@@ -59,6 +59,11 @@ impl<'tmp, T: Component> Shiperator for Not<FullRawWindow<'tmp, T>> {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, _index: Self::Index) -> Self::Out {}
 }
 
@@ -108,6 +113,11 @@ impl<'tmp, T: Component, Track> Shiperator for Not<FullRawWindowMut<'tmp, T, Tra
         } else {
             Some(usize::MAX)
         }
+    }
+
+    #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
     }
 
     #[inline]
@@ -179,6 +189,11 @@ impl<'tmp, T: Component> Shiperator for Not<Inserted<FullRawWindow<'tmp, T>>> {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         (self.0).0.get_data(index)
     }
@@ -245,6 +260,11 @@ macro_rules! impl_shiperator_not_inserted {
                     } else {
                         Some(index)
                     }
+                }
+
+                #[inline]
+                fn storage_index(_index: &Self::Index) -> Option<usize> {
+                    None
                 }
 
                 #[inline]
@@ -323,6 +343,11 @@ impl<'tmp, T: Component> Shiperator for Not<Modified<FullRawWindow<'tmp, T>>> {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         &*(self.0).0.data.add(index)
     }
@@ -388,6 +413,11 @@ macro_rules! impl_shiperator_not_modified {
                     } else {
                         Some(index)
                     }
+                }
+
+                #[inline]
+                fn storage_index(_index: &Self::Index) -> Option<usize> {
+                    None
                 }
 
                 #[inline]
@@ -470,6 +500,11 @@ impl<'tmp, T: Component> Shiperator for Not<InsertedOrModified<FullRawWindow<'tm
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         &*(self.0).0.data.add(index)
     }
@@ -539,6 +574,11 @@ macro_rules! impl_shiperator_not_inserted_or_modified {
                     } else {
                         Some(index)
                     }
+                }
+
+                #[inline]
+                fn storage_index(_index: &Self::Index) -> Option<usize> {
+                    None
                 }
 
                 #[inline]

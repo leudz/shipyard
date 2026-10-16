@@ -129,10 +129,10 @@ fn or_value(item: OneOfTwo<&A, &B>) -> u32 {
 fn unequal_starts() {
     let (world, e) = shifted_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let windows = Mixed {
-        shiperator: (FullRawWindow::from_view(&a), FullRawWindow::from_view(&b)),
-        captain_mask: 0b01,
-    };
+    let windows = Mixed::new(
+        (FullRawWindow::from_view(&a), FullRawWindow::from_view(&b)),
+        0b01,
+    );
     let row = [mixed(0b11), window(2), window(1)];
     let mut iter = planned(windows, &MIXED_LAYOUT, &[(&a.dense[2..6], &row)]);
 
@@ -196,16 +196,16 @@ fn inactive_sailor() {
         a_window.set_segment_start(7);
         b_window.set_segment_start(8);
     }
-    let windows = Mixed {
-        shiperator: (
+    let windows = Mixed::new(
+        (
             FullRawWindow::from_view(&c),
             OrWindow {
                 storages: (a_window, b_window),
                 branch: OrBranch::B,
             },
         ),
-        captain_mask: 0b01,
-    };
+        0b01,
+    );
     let layout = [
         NodeKind::Mixed { children: 2 },
         NodeKind::Window,

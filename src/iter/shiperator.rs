@@ -41,6 +41,8 @@ pub trait Shiperator {
     ///   built for this Shiperator
     /// - until the next entry, the candidates this Shiperator receives as a captain must come from
     ///   the segment this row was built for
+    /// - the plan `entry` reads from must stay alive as long as this Shiperator, or a clone of it,
+    ///   resolves captain indices
     unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>);
     /// Approximation of how much time iterating this Shiperator will take.\
     /// This helps pick the fastest Shiperator when iterating multiple storages.
@@ -49,6 +51,12 @@ pub trait Shiperator {
     fn sail_time(&self) -> usize;
     /// `true` when this Shiperator cannot return `None`.
     fn is_exact_sized(&self) -> bool;
+    /// Returns the absolute index in this node's storage that `index` points to.
+    ///
+    /// Only plain component windows have a single storage index, other nodes return `None`.\
+    /// `Mixed` uses it to reject candidates an earlier segment already walked,
+    /// without creating any component reference.
+    fn storage_index(index: &Self::Index) -> Option<usize>;
     /// Returns the indices of the components matching the current candidate of `entities`.
     ///
     /// `index` is the candidate's index local to the segment currently iterated.\
@@ -62,10 +70,13 @@ pub trait Shiperator {
     ///
     /// This function is only called when this Shiperator is the Captain.
     ///
+    /// It only resolves indices, it never creates a component reference.
+    ///
     /// # Safety
     ///
     /// - `entities` must not be empty
     /// - `index` must be the local index of the current candidate of `entities`
+    /// - the plan of the last segment this Shiperator entered, if any, must still be alive
     unsafe fn captain_indices_of(
         &self,
         entities: &EntityCursor,
@@ -135,6 +146,11 @@ impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {
     }
 
     #[inline]
+    fn storage_index(index: &Self::Index) -> Option<usize> {
+        Some(*index)
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         &*self.data.add(index)
     }
@@ -181,6 +197,11 @@ macro_rules! impl_shiperator_no_mut {
                 #[inline]
                 fn sailor_indices_of(&self, eid: EntityId) -> Option<Self::Index> {
                     self.index_of(eid)
+                }
+
+                #[inline]
+                fn storage_index(index: &Self::Index) -> Option<usize> {
+                    Some(*index)
                 }
 
                 #[inline]
@@ -235,6 +256,11 @@ macro_rules! impl_shiperator_mut {
                 #[inline]
                 fn sailor_indices_of(&self, eid: EntityId) -> Option<Self::Index> {
                     self.index_of(eid)
+                }
+
+                #[inline]
+                fn storage_index(index: &Self::Index) -> Option<usize> {
+                    Some(*index)
                 }
 
                 #[inline]
@@ -300,6 +326,11 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         *self.get_unchecked(index)
     }
@@ -347,6 +378,11 @@ impl<'tmp, T: Component> Shiperator for Optional<FullRawWindow<'tmp, T>> {
     #[inline]
     fn sailor_indices_of(&self, entity_id: EntityId) -> Option<Self::Index> {
         Some(self.0.sailor_indices_of(entity_id))
+    }
+
+    #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
     }
 
     #[inline]
@@ -404,6 +440,11 @@ where
     #[inline]
     fn sailor_indices_of(&self, entity_id: EntityId) -> Option<Self::Index> {
         Some(self.0.sailor_indices_of(entity_id))
+    }
+
+    #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
     }
 
     #[inline]

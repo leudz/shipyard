@@ -782,10 +782,7 @@ mod grouping_coordinates {
             b_window.set_segment_start(1);
         }
 
-        let mixed = Mixed {
-            shiperator: (a_window, b_window),
-            captain_mask: 0b11,
-        };
+        let mixed = Mixed::new((a_window, b_window), 0b11);
         let iter = segment_iter(mixed, &a.dense, 2, 4);
 
         let items: Vec<_> = iter.with_id().map(|(id, (a, b))| (id, a.0, b.0)).collect();
@@ -833,10 +830,7 @@ mod grouping_coordinates {
             b_window.set_segment_start(1);
         }
 
-        let mixed = Mixed {
-            shiperator: (a_window, b_window),
-            captain_mask: 0b10,
-        };
+        let mixed = Mixed::new((a_window, b_window), 0b10);
         let iter = segment_iter(mixed, &b.dense, 1, 4);
 
         let items: Vec<_> = iter.with_id().map(|(id, (a, b))| (id, a.0, b.0)).collect();

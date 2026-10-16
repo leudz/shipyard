@@ -108,6 +108,11 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
     }
 
     #[inline]
+    fn storage_index(_index: &Self::Index) -> Option<usize> {
+        None
+    }
+
+    #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         match index {
             OneOfTwo::One(index) => OneOfTwo::One((self.storages).0.get_data(index)),

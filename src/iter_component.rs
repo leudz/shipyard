@@ -8,6 +8,7 @@ use crate::borrow::Borrow;
 #[cfg(feature = "thread_local")]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
+use crate::iter::is_exact_traversal;
 use crate::iter::mixed::embed_captain_entities;
 use crate::iter::{Mixed, RawEntityIdAccess, Shiperator};
 use crate::r#mut::Mut;
@@ -61,7 +62,7 @@ where
         T::into_shiperator(all_storages, all_borrow, current, &mut storage_ids)?;
 
     debug_assert_eq!(current_len, entities.cursor.len());
-    let is_exact_sized = shiperator.is_exact_sized();
+    let is_exact_sized = is_exact_traversal(&shiperator, &entities);
 
     Ok(IntoIterRef {
         shiperator,
@@ -528,7 +529,7 @@ macro_rules! impl_iter_component {
 
                 let _ = (min_sail_time, slot);
 
-                let mixed = Mixed {shiperator: ($($raw_window,)+), captain_mask };
+                let mixed = Mixed::new(($($raw_window,)+), captain_mask);
                 let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
 
                 Ok((mixed, all_borrow, ($($borrow,)+), len, entity_iter))

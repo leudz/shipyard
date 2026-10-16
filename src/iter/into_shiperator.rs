@@ -369,10 +369,7 @@ macro_rules! impl_into_shiperator_tuple {
                     let _ = min_sail_time;
                 }
 
-                let mixed = Mixed {
-                    shiperator: ($(shiperators.$index.0,)+),
-                    captain_mask,
-                };
+                let mixed = Mixed::new(($(shiperators.$index.0,)+), captain_mask);
                 let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
 
                 (mixed, len, entity_iter)
