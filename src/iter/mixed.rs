@@ -1,6 +1,7 @@
 use crate::entity_id::EntityId;
+use crate::iter::plan::{CoverageSpan, NodeKind, NodeState, PlanBuilder};
 use crate::iter::{into_shiperator::strip_plus, Shiperator};
-use crate::sparse_set::RawEntityIdAccess;
+use crate::iter::{EntityCursor, RawEntityIdAccess, SegmentEntry, SegmentRow};
 
 const NON_CAPTAIN_FACTOR: f32 = 0.5;
 
@@ -26,6 +27,30 @@ impl<S: Clone> Clone for Mixed<S> {
     }
 }
 
+/// Embeds the follow-ups of `mixed`'s captain child in `mixed`'s own rows.
+///
+/// `entities` are the child's, its states start at index `slot` of `mixed`'s rows.\
+/// Returns `entities` unchanged when the child has no follow-ups.
+pub(crate) fn embed_captain_entities<S: Shiperator>(
+    mixed: &S,
+    slot: usize,
+    entities: RawEntityIdAccess,
+) -> RawEntityIdAccess {
+    let Some(schedule) = &entities.schedule else {
+        return entities;
+    };
+
+    // `mixed` is in its initial state, the captain child drives each follow-up in the same way.
+    let row = SegmentRow::of(mixed);
+    let mut plan = PlanBuilder::new(row.layout());
+    plan.push_child_follow_ups(schedule, row.states(), slot);
+
+    RawEntityIdAccess {
+        cursor: entities.cursor,
+        schedule: plan.finish(),
+    }
+}
+
 macro_rules! impl_shiperator_output {
     ($(($type: ident, $index: tt))+) => {
         impl<$($type: Shiperator),+> Shiperator for Mixed<($($type,)+)> {
@@ -33,9 +58,46 @@ macro_rules! impl_shiperator_output {
             type Index = ($($type::Index,)+);
 
             #[inline]
-            fn next_slice(&mut self) {
+            fn node_count() -> usize {
+                1 $(+ $type::node_count())+
+            }
+
+            #[inline]
+            fn describe(&self, active: bool, row: &mut SegmentRow) {
+                let state = if active {
+                    NodeState::Mixed {
+                        captain_mask: self.captain_mask,
+                        coverage: CoverageSpan::EMPTY,
+                    }
+                } else {
+                    NodeState::Sailor
+                };
+                row.push(NodeKind::Mixed { children: strip_plus!($(+{let _: $type; 1})+) }, state);
+
                 $(
-                    self.shiperator.$index.next_slice();
+                    self.shiperator.$index.describe(active && self.captain_mask & (1 << $index) != 0, row);
+                )+
+            }
+
+            #[inline]
+            unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+                let (captain_mask, coverage) = entry.next_mixed();
+
+                // Only grouped plans record coverage and they can't be built yet.
+                // Ignoring a record would yield entities twice, so we refuse it.
+                assert_eq!(coverage.len, 0, "Mixed doesn't support coverage yet");
+
+                self.captain_mask = captain_mask;
+
+                // Captain children take their states, sailor children are skipped and left untouched.
+                $(
+                    if captain_mask & (1 << $index) != 0 {
+                        // SAFE: Our caller guarantees `entry` holds our subtree's states for the segment
+                        // about to be iterated. This child's states are next in preorder.
+                        unsafe { self.shiperator.$index.enter_segment(entry) };
+                    } else {
+                        entry.skip($type::node_count());
+                    }
                 )+
             }
 
@@ -60,7 +122,7 @@ macro_rules! impl_shiperator_output {
             }
 
             #[inline]
-            unsafe fn captain_indices_of(&self, entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+            unsafe fn captain_indices_of(&self, entities: &EntityCursor, index: usize) -> Option<Self::Index> {
                  Some(($(
                     if self.captain_mask & (1 << $index) != 0 {
                         if let Some(index) = unsafe { self.shiperator.$index.captain_indices_of(entities, index) } {
@@ -69,7 +131,7 @@ macro_rules! impl_shiperator_output {
                             return None
                         }
                     } else {
-                        // SAFE: Our caller guarantees the current range of `entities` isn't exhausted.
+                        // SAFE: Our caller guarantees `entities` isn't empty.
                         let eid = unsafe { entities.current() };
 
                         if let Some(index) = self.shiperator.$index.sailor_indices_of(eid) {

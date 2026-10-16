@@ -1,6 +1,7 @@
 use crate::component::Component;
 use crate::iter::IntoShiperator;
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
+use crate::iter::RawEntityIdAccess;
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::tracking::{Inserted, InsertedOrModified, Modified, Tracking};
 use crate::views::{View, ViewMut};
 

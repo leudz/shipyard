@@ -1,7 +1,6 @@
 use crate::atomic_refcell::SharedBorrow;
-use crate::iter::{Shiper, Shiperator};
+use crate::iter::{RawEntityIdAccess, Shiper, Shiperator};
 use crate::iter_component::IterComponent;
-use crate::sparse_set::RawEntityIdAccess;
 use core::marker::PhantomData;
 
 #[allow(missing_docs)]
@@ -9,6 +8,7 @@ pub struct IntoIterRef<'a, T: IterComponent> {
     pub(crate) shiperator: T::Shiperator<'a>,
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: T::Borrow<'a>,
+    /// Entities each iterator starts from, never consumed.
     pub(crate) entities: RawEntityIdAccess,
     pub(crate) is_exact_sized: bool,
     pub(crate) phantom: PhantomData<T>,
@@ -34,14 +34,21 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
     {
         let shiperator = self.shiperator.clone();
 
+        // SAFETY: We shorten the lifetime here. To me this is okay.
+        //         IntoIterRef only works with SparseSet, its shiperator doesn't contain any reference.
+        //         All components are 'static so this transmute shouldn't allow a shorter lifetime to be stored.
+        let shiperator =
+            unsafe { core::mem::transmute::<T::Shiperator<'a>, T::Shiperator<'b>>(shiperator) };
+
+        // Each iterator starts from its own copy of the entities: a fresh cursor and fresh
+        // follow-up positions. It borrows `self` for 'b, so even sharing the plan it can't
+        // outlive the borrows we hold.
+        let RawEntityIdAccess { cursor, schedule } = self.entities.clone();
+
         Shiper {
-            // SAFETY: We shorten the lifetime here. To me this is okay.
-            //         IntoIterRef only works with SparseSet, its shiperator doesn't contain any reference.
-            //         All components are 'static so this transmute shouldn't allow a shorter lifetime to be stored.
-            shiperator: unsafe {
-                core::mem::transmute::<T::Shiperator<'a>, T::Shiperator<'b>>(shiperator)
-            },
-            entities: self.entities.clone(),
+            shiperator,
+            cursor,
+            schedule,
             is_exact_sized: self.is_exact_sized,
         }
     }

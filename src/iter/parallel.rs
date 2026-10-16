@@ -16,15 +16,23 @@ impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for 
 
     #[inline]
     fn split(mut self) -> (Self, Option<Self>) {
-        // We only split the current range, neither half moves to another range.
-        // `self` keeps the first half, the second half gets all follow-ups.
-        let Some(right_entities) = self.entities.split() else {
+        // We only split the current segment, neither half moves to another segment.
+        let Some((left_cursor, right_cursor)) = self.cursor.split() else {
             return (self, None);
         };
 
+        // Both halves keep the plan, the current segment's state might come from it.
+        // `self` keeps the first half without follow-ups, the second half gets all of them.
+        let right_schedule = self
+            .schedule
+            .as_mut()
+            .map(|schedule| schedule.split_follow_ups());
+        self.cursor = left_cursor;
+
         let right = Shiper {
             shiperator: self.shiperator.clone(),
-            entities: right_entities,
+            cursor: right_cursor,
+            schedule: right_schedule,
             is_exact_sized: self.is_exact_sized,
         };
 

@@ -1,7 +1,8 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::iter::Shiperator;
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
+use crate::iter::{EntityCursor, SegmentEntry, SegmentRow};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::track;
 use crate::tracking::{Inserted, InsertedOrModified, Modified};
 
@@ -12,7 +13,20 @@ impl<'tmp, T: Component> Shiperator for Inserted<FullRawWindow<'tmp, T>> {
     type Index = usize;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        self.0.describe_window(active, row);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+        unsafe { self.0.enter_window(entry) };
+    }
 
     #[inline]
     #[allow(clippy::cast_precision_loss)]
@@ -28,7 +42,7 @@ impl<'tmp, T: Component> Shiperator for Inserted<FullRawWindow<'tmp, T>> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &RawEntityIdAccess,
+        _entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
         // Timestamps are stored at the component's absolute index
@@ -72,7 +86,20 @@ macro_rules! impl_shiperator_inserted {
                 type Index = usize;
 
                 #[inline]
-                fn next_slice(&mut self) {}
+                fn node_count() -> usize {
+                    1
+                }
+
+                #[inline]
+                fn describe(&self, active: bool, row: &mut SegmentRow) {
+                    self.0.describe_window(active, row);
+                }
+
+                #[inline]
+                unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+                    // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+                    unsafe { self.0.enter_window(entry) };
+                }
 
                 #[inline]
                 #[allow(clippy::cast_precision_loss)]
@@ -86,7 +113,7 @@ macro_rules! impl_shiperator_inserted {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize,) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &EntityCursor, index: usize,) -> Option<Self::Index> {
                     // Timestamps are stored at the component's absolute index
                     let index = self.0.resolve_index(index);
 
@@ -130,7 +157,20 @@ impl<'tmp, T: Component> Shiperator for Modified<FullRawWindow<'tmp, T>> {
     type Index = usize;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        self.0.describe_window(active, row);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+        unsafe { self.0.enter_window(entry) };
+    }
 
     #[inline]
     #[allow(clippy::cast_precision_loss)]
@@ -146,7 +186,7 @@ impl<'tmp, T: Component> Shiperator for Modified<FullRawWindow<'tmp, T>> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &RawEntityIdAccess,
+        _entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
         // Timestamps are stored at the component's absolute index
@@ -190,7 +230,20 @@ macro_rules! impl_shiperator_modified {
                 type Index = usize;
 
                 #[inline]
-                fn next_slice(&mut self) {}
+                fn node_count() -> usize {
+                    1
+                }
+
+                #[inline]
+                fn describe(&self, active: bool, row: &mut SegmentRow) {
+                    self.0.describe_window(active, row);
+                }
+
+                #[inline]
+                unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+                    // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+                    unsafe { self.0.enter_window(entry) };
+                }
 
                 #[inline]
                 #[allow(clippy::cast_precision_loss)]
@@ -204,7 +257,7 @@ macro_rules! impl_shiperator_modified {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize,) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &EntityCursor, index: usize,) -> Option<Self::Index> {
                     // Timestamps are stored at the component's absolute index
                     let index = self.0.resolve_index(index);
 
@@ -248,7 +301,20 @@ impl<'tmp, T: Component> Shiperator for InsertedOrModified<FullRawWindow<'tmp, T
     type Index = usize;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        self.0.describe_window(active, row);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+        unsafe { self.0.enter_window(entry) };
+    }
 
     #[inline]
     #[allow(clippy::cast_precision_loss)]
@@ -264,7 +330,7 @@ impl<'tmp, T: Component> Shiperator for InsertedOrModified<FullRawWindow<'tmp, T
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &RawEntityIdAccess,
+        _entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
         // Timestamps are stored at the component's absolute index
@@ -312,7 +378,20 @@ macro_rules! impl_shiperator_inserted_or_modified {
                 type Index = usize;
 
                 #[inline]
-                fn next_slice(&mut self) {}
+                fn node_count() -> usize {
+                    1
+                }
+
+                #[inline]
+                fn describe(&self, active: bool, row: &mut SegmentRow) {
+                    self.0.describe_window(active, row);
+                }
+
+                #[inline]
+                unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+                    // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+                    unsafe { self.0.enter_window(entry) };
+                }
 
                 #[inline]
                 #[allow(clippy::cast_precision_loss)]
@@ -326,7 +405,7 @@ macro_rules! impl_shiperator_inserted_or_modified {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize,) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &EntityCursor, index: usize,) -> Option<Self::Index> {
                     // Timestamps are stored at the component's absolute index
                     let index = self.0.resolve_index(index);
 

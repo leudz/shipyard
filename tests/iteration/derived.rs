@@ -1,3 +1,4 @@
+use shipyard::iter::OneOfTwo;
 use shipyard::*;
 
 #[derive(Component, Debug, PartialEq)]
@@ -83,4 +84,46 @@ fn nested_with_id() {
         .map(|(id, (motion, tag))| (id, motion.pos.0, motion.vel.0, tag.0))
         .collect();
     assert_eq!(items, [(e[1], 1, 11, 21), (e[3], 3, 13, 23)]);
+}
+
+/// Asserts that a named derived iterator as the second storage of an `Or` takes over once
+/// the first storage is exhausted, yielding only the entities the first one doesn't have.
+#[test]
+fn named_or() {
+    let (mut world, e) = derive_world();
+    let alone = world.add_entity((Pos(5), Vel(15)));
+    let (mut motion, tags) = world.borrow::<(MotionView, View<Tag>)>().unwrap();
+
+    let items: Vec<_> = (&tags | &mut motion)
+        .iter()
+        .with_id()
+        .filter_map(|(id, item)| match item {
+            OneOfTwo::One(tag) if tag.0 != 0 => Some((id, tag.0)),
+            OneOfTwo::One(_) => None,
+            OneOfTwo::Two(motion) => Some((id, motion.pos.0 + motion.vel.0)),
+        })
+        .collect();
+
+    assert_eq!(items, [(e[1], 21), (e[3], 23), (alone, 20)]);
+}
+
+/// Asserts that a tuple derived iterator as the second storage of an `Or` takes over once
+/// the first storage is exhausted, yielding only the entities the first one doesn't have.
+#[test]
+fn tuple_or() {
+    let (mut world, e) = derive_world();
+    let alone = world.add_entity((Pos(5), Vel(15)));
+    let (motion, tags) = world.borrow::<(MotionTuple, View<Tag>)>().unwrap();
+
+    let items: Vec<_> = (&tags | &motion)
+        .iter()
+        .with_id()
+        .filter_map(|(id, item)| match item {
+            OneOfTwo::One(tag) if tag.0 != 0 => Some((id, tag.0)),
+            OneOfTwo::One(_) => None,
+            OneOfTwo::Two((pos, vel)) => Some((id, pos.0 + vel.0)),
+        })
+        .collect();
+
+    assert_eq!(items, [(e[1], 21), (e[3], 23), (alone, 20)]);
 }

@@ -4,9 +4,10 @@ mod tracking;
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::iter::{EntityCursor, SegmentEntry, SegmentRow};
 use crate::optional::Optional;
 use crate::r#mut::Mut;
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::track;
 
 /// Provides iteration costs, component lookup, and data access for a storage iterator.
@@ -19,9 +20,28 @@ pub trait Shiperator {
     /// This is often `usize` or a tuple of `usize` for multiple storages.
     type Index;
 
-    /// Shiperators might iterate multiple slices of `EntityId`s.\
-    /// This function is called on the switch to the next slice.
-    fn next_slice(&mut self);
+    /// Returns the number of nodes in this Shiperator's tree, itself included.
+    ///
+    /// Plan rows hold one state per node, in preorder.\
+    /// Composite Shiperators use it to skip the states of their sailor children.
+    fn node_count() -> usize;
+    /// Appends this node's kind and current state to `row`, followed by its children's.
+    ///
+    /// `active` is `false` when the node only answers sailor lookups,
+    /// its whole subtree is then described as sailors.
+    fn describe(&self, active: bool, row: &mut SegmentRow);
+    /// Installs the state this node and its active children hold for the segment about to be iterated.
+    ///
+    /// Takes this node's state from `entry` then routes `entry` through the active children,
+    /// skipping the states of the sailor ones. Sailors are left untouched.
+    ///
+    /// ### Safety
+    ///
+    /// - `entry`'s next states must be the states of this node's subtree, from a row of a plan
+    ///   built for this Shiperator
+    /// - until the next entry, the candidates this Shiperator receives as a captain must come from
+    ///   the segment this row was built for
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>);
     /// Approximation of how much time iterating this Shiperator will take.\
     /// This helps pick the fastest Shiperator when iterating multiple storages.
     ///
@@ -34,7 +54,7 @@ pub trait Shiperator {
     /// `index` is the candidate's index local to the segment currently iterated.\
     /// Shiperators resolve it to the absolute index of their component by adding
     /// the start of their segment.\
-    /// The candidate's [`EntityId`] is read with [`RawEntityIdAccess::current`].
+    /// The candidate's [`EntityId`] is read with `EntityCursor::current`.
     ///
     /// This doesn't consume the candidate, the caller advances `entities` afterwards.
     ///
@@ -44,11 +64,11 @@ pub trait Shiperator {
     ///
     /// # Safety
     ///
-    /// - the current range of `entities` must not be exhausted
+    /// - `entities` must not be empty
     /// - `index` must be the local index of the current candidate of `entities`
     unsafe fn captain_indices_of(
         &self,
-        entities: &RawEntityIdAccess,
+        entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index>;
     /// Provides access to components when the storage doesn't drive the iteration.
@@ -75,7 +95,20 @@ impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {
     type Index = usize;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        self.describe_window(active, row);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+        unsafe { self.enter_window(entry) };
+    }
 
     #[inline]
     fn sail_time(&self) -> usize {
@@ -90,7 +123,7 @@ impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &RawEntityIdAccess,
+        _entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
         Some(self.resolve_index(index))
@@ -115,7 +148,20 @@ macro_rules! impl_shiperator_no_mut {
                 type Index = usize;
 
                 #[inline]
-                fn next_slice(&mut self) {}
+                fn node_count() -> usize {
+                    1
+                }
+
+                #[inline]
+                fn describe(&self, active: bool, row: &mut SegmentRow) {
+                    self.describe_window(active, row);
+                }
+
+                #[inline]
+                unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+                    // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+                    unsafe { self.enter_window(entry) };
+                }
 
                 #[inline]
                 fn sail_time(&self) -> usize {
@@ -128,7 +174,7 @@ macro_rules! impl_shiperator_no_mut {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &EntityCursor, index: usize) -> Option<Self::Index> {
                     Some(self.resolve_index(index))
                 }
 
@@ -156,7 +202,20 @@ macro_rules! impl_shiperator_mut {
                 type Index = usize;
 
                 #[inline]
-                fn next_slice(&mut self) {}
+                fn node_count() -> usize {
+                    1
+                }
+
+                #[inline]
+                fn describe(&self, active: bool, row: &mut SegmentRow) {
+                    self.describe_window(active, row);
+                }
+
+                #[inline]
+                unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+                    // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+                    unsafe { self.enter_window(entry) };
+                }
 
                 #[inline]
                 fn sail_time(&self) -> usize {
@@ -169,7 +228,7 @@ macro_rules! impl_shiperator_mut {
                 }
 
                 #[inline]
-                unsafe fn captain_indices_of(&self, _entities: &RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                unsafe fn captain_indices_of(&self, _entities: &EntityCursor, index: usize) -> Option<Self::Index> {
                     Some(self.resolve_index(index))
                 }
 
@@ -198,7 +257,22 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
     type Index = usize;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    // An entity slice is a single segment, its local indices are already indices of the slice.
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        row.push_window(active, 0);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        let segment_start = entry.next_window();
+
+        assert_eq!(segment_start, 0, "entity slices are a single segment");
+    }
 
     #[inline]
     fn sail_time(&self) -> usize {
@@ -214,7 +288,7 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &RawEntityIdAccess,
+        _entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
         Some(index)
@@ -236,7 +310,20 @@ impl<'tmp, T: Component> Shiperator for Optional<FullRawWindow<'tmp, T>> {
     type Index = Option<usize>;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        self.0.describe_window(active, row);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+        unsafe { self.0.enter_window(entry) };
+    }
 
     #[inline]
     fn sail_time(&self) -> usize {
@@ -251,7 +338,7 @@ impl<'tmp, T: Component> Shiperator for Optional<FullRawWindow<'tmp, T>> {
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        _entities: &RawEntityIdAccess,
+        _entities: &EntityCursor,
         _index: usize,
     ) -> Option<Self::Index> {
         unreachable!()
@@ -280,7 +367,20 @@ where
     type Index = Option<usize>;
 
     #[inline]
-    fn next_slice(&mut self) {}
+    fn node_count() -> usize {
+        1
+    }
+
+    #[inline]
+    fn describe(&self, active: bool, row: &mut SegmentRow) {
+        self.0.describe_window(active, row);
+    }
+
+    #[inline]
+    unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>) {
+        // SAFE: Our caller guarantees `entry` holds our window's state for the segment about to be iterated.
+        unsafe { self.0.enter_window(entry) };
+    }
 
     #[inline]
     fn sail_time(&self) -> usize {
@@ -295,7 +395,7 @@ where
     #[inline]
     unsafe fn captain_indices_of(
         &self,
-        entities: &RawEntityIdAccess,
+        entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
         Some(self.0.captain_indices_of(entities, index))

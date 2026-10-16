@@ -8,9 +8,10 @@ use crate::borrow::Borrow;
 #[cfg(feature = "thread_local")]
 use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
-use crate::iter::{Mixed, Shiperator};
+use crate::iter::mixed::embed_captain_entities;
+use crate::iter::{Mixed, RawEntityIdAccess, Shiperator};
 use crate::r#mut::Mut;
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut, RawEntityIdAccess};
+use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::storage::StorageId;
 use crate::tracking::Tracking;
 use crate::tracking::TrackingTimestamp;
@@ -59,7 +60,7 @@ where
     let (shiperator, all_borrow, borrow, current_len, entities) =
         T::into_shiperator(all_storages, all_borrow, current, &mut storage_ids)?;
 
-    debug_assert_eq!(current_len, entities.current_len());
+    debug_assert_eq!(current_len, entities.cursor.len());
     let is_exact_sized = shiperator.is_exact_sized();
 
     Ok(IntoIterRef {
@@ -504,24 +505,33 @@ macro_rules! impl_iter_component {
                 )+
 
                 let mut captain_mask = 0;
+                let mut captain_slot = 0;
                 let mut len = 0;
-                let mut entity_iter = RawEntityIdAccess::dangling();
+                let mut entity_iter = RawEntityIdAccess::empty();
                 let mut min_sail_time = usize::MAX;
+                // Preorder position of the current child's states in the Mixed's rows.
+                let mut slot = 1;
 
                 $(
                     let sail_time = $raw_window.sail_time();
 
                     if sail_time < min_sail_time {
                         captain_mask = 1 << $index;
+                        captain_slot = slot;
                         len = $len;
                         entity_iter = $entity_iter;
                         min_sail_time = sail_time;
                     }
+
+                    slot += <$type::Shiperator<'a> as Shiperator>::node_count();
                 )+
 
-                let _ = min_sail_time;
+                let _ = (min_sail_time, slot);
 
-                Ok((Mixed {shiperator: ($($raw_window,)+), captain_mask }, all_borrow, ($($borrow,)+), len, entity_iter))
+                let mixed = Mixed {shiperator: ($($raw_window,)+), captain_mask };
+                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
+
+                Ok((mixed, all_borrow, ($($borrow,)+), len, entity_iter))
             }
         }
     }

@@ -7,6 +7,7 @@
 //! its own position in the follow-up segments, independently of the active `EntityCursor`.
 
 use crate::entity_id::EntityId;
+use crate::iter::Shiperator;
 use crate::sparse_set::EntityCursor;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -18,10 +19,6 @@ use core::ptr::NonNull;
 ///
 /// A query's layout lists its nodes in preorder. It is used to validate plan rows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "grouping plan 04 wires plans into segment entry")
-)]
 pub(crate) enum NodeKind {
     /// A node without children, like a component window or an entity slice.
     ///
@@ -35,10 +32,6 @@ pub(crate) enum NodeKind {
 
 /// Branch of an `Or` acting as captain.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "grouping plan 04 wires plans into segment entry")
-)]
 pub(crate) enum OrBranch {
     A,
     B,
@@ -46,10 +39,6 @@ pub(crate) enum OrBranch {
 
 /// State a node installs when entering a segment.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "grouping plan 04 wires plans into segment entry")
-)]
 pub(crate) enum NodeState {
     /// The node's subtree isn't driving this segment, it only answers sailor lookups.
     ///
@@ -69,11 +58,37 @@ pub(crate) enum NodeState {
     Or { branch: OrBranch },
 }
 
+impl NodeState {
+    /// Moves a `Mixed`'s coverage span `offset` records further in the pool.
+    ///
+    /// Used when a child plan's coverage pool is appended to a larger one.
+    fn with_coverage_offset(self, offset: usize) -> NodeState {
+        match self {
+            NodeState::Mixed {
+                captain_mask,
+                coverage,
+            } => NodeState::Mixed {
+                captain_mask,
+                coverage: CoverageSpan {
+                    start: coverage.start + offset,
+                    len: coverage.len,
+                },
+            },
+            state => state,
+        }
+    }
+}
+
 /// Range of records in a plan's coverage pool.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct CoverageSpan {
     pub(crate) start: usize,
     pub(crate) len: usize,
+}
+
+impl CoverageSpan {
+    /// Span without any record.
+    pub(crate) const EMPTY: CoverageSpan = CoverageSpan { start: 0, len: 0 };
 }
 
 /// Physical region of a storage owned by an earlier segment.
@@ -95,10 +110,6 @@ pub(crate) struct SegmentDescriptor {
     row: usize,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "grouping plan 04 wires plans into segment entry")
-)]
 impl SegmentDescriptor {
     /// Returns a descriptor over the `len` entities starting at `entities`, using row `row`.
     ///
@@ -121,6 +132,19 @@ impl SegmentDescriptor {
     #[inline]
     pub(crate) fn len(&self) -> usize {
         self.len
+    }
+
+    /// Returns a descriptor over the entities of `cursor`, using row `row`.
+    ///
+    /// Segments restart local indices at 0, so `cursor` must not have consumed any entity yet.
+    #[inline]
+    pub(crate) fn from_cursor(cursor: EntityCursor, row: usize) -> Self {
+        assert_eq!(cursor.local_index(), 0, "segments start at local index 0");
+
+        // SAFE: `cursor`'s creator already guarantees its `len` entities are initialized and stay
+        // valid and unmodified while it or a copy of it is used. The descriptor only hands out
+        // cursors over these same entities.
+        unsafe { SegmentDescriptor::new(cursor.as_ptr(), cursor.len(), row) }
     }
 
     /// Returns a cursor over the segment's entities.
@@ -181,10 +205,6 @@ pub(crate) struct Plan {
 unsafe impl Send for Plan {}
 unsafe impl Sync for Plan {}
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "grouping plan 04 wires plans into segment entry")
-)]
 impl Plan {
     /// Builds a plan after checking its structure against `layout`.
     ///
@@ -260,6 +280,13 @@ impl Plan {
     /// `span` must come from one of this plan's rows.\
     /// The records don't move while the plan is alive.
     #[inline]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "grouping plan 05 resolves coverage on segment entry"
+        )
+    )]
     pub(crate) fn coverage(&self, span: CoverageSpan) -> &[Coverage] {
         coverage_records(&self.coverage, span).expect("coverage span validated by Plan::new")
     }
@@ -377,10 +404,6 @@ pub(crate) struct SegmentSchedule {
     remaining_len: usize,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "grouping plan 04 wires plans into segment entry")
-)]
 impl SegmentSchedule {
     /// Publishes `plan`, all its segments are follow-ups.
     #[inline]
@@ -400,16 +423,16 @@ impl SegmentSchedule {
         &self.plan
     }
 
-    /// Returns the next follow-up segment without consuming it.
+    /// Returns the follow-up segments left, in order.
     #[inline]
-    pub(crate) fn peek(&self) -> Option<SegmentDescriptor> {
-        self.plan.segments.get(self.next).copied()
+    pub(crate) fn follow_ups(&self) -> &[SegmentDescriptor] {
+        &self.plan.segments[self.next..]
     }
 
     /// Consumes and returns the next follow-up segment.
     #[inline]
     pub(crate) fn take_next(&mut self) -> Option<SegmentDescriptor> {
-        let segment = self.peek()?;
+        let segment = *self.follow_ups().first()?;
 
         self.next += 1;
         // `remaining_len` is the sum of the lengths of the segments from the old `self.next`,
@@ -417,12 +440,6 @@ impl SegmentSchedule {
         self.remaining_len -= segment.len;
 
         Some(segment)
-    }
-
-    /// Returns the number of follow-up segments left.
-    #[inline]
-    pub(crate) fn follow_up_count(&self) -> usize {
-        self.plan.segments.len() - self.next
     }
 
     /// Returns the number of candidates in the follow-up segments.
@@ -437,6 +454,7 @@ impl SegmentSchedule {
     ///
     /// `self` keeps the plan without any follow-up left.
     #[inline]
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     pub(crate) fn split_follow_ups(&mut self) -> SegmentSchedule {
         let follow_ups = self.clone();
 
@@ -466,6 +484,212 @@ impl Drop for SegmentSchedule {
         let plan = unsafe { ManuallyDrop::take(&mut self.plan) };
 
         drop(plan);
+    }
+}
+
+/// Node states read in preorder while a query enters a segment.
+///
+/// Each node takes its own state then hands the reader to its active children.
+/// Sailor subtrees are skipped as a whole.
+#[doc(hidden)]
+pub struct SegmentEntry<'a> {
+    states: &'a [NodeState],
+}
+
+impl<'a> SegmentEntry<'a> {
+    /// Returns a reader over `row`, a full row of a plan.
+    #[inline]
+    pub(crate) fn new(row: &'a [NodeState]) -> SegmentEntry<'a> {
+        SegmentEntry { states: row }
+    }
+
+    /// Returns the state of the next node in preorder.
+    #[inline]
+    fn next_state(&mut self) -> NodeState {
+        let (&state, rest) = self
+            .states
+            .split_first()
+            .expect("plan rows have one state per node");
+        self.states = rest;
+
+        state
+    }
+
+    /// Returns the segment start of the next node, an active window.
+    #[inline]
+    pub(crate) fn next_window(&mut self) -> usize {
+        match self.next_state() {
+            NodeState::Window { segment_start } => segment_start,
+            state => unreachable!("expected an active window state, got {state:?}"),
+        }
+    }
+
+    /// Returns the captain mask and coverage of the next node, an active `Mixed`.
+    #[inline]
+    pub(crate) fn next_mixed(&mut self) -> (u32, CoverageSpan) {
+        match self.next_state() {
+            NodeState::Mixed {
+                captain_mask,
+                coverage,
+            } => (captain_mask, coverage),
+            state => unreachable!("expected an active Mixed state, got {state:?}"),
+        }
+    }
+
+    /// Returns the branch of the next node, an active `Or`.
+    #[inline]
+    pub(crate) fn next_or(&mut self) -> OrBranch {
+        match self.next_state() {
+            NodeState::Or { branch } => branch,
+            state => unreachable!("expected an active Or state, got {state:?}"),
+        }
+    }
+
+    /// Skips the `node_count` nodes of a sailor subtree.
+    #[inline]
+    pub(crate) fn skip(&mut self, node_count: usize) {
+        self.states = &self.states[node_count..];
+    }
+
+    /// Returns `true` once every node took its state.
+    #[inline]
+    pub(crate) fn is_done(&self) -> bool {
+        self.states.is_empty()
+    }
+}
+
+/// Kinds and current states of a query's nodes, in preorder.
+///
+/// Composite nodes use it to describe themselves when they embed their children's segments.
+#[doc(hidden)]
+pub struct SegmentRow {
+    layout: Vec<NodeKind>,
+    states: Vec<NodeState>,
+}
+
+impl SegmentRow {
+    /// Returns the row describing `shiperator` as the root of a query.
+    pub(crate) fn of<S: Shiperator>(shiperator: &S) -> SegmentRow {
+        let mut row = SegmentRow {
+            layout: Vec::new(),
+            states: Vec::new(),
+        };
+        shiperator.describe(true, &mut row);
+
+        row
+    }
+
+    /// Appends a node.
+    #[inline]
+    pub(crate) fn push(&mut self, kind: NodeKind, state: NodeState) {
+        self.layout.push(kind);
+        self.states.push(state);
+    }
+
+    /// Appends a window node, `segment_start` is only used when it's `active`.
+    #[inline]
+    pub(crate) fn push_window(&mut self, active: bool, segment_start: usize) {
+        let state = if active {
+            NodeState::Window { segment_start }
+        } else {
+            NodeState::Sailor
+        };
+
+        self.push(NodeKind::Window, state);
+    }
+
+    pub(crate) fn layout(&self) -> &[NodeKind] {
+        &self.layout
+    }
+
+    pub(crate) fn states(&self) -> &[NodeState] {
+        &self.states
+    }
+}
+
+/// Collects the segments of a composite query before publishing them as a single plan.
+///
+/// Composite nodes (`Or`, `Mixed`) use it when they're built, to embed the segments of their
+/// children under their own state.
+pub(crate) struct PlanBuilder {
+    layout: Vec<NodeKind>,
+    segments: Vec<SegmentDescriptor>,
+    rows: Vec<NodeState>,
+    coverage: Vec<Coverage>,
+}
+
+impl PlanBuilder {
+    /// Returns a builder for a query with `layout`.
+    pub(crate) fn new(layout: &[NodeKind]) -> PlanBuilder {
+        PlanBuilder {
+            layout: layout.to_vec(),
+            segments: Vec::new(),
+            rows: Vec::new(),
+            coverage: Vec::new(),
+        }
+    }
+
+    /// Adds a segment walking the entities of `cursor` and installing `row`.
+    ///
+    /// `cursor` must not have consumed any entity yet.
+    pub(crate) fn push_segment(&mut self, cursor: EntityCursor, row: &[NodeState]) {
+        debug_assert_eq!(row.len(), self.layout.len());
+
+        let row_index = self.rows.len() / self.layout.len();
+        self.rows.extend_from_slice(row);
+        self.segments
+            .push(SegmentDescriptor::from_cursor(cursor, row_index));
+    }
+
+    /// Adds the follow-ups left in a child's `schedule`.
+    ///
+    /// `parent_row` is the row of the whole query while the child drives it,
+    /// the child's states start at index `slot`.\
+    /// Each follow-up installs `parent_row` with the child's part replaced by the follow-up's own row.
+    pub(crate) fn push_child_follow_ups(
+        &mut self,
+        schedule: &SegmentSchedule,
+        parent_row: &[NodeState],
+        slot: usize,
+    ) {
+        let plan = schedule.plan();
+        let after_child = slot + plan.row_width;
+        debug_assert_eq!(parent_row.len(), self.layout.len());
+        debug_assert!(after_child <= parent_row.len());
+
+        // Coverage records are relative to the `Mixed` holding them, they keep their meaning
+        // under a new parent. Only the spans pointing into the pool have to move.
+        let coverage_offset = self.coverage.len();
+        self.coverage.extend_from_slice(&plan.coverage);
+
+        for segment in schedule.follow_ups() {
+            let row_index = self.rows.len() / self.layout.len();
+
+            self.rows.extend_from_slice(&parent_row[..slot]);
+            self.rows.extend(
+                plan.row(segment)
+                    .iter()
+                    .map(|state| state.with_coverage_offset(coverage_offset)),
+            );
+            self.rows.extend_from_slice(&parent_row[after_child..]);
+
+            self.segments.push(SegmentDescriptor {
+                row: row_index,
+                ..*segment
+            });
+        }
+    }
+
+    /// Publishes the plan, `None` when no segment was added.
+    pub(crate) fn finish(self) -> Option<SegmentSchedule> {
+        if self.segments.is_empty() {
+            return None;
+        }
+
+        let plan = Plan::new(&self.layout, self.segments, self.rows, self.coverage)
+            .expect("composite plans embed valid rows in their parent's layout");
+
+        Some(SegmentSchedule::new(plan))
     }
 }
 
@@ -561,7 +785,7 @@ mod grouping_plan_owner {
         let mut schedule = SegmentSchedule::new(window_plan(&[&entities]));
 
         assert_eq!(
-            (schedule.follow_up_count(), schedule.remaining_len()),
+            (schedule.follow_ups().len(), schedule.remaining_len()),
             (1, 3)
         );
 
@@ -570,10 +794,10 @@ mod grouping_plan_owner {
         assert_eq!(collect(segment.cursor()), entities);
         assert_eq!(schedule.plan().row(&segment), [window(0)]);
         assert_eq!(
-            (schedule.follow_up_count(), schedule.remaining_len()),
+            (schedule.follow_ups().len(), schedule.remaining_len()),
             (0, 0)
         );
-        assert!(schedule.peek().is_none());
+        assert!(schedule.follow_ups().is_empty());
     }
 
     /// Asserts that follow-ups come out in order with their own rows
@@ -588,7 +812,7 @@ mod grouping_plan_owner {
         assert_eq!(schedule.remaining_len(), 8);
 
         for (entities, remaining_len) in [(&first, 6), (&second, 1), (&third, 0)] {
-            let peeked = schedule.peek().unwrap();
+            let peeked = schedule.follow_ups()[0];
             let segment = schedule.take_next().unwrap();
 
             assert_eq!(peeked.entities, segment.entities);
@@ -616,7 +840,7 @@ mod grouping_plan_owner {
         for _ in 0..3 {
             assert!(schedule.take_next().is_none());
             assert_eq!(
-                (schedule.follow_up_count(), schedule.remaining_len()),
+                (schedule.follow_ups().len(), schedule.remaining_len()),
                 (0, 0)
             );
         }
@@ -653,10 +877,10 @@ mod grouping_plan_owner {
 
         assert!(ptr::eq(original.plan(), clone.plan()));
         assert_eq!(
-            (original.follow_up_count(), original.remaining_len()),
+            (original.follow_ups().len(), original.remaining_len()),
             (1, 3)
         );
-        assert_eq!((clone.follow_up_count(), clone.remaining_len()), (0, 0));
+        assert_eq!((clone.follow_ups().len(), clone.remaining_len()), (0, 0));
         assert_eq!(collect(original.take_next().unwrap().cursor()), second);
     }
 
@@ -672,9 +896,9 @@ mod grouping_plan_owner {
         let mut right = left.split_follow_ups();
 
         assert!(ptr::eq(left.plan(), right.plan()));
-        assert_eq!((left.follow_up_count(), left.remaining_len()), (0, 0));
+        assert_eq!((left.follow_ups().len(), left.remaining_len()), (0, 0));
         assert!(left.take_next().is_none());
-        assert_eq!((right.follow_up_count(), right.remaining_len()), (1, 3));
+        assert_eq!((right.follow_ups().len(), right.remaining_len()), (1, 3));
         assert_eq!(collect(right.take_next().unwrap().cursor()), second);
     }
 
@@ -746,7 +970,7 @@ mod grouping_plan_owner {
         let right = left.split_follow_ups();
         drop(right);
 
-        assert_eq!(left.follow_up_count(), 0);
+        assert_eq!(left.follow_ups().len(), 0);
         // SAFE: `left` still owns the plan holding these records.
         assert_eq!(unsafe { &*coverage }, EXPECTED_COVERAGE);
     }
@@ -761,7 +985,7 @@ mod grouping_plan_owner {
         let right = left.split_follow_ups();
         drop(left);
 
-        assert_eq!(right.follow_up_count(), 1);
+        assert_eq!(right.follow_ups().len(), 1);
         // SAFE: `right` still owns the plan holding these records.
         assert_eq!(unsafe { &*coverage }, EXPECTED_COVERAGE);
     }

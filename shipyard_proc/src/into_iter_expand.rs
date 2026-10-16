@@ -275,8 +275,19 @@ pub(crate) fn expand_into_iter(
                     type Index = <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::Shiperator>::Index;
 
                     #[inline]
-                    fn next_slice(&mut self) {
-                        self.0.next_slice()
+                    fn node_count() -> usize {
+                        <<(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator as shipyard::iter::Shiperator>::node_count()
+                    }
+
+                    #[inline]
+                    fn describe(&self, active: bool, row: &mut shipyard::iter::SegmentRow) {
+                        self.0.describe(active, row)
+                    }
+
+                    #[inline]
+                    unsafe fn enter_segment(&mut self, entry: &mut shipyard::iter::SegmentEntry<'_>) {
+                        // SAFE: We're a newtype around our inner Shiperator, our caller's guarantees are its own.
+                        unsafe { self.0.enter_segment(entry) }
                     }
 
                     #[inline]
@@ -290,7 +301,7 @@ pub(crate) fn expand_into_iter(
                     }
 
                     #[inline]
-                    unsafe fn captain_indices_of(&self, entities: &shipyard::iter::RawEntityIdAccess, index: usize) -> Option<Self::Index> {
+                    unsafe fn captain_indices_of(&self, entities: &shipyard::iter::EntityCursor, index: usize) -> Option<Self::Index> {
                         self.0.captain_indices_of(entities, index)
                     }
 

@@ -1,5 +1,6 @@
 use crate::{
     component::Component,
+    iter::plan::OrBranch,
     tracking::{Inserted, Tracking},
     views::{View, ViewMut},
 };
@@ -92,5 +93,6 @@ impl From<usize> for OneOfTwo<usize, usize> {
 #[derive(Clone)]
 pub struct OrWindow<T> {
     pub(crate) storages: T,
-    pub(crate) is_past_first_storage: bool,
+    /// Branch driving the current segment.
+    pub(crate) branch: OrBranch,
 }

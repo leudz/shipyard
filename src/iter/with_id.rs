@@ -28,24 +28,24 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
         let shiper = &mut self.0;
 
         while shiper.has_candidate() {
-            let local_index = shiper.entities.local_index();
-            // SAFE: `has_candidate` returned `true` so the current range isn't exhausted
+            let local_index = shiper.cursor.local_index();
+            // SAFE: `has_candidate` returned `true` so the cursor isn't empty
             // and `local_index` is the local index of its current candidate.
             let indices = unsafe {
                 shiper
                     .shiperator
-                    .captain_indices_of(&shiper.entities, local_index)
+                    .captain_indices_of(&shiper.cursor, local_index)
             };
 
             let Some(indices) = indices else {
-                shiper.entities.advance();
+                shiper.cursor.advance();
                 continue;
             };
 
             // We have to read the id before consuming the candidate.
-            // SAFE: The current range isn't exhausted, we haven't advanced yet.
-            let entity_id = unsafe { shiper.entities.current() };
-            shiper.entities.advance();
+            // SAFE: The cursor isn't empty, we haven't advanced yet.
+            let entity_id = unsafe { shiper.cursor.current() };
+            shiper.cursor.advance();
 
             // SAFE: `indices` was just returned by `captain_indices_of`.
             let data = unsafe { shiper.shiperator.get_data(indices) };
@@ -71,24 +71,24 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
 
         // We start at the first unconsumed candidate, `next` might have consumed a prefix.
         while shiper.has_candidate() {
-            let local_index = shiper.entities.local_index();
-            // SAFE: `has_candidate` returned `true` so the current range isn't exhausted
+            let local_index = shiper.cursor.local_index();
+            // SAFE: `has_candidate` returned `true` so the cursor isn't empty
             // and `local_index` is the local index of its current candidate.
             let indices = unsafe {
                 shiper
                     .shiperator
-                    .captain_indices_of(&shiper.entities, local_index)
+                    .captain_indices_of(&shiper.cursor, local_index)
             };
 
             let Some(indices) = indices else {
-                shiper.entities.advance();
+                shiper.cursor.advance();
                 continue;
             };
 
-            // SAFE: The current range isn't exhausted, we haven't advanced yet.
-            let entity_id = unsafe { shiper.entities.current() };
+            // SAFE: The cursor isn't empty, we haven't advanced yet.
+            let entity_id = unsafe { shiper.cursor.current() };
             // We consume the candidate before creating any output or calling `f`.
-            shiper.entities.advance();
+            shiper.cursor.advance();
 
             // SAFE: `indices` was just returned by `captain_indices_of`.
             let data = unsafe { shiper.shiperator.get_data(indices) };
