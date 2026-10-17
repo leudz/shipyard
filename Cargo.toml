@@ -50,6 +50,10 @@ serde_derive = { version = "1", features = ["deserialize_in_place"] }
 name = "bench"
 harness = false
 
+[[bench]]
+name = "iteration"
+harness = false
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
