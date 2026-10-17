@@ -507,10 +507,10 @@ impl<T: Component> SparseSet<T> {
             );
         }
 
-        // The ungrouped region sits between the range and the unevaluated region,
+        // The ungrouped region sits between the ranges and the unevaluated region,
         // so every move is made of steps into or out of it.
-        // With a single range per storage, the range always borders the ungrouped region,
-        // and the step helpers below rely on that.
+        // A component can leave any range. Entering a range still assumes it's the last one,
+        // which borders the ungrouped region.
         match (self.groups.region_of(index), destination) {
             (GroupRegion::Range(source), GroupRegion::Range(group)) => {
                 if !Arc::ptr_eq(source, group) {
@@ -547,25 +547,68 @@ impl<T: Component> SparseSet<T> {
         self.groups.assert_invariants(self.dense.len());
     }
 
-    /// Moves the component at `index`, inside the last range, to the ungrouped region.\
+    /// Moves the component at `index`, inside any range, to the ungrouped region.\
     /// Returns its new index.
     fn range_to_ungrouped(&mut self, index: usize) -> usize {
-        // We swap it with the range's last component, then shrink the range to leave it out.
-        let new_index = self.groups.grouped_end() - 1;
-        self.swap_rows(index, new_index);
-
-        let range = self
+        let range_index = self
             .groups
-            .ranges
-            .last_mut()
+            .range_index_of(index)
             .expect("the component is inside a range");
-        debug_assert!(range.start <= index);
+        let logical = self.groups.ranges[range_index].ring().logical_of(index);
 
-        range.len -= 1;
-        // Only positions from `index` onward changed, so at most the ones before it are still trusted.
-        range.trust = range.trust.min(index - range.start);
+        // The component leaves its range at the slot right after the shrunk range,
+        // then the later ranges move left over it and leave it as the first ungrouped component.
+        self.take_from_range(range_index, logical);
+        self.move_ranges_left(range_index + 1);
 
-        new_index
+        self.groups.grouped_end()
+    }
+
+    /// Takes the component at `logical` out of range `range_index` with a logical swap-remove.
+    ///
+    /// The component ends right after the shrunk range, in a slot no range covers anymore.\
+    /// Trust is lowered conservatively: other members only agree once they did the same.
+    fn take_from_range(&mut self, range_index: usize, logical: usize) {
+        let ring = self.groups.ranges[range_index].ring();
+        let last = ring.len - 1;
+
+        // The logical last component fills the hole, ours takes its place.
+        // Members at different rotations all get the same logical result,
+        // unlike with a physical swap-remove.
+        self.swap_rows(ring.physical_of(logical), ring.physical_of(last));
+
+        // Our component sits at the wrap point now. We move it to the ring's physical last slot
+        // from the cheaper side, only that member's start and shift depend on the side.
+        let wrap_offset = ring.wrap_offset();
+        let unwrapped_len = ring.len - wrap_offset;
+        let new_wrap_offset = if wrap_offset == 0 {
+            // Unrotated, the logical last component is the physical last one.
+            0
+        } else if unwrapped_len <= wrap_offset {
+            // The unwrapped part slides left over our component.
+            for physical in ring.start + wrap_offset - 1..ring.end() - 1 {
+                self.swap_rows(physical, physical + 1);
+            }
+
+            wrap_offset - 1
+        } else {
+            // The wrapped part slides right over our component, which lands on the first slot.
+            // Then it swaps with the unwrapped part's last component, which becomes the
+            // wrapped part's first.
+            for physical in (ring.start..ring.start + wrap_offset - 1).rev() {
+                self.swap_rows(physical, physical + 1);
+            }
+            self.swap_rows(ring.start, ring.end() - 1);
+
+            // The unwrapped part is the longer one so it has at least 2 components,
+            // the wrap offset stays smaller than the new length.
+            wrap_offset
+        };
+
+        let range = &mut self.groups.ranges[range_index];
+        // Only `logical` and the old last position changed, the positions before `logical` didn't.
+        range.trust = range.trust.min(logical);
+        range.resize(last, new_wrap_offset);
     }
 
     /// Appends the ungrouped component at `index` to the last range.
@@ -2202,8 +2245,18 @@ mod tests {
         /// `RANGES` are placed back to back and fully trusted, the last 2 components are ungrouped.\
         /// Tracked entities are inserted at timestamp `index` and modified at `100 + index`.
         fn storage<T: Component>(make: impl Fn(u64) -> T) -> SparseSet<T> {
+            storage_with(&RANGES, make)
+        }
+
+        /// Same as `storage`, with `ranges` as `(len, shift)` pairs instead of `RANGES`.
+        fn storage_with<T: Component>(
+            ranges: &[(usize, isize)],
+            make: impl Fn(u64) -> T,
+        ) -> SparseSet<T> {
+            let entity_count = ranges.iter().map(|&(len, _)| len).sum::<usize>() + 2;
+
             let mut sparse_set = SparseSet::new();
-            for index in 0..12 {
+            for index in 0..entity_count as u64 {
                 sparse_set
                     .insert(
                         EntityId::new(index),
@@ -2219,7 +2272,7 @@ mod tests {
             }
 
             let mut start = 0;
-            for (position, (len, shift)) in RANGES.into_iter().enumerate() {
+            for (position, &(len, shift)) in ranges.iter().enumerate() {
                 sparse_set.groups.ranges.push(GroupRange {
                     group: Arc::from([
                         StorageId::Custom(0),
@@ -2232,7 +2285,7 @@ mod tests {
                 });
                 start += len;
             }
-            sparse_set.groups.unevaluated_start = 12;
+            sparse_set.groups.unevaluated_start = entity_count;
 
             sparse_set
         }
@@ -2446,6 +2499,179 @@ mod tests {
             assert_eq!(drops.load(AtomicOrdering::Relaxed), 0);
             drop(sparse_set);
             assert_eq!(drops.load(AtomicOrdering::Relaxed), 12);
+        }
+
+        fn ints_with(ranges: &[(usize, isize)]) -> SparseSet<I32> {
+            storage_with(ranges, |index| I32(i32::try_from(index).unwrap()))
+        }
+
+        /// Moves the component at `logical` of range `range_index` to `destination`, then panics
+        /// unless that range lost it with a logical swap-remove and only trusts the positions
+        /// before it, while every other range kept its order and trust.
+        fn assert_take<T: Component>(
+            sparse_set: &mut SparseSet<T>,
+            range_index: usize,
+            logical: usize,
+            destination: GroupRegion<'_>,
+            value: impl Fn(&T) -> u64,
+        ) {
+            let ring = sparse_set.groups.ranges[range_index].ring();
+            let mut order = logical_order(sparse_set);
+            let mut trust = trusts(sparse_set);
+            let entity = EntityId::new(order[range_index][logical]);
+
+            sparse_set.private_move_to(entity, destination);
+
+            // `Vec::swap_remove` is exactly a logical swap-remove.
+            order[range_index].swap_remove(logical);
+            trust[range_index] = trust[range_index].min(logical);
+            assert_eq!(
+                logical_order(sparse_set),
+                order,
+                "{ring:?}, logical {logical}"
+            );
+            assert_eq!(trusts(sparse_set), trust, "{ring:?}, logical {logical}");
+
+            let index = sparse_set.index_of(entity).unwrap();
+            assert!(
+                matches!(
+                    (sparse_set.groups.region_of(index), destination),
+                    (GroupRegion::Ungrouped, GroupRegion::Ungrouped)
+                        | (GroupRegion::Unevaluated, GroupRegion::Unevaluated)
+                ),
+                "{ring:?}, logical {logical}"
+            );
+            assert_rows(sparse_set, value);
+        }
+
+        /// Asserts that every position of a small first ring, at any rotation, leaves with a
+        /// logical swap-remove while the later rings, rotated or empty, keep their order.
+        #[test]
+        fn take_first() {
+            for len in 1..=5 {
+                for shift in -6..=6 {
+                    for logical in 0..len {
+                        let mut sparse_set = ints_with(&[(len, shift), (2, 1), (0, 0), (3, -2)]);
+
+                        assert_take(
+                            &mut sparse_set,
+                            0,
+                            logical,
+                            GroupRegion::Ungrouped,
+                            int_value,
+                        );
+                    }
+                }
+            }
+        }
+
+        /// Asserts that every position of a ring between other rings leaves with a logical
+        /// swap-remove, the earlier ring staying untouched.
+        #[test]
+        fn take_middle() {
+            for len in 1..=5 {
+                for shift in -6..=6 {
+                    for logical in 0..len {
+                        let mut sparse_set = ints_with(&[(2, 1), (len, shift), (0, 0), (3, -2)]);
+
+                        assert_take(
+                            &mut sparse_set,
+                            1,
+                            logical,
+                            GroupRegion::Unevaluated,
+                            int_value,
+                        );
+                    }
+                }
+            }
+        }
+
+        /// Asserts that every position of the last ring leaves with a logical swap-remove.
+        #[test]
+        fn take_last() {
+            for len in 1..=5 {
+                for shift in -6..=6 {
+                    for logical in 0..len {
+                        let mut sparse_set = ints_with(&[(2, 1), (0, 0), (len, shift)]);
+
+                        assert_take(
+                            &mut sparse_set,
+                            2,
+                            logical,
+                            GroupRegion::Ungrouped,
+                            int_value,
+                        );
+                    }
+                }
+            }
+        }
+
+        /// Asserts that emptying a rotated singleton ring leaves it empty and attached.
+        #[test]
+        fn take_singleton() {
+            let mut sparse_set = ints_with(&[(1, -4), (2, 1)]);
+
+            assert_take(&mut sparse_set, 0, 0, GroupRegion::Ungrouped, int_value);
+
+            assert_eq!(sparse_set.groups.ranges.len(), 2);
+            assert_eq!(sparse_set.groups.ranges[0].len, 0);
+        }
+
+        /// Asserts that taking a component after a damaged prefix keeps that prefix's trust,
+        /// and taking one inside it lowers the trust to its position.
+        #[test]
+        fn take_partial_trust() {
+            let mut sparse_set = ints_with(&[(5, 2), (2, 1)]);
+            sparse_set.groups.ranges[0].trust = 2;
+
+            assert_take(&mut sparse_set, 0, 4, GroupRegion::Ungrouped, int_value);
+            assert_eq!(sparse_set.groups.ranges[0].trust, 2);
+
+            assert_take(&mut sparse_set, 0, 1, GroupRegion::Ungrouped, int_value);
+            assert_eq!(sparse_set.groups.ranges[0].trust, 1);
+        }
+
+        /// Asserts that insertion and modification timestamps follow their components
+        /// while rotated rings lose components.
+        #[test]
+        fn take_tracked() {
+            let mut sparse_set = storage_with(&[(4, 3), (3, -1)], |index| {
+                TrackedI32(i32::try_from(index).unwrap())
+            });
+            let value = |component: &TrackedI32| u64::try_from(component.0).unwrap();
+
+            for (range_index, logical) in [(0, 1), (1, 0), (0, 2), (1, 1)] {
+                assert_take(
+                    &mut sparse_set,
+                    range_index,
+                    logical,
+                    GroupRegion::Ungrouped,
+                    value,
+                );
+            }
+        }
+
+        /// Asserts that emptying rotated rings never drops a component,
+        /// and that dropping the storage then drops each of them once.
+        #[test]
+        fn take_drops() {
+            let drops = Arc::new(AtomicUsize::new(0));
+            let mut sparse_set =
+                storage_with(&[(4, 3), (3, -1)], |index| Counted(index, drops.clone()));
+
+            for (range_index, logical) in [(0, 1), (1, 2), (0, 2), (1, 0), (0, 0), (1, 0), (0, 0)] {
+                assert_take(
+                    &mut sparse_set,
+                    range_index,
+                    logical,
+                    GroupRegion::Unevaluated,
+                    |component| component.0,
+                );
+            }
+
+            assert_eq!(drops.load(AtomicOrdering::Relaxed), 0);
+            drop(sparse_set);
+            assert_eq!(drops.load(AtomicOrdering::Relaxed), 9);
         }
     }
 }
