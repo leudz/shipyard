@@ -44,7 +44,9 @@ pub struct Mixed<S> {
     pub(crate) coverage: NonNull<[Coverage]>,
 }
 
-// `coverage` only points to plain data that plans never modify and plans are `Sync`.
+// SAFE: Besides our children, which have to be `Send`, we only hold `coverage`. It points to
+// records plans never modify and plans are `Sync`, so reading them from another thread is fine.
+// The plan stays alive as long as the schedule of the iterator moving us along.
 unsafe impl<S: Send> Send for Mixed<S> {}
 
 impl<S: Clone> Clone for Mixed<S> {

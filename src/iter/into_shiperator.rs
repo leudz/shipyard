@@ -81,7 +81,12 @@ where
         // We're the query's root, every node has been built and nothing will pick another walk.
         let entities = planner::install_winner(&mut shiperator, entities);
 
-        Shiper::new(shiperator, entities)
+        // SAFE: `into_shiperator` returns a Shiperator whose state matches the first segment of
+        // the entities it returns, along with the follow-ups its constructors built rows for.
+        // `install_winner` either keeps that pair or installs the first grouped segment on
+        // `shiperator` and returns that segment's entities, with the plan `grouped_entities`
+        // built for `shiperator`'s own layout.
+        unsafe { Shiper::new(shiperator, entities) }
     }
 
     #[cfg(feature = "parallel")]

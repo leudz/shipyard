@@ -160,9 +160,14 @@ impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
     #[inline]
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
         if entity.bucket() < self.sparse_len {
+            // SAFE: `sparse` points to the `sparse_len` pages of the storage we borrow and
+            // `bucket` is below that length. A page is an `Option<Box<Page>>`,
+            // which is a nullable pointer to the page.
             let bucket = unsafe { ptr::read(self.sparse.add(entity.bucket())) };
 
             if !bucket.is_null() {
+                // SAFE: `bucket` points to an allocated page, `Page` is `repr(C)` around its
+                // `BUCKET_SIZE` entities and `bucket_index` is a remainder of `BUCKET_SIZE`.
                 Some(unsafe { ptr::read(bucket.add(entity.bucket_index())) })
             } else {
                 None
@@ -394,9 +399,14 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
     #[inline]
     fn sparse_index(&self, entity: EntityId) -> Option<EntityId> {
         if entity.bucket() < self.sparse_len {
+            // SAFE: `sparse` points to the `sparse_len` pages of the storage we borrow and
+            // `bucket` is below that length. A page is an `Option<Box<Page>>`,
+            // which is a nullable pointer to the page.
             let bucket = unsafe { ptr::read(self.sparse.add(entity.bucket())) };
 
             if !bucket.is_null() {
+                // SAFE: `bucket` points to an allocated page, `Page` is `repr(C)` around its
+                // `BUCKET_SIZE` entities and `bucket_index` is a remainder of `BUCKET_SIZE`.
                 Some(unsafe { ptr::read(bucket.add(entity.bucket_index())) })
             } else {
                 None
@@ -541,7 +551,7 @@ pub struct EntityCursor {
     local_index: usize,
 }
 
-// The cursor only reads entities. `new`'s caller guarantees they aren't modified while the cursor
+// SAFE: The cursor only reads entities. `new`'s caller guarantees they aren't modified while the cursor
 // is used and `EntityId` is plain data, so reading them from another thread is fine.
 unsafe impl Send for EntityCursor {}
 

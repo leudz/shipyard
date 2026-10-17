@@ -246,14 +246,18 @@ fn opt_len_follow_ups() {
     let iter = || {
         let schedule = window_plan(&a, &[3, 2]).schedule;
 
-        Shiper::new(
-            FullRawWindow::from_view(&a),
-            RawEntityIdAccess {
-                cursor: EntityCursor::empty(),
-                schedule,
-                metadata: Default::default(),
-            },
-        )
+        // SAFE: The cursor is empty, nothing is resolved before entering the first follow-up.
+        // `window_plan` built its rows for a window over `a`, with each segment's start.
+        unsafe {
+            Shiper::new(
+                FullRawWindow::from_view(&a),
+                RawEntityIdAccess {
+                    cursor: EntityCursor::empty(),
+                    schedule,
+                    metadata: Default::default(),
+                },
+            )
+        }
     };
     let last_segment = || {
         let mut iter = iter();
@@ -279,14 +283,18 @@ fn opt_len_mixed() {
     );
     let schedule = coverage_plan(pair(&a, &b), &a.dense, &b.dense).schedule;
 
-    let iter = Shiper::new(
-        aligned,
-        RawEntityIdAccess {
-            cursor: EntityCursor::empty(),
-            schedule,
-            metadata: Default::default(),
-        },
-    );
+    // SAFE: The cursor is empty, nothing is resolved before entering the first follow-up.
+    // `coverage_plan` built its rows for a pair over `a` and `b`, the same layout as `aligned`.
+    let iter = unsafe {
+        Shiper::new(
+            aligned,
+            RawEntityIdAccess {
+                cursor: EntityCursor::empty(),
+                schedule,
+                metadata: Default::default(),
+            },
+        )
+    };
 
     assert_eq!(ParShiperator(iter).opt_len(), None);
 }
@@ -338,14 +346,18 @@ fn indexed_collect() {
             0b11,
         );
 
-        Shiper::new(
-            aligned,
-            RawEntityIdAccess {
-                cursor: cursor(&a.dense),
-                schedule: None,
-                metadata: Default::default(),
-            },
-        )
+        // SAFE: `aligned_world` holds the same entities at the same indices of `a` and `b`,
+        // both windows start at 0 and the cursor walks all of `a`'s entities.
+        unsafe {
+            Shiper::new(
+                aligned,
+                RawEntityIdAccess {
+                    cursor: cursor(&a.dense),
+                    schedule: None,
+                    metadata: Default::default(),
+                },
+            )
+        }
     };
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
 

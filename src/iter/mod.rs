@@ -54,10 +54,13 @@ impl<S: Shiperator> Shiper<S> {
     ///
     /// ### Safety
     ///
-    /// `entities`' initial cursor must match the states `shiperator` has installed
-    /// and `shiperator` must be able to enter every follow-up of `entities`.
+    /// - `entities`' initial cursor must hold, at each local index, the entity whose components
+    ///   `shiperator`'s installed state resolves that local index to
+    /// - every follow-up of `entities` must have a row built for `shiperator`'s layout,
+    ///   pairing its segment with the entities its captains resolve, see
+    ///   [`Shiperator::enter_segment`]
     #[inline]
-    pub(crate) fn new(shiperator: S, entities: RawEntityIdAccess) -> Shiper<S> {
+    pub(crate) unsafe fn new(shiperator: S, entities: RawEntityIdAccess) -> Shiper<S> {
         let is_exact_sized = is_exact_traversal(&shiperator, &entities);
 
         Shiper {

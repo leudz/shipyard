@@ -203,7 +203,7 @@ pub(crate) struct Plan {
     total_len: usize,
 }
 
-// Plans only point to entities, never to components.
+// SAFE: Plans only point to entities, never to components.
 // `SegmentDescriptor::new`'s caller guarantees these entities aren't modified while the plan is used
 // and the plan only reads them. `EntityId` is plain data, reading it from any thread is fine.
 // Mutable component access stays in the typed windows and their own `Send` bounds,
@@ -968,7 +968,8 @@ mod grouping_plan_owner {
 
     /// Builds a schedule over three segments, the last two reading one coverage record.
     ///
-    /// The schedule has entered the second segment and has one follow-up left.    /// Returns it with the coverage of its current segment, as the raw slice a `Mixed`
+    /// The schedule has entered the second segment and has one follow-up left.\
+    /// Returns it with the coverage of its current segment, as the raw slice a `Mixed`
     /// caches when entering a segment.
     fn coverage_schedule(
         first: &[EntityId],

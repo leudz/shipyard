@@ -56,7 +56,9 @@ fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
 
     let entities = grouped_entities(&mut mixed, alternative);
 
-    Shiper::new(mixed, entities)
+    // SAFE: `grouped_entities` installed its first segment on `mixed` and returns that
+    // segment's entities, with follow-ups whose rows it built for `mixed`'s layout.
+    unsafe { Shiper::new(mixed, entities) }
 }
 
 /// A segment as tests compare it.

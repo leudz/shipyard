@@ -241,7 +241,10 @@ impl<'tmp, T: Component, Track: Tracking> Shiperator for FullRawWindow<'tmp, T, 
 
     #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-        &*self.data.add(index)
+        // SAFE: Our caller passes an index we resolved. Captain indices are below the storage's
+        // length per `set_segment_start`'s contract, sailor indices come from its sparse array.
+        // The storage stays borrowed for 'tmp.
+        unsafe { &*self.data.add(index) }
     }
 }
 
@@ -295,7 +298,11 @@ macro_rules! impl_shiperator_no_mut {
 
                 #[inline]
                 unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-                    &mut *self.data.add(index)
+                    // SAFE: Our caller passes an index we resolved, see `FullRawWindow::get_data`.
+                    // The storage stays exclusively borrowed for 'tmp. Traversals consume each
+                    // candidate before creating its item and reject the ones an earlier segment
+                    // yielded, so no other item points to this component.
+                    unsafe { &mut *self.data.add(index) }
                 }
             }
         )+
@@ -354,10 +361,15 @@ macro_rules! impl_shiperator_mut {
 
                 #[inline]
                 unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-                    Mut {
-                        flag: Some(&mut *self.modification_data.add(index)),
-                        current: self.current,
-                        data: &mut *self.data.add(index),
+                    // SAFE: Same as the untracked windows, the component is only reachable through
+                    // this item. `$track` tracks modification, so the storage keeps one
+                    // modification timestamp per component and `index` is one of them.
+                    unsafe {
+                        Mut {
+                            flag: Some(&mut *self.modification_data.add(index)),
+                            current: self.current,
+                            data: &mut *self.data.add(index),
+                        }
                     }
                 }
             }
@@ -421,7 +433,9 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
 
     #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-        *self.get_unchecked(index)
+        // SAFE: Our caller passes an index we returned, the local index of a candidate of our only
+        // segment, which walks the whole slice.
+        unsafe { *self.get_unchecked(index) }
     }
 }
 
