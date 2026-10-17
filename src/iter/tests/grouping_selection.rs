@@ -6,7 +6,7 @@
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::iter::planner::{MemberRegions, NodeMetadata, Selection, Walk};
+use crate::iter::planner::{Alternative, MemberRegions, NodeMetadata, Route, Selection, Walk};
 use crate::iter::{IntoIter, IntoShiperator, IterComponent, Optional, RawEntityIdAccess};
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
@@ -57,24 +57,27 @@ impl Component for Modif {
 /// Returns the selection a `Mixed` reported, `None` when it had no grouped alternative.
 fn selection(entities: &RawEntityIdAccess) -> Option<&Selection> {
     match &entities.metadata {
-        NodeMetadata::Mixed(selection) => Some(selection),
+        NodeMetadata::Mixed(selection) if !selection.alternatives.is_empty() => Some(selection),
         _ => None,
     }
 }
 
 /// Asserts that a `Mixed` reported no grouped alternative, without filter.
 fn assert_ungrouped(entities: &RawEntityIdAccess) {
-    assert!(matches!(entities.metadata, NodeMetadata::Ungrouped));
+    let NodeMetadata::Mixed(selection) = &entities.metadata else {
+        panic!("a Mixed without filter reports its selection");
+    };
+
+    assert!(selection.alternatives.is_empty());
 }
 
-/// Asserts that the grouped alternative of `entities` wins with the members `member_mask` flags.
+/// Asserts that the cheapest grouped alternative of `entities` wins with the members
+/// `member_mask` flags.
 fn assert_grouped_wins(entities: &RawEntityIdAccess, member_mask: u32) {
     let selection = selection(entities).expect("a grouped alternative");
-    let winner = selection
-        .grouped_winner()
-        .expect("the grouped alternative wins");
+    let winner = selection.winner().expect("the grouped alternative wins");
 
-    assert_eq!(winner.member_mask(), member_mask);
+    assert_eq!(winner.group().member_mask(), member_mask);
 }
 
 /// Asserts that `entities` reported a grouped alternative but its ordinary walk with
@@ -82,18 +85,21 @@ fn assert_grouped_wins(entities: &RawEntityIdAccess, member_mask: u32) {
 fn assert_ordinary_wins(entities: &RawEntityIdAccess, captain: usize) {
     let selection = selection(entities).expect("a grouped alternative");
 
-    assert!(selection.grouped_winner().is_none());
+    assert!(selection.winner().is_none());
     assert_eq!(selection.ordinary.captain, captain);
 }
 
-/// Returns the walks of the grouped alternative of `entities`.
-fn walks(entities: &RawEntityIdAccess) -> &[Walk] {
-    &selection(entities)
+/// Returns the cheapest grouped alternative of `entities`.
+fn cheapest(entities: &RawEntityIdAccess) -> &Alternative {
+    selection(entities)
         .expect("a grouped alternative")
-        .grouped
-        .as_ref()
+        .cheapest()
         .unwrap()
-        .walks
+}
+
+/// Returns the walks of the cheapest grouped alternative of `entities`.
+fn walks(entities: &RawEntityIdAccess) -> &[Walk] {
+    &cheapest(entities).group().walks
 }
 
 /// Adds `count` entities owning `A(i)` and `B(i)`.
@@ -196,7 +202,7 @@ fn aligned() {
     assert_eq!(walks(&entities), [Walk::Aligned { len: 5 }]);
     // 5 candidates without sailor against B's 5 candidates with A looked up.
     let selection = selection(&entities).unwrap();
-    assert_eq!(selection.grouped.as_ref().unwrap().work, 10);
+    assert_eq!(selection.cheapest().unwrap().work, 10);
     assert_eq!(selection.ordinary.work, Some(15));
 
     assert_eq!((mixed.captain_mask, len), (0b10, 5));
@@ -286,7 +292,7 @@ fn reset() {
         }]
     );
     let selection = selection(&entities).unwrap();
-    assert_eq!(selection.grouped.as_ref().unwrap().work, 27);
+    assert_eq!(selection.cheapest().unwrap().work, 27);
     assert_eq!(selection.ordinary.work, Some(27));
     assert_ordinary_wins(&entities, 0);
     assert_eq!(mixed.captain_mask, 0b01);
@@ -350,7 +356,7 @@ fn equal_cost() {
     let (mixed, _, entities) = (&a, &b, &c).into_shiperator();
 
     let selection = selection(&entities).unwrap();
-    assert_eq!(selection.grouped.as_ref().unwrap().work, 12);
+    assert_eq!(selection.cheapest().unwrap().work, 12);
     assert_eq!(selection.ordinary.work, Some(12));
     assert_ordinary_wins(&entities, 2);
     assert_eq!(mixed.captain_mask, 0b100);
@@ -479,8 +485,11 @@ fn thread_local_identity() {
     assert_grouped_wins(&entities, 0b11);
 }
 
-/// Asserts that a nested `Mixed` isn't a group member for its parent:
-/// the parent keeps ordinary selection while the child reports its own alternative.
+/// Asserts that a nested `Mixed` isn't a group member for its parent, its parent drives
+/// through the alternative it reported instead.
+///
+/// 10 AB pairs all owning C: driving the aligned pair costs 20 and looking C up 10 more,
+/// against 40 for C looking the pair up.
 #[test]
 fn nested() {
     let mut world = World::new();
@@ -498,7 +507,15 @@ fn nested() {
     assert_grouped_wins(&entities, 0b11);
 
     let (mixed, _, entities) = ((&a, &b), &c).into_shiperator();
-    assert_ungrouped(&entities);
+    let selection = selection(&entities).unwrap();
+    let winner = selection.winner().unwrap();
+
+    assert_eq!(selection.ordinary.captain, 1);
+    assert_eq!(selection.ordinary.work, Some(40));
+    assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
+    assert_eq!((winner.candidates, winner.work), (10, 30));
+    assert_eq!(winner.group().member_mask(), 0b11);
+    // Constructors still install the ordinary walk, only the root swaps it.
     assert_eq!(mixed.captain_mask, 0b10);
 }
 

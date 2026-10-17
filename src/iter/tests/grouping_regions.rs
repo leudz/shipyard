@@ -47,9 +47,9 @@ fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
     let NodeMetadata::Mixed(selection) = entities.metadata else {
         panic!("the query has a grouped alternative");
     };
-    let candidate = selection.grouped.as_ref().unwrap();
+    let alternative = selection.cheapest().unwrap();
 
-    let entities = grouped_entities(&mut mixed, candidate);
+    let entities = grouped_entities(&mut mixed, alternative);
 
     Shiper::new(mixed, entities)
 }
@@ -132,7 +132,10 @@ pub(super) fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]
 }
 
 /// Returns the child whose storage holds `segment`'s entities and their indices in it.
-fn walked(segment: &SegmentDescriptor, storages: &[&[EntityId]]) -> (usize, Range<usize>) {
+pub(super) fn walked(
+    segment: &SegmentDescriptor,
+    storages: &[&[EntityId]],
+) -> (usize, Range<usize>) {
     let first: *const EntityId = segment.cursor().as_ptr().as_ptr();
 
     storages

@@ -3,8 +3,11 @@
 //! [`grouped_entities`] publishes the walks [`select`](super::select) estimated as a plan:
 //! one segment per walk, each with the row it installs and the regions earlier walks own.\
 //! It doesn't read entities, segments are carved out of the members' entities from metadata alone.
+//!
+//! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
+//! drives every segment through the single child leading to it, the rest of the query is looked up.
 
-use super::{GroupedCandidate, Member, NodeMetadata, Walk};
+use super::{Alternative, GroupedCandidate, Member, NodeMetadata, Route, Walk};
 use crate::iter::plan::{
     Coverage, CoverageSpan, NodeKind, NodeState, Plan, SegmentDescriptor, SegmentEntry, SegmentRow,
     SegmentSchedule,
@@ -13,20 +16,20 @@ use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
 use alloc::vec;
 use alloc::vec::Vec;
 
-/// Returns the entities driving `mixed` through every walk of `candidate`, with `mixed`
+/// Returns the entities driving `root` through every walk of `alternative`, with `root`
 /// installed for the first one.
 ///
-/// `mixed` is the `Mixed` whose immediate children `candidate` was selected from,
-/// in the state its constructor built.\
-/// `mixed`'s new state points into the plan held by the returned entities, they have to drive it.
+/// `root` is the `Mixed` that reported `alternative`, in the state its constructor built.
+/// It must be the query's root: rows are built for its whole layout.\
+/// `root`'s new state points into the plan held by the returned entities, they have to drive it.
 ///
-/// When `candidate` has no walk, the returned entities have no candidate and no plan,
-/// `mixed` is left as is.
+/// When `alternative` has no walk, the returned entities have no candidate and no plan,
+/// `root` is left as is.
 pub(crate) fn grouped_entities<S: Shiperator>(
-    mixed: &mut S,
-    candidate: &GroupedCandidate,
+    root: &mut S,
+    alternative: &Alternative,
 ) -> RawEntityIdAccess {
-    let Some(plan) = grouped_plan(mixed, candidate) else {
+    let Some(plan) = grouped_plan(root, alternative) else {
         return RawEntityIdAccess::empty();
     };
 
@@ -37,13 +40,15 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 
     // The first segment is entered like any follow-up, from its row in the published plan.
     let mut entry = SegmentEntry::new(schedule.plan(), &first);
-    // SAFE: `grouped_plan` built every row for `mixed`'s own layout. In each segment, a captain
+    // SAFE: `grouped_plan` built every row for `root`'s own layout. In each segment, a captain
     // window starts at the index, in its own storage, of the segment's first entity and the
     // segment fits in that storage. For the aligned walk, this relies on members holding
     // the same entities over the prefix they all trust, which their group metadata guarantees.
-    // `mixed` gets this segment's candidates from `first`'s cursor, which we return along with
+    // The `Mixed`s above the group's owner only have the child leading to it as captain, they
+    // pass the candidates down unchanged.
+    // `root` gets this segment's candidates from `first`'s cursor, which we return along with
     // the schedule keeping the plan alive.
-    unsafe { mixed.enter_segment(&mut entry) };
+    unsafe { root.enter_segment(&mut entry) };
     debug_assert!(entry.is_done());
 
     RawEntityIdAccess {
@@ -56,7 +61,13 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 // Why the walks yield every match of the query exactly once.
 //
 // Members are the selected group's storages, each one held by a plain window child of the
-// query. A match owns a component in all of them. Other children are only looked up.
+// `Mixed` owning the group. A match owns a component in all of them. Other children are only
+// looked up.
+//
+// When that `Mixed` is nested, its ancestors drive through it alone and look the rest of the
+// query up. Their matches are its matches that pass these lookups, so the walks below yield
+// each of them exactly once too. Lookups don't depend on the segment, a candidate rejected
+// in one segment would be rejected in all of them.
 //
 // Completeness, for a match `e`:
 // - When one of `e`'s members is unevaluated, that member's unevaluated walk meets `e`.
@@ -81,15 +92,21 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 //   Regions in the later walk's own storage are left out, its candidates are in another region.
 //   An earlier candidate a lookup rejected isn't a match, the later walk rejects it too.
 
-/// Builds the plan walking `candidate`'s walks in order, `None` when it has none.
-fn grouped_plan<S: Shiperator>(mixed: &S, candidate: &GroupedCandidate) -> Option<Plan> {
+/// Builds the plan walking `alternative`'s walks in order, `None` when it has none.
+///
+/// `root` is the query's root, the `Mixed` that reported `alternative`.
+fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Plan> {
+    let row = SegmentRow::of(root);
+    let layout = row.layout();
+
+    // Every segment drives the same path down to the `Mixed` owning the group,
+    // the rest of the query is made of sailors.
+    let (base_row, owner_slot, candidate) = route_row(layout, alternative);
     if candidate.walks.is_empty() {
         return None;
     }
 
-    let row = SegmentRow::of(mixed);
-    let layout = row.layout();
-    let slots = child_slots(layout);
+    let slots = child_slots(layout, owner_slot);
 
     for member in &candidate.members {
         // The regions and the entities were both read from the member's storage while it's
@@ -119,7 +136,7 @@ fn grouped_plan<S: Shiperator>(mixed: &S, candidate: &GroupedCandidate) -> Optio
         coverage.extend(records);
 
         // Each segment uses its own row, rows are pushed in segment order.
-        rows.extend(placement.row(layout, &slots, span));
+        rows.extend(placement.row(&base_row, owner_slot, &slots, span));
         segments.push(SegmentDescriptor::from_cursor(placement.entities, index));
     }
 
@@ -224,18 +241,25 @@ impl Placement {
             .collect()
     }
 
-    /// Returns the row this walk installs, in `layout`'s preorder.
+    /// Returns the row this walk installs.
     ///
-    /// `slots` holds the position in `layout` of each child of the root.
-    fn row(&self, layout: &[NodeKind], slots: &[usize], coverage: CoverageSpan) -> Vec<NodeState> {
+    /// `base_row` is the row leading to the `Mixed` owning the group, at position `owner_slot`.
+    /// `slots` holds the position of each of its children.
+    fn row(
+        &self,
+        base_row: &[NodeState],
+        owner_slot: usize,
+        slots: &[usize],
+        coverage: CoverageSpan,
+    ) -> Vec<NodeState> {
         let captain_mask = self
             .captains
             .iter()
             .fold(0, |mask, &(child, _)| mask | 1 << child);
 
         // Children not driving the walk are sailors, along with their whole subtree.
-        let mut row = vec![NodeState::Sailor; layout.len()];
-        row[0] = NodeState::Mixed {
+        let mut row = base_row.to_vec();
+        row[owner_slot] = NodeState::Mixed {
             captain_mask,
             coverage,
         };
@@ -247,14 +271,48 @@ impl Placement {
     }
 }
 
-/// Returns the position of each immediate child of `layout`'s root, a `Mixed`, in `layout`.
-fn child_slots(layout: &[NodeKind]) -> Vec<usize> {
-    let NodeKind::Mixed { children } = layout[0] else {
+/// Follows `alternative`'s route from `layout`'s root down to the `Mixed` owning its group.
+///
+/// Returns the row every segment shares, the position of the owner in `layout` and its walks.\
+/// In that row, each `Mixed` on the way drives through the child leading to the owner,
+/// without coverage. Every other node is a sailor, the owner's state is left to each segment.
+fn route_row<'a>(
+    layout: &[NodeKind],
+    alternative: &'a Alternative,
+) -> (Vec<NodeState>, usize, &'a GroupedCandidate) {
+    let mut row = vec![NodeState::Sailor; layout.len()];
+    let mut slot = 0;
+    let mut alternative = alternative;
+
+    loop {
+        match &alternative.route {
+            Route::Local(candidate) => return (row, slot, candidate),
+            Route::Nested {
+                child,
+                alternative: nested,
+            } => {
+                // Coverage stays with the owner, the `Mixed`s above it never reject a candidate
+                // because another segment walked it.
+                row[slot] = NodeState::Mixed {
+                    captain_mask: 1 << child,
+                    coverage: CoverageSpan::EMPTY,
+                };
+
+                slot = child_slots(layout, slot)[*child];
+                alternative = nested;
+            }
+        }
+    }
+}
+
+/// Returns the position in `layout` of each immediate child of the `Mixed` at position `node`.
+fn child_slots(layout: &[NodeKind], node: usize) -> Vec<usize> {
+    let NodeKind::Mixed { children } = layout[node] else {
         panic!("grouped walks drive a Mixed");
     };
 
     let mut slots = Vec::new();
-    let mut next = 1;
+    let mut next = node + 1;
     for _ in 0..children {
         slots.push(next);
         next = subtree_end(layout, next);

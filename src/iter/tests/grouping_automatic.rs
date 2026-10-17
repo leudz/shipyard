@@ -428,10 +428,10 @@ fn zero_sized() {
     assert_eq!(fold_ids((&z0, &z1).iter()), sorted(pairs));
 }
 
-/// Asserts that a grouped pair nested in a query keeps the ordinary walk its constructor
-/// installed: its parent doesn't compose grouped children yet.
+/// Asserts that a grouped pair nested in a query drives it when that's cheaper:
+/// the parent drives through the pair alone and looks C up. `grouping_nested` goes further.
 #[test]
-fn nested_stays_ordinary() {
+fn nested() {
     let mut world = World::new();
     let pairs = add_ab(&mut world, 4);
     world.add_entity(A(10));
@@ -446,8 +446,10 @@ fn nested_stays_ordinary() {
         .unwrap();
     let iter = ((&a, &b), &c).iter();
 
-    assert!(iter.schedule.is_none());
-    assert_eq!(iter.shiperator.shiperator.0.captain_mask.count_ones(), 1);
+    assert_eq!(iter.shiperator.captain_mask, 0b01);
+    assert_eq!(iter.shiperator.shiperator.0.captain_mask, 0b11);
+    assert_eq!(iter.cursor.len(), 4);
+    assert!(!iter.is_exact_sized);
     assert_eq!(next_ids(iter), sorted(pairs));
 }
 

@@ -526,13 +526,14 @@ macro_rules! impl_iter_component {
 
                 // Owned iteration only builds windows and tuples of them,
                 // they can all be captains and sailors.
-                let children = [$(
+                let mut children = [$(
                     Child::new(true, true, $raw_window.sail_time(), &mut $entity_iter),
                 )+];
-                let selection = planner::select(&children);
+                let selection = planner::select(&mut children);
 
                 // We always install the ordinary walk, our parent may drive through it.
-                // A cheaper grouped walk is only installed by the query's root, `into_iter`.
+                // A cheaper grouped walk, through our groups or our children's, is only installed
+                // by the query's root, `into_iter`.
                 let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;

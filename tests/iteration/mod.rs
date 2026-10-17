@@ -4,6 +4,7 @@ mod cursor;
 mod derived;
 mod filters;
 mod grouped;
+mod nested;
 mod non_packed;
 mod or;
 mod owned;

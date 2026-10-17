@@ -3,14 +3,15 @@
 //! While a query is built, each node reports what it knows about grouping in a
 //! [`NodeMetadata`], read from its storages while they're borrowed.\
 //! A `Mixed` hands its immediate children to [`select`], which ranks the ordinary captains
-//! and estimates the walks over every group its window children fully hold.
-//! Both alternatives are kept in a [`Selection`] until the query decides which one drives.
+//! and estimates its grouped [`Alternative`]s: walks over every group its window children
+//! fully hold, and the alternatives its nested `Mixed` children reported, driven through them.\
+//! Everything is kept in a [`Selection`] until the query decides which walk drives.
 //!
 //! Nothing here reads entities. Estimates only use group metadata, and the metadata is
 //! released once the iterator is built.\
 //! Constructors always install their ordinary walk. Once the whole query is built,
-//! [`install_winner`] swaps in its root's grouped walks when they're cheaper,
-//! [`regions::grouped_entities`] turning them into segments.
+//! [`install_winner`] swaps in its root's cheapest alternative when it beats the ordinary walk,
+//! [`regions::grouped_entities`] turning it into segments.
 
 pub(crate) mod regions;
 
@@ -32,8 +33,7 @@ use core::fmt;
 pub(crate) enum NodeMetadata {
     /// Nothing that could help or prevent grouping.
     ///
-    /// A window over a storage without group range, an entity slice or a `Mixed` without
-    /// grouped alternative.
+    /// A window over a storage without group range or an entity slice.
     #[default]
     Ungrouped,
     /// A plain window over a storage holding a group range.
@@ -42,11 +42,11 @@ pub(crate) enum NodeMetadata {
     ///
     /// These queries keep ordinary selection all the way up to the root.
     Filtered,
-    /// A `Mixed` with a grouped alternative to its ordinary walk.
+    /// A `Mixed` without filter, with its ordinary walk and its grouped alternatives.
     ///
-    /// Parents don't compose it yet, to them it's a child like any other non member.
-    /// Only the query's root can install it, see [`install_winner`].
-    Mixed(Box<Selection>),
+    /// Its parent can drive through any of these alternatives, only the query's root
+    /// installs one, see [`install_winner`].
+    Mixed(Selection),
 }
 
 impl NodeMetadata {
@@ -180,14 +180,47 @@ impl Child {
             _ => None,
         }
     }
+
+    /// Returns the number of components a sailor lookup of this child reads.
+    ///
+    /// A nested `Mixed` looks up each of its own children. Any other child is a single lookup:
+    /// filters can read more, but they disable grouping so their estimate is never compared.
+    fn lookups(&self) -> usize {
+        match &self.metadata {
+            NodeMetadata::Mixed(selection) => selection.lookups,
+            _ => 1,
+        }
+    }
+
+    /// Returns the estimated work of this child's ordinary walk, without its parent's lookups.
+    ///
+    /// Returns `None` when it doesn't fit in a `u64`.
+    fn ordinary_work(&self) -> Option<u64> {
+        match &self.metadata {
+            NodeMetadata::Mixed(selection) => selection.ordinary.work,
+            _ => walk_work(self.candidates?, 0),
+        }
+    }
+
+    /// Moves out the grouped alternatives this child reported, only a nested `Mixed` has some.
+    fn take_alternatives(&mut self) -> Vec<Alternative> {
+        match &mut self.metadata {
+            NodeMetadata::Mixed(selection) => core::mem::take(&mut selection.alternatives),
+            _ => Vec::new(),
+        }
+    }
 }
 
-/// Both alternatives of a `Mixed`: its ordinary walk and its cheapest grouped walks.
+/// Every walk a `Mixed` can drive with: its ordinary walk and its grouped alternatives.
 #[derive(Clone)]
 pub(crate) struct Selection {
     pub(crate) ordinary: OrdinaryCandidate,
-    /// The cheapest grouped alternative, `None` when no group is usable.
-    pub(crate) grouped: Option<GroupedCandidate>,
+    /// Grouped alternatives, ordered by the first child they involve.
+    ///
+    /// Empty when no group is usable or the query contains a filter.
+    pub(crate) alternatives: Vec<Alternative>,
+    /// Number of components a sailor lookup of this `Mixed` reads, one per window below it.
+    pub(crate) lookups: usize,
     /// The query contains a filter, grouping stays disabled up to the root.
     filtered: bool,
 }
@@ -201,6 +234,32 @@ pub(crate) struct OrdinaryCandidate {
     pub(crate) work: Option<u64>,
 }
 
+/// A grouped way for a `Mixed` to walk every one of its matches.
+#[derive(Clone, Debug)]
+pub(crate) struct Alternative {
+    /// Number of candidates walked, an upper bound of the matches since lookups can reject.
+    pub(crate) candidates: usize,
+    /// Estimated work for the `Mixed` reporting it, the lookups of all its children included.
+    /// See [`walk_work`].
+    pub(crate) work: u64,
+    pub(crate) route: Route,
+}
+
+/// Where an [`Alternative`]'s group is, relative to the `Mixed` reporting it.
+#[derive(Clone, Debug)]
+pub(crate) enum Route {
+    /// Walks over a group the `Mixed`'s immediate window children fully hold.
+    Local(GroupedCandidate),
+    /// The nested `Mixed` at position `child` drives through one of its own alternatives,
+    /// the other children are looked up.
+    ///
+    /// The nested `Mixed` keeps its own captain mask and coverage, nothing is flattened.
+    Nested {
+        child: usize,
+        alternative: Box<Alternative>,
+    },
+}
+
 /// Walks covering every match of a query through one of its groups.
 ///
 /// This is the region recipe: the walks are listed in the order they're emitted
@@ -211,8 +270,6 @@ pub(crate) struct GroupedCandidate {
     pub(crate) members: Vec<Member>,
     /// Walks in emission order, empty ones are left out.
     pub(crate) walks: Vec<Walk>,
-    /// Estimated work of all walks, see [`walk_work`].
-    pub(crate) work: u64,
 }
 
 /// A group member and the child holding it.
@@ -280,7 +337,7 @@ impl Walk {
 
 /// Work of walking one candidate, in half candidate visits.
 const CANDIDATE_WORK: u64 = 2;
-/// Work of looking up one sailor for a candidate, `NON_CAPTAIN_FACTOR` of a candidate visit.
+/// Work of looking up one component for a candidate, `NON_CAPTAIN_FACTOR` of a candidate visit.
 #[allow(clippy::cast_precision_loss, reason = "2 is exact in an f32.")]
 const SAILOR_WORK: u64 = (NON_CAPTAIN_FACTOR * CANDIDATE_WORK as f32) as u64;
 
@@ -293,21 +350,32 @@ const _: () = assert!(
     "`CANDIDATE_WORK` has to express `NON_CAPTAIN_FACTOR` exactly"
 );
 
-/// Returns the estimated work of walking `candidates` candidates, looking up `sailors`
-/// children for each of them.
+/// Returns the estimated work of walking `candidates` candidates, looking up `lookups`
+/// components for each of them.
 ///
 /// The unit is half a candidate visit:
 /// - walking a candidate costs `CANDIDATE_WORK` (2), captains read their component directly
-/// - looking up a sailor costs `SAILOR_WORK` (1), the `NON_CAPTAIN_FACTOR` (0.5) `Mixed`
+/// - looking up a component costs `SAILOR_WORK` (1), the `NON_CAPTAIN_FACTOR` (0.5) `Mixed`
 ///   weighs its sailors with
 ///
-/// So a walk costs `candidates * (2 + sailors)`.\
+/// So a walk costs `candidates * (2 + lookups)`.\
+/// A sailor window is one lookup, a sailor `Mixed` one per window below it.
 /// Every candidate is charged all its lookups, even though a rejection stops them early.
 /// Coverage checks are free next to a sparse lookup.
 ///
 /// Returns `None` when the result doesn't fit in a `u64`.
-fn walk_work(candidates: usize, sailors: usize) -> Option<u64> {
-    let per_candidate = CANDIDATE_WORK.checked_add(SAILOR_WORK.checked_mul(sailors as u64)?)?;
+fn walk_work(candidates: usize, lookups: usize) -> Option<u64> {
+    let per_candidate = CANDIDATE_WORK.checked_add(SAILOR_WORK.checked_mul(lookups as u64)?)?;
+
+    u64::try_from(candidates).ok()?.checked_mul(per_candidate)
+}
+
+/// Returns the estimated work of looking up `lookups` components for each of `candidates`
+/// candidates someone else walks, see [`walk_work`].
+///
+/// Returns `None` when the result doesn't fit in a `u64`.
+fn lookup_work(candidates: usize, lookups: usize) -> Option<u64> {
+    let per_candidate = SAILOR_WORK.checked_mul(lookups as u64)?;
 
     u64::try_from(candidates).ok()?.checked_mul(per_candidate)
 }
@@ -315,9 +383,11 @@ fn walk_work(candidates: usize, sailors: usize) -> Option<u64> {
 /// Ranks the alternatives of a `Mixed` with these immediate `children`.
 ///
 /// `children` must have at least one child able to captain and at most one unable to sail,
-/// constructors reject other queries.
-pub(crate) fn select(children: &[Child]) -> Selection {
-    let ordinary = ordinary_candidate(children);
+/// constructors reject other queries.\
+/// The alternatives nested `Mixed` children reported move into the returned selection.
+pub(crate) fn select(children: &mut [Child]) -> Selection {
+    let lookups = children.iter().map(Child::lookups).sum();
+    let ordinary = ordinary_candidate(children, lookups);
 
     let filtered = children
         .iter()
@@ -325,51 +395,58 @@ pub(crate) fn select(children: &[Child]) -> Selection {
     // A child that can't sail has to drive, no group can replace it.
     let has_forced_captain = children.iter().any(|child| !child.can_sailor);
 
-    let grouped = if filtered || has_forced_captain {
-        None
+    let alternatives = if filtered || has_forced_captain {
+        Vec::new()
     } else {
-        cheapest_grouped_candidate(children)
+        alternatives(children, lookups)
     };
 
     Selection {
         ordinary,
-        grouped,
+        alternatives,
+        lookups,
         filtered,
     }
 }
 
 impl Selection {
-    /// Returns the grouped alternative when it's cheaper than the ordinary walk.
+    /// Returns the cheapest grouped alternative, the first one on ties.
+    pub(crate) fn cheapest(&self) -> Option<&Alternative> {
+        self.alternatives
+            .iter()
+            .min_by_key(|alternative| alternative.work)
+    }
+
+    /// Returns the cheapest grouped alternative when it's cheaper than the ordinary walk.
     ///
     /// The ordinary walk wins ties and estimates that don't fit in a `u64`.
-    pub(crate) fn grouped_winner(&self) -> Option<&GroupedCandidate> {
-        let grouped = self.grouped.as_ref()?;
+    pub(crate) fn winner(&self) -> Option<&Alternative> {
+        let cheapest = self.cheapest()?;
         let ordinary_work = self.ordinary.work?;
 
-        (grouped.work < ordinary_work).then_some(grouped)
+        (cheapest.work < ordinary_work).then_some(cheapest)
     }
 
     /// Returns the metadata of the `Mixed` this selection is about, for its parent.
     pub(crate) fn into_metadata(self) -> NodeMetadata {
         if self.filtered {
             NodeMetadata::Filtered
-        } else if self.grouped.is_some() {
-            NodeMetadata::Mixed(Box::new(self))
         } else {
-            NodeMetadata::Ungrouped
+            NodeMetadata::Mixed(self)
         }
     }
 }
 
-/// Returns the entities driving a whole query, installing its grouped walks on `root`
-/// when they're cheaper than its ordinary walk.
+/// Returns the entities driving a whole query, installing its cheapest alternative on `root`
+/// when it beats its ordinary walk.
 ///
 /// `root` and `entities` are what the query's constructor returned, `root` still in the state
 /// it built.\
-/// The returned entities never carry metadata, the losing alternative is dropped here.
+/// The returned entities never carry metadata, the losing alternatives are dropped here.
 ///
-/// Only the root may call this. A nested `Mixed` keeps the ordinary walk its constructor
-/// installed: its parent estimated its own alternatives with that walk and may drive through it.
+/// Only the root may call this. Each nested `Mixed` keeps the ordinary walk its constructor
+/// installed until then: its parent estimated its own alternatives with that walk and may
+/// drive through it.
 pub(crate) fn install_winner<S: Shiperator>(
     root: &mut S,
     entities: RawEntityIdAccess,
@@ -379,7 +456,7 @@ pub(crate) fn install_winner<S: Shiperator>(
     let NodeMetadata::Mixed(selection) = &entities.metadata else {
         return entities.without_metadata();
     };
-    let Some(winner) = selection.grouped_winner() else {
+    let Some(winner) = selection.winner() else {
         return entities.without_metadata();
     };
 
@@ -388,17 +465,20 @@ pub(crate) fn install_winner<S: Shiperator>(
     regions::grouped_entities(root, winner)
 }
 
-/// Returns the ordinary walk of `children`.
-fn ordinary_candidate(children: &[Child]) -> OrdinaryCandidate {
+/// Returns the ordinary walk of `children`, which read `lookups` components as sailors.
+fn ordinary_candidate(children: &[Child], lookups: usize) -> OrdinaryCandidate {
     let captain = ordinary_captain(children);
-    let sailors = children.len() - 1;
+    let child = &children[captain];
 
-    OrdinaryCandidate {
-        captain,
-        work: children[captain]
-            .candidates
-            .and_then(|candidates| walk_work(candidates, sailors)),
-    }
+    // The captain walks its own candidates, its own sailors included,
+    // and we look up our other children for each of them.
+    let work = child.candidates.and_then(|candidates| {
+        let sailor_work = lookup_work(candidates, lookups - child.lookups())?;
+
+        child.ordinary_work()?.checked_add(sailor_work)
+    });
+
+    OrdinaryCandidate { captain, work }
 }
 
 /// Returns the position of the ordinary captain among `children`.
@@ -418,43 +498,51 @@ fn ordinary_captain(children: &[Child]) -> usize {
         .expect("constructors reject queries without captain")
 }
 
-/// Returns the cheapest grouped alternative among the groups `children` fully hold.
+/// Returns every grouped alternative of `children`, which read `lookups` components as sailors.
 ///
-/// Equal estimates keep the group whose first member comes first.
-fn cheapest_grouped_candidate(children: &[Child]) -> Option<GroupedCandidate> {
-    let mut cheapest: Option<GroupedCandidate> = None;
+/// Alternatives are ordered by the first child they involve: a group by its first member,
+/// a nested `Mixed`'s alternatives by its position.\
+/// Alternatives whose estimate doesn't fit in a `u64` can't beat anything and are left out.
+fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
+    let mut alternatives = Vec::new();
 
-    for (position, child) in children.iter().enumerate() {
-        let Some(window) = child.window() else {
-            continue;
-        };
-
-        // Each group is considered once, from its first member.
-        let seen = children[..position]
-            .iter()
-            .filter_map(Child::window)
-            .any(|earlier| Arc::ptr_eq(&earlier.group, &window.group));
-        if seen {
-            continue;
+    for position in 0..children.len() {
+        // Only a window can start a group and only a nested `Mixed` has alternatives,
+        // at most one of these two adds something.
+        if let Some(candidate) = local_candidate(children, position) {
+            alternatives.extend(Alternative::local(candidate, lookups));
         }
 
-        let Some(members) = group_members(children, &window.group) else {
-            continue;
-        };
-        // A candidate whose estimate doesn't fit can't beat anything.
-        let Some(candidate) = GroupedCandidate::new(children.len(), members) else {
-            continue;
-        };
-
-        if cheapest
-            .as_ref()
-            .is_none_or(|cheapest| candidate.work < cheapest.work)
-        {
-            cheapest = Some(candidate);
+        // Groups don't cross `Mixed` boundaries: a nested `Mixed` is never a member of our
+        // groups and we drive through its alternatives as a whole, its masks stay its own.
+        let child = &mut children[position];
+        let sailor_lookups = lookups - child.lookups();
+        for alternative in child.take_alternatives() {
+            alternatives.extend(Alternative::nested(position, alternative, sailor_lookups));
         }
     }
 
-    cheapest
+    alternatives
+}
+
+/// Returns the walks over the group whose first member is the child at `position`,
+/// `None` when that child isn't a window over a grouped storage or `children` don't fully
+/// hold its group.
+fn local_candidate(children: &[Child], position: usize) -> Option<GroupedCandidate> {
+    let window = children[position].window()?;
+
+    // Each group is considered once, from its first member.
+    let seen = children[..position]
+        .iter()
+        .filter_map(Child::window)
+        .any(|earlier| Arc::ptr_eq(&earlier.group, &window.group));
+    if seen {
+        return None;
+    }
+
+    let members = group_members(children, &window.group)?;
+
+    Some(GroupedCandidate::new(members))
 }
 
 /// Returns `group`'s members, in child order, when each of them is held by exactly one child.
@@ -494,25 +582,71 @@ fn group_members(children: &[Child], group: &Arc<[StorageId]>) -> Option<Vec<Mem
     (members.len() == group.len()).then_some(members)
 }
 
-impl GroupedCandidate {
-    /// Returns the walks over the group of `members` in a `Mixed` with `child_count` children.
+impl Alternative {
+    /// Returns the alternative walking `candidate`'s walks, for a `Mixed` whose children
+    /// read `lookups` components as sailors.
     ///
     /// Returns `None` when the estimate doesn't fit in a `u64`.
-    fn new(child_count: usize, members: Vec<Member>) -> Option<GroupedCandidate> {
-        let walks = walks(&members);
-
+    fn local(candidate: GroupedCandidate, lookups: usize) -> Option<Alternative> {
+        let mut candidates = 0usize;
         let mut work = 0u64;
-        for walk in &walks {
-            let sailors = child_count - walk.captain_count(members.len());
 
-            work = work.checked_add(walk_work(walk.len(), sailors)?)?;
+        for walk in &candidate.walks {
+            // Captains are member windows, each one would otherwise be a single lookup.
+            let sailor_lookups = lookups - walk.captain_count(candidate.members.len());
+
+            candidates = candidates.checked_add(walk.len())?;
+            work = work.checked_add(walk_work(walk.len(), sailor_lookups)?)?;
         }
 
-        Some(GroupedCandidate {
-            members,
-            walks,
+        Some(Alternative {
+            candidates,
             work,
+            route: Route::Local(candidate),
         })
+    }
+
+    /// Returns the alternative where the child at position `child` drives through `alternative`
+    /// and the other children read `sailor_lookups` components for each of its candidates.
+    ///
+    /// Returns `None` when the estimate doesn't fit in a `u64`.
+    fn nested(
+        child: usize,
+        alternative: Alternative,
+        sailor_lookups: usize,
+    ) -> Option<Alternative> {
+        // The child's candidates are an upper bound of its matches, we look ourselves up
+        // for each of them.
+        let work = alternative
+            .work
+            .checked_add(lookup_work(alternative.candidates, sailor_lookups)?)?;
+
+        Some(Alternative {
+            candidates: alternative.candidates,
+            work,
+            route: Route::Nested {
+                child,
+                alternative: Box::new(alternative),
+            },
+        })
+    }
+
+    /// Returns the group walks this alternative ends up driving, through any nested `Mixed`.
+    #[allow(dead_code, reason = "Only tests read it for now.")]
+    pub(crate) fn group(&self) -> &GroupedCandidate {
+        match &self.route {
+            Route::Local(candidate) => candidate,
+            Route::Nested { alternative, .. } => alternative.group(),
+        }
+    }
+}
+
+impl GroupedCandidate {
+    /// Returns the walks over the group of `members`.
+    fn new(members: Vec<Member>) -> GroupedCandidate {
+        let walks = walks(&members);
+
+        GroupedCandidate { members, walks }
     }
 
     /// Returns the children holding the group's members, bit `i` for child `i`.
@@ -654,15 +788,15 @@ mod grouping_selection_arithmetic {
     #[test]
     fn huge_grouped() {
         let group = group();
-        let children = [
+        let mut children = [
             member(&group, 0, usize::MAX / 2, usize::MAX),
             member(&group, 1, usize::MAX / 2, usize::MAX),
             ungrouped(5),
         ];
 
-        let selection = select(&children);
+        let selection = select(&mut children);
 
-        assert!(selection.grouped.is_none());
+        assert!(selection.alternatives.is_empty());
         assert_eq!(selection.ordinary.captain, 2);
         // 5 candidates, 2 sailors.
         assert_eq!(selection.ordinary.work, Some(20));
@@ -677,7 +811,7 @@ mod grouping_selection_arithmetic {
         let a = member(&group, 0, 3, usize::MAX);
         let b = member(&group, 1, 3, 3);
 
-        assert!(select(&[a, b]).grouped.is_none());
+        assert!(select(&mut [a, b]).alternatives.is_empty());
     }
 
     /// Asserts that an ordinary walk whose estimate doesn't fit in a `u64` still beats
@@ -688,18 +822,18 @@ mod grouping_selection_arithmetic {
         // The smallest sail time drives, but its follow-ups overflow the candidate count.
         let mut overflowing = ungrouped(1);
         overflowing.candidates = None;
-        let children = [
+        let mut children = [
             overflowing,
             member(&group, 0, 3, 3),
             member(&group, 1, 3, 3),
         ];
 
-        let selection = select(&children);
+        let selection = select(&mut children);
 
         assert_eq!(selection.ordinary.captain, 0);
         assert_eq!(selection.ordinary.work, None);
-        assert_eq!(selection.grouped.as_ref().unwrap().work, 9);
-        assert!(selection.grouped_winner().is_none());
+        assert_eq!(selection.cheapest().unwrap().work, 9);
+        assert!(selection.winner().is_none());
     }
 
     /// Asserts that a fully aligned group is a single aligned walk where the members'
@@ -707,18 +841,19 @@ mod grouping_selection_arithmetic {
     #[test]
     fn aligned_recipe() {
         let group = group();
-        let children = [
+        let mut children = [
             member(&group, 0, 4, 4),
             member(&group, 1, 4, 4),
             ungrouped(9),
         ];
 
-        let candidate = select(&children).grouped.unwrap();
+        let selection = select(&mut children);
+        let alternative = selection.cheapest().unwrap();
 
-        assert_eq!(candidate.walks, [Walk::Aligned { len: 4 }]);
-        assert_eq!(candidate.member_mask(), 0b011);
+        assert_eq!(alternative.group().walks, [Walk::Aligned { len: 4 }]);
+        assert_eq!(alternative.group().member_mask(), 0b011);
         // 4 candidates, 1 sailor.
-        assert_eq!(candidate.work, 12);
+        assert_eq!((alternative.candidates, alternative.work), (4, 12));
     }
 
     /// Asserts that partial trust gives an aligned prefix, a single damaged walk owned by
@@ -743,10 +878,11 @@ mod grouping_selection_arithmetic {
             len: 12,
         };
 
-        let candidate = select(&[a, b]).grouped.unwrap();
+        let selection = select(&mut [a, b]);
+        let alternative = selection.cheapest().unwrap();
 
         assert_eq!(
-            candidate.walks,
+            alternative.group().walks,
             [
                 Walk::Aligned { len: 2 },
                 Walk::Damaged {
@@ -767,7 +903,7 @@ mod grouping_selection_arithmetic {
             ]
         );
         // 2 aligned candidates without sailor, then 11 candidates with one sailor each.
-        assert_eq!(candidate.work, 2 * 2 + 11 * 3);
+        assert_eq!(alternative.work, 2 * 2 + 11 * 3);
     }
 
     /// Asserts that equal damaged suffixes and equal unevaluated regions are owned
@@ -780,10 +916,10 @@ mod grouping_selection_arithmetic {
         regions_mut(&mut a).trust = 1;
         regions_mut(&mut b).trust = 1;
 
-        let candidate = select(&[a, b]).grouped.unwrap();
+        let selection = select(&mut [a, b]);
 
         assert_eq!(
-            candidate.walks,
+            selection.cheapest().unwrap().group().walks,
             [
                 Walk::Aligned { len: 1 },
                 Walk::Damaged {
@@ -847,11 +983,164 @@ mod grouping_selection_arithmetic {
         let group = group();
         let mut entities = ungrouped(100);
         entities.can_sailor = false;
-        let children = [member(&group, 0, 4, 4), member(&group, 1, 4, 4), entities];
+        let mut children = [member(&group, 0, 4, 4), member(&group, 1, 4, 4), entities];
 
-        let selection = select(&children);
+        let selection = select(&mut children);
 
         assert_eq!(selection.ordinary.captain, 2);
-        assert!(selection.grouped.is_none());
+        assert!(selection.alternatives.is_empty());
+    }
+
+    /// A nested `Mixed` child of `lookups` windows whose ordinary walk drives `candidates`
+    /// candidates for `work`, reporting `alternatives` as `(candidates, work)`.
+    fn nested(
+        candidates: usize,
+        work: u64,
+        lookups: usize,
+        alternatives: &[(usize, u64)],
+    ) -> Child {
+        let alternatives = alternatives
+            .iter()
+            .map(|&(candidates, work)| Alternative {
+                candidates,
+                work,
+                route: Route::Local(GroupedCandidate {
+                    members: Vec::new(),
+                    walks: Vec::new(),
+                }),
+            })
+            .collect();
+
+        Child {
+            can_captain: true,
+            can_sailor: true,
+            sail_time: candidates,
+            candidates: Some(candidates),
+            entities: EntityCursor::empty(),
+            metadata: NodeMetadata::Mixed(Selection {
+                ordinary: OrdinaryCandidate {
+                    captain: 0,
+                    work: Some(work),
+                },
+                alternatives,
+                lookups,
+                filtered: false,
+            }),
+        }
+    }
+
+    /// Asserts that a nested `Mixed` as sailor costs one lookup per window below it,
+    /// and that its parent reports the sum of its children's lookups.
+    #[test]
+    fn nested_lookups() {
+        let mut children = [ungrouped(4), nested(100, 300, 3, &[])];
+
+        let selection = select(&mut children);
+
+        assert_eq!(selection.lookups, 4);
+        assert_eq!(selection.ordinary.captain, 0);
+        // 4 candidates looking 3 windows up.
+        assert_eq!(selection.ordinary.work, Some(4 * (2 + 3)));
+    }
+
+    /// Asserts that a nested `Mixed` driving the ordinary walk brings its own work,
+    /// its parent only adds the lookups of its other children.
+    #[test]
+    fn nested_captain() {
+        let mut children = [nested(4, 30, 2, &[]), ungrouped(100)];
+
+        let selection = select(&mut children);
+
+        assert_eq!(selection.ordinary.captain, 0);
+        assert_eq!(selection.ordinary.work, Some(30 + 4));
+        assert!(selection.alternatives.is_empty());
+    }
+
+    /// Asserts that a parent ranks every alternative a child reported with its own lookups:
+    /// the child's cheaper walk has more candidates and loses once the parent looks 3 windows up
+    /// for each of them. The child isn't committed to its own cheapest walk.
+    #[test]
+    fn parent_reranks() {
+        let mut children = [
+            nested(1000, 5000, 2, &[(50, 100), (10, 110)]),
+            ungrouped(1000),
+            ungrouped(1000),
+            ungrouped(1000),
+        ];
+
+        let selection = select(&mut children);
+
+        let works: Vec<u64> = selection
+            .alternatives
+            .iter()
+            .map(|alternative| alternative.work)
+            .collect();
+        assert_eq!(works, [100 + 50 * 3, 110 + 10 * 3]);
+
+        let winner = selection.winner().unwrap();
+        let Route::Nested { child, alternative } = &winner.route else {
+            panic!("the child's alternative drives");
+        };
+        assert_eq!(
+            (*child, alternative.candidates, alternative.work),
+            (0, 10, 110)
+        );
+        assert_eq!(winner.candidates, 10);
+    }
+
+    /// Asserts that alternatives move up through every level, each one adding its lookups.
+    #[test]
+    fn two_levels() {
+        let mut middle_children = [nested(20, 60, 2, &[(10, 20)]), ungrouped(30)];
+        let middle = select(&mut middle_children);
+        assert_eq!(middle.lookups, 3);
+        assert_eq!(middle.alternatives[0].work, 20 + 10);
+
+        let mut root_children = [
+            Child {
+                metadata: NodeMetadata::Mixed(middle),
+                ..ungrouped(20)
+            },
+            ungrouped(40),
+        ];
+        let root = select(&mut root_children);
+
+        let winner = root.winner().unwrap();
+        assert_eq!(winner.work, 20 + 10 + 10);
+        let Route::Nested {
+            child: 0,
+            alternative,
+        } = &winner.route
+        else {
+            panic!("the middle `Mixed` drives");
+        };
+        assert!(matches!(alternative.route, Route::Nested { child: 0, .. }));
+    }
+
+    /// Asserts that a filtered child drops every alternative, its siblings' included,
+    /// and that a child unable to sail drops nested alternatives too.
+    #[test]
+    fn nested_disabled() {
+        let mut filtered = ungrouped(5);
+        filtered.metadata = NodeMetadata::Filtered;
+        let mut children = [nested(10, 30, 2, &[(10, 20)]), filtered];
+        assert!(select(&mut children).alternatives.is_empty());
+
+        let mut entities = ungrouped(100);
+        entities.can_sailor = false;
+        let mut children = [nested(10, 30, 2, &[(10, 20)]), entities];
+        assert!(select(&mut children).alternatives.is_empty());
+    }
+
+    /// Asserts that a nested alternative whose estimate overflows with its parent's lookups
+    /// is left out instead of wrapping.
+    #[test]
+    fn nested_overflow() {
+        let mut children = [
+            nested(10, 30, 2, &[(usize::MAX, u64::MAX - 1)]),
+            ungrouped(1),
+        ];
+
+        assert!(select(&mut children).alternatives.is_empty());
     }
 }

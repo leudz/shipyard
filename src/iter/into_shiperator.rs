@@ -334,7 +334,7 @@ macro_rules! impl_into_shiperator_tuple {
                     panic!("Unable to build a Shiperator: Multiple views are unable to be Sailors.")
                 }
 
-                let children = [$(
+                let mut children = [$(
                     Child::new(
                         can_captains.$index,
                         can_sailors.$index,
@@ -342,7 +342,7 @@ macro_rules! impl_into_shiperator_tuple {
                         &mut shiperators.$index.2,
                     ),
                 )+];
-                let selection = planner::select(&children);
+                let selection = planner::select(&mut children);
 
                 // Preorder position of each child's states in the Mixed's rows.
                 let mut next_slot = 1;
@@ -354,7 +354,8 @@ macro_rules! impl_into_shiperator_tuple {
                 let _ = next_slot;
 
                 // We always install the ordinary walk, our parent may drive through it.
-                // A cheaper grouped walk is only installed by the query's root, `IntoIter::iter`.
+                // A cheaper grouped walk, through our groups or our children's, is only installed
+                // by the query's root, `IntoIter::iter`.
                 let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;
