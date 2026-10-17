@@ -59,7 +59,7 @@ impl<'tmp, 'view, T: Component + Serialize, Track: Tracking> Serialize
             use serde::ser::SerializeStruct as _;
 
             let mut state = serializer.serialize_struct("View", 2)?;
-            state.serialize_field("type_name", &std::any::type_name::<T>())?;
+            state.serialize_field("type_name", &core::any::type_name::<T>())?;
 
             let data = self.view.iter().with_id().collect::<Vec<_>>();
             state.serialize_field("data", &data)?;
