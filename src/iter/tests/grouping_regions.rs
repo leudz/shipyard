@@ -511,18 +511,17 @@ struct Partial {
     late_a: EntityId,
 }
 
-/// A world with an AB group whose ranges don't start at the same index and are partially trusted.
+/// A world with an AB group whose ranges have different lengths and are partially trusted.
 ///
 /// ```text
-///          range                   ungrouped  unevaluated
-/// A: [x | e1 e2 e3 late_b]         [g]        [unevaluated late_a]
-///       trust 3
-/// B:     [e1 e2 e3]                [late_a]   [late_b unevaluated]
-///        trust 2
+///    range                 ungrouped  unevaluated
+/// A: [e1 e2 e3 late_b]     [x g]      [unevaluated late_a]
+///    trust 3
+/// B: [e1 e2 e3]            [late_a]   [late_b unevaluated]
+///    trust 2
 /// ```
 ///
-/// `x` stands for components before A's range, another group's range once storages hold
-/// several. Neither `x` nor `g` own B, so they aren't matches.\
+/// Neither `x` nor `g` own B, so they aren't matches.\
 /// Members hold the same entities over the 2 positions they both trust and every match
 /// with both components evaluated is in both ranges, as group metadata guarantees.
 fn partial_world() -> Partial {
@@ -530,19 +529,19 @@ fn partial_world() -> Partial {
     world.group::<(A, B)>();
 
     // Every component lands at the end of its storage, the regions are set afterwards.
-    let x = world.add_entity(A(0));
     let e1 = world.add_entity((A(1), B(1)));
     let e2 = world.add_entity((A(2), B(2)));
     let damaged = world.add_entity((A(3), B(3)));
     let late_a = world.add_entity(B(4));
     let late_b = world.add_entity((A(5), B(5)));
+    let x = world.add_entity(A(0));
     let g = world.add_entity(A(6));
     let unevaluated = world.add_entity((A(7), B(7)));
     world.add_component(late_a, A(4));
 
     {
         let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
-        set_regions(&mut a.groups, 1..5, 3, 6);
+        set_regions(&mut a.groups, 0..4, 3, 6);
         set_regions(&mut b.groups, 0..3, 2, 4);
     }
 
@@ -558,7 +557,7 @@ fn partial_world() -> Partial {
 }
 
 /// Asserts the segments of `partial_world`:
-/// - the aligned walk starts at each member's own range start
+/// - the aligned walk starts at each member's range start
 /// - B has the shorter damaged suffix and walks it alone
 /// - A's unevaluated walk comes first on equal lengths and rejects what B's damaged walk owns
 /// - B's unevaluated walk rejects what A's unevaluated walk owns
@@ -576,13 +575,13 @@ fn partial_trust() {
     assert_eq!(
         segments,
         [
-            segment((0, 1..3), 0b11, &[Some(1), Some(0)], &[]),
+            segment((0, 0..2), 0b11, &[Some(0), Some(0)], &[]),
             segment((1, 2..3), 0b10, &[None, Some(2)], &[]),
             segment((0, 6..8), 0b01, &[Some(6), None], &[record(1, 2, 3)]),
             segment((1, 4..6), 0b10, &[None, Some(4)], &[record(0, 6, 8)]),
         ]
     );
-    assert_skipped(&segments, 0, 5..6);
+    assert_skipped(&segments, 0, 4..6);
     assert_skipped(&segments, 1, 3..4);
     assert_pairs(&a, &b, &partial.all);
 }

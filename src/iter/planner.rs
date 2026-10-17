@@ -18,7 +18,7 @@ pub(crate) mod regions;
 use crate::component::Component;
 use crate::iter::mixed::NON_CAPTAIN_FACTOR;
 use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
-use crate::sparse_set::{Groups, SparseSet};
+use crate::sparse_set::{Groups, Ring, SparseSet};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -36,7 +36,7 @@ pub(crate) enum NodeMetadata {
     /// A window over a storage without group range or an entity slice.
     #[default]
     Ungrouped,
-    /// A plain window over a storage holding a group range.
+    /// A plain window over a storage holding group ranges.
     Window(WindowMetadata),
     /// An `Optional`, `Not`, tracking filter or `Or`, or a query containing one.
     ///
@@ -59,50 +59,111 @@ impl NodeMetadata {
     /// Returns the metadata of a plain window over a storage of `len` components with `groups`.
     fn of_storage(groups: &Groups, len: usize) -> NodeMetadata {
         // Storages without group only pay this check.
-        // A storage can only hold a single range for now. With several, picking one would
-        // need union support, so we don't advertise any and stay ordinary, which is always complete.
-        let [range] = &groups.ranges[..] else {
+        if !groups.has_ranges() {
             return NodeMetadata::Ungrouped;
-        };
+        }
         let Some(storage_id) = groups.storage_id else {
             return NodeMetadata::Ungrouped;
         };
 
-        let regions = MemberRegions {
-            range_start: range.start,
-            range_len: range.len,
-            trust: range.trust,
-            unevaluated_start: groups.unevaluated_start,
+        let window = WindowMetadata {
+            storage_id,
             len,
+            unevaluated_start: groups.unevaluated_start,
+            ranges: groups
+                .ranges
+                .iter()
+                .map(|range| RangeMetadata {
+                    group: range.group.clone(),
+                    ring: range.ring(),
+                    trust: range.trust,
+                })
+                .collect(),
         };
 
-        // Rotated ranges can't be walked yet and the estimates subtract these bounds,
-        // so anything outside the base's layout stays ordinary instead of being trusted.
-        if range.shift != 0 || !regions.is_valid() {
+        // Walks are placed and estimated from these bounds without further checks,
+        // so a layout outside the storage stays ordinary instead of being trusted.
+        if !window.is_valid() {
             return NodeMetadata::Ungrouped;
         }
 
-        NodeMetadata::Window(WindowMetadata {
-            storage_id,
-            group: range.group.clone(),
-            regions,
-        })
+        NodeMetadata::Window(window)
     }
 }
 
-/// Group metadata of a plain window's storage.
-#[derive(Clone)]
+/// Group metadata of a plain window's storage, copied while the storage is borrowed.
+///
+/// ```text
+/// [ Group range(s) ][ Ungrouped ][ Unevaluated ]
+/// ```
+#[derive(Clone, Debug)]
 pub(crate) struct WindowMetadata {
     /// Id of the storage, as its own group metadata records it.
     ///
     /// Thread-local storages have ids distinct from their `Send + Sync` counterparts.
     pub(crate) storage_id: StorageId,
-    /// Sorted member ids of the storage's group, compared by pointer.
-    pub(crate) group: Arc<[StorageId]>,
-    pub(crate) regions: MemberRegions,
+    /// Number of components in the storage.
+    pub(crate) len: usize,
+    /// Physical index where the unevaluated region starts.
+    pub(crate) unevaluated_start: usize,
+    /// Every range of the storage, in physical order.
+    pub(crate) ranges: Vec<RangeMetadata>,
 }
 
-/// Regions of a group member's storage.
+/// One range of a plain window's storage.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct RangeMetadata {
+    /// Sorted member ids of the range's group, compared by pointer.
+    pub(crate) group: Arc<[StorageId]>,
+    pub(crate) ring: Ring,
+    /// Length of the range's logical prefix unchanged since the last regroup.
+    pub(crate) trust: usize,
+}
+
+impl WindowMetadata {
+    /// Returns `true` when the ranges tile the start of the storage, each one trusting at most
+    /// its length, followed by the ungrouped and unevaluated regions inside the storage.
+    fn is_valid(&self) -> bool {
+        let mut grouped_end = 0usize;
+        for range in &self.ranges {
+            if range.ring.start != grouped_end || range.trust > range.ring.len {
+                return false;
+            }
+
+            let Some(end) = grouped_end.checked_add(range.ring.len) else {
+                return false;
+            };
+            grouped_end = end;
+        }
+
+        grouped_end <= self.unevaluated_start && self.unevaluated_start <= self.len
+    }
+
+    /// Returns the group and regions of the storage's range, when it holds a single unrotated one.
+    ///
+    /// Grouped walks only handle this layout for now. Storages with any other layout stay
+    /// ordinary, which is always complete.
+    fn single_range(&self) -> Option<(&Arc<[StorageId]>, MemberRegions)> {
+        let [range] = &self.ranges[..] else {
+            return None;
+        };
+        if range.ring.len != 0 && range.ring.wrap_offset() != 0 {
+            return None;
+        }
+
+        let regions = MemberRegions {
+            range_start: range.ring.start,
+            range_len: range.ring.len,
+            trust: range.trust,
+            unevaluated_start: self.unevaluated_start,
+            len: self.len,
+        };
+
+        Some((&range.group, regions))
+    }
+}
+
+/// Regions of a group member's storage holding a single unrotated range.
 ///
 /// ```text
 /// [ Group range ][ Ungrouped ][ Unevaluated ]
@@ -121,15 +182,6 @@ pub(crate) struct MemberRegions {
 }
 
 impl MemberRegions {
-    /// Returns `true` when the regions are in order and within the storage.
-    fn is_valid(&self) -> bool {
-        let range_end = self.range_start.checked_add(self.range_len);
-
-        self.trust <= self.range_len
-            && range_end.is_some_and(|range_end| range_end <= self.unevaluated_start)
-            && self.unevaluated_start <= self.len
-    }
-
     /// Returns the number of components in the unevaluated region.
     fn unevaluated_len(&self) -> usize {
         self.len - self.unevaluated_start
@@ -529,18 +581,19 @@ fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
 /// `None` when that child isn't a window over a grouped storage or `children` don't fully
 /// hold its group.
 fn local_candidate(children: &[Child], position: usize) -> Option<GroupedCandidate> {
-    let window = children[position].window()?;
+    let (group, _) = children[position].window()?.single_range()?;
 
     // Each group is considered once, from its first member.
     let seen = children[..position]
         .iter()
         .filter_map(Child::window)
-        .any(|earlier| Arc::ptr_eq(&earlier.group, &window.group));
+        .filter_map(WindowMetadata::single_range)
+        .any(|(earlier, _)| Arc::ptr_eq(earlier, group));
     if seen {
         return None;
     }
 
-    let members = group_members(children, &window.group)?;
+    let members = group_members(children, group)?;
 
     Some(GroupedCandidate::new(members))
 }
@@ -560,7 +613,10 @@ fn group_members(children: &[Child], group: &Arc<[StorageId]>) -> Option<Vec<Mem
         let Some(window) = child.window() else {
             continue;
         };
-        if !Arc::ptr_eq(&window.group, group) {
+        let Some((window_group, regions)) = window.single_range() else {
+            continue;
+        };
+        if !Arc::ptr_eq(window_group, group) {
             continue;
         }
 
@@ -574,7 +630,7 @@ fn group_members(children: &[Child], group: &Arc<[StorageId]>) -> Option<Vec<Mem
         found |= bit;
         members.push(Member {
             child: position,
-            regions: window.regions,
+            regions,
             entities: child.entities,
         });
     }
@@ -715,6 +771,8 @@ fn walks(members: &[Member]) -> Vec<Walk> {
 #[cfg(test)]
 mod grouping_selection_arithmetic {
     use super::*;
+    use crate::sparse_set::GroupRange;
+    use alloc::vec;
 
     fn group() -> Arc<[StorageId]> {
         Arc::from([StorageId::Custom(0), StorageId::Custom(1)])
@@ -731,24 +789,40 @@ mod grouping_selection_arithmetic {
             entities: EntityCursor::empty(),
             metadata: NodeMetadata::Window(WindowMetadata {
                 storage_id: group[member],
-                group: group.clone(),
-                regions: MemberRegions {
-                    range_start: 0,
-                    range_len,
+                len,
+                unevaluated_start: range_len,
+                ranges: vec![RangeMetadata {
+                    group: group.clone(),
+                    ring: Ring {
+                        start: 0,
+                        len: range_len,
+                        shift: 0,
+                    },
                     trust: range_len,
-                    unevaluated_start: range_len,
-                    len,
-                },
+                }],
             }),
         }
     }
 
-    /// Returns the regions of a child made by `member`.
-    fn regions_mut(child: &mut Child) -> &mut MemberRegions {
+    /// Returns the metadata of a child made by `member`.
+    fn window_mut(child: &mut Child) -> &mut WindowMetadata {
         match &mut child.metadata {
-            NodeMetadata::Window(window) => &mut window.regions,
+            NodeMetadata::Window(window) => window,
             _ => unreachable!(),
         }
+    }
+
+    /// Lays the storage of a child made by `member` out as `regions`.
+    fn set_regions(child: &mut Child, regions: MemberRegions) {
+        let window = window_mut(child);
+        window.ranges[0].ring = Ring {
+            start: regions.range_start,
+            len: regions.range_len,
+            shift: 0,
+        };
+        window.ranges[0].trust = regions.trust;
+        window.unevaluated_start = regions.unevaluated_start;
+        window.len = regions.len;
     }
 
     /// A window child of `len` components without group metadata.
@@ -863,20 +937,26 @@ mod grouping_selection_arithmetic {
         let group = group();
         let mut a = member(&group, 0, 6, 9);
         let mut b = member(&group, 1, 5, 12);
-        *regions_mut(&mut a) = MemberRegions {
-            range_start: 0,
-            range_len: 6,
-            trust: 2,
-            unevaluated_start: 7,
-            len: 9,
-        };
-        *regions_mut(&mut b) = MemberRegions {
-            range_start: 1,
-            range_len: 5,
-            trust: 3,
-            unevaluated_start: 6,
-            len: 12,
-        };
+        set_regions(
+            &mut a,
+            MemberRegions {
+                range_start: 0,
+                range_len: 6,
+                trust: 2,
+                unevaluated_start: 7,
+                len: 9,
+            },
+        );
+        set_regions(
+            &mut b,
+            MemberRegions {
+                range_start: 0,
+                range_len: 5,
+                trust: 3,
+                unevaluated_start: 6,
+                len: 12,
+            },
+        );
 
         let selection = select(&mut [a, b]);
         let alternative = selection.cheapest().unwrap();
@@ -913,8 +993,8 @@ mod grouping_selection_arithmetic {
         let group = group();
         let mut a = member(&group, 0, 4, 6);
         let mut b = member(&group, 1, 4, 6);
-        regions_mut(&mut a).trust = 1;
-        regions_mut(&mut b).trust = 1;
+        window_mut(&mut a).ranges[0].trust = 1;
+        window_mut(&mut b).ranges[0].trust = 1;
 
         let selection = select(&mut [a, b]);
 
@@ -941,40 +1021,208 @@ mod grouping_selection_arithmetic {
         );
     }
 
-    /// Asserts that regions out of order or outside the storage aren't trusted.
+    /// A range of `group` at `start`, `len` long with `shift` and `trust`.
+    fn group_range(
+        group: &Arc<[StorageId]>,
+        start: usize,
+        len: usize,
+        shift: isize,
+        trust: usize,
+    ) -> GroupRange {
+        GroupRange {
+            group: group.clone(),
+            start,
+            len,
+            shift,
+            trust,
+        }
+    }
+
+    /// Group metadata of storage 0 with `ranges` and the unevaluated region at `unevaluated_start`.
+    fn storage_groups(ranges: Vec<GroupRange>, unevaluated_start: usize) -> Groups {
+        Groups {
+            storage_id: Some(StorageId::Custom(0)),
+            ranges,
+            unevaluated_start,
+        }
+    }
+
+    /// Returns the window metadata of a storage of `len` components with `groups`.
+    fn metadata(groups: &Groups, len: usize) -> Option<WindowMetadata> {
+        match NodeMetadata::of_storage(groups, len) {
+            NodeMetadata::Window(window) => Some(window),
+            _ => None,
+        }
+    }
+
+    /// Asserts that a storage without group reports no metadata.
     #[test]
-    fn invalid_regions() {
+    fn metadata_ungrouped() {
+        assert!(metadata(&Groups::default(), 5).is_none());
+    }
+
+    /// Asserts that a storage whose metadata doesn't record its own id reports nothing.
+    #[test]
+    fn metadata_missing_id() {
+        let mut groups = storage_groups(vec![group_range(&group(), 0, 2, 0, 2)], 2);
+        groups.storage_id = None;
+
+        assert!(metadata(&groups, 2).is_none());
+    }
+
+    /// Asserts that every range is reported with its group, position, rotation and trust,
+    /// empty ones included, along with the storage-wide regions.
+    #[test]
+    fn metadata_ranges() {
+        let ab = group();
+        let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
+        let ad: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(3)]);
+        let groups = storage_groups(
+            vec![
+                group_range(&ab, 0, 2, 1, 2),
+                group_range(&ac, 2, 0, -3, 0),
+                group_range(&ad, 2, 3, 4, 1),
+            ],
+            6,
+        );
+
+        let window = metadata(&groups, 8).unwrap();
+
+        assert_eq!(window.storage_id, StorageId::Custom(0));
+        assert_eq!((window.len, window.unevaluated_start), (8, 6));
+        let rings: Vec<(Ring, usize)> = window
+            .ranges
+            .iter()
+            .map(|range| (range.ring, range.trust))
+            .collect();
+        assert_eq!(
+            rings,
+            [
+                (
+                    Ring {
+                        start: 0,
+                        len: 2,
+                        shift: 1
+                    },
+                    2
+                ),
+                (
+                    Ring {
+                        start: 2,
+                        len: 0,
+                        shift: -3
+                    },
+                    0
+                ),
+                (
+                    Ring {
+                        start: 2,
+                        len: 3,
+                        shift: 4
+                    },
+                    1
+                ),
+            ]
+        );
+        for (range, group) in window.ranges.iter().zip([&ab, &ac, &ad]) {
+            assert!(Arc::ptr_eq(&range.group, group));
+        }
+    }
+
+    /// Asserts that a reset storage reports its emptied ranges, they're still a valid layout.
+    #[test]
+    fn metadata_reset() {
+        let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
+        let mut groups = storage_groups(
+            vec![
+                group_range(&group(), 0, 2, 0, 2),
+                group_range(&ac, 2, 3, -1, 3),
+            ],
+            6,
+        );
+
+        groups.reset();
+        let window = metadata(&groups, 6).unwrap();
+
+        assert_eq!(window.unevaluated_start, 0);
+        assert!(window
+            .ranges
+            .iter()
+            .all(|range| range.ring.start == 0 && range.ring.len == 0 && range.trust == 0));
+    }
+
+    /// Asserts that layouts outside the storage or out of order aren't trusted.
+    #[test]
+    fn metadata_invalid() {
+        let ab = group();
+        let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
         let invalid = [
+            // The first range doesn't start the storage.
+            (vec![group_range(&ab, 1, 2, 0, 2)], 3, 3),
+            // A gap between two ranges.
+            (
+                vec![group_range(&ab, 0, 2, 0, 2), group_range(&ac, 3, 1, 0, 1)],
+                4,
+                4,
+            ),
             // Trust past the range's length.
-            (0, 2, 3, 2, 2),
-            // The range overlaps the unevaluated region.
-            (0, 3, 3, 2, 3),
+            (vec![group_range(&ab, 0, 2, 0, 3)], 2, 2),
+            // The ranges overlap the unevaluated region.
+            (vec![group_range(&ab, 0, 3, 0, 3)], 2, 3),
             // The unevaluated region starts past the storage's end.
-            (0, 2, 2, 5, 4),
-            // The range's end overflows.
-            (usize::MAX, 2, 0, usize::MAX, usize::MAX),
+            (vec![group_range(&ab, 0, 2, 0, 2)], 5, 4),
+            // The ranges' end overflows.
+            (
+                vec![
+                    group_range(&ab, 0, usize::MAX, 0, 0),
+                    group_range(&ac, usize::MAX, 2, 0, 0),
+                ],
+                usize::MAX,
+                usize::MAX,
+            ),
         ];
 
-        for (range_start, range_len, trust, unevaluated_start, len) in invalid {
-            let regions = MemberRegions {
-                range_start,
-                range_len,
-                trust,
-                unevaluated_start,
-                len,
-            };
+        for (ranges, unevaluated_start, len) in invalid {
+            let groups = storage_groups(ranges, unevaluated_start);
 
-            assert!(!regions.is_valid(), "{regions:?}");
+            assert!(metadata(&groups, len).is_none());
         }
+    }
 
-        let valid = MemberRegions {
-            range_start: 0,
-            range_len: 2,
-            trust: 1,
-            unevaluated_start: 3,
-            len: 3,
-        };
-        assert!(valid.is_valid());
+    /// Asserts that grouped walks only use a storage holding a single unrotated range for now:
+    /// several ranges or a rotated one keep ordinary selection.
+    #[test]
+    fn single_range() {
+        let ab = group();
+        let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
+        let single = |ranges, len| metadata(&storage_groups(ranges, len), len).unwrap();
+
+        let unrotated = single(vec![group_range(&ab, 0, 3, 0, 2)], 3);
+        let (unrotated_group, regions) = unrotated.single_range().unwrap();
+        assert!(Arc::ptr_eq(unrotated_group, &ab));
+        assert_eq!(
+            regions,
+            MemberRegions {
+                range_start: 0,
+                range_len: 3,
+                trust: 2,
+                unevaluated_start: 3,
+                len: 3,
+            }
+        );
+        // A shift of a whole turn isn't a rotation.
+        assert!(single(vec![group_range(&ab, 0, 3, -3, 3)], 3)
+            .single_range()
+            .is_some());
+        assert!(single(vec![group_range(&ab, 0, 3, 1, 3)], 3)
+            .single_range()
+            .is_none());
+        assert!(single(
+            vec![group_range(&ab, 0, 2, 0, 2), group_range(&ac, 2, 0, 0, 0)],
+            2
+        )
+        .single_range()
+        .is_none());
     }
 
     /// Asserts that a child unable to sail drives and disables grouping.

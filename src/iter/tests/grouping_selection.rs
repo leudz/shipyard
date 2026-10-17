@@ -6,9 +6,9 @@
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::iter::planner::{Alternative, MemberRegions, NodeMetadata, Route, Selection, Walk};
+use crate::iter::planner::{Alternative, NodeMetadata, Route, Selection, Walk};
 use crate::iter::{IntoIter, IntoShiperator, IterComponent, Optional, RawEntityIdAccess};
-use crate::sparse_set::SparseSet;
+use crate::sparse_set::{Ring, SparseSet};
 use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::TrackingTimestamp;
@@ -124,17 +124,48 @@ fn window_metadata() {
         panic!("a grouped window reports its group");
     };
     assert_eq!(window.storage_id, StorageId::of::<SparseSet<A>>());
-    assert!(Arc::ptr_eq(&window.group, &b.groups.ranges[0].group));
+    assert_eq!((window.unevaluated_start, window.len), (4, 5));
+    let [range] = &window.ranges[..] else {
+        panic!("A holds a single range");
+    };
+    assert!(Arc::ptr_eq(&range.group, &b.groups.ranges[0].group));
     assert_eq!(
-        window.regions,
-        MemberRegions {
-            range_start: 0,
-            range_len: 3,
-            trust: 3,
-            unevaluated_start: 4,
-            len: 5,
-        }
+        (range.ring, range.trust),
+        (
+            Ring {
+                start: 0,
+                len: 3,
+                shift: 0
+            },
+            3
+        )
     );
+}
+
+/// Asserts that a window over a storage in two overlapping groups reports each of its ranges,
+/// while selection stays ordinary until grouped walks handle several ranges.
+#[test]
+fn window_metadata_overlapping() {
+    let mut world = World::new();
+    world.add_entity((A(0), B(0)));
+    world.add_entity((A(1), C(1)));
+    world.add_entity((A(2), B(2), C(2)));
+    world.group::<(A, B)>().group::<(A, C)>();
+
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let (_, _, entities) = (&a).into_shiperator();
+
+    let NodeMetadata::Window(window) = &entities.metadata else {
+        panic!("a grouped window reports its groups");
+    };
+    let lens: Vec<usize> = window.ranges.iter().map(|range| range.ring.len).collect();
+    assert_eq!(lens, [1, 1, 1]);
+    for (range, storage_range) in window.ranges.iter().zip(&a.groups.ranges) {
+        assert!(Arc::ptr_eq(&range.group, &storage_range.group));
+    }
+
+    let (_, _, entities) = (&a, &b).into_shiperator();
+    assert_ungrouped(&entities);
 }
 
 /// Asserts that a query over storages without any group has no grouped alternative
