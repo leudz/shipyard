@@ -11,31 +11,38 @@ use alloc::vec::Vec;
 /// The `'static` is spelled out, inside a reference it would default to the reference's lifetime.
 type StoragePtr = *mut (dyn Storage + 'static);
 
+// Regroup works on all members of a group at once, so it holds them as raw pointers.
+// This is sound because:
+// - `&mut AllStorages` guarantees nobody else borrows any storage,
+// - members are distinct storages, `AllStorages::group` rejects groups listing a storage twice,
+// - storages can't be removed while we hold the map mutably, so the pointers stay valid,
+// - we only turn a pointer into a reference for one operation at a time,
+//   so two references to the same member never coexist,
+// - a set of pointers is rebuilt before each use, since getting a fresh pointer to a storage
+//   invalidates the previous one.
+
 impl AllStorages {
     /// Moves every grouped component to where it belongs.
     #[doc(hidden)]
     pub fn regroup(&mut self) {
         let storages = self.storages.get_mut();
+        let storage_ids = sorted_storage_ids(storages);
 
-        // The map's iteration order can change between runs.
-        // Sorting keeps the layout, and therefore grouped iteration order, reproducible.
-        let mut storage_ids: Vec<StorageId> = storages.keys().copied().collect();
-        storage_ids.sort_unstable();
+        // Evaluation appends the same entity to every member of a group,
+        // which only keeps them aligned when they're aligned to begin with.
+        repair_all(storages, &storage_ids);
 
-        let mut repaired_groups: Vec<Arc<[StorageId]>> = Vec::new();
-        // Regroup works on all members of a group at once, so we hold them as raw pointers.
-        // This is sound because:
-        // - `&mut self` guarantees nobody else borrows any storage,
-        // - members are distinct storages, `AllStorages::group` rejects groups listing a storage twice,
-        // - storages can't be removed while we hold the map mutably, so the pointers stay valid,
-        // - we only turn a pointer into a reference for one operation at a time,
-        //   so two references to the same member never coexist.
+        let mut groups: Vec<Arc<[StorageId]>> = Vec::new();
         let mut members: Vec<StoragePtr> = Vec::new();
 
         for storage_id in storage_ids {
             let storage = storage_ptr(storages, storage_id);
-            // SAFE: `storage` was just created and is only used for this read, see the comment on `members`.
-            let Some(group) = range_group(unsafe { &*storage }) else {
+            // SAFE: `storage` was just created and is only used for this read,
+            // see the comment at the top of this file.
+            range_groups(unsafe { &*storage }, &mut groups);
+
+            // Evaluation only handles a single group per storage until unions land.
+            let [group] = &groups[..] else {
                 continue;
             };
 
@@ -47,21 +54,59 @@ impl AllStorages {
                     .map(|&member_id| storage_ptr(storages, member_id)),
             );
 
-            // Repair runs the first time we visit any member, before any member is evaluated.
-            if !repaired_groups
-                .iter()
-                .any(|repaired_group| Arc::ptr_eq(repaired_group, &group))
-            {
-                repair(&group, &members);
-                repaired_groups.push(group.clone());
-            }
-
             // Group ids are sorted, so we can find which member is the storage we're visiting.
             let position = group
                 .binary_search(&storage_id)
                 .expect("a storage belongs to the group of its range");
 
-            evaluate(&group, &members, position);
+            evaluate(group, &members, position);
+        }
+    }
+}
+
+/// Returns the id of every storage, sorted.
+///
+/// The map's iteration order can change between runs.
+/// Sorting keeps the layout, and therefore grouped iteration order, reproducible.
+fn sorted_storage_ids(storages: &ShipHashMap<StorageId, SBox>) -> Vec<StorageId> {
+    let mut storage_ids: Vec<StorageId> = storages.keys().copied().collect();
+    storage_ids.sort_unstable();
+
+    storage_ids
+}
+
+/// Repairs every group attached to the storages with ids `storage_ids`, each one once.
+///
+/// Afterwards every range of every member is aligned with the other members' and fully trusted.
+fn repair_all(storages: &mut ShipHashMap<StorageId, SBox>, storage_ids: &[StorageId]) {
+    let mut repaired_groups: Vec<Arc<[StorageId]>> = Vec::new();
+    let mut groups: Vec<Arc<[StorageId]>> = Vec::new();
+    let mut members: Vec<StoragePtr> = Vec::new();
+
+    for &storage_id in storage_ids {
+        let storage = storage_ptr(storages, storage_id);
+        // SAFE: `storage` was just created and is only used for this read,
+        // see the comment at the top of this file.
+        range_groups(unsafe { &*storage }, &mut groups);
+
+        for group in &groups {
+            // Every member lists the group, we repair it from the first one we visit.
+            if repaired_groups
+                .iter()
+                .any(|repaired_group| Arc::ptr_eq(repaired_group, group))
+            {
+                continue;
+            }
+
+            members.clear();
+            members.extend(
+                group
+                    .iter()
+                    .map(|&member_id| storage_ptr(storages, member_id)),
+            );
+
+            repair(group, &members);
+            repaired_groups.push(group.clone());
         }
     }
 }
@@ -79,11 +124,20 @@ fn storage_ptr(storages: &mut ShipHashMap<StorageId, SBox>, storage_id: StorageI
     unsafe { &mut *sbox.0 }.get_mut()
 }
 
-/// Returns the group of `storage`'s range, if it has one.
-fn range_group(storage: &dyn Storage) -> Option<Arc<[StorageId]>> {
-    let range = storage.groups()?.ranges.first()?;
+/// Replaces the content of `groups` with the group of each of `storage`'s ranges, in range order.
+///
+/// We copy the groups out, moves and new unions can change the storage's ranges.
+fn range_groups(storage: &dyn Storage, groups: &mut Vec<Arc<[StorageId]>>) {
+    groups.clear();
 
-    Some(range.group.clone())
+    if let Some(storage_groups) = storage.groups() {
+        groups.extend(
+            storage_groups
+                .ranges
+                .iter()
+                .map(|range| range.group.clone()),
+        );
+    }
 }
 
 /// Returns `group`'s range in `storage`.
@@ -96,17 +150,19 @@ fn group_range<'a>(storage: &'a dyn Storage, group: &Arc<[StorageId]>) -> &'a Gr
 
 /// Evicts every member's damaged suffix to its unevaluated region.
 ///
-/// Afterwards every member's range holds exactly the group's aligned part and is fully trusted.
+/// Afterwards every member's range holds exactly the group's aligned part and is fully trusted.\
+/// Other ranges of the members keep their logical order and trust.
 fn repair(group: &Arc<[StorageId]>, members: &[StoragePtr]) {
     let aligned_len = members
         .iter()
-        // SAFE: `members` comes from `regroup`, and this reference only lives for this read.
+        // SAFE: `members` were just rebuilt by our caller, and this reference only lives for this read.
         .map(|&member| group_range(unsafe { &*member }, group).trust)
         .min()
         .expect("a group has at least two members");
 
     for &member in members {
-        // SAFE: `members` comes from `regroup`, and this is the only reference to this member until the next iteration.
+        // SAFE: `members` were just rebuilt by our caller,
+        // and this is the only reference to this member until the next iteration.
         let member = unsafe { &mut *member };
 
         loop {
@@ -115,13 +171,16 @@ fn repair(group: &Arc<[StorageId]>, members: &[StoragePtr]) {
                 break;
             }
 
-            // Evicting the range's last component lowers its trust to at most the new length,
+            // Evicting the logical last component lowers the trust to at most the new length,
             // so once we're down to `aligned_len` the range is fully trusted again.
-            let last_index = range.end() - 1;
+            // Positions below `aligned_len` never move, they're the prefix every member agrees on.
+            let last_index = range.ring().physical_of(range.len - 1);
             let last = member.dense().expect("group members are SparseSet")[last_index];
 
             member.move_to(last, GroupRegion::Unevaluated);
         }
+
+        debug_assert_eq!(group_range(member, group).trust, aligned_len);
     }
 }
 
@@ -190,7 +249,11 @@ fn is_in_range(storage: &dyn Storage, group: &Arc<[StorageId]>, entity: EntityId
 
 #[cfg(test)]
 mod tests {
+    use super::{repair_all, sorted_storage_ids};
+    use crate::sparse_set::{GroupRegion, SparseSet};
+    use crate::storage::{Storage, StorageId};
     use crate::{track, Component, EntityId, Get, IntoIter, View, ViewMut, World};
+    use alloc::sync::Arc;
     use alloc::vec;
     use alloc::vec::Vec;
 
@@ -221,6 +284,16 @@ mod tests {
         type Tracking = track::All;
     }
 
+    /// Returns the entities of `group`'s range in `storage`, in logical order.
+    fn logical(storage: &dyn Storage, group: &Arc<[StorageId]>) -> Vec<EntityId> {
+        let ring = storage.groups().unwrap().range(group).unwrap().ring();
+        let dense = storage.dense().unwrap();
+
+        (0..ring.len)
+            .map(|logical| dense[ring.physical_of(logical)])
+            .collect()
+    }
+
     /// Panics unless every grouped storage is fully evaluated
     /// and every group's members hold identical, fully trusted ranges.
     fn assert_regrouped(world: &World) {
@@ -234,26 +307,27 @@ mod tests {
             let Some(groups) = storage.groups() else {
                 continue;
             };
-            let Some(range) = groups.ranges.first() else {
+            if !groups.has_ranges() {
                 continue;
-            };
+            }
             let dense = storage.dense().unwrap();
 
             #[cfg(debug_assertions)]
             groups.assert_invariants(dense.len());
             assert_eq!(groups.unevaluated_start, dense.len());
-            assert_eq!(range.trust, range.len);
 
-            for member_id in range.group.iter() {
-                // SAFE: same as above.
-                let member = unsafe { &*storages[member_id].0 }.borrow().unwrap();
-                let member_range = member.groups().unwrap().range(&range.group).unwrap();
-                let member_dense = member.dense().unwrap();
+            for range in &groups.ranges {
+                assert_eq!(range.trust, range.len);
 
-                assert_eq!(
-                    member_dense[member_range.start..member_range.end()],
-                    dense[range.start..range.end()]
-                );
+                for member_id in range.group.iter() {
+                    // SAFE: same as above.
+                    let member = unsafe { &*storages[member_id].0 }.borrow().unwrap();
+
+                    assert_eq!(
+                        logical(&*member, &range.group),
+                        logical(&*storage, &range.group)
+                    );
+                }
             }
         }
     }
@@ -554,5 +628,203 @@ mod tests {
         assert_eq!(b.dense[..b.groups.grouped_end()], range_of::<A>(&world));
         assert_eq!(b.get(ab0), Ok(&B(0)));
         assert_eq!(b.get(ab2), Ok(&B(2)));
+    }
+
+    /// Attaches the group of `T` and `U` to both storages without regrouping,
+    /// like a declaration would before it regroups.
+    ///
+    /// Public declarations still reject a storage in two groups, tests build them this way.
+    fn attach<T: Component + Send + Sync, U: Component + Send + Sync>(
+        world: &World,
+    ) -> Arc<[StorageId]> {
+        let t_id = StorageId::of::<SparseSet<T>>();
+        let u_id = StorageId::of::<SparseSet<U>>();
+        let mut ids = vec![t_id, u_id];
+        ids.sort_unstable();
+        let group: Arc<[StorageId]> = Arc::from(ids);
+
+        let (mut t, mut u) = world.borrow::<(ViewMut<'_, T>, ViewMut<'_, U>)>().unwrap();
+        t.groups.attach(group.clone(), t_id);
+        u.groups.attach(group.clone(), u_id);
+
+        group
+    }
+
+    /// Moves `entity`'s `T` and `U` components to the end of `group`'s range.
+    fn place<T: Component + Send + Sync, U: Component + Send + Sync>(
+        world: &World,
+        group: &Arc<[StorageId]>,
+        entity: EntityId,
+    ) {
+        let (mut t, mut u) = world.borrow::<(ViewMut<'_, T>, ViewMut<'_, U>)>().unwrap();
+        t.private_move_to(entity, GroupRegion::Range(group));
+        u.private_move_to(entity, GroupRegion::Range(group));
+    }
+
+    /// Moves `entity`'s `T` component to `T`'s unevaluated region, damaging the range it leaves.
+    fn evict<T: Component + Send + Sync>(world: &World, entity: EntityId) {
+        let mut t = world.borrow::<ViewMut<'_, T>>().unwrap();
+        t.private_move_to(entity, GroupRegion::Unevaluated);
+    }
+
+    /// Runs the repair pass alone, without evaluating anything.
+    fn repair(world: &World) {
+        let mut all_storages = world.all_storages_mut().unwrap();
+        let storages = all_storages.storages.get_mut();
+        let storage_ids = sorted_storage_ids(storages);
+
+        repair_all(storages, &storage_ids);
+    }
+
+    /// Returns `group`'s range in `T` in logical order, along with its trust.
+    fn group_of<T: Component + Send + Sync>(
+        world: &World,
+        group: &Arc<[StorageId]>,
+    ) -> (Vec<EntityId>, usize) {
+        let view = world.borrow::<View<'_, T>>().unwrap();
+        let range = view.groups.range(group).unwrap();
+        let entities = (0..range.len)
+            .map(|logical| view.dense[range.ring().physical_of(logical)])
+            .collect();
+
+        (entities, range.trust)
+    }
+
+    /// Returns a world with AB holding `e0`, `e1` and `e2`, AC holding `e3` and `e4`,
+    /// all aligned and fully trusted, with the entities in index order.
+    ///
+    /// AC is filled first, so each AB append passes a hole through it and rotates it in A.
+    fn overlapping() -> (World, Arc<[StorageId]>, Arc<[StorageId]>, Vec<EntityId>) {
+        let mut world = World::new();
+        let mut entities = Vec::new();
+        for index in 0..3 {
+            entities.push(world.add_entity((A(index), B(index))));
+        }
+        for index in 3..5 {
+            entities.push(world.add_entity((A(index), C)));
+        }
+
+        let ab = attach::<A, B>(&world);
+        let ac = attach::<A, C>(&world);
+        place::<A, C>(&world, &ac, entities[3]);
+        place::<A, C>(&world, &ac, entities[4]);
+        for &entity in &entities[..3] {
+            place::<A, B>(&world, &ab, entity);
+        }
+
+        (world, ab, ac, entities)
+    }
+
+    /// Asserts that the `overlapping` fixture holds the layout tests rely on: AC is rotated in A
+    /// and not in C, both groups are aligned and fully trusted.
+    #[test]
+    fn overlapping_fixture() {
+        let (world, ab, ac, e) = overlapping();
+
+        assert_ne!(
+            world
+                .borrow::<View<'_, A>>()
+                .unwrap()
+                .groups
+                .range(&ac)
+                .unwrap()
+                .shift,
+            0
+        );
+        assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
+        assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
+        assert_eq!(group_of::<A>(&world, &ac), (vec![e[3], e[4]], 2));
+        assert_eq!(group_of::<C>(&world, &ac), (vec![e[3], e[4]], 2));
+    }
+
+    /// Asserts that repairing aligned, fully trusted groups doesn't move anything.
+    #[test]
+    fn repair_aligned() {
+        let (world, _, _, _) = overlapping();
+        let before = (
+            dense_of::<A>(&world),
+            dense_of::<B>(&world),
+            dense_of::<C>(&world),
+        );
+
+        repair(&world);
+
+        let after = (
+            dense_of::<A>(&world),
+            dense_of::<B>(&world),
+            dense_of::<C>(&world),
+        );
+        assert_eq!(after, before);
+    }
+
+    /// Asserts that repair shrinks each of two overlapping groups to the prefix all its members
+    /// trust, in every member, even with B shorter than A and AC rotated in A.
+    #[test]
+    fn repair_overlapping() {
+        let (world, ab, ac, e) = overlapping();
+        // B's AB becomes [e0, e2] and only trusts e0. C's AC becomes [e3] and trusts it.
+        evict::<B>(&world, e[1]);
+        evict::<C>(&world, e[4]);
+
+        repair(&world);
+
+        assert_eq!(group_of::<A>(&world, &ab), (vec![e[0]], 1));
+        assert_eq!(group_of::<B>(&world, &ab), (vec![e[0]], 1));
+        assert_eq!(group_of::<A>(&world, &ac), (vec![e[3]], 1));
+        assert_eq!(group_of::<C>(&world, &ac), (vec![e[3]], 1));
+    }
+
+    /// Asserts that repair evicts each damaged suffix to its own storage's unevaluated region
+    /// and that every component stays reachable with its value.
+    #[test]
+    fn repair_evictions() {
+        let (world, _, _, e) = overlapping();
+        evict::<B>(&world, e[1]);
+        evict::<C>(&world, e[4]);
+
+        repair(&world);
+
+        assert_eq!(unevaluated_of::<A>(&world), [e[1], e[2], e[4]]);
+        assert_eq!(unevaluated_of::<B>(&world), [e[1], e[2]]);
+        assert_eq!(unevaluated_of::<C>(&world), [e[4]]);
+        let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        for (index, &entity) in e.iter().enumerate() {
+            assert_eq!(a.get(entity), Ok(&A(index as u32)));
+        }
+        for (index, &entity) in e[..3].iter().enumerate() {
+            assert_eq!(b.get(entity), Ok(&B(index as u32)));
+        }
+    }
+
+    /// Asserts that evicting from AB in A passes holes through the rotated AC
+    /// without changing its order or trust.
+    #[test]
+    fn repair_keeps_other_groups() {
+        let (world, ab, ac, e) = overlapping();
+        evict::<B>(&world, e[2]);
+
+        repair(&world);
+
+        assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1]], 2));
+        assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1]], 2));
+        assert_eq!(group_of::<A>(&world, &ac), (vec![e[3], e[4]], 2));
+        assert_eq!(group_of::<C>(&world, &ac), (vec![e[3], e[4]], 2));
+    }
+
+    /// Asserts that a member reset by a removal empties its groups in every member,
+    /// while groups it isn't part of stay as they were.
+    #[test]
+    fn repair_reset_member() {
+        let (mut world, ab, ac, e) = overlapping();
+        world.remove::<(C,)>(e[4]);
+
+        repair(&world);
+
+        assert_eq!(group_of::<A>(&world, &ac), (vec![], 0));
+        assert_eq!(group_of::<C>(&world, &ac), (vec![], 0));
+        assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
+        assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
+        assert_eq!(unevaluated_of::<A>(&world), [e[3], e[4]]);
+        assert_eq!(unevaluated_of::<C>(&world), [e[3]]);
     }
 }
