@@ -3,7 +3,8 @@
 //! How a split shares candidates, follow-ups and the plan is tested without Rayon in
 //! `grouping_split_ownership`, whose fixtures we reuse. Here we check that the producers use
 //! that split, that `fold_with` honors cancellation and that Rayon's own scheduling,
-//! whatever order it picks, yields every entity once.//! Exact traversals without follow-ups are driven as indexed, Rayon picks their split indices.
+//! whatever order it picks, yields every entity once.\
+//! Exact traversals without follow-ups are driven as indexed, Rayon picks their split indices.
 
 use super::grouping_bulk::cursor;
 use super::grouping_split_ownership::{
@@ -213,6 +214,81 @@ fn bridge_mutable() {
         assert_eq!((&a).get(id).unwrap(), &A(100 + i as u32));
         assert_eq!((&b).get(id).unwrap(), &B(110 + i as u32));
     }
+}
+
+/// Increments its counter when dropped, from whichever thread drops it.
+struct Dropped<'a>(&'a AtomicUsize);
+
+impl Drop for Dropped<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// Asserts that a `for_each` callback panicking on `e4`, in the follow-up B walks, propagates
+/// out of Rayon, drops the callback exactly once and releases the plan every piece shared.
+#[cfg(feature = "std")]
+#[test]
+fn bridge_panic() {
+    let (world, _) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let iter = ParShiperator(coverage_plan(pair(&a, &b), &a.dense, &b.dense));
+    let plan = iter.0.schedule.as_ref().unwrap().downgrade();
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+    let guard_drops = AtomicUsize::new(0);
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        let guard = Dropped(&guard_drops);
+
+        pool.install(move || {
+            iter.for_each(move |(a, _)| {
+                let _ = &guard;
+                if a.0 == 4 {
+                    panic!("callback panic on e4");
+                }
+            })
+        });
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(guard_drops.load(Ordering::Relaxed), 1);
+    assert!(plan.upgrade().is_none());
+}
+
+/// Asserts that when a `fold` callback panics on `e4`, every accumulated value Rayon's pieces
+/// created is dropped exactly once and the plan is released.
+#[cfg(feature = "std")]
+#[test]
+fn bridge_fold_panic() {
+    let (world, _) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let iter = ParShiperator(coverage_plan(pair(&a, &b), &a.dense, &b.dense));
+    let plan = iter.0.schedule.as_ref().unwrap().downgrade();
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+    let created = AtomicUsize::new(0);
+    let dropped = AtomicUsize::new(0);
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        pool.install(|| {
+            iter.fold(Vec::new, |mut acc, (a, _)| {
+                if a.0 == 4 {
+                    panic!("callback panic on e4");
+                }
+
+                created.fetch_add(1, Ordering::Relaxed);
+                acc.push(Dropped(&dropped));
+                acc
+            })
+            .for_each(drop)
+        });
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(
+        dropped.load(Ordering::Relaxed),
+        created.load(Ordering::Relaxed)
+    );
+    assert!(plan.upgrade().is_none());
 }
 
 /// Asserts that a short-circuiting consumer stops the traversal: on a single thread the

@@ -2,6 +2,8 @@ mod automatic;
 mod cursor;
 #[cfg(feature = "proc")]
 mod derived;
+#[cfg(feature = "proc")]
+mod differential;
 mod filters;
 mod grouped;
 mod nested;
