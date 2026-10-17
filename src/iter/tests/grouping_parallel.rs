@@ -3,7 +3,7 @@
 //! Internal producer calls let us inspect exact split/cancellation behavior; query
 //! construction always goes through iter/par_iter, including automatic selection.
 
-use super::grouping_fixtures::{coverage_world, late_iter, A, B};
+use super::grouping_fixtures::{coverage_world, late_iter, ring_world, A, B};
 use crate::iter::parallel::ExactProducer;
 use crate::iter::{IntoIter, ParShiperator};
 use crate::{EntityId, Get, View, ViewMut, World};
@@ -360,4 +360,100 @@ fn bridge_fold_panic() {
         created.load(Ordering::Relaxed)
     );
     assert!(plan.upgrade().is_none());
+}
+
+/// Asserts that `ring_world`'s pair walks, spread over several ranges and cut at wrap points,
+/// yield every pair once in parallel, with no exact length to report.
+#[test]
+fn ring_collect() {
+    let (world, pairs) = ring_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    assert!((&a, &b).iter().schedule.is_some());
+    assert_eq!((&a, &b).par_iter().opt_len(), None);
+
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+    let mut items: Vec<_> = pool.install(|| {
+        (&a, &b)
+            .par_iter()
+            .with_id()
+            .map(|(id, (a, b))| (id, a.0, b.0))
+            .collect()
+    });
+    items.sort_unstable_by_key(|&(_, a, _)| a);
+
+    let expected: Vec<_> = (0..).zip(&pairs).map(|(i, &id)| (id, i, 100 + i)).collect();
+    assert_eq!(items, expected);
+}
+
+/// Asserts that parallel mutable outputs of `ring_world`'s pair walks write every pair once.
+#[test]
+fn ring_mutable() {
+    let (world, pairs) = ring_world();
+    let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+    pool.install(|| {
+        (&mut a, &mut b).par_iter().for_each(|(a, b)| {
+            a.0 += 1000;
+            b.0 += 1000;
+        })
+    });
+
+    for (i, &id) in (0..).zip(&pairs) {
+        assert_eq!((&a).get(id).unwrap().0, 1000 + i);
+        assert_eq!((&b).get(id).unwrap().0, 1100 + i);
+    }
+}
+
+/// Asserts that a parallel search over `ring_world`'s pair walks can stop early and still
+/// finds a pair from each kind of segment.
+#[test]
+fn ring_short_circuit() {
+    let (world, pairs) = ring_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+
+    // Pair 3 is in AB, 9 in ABC and 14 unevaluated.
+    for i in [3, 9, 14] {
+        let found = pool.install(|| {
+            (&a, &b)
+                .par_iter()
+                .with_id()
+                .find_any(|(_, (a, _))| a.0 == i)
+                .map(|(id, _)| id)
+        });
+
+        assert_eq!(found, Some(pairs[i as usize]));
+    }
+}
+
+/// Asserts that parallel writes across a damaged ring, C's trust endpoint and covered
+/// unevaluated candidates update every component exactly once.
+#[test]
+fn trust_mutable() {
+    use super::grouping_fixtures::{trust_world, C};
+    use super::grouping_regions::grouped;
+    use crate::iter::IntoShiperator;
+
+    let (world, ids) = trust_world();
+    let (mut a, mut b, mut c) = world
+        .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+        .unwrap();
+    c.groups.ranges[0].trust = 2;
+    let iter = ParShiperator(grouped((&mut a, &mut b, &mut c).into_shiperator()));
+    assert_eq!(iter.opt_len(), None);
+
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+    pool.install(|| {
+        iter.for_each(|(a, b, c)| {
+            a.0 += 1000;
+            b.0 += 1000;
+            c.0 += 1000;
+        })
+    });
+    for (i, &id) in (0..).zip(&ids) {
+        assert_eq!((&a).get(id).unwrap().0, 1000 + i);
+        assert_eq!((&b).get(id).unwrap().0, 1100 + i);
+        assert_eq!((&c).get(id).unwrap().0, 1200 + i);
+    }
 }

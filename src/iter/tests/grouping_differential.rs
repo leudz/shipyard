@@ -9,6 +9,9 @@
 //! storage's unevaluated region, which changes no component but leaves the partially trusted
 //! ranges public operations can't produce yet. That way damaged walks get compared too.
 //!
+//! Groups overlap freely, so regroup creates unions and rotates rings. Layouts are checked on
+//! their own after each step, independently of what queries yield.
+//!
 //! A failure prints the seed, the step and its mutation, and the query shape.\
 //! `Scenario::replay(seed, steps)` rebuilds the exact same world to reproduce it.
 
@@ -17,13 +20,15 @@ use crate::entity_id::EntityId;
 use crate::iter::planner::{NodeMetadata, Route, Walk};
 use crate::iter::{IntoIter, IntoShiperator, OneOfTwo, Shiper, Shiperator};
 use crate::r#mut::Mut;
-use crate::sparse_set::GroupRegion;
+use crate::sparse_set::{GroupRegion, Ring, SparseSet};
+use crate::storage::StorageId;
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
 use crate::Get;
 use alloc::collections::BTreeMap;
 use alloc::format;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::Range;
@@ -38,6 +43,19 @@ const STEPS: usize = 64;
 const SEEDS: Range<u64> = 0..2;
 #[cfg(miri)]
 const STEPS: usize = 20;
+
+/// Reads are compared after every `READ_EVERY` steps. Layouts are checked after every step.
+///
+/// Under Miri, every traversal is slow, so is every comparison.
+#[cfg(not(miri))]
+const READ_EVERY: usize = 1;
+#[cfg(miri)]
+const READ_EVERY: usize = 10;
+
+const _: () = assert!(
+    STEPS.is_multiple_of(READ_EVERY),
+    "the last step's reads are compared"
+);
 
 /// Steps after which mutable consumers are checked, on worlds replayed up to that step.
 const WRITE_CHECKPOINTS: [usize; 2] = [STEPS / 2, STEPS];
@@ -152,10 +170,14 @@ macro_rules! with_kind {
 /// Values of an entity's components, `None` when it doesn't own one.
 type Row = [Option<u32>; SLOTS];
 
-/// Groups the scenarios declare, as slot masks: AB, CD, ABC, AZ and BC.
+/// Groups the scenarios declare, as slot masks: AB, CD, ABC, AZ, BC, AC and ACD.
 ///
-/// Storages can only belong to a single group, overlapping declarations are skipped.
-const GROUPS: [u8; 5] = [0b00011, 0b01100, 0b00111, 0b10001, 0b00110];
+/// They overlap in every way: AB and CD are disjoint until BC or ACD connects them, AB and AC
+/// make ABC unions, ABC contains AB, and an `(A, B, C)` query over AB and ACD gets C as an
+/// extra captain in their ABCD union.
+const GROUPS: [u8; 7] = [
+    0b00011, 0b01100, 0b00111, 0b10001, 0b00110, 0b00101, 0b01101,
+];
 
 /// A mutation, as applied.
 #[derive(Clone, Copy, Debug)]
@@ -208,7 +230,7 @@ struct Scenario {
     model: BTreeMap<EntityId, Row>,
     /// Groups declared so far, as slot masks.
     ///
-    /// Only used to avoid overlapping declarations, the model doesn't know about layouts.
+    /// Picks damaged storages and checks unions, the model doesn't know about layouts.
     declared: Vec<u8>,
     /// Every added or written component gets a new value, so a component paired with
     /// another entity's can't go unnoticed.
@@ -416,23 +438,16 @@ impl Scenario {
         self.model.insert(id, row);
     }
 
-    /// Declares the group of `mask`, unless one of its storages already is in another group.
+    /// Declares the group of `mask`.
     fn group(&mut self, mask: u8) {
-        let overlaps = self
-            .declared
-            .iter()
-            .any(|&declared| declared != mask && declared & mask != 0);
-        if overlaps {
-            // Unions aren't supported, `World::group` would panic.
-            return;
-        }
-
         match mask {
             0b00011 => self.world.group::<(A, B)>(),
             0b01100 => self.world.group::<(C, D)>(),
             0b00111 => self.world.group::<(A, B, C)>(),
             0b10001 => self.world.group::<(A, Z)>(),
             0b00110 => self.world.group::<(B, C)>(),
+            0b00101 => self.world.group::<(A, C)>(),
+            0b01101 => self.world.group::<(A, C, D)>(),
             _ => unreachable!("not one of `GROUPS`"),
         };
 
@@ -452,13 +467,11 @@ impl Scenario {
     }
 }
 
-/// Returns the entities in the group range of `K`'s storage.
+/// Returns the entities in the group ranges of `K`'s storage.
 fn range_entities<K: Kind>(world: &World) -> Vec<EntityId> {
     let view = world.borrow::<View<'_, K>>().unwrap();
 
-    view.groups.ranges.first().map_or(Vec::new(), |range| {
-        view.dense[range.start..range.end()].to_vec()
-    })
+    view.dense[..view.groups.grouped_end()].to_vec()
 }
 
 /// Asserts that every storage holds exactly the model's components, `delta` added to the ones
@@ -526,8 +539,18 @@ struct Stats {
     aligned: usize,
     damaged: usize,
     unevaluated: usize,
+    /// Winners walking several ranges.
+    multi_range: usize,
+    /// Winners walking a range whose ring is rotated in one of its captains.
+    rotated: usize,
+    /// Winners where a member outside the required ones captains a walk.
+    extra_captain: usize,
     /// Steps where an alive entity reused a deleted one's index.
     reused: usize,
+    /// Steps where a union regroup created was attached.
+    unions: usize,
+    /// Regroups leaving a group whose members are rotated differently.
+    distinct_rotations: usize,
 }
 
 impl Stats {
@@ -552,13 +575,267 @@ impl Stats {
         if matches!(winner.route, Route::Nested { .. }) {
             self.nested += 1;
         }
-        for walk in &winner.group().walks {
-            match walk {
-                Walk::Aligned { .. } => self.aligned += 1,
-                Walk::Damaged { .. } => self.damaged += 1,
-                Walk::Unevaluated { .. } => self.unevaluated += 1,
+        let candidate = winner.group();
+        let mut walked_ranges = Vec::new();
+        for walk in &candidate.walks {
+            let range = match *walk {
+                Walk::Aligned { range, .. } => {
+                    self.aligned += 1;
+                    Some(range)
+                }
+                Walk::Damaged { range, .. } => {
+                    self.damaged += 1;
+                    Some(range)
+                }
+                Walk::Unevaluated { .. } => {
+                    self.unevaluated += 1;
+                    None
+                }
+            };
+
+            if walk.captains() & !candidate.required != 0 {
+                self.extra_captain += 1;
+            }
+
+            let Some(range) = range else {
+                continue;
+            };
+            if !walked_ranges.contains(&range) {
+                walked_ranges.push(range);
+            }
+            let is_rotated = candidate.ranges[range].members.iter().any(|member| {
+                walk.captains() & (1 << member.child) != 0 && is_rotated(member.ring)
+            });
+            if is_rotated {
+                self.rotated += 1;
             }
         }
+
+        if walked_ranges.len() > 1 {
+            self.multi_range += 1;
+        }
+    }
+}
+
+/// Returns `true` when `ring` holds components and its logical 0 isn't at its start.
+fn is_rotated(ring: Ring) -> bool {
+    ring.len > 0 && ring.wrap_offset() != 0
+}
+
+/// What the layout checks read from a storage.
+struct Layout {
+    storage_id: StorageId,
+    dense: Vec<EntityId>,
+    unevaluated_start: usize,
+    /// Each range's group, ring and trust, in physical order.
+    ranges: Vec<(Arc<[StorageId]>, Ring, usize)>,
+}
+
+impl Layout {
+    /// Returns the ring of `group`'s range, `None` when this storage doesn't hold one.
+    fn ring(&self, group: &Arc<[StorageId]>) -> Option<Ring> {
+        self.ranges
+            .iter()
+            .find(|(range_group, _, _)| Arc::ptr_eq(range_group, group))
+            .map(|&(_, ring, _)| ring)
+    }
+
+    /// Returns the entities of `group`'s range in logical order.
+    fn logical(&self, group: &Arc<[StorageId]>) -> Vec<EntityId> {
+        let ring = self.ring(group).unwrap();
+
+        (0..ring.len)
+            .map(|logical| self.dense[ring.physical_of(logical)])
+            .collect()
+    }
+}
+
+/// Returns the layout of every storage, by slot.
+///
+/// It also checks each storage's own layout contract in debug builds.
+fn layouts(world: &World) -> Vec<Layout> {
+    (0..SLOTS)
+        .map(|slot| {
+            with_kind!(slot, K => {
+                let view = world.borrow::<View<'_, K>>().unwrap();
+                #[cfg(debug_assertions)]
+                view.groups.assert_invariants(view.dense.len());
+
+                Layout {
+                    storage_id: StorageId::of::<SparseSet<K>>(),
+                    dense: view.dense.to_vec(),
+                    unevaluated_start: view.groups.unevaluated_start,
+                    ranges: view
+                        .groups
+                        .ranges
+                        .iter()
+                        .map(|range| (range.group.clone(), range.ring(), range.trust))
+                        .collect(),
+                }
+            })
+        })
+        .collect()
+}
+
+/// Returns `group`'s members as a slot mask.
+fn slot_mask(layouts: &[Layout], group: &[StorageId]) -> u8 {
+    group.iter().fold(0, |mask, storage_id| {
+        let slot = layouts
+            .iter()
+            .position(|layout| layout.storage_id == *storage_id)
+            .expect("groups only hold the scenario's storages");
+
+        mask | 1 << slot
+    })
+}
+
+/// Returns the members of every group attached in `world`, as slot masks.
+fn group_masks(world: &World) -> Vec<u8> {
+    let layouts = layouts(world);
+
+    layouts
+        .iter()
+        .flat_map(|layout| &layout.ranges)
+        .map(|(group, _, _)| slot_mask(&layouts, group))
+        .collect()
+}
+
+/// Returns `true` when `groups` join into a single set through shared members.
+fn is_connected(groups: &[u8]) -> bool {
+    let Some((&first, rest)) = groups.split_first() else {
+        return false;
+    };
+
+    let mut reached = first;
+    let mut left = rest.to_vec();
+    while let Some(position) = left.iter().position(|&group| group & reached != 0) {
+        reached |= left.swap_remove(position);
+    }
+
+    left.is_empty()
+}
+
+/// Asserts what group metadata guarantees after any step, independently of what queries yield.
+///
+/// `seen` holds every group met so far in this scenario, by identity.\
+/// When the step `regrouped`, it also checks every grouped storage was fully evaluated
+/// and every group's members hold the same fully trusted logical sequence.
+fn check_layout(
+    scenario: &Scenario,
+    regrouped: bool,
+    seen: &mut Vec<Arc<[StorageId]>>,
+    stats: &mut Stats,
+    context: &str,
+) {
+    let layouts = layouts(&scenario.world);
+
+    // Every group once, by identity.
+    let mut groups: Vec<Arc<[StorageId]>> = Vec::new();
+    for layout in &layouts {
+        for (group, _, _) in &layout.ranges {
+            if !groups.iter().any(|known| Arc::ptr_eq(known, group)) {
+                groups.push(group.clone());
+            }
+        }
+    }
+
+    for (index, group) in groups.iter().enumerate() {
+        // A group is shared by all its members and no other group has the same members.
+        for storage_id in group.iter() {
+            let member = layouts
+                .iter()
+                .find(|layout| layout.storage_id == *storage_id)
+                .unwrap();
+            assert!(
+                member.ring(group).is_some(),
+                "{group:?} missing from a member, {context}"
+            );
+        }
+        assert!(
+            groups[index + 1..].iter().all(|other| **other != **group),
+            "{group:?} allocated twice, {context}"
+        );
+
+        // A union is made of the declared groups it contains, connected through shared members.
+        let mask = slot_mask(&layouts, group);
+        if !scenario.declared.contains(&mask) {
+            let contained: Vec<u8> = scenario
+                .declared
+                .iter()
+                .copied()
+                .filter(|&declared| declared & !mask == 0)
+                .collect();
+            let union = contained.iter().fold(0, |union, declared| union | declared);
+            assert!(
+                union == mask && is_connected(&contained),
+                "union {mask:#07b} isn't made of declared groups, {context}"
+            );
+        }
+    }
+
+    // Groups are never dropped and keep their identity, even empty.
+    for group in seen.iter() {
+        assert!(
+            groups.iter().any(|known| Arc::ptr_eq(known, group)),
+            "{group:?} was dropped, {context}"
+        );
+    }
+    for group in &groups {
+        if !seen.iter().any(|known| Arc::ptr_eq(known, group)) {
+            seen.push(group.clone());
+        }
+    }
+    if groups
+        .iter()
+        .any(|group| !scenario.declared.contains(&slot_mask(&layouts, group)))
+    {
+        stats.unions += 1;
+    }
+
+    if !regrouped {
+        return;
+    }
+
+    for layout in layouts.iter().filter(|layout| !layout.ranges.is_empty()) {
+        assert_eq!(
+            layout.unevaluated_start,
+            layout.dense.len(),
+            "unevaluated components left, {context}"
+        );
+        for (group, ring, trust) in &layout.ranges {
+            assert_eq!(*trust, ring.len, "{group:?} damaged, {context}");
+        }
+    }
+
+    let mut distinct_rotations = false;
+    for group in &groups {
+        let members: Vec<&Layout> = layouts
+            .iter()
+            .filter(|layout| group.contains(&layout.storage_id))
+            .collect();
+
+        let expected = members[0].logical(group);
+        for member in &members[1..] {
+            assert_eq!(
+                member.logical(group),
+                expected,
+                "{group:?} members disagree, {context}"
+            );
+        }
+
+        let offsets: Vec<Option<usize>> = members
+            .iter()
+            .map(|member| {
+                let ring = member.ring(group).unwrap();
+                is_rotated(ring).then(|| ring.wrap_offset())
+            })
+            .collect();
+        if offsets.iter().any(|offset| *offset != offsets[0]) {
+            distinct_rotations = true;
+        }
+    }
+    if distinct_rotations {
+        stats.distinct_rotations += 1;
     }
 }
 
@@ -593,6 +870,11 @@ fn assert_regions<S>(iter: &Shiper<S>, storages: &[(&[EntityId], Range<usize>)],
 ///
 /// Small traversals try every prefix, past their end included.
 fn prefixes(rng: &mut Rng, len: usize) -> Vec<usize> {
+    // Under Miri, a random prefix per traversal is all we can afford.
+    if cfg!(miri) {
+        return alloc::vec![rng.below(len + 2)];
+    }
+
     if len <= 6 {
         return (0..=len + 1).collect();
     }
@@ -926,11 +1208,24 @@ fn reads() {
         // Prefix sampling has its own generator, replays only depend on the steps.
         let mut rng = Rng(!seed);
 
+        let mut seen = Vec::new();
+
         for step in 0..STEPS {
+            let attached = group_masks(&scenario.world);
             let op = scenario.step();
             let context = format!("seed {seed}, step {step} ({op:?})");
 
-            check_reads(&scenario, &mut rng, &mut stats, &context);
+            // Declaring a group regroups, unless the same group is already attached:
+            // declared before or created by regroup as a union.
+            let regrouped = match op {
+                Op::Regroup => true,
+                Op::Group { mask } => !attached.contains(&mask),
+                _ => false,
+            };
+            check_layout(&scenario, regrouped, &mut seen, &mut stats, &context);
+            if (step + 1).is_multiple_of(READ_EVERY) {
+                check_reads(&scenario, &mut rng, &mut stats, &context);
+            }
             if scenario.model.keys().any(|id| id.gen() > 0) {
                 stats.reused += 1;
             }
@@ -948,7 +1243,12 @@ fn reads() {
             aligned,
             damaged,
             unevaluated,
+            multi_range,
+            rotated,
+            extra_captain,
             reused,
+            unions,
+            distinct_rotations,
         } = stats;
         assert!(
             [
@@ -958,13 +1258,108 @@ fn reads() {
                 aligned,
                 damaged,
                 unevaluated,
-                reused
+                multi_range,
+                rotated,
+                extra_captain,
+                reused,
+                unions,
+                distinct_rotations,
             ]
             .iter()
             .all(|&count| count > 0),
             "{stats:?}"
         );
     }
+}
+
+/// Adds an entity owning the components of `mask` to `scenario` and returns it.
+///
+/// Only for scenarios that never deleted an entity, the new one has the largest id.
+fn add(scenario: &mut Scenario, mask: u8) -> EntityId {
+    scenario.apply(Op::AddEntity { mask });
+
+    *scenario.model.keys().next_back().unwrap()
+}
+
+/// Returns the members of every group attached in `world` once, as sorted slot masks.
+fn definitions(world: &World) -> Vec<u8> {
+    let mut masks = group_masks(world);
+    masks.sort_unstable();
+    masks.dedup();
+
+    masks
+}
+
+/// Asserts that promoting grouped entities into unions keeps every read in agreement with
+/// the model, with valid layouts after each step:
+/// - an AB entity gaining C and D goes straight to ABCD, no ABC or BCD union is made on the way
+/// - AB entities gaining C then make ABC, ABCD keeps its identity
+/// - ABC stays attached after one of its entities loses C
+/// - regroup leaves members of a group rotated differently
+#[test]
+fn promotions() {
+    const AB: u8 = 0b00011;
+    const BC: u8 = 0b00110;
+    const CD: u8 = 0b01100;
+
+    // Seed 0 starts without any group.
+    let mut scenario = Scenario::new(0);
+    let mut rng = Rng(0);
+    let mut stats = Stats::default();
+    let mut seen = Vec::new();
+    let mut run = |scenario: &mut Scenario, op: Op, regrouped: bool| {
+        scenario.apply(op);
+        let context = format!("promotions, {op:?}");
+
+        check_layout(scenario, regrouped, &mut seen, &mut stats, &context);
+        // Under Miri, reads are only compared once, after the last step.
+        if !cfg!(miri) {
+            check_reads(scenario, &mut rng, &mut stats, &context);
+        }
+    };
+
+    let ab: Vec<EntityId> = (0..6).map(|_| add(&mut scenario, AB)).collect();
+    for _ in 0..4 {
+        add(&mut scenario, BC);
+        add(&mut scenario, CD);
+    }
+    for mask in [AB, BC, CD] {
+        run(&mut scenario, Op::Group { mask }, true);
+    }
+
+    let add_component = |id, slot| Op::AddComponent { id, slot };
+    run(&mut scenario, add_component(ab[0], C::SLOT), false);
+    run(&mut scenario, add_component(ab[0], D::SLOT), false);
+    run(&mut scenario, Op::Regroup, true);
+    assert_eq!(definitions(&scenario.world), [AB, BC, CD, AB | BC | CD]);
+
+    for &id in &ab[1..4] {
+        run(&mut scenario, add_component(id, C::SLOT), false);
+    }
+    run(&mut scenario, Op::Regroup, true);
+    assert_eq!(
+        definitions(&scenario.world),
+        [AB, BC, AB | BC, CD, AB | BC | CD]
+    );
+
+    run(
+        &mut scenario,
+        Op::Remove {
+            id: ab[1],
+            slot: C::SLOT,
+        },
+        false,
+    );
+    run(&mut scenario, Op::Regroup, true);
+    assert_eq!(
+        definitions(&scenario.world),
+        [AB, BC, AB | BC, CD, AB | BC | CD]
+    );
+
+    if cfg!(miri) {
+        check_reads(&scenario, &mut rng, &mut stats, "promotions, last step");
+    }
+    assert!(stats.distinct_rotations > 0, "{stats:?}");
 }
 
 /// How a mutable consumer is driven.
@@ -1147,10 +1542,21 @@ fn write_az(world: &World, way: Way) {
 /// doesn't change what they expect.
 #[test]
 fn writes() {
+    let mut combination = 0;
+
     for seed in SEEDS {
         for steps in WRITE_CHECKPOINTS {
             for case in &WRITE_CASES {
-                for &way in WAYS {
+                // Under Miri, each combination is driven in a single way, the ways take turns.
+                // There are more combinations than ways, every way still runs.
+                let ways = if cfg!(miri) {
+                    &WAYS[combination % WAYS.len()..][..1]
+                } else {
+                    WAYS
+                };
+                combination += 1;
+
+                for &way in ways {
                     let scenario = Scenario::replay(seed, steps);
                     let context = format!("seed {seed}, {steps} steps, {} {way:?}", case.shape);
 
@@ -1286,4 +1692,144 @@ fn tracked_writes() {
             "e{i}"
         );
     }
+}
+
+/// AB and `(A, Tracked)` groups, after regroup promoted two `(A, Tracked)` entities that gained
+/// a B into their union:
+/// - `e0` to `e7` own `A(i)` and `Tracked(i)`, `e0` and `e1` also own a B
+/// - `e8` to `e11` own `A(i)`, `B(i)` and `Tracked(i)`
+///
+/// No component is flagged as modified.
+fn tracked_overlap_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+    let mut e: Vec<EntityId> = (0..8)
+        .map(|i| world.add_entity((A(i), Tracked(i))))
+        .collect();
+    e.extend((8..12).map(|i| world.add_entity((A(i), B(i), Tracked(i)))));
+    world.group::<(A, B)>().group::<(A, Tracked)>();
+
+    world.add_component(e[0], B(100));
+    world.add_component(e[1], B(101));
+    world.regroup();
+    world
+        .borrow::<ViewMut<'_, Tracked>>()
+        .unwrap()
+        .clear_all_modified();
+
+    (world, e)
+}
+
+/// Asserts that reading tracked mutable outputs over the `(A, Tracked)` range and the union,
+/// in every way and after every `next` prefix, flags nothing as modified.
+#[test]
+fn tracked_overlap_reads() {
+    let (world, e) = tracked_overlap_world();
+    let (a, mut tracked) = world
+        .borrow::<(View<'_, A>, ViewMut<'_, Tracked>)>()
+        .unwrap();
+    assert_eq!(winner_walks((&a, &tracked)), ["aligned", "aligned"]);
+
+    let expected: Vec<_> = (0..12).map(|i| (e[i], (i as u32, i as u32))).collect();
+    let mut rng = Rng(0);
+    check!(
+        &mut rng,
+        "tracked overlap reads",
+        (&a, &mut tracked).iter(),
+        |(a, tracked): (&A, Mut<'_, Tracked>)| (a.0, tracked.0),
+        expected,
+    );
+
+    assert!(e.iter().all(|&id| !tracked.is_modified(id)));
+}
+
+/// Asserts that writing through tracked outputs over the `(A, Tracked)` range and the union,
+/// after a `next` prefix, flags exactly the written components.
+#[test]
+fn tracked_overlap_writes() {
+    let (world, e) = tracked_overlap_world();
+    let (a, mut tracked) = world
+        .borrow::<(View<'_, A>, ViewMut<'_, Tracked>)>()
+        .unwrap();
+
+    let mut iter = (&a, &mut tracked).iter();
+    for (a, mut tracked) in (&mut iter).take(5) {
+        if a.0 % 2 == 1 {
+            tracked.0 += 100;
+        }
+    }
+    iter.fold((), |(), (a, mut tracked)| {
+        if a.0 % 2 == 1 {
+            tracked.0 += 100;
+        }
+    });
+
+    for (i, &id) in (0..).zip(&e) {
+        let written = i % 2 == 1;
+        assert_eq!(tracked.is_modified(id), written, "e{i}");
+        assert_eq!(
+            (&tracked).get(id).unwrap().0,
+            if written { 100 + i } else { i },
+            "e{i}"
+        );
+    }
+}
+
+/// Asserts that a thread-local A in overlapping groups with B and C is grouped on its own:
+/// after promotions into their union, pair and triple queries over it walk the groups and
+/// yield exactly the entities owning every component, while the `Send + Sync` A stays apart.
+#[cfg(feature = "thread_local")]
+#[test]
+fn thread_local_overlap() {
+    use crate::borrow::NonSend;
+    use crate::AddComponent;
+
+    let mut world = World::new();
+    let e: Vec<EntityId> = (0..12).map(|_| world.add_entity(())).collect();
+    {
+        let (mut local_a, mut b, mut c) = world
+            .borrow::<(NonSend<ViewMut<'_, A>>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+            .unwrap();
+        for (i, &id) in (0..).zip(&e) {
+            local_a.add_component_unchecked(id, A(i));
+            if i % 2 == 0 {
+                b.add_component_unchecked(id, B(i));
+            }
+            if i % 3 == 0 {
+                c.add_component_unchecked(id, C(i));
+            }
+        }
+    }
+    world.add_entity((A(100), B(100), C(100)));
+    world.group::<(NonSend<A>, B)>().group::<(NonSend<A>, C)>();
+    world.add_component(e[2], C(2));
+    world.add_component(e[3], B(3));
+    world.regroup();
+
+    let (local_a, b, c) = world
+        .borrow::<(NonSend<View<'_, A>>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let owning = |has: &dyn Fn(EntityId) -> bool| -> Vec<EntityId> {
+        e.iter().copied().filter(|&id| has(id)).collect()
+    };
+
+    let iter = (&*local_a, &b).iter();
+    assert!(iter.schedule.is_some());
+    let mut ids: Vec<EntityId> = iter
+        .with_id()
+        .map(|(id, (a_item, b_item))| {
+            assert_eq!(
+                (a_item.0, b_item.0),
+                ((&*local_a).get(id).unwrap().0, (&b).get(id).unwrap().0)
+            );
+            id
+        })
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(ids, owning(&|id| b.contains(id)));
+
+    let iter = (&*local_a, &b, &c).iter();
+    assert!(iter.schedule.is_some());
+    let mut ids: Vec<EntityId> = iter.ids().collect();
+    ids.sort_unstable();
+    assert_eq!(ids, owning(&|id| b.contains(id) && c.contains(id)));
 }

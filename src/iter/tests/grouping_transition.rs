@@ -344,3 +344,95 @@ mod split {
         assert_eq!(values, [0, 1]);
     }
 }
+
+/// Asserts that entering each segment of `ring_world`'s pair walks installs exactly its masks,
+/// coverage, window starts and candidates, captains starting at their own index on both sides of every wrap point,
+/// whether segments are entered by `next` or by `fold`.
+#[test]
+fn ring_entry() {
+    use super::grouping_fixtures::{ring_world, A, B};
+
+    let (world, _) = ring_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    let mut iter = (&a, &b).iter();
+    let plan = iter
+        .schedule
+        .as_ref()
+        .unwrap()
+        .downgrade()
+        .upgrade()
+        .unwrap();
+    let segments = plan.segments();
+    assert_eq!(segments.len(), 6);
+
+    for (index, segment) in segments.iter().enumerate() {
+        if index > 0 {
+            assert!(iter.enter_next_segment());
+        }
+
+        // A `Mixed` holding coverage can't describe itself as a row, so we read its state.
+        let mixed = &iter.shiperator;
+        let row = plan.row(segment);
+        let NodeState::Mixed {
+            captain_mask,
+            coverage,
+        } = row[0]
+        else {
+            panic!("grouped walks drive a Mixed");
+        };
+        // SAFE: `mixed.coverage` points into the plan, which `plan` keeps alive.
+        let installed_coverage = unsafe { mixed.coverage.as_ref() };
+        assert_eq!(
+            (mixed.captain_mask, installed_coverage),
+            (captain_mask, plan.coverage(coverage)),
+            "segment {index}"
+        );
+
+        // Sailors keep whatever start they had, only captains are installed.
+        let starts = [
+            mixed.shiperator.0.segment_start,
+            mixed.shiperator.1.segment_start,
+        ];
+        for (child, installed) in starts.into_iter().enumerate() {
+            if let NodeState::Window { segment_start } = row[1 + child] {
+                assert_eq!(installed, segment_start, "segment {index}, child {child}");
+            }
+        }
+        assert_eq!(iter.cursor.as_ptr(), segment.cursor().as_ptr());
+        assert_eq!(iter.cursor.len(), segment.len());
+    }
+    assert!(!iter.enter_next_segment());
+
+    // `next` and `fold` go through the same entries, every segment's items included.
+    let next: Vec<u32> = (&a, &b).iter().map(|(a, _)| a.0).collect();
+    let fold = (&a, &b).iter().fold(Vec::new(), |mut acc, (a, _)| {
+        acc.push(a.0);
+        acc
+    });
+    assert_eq!(next, fold);
+    assert_eq!(next.len(), 15);
+}
+
+/// Asserts that C stops captaining at its own trust endpoint within a damaged ring,
+/// while A keeps driving and B's later unevaluated candidate is rejected by coverage.
+#[test]
+fn trust_entry() {
+    use super::grouping_fixtures::{trust_world, A, B, C};
+    use super::grouping_regions::grouped;
+
+    let (world, ids) = trust_world();
+    world.borrow::<ViewMut<'_, C>>().unwrap().groups.ranges[0].trust = 2;
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let mut iter = grouped((&a, &b, &c).into_shiperator()).with_id();
+    for (i, mask) in [0b111, 0b101, 0b001, 0b001].into_iter().enumerate() {
+        let (id, (a, b, c)) = iter.next().unwrap();
+        assert_eq!(id, ids[i]);
+        assert_eq!((a.0, b.0, c.0), (i as u32, 100 + i as u32, 200 + i as u32));
+        assert_eq!(iter.0.shiperator.captain_mask, mask);
+    }
+    assert!(iter.next().is_none());
+    assert_eq!(iter.0.shiperator.captain_mask, 0b010);
+}

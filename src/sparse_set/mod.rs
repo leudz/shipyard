@@ -2543,6 +2543,17 @@ mod tests {
             assert_eq!(drops.load(AtomicOrdering::Relaxed), 12);
         }
 
+        /// Returns the shifts ring sweeps try, negative and positive, past the length too.
+        ///
+        /// Under Miri, fewer of them still give every remainder for lengths up to 5.
+        fn shifts() -> Vec<isize> {
+            if cfg!(miri) {
+                vec![-6, -2, -1, 0, 1, 2, 6]
+            } else {
+                (-6..=6).collect()
+            }
+        }
+
         fn ints_with(ranges: &[(usize, isize)]) -> SparseSet<I32> {
             storage_with(ranges, |index| I32(i32::try_from(index).unwrap()))
         }
@@ -2591,7 +2602,7 @@ mod tests {
         #[test]
         fn take_first() {
             for len in 1..=5 {
-                for shift in -6..=6 {
+                for shift in shifts() {
                     for logical in 0..len {
                         let mut sparse_set = ints_with(&[(len, shift), (2, 1), (0, 0), (3, -2)]);
 
@@ -2612,7 +2623,7 @@ mod tests {
         #[test]
         fn take_middle() {
             for len in 1..=5 {
-                for shift in -6..=6 {
+                for shift in shifts() {
                     for logical in 0..len {
                         let mut sparse_set = ints_with(&[(2, 1), (len, shift), (0, 0), (3, -2)]);
 
@@ -2632,7 +2643,7 @@ mod tests {
         #[test]
         fn take_last() {
             for len in 1..=5 {
-                for shift in -6..=6 {
+                for shift in shifts() {
                     for logical in 0..len {
                         let mut sparse_set = ints_with(&[(2, 1), (0, 0), (len, shift)]);
 
@@ -2881,7 +2892,7 @@ mod tests {
         #[test]
         fn append_first() {
             for len in 0..=5 {
-                for shift in -6..=6 {
+                for shift in shifts() {
                     let mut sparse_set =
                         ints_with_tails(&[(len, shift), (2, 1), (0, 0), (3, -2)], 2, 2);
                     let ungrouped = len as u64 + 5;
@@ -2898,7 +2909,7 @@ mod tests {
         #[test]
         fn append_last() {
             for len in 0..=5 {
-                for shift in -6..=6 {
+                for shift in shifts() {
                     let mut sparse_set = ints_with_tails(&[(2, 1), (0, 0), (len, shift)], 1, 1);
                     let ungrouped = len as u64 + 2;
                     let unevaluated = len as u64 + 3;
@@ -2942,7 +2953,9 @@ mod tests {
                 To::Unevaluated,
             ];
 
-            for entity in 0..13 {
+            // Under Miri, every other component still leaves from every region.
+            let step = if cfg!(miri) { 2 } else { 1 };
+            for entity in (0..13).step_by(step) {
                 for to in destinations {
                     let mut sparse_set = ints_with_tails(&[(3, 1), (0, 0), (4, -2), (2, 5)], 2, 2);
 

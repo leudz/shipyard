@@ -156,7 +156,13 @@ where
     assert_eq!(id_for_each, with_ids, "WithId for_each");
 
     // Prefixes end before, inside, at the end and past the end of the items.
-    for prefix in 0..=with_ids.len() + 1 {
+    // Under Miri, every traversal is slow, one prefix of each kind is enough.
+    let prefixes: Vec<usize> = if cfg!(miri) {
+        vec![0, with_ids.len() / 2, with_ids.len(), with_ids.len() + 1]
+    } else {
+        (0..=with_ids.len() + 1).collect()
+    };
+    for prefix in prefixes {
         let mut plain = iter();
         let head: Vec<T> = (&mut plain).take(prefix).map(value).collect();
         let fold = plain.fold(head, |mut acc, item| {
@@ -967,4 +973,78 @@ fn split_left_dropped() {
     // The right half walks A's storage from its 6th component on.
     assert_eq!(sorted(right_ids), sorted(a.dense[5..].to_vec()));
     assert_eq!(a.dense.len(), pairs.len());
+}
+
+/// Asserts that `ring_world`'s pair, walking AB and ABC rings cut at wrap points then its
+/// unevaluated regions, drives `((A, B), C)` from inside the nested `Mixed`: the root drives
+/// every segment through the pair without coverage and looks C up, the pair keeps its own
+/// per-segment masks and coverage. Every way yields every match once, and mutable outputs
+/// held all at once each write once.
+#[test]
+fn ring_nested() {
+    use super::grouping_fixtures::{ring_world, A, B, C};
+
+    let (world, pairs) = ring_world();
+    {
+        let (a, b, c) = world
+            .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+            .unwrap();
+        let iter = ((&a, &b), &c).iter();
+
+        let segments = segments(&iter, &[&a.dense, &b.dense]);
+        let pair_masks: Vec<u32> = segments
+            .iter()
+            .map(|segment| {
+                assert_eq!(segment.row[0], mixed(0b01));
+                assert_eq!(segment.row[4], Sailor);
+                let State::Mixed(mask, _) = segment.row[1] else {
+                    panic!("the pair drives");
+                };
+                mask
+            })
+            .collect();
+        assert_eq!(pair_masks, [0b11, 0b11, 0b11, 0b11, 0b01, 0b10]);
+        let State::Mixed(_, coverage) = &segments[5].row[1] else {
+            panic!("the pair drives");
+        };
+        assert_eq!(coverage.len(), 1);
+
+        let expected: Vec<_> = sorted(
+            pairs
+                .iter()
+                .filter(|&&id| c.contains(id))
+                .map(|&id| {
+                    let values = (
+                        a.get(id).unwrap().0,
+                        b.get(id).unwrap().0,
+                        c.get(id).unwrap().0,
+                    );
+
+                    (id, values)
+                })
+                .collect(),
+        );
+        assert_eq!(expected.len(), 7);
+        assert_every_way(
+            || ((&a, &b), &c).iter(),
+            |((a, b), c)| (a.0, b.0, c.0),
+            &expected,
+        );
+    }
+
+    let (mut a, mut b, mut c) = world
+        .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+        .unwrap();
+    let items: Vec<_> = ((&mut a, &mut b), &mut c).iter().collect();
+    assert_eq!(items.len(), 7);
+    for ((a, b), c) in items {
+        a.0 += 1000;
+        b.0 += 1000;
+        c.0 += 1000;
+    }
+    for (i, &id) in (0..).zip(&pairs) {
+        let delta = if c.contains(id) { 1000 } else { 0 };
+        assert_eq!((&a).get(id).unwrap().0, i + delta);
+        assert_eq!((&b).get(id).unwrap().0, 100 + i + delta);
+    }
 }

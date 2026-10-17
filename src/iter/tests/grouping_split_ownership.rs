@@ -4,8 +4,11 @@
 //! consumption/drop and to run aliasing and lifetime checks under Miri without Rayon.
 //! Worlds and iterators are built through the public API; no plans are injected.
 
-use super::grouping_fixtures::{coverage_world, late_iter, PairIter, A, B};
-use crate::iter::{IntoIter, Shiper, Shiperator};
+use super::grouping_fixtures::{
+    coverage_world, late_iter, ring_world, trust_world, PairIter, A, B, C,
+};
+use super::grouping_regions::grouped;
+use crate::iter::{IntoIter, IntoShiperator, Shiper, Shiperator};
 use crate::or::OneOfTwo;
 use crate::{track, Component, EntityId, Get, View, ViewMut, World};
 use alloc::vec::Vec;
@@ -70,6 +73,11 @@ fn split_all<S: Shiperator + Clone>(iter: Shiper<S>, pieces: &mut Vec<Shiper<S>>
         }
         (iter, None) => pieces.push(iter),
     }
+}
+
+fn sorted(mut ids: Vec<EntityId>) -> Vec<EntityId> {
+    ids.sort_unstable();
+    ids
 }
 
 fn or_value(item: OneOfTwo<&A, &B>) -> u32 {
@@ -282,5 +290,137 @@ fn tracked_mutation() {
     for (i, &id) in ids.iter().enumerate() {
         assert_eq!(m.is_modified(id), [0, 6, 10].contains(&i));
         assert_eq!((&m).get(id).unwrap().0 >= 100, [0, 6, 10].contains(&i));
+    }
+}
+
+/// Splits `iter` inside each of its segments until no piece can split.
+///
+/// The current segment is peeled off and split, then the follow-ups are entered one by one and
+/// split the same way. Pieces are returned in traversal order, each holds at most one candidate
+/// and none of them has follow-ups.
+fn split_every_segment<S: Shiperator + Clone>(iter: Shiper<S>) -> Vec<Shiper<S>> {
+    let mut pieces = Vec::new();
+    let mut iter = iter;
+
+    loop {
+        let len = iter.cursor.len();
+        let (current, mut rest) = iter.split_current_segment_at(len);
+        split_all(current, &mut pieces);
+
+        if !rest.enter_next_segment() {
+            return pieces;
+        }
+        iter = rest;
+    }
+}
+
+/// Returns the ids `iter` yields, asserting each item holds a `ring_world` pair's components.
+fn ring_ids(iter: PairIter<'_>) -> Vec<EntityId> {
+    iter.with_id()
+        .map(|(id, (a, b))| {
+            assert_eq!(a.0 + 100, b.0);
+            id
+        })
+        .collect()
+}
+
+/// Asserts that splitting `ring_world`'s pair walks inside every segment, the ABC pieces between
+/// wrap points and the covered B walk included, gives pieces that yield every pair once
+/// whichever order they're consumed in.
+#[test]
+fn ring_pieces_order() {
+    let (world, pairs) = ring_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let expected = sorted(pairs.clone());
+
+    let pieces = split_every_segment((&a, &b).iter());
+    assert!(pieces.iter().all(|piece| piece.cursor.len() <= 1));
+    let in_order: Vec<EntityId> = pieces.into_iter().flat_map(ring_ids).collect();
+    assert_eq!(sorted(in_order), expected);
+
+    let pieces = split_every_segment((&a, &b).iter());
+    let reversed: Vec<EntityId> = pieces.into_iter().rev().flat_map(ring_ids).collect();
+    assert_eq!(sorted(reversed), expected);
+}
+
+/// Asserts that dropping every other piece of `ring_world`'s pair walks first leaves the others
+/// yielding exactly what they yield on their own: coverage they read outlives the dropped pieces.
+#[test]
+fn ring_pieces_dropped() {
+    let (world, _) = ring_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let alone: Vec<Vec<EntityId>> = split_every_segment((&a, &b).iter())
+        .into_iter()
+        .map(ring_ids)
+        .collect();
+
+    for kept in [0, 1] {
+        let mut pieces = split_every_segment((&a, &b).iter());
+        let plan = pieces[0].schedule.as_ref().unwrap().downgrade();
+
+        let mut index = 0;
+        pieces.retain(|_| {
+            index += 1;
+            (index - 1) % 2 == kept
+        });
+        let survivors: Vec<Vec<EntityId>> = pieces.into_iter().map(ring_ids).collect();
+
+        let expected: Vec<Vec<EntityId>> = alone.iter().skip(kept).step_by(2).cloned().collect();
+        assert_eq!(survivors, expected, "kept {kept}");
+        assert!(plan.upgrade().is_none());
+    }
+}
+
+/// Asserts that mutable outputs of every piece of `ring_world`'s pair walks can be held all
+/// at once: each pair is written exactly once and nothing else is.
+#[test]
+fn ring_pieces_mut() {
+    let (world, pairs) = ring_world();
+    let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+    let a_len = a.len();
+
+    let outputs: Vec<(&mut A, &mut B)> = split_every_segment((&mut a, &mut b).iter())
+        .into_iter()
+        .rev()
+        .flatten()
+        .collect();
+    assert_eq!(outputs.len(), pairs.len());
+    for (a, b) in outputs {
+        a.0 += 1000;
+        b.0 += 1000;
+    }
+
+    for (i, &id) in (0..).zip(&pairs) {
+        assert_eq!((&a).get(id).unwrap().0, 1000 + i);
+        assert_eq!((&b).get(id).unwrap().0, 1100 + i);
+    }
+    let written = a.iter().filter(|a| a.0 >= 1000).count();
+    assert_eq!((written, a_len), (pairs.len(), pairs.len() + 7));
+}
+
+/// Asserts that mutable outputs of every piece of `trust_world`'s walks, where the damaged walk
+/// has two captains and B's unevaluated walk rejects what it owns, can be held all at once:
+/// each match is written exactly once.
+#[test]
+fn trust_pieces_mut() {
+    let (world, e) = trust_world();
+    let (mut a, mut b, mut c) = world
+        .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+        .unwrap();
+
+    let iter = grouped((&mut a, &mut b, &mut c).into_shiperator());
+    let outputs: Vec<(&mut A, &mut B, &mut C)> =
+        split_every_segment(iter).into_iter().flatten().collect();
+    assert_eq!(outputs.len(), e.len());
+    for (a, b, c) in outputs {
+        a.0 += 1000;
+        b.0 += 1000;
+        c.0 += 1000;
+    }
+
+    for (i, &id) in (0..).zip(&e) {
+        assert_eq!((&a).get(id).unwrap().0, 1000 + i);
+        assert_eq!((&b).get(id).unwrap().0, 1100 + i);
+        assert_eq!((&c).get(id).unwrap().0, 1200 + i);
     }
 }

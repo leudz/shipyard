@@ -69,11 +69,18 @@ struct Scenario {
 }
 
 impl Scenario {
-    /// Returns the scenario of `seed`, a quarter of them never group `A` and `B`.
+    /// Returns the scenario of `seed`: a quarter of them never group, a quarter group AB and AC,
+    /// the others only AB.
     fn new(seed: u64) -> Scenario {
         let mut world = World::new();
-        if !seed.is_multiple_of(4) {
-            world.group::<(A, B)>();
+        match seed % 4 {
+            0 => {}
+            2 => {
+                world.group::<(A, B)>().group::<(A, C)>();
+            }
+            _ => {
+                world.group::<(A, B)>();
+            }
         }
 
         Scenario {

@@ -399,6 +399,96 @@ fn overlapping_held_mut() {
     assert_eq!(pair_values(&overlap.world, &overlap.pairs), written);
 }
 
+/// Asserts that mutable outputs over AB, the ABC union and late unevaluated pairs reach every
+/// pair in every way, `next` prefixes followed by bulk consumption included.
+#[test]
+fn overlapping_mut_every_way() {
+    let mut overlap = overlap_world(true);
+    let mut pairs = overlap.pairs.clone();
+    pairs.extend(add_ab(&mut overlap.world, 500, 2));
+    let expected = pair_values(&overlap.world, &pairs);
+
+    let (mut a, mut b) = overlap.world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
+    let items = every_way!((&mut a, &mut b).iter(), |(a, b): (&mut A, &mut B)| (
+        a.0, b.0
+    ));
+
+    assert_eq!(sorted(items), expected);
+}
+
+/// Asserts that stopping inside a ring or an unevaluated walk leaves the mutable
+/// iterator resumable, with each pair updated exactly once across both traversals.
+#[test]
+fn overlapping_resume() {
+    let mut overlap = overlap_world(true);
+    overlap.pairs.extend(add_ab(&mut overlap.world, 500, 2));
+    let expected = pair_values(&overlap.world, &overlap.pairs);
+    let stops = [overlap.pairs[3], overlap.pairs[10], overlap.pairs[13]];
+
+    for stop in stops {
+        let (mut a, mut b) = overlap.world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
+        let mut iter = (&mut a, &mut b).iter().with_id();
+        assert_eq!(iter.size_hint(), (0, Some(17)));
+        let mut seen = Vec::new();
+        let result = iter.try_for_each(|(id, (a, b))| {
+            seen.push(id);
+            a.0 += 1;
+            b.0 += 1;
+            if id == stop {
+                Err(())
+            } else {
+                Ok(())
+            }
+        });
+        assert_eq!(result, Err(()));
+        iter.for_each(|(id, (a, b))| {
+            seen.push(id);
+            a.0 += 1;
+            b.0 += 1;
+        });
+        assert_eq!(sorted(seen), sorted(overlap.pairs.clone()));
+    }
+
+    let written: Vec<_> = expected
+        .into_iter()
+        .map(|(id, (a, b))| (id, (a + 3, b + 3)))
+        .collect();
+    assert_eq!(pair_values(&overlap.world, &overlap.pairs), written);
+}
+
+/// Asserts that a bulk callback panic in AB, ABC or an unevaluated walk leaves the
+/// owned iterator reusable from its first segment and releases borrows when dropped.
+#[cfg(feature = "std")]
+#[test]
+fn overlapping_unwind() {
+    let mut overlap = overlap_world(true);
+    overlap.pairs.extend(add_ab(&mut overlap.world, 500, 2));
+    let expected = pair_values(&overlap.world, &overlap.pairs);
+    let mut owned = overlap.world.iter::<(&mut A, &mut B)>();
+
+    for stop in [overlap.pairs[3], overlap.pairs[10], overlap.pairs[13]] {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let iter = owned.iter();
+            assert_eq!(iter.size_hint(), (0, Some(17)));
+            iter.with_id().for_each(|(id, _)| {
+                if id == stop {
+                    panic!("callback panic at {stop:?}");
+                }
+            });
+        }));
+        assert!(result.is_err());
+
+        let items = owned
+            .iter()
+            .with_id()
+            .map(|(id, (a, b))| (id, (a.0, b.0)))
+            .collect();
+        assert_eq!(sorted(items), expected);
+    }
+    drop(owned);
+    assert!(overlap.world.borrow::<(ViewMut<A>, ViewMut<B>)>().is_ok());
+}
+
 /// Asserts that with AB and ACD groups, an ABC query yields the entities of their ABCD union
 /// in every way. It walks AB and ABCD: 11 candidates, where B or C alone would count 13.
 #[test]
