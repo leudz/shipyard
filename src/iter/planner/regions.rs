@@ -7,7 +7,7 @@
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
 //! drives every segment through the single child leading to it, the rest of the query is looked up.
 
-use super::{Alternative, GroupedCandidate, Member, NodeMetadata, Route, Walk};
+use super::{mask_children, Alternative, GroupedCandidate, Member, NodeMetadata, Route, Walk};
 use crate::iter::plan::{
     Coverage, CoverageSpan, NodeKind, NodeState, Plan, SegmentDescriptor, SegmentEntry, SegmentRow,
     SegmentSchedule,
@@ -112,7 +112,7 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
         // The regions and the entities were both read from the member's storage while it's
         // borrowed. This catches a constructor pairing a child with another child's entities.
         assert!(
-            member.entities.local_index() == 0 && member.entities.len() == member.regions.len,
+            member.entities.local_index() == 0 && member.entities.len() == member.len,
             "a member's entities are its whole storage"
         );
     }
@@ -120,7 +120,7 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
     let placements: Vec<Placement> = candidate
         .walks
         .iter()
-        .map(|&walk| Placement::new(walk, &candidate.members))
+        .map(|&walk| Placement::new(walk, candidate))
         .collect();
 
     let mut segments = Vec::with_capacity(placements.len());
@@ -157,41 +157,42 @@ struct Placement {
 }
 
 impl Placement {
-    /// Places `walk` in the storages of `members`.
+    /// Places `walk`, one of `candidate`'s walks, in its captains' storages.
     ///
     /// This is where range positions become physical indices.
-    fn new(walk: Walk, members: &[Member]) -> Placement {
+    fn new(walk: Walk, candidate: &GroupedCandidate) -> Placement {
         let member = |child| {
-            members
+            candidate
+                .members
                 .iter()
                 .find(|member| member.child == child)
                 .expect("members drive grouped walks")
         };
 
-        // Ranges aren't rotated, `NodeMetadata::of_storage` rejects a nonzero shift. So logical
-        // position `p` of a range is at physical index `range_start + p` and each walk is
-        // a single physical piece. Rings will split the walks crossing their wrap point here.
         let placement = match walk {
-            Walk::Aligned { len } => {
-                // Members hold the same entities over the aligned prefix, the first member's
-                // entities drive the walk and every member starts at its own range's start.
-                let driver = &members[0];
+            Walk::Aligned {
+                range,
+                start,
+                len,
+                captains,
+            } => {
+                // Captains hold the same entities over these positions, any of them can drive.
+                let driver = captains.trailing_zeros() as usize;
+                let placement = Placement::range(candidate, range, driver, start, len, captains);
 
                 Placement {
-                    entities: driver.entities.segment(driver.regions.range_start, len),
-                    captains: members
-                        .iter()
-                        .map(|member| (member.child, member.regions.range_start))
-                        .collect(),
                     // Later walks never meet these entities, see the reasoning above `grouped_plan`.
                     owned: None,
+                    ..placement
                 }
             }
-            Walk::Damaged { owner, start, len } => {
-                let owner = member(owner);
-
-                Placement::single(owner, owner.regions.range_start + start, len)
-            }
+            Walk::Damaged {
+                range,
+                owner,
+                start,
+                len,
+                captains,
+            } => Placement::range(candidate, range, owner, start, len, captains),
             Walk::Unevaluated { owner, start, len } => Placement::single(member(owner), start, len),
         };
 
@@ -201,12 +202,70 @@ impl Placement {
             let end = start.checked_add(walk.len());
 
             assert!(
-                end.is_some_and(|end| end <= member(child).regions.len),
+                end.is_some_and(|end| end <= member(child).len),
                 "a walk fits in its captains' storages"
             );
         }
 
         placement
+    }
+
+    /// Places logical positions `start..start + len` of `candidate`'s range at position `range`,
+    /// driven by child `driver` with the children `captains` flags.
+    ///
+    /// The walk owns `driver`'s part of the range.
+    fn range(
+        candidate: &GroupedCandidate,
+        range: usize,
+        driver: usize,
+        start: usize,
+        len: usize,
+        captains: u32,
+    ) -> Placement {
+        let range = &candidate.ranges[range];
+
+        // `is_placeable` only lets unrotated rings through, so logical position `p` is at
+        // physical index `ring.start + p` and each walk is a single physical piece in every
+        // captain. Rings will split the walks crossing their wrap point here.
+        let captains: Vec<(usize, usize)> = mask_children(captains)
+            .map(|child| {
+                let ring = range
+                    .members
+                    .iter()
+                    .find(|member| member.child == child)
+                    .expect("captains are members of their range")
+                    .ring;
+                assert!(
+                    ring.contiguous_len(start) >= len,
+                    "walks don't cross a wrap point"
+                );
+
+                (child, ring.physical_of(start))
+            })
+            .collect();
+
+        let driver_start = captains
+            .iter()
+            .find(|&&(child, _)| child == driver)
+            .expect("the driver is a captain")
+            .1;
+        let driver = candidate
+            .members
+            .iter()
+            .find(|member| member.child == driver)
+            .expect("members drive grouped walks");
+        // `segment` checks the walk is inside the storage, `driver_start + len` can't overflow below.
+        let entities = driver.entities.segment(driver_start, len);
+
+        Placement {
+            entities,
+            captains,
+            owned: Some(Coverage {
+                child: u32::try_from(driver.child).expect("a Mixed has at most 32 children"),
+                start: driver_start,
+                end: driver_start + len,
+            }),
+        }
     }
 
     /// Places a walk driven by `owner` alone, over `len` entities from physical index `start`.

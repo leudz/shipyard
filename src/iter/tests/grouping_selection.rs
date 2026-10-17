@@ -77,7 +77,7 @@ fn assert_grouped_wins(entities: &RawEntityIdAccess, member_mask: u32) {
     let selection = selection(entities).expect("a grouped alternative");
     let winner = selection.winner().expect("the grouped alternative wins");
 
-    assert_eq!(winner.group().member_mask(), member_mask);
+    assert_eq!(winner.group().required, member_mask);
 }
 
 /// Asserts that `entities` reported a grouped alternative but its ordinary walk with
@@ -95,6 +95,17 @@ fn cheapest(entities: &RawEntityIdAccess) -> &Alternative {
         .expect("a grouped alternative")
         .cheapest()
         .unwrap()
+}
+
+/// Returns the walk over the first `len` positions of a group's only range, every child
+/// `captains` flags reading its component directly.
+fn aligned_walk(len: usize, captains: u32) -> Walk {
+    Walk::Aligned {
+        range: 0,
+        start: 0,
+        len,
+        captains,
+    }
 }
 
 /// Returns the walks of the cheapest grouped alternative of `entities`.
@@ -230,7 +241,7 @@ fn aligned() {
     let (mixed, len, entities) = (&a, &b).into_shiperator();
 
     assert_grouped_wins(&entities, 0b11);
-    assert_eq!(walks(&entities), [Walk::Aligned { len: 5 }]);
+    assert_eq!(walks(&entities), [aligned_walk(5, 0b11)]);
     // 5 candidates without sailor against B's 5 candidates with A looked up.
     let selection = selection(&entities).unwrap();
     assert_eq!(selection.cheapest().unwrap().work, 10);
@@ -276,7 +287,7 @@ fn disjoint_groups() {
     let (_, _, entities) = (&a, &b, &c, &d).into_shiperator();
 
     assert_grouped_wins(&entities, 0b1100);
-    assert_eq!(walks(&entities), [Walk::Aligned { len: 10 }]);
+    assert_eq!(walks(&entities), [aligned_walk(10, 0b1100)]);
 }
 
 /// Asserts that two disjoint groups with equal estimates pick the one whose
@@ -345,7 +356,7 @@ fn multiwalk() {
         assert_eq!(
             walks(&entities),
             [
-                Walk::Aligned { len: 10 },
+                aligned_walk(10, 0b11),
                 Walk::Unevaluated {
                     owner: 0,
                     start: 10,
@@ -366,7 +377,7 @@ fn multiwalk() {
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let (_, _, entities) = (&a, &b).into_shiperator();
 
-    assert_eq!(walks(&entities), [Walk::Aligned { len: 20 }]);
+    assert_eq!(walks(&entities), [aligned_walk(20, 0b11)]);
     assert_grouped_wins(&entities, 0b11);
 }
 
@@ -545,7 +556,7 @@ fn nested() {
     assert_eq!(selection.ordinary.work, Some(40));
     assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
     assert_eq!((winner.candidates, winner.work), (10, 30));
-    assert_eq!(winner.group().member_mask(), 0b11);
+    assert_eq!(winner.group().required, 0b11);
     // Constructors still install the ordinary walk, only the root swaps it.
     assert_eq!(mixed.captain_mask, 0b10);
 }

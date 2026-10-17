@@ -1,10 +1,11 @@
-//! Construction-only choice between an ordinary walk and walks over a group.
+//! Construction-only choice between an ordinary walk and walks over group ranges.
 //!
 //! While a query is built, each node reports what it knows about grouping in a
 //! [`NodeMetadata`], read from its storages while they're borrowed.\
 //! A `Mixed` hands its immediate children to [`select`], which ranks the ordinary captains
-//! and estimates its grouped [`Alternative`]s: walks over every group its window children
-//! fully hold, and the alternatives its nested `Mixed` children reported, driven through them.\
+//! and estimates its grouped [`Alternative`]s: walks over the ranges containing each set of
+//! overlapping groups its window children fully hold (see [`cover_sets`]), and the
+//! alternatives its nested `Mixed` children reported, driven through them.\
 //! Everything is kept in a [`Selection`] until the query decides which walk drives.
 //!
 //! Nothing here reads entities. Estimates only use group metadata, and the metadata is
@@ -25,6 +26,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cmp::Reverse;
 use core::fmt;
+use core::ops::Range;
 
 /// What a query node knows about grouping, reported while its storages are borrowed.
 ///
@@ -137,54 +139,6 @@ impl WindowMetadata {
         }
 
         grouped_end <= self.unevaluated_start && self.unevaluated_start <= self.len
-    }
-
-    /// Returns the group and regions of the storage's range, when it holds a single unrotated one.
-    ///
-    /// Grouped walks only handle this layout for now. Storages with any other layout stay
-    /// ordinary, which is always complete.
-    fn single_range(&self) -> Option<(&Arc<[StorageId]>, MemberRegions)> {
-        let [range] = &self.ranges[..] else {
-            return None;
-        };
-        if range.ring.len != 0 && range.ring.wrap_offset() != 0 {
-            return None;
-        }
-
-        let regions = MemberRegions {
-            range_start: range.ring.start,
-            range_len: range.ring.len,
-            trust: range.trust,
-            unevaluated_start: self.unevaluated_start,
-            len: self.len,
-        };
-
-        Some((&range.group, regions))
-    }
-}
-
-/// Regions of a group member's storage holding a single unrotated range.
-///
-/// ```text
-/// [ Group range ][ Ungrouped ][ Unevaluated ]
-/// ```
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct MemberRegions {
-    /// Physical index of the group range's first component.
-    pub(crate) range_start: usize,
-    pub(crate) range_len: usize,
-    /// Length of the range's prefix unchanged since the last regroup.
-    pub(crate) trust: usize,
-    /// Physical index where the unevaluated region starts.
-    pub(crate) unevaluated_start: usize,
-    /// Number of components in the storage.
-    pub(crate) len: usize,
-}
-
-impl MemberRegions {
-    /// Returns the number of components in the unevaluated region.
-    fn unevaluated_len(&self) -> usize {
-        self.len - self.unevaluated_start
     }
 }
 
@@ -312,25 +266,32 @@ pub(crate) enum Route {
     },
 }
 
-/// Walks covering every match of a query through one of its groups.
+/// Walks covering every match of a query through the ranges of one of its cover sets.
 ///
 /// This is the region recipe: the walks are listed in the order they're emitted
 /// and the estimate is computed from these same walks.
 #[derive(Clone, Debug)]
 pub(crate) struct GroupedCandidate {
-    /// The group's members in child order, with their storage's regions.
+    /// Children holding the required members, bit `i` for child `i`, see [`CoverSet`].
+    pub(crate) required: u32,
+    /// The ranges walks refer to, by position.
+    pub(crate) ranges: Vec<CoverRange>,
+    /// Every child taking part in a walk, in child order.
     pub(crate) members: Vec<Member>,
     /// Walks in emission order, empty ones are left out.
     pub(crate) walks: Vec<Walk>,
 }
 
-/// A group member and the child holding it.
+/// A child taking part in a grouped alternative, a required member or not.
 #[derive(Clone, Copy)]
 pub(crate) struct Member {
     /// Position of the child among the `Mixed`'s children.
     pub(crate) child: usize,
-    pub(crate) regions: MemberRegions,
-    /// Every entity of the member's storage, `regions` describes them.
+    /// Number of components in the child's storage.
+    pub(crate) len: usize,
+    /// Physical index where the storage's unevaluated region starts.
+    pub(crate) unevaluated_start: usize,
+    /// Every entity of the child's storage.
     pub(crate) entities: EntityCursor,
 }
 
@@ -338,26 +299,41 @@ impl fmt::Debug for Member {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Member")
             .field("child", &self.child)
-            .field("regions", &self.regions)
+            .field("len", &self.len)
+            .field("unevaluated_start", &self.unevaluated_start)
             .finish_non_exhaustive()
     }
 }
 
 /// One walk of a grouped alternative.
 ///
-/// Range positions are logical, counted from the start of each member's range.
+/// Range positions are logical, each member's ring places them in its own storage.
 /// Turning them into physical indices is left to whoever emits the walks.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Walk {
-    /// Every member drives the first `len` positions of its range, where all members hold
-    /// the same entities. Other children are looked up.
-    Aligned { len: usize },
-    /// The child at position `owner` drives positions `start..start + len` of its range.
-    /// All other children are looked up.
+    /// Logical positions `start..start + len` of the range at position `range`,
+    /// where every required member holds the same entities.
+    ///
+    /// The children `captains` flags read their component directly: the required members and
+    /// the other members trusting these positions. Other children are looked up.
+    Aligned {
+        range: usize,
+        start: usize,
+        len: usize,
+        captains: u32,
+    },
+    /// Logical positions `start..start + len` of the range at position `range`, past its
+    /// aligned prefix, driven by the child at position `owner`.
+    ///
+    /// The children `captains` flags read their component directly: `owner` and, where
+    /// `owner` trusts these positions, the other members trusting them too.
+    /// Other children are looked up.
     Damaged {
+        range: usize,
         owner: usize,
         start: usize,
         len: usize,
+        captains: u32,
     },
     /// The child at position `owner` drives the physical indices `start..start + len`
     /// of its unevaluated region. All other children are looked up.
@@ -372,19 +348,24 @@ impl Walk {
     /// Returns the number of candidates of the walk.
     pub(crate) fn len(&self) -> usize {
         match *self {
-            Walk::Aligned { len } | Walk::Damaged { len, .. } | Walk::Unevaluated { len, .. } => {
-                len
-            }
+            Walk::Aligned { len, .. }
+            | Walk::Damaged { len, .. }
+            | Walk::Unevaluated { len, .. } => len,
         }
     }
 
-    /// Returns the number of children driving the walk, out of a group of `member_count`.
-    fn captain_count(&self, member_count: usize) -> usize {
-        match self {
-            Walk::Aligned { .. } => member_count,
-            Walk::Damaged { .. } | Walk::Unevaluated { .. } => 1,
+    /// Returns the children reading their component directly, bit `i` for child `i`.
+    pub(crate) fn captains(&self) -> u32 {
+        match *self {
+            Walk::Aligned { captains, .. } | Walk::Damaged { captains, .. } => captains,
+            Walk::Unevaluated { owner, .. } => 1 << owner,
         }
     }
+}
+
+/// Returns the position of each child `mask` flags, bit `i` for child `i`, in order.
+pub(crate) fn mask_children(mask: u32) -> impl Iterator<Item = usize> {
+    (0..u32::BITS as usize).filter(move |&child| mask & (1 << child) != 0)
 }
 
 /// Work of walking one candidate, in half candidate visits.
@@ -552,16 +533,25 @@ fn ordinary_captain(children: &[Child]) -> usize {
 
 /// Returns every grouped alternative of `children`, which read `lookups` components as sailors.
 ///
-/// Alternatives are ordered by the first child they involve: a group by its first member,
-/// a nested `Mixed`'s alternatives by its position.\
+/// Alternatives are ordered by the first child they involve: a cover set by its first
+/// required member, a nested `Mixed`'s alternatives by its position.\
 /// Alternatives whose estimate doesn't fit in a `u64` can't beat anything and are left out.
 fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
+    let local: Vec<GroupedCandidate> = cover_sets(children)
+        .into_iter()
+        .filter(|set| is_placeable(children, set))
+        .map(|set| GroupedCandidate::new(children, set))
+        .collect();
+    let mut local = local.into_iter().peekable();
     let mut alternatives = Vec::new();
 
     for position in 0..children.len() {
-        // Only a window can start a group and only a nested `Mixed` has alternatives,
+        // Only a window can start a cover set and only a nested `Mixed` has alternatives,
         // at most one of these two adds something.
-        if let Some(candidate) = local_candidate(children, position) {
+        // Cover sets come ordered by their first required member.
+        while let Some(candidate) =
+            local.next_if(|candidate| candidate.required.trailing_zeros() as usize == position)
+        {
             alternatives.extend(Alternative::local(candidate, lookups));
         }
 
@@ -577,65 +567,21 @@ fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
     alternatives
 }
 
-/// Returns the walks over the group whose first member is the child at `position`,
-/// `None` when that child isn't a window over a grouped storage or `children` don't fully
-/// hold its group.
-fn local_candidate(children: &[Child], position: usize) -> Option<GroupedCandidate> {
-    let (group, _) = children[position].window()?.single_range()?;
-
-    // Each group is considered once, from its first member.
-    let seen = children[..position]
-        .iter()
-        .filter_map(Child::window)
-        .filter_map(WindowMetadata::single_range)
-        .any(|(earlier, _)| Arc::ptr_eq(earlier, group));
-    if seen {
-        return None;
-    }
-
-    let members = group_members(children, group)?;
-
-    Some(GroupedCandidate::new(members))
-}
-
-/// Returns `group`'s members, in child order, when each of them is held by exactly one child.
+/// Returns `true` when the walks of `set` can be placed in storages.
 ///
-/// A missing member makes the group unusable: with an `(A, B)` query and only an ABC group,
-/// matches without C sit outside the group range and only an ordinary walk finds them.\
-/// A member held by several children, like A in `(&a, &a, &b)`, is ambiguous and we don't
-/// pick which child would drive.
-fn group_members(children: &[Child], group: &Arc<[StorageId]>) -> Option<Vec<Member>> {
-    let mut members = Vec::new();
-    // Bit `i` flags the `i`th member id as found.
-    let mut found = 0u64;
-
-    for (position, child) in children.iter().enumerate() {
-        let Some(window) = child.window() else {
-            continue;
+/// Placement doesn't split walks at wrap points or across several ranges yet,
+/// so each required member has to hold a single range, unrotated. Other sets stay ordinary.
+fn is_placeable(children: &[Child], set: &CoverSet) -> bool {
+    mask_children(set.required).all(|child| {
+        let window = children[child]
+            .window()
+            .expect("required members are window children");
+        let [range] = &window.ranges[..] else {
+            return false;
         };
-        let Some((window_group, regions)) = window.single_range() else {
-            continue;
-        };
-        if !Arc::ptr_eq(window_group, group) {
-            continue;
-        }
 
-        // Group ids are sorted, a member's position in them identifies it.
-        let member_index = group.binary_search(&window.storage_id).ok()?;
-        let bit = 1u64.checked_shl(u32::try_from(member_index).ok()?)?;
-        if found & bit != 0 {
-            return None;
-        }
-
-        found |= bit;
-        members.push(Member {
-            child: position,
-            regions,
-            entities: child.entities,
-        });
-    }
-
-    (members.len() == group.len()).then_some(members)
+        range.ring.len == 0 || range.ring.wrap_offset() == 0
+    })
 }
 
 /// Members a grouped alternative of a `Mixed` has to cover, and the ranges it can walk.
@@ -828,7 +774,7 @@ impl Alternative {
 
         for walk in &candidate.walks {
             // Captains are member windows, each one would otherwise be a single lookup.
-            let sailor_lookups = lookups - walk.captain_count(candidate.members.len());
+            let sailor_lookups = lookups - walk.captains().count_ones() as usize;
 
             candidates = candidates.checked_add(walk.len())?;
             work = work.checked_add(walk_work(walk.len(), sailor_lookups)?)?;
@@ -877,74 +823,167 @@ impl Alternative {
 }
 
 impl GroupedCandidate {
-    /// Returns the walks over the group of `members`.
-    fn new(members: Vec<Member>) -> GroupedCandidate {
-        let walks = walks(&members);
-
-        GroupedCandidate { members, walks }
-    }
-
-    /// Returns the children holding the group's members, bit `i` for child `i`.
-    #[cfg(test)]
-    pub(crate) fn member_mask(&self) -> u32 {
-        self.members
+    /// Returns the walks covering `set`'s required members, for a `Mixed` with these `children`.
+    fn new(children: &[Child], set: CoverSet) -> GroupedCandidate {
+        // Required members walk their unevaluated regions, any member of a range can drive part of it.
+        let member_mask = set
+            .ranges
             .iter()
-            .fold(0, |mask, member| mask | (1 << member.child))
+            .flat_map(|range| &range.members)
+            .fold(set.required, |mask, member| mask | 1 << member.child);
+        let members: Vec<Member> = mask_children(member_mask)
+            .map(|child| {
+                let window = children[child]
+                    .window()
+                    .expect("members are window children");
+
+                Member {
+                    child,
+                    len: window.len,
+                    unevaluated_start: window.unevaluated_start,
+                    entities: children[child].entities,
+                }
+            })
+            .collect();
+
+        let walks = walks(set.required, &set.ranges, &members);
+
+        GroupedCandidate {
+            required: set.required,
+            ranges: set.ranges,
+            members,
+            walks,
+        }
     }
 }
 
-/// Returns the walks over the group of `members`, in emission order.
+/// Returns the walks covering the members `required` flags through `ranges`, in emission order.
 ///
-/// Empty walks are left out.
-fn walks(members: &[Member]) -> Vec<Walk> {
+/// `members` lists every child taking part in a walk. Empty walks are left out.
+fn walks(required: u32, ranges: &[CoverRange], members: &[Member]) -> Vec<Walk> {
     let mut walks = Vec::new();
 
-    // Every member holds the same entities over the prefix all of them trust.
-    let aligned_len = members
-        .iter()
-        .map(|member| member.regions.trust)
-        .min()
-        .expect("groups have at least two members");
+    for (range_index, range) in ranges.iter().enumerate() {
+        let required_parts = || {
+            range
+                .members
+                .iter()
+                .filter(|member| required & (1 << member.child) != 0)
+        };
+        let trusts = || range.members.iter().map(|member| member.trust);
 
-    if aligned_len > 0 {
-        walks.push(Walk::Aligned { len: aligned_len });
+        // Every required member holds the same entities over the logical prefix all of them trust.
+        let aligned_len = required_parts()
+            .map(|member| member.trust)
+            .min()
+            .expect("cover sets require at least two members");
+
+        // Members trusting the same positions hold the same entities there, so the other
+        // members join the required ones up to their own trust. A member trusting less
+        // doesn't shorten the prefix, it's looked up past its trust.
+        for (positions, captains) in pieces(0..aligned_len, trusts(), |position| {
+            trusting(range, position)
+        }) {
+            walks.push(Walk::Aligned {
+                range: range_index,
+                start: positions.start,
+                len: positions.len(),
+                captains,
+            });
+        }
+
+        // A match of this range past the aligned prefix is in the damaged suffix of every
+        // required member. Walking one of them is enough: the shortest, the first in child order
+        // on ties.
+        let owner = required_parts()
+            .min_by_key(|member| member.ring.len - aligned_len)
+            .expect("cover sets require at least two members");
+
+        // Another member reads its component directly only where it and the owner both
+        // trust the position. Past the owner's trust, nothing tells where they hold its entity.
+        for (positions, captains) in pieces(aligned_len..owner.ring.len, trusts(), |position| {
+            if position < owner.trust {
+                trusting(range, position)
+            } else {
+                1 << owner.child
+            }
+        }) {
+            walks.push(Walk::Damaged {
+                range: range_index,
+                owner: owner.child,
+                start: positions.start,
+                len: positions.len(),
+                captains,
+            });
+        }
     }
 
-    // A match whose members are all in the group range but outside the aligned prefix is
-    // in every member's damaged suffix. Walking a single one of them is enough,
-    // we pick the shortest, the first in child order on ties.
-    let damaged_owner = members
+    // Each required member walks its unevaluated region. A walk rejects what the walks before
+    // it covered, so later walks check more regions: the longest go first, in child order on ties.
+    let mut unevaluated: Vec<&Member> = members
         .iter()
-        .min_by_key(|member| member.regions.range_len - aligned_len)
-        .expect("groups have at least two members");
-    let damaged_len = damaged_owner.regions.range_len - aligned_len;
-
-    if damaged_len > 0 {
-        walks.push(Walk::Damaged {
-            owner: damaged_owner.child,
-            start: aligned_len,
-            len: damaged_len,
-        });
-    }
-
-    // Each member walks its unevaluated region. A walk rejects what the walks before it
-    // covered, so later walks check more regions: the longest go first, in child order on ties.
-    let mut unevaluated: Vec<&Member> = members.iter().collect();
-    unevaluated.sort_by_key(|member| Reverse(member.regions.unevaluated_len()));
+        .filter(|member| required & (1 << member.child) != 0)
+        .collect();
+    unevaluated.sort_by_key(|member| Reverse(member.len - member.unevaluated_start));
 
     for member in unevaluated {
-        let len = member.regions.unevaluated_len();
+        let len = member.len - member.unevaluated_start;
 
         if len > 0 {
             walks.push(Walk::Unevaluated {
                 owner: member.child,
-                start: member.regions.unevaluated_start,
+                start: member.unevaluated_start,
                 len,
             });
         }
     }
 
     walks
+}
+
+/// Returns the members of `range` trusting logical position `position`, bit `i` for child `i`.
+fn trusting(range: &CoverRange, position: usize) -> u32 {
+    range
+        .members
+        .iter()
+        .filter(|member| position < member.trust)
+        .fold(0, |mask, member| mask | 1 << member.child)
+}
+
+/// Splits `positions` into pieces with the same captains, `captains_at` returning the captains
+/// of a position.
+///
+/// The captains can only change at one of `bounds`. Empty positions give no piece.
+fn pieces(
+    positions: Range<usize>,
+    bounds: impl Iterator<Item = usize>,
+    captains_at: impl Fn(usize) -> u32,
+) -> Vec<(Range<usize>, u32)> {
+    let mut ends: Vec<usize> = bounds
+        .filter(|&bound| positions.start < bound && bound < positions.end)
+        .collect();
+    ends.push(positions.end);
+    ends.sort_unstable();
+    ends.dedup();
+
+    let mut pieces: Vec<(Range<usize>, u32)> = Vec::new();
+    let mut start = positions.start;
+    for end in ends {
+        if start == end {
+            continue;
+        }
+
+        let captains = captains_at(start);
+        match pieces.last_mut() {
+            // A bound where nothing changes doesn't split anything.
+            Some((last, last_captains)) if *last_captains == captains => last.end = end,
+            _ => pieces.push((start..end, captains)),
+        }
+
+        start = end;
+    }
+
+    pieces
 }
 
 #[cfg(test)]
@@ -991,17 +1030,24 @@ mod grouping_selection_arithmetic {
         }
     }
 
-    /// Lays the storage of a child made by `member` out as `regions`.
-    fn set_regions(child: &mut Child, regions: MemberRegions) {
+    /// Lays the storage of a child made by `member` out with an unrotated range of `range_len`
+    /// trusting `trust`, then the unevaluated region from `unevaluated_start` to `len`.
+    fn set_regions(
+        child: &mut Child,
+        range_len: usize,
+        trust: usize,
+        unevaluated_start: usize,
+        len: usize,
+    ) {
         let window = window_mut(child);
         window.ranges[0].ring = Ring {
-            start: regions.range_start,
-            len: regions.range_len,
+            start: 0,
+            len: range_len,
             shift: 0,
         };
-        window.ranges[0].trust = regions.trust;
-        window.unevaluated_start = regions.unevaluated_start;
-        window.len = regions.len;
+        window.ranges[0].trust = trust;
+        window.unevaluated_start = unevaluated_start;
+        window.len = len;
     }
 
     /// A window child of `len` components without group metadata.
@@ -1103,8 +1149,16 @@ mod grouping_selection_arithmetic {
         let selection = select(&mut children);
         let alternative = selection.cheapest().unwrap();
 
-        assert_eq!(alternative.group().walks, [Walk::Aligned { len: 4 }]);
-        assert_eq!(alternative.group().member_mask(), 0b011);
+        assert_eq!(
+            alternative.group().walks,
+            [Walk::Aligned {
+                range: 0,
+                start: 0,
+                len: 4,
+                captains: 0b011
+            }]
+        );
+        assert_eq!(alternative.group().required, 0b011);
         // 4 candidates, 1 sailor.
         assert_eq!((alternative.candidates, alternative.work), (4, 12));
     }
@@ -1116,26 +1170,8 @@ mod grouping_selection_arithmetic {
         let group = group();
         let mut a = member(&group, 0, 6, 9);
         let mut b = member(&group, 1, 5, 12);
-        set_regions(
-            &mut a,
-            MemberRegions {
-                range_start: 0,
-                range_len: 6,
-                trust: 2,
-                unevaluated_start: 7,
-                len: 9,
-            },
-        );
-        set_regions(
-            &mut b,
-            MemberRegions {
-                range_start: 0,
-                range_len: 5,
-                trust: 3,
-                unevaluated_start: 6,
-                len: 12,
-            },
-        );
+        set_regions(&mut a, 6, 2, 7, 9);
+        set_regions(&mut b, 5, 3, 6, 12);
 
         let selection = select(&mut [a, b]);
         let alternative = selection.cheapest().unwrap();
@@ -1143,11 +1179,19 @@ mod grouping_selection_arithmetic {
         assert_eq!(
             alternative.group().walks,
             [
-                Walk::Aligned { len: 2 },
+                Walk::Aligned {
+                    range: 0,
+                    start: 0,
+                    len: 2,
+                    captains: 0b11
+                },
+                // B trusts position 2 but A doesn't, B is its only captain.
                 Walk::Damaged {
+                    range: 0,
                     owner: 1,
                     start: 2,
-                    len: 3
+                    len: 3,
+                    captains: 0b10
                 },
                 Walk::Unevaluated {
                     owner: 1,
@@ -1180,11 +1224,18 @@ mod grouping_selection_arithmetic {
         assert_eq!(
             selection.cheapest().unwrap().group().walks,
             [
-                Walk::Aligned { len: 1 },
+                Walk::Aligned {
+                    range: 0,
+                    start: 0,
+                    len: 1,
+                    captains: 0b11
+                },
                 Walk::Damaged {
+                    range: 0,
                     owner: 0,
                     start: 1,
-                    len: 3
+                    len: 3,
+                    captains: 0b01
                 },
                 Walk::Unevaluated {
                     owner: 0,
@@ -1368,42 +1419,6 @@ mod grouping_selection_arithmetic {
         }
     }
 
-    /// Asserts that grouped walks only use a storage holding a single unrotated range for now:
-    /// several ranges or a rotated one keep ordinary selection.
-    #[test]
-    fn single_range() {
-        let ab = group();
-        let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
-        let single = |ranges, len| metadata(&storage_groups(ranges, len), len).unwrap();
-
-        let unrotated = single(vec![group_range(&ab, 0, 3, 0, 2)], 3);
-        let (unrotated_group, regions) = unrotated.single_range().unwrap();
-        assert!(Arc::ptr_eq(unrotated_group, &ab));
-        assert_eq!(
-            regions,
-            MemberRegions {
-                range_start: 0,
-                range_len: 3,
-                trust: 2,
-                unevaluated_start: 3,
-                len: 3,
-            }
-        );
-        // A shift of a whole turn isn't a rotation.
-        assert!(single(vec![group_range(&ab, 0, 3, -3, 3)], 3)
-            .single_range()
-            .is_some());
-        assert!(single(vec![group_range(&ab, 0, 3, 1, 3)], 3)
-            .single_range()
-            .is_none());
-        assert!(single(
-            vec![group_range(&ab, 0, 2, 0, 2), group_range(&ac, 2, 0, 0, 0)],
-            2
-        )
-        .single_range()
-        .is_none());
-    }
-
     /// Asserts that a child unable to sail drives and disables grouping.
     #[test]
     fn forced_captain() {
@@ -1432,6 +1447,8 @@ mod grouping_selection_arithmetic {
                 candidates,
                 work,
                 route: Route::Local(GroupedCandidate {
+                    required: 0,
+                    ranges: Vec::new(),
                     members: Vec::new(),
                     walks: Vec::new(),
                 }),
@@ -1862,5 +1879,338 @@ mod grouping_cover_sets {
                 },
             ]
         );
+    }
+
+    /// A window child over storage `storage` holding a range for each `(group, len, trust)`,
+    /// back to back and unrotated, followed by `unevaluated` unevaluated components.
+    fn window_with(
+        storage: u64,
+        ranges: &[(&Arc<[StorageId]>, usize, usize)],
+        unevaluated: usize,
+    ) -> Child {
+        let mut child = window(storage, &[]);
+        let NodeMetadata::Window(window) = &mut child.metadata else {
+            unreachable!();
+        };
+
+        for &(group, len, trust) in ranges {
+            window.ranges.push(RangeMetadata {
+                group: group.clone(),
+                ring: Ring {
+                    start: window.len,
+                    len,
+                    shift: 0,
+                },
+                trust,
+            });
+            window.len += len;
+        }
+        window.unevaluated_start = window.len;
+        window.len += unevaluated;
+        child.candidates = Some(window.len);
+        child.sail_time = window.len;
+
+        child
+    }
+
+    /// Returns the walks of the first cover set of `children`, placeable or not.
+    fn first_candidate(children: &[Child]) -> GroupedCandidate {
+        let set = cover_sets(children)
+            .into_iter()
+            .next()
+            .expect("the children hold a group");
+
+        GroupedCandidate::new(children, set)
+    }
+
+    fn aligned(range: usize, start: usize, len: usize, captains: u32) -> Walk {
+        Walk::Aligned {
+            range,
+            start,
+            len,
+            captains,
+        }
+    }
+
+    fn damaged(range: usize, owner: usize, start: usize, len: usize, captains: u32) -> Walk {
+        Walk::Damaged {
+            range,
+            owner,
+            start,
+            len,
+            captains,
+        }
+    }
+
+    fn unevaluated(owner: usize, start: usize, len: usize) -> Walk {
+        Walk::Unevaluated { owner, start, len }
+    }
+
+    /// Asserts that an `(A, B)` query walks the aligned part of each range containing A and B,
+    /// AB then the ABC union, where A and B read directly and C isn't involved.
+    #[test]
+    fn walks_ranges() {
+        let (ab, ac, abc) = (group(&[A, B]), group(&[A, C]), group(&[A, B, C]));
+        let children = [
+            window_with(A, &[(&ab, 2, 2), (&ac, 1, 1), (&abc, 3, 3)], 0),
+            window_with(B, &[(&ab, 2, 2), (&abc, 3, 3)], 0),
+        ];
+
+        let candidate = first_candidate(&children);
+
+        assert_eq!(
+            candidate.walks,
+            [aligned(0, 0, 2, 0b11), aligned(1, 0, 3, 0b11)]
+        );
+        // 5 candidates without sailor.
+        let alternative = Alternative::local(candidate, 2).unwrap();
+        assert_eq!((alternative.candidates, alternative.work), (5, 10));
+    }
+
+    /// Asserts that unevaluated walks come once, after every range walk,
+    /// longest first and in child order on ties.
+    #[test]
+    fn walks_unevaluated_once() {
+        let (ab, abc) = (group(&[A, B]), group(&[A, B, C]));
+        let children = [
+            window_with(A, &[(&ab, 2, 2), (&abc, 1, 1)], 2),
+            window_with(B, &[(&ab, 2, 2), (&abc, 1, 1)], 3),
+            window_with(D, &[], 0),
+        ];
+
+        let candidate = first_candidate(&children);
+
+        assert_eq!(
+            candidate.walks,
+            [
+                aligned(0, 0, 2, 0b11),
+                aligned(1, 0, 1, 0b11),
+                unevaluated(1, 3, 3),
+                unevaluated(0, 3, 2),
+            ]
+        );
+    }
+
+    /// Asserts that the aligned prefix stops at the lowest trust of the required members,
+    /// the shortest damaged suffix drives the rest, and a member trusting positions the owner
+    /// doesn't trust can't read directly there.
+    #[test]
+    fn walks_required_trust() {
+        let ab = group(&[A, B]);
+        let children = [
+            window_with(A, &[(&ab, 5, 1)], 0),
+            window_with(B, &[(&ab, 4, 3)], 0),
+        ];
+
+        let candidate = first_candidate(&children);
+
+        // B's suffix is the shortest, A trusts none of it.
+        assert_eq!(
+            candidate.walks,
+            [aligned(0, 0, 1, 0b11), damaged(0, 1, 1, 3, 0b10)]
+        );
+    }
+
+    /// Asserts that on equal damaged suffixes, the first required member in child order owns
+    /// the walk, and B trusting more than the owner doesn't make it a captain.
+    #[test]
+    fn walks_damaged_tie() {
+        let ab = group(&[A, B]);
+        let children = [
+            window_with(A, &[(&ab, 4, 1)], 0),
+            window_with(B, &[(&ab, 4, 3)], 0),
+        ];
+
+        assert_eq!(
+            first_candidate(&children).walks,
+            [aligned(0, 0, 1, 0b11), damaged(0, 0, 1, 3, 0b01)]
+        );
+    }
+
+    /// Returns `(A, B, C)` children with AB, ACD and the ABCD union, D isn't borrowed.
+    /// C trusts `c_trust` of ABCD's 6 positions, A and B trust all of them.
+    fn extra_children(c_trust: usize) -> [Child; 3] {
+        let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
+
+        [
+            window_with(A, &[(&ab, 2, 2), (&acd, 1, 1), (&abcd, 6, 6)], 0),
+            window_with(B, &[(&ab, 2, 2), (&abcd, 6, 6)], 0),
+            window_with(C, &[(&acd, 1, 1), (&abcd, 6, c_trust)], 0),
+        ]
+    }
+
+    /// Asserts that an extra member trusting none of a range is looked up all along,
+    /// A and B still read directly over the whole range.
+    #[test]
+    fn walks_extra_untrusted() {
+        assert_eq!(
+            first_candidate(&extra_children(0)).walks,
+            [aligned(0, 0, 2, 0b011), aligned(1, 0, 6, 0b011)]
+        );
+    }
+
+    /// Asserts that an extra member reads directly up to its trust, splitting the aligned
+    /// part there, without shortening A and B's aligned part.
+    #[test]
+    fn walks_extra_partial() {
+        let candidate = first_candidate(&extra_children(3));
+
+        assert_eq!(
+            candidate.walks,
+            [
+                aligned(0, 0, 2, 0b011),
+                aligned(1, 0, 3, 0b111),
+                aligned(1, 3, 3, 0b011),
+            ]
+        );
+        // AB's 2 and ABCD's last 3 candidates look C up, ABCD's first 3 look nothing up.
+        let alternative = Alternative::local(candidate, 3).unwrap();
+        assert_eq!(
+            (alternative.candidates, alternative.work),
+            (8, 2 * 3 + 3 * 2 + 3 * 3)
+        );
+    }
+
+    /// Asserts that an extra member trusting a whole range reads directly over all of it.
+    #[test]
+    fn walks_extra_trusted() {
+        assert_eq!(
+            first_candidate(&extra_children(6)).walks,
+            [aligned(0, 0, 2, 0b011), aligned(1, 0, 6, 0b111)]
+        );
+    }
+
+    /// Asserts that a damaged suffix is split at every trust endpoint: members read directly
+    /// where they and the owner both trust the position, then the owner drives alone.
+    #[test]
+    fn walks_damaged_extras() {
+        let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
+        let children = [
+            window_with(A, &[(&ab, 0, 0), (&acd, 0, 0), (&abcd, 8, 2)], 0),
+            window_with(B, &[(&ab, 0, 0), (&abcd, 6, 5)], 0),
+            window_with(C, &[(&acd, 0, 0), (&abcd, 7, 4)], 0),
+        ];
+
+        let candidate = first_candidate(&children);
+
+        // B has the shortest suffix. C trusts up to 4 and B up to 5, past that B drives alone.
+        assert_eq!(
+            candidate.walks,
+            [
+                aligned(1, 0, 2, 0b111),
+                damaged(1, 1, 2, 2, 0b110),
+                damaged(1, 1, 4, 2, 0b010),
+            ]
+        );
+    }
+
+    /// Asserts that a cover set without any containing range, AB and AC before their ABC union
+    /// exists, only walks its required members' unevaluated regions.
+    #[test]
+    fn walks_unevaluated_only() {
+        let (ab, ac) = (group(&[A, B]), group(&[A, C]));
+        let children = [
+            window_with(A, &[(&ab, 0, 0), (&ac, 0, 0)], 3),
+            window_with(B, &[(&ab, 0, 0)], 1),
+            window_with(C, &[(&ac, 0, 0)], 2),
+        ];
+
+        let candidate = first_candidate(&children);
+
+        assert_eq!(
+            candidate.walks,
+            [
+                unevaluated(0, 0, 3),
+                unevaluated(2, 0, 2),
+                unevaluated(1, 0, 1)
+            ]
+        );
+        // Every candidate looks the two other children up.
+        let alternative = Alternative::local(candidate, 3).unwrap();
+        assert_eq!((alternative.candidates, alternative.work), (6, 6 * 4));
+    }
+
+    /// Asserts that a grouped walk over several ranges can cost more than an ordinary walk
+    /// with a small captain.
+    #[test]
+    fn estimates_ordinary() {
+        let (ab, abc) = (group(&[A, B]), group(&[A, B, C]));
+        let children = [
+            window_with(A, &[(&ab, 20, 20), (&abc, 30, 30)], 0),
+            window_with(B, &[(&ab, 20, 20), (&abc, 30, 30)], 0),
+            window_with(9, &[], 3),
+        ];
+
+        let grouped = Alternative::local(first_candidate(&children), 3).unwrap();
+        let ordinary = ordinary_candidate(&children, 3);
+
+        // 50 candidates looking the small storage up against 3 candidates looking A and B up.
+        assert_eq!(grouped.work, 50 * 3);
+        assert_eq!((ordinary.captain, ordinary.work), (2, Some(3 * 4)));
+    }
+
+    /// Asserts that disjoint cover sets get their own walks and estimates,
+    /// the smaller group's being cheaper.
+    #[test]
+    fn estimates_disjoint() {
+        let (ab, cd) = (group(&[A, B]), group(&[C, D]));
+        let children = [
+            window_with(A, &[(&ab, 40, 40)], 0),
+            window_with(B, &[(&ab, 40, 40)], 0),
+            window_with(C, &[(&cd, 10, 10)], 0),
+            window_with(D, &[(&cd, 10, 10)], 0),
+        ];
+
+        let works: Vec<u64> = cover_sets(&children)
+            .into_iter()
+            .map(|set| {
+                Alternative::local(GroupedCandidate::new(&children, set), 4)
+                    .unwrap()
+                    .work
+            })
+            .collect();
+
+        // Each walk reads its two members and looks the two others up.
+        assert_eq!(works, [40 * 4, 10 * 4]);
+    }
+
+    /// Asserts that walks are only placed for required members holding a single unrotated range,
+    /// a whole turn not counting as a rotation.
+    #[test]
+    fn placeable() {
+        let (ab, ac) = (group(&[A, B]), group(&[A, C]));
+        let with_shift = |shift| {
+            let mut a = window_with(A, &[(&ab, 3, 3)], 0);
+            if let NodeMetadata::Window(window) = &mut a.metadata {
+                window.ranges[0].ring.shift = shift;
+            }
+
+            [a, window_with(B, &[(&ab, 3, 3)], 0)]
+        };
+        let is_first_placeable =
+            |children: &[Child]| is_placeable(children, &cover_sets(children)[0]);
+
+        assert!(is_first_placeable(&with_shift(0)));
+        assert!(is_first_placeable(&with_shift(-3)));
+        assert!(!is_first_placeable(&with_shift(1)));
+
+        let several = [
+            window_with(A, &[(&ab, 2, 2), (&ac, 0, 0)], 0),
+            window_with(B, &[(&ab, 2, 2)], 0),
+        ];
+        assert!(!is_first_placeable(&several));
+    }
+
+    /// Asserts that `pieces` splits only where the captains change, ignores bounds outside
+    /// the positions and gives nothing for empty positions.
+    #[test]
+    fn split_pieces() {
+        let captains_at = |position: usize| if position < 4 { 0b11 } else { 0b01 };
+
+        assert_eq!(
+            pieces(1..7, [2, 4, 4, 9, 0].into_iter(), captains_at),
+            [(1..4, 0b11), (4..7, 0b01)]
+        );
+        assert!(pieces(3..3, [3].into_iter(), captains_at).is_empty());
     }
 }
