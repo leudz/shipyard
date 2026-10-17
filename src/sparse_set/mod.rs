@@ -451,6 +451,40 @@ impl<T: Component> SparseSet<T> {
         }
     }
 
+    /// Moves every range from `first` on one slot to the left, keeping their logical order.
+    ///
+    /// The component in the slot right before `ranges[first]` is carried along and ends
+    /// right after the last range.
+    fn move_ranges_left(&mut self, first: usize) {
+        for range_index in first..self.groups.ranges.len() {
+            let ring = self.groups.ranges[range_index].ring();
+
+            // The carried component is right before this range. It swaps with the range's
+            // physical last component, which keeps its logical position once the range moved.
+            if ring.len != 0 {
+                self.swap_rows(ring.start - 1, ring.end() - 1);
+            }
+            self.groups.ranges[range_index].move_left();
+        }
+    }
+
+    /// Moves every range from `first` on one slot to the right, keeping their logical order.
+    ///
+    /// The component in the slot right after the last range is carried along and ends
+    /// right before `ranges[first]`.
+    fn move_ranges_right(&mut self, first: usize) {
+        for range_index in (first..self.groups.ranges.len()).rev() {
+            let ring = self.groups.ranges[range_index].ring();
+
+            // The carried component is right after this range. It swaps with the range's
+            // physical first component, which keeps its logical position once the range moved.
+            if ring.len != 0 {
+                self.swap_rows(ring.end(), ring.start);
+            }
+            self.groups.ranges[range_index].move_right();
+        }
+    }
+
     /// Moves `entity`'s component to `destination`, wherever it currently is in this storage.
     ///
     /// A move into a range appends the component at the range's end.\
@@ -2139,5 +2173,279 @@ mod tests {
             regions(&sparse_set),
             [vec![0, 1], vec![2, 3, 5], vec![4, 6]]
         );
+    }
+
+    mod range_moves {
+        use super::*;
+        use core::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+
+        /// Component counting its drops, to catch a move losing or duplicating a component.
+        struct Counted(u64, Arc<AtomicUsize>);
+
+        impl Drop for Counted {
+            fn drop(&mut self) {
+                self.1.fetch_add(1, AtomicOrdering::Relaxed);
+            }
+        }
+
+        impl Component for Counted {
+            type Tracking = crate::track::Untracked;
+        }
+
+        /// Range layout shared by the tests: `(len, shift)` pairs, rotated rings and an empty one.
+        ///
+        /// The first range isn't rotated, so its physical last component is also its logical last.
+        const RANGES: [(usize, isize); 5] = [(3, 0), (2, 1), (0, 0), (4, -3), (1, 5)];
+
+        /// Builds a storage holding entities `0..12` in physical order, each with `make(index)`.
+        ///
+        /// `RANGES` are placed back to back and fully trusted, the last 2 components are ungrouped.\
+        /// Tracked entities are inserted at timestamp `index` and modified at `100 + index`.
+        fn storage<T: Component>(make: impl Fn(u64) -> T) -> SparseSet<T> {
+            let mut sparse_set = SparseSet::new();
+            for index in 0..12 {
+                sparse_set
+                    .insert(
+                        EntityId::new(index),
+                        make(index),
+                        TrackingTimestamp::new(index),
+                    )
+                    .assert_inserted();
+            }
+            if sparse_set.is_tracking_modification {
+                for (index, timestamp) in sparse_set.modification_data.iter_mut().enumerate() {
+                    *timestamp = TrackingTimestamp::new(100 + index as u64);
+                }
+            }
+
+            let mut start = 0;
+            for (position, (len, shift)) in RANGES.into_iter().enumerate() {
+                sparse_set.groups.ranges.push(GroupRange {
+                    group: Arc::from([
+                        StorageId::Custom(0),
+                        StorageId::Custom(position as u64 + 1),
+                    ]),
+                    start,
+                    len,
+                    shift,
+                    trust: len,
+                });
+                start += len;
+            }
+            sparse_set.groups.unevaluated_start = 12;
+
+            sparse_set
+        }
+
+        fn ints() -> SparseSet<I32> {
+            storage(|index| I32(i32::try_from(index).unwrap()))
+        }
+
+        /// Returns the entity indices of each range, in logical order.
+        fn logical_order<T: Component>(sparse_set: &SparseSet<T>) -> Vec<Vec<u64>> {
+            sparse_set
+                .groups
+                .ranges
+                .iter()
+                .map(|range| {
+                    let ring = range.ring();
+
+                    (0..ring.len)
+                        .map(|logical| sparse_set.dense[ring.physical_of(logical)].index())
+                        .collect()
+                })
+                .collect()
+        }
+
+        fn starts<T: Component>(sparse_set: &SparseSet<T>) -> Vec<usize> {
+            sparse_set
+                .groups
+                .ranges
+                .iter()
+                .map(|range| range.start)
+                .collect()
+        }
+
+        fn trusts<T: Component>(sparse_set: &SparseSet<T>) -> Vec<usize> {
+            sparse_set
+                .groups
+                .ranges
+                .iter()
+                .map(|range| range.trust)
+                .collect()
+        }
+
+        /// Panics unless every row still holds its entity's component and timestamps,
+        /// with the sparse array pointing at it, and the layout is valid.
+        ///
+        /// `value` reads the entity index a component was built with.
+        fn assert_rows<T: Component>(sparse_set: &SparseSet<T>, value: impl Fn(&T) -> u64) {
+            for (index, entity) in sparse_set.dense.iter().enumerate() {
+                assert_eq!(sparse_set.index_of(*entity), Some(index));
+                assert_eq!(value(&sparse_set.data[index]), entity.index());
+
+                if sparse_set.is_tracking_insertion {
+                    assert_eq!(sparse_set.insertion_data[index].get(), entity.index());
+                }
+                if sparse_set.is_tracking_modification {
+                    assert_eq!(
+                        sparse_set.modification_data[index].get(),
+                        100 + entity.index()
+                    );
+                }
+            }
+
+            #[cfg(debug_assertions)]
+            sparse_set.groups.assert_invariants(sparse_set.len());
+        }
+
+        /// Takes entity 2, the first range's last component, out of it and moves the later ranges left.
+        fn shrink_first<T: Component>(sparse_set: &mut SparseSet<T>) {
+            sparse_set.groups.ranges[0].len = 2;
+            sparse_set.groups.ranges[0].trust = 2;
+
+            sparse_set.move_ranges_left(1);
+        }
+
+        /// Moves the later ranges right over entity 10, the first ungrouped component,
+        /// and appends it to the first range.
+        fn grow_first<T: Component>(sparse_set: &mut SparseSet<T>) {
+            sparse_set.move_ranges_right(1);
+
+            sparse_set.groups.ranges[0].len = 4;
+            sparse_set.groups.ranges[0].trust = 4;
+        }
+
+        fn int_value(component: &I32) -> u64 {
+            u64::try_from(component.0).unwrap()
+        }
+
+        /// Asserts that moving ranges left keeps each later range's logical order,
+        /// rotated or empty, and moves each of them one slot down.
+        #[test]
+        fn left() {
+            let mut sparse_set = ints();
+            let before = logical_order(&sparse_set);
+
+            shrink_first(&mut sparse_set);
+
+            assert_eq!(logical_order(&sparse_set)[1..], before[1..]);
+            assert_eq!(starts(&sparse_set), [0, 2, 4, 4, 8]);
+            assert_rows(&sparse_set, int_value);
+        }
+
+        /// Asserts that moving ranges left carries the component before them past all of them,
+        /// leaving it as the first ungrouped component.
+        #[test]
+        fn left_carried() {
+            let mut sparse_set = ints();
+
+            shrink_first(&mut sparse_set);
+
+            let grouped_end = sparse_set.groups.grouped_end();
+            assert_eq!(grouped_end, 9);
+            assert_eq!(sparse_set.dense[grouped_end], EntityId::new(2));
+        }
+
+        /// Asserts that moving ranges left leaves their trust alone, partial or full.
+        #[test]
+        fn left_trust() {
+            let mut sparse_set = ints();
+            sparse_set.groups.ranges[1].trust = 1;
+            sparse_set.groups.ranges[3].trust = 0;
+
+            shrink_first(&mut sparse_set);
+
+            assert_eq!(trusts(&sparse_set), [2, 1, 0, 0, 1]);
+        }
+
+        /// Asserts that moving ranges right keeps each later range's logical order,
+        /// rotated or empty, and moves each of them one slot up.
+        #[test]
+        fn right() {
+            let mut sparse_set = ints();
+            let before = logical_order(&sparse_set);
+
+            grow_first(&mut sparse_set);
+
+            assert_eq!(logical_order(&sparse_set)[1..], before[1..]);
+            assert_eq!(starts(&sparse_set), [0, 4, 6, 6, 10]);
+            assert_rows(&sparse_set, int_value);
+        }
+
+        /// Asserts that moving ranges right carries the component after them past all of them,
+        /// leaving it right before the first moved range.
+        #[test]
+        fn right_carried() {
+            let mut sparse_set = ints();
+
+            grow_first(&mut sparse_set);
+
+            assert_eq!(sparse_set.dense[3], EntityId::new(10));
+        }
+
+        /// Asserts that moving ranges right leaves their trust alone, partial or full.
+        #[test]
+        fn right_trust() {
+            let mut sparse_set = ints();
+            sparse_set.groups.ranges[1].trust = 1;
+            sparse_set.groups.ranges[3].trust = 0;
+
+            grow_first(&mut sparse_set);
+
+            assert_eq!(trusts(&sparse_set), [4, 1, 0, 0, 1]);
+        }
+
+        /// Asserts that moving only empty ranges moves their starts and nothing else.
+        #[test]
+        fn empty_ranges() {
+            let mut sparse_set = ints();
+            sparse_set.groups.ranges.truncate(3);
+            sparse_set.groups.ranges[1].len = 0;
+            sparse_set.groups.ranges[1].trust = 0;
+            sparse_set.groups.ranges[2].start = 3;
+            let dense = sparse_set.dense.clone();
+
+            sparse_set.move_ranges_right(1);
+            assert_eq!(starts(&sparse_set), [0, 4, 4]);
+            sparse_set.move_ranges_left(1);
+            assert_eq!(starts(&sparse_set), [0, 3, 3]);
+
+            assert_eq!(sparse_set.dense, dense);
+        }
+
+        /// Asserts that insertion and modification timestamps follow their components
+        /// in both directions.
+        #[test]
+        fn tracked() {
+            let mut sparse_set = storage(|index| TrackedI32(i32::try_from(index).unwrap()));
+            let value = |component: &TrackedI32| u64::try_from(component.0).unwrap();
+
+            shrink_first(&mut sparse_set);
+            assert_rows(&sparse_set, value);
+
+            // Entity 2 left the range, we put it back.
+            sparse_set.move_ranges_right(1);
+            sparse_set.groups.ranges[0].len = 3;
+            sparse_set.groups.ranges[0].trust = 3;
+            assert_rows(&sparse_set, value);
+        }
+
+        /// Asserts that moving ranges in both directions never drops a component,
+        /// and that dropping the storage then drops each of them once.
+        #[test]
+        fn drops() {
+            let drops = Arc::new(AtomicUsize::new(0));
+            let mut sparse_set = storage(|index| Counted(index, drops.clone()));
+
+            shrink_first(&mut sparse_set);
+            sparse_set.move_ranges_right(1);
+            sparse_set.groups.ranges[0].len = 3;
+            assert_rows(&sparse_set, |component| component.0);
+
+            assert_eq!(drops.load(AtomicOrdering::Relaxed), 0);
+            drop(sparse_set);
+            assert_eq!(drops.load(AtomicOrdering::Relaxed), 12);
+        }
     }
 }
