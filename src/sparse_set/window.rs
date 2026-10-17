@@ -34,7 +34,32 @@ pub struct FullRawWindow<'a, T, Track: Tracking> {
     _phantom: PhantomData<(&'a T, Track)>,
 }
 
-unsafe impl<T: Send + Component, Track: Tracking> Send for FullRawWindow<'_, T, Track> {}
+// SAFE: A window only gives shared access to its storage's components, `&T` is `Send` when `T`
+// is `Sync`. The other thread can only read the storage's entities, sparse pages and timestamps,
+// which stay borrowed and unmodified for 'a.
+unsafe impl<T: Sync + Component, Track: Tracking> Send for FullRawWindow<'_, T, Track> {}
+
+/// Asserts that an iterator over `!Sync` components isn't `Send`, the view could still reach the
+/// same components from this thread.
+///
+/// ```compile_fail
+/// use shipyard::{borrow::NonSync, track, Component, IntoIter, View, World};
+/// use std::cell::Cell;
+///
+/// struct Counter(Cell<u32>);
+/// impl Component for Counter {
+///     type Tracking = track::Untracked;
+/// }
+///
+/// fn assert_send<T: Send>(_: &T) {}
+///
+/// let world = World::new();
+/// world.run(|counters: NonSync<View<Counter>>| {
+///     assert_send(&(&*counters).iter());
+/// });
+/// ```
+#[cfg(all(doctest, feature = "thread_local"))]
+struct NonSyncIterNotSend;
 
 impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
     #[inline]
@@ -286,6 +311,8 @@ pub struct FullRawWindowMut<'a, T, Track: Tracking> {
     _phantom: PhantomData<(&'a mut T, Track)>,
 }
 
+// SAFE: A window gives exclusive access to the components of the storage it borrows mutably for
+// 'a, sending it moves that access to the other thread. `&mut T` is `Send` when `T` is `Send`.
 unsafe impl<T: Send + Component, Track: Tracking> Send for FullRawWindowMut<'_, T, Track> {}
 
 impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
