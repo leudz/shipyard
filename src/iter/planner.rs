@@ -539,7 +539,6 @@ fn ordinary_captain(children: &[Child]) -> usize {
 fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
     let local: Vec<GroupedCandidate> = cover_sets(children)
         .into_iter()
-        .filter(|set| is_placeable(children, set))
         .map(|set| GroupedCandidate::new(children, set))
         .collect();
     let mut local = local.into_iter().peekable();
@@ -565,23 +564,6 @@ fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
     }
 
     alternatives
-}
-
-/// Returns `true` when the walks of `set` can be selected.
-///
-/// Placement handles several ranges and rotated rings, but selecting them isn't enabled yet.
-/// So each required member has to hold a single range, unrotated. Other sets stay ordinary.
-fn is_placeable(children: &[Child], set: &CoverSet) -> bool {
-    mask_children(set.required).all(|child| {
-        let window = children[child]
-            .window()
-            .expect("required members are window children");
-        let [range] = &window.ranges[..] else {
-            return false;
-        };
-
-        range.ring.len == 0 || range.ring.wrap_offset() == 0
-    })
 }
 
 /// Members a grouped alternative of a `Mixed` has to cover, and the ranges it can walk.
@@ -768,7 +750,7 @@ impl Alternative {
     /// read `lookups` components as sailors.
     ///
     /// Returns `None` when the estimate doesn't fit in a `u64`.
-    pub(crate) fn local(candidate: GroupedCandidate, lookups: usize) -> Option<Alternative> {
+    fn local(candidate: GroupedCandidate, lookups: usize) -> Option<Alternative> {
         let mut candidates = 0usize;
         let mut work = 0u64;
 
@@ -824,7 +806,7 @@ impl Alternative {
 
 impl GroupedCandidate {
     /// Returns the walks covering `set`'s required members, for a `Mixed` with these `children`.
-    pub(crate) fn new(children: &[Child], set: CoverSet) -> GroupedCandidate {
+    fn new(children: &[Child], set: CoverSet) -> GroupedCandidate {
         // Required members walk their unevaluated regions, any member of a range can drive part of it.
         let member_mask = set
             .ranges
@@ -2172,33 +2154,6 @@ mod grouping_cover_sets {
 
         // Each walk reads its two members and looks the two others up.
         assert_eq!(works, [40 * 4, 10 * 4]);
-    }
-
-    /// Asserts that walks are only placed for required members holding a single unrotated range,
-    /// a whole turn not counting as a rotation.
-    #[test]
-    fn placeable() {
-        let (ab, ac) = (group(&[A, B]), group(&[A, C]));
-        let with_shift = |shift| {
-            let mut a = window_with(A, &[(&ab, 3, 3)], 0);
-            if let NodeMetadata::Window(window) = &mut a.metadata {
-                window.ranges[0].ring.shift = shift;
-            }
-
-            [a, window_with(B, &[(&ab, 3, 3)], 0)]
-        };
-        let is_first_placeable =
-            |children: &[Child]| is_placeable(children, &cover_sets(children)[0]);
-
-        assert!(is_first_placeable(&with_shift(0)));
-        assert!(is_first_placeable(&with_shift(-3)));
-        assert!(!is_first_placeable(&with_shift(1)));
-
-        let several = [
-            window_with(A, &[(&ab, 2, 2), (&ac, 0, 0)], 0),
-            window_with(B, &[(&ab, 2, 2)], 0),
-        ];
-        assert!(!is_first_placeable(&several));
     }
 
     /// Asserts that `pieces` splits only where the captains change, ignores bounds outside

@@ -47,7 +47,7 @@ type PairIter<'a> = Shiper<
 
 /// Builds the iterator walking the grouped alternative `query`'s constructor reported,
 /// whether or not it's cheaper than the ordinary walk.
-fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
+pub(super) fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
     let (mut mixed, _, entities) = query;
     let NodeMetadata::Mixed(selection) = entities.metadata else {
         panic!("the query has a grouped alternative");
@@ -65,11 +65,11 @@ fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
 #[derive(Debug, PartialEq)]
 pub(super) struct Segment {
     /// Query child whose storage holds the walked entities, and their indices in it.
-    walks: (usize, Range<usize>),
-    captain_mask: u32,
+    pub(super) walks: (usize, Range<usize>),
+    pub(super) captain_mask: u32,
     /// Segment start of each child, `None` for sailors.
-    starts: Vec<Option<usize>>,
-    coverage: Vec<Coverage>,
+    pub(super) starts: Vec<Option<usize>>,
+    pub(super) coverage: Vec<Coverage>,
 }
 
 pub(super) fn segment(

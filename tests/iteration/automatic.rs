@@ -255,6 +255,196 @@ fn projection() {
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
 }
 
+/// Returns `ids` with their A, B and C values, looked up one by one and sorted by id.
+fn triple_values(world: &World, ids: &[EntityId]) -> Vec<(EntityId, (u32, u32, u32))> {
+    let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+
+    sorted(
+        ids.iter()
+            .map(|&id| {
+                let values = (
+                    a.get(id).unwrap().0,
+                    b.get(id).unwrap().0,
+                    c.get(id).unwrap().0,
+                );
+
+                (id, values)
+            })
+            .collect(),
+    )
+}
+
+/// Runs `(&a, &b, &c)` in every way and returns its sorted items.
+fn triple_items(world: &World) -> Vec<(EntityId, (u32, u32, u32))> {
+    let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+
+    sorted(every_way!((&a, &b, &c).iter(), |(a, b, c): (
+        &A,
+        &B,
+        &C
+    )| (a.0, b.0, c.0)))
+}
+
+/// Entities of `overlap_world`.
+struct Overlap {
+    world: World,
+    /// Entities owning A and B.
+    pairs: Vec<EntityId>,
+    /// Entities owning A, B and C.
+    triples: Vec<EntityId>,
+}
+
+/// AB and AC groups holding 8 AB, 8 AC and 4 ABC entities, along with 3 B-only ones.
+/// Then two AB entities gain a C and an AC entity gains a B.
+///
+/// After `regroup`, the 3 entities gaining a component are promoted into ABC, moving the
+/// ranges around. Otherwise their new component is left unevaluated.\
+/// Entity `i` owns `A(i)`, `B(100 + i)` and `C(200 + i)`, among its components.
+fn overlap_world(regroup: bool) -> Overlap {
+    let mut world = World::new();
+    let ab: Vec<_> = (0..8)
+        .map(|i| world.add_entity((A(i), B(100 + i))))
+        .collect();
+    let ac: Vec<_> = (8..16)
+        .map(|i| world.add_entity((A(i), C(200 + i))))
+        .collect();
+    let abc: Vec<_> = (16..20)
+        .map(|i| world.add_entity((A(i), B(100 + i), C(200 + i))))
+        .collect();
+    for i in 20..23 {
+        world.add_entity(B(100 + i));
+    }
+    world.group::<(A, B)>().group::<(A, C)>();
+
+    world.add_component(ab[0], C(200));
+    world.add_component(ab[1], C(201));
+    world.add_component(ac[0], B(108));
+    if regroup {
+        world.regroup();
+    }
+
+    let pairs = [&ab[..], &ac[..1], &abc[..]].concat();
+    let triples = [&ab[..2], &ac[..1], &abc[..]].concat();
+
+    Overlap {
+        world,
+        pairs,
+        triples,
+    }
+}
+
+/// Asserts that with AB and AC groups, pair and triple queries yield every match in every way,
+/// whether the promoted entities were regrouped yet or not.
+#[test]
+fn overlapping() {
+    for regroup in [false, true] {
+        let overlap = overlap_world(regroup);
+
+        assert_eq!(
+            pair_items(&overlap.world),
+            pair_values(&overlap.world, &overlap.pairs),
+            "regroup: {regroup}"
+        );
+        assert_eq!(
+            triple_items(&overlap.world),
+            triple_values(&overlap.world, &overlap.triples),
+            "regroup: {regroup}"
+        );
+    }
+}
+
+/// Asserts that after regroup, an AB query walks AB and the ABC union: 13 candidates
+/// in several segments, where B captaining alone would count 16.
+#[test]
+fn overlapping_hint() {
+    let overlap = overlap_world(true);
+    let (a, b) = overlap.world.borrow::<(View<A>, View<B>)>().unwrap();
+
+    assert_eq!((&a, &b).iter().size_hint(), (0, Some(13)));
+}
+
+/// Asserts that after regroup, an ABC query walks the ABC union alone: 7 candidates,
+/// where C captaining alone would count 14.
+#[test]
+fn union_hint() {
+    let overlap = overlap_world(true);
+    let (a, b, c) = overlap
+        .world
+        .borrow::<(View<A>, View<B>, View<C>)>()
+        .unwrap();
+
+    assert_eq!((&a, &b, &c).iter().size_hint().1, Some(7));
+}
+
+/// Asserts that mutable outputs over AB and ABC, held all at once, each write their own
+/// entity's components exactly once.
+#[test]
+fn overlapping_held_mut() {
+    let overlap = overlap_world(true);
+    let expected = pair_values(&overlap.world, &overlap.pairs);
+
+    let (mut a, mut b) = overlap.world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
+    let held: Vec<(&mut A, &mut B)> = (&mut a, &mut b).iter().collect();
+    assert_eq!(held.len(), expected.len());
+    for (a, b) in held {
+        a.0 += 1000;
+        b.0 += 2000;
+    }
+    drop((a, b));
+
+    let written: Vec<_> = expected
+        .iter()
+        .map(|&(id, (a, b))| (id, (a + 1000, b + 2000)))
+        .collect();
+    assert_eq!(pair_values(&overlap.world, &overlap.pairs), written);
+}
+
+/// Asserts that with AB and ACD groups, an ABC query yields the entities of their ABCD union
+/// in every way. It walks AB and ABCD: 11 candidates, where B or C alone would count 13.
+#[test]
+fn extra_captain() {
+    let mut world = World::new();
+    add_ab(&mut world, 0, 6);
+    for i in 0..6 {
+        world.add_entity((A(i), C(i), D(i)));
+    }
+    let triples: Vec<_> = (0..5)
+        .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
+        .collect();
+    for i in 0..2 {
+        world.add_entity(B(i));
+        world.add_entity(C(i));
+    }
+    world.group::<(A, B)>().group::<(A, C, D)>();
+
+    assert_eq!(triple_items(&world), triple_values(&world, &triples));
+
+    let (a, b, c) = world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+    assert_eq!((&a, &b, &c).iter().size_hint(), (0, Some(11)));
+}
+
+/// Asserts that walks over AB and ABC yield the same items in parallel, each entity once.
+/// They span several segments, so the parallel iterator reports no exact length.
+#[cfg(feature = "parallel")]
+#[test]
+fn overlapping_parallel() {
+    use rayon::prelude::*;
+
+    let overlap = overlap_world(true);
+    let (a, b) = overlap.world.borrow::<(View<A>, View<B>)>().unwrap();
+    assert_eq!((&a, &b).par_iter().opt_len(), None);
+
+    let parallel: Vec<_> = (&a, &b)
+        .par_iter()
+        .with_id()
+        .map(|(id, (a, b))| (id, (a.0, b.0)))
+        .collect();
+    assert_eq!(
+        sorted(parallel),
+        pair_values(&overlap.world, &overlap.pairs)
+    );
+}
+
 /// Asserts that an empty grouped pair yields nothing.
 #[test]
 fn empty() {

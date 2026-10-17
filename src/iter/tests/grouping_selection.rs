@@ -43,6 +43,12 @@ impl Component for D {
 }
 
 #[derive(Debug, PartialEq)]
+struct E(u32);
+impl Component for E {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
 struct Ins(u32);
 impl Component for Ins {
     type Tracking = track::Insertion;
@@ -153,8 +159,7 @@ fn window_metadata() {
     );
 }
 
-/// Asserts that a window over a storage in two overlapping groups reports each of its ranges,
-/// while selection stays ordinary until grouped walks handle several ranges.
+/// Asserts that a window over a storage in two overlapping groups reports each of its ranges.
 #[test]
 fn window_metadata_overlapping() {
     let mut world = World::new();
@@ -163,7 +168,7 @@ fn window_metadata_overlapping() {
     world.add_entity((A(2), B(2), C(2)));
     world.group::<(A, B)>().group::<(A, C)>();
 
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let a = world.borrow::<View<'_, A>>().unwrap();
     let (_, _, entities) = (&a).into_shiperator();
 
     let NodeMetadata::Window(window) = &entities.metadata else {
@@ -174,9 +179,6 @@ fn window_metadata_overlapping() {
     for (range, storage_range) in window.ranges.iter().zip(&a.groups.ranges) {
         assert!(Arc::ptr_eq(&range.group, &storage_range.group));
     }
-
-    let (_, _, entities) = (&a, &b).into_shiperator();
-    assert_ungrouped(&entities);
 }
 
 /// Asserts that a query over storages without any group has no grouped alternative
@@ -420,6 +422,209 @@ fn projection() {
 
     assert_ungrouped(&metadata);
     assert_eq!((&a, &b).iter().count(), 5);
+}
+
+/// AB and AC groups after regroup promoted grouped entities into ABC:
+/// - AB holds 6 entities, two of its first 8 gained a C
+/// - AC holds 7 entities, one of its first 8 gained a B
+/// - ABC holds 7 entities, the 4 owning A, B and C from the start and the 3 promoted
+/// - 3 entities own a B alone
+fn overlap_world() -> World {
+    let mut world = World::new();
+    let ab: Vec<EntityId> = (0..8).map(|i| world.add_entity((A(i), B(i)))).collect();
+    let ac: Vec<EntityId> = (0..8).map(|i| world.add_entity((A(i), C(i)))).collect();
+    for i in 0..4 {
+        world.add_entity((A(i), B(i), C(i)));
+    }
+    for i in 0..3 {
+        world.add_entity(B(i));
+    }
+    world.group::<(A, B)>().group::<(A, C)>();
+
+    world.add_component(ab[0], C(0));
+    world.add_component(ab[1], C(1));
+    world.add_component(ac[0], B(0));
+    world.regroup();
+
+    world
+}
+
+/// Returns the length of each range the cheapest alternative of `entities` walks, by group size.
+fn cover_ranges(entities: &RawEntityIdAccess) -> Vec<usize> {
+    cheapest(entities)
+        .group()
+        .ranges
+        .iter()
+        .map(|range| range.group.len())
+        .collect()
+}
+
+/// Asserts that an `(A, B)` query over AB and AC wins with an aligned walk over AB then one
+/// over the ABC union, skipping AC.
+#[test]
+fn overlapping() {
+    let world = overlap_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let (_, _, entities) = (&a, &b).into_shiperator();
+
+    assert_grouped_wins(&entities, 0b11);
+    assert_eq!(cover_ranges(&entities), [2, 3]);
+    assert_eq!(
+        walks(&entities),
+        [
+            aligned_walk(6, 0b11),
+            Walk::Aligned {
+                range: 1,
+                start: 0,
+                len: 7,
+                captains: 0b11
+            }
+        ]
+    );
+}
+
+/// Asserts that an `(A, B, C)` query over AB and AC covers their ABC union alone:
+/// matches can't be in AB or AC once evaluated.
+#[test]
+fn union_exclusion() {
+    let world = overlap_world();
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let (_, _, entities) = (&a, &b, &c).into_shiperator();
+
+    assert_grouped_wins(&entities, 0b111);
+    assert_eq!(cover_ranges(&entities), [3]);
+    assert_eq!(walks(&entities), [aligned_walk(7, 0b111)]);
+}
+
+/// Asserts that a small ordinary captain beats walks over several ranges.
+#[test]
+fn overlap_small_captain() {
+    let mut world = overlap_world();
+    let ab = world.add_entity((A(100), B(100), D(100)));
+    world.regroup();
+    world.add_entity(D(101));
+
+    let (a, b, d) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, D>)>()
+        .unwrap();
+    let (mixed, _, entities) = (&a, &b, &d).into_shiperator();
+
+    assert_ordinary_wins(&entities, 2);
+    assert_eq!(mixed.captain_mask, 0b100);
+    assert_eq!((&a, &b, &d).iter().ids().collect::<Vec<_>>(), [ab]);
+}
+
+/// Asserts that AB and AC, with an ABC entity added after the last regroup, give an
+/// `(A, B, C)` query an alternative made of unevaluated walks alone: no ABC union exists yet.
+#[test]
+fn absent_union() {
+    let mut world = World::new();
+    for i in 0..3 {
+        world.add_entity((A(i), B(i)));
+        world.add_entity((A(i), C(i)));
+    }
+    world.group::<(A, B)>().group::<(A, C)>();
+    world.add_entity((A(10), B(10), C(10)));
+
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let (_, _, entities) = (&a, &b, &c).into_shiperator();
+
+    // 3 candidates each looking 2 components up cost 12, C captaining alone 16.
+    assert_grouped_wins(&entities, 0b111);
+    assert!(cover_ranges(&entities).is_empty());
+    assert_eq!(
+        walks(&entities),
+        [
+            Walk::Unevaluated {
+                owner: 0,
+                start: 6,
+                len: 1
+            },
+            Walk::Unevaluated {
+                owner: 1,
+                start: 3,
+                len: 1
+            },
+            Walk::Unevaluated {
+                owner: 2,
+                start: 3,
+                len: 1
+            },
+        ]
+    );
+}
+
+/// AB and ACD groups holding 6 AB entities, 6 ACD entities and 5 entities owning all four
+/// components in their ABCD union.
+fn extra_world() -> World {
+    let mut world = World::new();
+    for i in 0..6 {
+        world.add_entity((A(i), B(i)));
+        world.add_entity((A(i), C(i), D(i)));
+    }
+    for i in 0..5 {
+        world.add_entity((A(i), B(i), C(i), D(i)));
+    }
+    world.group::<(A, B)>().group::<(A, C, D)>();
+
+    world
+}
+
+/// Asserts that an `(A, B, C)` query over AB and ACD covers AB, walking AB and ABCD without
+/// borrowing D. C reads directly in ABCD, it's looked up in AB.
+#[test]
+fn extra_captain() {
+    let world = extra_world();
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let (_, _, entities) = (&a, &b, &c).into_shiperator();
+
+    assert_grouped_wins(&entities, 0b011);
+    assert_eq!(cover_ranges(&entities), [2, 4]);
+    assert_eq!(
+        walks(&entities),
+        [
+            aligned_walk(6, 0b011),
+            Walk::Aligned {
+                range: 1,
+                start: 0,
+                len: 5,
+                captains: 0b111
+            }
+        ]
+    );
+    // 6 candidates looking C up and 5 looking nothing up, against 11 looking 2 components up.
+    assert_eq!(cheapest(&entities).work, 28);
+}
+
+/// Asserts that a set of overlapping groups competes with a disjoint group: with AB and AC
+/// against a smaller DE, an `(A, B, D, E)` query has both alternatives and DE wins.
+#[test]
+fn overlap_disjoint() {
+    let mut world = overlap_world();
+    for i in 0..3 {
+        world.add_entity((A(i), B(i), D(i), E(i)));
+    }
+    world.group::<(D, E)>();
+
+    let (a, b, d, e) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, D>, View<'_, E>)>()
+        .unwrap();
+    let (_, _, entities) = (&a, &b, &d, &e).into_shiperator();
+
+    let required: Vec<u32> = selection(&entities)
+        .unwrap()
+        .alternatives
+        .iter()
+        .map(|alternative| alternative.group().required)
+        .collect();
+    assert_eq!(required, [0b0011, 0b1100]);
+    assert_grouped_wins(&entities, 0b1100);
 }
 
 /// Asserts that queries containing `Not`, `Optional`, `Or` or a tracking filter keep

@@ -1,17 +1,15 @@
 //! Segments of grouped walks over rotated rings and several ranges per storage.
 //!
-//! Selection doesn't advertise these alternatives yet, so the walks are built straight from the
-//! cover set of the query's windows and installed with `grouped_entities`.\
+//! Queries are built through their real constructors, then their grouped alternative is
+//! installed whether or not it's the cheaper walk.\
 //! Fixtures place components in a chosen physical order then describe it with group metadata,
 //! each one documents why its metadata is valid.\
 //! Expected matches come from looking each entity up, not from the walks under test.
 
-use super::grouping_regions::{assert_skipped, record, segment, segments};
+use super::grouping_regions::{assert_skipped, grouped, record, segment, segments};
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::iter::planner::regions::grouped_entities;
-use crate::iter::planner::{cover_sets, Alternative, Child, GroupedCandidate};
-use crate::iter::{IntoShiperator, Mixed, RawEntityIdAccess, Shiper, Shiperator};
+use crate::iter::{IntoShiperator, Mixed, Shiper};
 use crate::sparse_set::{FullRawWindow, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
@@ -61,44 +59,14 @@ type TripleIter<'a> = Shiper<
     )>,
 >;
 
-/// Builds the iterator walking the first cover set of `mixed`'s children, whether or not
-/// selection advertises it.
-///
-/// `windows` are the entities each child's own constructor returned, in child order.
-fn placed<S: Shiperator>(mut mixed: S, windows: Vec<RawEntityIdAccess>) -> Shiper<S> {
-    let children: Vec<Child> = windows
-        .into_iter()
-        .map(|mut entities| Child::new(true, true, 0, &mut entities))
-        .collect();
-    let set = cover_sets(&children).remove(0);
-    let candidate = GroupedCandidate::new(&children, set);
-    let alternative = Alternative::local(candidate, children.len()).unwrap();
-
-    let entities = grouped_entities(&mut mixed, &alternative);
-
-    // SAFE: `grouped_entities` installed its first segment on `mixed` and returns that
-    // segment's entities, with follow-ups whose rows it built for `mixed`'s layout.
-    unsafe { Shiper::new(mixed, entities) }
-}
-
-/// Builds the walks of `(&a, &b)` from its cover set.
+/// Builds the grouped walks of `(&a, &b)`.
 fn pair<'a>(a: &'a View<'_, A>, b: &'a View<'_, B>) -> PairIter<'a> {
-    placed(
-        (a, b).into_shiperator().0,
-        Vec::from([a.into_shiperator().2, b.into_shiperator().2]),
-    )
+    grouped((a, b).into_shiperator())
 }
 
-/// Builds the walks of `(&a, &b, &c)` from its cover set.
+/// Builds the grouped walks of `(&a, &b, &c)`.
 fn triple<'a>(a: &'a View<'_, A>, b: &'a View<'_, B>, c: &'a View<'_, C>) -> TripleIter<'a> {
-    placed(
-        (a, b, c).into_shiperator().0,
-        Vec::from([
-            a.into_shiperator().2,
-            b.into_shiperator().2,
-            c.into_shiperator().2,
-        ]),
-    )
+    grouped((a, b, c).into_shiperator())
 }
 
 /// Overwrites every range of a storage, in physical order, with `(start, len, shift, trust)`,

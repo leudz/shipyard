@@ -5,14 +5,17 @@
 //! We check which walk won and the segments it installed, then compare the items with
 //! the entities we know own every component.
 
-use super::grouping_regions::{assert_skipped, record, segment, segments};
+use super::grouping_regions::{assert_skipped, record, segment, segments, Segment};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::iter::mixed::BulkStrategy;
 use crate::iter::{IntoIter, Shiper, Shiperator};
+use crate::sparse_set::{GroupRange, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
 use crate::Get;
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -286,6 +289,253 @@ fn projection() {
 
     assert!(iter.schedule.is_none());
     assert_eq!(next_ids(iter), sorted(pairs));
+}
+
+/// AB and AC groups after regroup promoted grouped entities into ABC, which rotates rings:
+/// - AB holds 6 entities, two of its first 8 gained a C
+/// - AC holds 7 entities, one of its first 8 gained a B
+/// - ABC holds 7 entities, the 4 owning A, B and C from the start and the 3 promoted
+/// - 3 entities own a B alone
+///
+/// Returns every entity.
+fn overlap_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+    let ab = add_ab(&mut world, 8);
+    let ac: Vec<EntityId> = (0..8).map(|i| world.add_entity((A(i), C(i)))).collect();
+    let abc: Vec<EntityId> = (0..4)
+        .map(|i| world.add_entity((A(i), B(i), C(i))))
+        .collect();
+    let b_only: Vec<EntityId> = (0..3).map(|i| world.add_entity(B(i))).collect();
+    world.group::<(A, B)>().group::<(A, C)>();
+
+    world.add_component(ab[0], C(0));
+    world.add_component(ab[1], C(1));
+    world.add_component(ac[0], B(0));
+    world.regroup();
+
+    let all = [ab, ac, abc, b_only].concat();
+
+    (world, all)
+}
+
+/// AB and ACD groups holding 6 AB entities, 6 ACD entities and 5 entities owning all four
+/// components in their ABCD union.
+///
+/// Returns every entity.
+fn extra_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new();
+    let mut all = add_ab(&mut world, 6);
+    all.extend((0..6).map(|i| world.add_entity((A(i), C(i), D(i)))));
+    all.extend((0..5).map(|i| world.add_entity((A(i), B(i), C(i), D(i)))));
+    world.group::<(A, B)>().group::<(A, C, D)>();
+
+    (world, all)
+}
+
+/// Returns the sorted entities of `all` `is_match` accepts.
+fn matching(all: &[EntityId], is_match: impl Fn(EntityId) -> bool) -> Vec<EntityId> {
+    sorted(all.iter().copied().filter(|&id| is_match(id)).collect())
+}
+
+/// Returns every index of child 0's storage `segments` walk, sorted.
+fn walked_indices(segments: &[Segment]) -> Vec<usize> {
+    let mut indices: Vec<usize> = segments
+        .iter()
+        .flat_map(|segment| {
+            let (child, range) = segment.walks.clone();
+            assert_eq!(child, 0);
+
+            range
+        })
+        .collect();
+    indices.sort_unstable();
+
+    indices
+}
+
+/// Returns every index of the ranges of `groups` whose group every one of `others` holds too,
+/// sorted.
+fn shared_indices(groups: &Groups, others: &[&Groups]) -> Vec<usize> {
+    let is_shared = |range: &&GroupRange| {
+        others.iter().all(|other| {
+            other
+                .ranges
+                .iter()
+                .any(|other_range| Arc::ptr_eq(&other_range.group, &range.group))
+        })
+    };
+
+    // Ranges are in physical order, so are their indices.
+    groups
+        .ranges
+        .iter()
+        .filter(is_shared)
+        .flat_map(|range| range.start..range.end())
+        .collect()
+}
+
+/// Asserts that an `(A, B)` query over AB and AC installs aligned walks over A's AB and ABC
+/// ranges, cut where regroup left a wrap point, and yields every pair once.
+#[test]
+fn overlapping_pairs() {
+    let (world, all) = overlap_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let iter = (&a, &b).iter();
+    let segments = segments(&iter, &[&a.dense, &b.dense]);
+
+    // AB and ABC are fully trusted and nothing is unevaluated, so 2 walks without coverage.
+    // Any other segment comes from a cut at a wrap point.
+    assert!(segments.len() > 2);
+    for segment in &segments {
+        assert_eq!(segment.captain_mask, 0b11);
+        assert!(segment.coverage.is_empty());
+    }
+    assert_eq!(
+        walked_indices(&segments),
+        shared_indices(&a.groups, &[&b.groups])
+    );
+
+    // Several segments aren't an exact traversal. B captaining alone would count 16.
+    assert_eq!(iter.size_hint(), (0, Some(13)));
+
+    let expected = matching(&all, |id| a.contains(id) && b.contains(id));
+    assert_eq!(next_ids((&a, &b).iter()), expected);
+    assert_eq!(fold_ids((&a, &b).iter()), expected);
+}
+
+/// Asserts that an `(A, B, C)` query over AB and AC installs walks over the ABC union alone,
+/// never walking nor covering A's AB and AC ranges.
+#[test]
+fn union_triples() {
+    let (world, all) = overlap_world();
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let iter = (&a, &b, &c).iter();
+    let segments = segments(&iter, &[&a.dense, &b.dense, &c.dense]);
+
+    for segment in &segments {
+        assert_eq!(segment.captain_mask, 0b111);
+        assert!(segment.coverage.is_empty());
+    }
+    assert_eq!(
+        walked_indices(&segments),
+        shared_indices(&a.groups, &[&b.groups, &c.groups])
+    );
+    for range in &a.groups.ranges {
+        if range.group.len() == 2 {
+            assert_skipped(&segments, 0, range.start..range.end());
+        }
+    }
+
+    let expected = matching(&all, |id| {
+        a.contains(id) && b.contains(id) && c.contains(id)
+    });
+    assert_eq!(next_ids((&a, &b, &c).iter()), expected);
+    assert_eq!(fold_ids((&a, &b, &c).iter()), expected);
+}
+
+/// Asserts that with AB and AC, an ABC entity added after the last regroup is found by the
+/// unevaluated walks alone, before any ABC union exists: A's walk yields it, B's and C's
+/// reject it thanks to the records of the walks before them.
+#[test]
+fn absent_union() {
+    let mut world = World::new();
+    let mut all = Vec::new();
+    for i in 0..3 {
+        all.push(world.add_entity((A(i), B(i))));
+        all.push(world.add_entity((A(i), C(i))));
+    }
+    world.group::<(A, B)>().group::<(A, C)>();
+    let late = world.add_entity((A(10), B(10), C(10)));
+    all.push(late);
+
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let iter = (&a, &b, &c).iter();
+
+    assert_eq!(
+        segments(&iter, &[&a.dense, &b.dense, &c.dense]),
+        [
+            segment((0, 6..7), 0b001, &[Some(6), None, None], &[]),
+            segment((1, 3..4), 0b010, &[None, Some(3), None], &[record(0, 6, 7)]),
+            segment(
+                (2, 3..4),
+                0b100,
+                &[None, None, Some(3)],
+                &[record(0, 6, 7), record(1, 3, 4)]
+            ),
+        ]
+    );
+    assert_eq!(next_ids(iter), [late]);
+    assert_eq!(fold_ids((&a, &b, &c).iter()), [late]);
+}
+
+/// Asserts that with AB and ACD, an `(A, B, C)` query installs segments whose masks reach
+/// the bulk strategy: ABCD segments have every child as captain and fold without lookups,
+/// AB segments keep looking C up.
+#[test]
+fn extra_captain() {
+    let (world, all) = extra_world();
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let mut iter = (&a, &b, &c).iter();
+    let segments = segments(&iter, &[&a.dense, &b.dense, &c.dense]);
+
+    let mut strategies = Vec::new();
+    loop {
+        strategies.push(iter.shiperator.bulk_strategy());
+        if !iter.enter_next_segment() {
+            break;
+        }
+    }
+
+    // A's only range shared with B and C is ABCD's.
+    let abcd = shared_indices(&a.groups, &[&b.groups, &c.groups]);
+    let mut kinds = Vec::new();
+    for (segment, strategy) in segments.iter().zip(strategies) {
+        let in_abcd = abcd.contains(&segment.walks.1.start);
+        kinds.push(in_abcd);
+
+        if in_abcd {
+            assert_eq!(
+                (segment.captain_mask, strategy),
+                (0b111, BulkStrategy::Aligned)
+            );
+        } else {
+            assert_eq!(
+                (segment.captain_mask, strategy),
+                (0b011, BulkStrategy::Partial)
+            );
+        }
+    }
+    assert!(kinds.contains(&true) && kinds.contains(&false));
+
+    let expected = matching(&all, |id| {
+        a.contains(id) && b.contains(id) && c.contains(id)
+    });
+    assert_eq!(expected.len(), 5);
+    assert_eq!(next_ids((&a, &b, &c).iter()), expected);
+    assert_eq!(fold_ids((&a, &b, &c).iter()), expected);
+}
+
+/// Asserts that a single D is a cheaper captain than walks over AB and ABC:
+/// the ordinary walk is installed, without plan.
+#[test]
+fn overlap_small_captain() {
+    let (mut world, _) = overlap_world();
+    let lone = world.add_entity((A(100), B(100), D(100)));
+
+    let (a, b, d) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, D>)>()
+        .unwrap();
+    let iter = (&a, &b, &d).iter();
+
+    assert_eq!(iter.shiperator.captain_mask, 0b100);
+    assert!(iter.schedule.is_none());
+    assert_eq!(next_ids(iter), [lone]);
 }
 
 /// Asserts that entities added after a regroup are installed as follow-ups: A's unevaluated
