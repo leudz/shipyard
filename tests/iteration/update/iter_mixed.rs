@@ -12,6 +12,147 @@ impl Component for I16 {
     type Tracking = track::Untracked;
 }
 
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+struct M32(u32);
+impl Component for M32 {
+    type Tracking = track::Modification;
+}
+
+/// Asserts that an insertion-only combined filter joins the same values whether it drives or is looked up.
+#[test]
+fn combined_join_paths() {
+    let mut captain_world = World::new();
+    captain_world.track_insertion::<U32>();
+    captain_world.add_entity((U32(1), I16(1)));
+    captain_world
+        .borrow::<ViewMut<U32, track::Insertion>>()
+        .unwrap()
+        .clear_all_inserted_and_modified();
+    captain_world.add_entity((U32(2), I16(2)));
+    for value in 10..20 {
+        captain_world.add_entity((I16(value),));
+    }
+
+    let (values, markers) = captain_world
+        .borrow::<(View<U32, track::Insertion>, View<I16>)>()
+        .unwrap();
+    assert_eq!(
+        values
+            .inserted_or_modified()
+            .iter()
+            .map(|value| value.0)
+            .collect::<Vec<_>>(),
+        vec![2]
+    );
+    assert_eq!(
+        (!values.inserted_or_modified())
+            .iter()
+            .map(|value| value.0)
+            .collect::<Vec<_>>(),
+        vec![1]
+    );
+    assert_eq!(
+        (values.inserted_or_modified(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(2, 2)]
+    );
+    assert_eq!(
+        (!values.inserted_or_modified(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(1, 1)]
+    );
+
+    let mut sailor_world = World::new();
+    sailor_world.track_insertion::<U32>();
+    sailor_world.add_entity((U32(1), I16(1)));
+    sailor_world
+        .borrow::<ViewMut<U32, track::Insertion>>()
+        .unwrap()
+        .clear_all_inserted_and_modified();
+    for value in 10..20 {
+        sailor_world.add_entity((U32(value),));
+    }
+    sailor_world.add_entity((U32(2), I16(2)));
+
+    let (mut values, markers) = sailor_world
+        .borrow::<(ViewMut<U32, track::Insertion>, View<I16>)>()
+        .unwrap();
+    assert_eq!(
+        (values.inserted_or_modified(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(2, 2)]
+    );
+    assert_eq!(
+        (!values.inserted_or_modified(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(1, 1)]
+    );
+    assert_eq!(
+        (values.inserted_or_modified_mut(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(2, 2)]
+    );
+    assert_eq!(
+        (!values.inserted_or_modified_mut(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(1, 1)]
+    );
+}
+
+/// Asserts that a modification-only combined filter joins and negates without insertion timestamps.
+#[test]
+fn combined_modification_join() {
+    let mut world = World::new();
+    world.add_entity((M32(1), I16(1)));
+    world.add_entity((M32(2), I16(2)));
+    {
+        let mut values = world.borrow::<ViewMut<M32>>().unwrap();
+        (&mut values).iter().nth(1).unwrap().0 += 10;
+    }
+
+    let (mut values, markers) = world.borrow::<(ViewMut<M32>, View<I16>)>().unwrap();
+    assert_eq!(
+        (values.inserted_or_modified(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(12, 2)]
+    );
+    assert_eq!(
+        (!values.inserted_or_modified(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(1, 1)]
+    );
+    assert_eq!(
+        (values.inserted_or_modified_mut(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(12, 2)]
+    );
+    assert_eq!(
+        (!values.inserted_or_modified_mut(), &markers)
+            .iter()
+            .map(|(value, marker)| (value.0, marker.0))
+            .collect::<Vec<_>>(),
+        vec![(1, 1)]
+    );
+}
+
 #[test]
 fn basic() {
     let mut world = World::new();

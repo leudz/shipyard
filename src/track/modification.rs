@@ -3,7 +3,9 @@ use crate::entity_id::EntityId;
 use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
 use crate::track::Modification;
-use crate::tracking::{ModificationTracking, Tracking, TrackingTimestamp};
+use crate::tracking::{
+    InsertionOrModificationTracking, ModificationTracking, Tracking, TrackingTimestamp,
+};
 
 impl Sealed for Modification {}
 
@@ -29,3 +31,4 @@ impl Tracking for Modification {
 }
 
 impl ModificationTracking for Modification {}
+impl InsertionOrModificationTracking for Modification {}

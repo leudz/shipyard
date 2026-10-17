@@ -108,7 +108,10 @@ pub(super) fn window_world() -> (World, Vec<EntityId>) {
 /// Single window iterator over `A` from index 1, cut in consecutive segments of `lens`.
 ///
 /// No segment is entered yet.
-pub(super) fn window_plan<'a>(a: &'a View<'_, A>, lens: &[usize]) -> Shiper<FullRawWindow<'a, A>> {
+pub(super) fn window_plan<'a>(
+    a: &'a View<'_, A>,
+    lens: &[usize],
+) -> Shiper<FullRawWindow<'a, A, track::Untracked>> {
     let mut rows = Vec::new();
     let mut start = 1;
     for &len in lens {
@@ -132,7 +135,7 @@ pub(super) fn window_plan<'a>(a: &'a View<'_, A>, lens: &[usize]) -> Shiper<Full
 pub(super) fn window_entered<'a>(
     a: &'a View<'_, A>,
     lens: &[usize],
-) -> Shiper<FullRawWindow<'a, A>> {
+) -> Shiper<FullRawWindow<'a, A, track::Untracked>> {
     let mut iter = window_plan(a, lens);
     assert!(iter.enter_next_segment());
 
@@ -402,14 +405,22 @@ pub(super) fn coverage_plan<S: Shiperator>(
 pub(super) fn pair<'a>(
     a: &'a View<'_, A>,
     b: &'a View<'_, B>,
-) -> Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)> {
+) -> Mixed<(
+    FullRawWindow<'a, A, track::Untracked>,
+    FullRawWindow<'a, B, track::Untracked>,
+)> {
     Mixed::new(
         (FullRawWindow::from_view(a), FullRawWindow::from_view(b)),
         0b01,
     )
 }
 
-pub(super) type PairIter<'a> = Shiper<Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)>>;
+pub(super) type PairIter<'a> = Shiper<
+    Mixed<(
+        FullRawWindow<'a, A, track::Untracked>,
+        FullRawWindow<'a, B, track::Untracked>,
+    )>,
+>;
 
 fn pair_ids(iter: PairIter<'_>) -> Vec<EntityId> {
     iter.with_id()

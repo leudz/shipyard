@@ -88,7 +88,7 @@ fn tracked_segment<'a, F: Shiperator>(
     filter: F,
     a: &'a View<'_, A>,
     tracked_dense: &[EntityId],
-) -> Shiper<Mixed<(F, FullRawWindow<'a, A>)>> {
+) -> Shiper<Mixed<(F, FullRawWindow<'a, A, track::Untracked>)>> {
     let windows = Mixed::new((filter, FullRawWindow::from_view(a)), 0b01);
 
     planned(
@@ -406,8 +406,11 @@ fn or_world() -> (World, Vec<EntityId>, EntityId) {
 }
 
 type OrPair<'a> = OrWindow<(
-    Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)>,
-    FullRawWindow<'a, C>,
+    Mixed<(
+        FullRawWindow<'a, A, track::Untracked>,
+        FullRawWindow<'a, B, track::Untracked>,
+    )>,
+    FullRawWindow<'a, C, track::Untracked>,
 )>;
 
 /// Iterator where the pair `(A, B)` drives `e1` to `e3` from starts 2 and 1,

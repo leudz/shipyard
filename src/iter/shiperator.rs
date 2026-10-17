@@ -9,6 +9,7 @@ use crate::optional::Optional;
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::track;
+use crate::tracking::Tracking;
 
 /// Provides iteration costs, component lookup, and data access for a storage iterator.
 pub trait Shiperator {
@@ -189,7 +190,7 @@ where
     acc
 }
 
-impl<'tmp, T: Component> Shiperator for FullRawWindow<'tmp, T> {
+impl<'tmp, T: Component, Track: Tracking> Shiperator for FullRawWindow<'tmp, T, Track> {
     type Out = &'tmp T;
     type Index = usize;
 
@@ -424,7 +425,7 @@ impl<'tmp> Shiperator for &'tmp [EntityId] {
     }
 }
 
-impl<'tmp, T: Component> Shiperator for Optional<FullRawWindow<'tmp, T>> {
+impl<'tmp, T: Component, Track: Tracking> Shiperator for Optional<FullRawWindow<'tmp, T, Track>> {
     type Out = Option<&'tmp T>;
     type Index = Option<usize>;
 
@@ -483,7 +484,7 @@ impl<'tmp, T: Component> Shiperator for Optional<FullRawWindow<'tmp, T>> {
     }
 }
 
-impl<'tmp, T: Component, Track> Shiperator for Optional<FullRawWindowMut<'tmp, T, Track>>
+impl<'tmp, T: Component, Track: Tracking> Shiperator for Optional<FullRawWindowMut<'tmp, T, Track>>
 where
     FullRawWindowMut<'tmp, T, Track>: Shiperator<Index = usize>,
 {

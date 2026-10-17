@@ -3,13 +3,16 @@ use crate::iter::IntoShiperator;
 use crate::iter::RawEntityIdAccess;
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::tracking::{Inserted, InsertedOrModified, Modified, Tracking};
+use crate::tracking::{
+    Inserted, InsertedOrModified, InsertionOrModificationTracking, InsertionTracking,
+    ModificationTracking, Modified, Tracking,
+};
 use crate::views::{View, ViewMut};
 
 impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Not<&'tmp View<'v, T, Track>>
 {
-    type Shiperator = Not<FullRawWindow<'tmp, T>>;
+    type Shiperator = Not<FullRawWindow<'tmp, T, Track>>;
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
@@ -32,7 +35,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Not<&'tmp ViewMut<'v, T, Track>>
 {
-    type Shiperator = Not<FullRawWindow<'tmp, T>>;
+    type Shiperator = Not<FullRawWindow<'tmp, T, Track>>;
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
@@ -76,11 +79,11 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 }
 
 macro_rules! impl_into_shiperator_tracking {
-    ($($type: ident)+) => {$(
-        impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+    ($($type: ident => $capability: ident)+) => {$(
+        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for Not<$type<&'tmp View<'v, T, Track>>>
         {
-            type Shiperator = Not<$type<FullRawWindow<'tmp, T>>>;
+            type Shiperator = Not<$type<FullRawWindow<'tmp, T, Track>>>;
 
             #[inline]
             fn into_shiperator(
@@ -102,10 +105,10 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for Not<$type<&'tmp ViewMut<'v, T, Track>>>
         {
-            type Shiperator = Not<$type<FullRawWindow<'tmp, T>>>;
+            type Shiperator = Not<$type<FullRawWindow<'tmp, T, Track>>>;
 
             #[inline]
             fn into_shiperator(
@@ -127,7 +130,7 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for Not<$type<&'tmp mut ViewMut<'v, T, Track>>>
         {
             type Shiperator = Not<$type<FullRawWindowMut<'tmp, T, Track>>>;
@@ -154,4 +157,8 @@ macro_rules! impl_into_shiperator_tracking {
     )+};
 }
 
-impl_into_shiperator_tracking![Inserted Modified InsertedOrModified];
+impl_into_shiperator_tracking![
+    Inserted => InsertionTracking
+    Modified => ModificationTracking
+    InsertedOrModified => InsertionOrModificationTracking
+];

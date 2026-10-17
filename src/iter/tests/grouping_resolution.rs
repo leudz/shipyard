@@ -44,7 +44,12 @@ impl Component for Ins {
 }
 
 /// Iterator over the pair `(A, B)`.
-type PairIter<'a> = Shiper<Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)>>;
+type PairIter<'a> = Shiper<
+    Mixed<(
+        FullRawWindow<'a, A, track::Untracked>,
+        FullRawWindow<'a, B, track::Untracked>,
+    )>,
+>;
 
 const PAIR_LAYOUT: [NodeKind; 3] = [
     NodeKind::Mixed { children: 2 },

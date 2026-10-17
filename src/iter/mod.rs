@@ -33,6 +33,7 @@ pub use with_id::WithId;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
+use crate::tracking::Tracking;
 use core::iter::FusedIterator;
 use plan::SegmentSchedule;
 
@@ -327,9 +328,14 @@ impl<S: Shiperator> Shiper<S> {
 
 impl<S: Shiperator> FusedIterator for Shiper<S> {}
 
-impl<'tmp, T: Component> ExactSizeIterator for Shiper<FullRawWindow<'tmp, T>> {}
+impl<'tmp, T: Component, Track: Tracking> ExactSizeIterator
+    for Shiper<FullRawWindow<'tmp, T, Track>>
+{
+}
 
-impl<'tmp, T: Component, Track> ExactSizeIterator for Shiper<FullRawWindowMut<'tmp, T, Track>> where
-    Self: Iterator
+impl<'tmp, T: Component, Track: Tracking> ExactSizeIterator
+    for Shiper<FullRawWindowMut<'tmp, T, Track>>
+where
+    Self: Iterator,
 {
 }

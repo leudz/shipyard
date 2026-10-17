@@ -9,8 +9,9 @@ use crate::sparse_set::{SparseSet, SparseSetDrain};
 use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::{
-    DeletionTracking, Inserted, InsertedOrModified, InsertionTracking, ModificationTracking,
-    Modified, RemovalOrDeletionTracking, RemovalTracking, Tracking, TrackingTimestamp,
+    DeletionTracking, Inserted, InsertedOrModified, InsertionOrModificationTracking,
+    InsertionTracking, ModificationTracking, Modified, RemovalOrDeletionTracking, RemovalTracking,
+    Tracking, TrackingTimestamp,
 };
 use crate::views::view::View;
 use core::fmt;
@@ -440,21 +441,29 @@ where
 
 impl<Track, T: Component> ViewMut<'_, T, Track>
 where
-    Track: InsertionTracking + ModificationTracking,
+    Track: InsertionOrModificationTracking,
 {
     /// Inside a workload returns `true` if `entity`'s component was inserted or modified since the last run of this system.\
-    /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last call to [`clear_all_inserted`](ViewMut::clear_all_inserted).\
+    /// Outside workloads returns `true` if `entity`'s component was inserted or modified since the last clear call.\
     /// Returns `false` if `entity` does not have a component in this storage.
     #[inline]
     pub fn is_inserted_or_modified(&self, entity: EntityId) -> bool {
-        self.is_inserted(entity) || self.is_modified(entity)
+        Track::is_inserted(self.sparse_set, entity, self.last_insertion, self.current)
+            || Track::is_modified(
+                self.sparse_set,
+                entity,
+                self.last_modification,
+                self.current,
+            )
     }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    /// Wraps this view to iterate components with an enabled insertion or modification event.\
+    /// When both kinds are enabled, each matching component appears once.
     #[inline]
     pub fn inserted_or_modified(&self) -> InsertedOrModified<&Self> {
         InsertedOrModified(self)
     }
-    /// Wraps this view to be able to iterate *inserted* and *modified* components.
+    /// Wraps this view to mutably iterate components with an enabled insertion or modification event.\
+    /// When both kinds are enabled, each matching component appears once.
     #[inline]
     pub fn inserted_or_modified_mut(&mut self) -> InsertedOrModified<&mut Self> {
         InsertedOrModified(self)
@@ -470,7 +479,7 @@ where
 #[cfg(feature = "thread_local")]
 impl<Track, T: Component + Sync> crate::borrow::NonSend<ViewMut<'_, T, Track>>
 where
-    Track: InsertionTracking + ModificationTracking,
+    Track: InsertionOrModificationTracking,
 {
     /// Removes the *inserted* and *modified* flags on all components of this storage.
     #[inline]
@@ -484,7 +493,7 @@ where
 #[cfg(feature = "thread_local")]
 impl<Track, T: Component + Send> crate::borrow::NonSync<ViewMut<'_, T, Track>>
 where
-    Track: InsertionTracking + ModificationTracking,
+    Track: InsertionOrModificationTracking,
 {
     /// Removes the *inserted* and *modified* flags on all components of this storage.
     #[inline]
@@ -498,7 +507,7 @@ where
 #[cfg(feature = "thread_local")]
 impl<Track, T: Component> crate::borrow::NonSendSync<ViewMut<'_, T, Track>>
 where
-    Track: InsertionTracking + ModificationTracking,
+    Track: InsertionOrModificationTracking,
 {
     /// Removes the *inserted* and *modified* flags on all components of this storage.
     #[inline]

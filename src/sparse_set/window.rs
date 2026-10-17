@@ -15,7 +15,10 @@ use core::ptr::{self, NonNull};
 /// Captains iterate a segment of the storage: they receive indices local to that segment
 /// and resolve them to absolute storage indices by adding `segment_start`.\
 /// Sparse lookups always return absolute indices.
-pub struct FullRawWindow<'a, T> {
+///
+/// `Track` is the tracking of the view the window comes from. Borrowing that view checked
+/// the storage tracks at least what `Track` does, so its timestamps exist for every component.
+pub struct FullRawWindow<'a, T, Track: Tracking> {
     sparse: *const *const EntityId,
     sparse_len: usize,
     pub(crate) dense: NonNull<EntityId>,
@@ -28,14 +31,14 @@ pub struct FullRawWindow<'a, T> {
     pub(crate) last_insertion: TrackingTimestamp,
     pub(crate) last_modification: TrackingTimestamp,
     pub(crate) current: TrackingTimestamp,
-    _phantom: PhantomData<&'a T>,
+    _phantom: PhantomData<(&'a T, Track)>,
 }
 
-unsafe impl<T: Send + Component> Send for FullRawWindow<'_, T> {}
+unsafe impl<T: Send + Component, Track: Tracking> Send for FullRawWindow<'_, T, Track> {}
 
-impl<'w, T: Component> FullRawWindow<'w, T> {
+impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
     #[inline]
-    pub(crate) fn from_view<Track: Tracking>(view: &View<'_, T, Track>) -> Self {
+    pub(crate) fn from_view(view: &View<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *const Option<Box<Page>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
@@ -57,7 +60,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
     }
 
     #[inline]
-    pub(crate) fn from_owned_view<Track: Tracking>(
+    pub(crate) fn from_owned_view(
         view: View<'_, T, Track>,
     ) -> (Self, Option<SharedBorrow<'_>>, SharedBorrow<'_>) {
         let View {
@@ -95,7 +98,7 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
     }
 
     #[inline]
-    pub(crate) fn from_view_mut<Track: Tracking>(view: &ViewMut<'_, T, Track>) -> Self {
+    pub(crate) fn from_view_mut(view: &ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
         let sparse: *const Option<Box<Page>> = view.sparse.as_ptr();
         let sparse = sparse as *const *const EntityId;
@@ -196,9 +199,54 @@ impl<'w, T: Component> FullRawWindow<'w, T> {
         // meeting `set_segment_start`'s requirements.
         unsafe { self.set_segment_start(segment_start) };
     }
+
+    /// Returns `true` when the component at `index` was inserted in this window's tracking interval.
+    ///
+    /// Always `false` when `Track` doesn't track insertion.
+    ///
+    /// ### Safety
+    ///
+    /// `index` must be smaller than the storage's length.
+    #[inline]
+    pub(crate) unsafe fn is_inserted(&self, index: usize) -> bool {
+        Track::track_insertion() && {
+            // SAFE: `Track` tracks insertion and the storage was checked to track at least what
+            // `Track` does, so it keeps an insertion timestamp per component.
+            // Our caller guarantees `index` is one of them.
+            unsafe { *self.insertion_data.add(index) }.is_within(self.last_insertion, self.current)
+        }
+    }
+
+    /// Returns `true` when the component at `index` was modified in this window's tracking interval.
+    ///
+    /// Always `false` when `Track` doesn't track modification.
+    ///
+    /// ### Safety
+    ///
+    /// `index` must be smaller than the storage's length.
+    #[inline]
+    pub(crate) unsafe fn is_modified(&self, index: usize) -> bool {
+        Track::track_modification() && {
+            // SAFE: Same as `is_inserted`, with the modification timestamps.
+            unsafe { *self.modification_data.add(index) }
+                .is_within(self.last_modification, self.current)
+        }
+    }
+
+    /// Returns `true` when the component at `index` was inserted or modified in this window's
+    /// tracking interval, only checking the kinds `Track` tracks.
+    ///
+    /// ### Safety
+    ///
+    /// `index` must be smaller than the storage's length.
+    #[inline]
+    pub(crate) unsafe fn is_inserted_or_modified(&self, index: usize) -> bool {
+        // SAFE: Our caller's guarantee is the one both checks need.
+        unsafe { self.is_inserted(index) || self.is_modified(index) }
+    }
 }
 
-impl<T: Component> Clone for FullRawWindow<'_, T> {
+impl<T: Component, Track: Tracking> Clone for FullRawWindow<'_, T, Track> {
     #[inline]
     fn clone(&self) -> Self {
         FullRawWindow {
@@ -221,7 +269,7 @@ impl<T: Component> Clone for FullRawWindow<'_, T> {
 /// Raw exclusive access to a storage's components.
 ///
 /// Uses the same coordinates as [`FullRawWindow`].
-pub struct FullRawWindowMut<'a, T, Track> {
+pub struct FullRawWindowMut<'a, T, Track: Tracking> {
     sparse: *mut *mut EntityId,
     sparse_len: usize,
     pub(crate) dense: NonNull<EntityId>,
@@ -238,9 +286,9 @@ pub struct FullRawWindowMut<'a, T, Track> {
     _phantom: PhantomData<(&'a mut T, Track)>,
 }
 
-unsafe impl<T: Send + Component, Track> Send for FullRawWindowMut<'_, T, Track> {}
+unsafe impl<T: Send + Component, Track: Tracking> Send for FullRawWindowMut<'_, T, Track> {}
 
-impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
+impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
     #[inline]
     pub(crate) fn new(view: &mut ViewMut<'_, T, Track>) -> Self {
         let sparse_len = view.sparse.len();
@@ -265,8 +313,8 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
     }
 
     #[inline]
-    pub(crate) fn new_owned<TRACK>(
-        view: ViewMut<'_, T, TRACK>,
+    pub(crate) fn new_owned(
+        view: ViewMut<'_, T, Track>,
     ) -> (Self, Option<SharedBorrow<'_>>, ExclusiveBorrow<'_>) {
         let ViewMut {
             sparse_set,
@@ -383,9 +431,54 @@ impl<'w, T: Component, Track> FullRawWindowMut<'w, T, Track> {
         // meeting `set_segment_start`'s requirements.
         unsafe { self.set_segment_start(segment_start) };
     }
+
+    /// Returns `true` when the component at `index` was inserted in this window's tracking interval.
+    ///
+    /// Always `false` when `Track` doesn't track insertion.
+    ///
+    /// ### Safety
+    ///
+    /// `index` must be smaller than the storage's length.
+    #[inline]
+    pub(crate) unsafe fn is_inserted(&self, index: usize) -> bool {
+        Track::track_insertion() && {
+            // SAFE: `Track` tracks insertion and the storage was checked to track at least what
+            // `Track` does, so it keeps an insertion timestamp per component.
+            // Our caller guarantees `index` is one of them.
+            unsafe { *self.insertion_data.add(index) }.is_within(self.last_insertion, self.current)
+        }
+    }
+
+    /// Returns `true` when the component at `index` was modified in this window's tracking interval.
+    ///
+    /// Always `false` when `Track` doesn't track modification.
+    ///
+    /// ### Safety
+    ///
+    /// `index` must be smaller than the storage's length.
+    #[inline]
+    pub(crate) unsafe fn is_modified(&self, index: usize) -> bool {
+        Track::track_modification() && {
+            // SAFE: Same as `is_inserted`, with the modification timestamps.
+            unsafe { *self.modification_data.add(index) }
+                .is_within(self.last_modification, self.current)
+        }
+    }
+
+    /// Returns `true` when the component at `index` was inserted or modified in this window's
+    /// tracking interval, only checking the kinds `Track` tracks.
+    ///
+    /// ### Safety
+    ///
+    /// `index` must be smaller than the storage's length.
+    #[inline]
+    pub(crate) unsafe fn is_inserted_or_modified(&self, index: usize) -> bool {
+        // SAFE: Our caller's guarantee is the one both checks need.
+        unsafe { self.is_inserted(index) || self.is_modified(index) }
+    }
 }
 
-impl<T: Component, Track> Clone for FullRawWindowMut<'_, T, Track> {
+impl<T: Component, Track: Tracking> Clone for FullRawWindowMut<'_, T, Track> {
     #[inline]
     fn clone(&self) -> Self {
         FullRawWindowMut {

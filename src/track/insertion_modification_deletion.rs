@@ -4,8 +4,8 @@ use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
 use crate::track::InsertionAndModificationAndDeletion;
 use crate::tracking::{
-    map_deletion_data, DeletionTracking, InsertionTracking, ModificationTracking,
-    RemovalOrDeletionTracking, Tracking, TrackingTimestamp,
+    map_deletion_data, DeletionTracking, InsertionOrModificationTracking, InsertionTracking,
+    ModificationTracking, RemovalOrDeletionTracking, Tracking, TrackingTimestamp,
 };
 
 impl Sealed for InsertionAndModificationAndDeletion {}
@@ -60,6 +60,7 @@ impl Tracking for InsertionAndModificationAndDeletion {
 
 impl InsertionTracking for InsertionAndModificationAndDeletion {}
 impl ModificationTracking for InsertionAndModificationAndDeletion {}
+impl InsertionOrModificationTracking for InsertionAndModificationAndDeletion {}
 impl DeletionTracking for InsertionAndModificationAndDeletion {}
 impl RemovalOrDeletionTracking for InsertionAndModificationAndDeletion {
     #[allow(trivial_casts)]

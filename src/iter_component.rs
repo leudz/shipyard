@@ -82,7 +82,7 @@ where
 }
 
 impl<T: Component + Send + Sync> IterComponent for &'_ T {
-    type Shiperator<'a> = FullRawWindow<'a, T>;
+    type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
     fn into_shiperator<'a>(
@@ -113,7 +113,7 @@ impl<T: Component + Send + Sync> IterComponent for &'_ T {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
-    type Shiperator<'a> = FullRawWindow<'a, T>;
+    type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
     fn into_shiperator<'a>(
@@ -144,7 +144,7 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
-    type Shiperator<'a> = FullRawWindow<'a, T>;
+    type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
     fn into_shiperator<'a>(
@@ -175,7 +175,7 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
 
 #[cfg(feature = "thread_local")]
 impl<T: Component> IterComponent for NonSendSync<&'_ T> {
-    type Shiperator<'a> = FullRawWindow<'a, T>;
+    type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
     fn into_shiperator<'a>(

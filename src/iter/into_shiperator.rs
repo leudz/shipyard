@@ -110,7 +110,7 @@ pub trait IntoShiperator {
 }
 
 impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp View<'v, T, Track> {
-    type Shiperator = FullRawWindow<'tmp, T>;
+    type Shiperator = FullRawWindow<'tmp, T, Track>;
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
@@ -135,7 +135,7 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
 }
 
 impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp ViewMut<'v, T, Track> {
-    type Shiperator = FullRawWindow<'tmp, T>;
+    type Shiperator = FullRawWindow<'tmp, T, Track>;
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
@@ -159,7 +159,9 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track> IntoShiperator for &'tmp mut ViewMut<'v, T, Track> {
+impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+    for &'tmp mut ViewMut<'v, T, Track>
+{
     type Shiperator = FullRawWindowMut<'tmp, T, Track>;
 
     #[inline]
@@ -208,7 +210,7 @@ impl<'tmp> IntoShiperator for &'tmp [EntityId] {
 }
 
 impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>> {
-    type Shiperator = Optional<FullRawWindow<'tmp, T>>;
+    type Shiperator = Optional<FullRawWindow<'tmp, T, T::Tracking>>;
 
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (shiperator, len, entities) = self.0.into_shiperator();
@@ -228,7 +230,7 @@ impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>
 impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Optional<&'tmp ViewMut<'v, T, Track>>
 {
-    type Shiperator = Optional<FullRawWindow<'tmp, T>>;
+    type Shiperator = Optional<FullRawWindow<'tmp, T, Track>>;
 
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
         let (shiperator, len, entities) = self.0.into_shiperator();

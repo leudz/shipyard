@@ -38,7 +38,12 @@ impl Component for C {
 }
 
 /// Iterator over the pair `(A, B)`.
-type PairIter<'a> = Shiper<Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)>>;
+type PairIter<'a> = Shiper<
+    Mixed<(
+        FullRawWindow<'a, A, track::Untracked>,
+        FullRawWindow<'a, B, track::Untracked>,
+    )>,
+>;
 
 /// Builds the iterator walking the grouped alternative `query`'s constructor reported,
 /// whether or not it's cheaper than the ordinary walk.

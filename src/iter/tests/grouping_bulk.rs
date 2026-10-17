@@ -308,10 +308,13 @@ const A_WALKED: [Coverage; 1] = [Coverage {
     end: 3,
 }];
 
-fn pair<'a>(
-    a: &'a View<'_, A>,
-    b: &'a View<'_, B>,
-) -> Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)> {
+/// The pair `(A, B)` as a `Mixed`.
+type Pair<'a> = Mixed<(
+    FullRawWindow<'a, A, track::Untracked>,
+    FullRawWindow<'a, B, track::Untracked>,
+)>;
+
+fn pair<'a>(a: &'a View<'_, A>, b: &'a View<'_, B>) -> Pair<'a> {
     Mixed::new(
         (FullRawWindow::from_view(a), FullRawWindow::from_view(b)),
         0b01,
@@ -323,10 +326,7 @@ fn pair_value((a, b): (&A, &B)) -> (u32, u32) {
 }
 
 /// Iterator over `SINGLE`, `ALIGNED`, `CHECKED` then `REJECTED`, yielding `e0` to `e4`.
-fn full<'a>(
-    a: &'a View<'_, A>,
-    b: &'a View<'_, B>,
-) -> Shiper<Mixed<(FullRawWindow<'a, A>, FullRawWindow<'a, B>)>> {
+fn full<'a>(a: &'a View<'_, A>, b: &'a View<'_, B>) -> Shiper<Pair<'a>> {
     let segments: [(&[EntityId], &[NodeState]); 4] = [
         (&a.dense[..1], &SINGLE),
         (&a.dense[1..3], &ALIGNED),

@@ -2,15 +2,18 @@ use crate::component::Component;
 use crate::iter::IntoShiperator;
 use crate::iter::RawEntityIdAccess;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::tracking::{Inserted, InsertedOrModified, Modified, Tracking};
+use crate::tracking::{
+    Inserted, InsertedOrModified, InsertionOrModificationTracking, InsertionTracking,
+    ModificationTracking, Modified,
+};
 use crate::views::{View, ViewMut};
 
 macro_rules! impl_into_shiperator_tracking {
-    ($($type: ident)+) => {$(
-        impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+    ($($type: ident => $capability: ident)+) => {$(
+        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for $type<&'tmp View<'v, T, Track>>
         {
-            type Shiperator = $type<FullRawWindow<'tmp, T>>;
+            type Shiperator = $type<FullRawWindow<'tmp, T, Track>>;
 
             #[inline]
             fn into_shiperator(
@@ -32,10 +35,10 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for $type<&'tmp ViewMut<'v, T, Track>>
         {
-            type Shiperator = $type<FullRawWindow<'tmp, T>>;
+            type Shiperator = $type<FullRawWindow<'tmp, T, Track>>;
 
             #[inline]
             fn into_shiperator(
@@ -57,7 +60,7 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for $type<&'tmp mut ViewMut<'v, T, Track>>
         {
             type Shiperator = $type<FullRawWindowMut<'tmp, T, Track>>;
@@ -84,4 +87,8 @@ macro_rules! impl_into_shiperator_tracking {
     )+};
 }
 
-impl_into_shiperator_tracking![Inserted Modified InsertedOrModified];
+impl_into_shiperator_tracking![
+    Inserted => InsertionTracking
+    Modified => ModificationTracking
+    InsertedOrModified => InsertionOrModificationTracking
+];

@@ -142,10 +142,12 @@ pub trait Tracking: 'static + Sized + Sealed + Send + Sync {
     }
 }
 
+/// Bound for tracking insertion or modification, including modes that track both.
+pub trait InsertionOrModificationTracking: Tracking {}
 /// Bound for tracking insertion.
-pub trait InsertionTracking: Tracking {}
+pub trait InsertionTracking: Tracking + InsertionOrModificationTracking {}
 /// Bound for tracking modification.
-pub trait ModificationTracking: Tracking {}
+pub trait ModificationTracking: Tracking + InsertionOrModificationTracking {}
 /// Bound for tracking removal.
 pub trait RemovalTracking: Tracking + RemovalOrDeletionTracking {}
 /// Bound for tracking deletion.
