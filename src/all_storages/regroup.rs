@@ -1,4 +1,4 @@
-use crate::all_storages::AllStorages;
+use crate::all_storages::{member_groups, AllStorages};
 use crate::entity_id::EntityId;
 use crate::sparse_set::{GroupRange, GroupRegion};
 use crate::storage::{SBox, Storage, StorageId};
@@ -234,6 +234,121 @@ fn evaluate(group: &Arc<[StorageId]>, members: &[StoragePtr], position: usize) {
     }
 }
 
+/// Scratch buffers finding the storages an entity has to be grouped in, reused across entities.
+#[derive(Default)]
+struct Discovery {
+    /// Members of the groups found so far, sorted once discovery is complete.
+    members: Vec<StorageId>,
+    /// Groups whose satisfaction we already checked, compared by pointer.
+    checked: Vec<Arc<[StorageId]>>,
+    /// Groups of the storage we're inspecting.
+    groups: Vec<Arc<[StorageId]>>,
+}
+
+impl Discovery {
+    /// Returns the sorted ids of the storages `entity` has to be grouped in, starting from its
+    /// component in `storage_id`.
+    ///
+    /// These are the members of every group `entity` satisfies that's connected to `storage_id`
+    /// through other groups it satisfies. Groups it doesn't satisfy don't connect anything,
+    /// and owning the components of two disjoint groups doesn't merge them.\
+    /// Returns `None` when `entity` satisfies none of `storage_id`'s groups.
+    fn discover(
+        &mut self,
+        storages: &mut ShipHashMap<StorageId, SBox>,
+        storage_id: StorageId,
+        entity: EntityId,
+    ) -> Option<&[StorageId]> {
+        self.members.clear();
+        self.checked.clear();
+        self.members.push(storage_id);
+
+        // `members` grows while we go through it, each member's groups are inspected once.
+        // A group we check from one member is skipped from the others, it has the same answer.
+        let mut next = 0;
+        while let Some(&member_id) = self.members.get(next) {
+            next += 1;
+
+            let storage = storage_ptr(storages, member_id);
+            // SAFE: `storage` was just created and is only used for this read,
+            // see the comment at the top of this file.
+            range_groups(unsafe { &*storage }, &mut self.groups);
+
+            for group in &self.groups {
+                if self
+                    .checked
+                    .iter()
+                    .any(|checked| Arc::ptr_eq(checked, group))
+                {
+                    continue;
+                }
+                self.checked.push(group.clone());
+
+                if !satisfies(storages, group, entity) {
+                    continue;
+                }
+
+                for &id in group.iter() {
+                    if !self.members.contains(&id) {
+                        self.members.push(id);
+                    }
+                }
+            }
+        }
+
+        // A satisfied group would have added at least one other storage.
+        if self.members.len() == 1 {
+            return None;
+        }
+
+        self.members.sort_unstable();
+
+        Some(&self.members)
+    }
+}
+
+/// Returns `true` when `entity` owns a component in every member of `group`.
+///
+/// The generation has to match, a component of a deleted entity reusing the same index doesn't count.
+fn satisfies(
+    storages: &mut ShipHashMap<StorageId, SBox>,
+    group: &Arc<[StorageId]>,
+    entity: EntityId,
+) -> bool {
+    group.iter().all(|&member_id| {
+        let member = storage_ptr(storages, member_id);
+
+        // SAFE: `member` was just created and is only used for this read,
+        // see the comment at the top of this file.
+        unsafe { &*member }
+            .sparse_array()
+            .expect("group members are SparseSet")
+            .contains(entity)
+    })
+}
+
+/// Returns the group made of the sorted storage ids `members`,
+/// attaching it as an empty range to each of them when it doesn't exist yet.
+///
+/// An existing group is reused whether it was declared or created as a union before,
+/// so each set of members has a single identity.
+fn union_group(
+    storages: &mut ShipHashMap<StorageId, SBox>,
+    members: &[StorageId],
+) -> Arc<[StorageId]> {
+    // Every member holds a range for each of its groups, so checking one of them is enough.
+    if let Some(group) = member_groups(storages, members[0]).find_by_value(members) {
+        return group.clone();
+    }
+
+    let group: Arc<[StorageId]> = Arc::from(members);
+    for &member_id in members {
+        member_groups(storages, member_id).attach(group.clone(), member_id);
+    }
+
+    group
+}
+
 /// Returns `true` if `entity`'s component is inside `group`'s range in `storage`.
 fn is_in_range(storage: &dyn Storage, group: &Arc<[StorageId]>, entity: EntityId) -> bool {
     let range = group_range(storage, group);
@@ -249,7 +364,7 @@ fn is_in_range(storage: &dyn Storage, group: &Arc<[StorageId]>, entity: EntityId
 
 #[cfg(test)]
 mod tests {
-    use super::{repair_all, sorted_storage_ids};
+    use super::{repair_all, sorted_storage_ids, storage_ptr, union_group, Discovery};
     use crate::sparse_set::{GroupRegion, SparseSet};
     use crate::storage::{Storage, StorageId};
     use crate::{track, Component, EntityId, Get, IntoIter, View, ViewMut, World};
@@ -271,6 +386,16 @@ mod tests {
 
     struct C;
     impl Component for C {
+        type Tracking = track::Untracked;
+    }
+
+    struct D;
+    impl Component for D {
+        type Tracking = track::Untracked;
+    }
+
+    struct E;
+    impl Component for E {
         type Tracking = track::Untracked;
     }
 
@@ -826,5 +951,278 @@ mod tests {
         assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
         assert_eq!(unevaluated_of::<A>(&world), [e[3], e[4]]);
         assert_eq!(unevaluated_of::<C>(&world), [e[3]]);
+    }
+
+    fn id<T: Component + Send + Sync>() -> StorageId {
+        StorageId::of::<SparseSet<T>>()
+    }
+
+    /// Attaches the group made of `ids` to each of its members without regrouping.
+    ///
+    /// Every member storage must exist.
+    fn attach_ids(world: &World, ids: &[StorageId]) -> Arc<[StorageId]> {
+        let mut ids = ids.to_vec();
+        ids.sort_unstable();
+        let group: Arc<[StorageId]> = Arc::from(ids);
+
+        let mut all_storages = world.all_storages_mut().unwrap();
+        let storages = all_storages.storages.get_mut();
+        for &member_id in group.iter() {
+            let member = storage_ptr(storages, member_id);
+            // SAFE: `member` was just created and is the only reference to this storage.
+            let groups = unsafe { &mut *member }.groups_mut().unwrap();
+
+            groups.attach(group.clone(), member_id);
+        }
+
+        group
+    }
+
+    /// Returns the storages `entity` has to be grouped in, starting from its component in `storage_id`.
+    fn discover(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Vec<StorageId>> {
+        let mut all_storages = world.all_storages_mut().unwrap();
+        let storages = all_storages.storages.get_mut();
+
+        Discovery::default()
+            .discover(storages, storage_id, entity)
+            .map(<[StorageId]>::to_vec)
+    }
+
+    /// Returns the group made of `members`, creating it when it doesn't exist yet.
+    fn union(world: &World, members: &[StorageId]) -> Arc<[StorageId]> {
+        let mut all_storages = world.all_storages_mut().unwrap();
+        let storages = all_storages.storages.get_mut();
+        let mut members = members.to_vec();
+        members.sort_unstable();
+
+        union_group(storages, &members)
+    }
+
+    /// Returns the groups of `T`'s ranges, in range order.
+    fn groups_of<T: Component + Send + Sync>(world: &World) -> Vec<Arc<[StorageId]>> {
+        let view = world.borrow::<View<'_, T>>().unwrap();
+
+        view.groups
+            .ranges
+            .iter()
+            .map(|range| range.group.clone())
+            .collect()
+    }
+
+    /// Returns `ids` sorted.
+    fn sorted_ids(mut ids: Vec<StorageId>) -> Vec<StorageId> {
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Asserts that with AB and AC, an entity holding A, B and C has to be grouped in all three,
+    /// from any of them.
+    #[test]
+    fn discover_overlapping() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), B(0), C));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<A>(), id::<C>()]);
+        let abc = sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]);
+
+        assert_eq!(discover(&world, id::<A>(), entity), Some(abc.clone()));
+        assert_eq!(discover(&world, id::<C>(), entity), Some(abc));
+    }
+
+    /// Asserts that with AB and AC, an entity holding only A and B has to be grouped in A and B.
+    #[test]
+    fn discover_one_satisfied() {
+        let mut world = World::new();
+        world.add_entity((A(0), B(0), C));
+        let entity = world.add_entity((A(1), B(1)));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<A>(), id::<C>()]);
+
+        assert_eq!(
+            discover(&world, id::<A>(), entity),
+            Some(sorted_ids(vec![id::<A>(), id::<B>()]))
+        );
+    }
+
+    /// Asserts that an entity satisfying none of a storage's groups has nowhere to be grouped.
+    #[test]
+    fn discover_none() {
+        let mut world = World::new();
+        world.add_entity((A(0), B(0), C));
+        let entity = world.add_entity(A(1));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<A>(), id::<C>()]);
+
+        assert_eq!(discover(&world, id::<A>(), entity), None);
+    }
+
+    /// Asserts that with AB, BC and CD, an entity holding all four is grouped in all of them,
+    /// from either end of the chain.
+    #[test]
+    fn discover_chain() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), B(0), C, D));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<B>(), id::<C>()]);
+        attach_ids(&world, &[id::<C>(), id::<D>()]);
+        let abcd = sorted_ids(vec![id::<A>(), id::<B>(), id::<C>(), id::<D>()]);
+
+        assert_eq!(discover(&world, id::<A>(), entity), Some(abcd.clone()));
+        assert_eq!(discover(&world, id::<D>(), entity), Some(abcd));
+    }
+
+    /// Asserts that groups an entity doesn't satisfy don't connect anything:
+    /// with AB, BE, EC and CD and no E, AB and CD stay apart.
+    #[test]
+    fn discover_unsatisfied_link() {
+        let mut world = World::new();
+        world.add_entity((B(0), C, E));
+        let entity = world.add_entity((A(0), B(0), C, D));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<B>(), id::<E>()]);
+        attach_ids(&world, &[id::<E>(), id::<C>()]);
+        attach_ids(&world, &[id::<C>(), id::<D>()]);
+
+        assert_eq!(
+            discover(&world, id::<A>(), entity),
+            Some(sorted_ids(vec![id::<A>(), id::<B>()]))
+        );
+        assert_eq!(
+            discover(&world, id::<D>(), entity),
+            Some(sorted_ids(vec![id::<C>(), id::<D>()]))
+        );
+    }
+
+    /// Asserts that owning the components of two disjoint groups doesn't merge them.
+    #[test]
+    fn discover_disjoint() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), B(0), C, D));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<C>(), id::<D>()]);
+
+        assert_eq!(
+            discover(&world, id::<A>(), entity),
+            Some(sorted_ids(vec![id::<A>(), id::<B>()]))
+        );
+        assert_eq!(
+            discover(&world, id::<C>(), entity),
+            Some(sorted_ids(vec![id::<C>(), id::<D>()]))
+        );
+    }
+
+    /// Asserts that with AB and ABC, the larger group adds C only to entities holding C.
+    #[test]
+    fn discover_subset() {
+        let mut world = World::new();
+        let abc_entity = world.add_entity((A(0), B(0), C));
+        let ab_entity = world.add_entity((A(1), B(1)));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<A>(), id::<B>(), id::<C>()]);
+
+        assert_eq!(
+            discover(&world, id::<A>(), abc_entity),
+            Some(sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]))
+        );
+        assert_eq!(
+            discover(&world, id::<A>(), ab_entity),
+            Some(sorted_ids(vec![id::<A>(), id::<B>()]))
+        );
+    }
+
+    /// Asserts that a component left by a deleted entity doesn't satisfy a group
+    /// for the entity now using its index.
+    #[test]
+    fn discover_stale_generation() {
+        use crate::AddComponent;
+
+        let mut world = World::new();
+        let deleted = world.add_entity((A(0), B(0)));
+        world.delete_entity(deleted);
+        let entity = world.add_entity(A(1));
+        assert_eq!(entity.index(), deleted.index());
+        world
+            .borrow::<ViewMut<'_, B>>()
+            .unwrap()
+            .add_component_unchecked(deleted, B(0));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+
+        assert_eq!(discover(&world, id::<A>(), entity), None);
+    }
+
+    /// Asserts that a missing union is created once, as a single shared definition attached
+    /// as an empty range after the last range of every member, and then reused.
+    #[test]
+    fn union_created_once() {
+        let mut world = World::new();
+        world.add_entity((A(0), B(0), C));
+        let ab = attach_ids(&world, &[id::<A>(), id::<B>()]);
+        let ac = attach_ids(&world, &[id::<A>(), id::<C>()]);
+
+        let abc = union(&world, &[id::<A>(), id::<B>(), id::<C>()]);
+        let again = union(&world, &[id::<C>(), id::<A>(), id::<B>()]);
+
+        assert!(Arc::ptr_eq(&abc, &again));
+        let a = groups_of::<A>(&world);
+        assert!(Arc::ptr_eq(&a[0], &ab) && Arc::ptr_eq(&a[1], &ac) && Arc::ptr_eq(&a[2], &abc));
+        assert_eq!(a.len(), 3);
+        assert!(groups_of::<B>(&world)
+            .iter()
+            .any(|group| Arc::ptr_eq(group, &abc)));
+        assert!(groups_of::<C>(&world)
+            .iter()
+            .any(|group| Arc::ptr_eq(group, &abc)));
+        let view = world.borrow::<View<'_, A>>().unwrap();
+        assert_eq!(
+            (view.groups.ranges[2].len, view.groups.ranges[2].trust),
+            (0, 0)
+        );
+    }
+
+    /// Asserts that a group satisfied alone is its own union, nothing new is attached.
+    #[test]
+    fn union_existing_group() {
+        let mut world = World::new();
+        world.add_entity((A(0), B(0)));
+        let ab = attach_ids(&world, &[id::<A>(), id::<B>()]);
+
+        assert!(Arc::ptr_eq(&union(&world, &[id::<A>(), id::<B>()]), &ab));
+        assert_eq!(groups_of::<A>(&world).len(), 1);
+    }
+
+    /// Asserts that a declared group equal to the union is reused instead of creating a new one.
+    #[test]
+    fn union_declared() {
+        let mut world = World::new();
+        world.add_entity((A(0), B(0), C));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<A>(), id::<C>()]);
+        let abc = attach_ids(&world, &[id::<A>(), id::<B>(), id::<C>()]);
+
+        assert!(Arc::ptr_eq(
+            &union(&world, &[id::<A>(), id::<B>(), id::<C>()]),
+            &abc
+        ));
+        assert_eq!(groups_of::<A>(&world).len(), 3);
+    }
+
+    /// Asserts that a transitive union is created directly, without any intermediate union:
+    /// with AB, BC and CD, only ABCD is added.
+    #[test]
+    fn union_direct() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), B(0), C, D));
+        attach_ids(&world, &[id::<A>(), id::<B>()]);
+        attach_ids(&world, &[id::<B>(), id::<C>()]);
+        attach_ids(&world, &[id::<C>(), id::<D>()]);
+
+        let members = discover(&world, id::<A>(), entity).unwrap();
+        let abcd = union(&world, &members);
+
+        assert_eq!(abcd.len(), 4);
+        assert_eq!(groups_of::<A>(&world).len(), 2);
+        assert_eq!(groups_of::<B>(&world).len(), 3);
+        assert_eq!(groups_of::<C>(&world).len(), 3);
+        assert_eq!(groups_of::<D>(&world).len(), 2);
     }
 }
