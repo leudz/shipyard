@@ -632,7 +632,7 @@ impl Alternative {
     }
 
     /// Returns the group walks this alternative ends up driving, through any nested `Mixed`.
-    #[allow(dead_code, reason = "Only tests read it for now.")]
+    #[cfg(test)]
     pub(crate) fn group(&self) -> &GroupedCandidate {
         match &self.route {
             Route::Local(candidate) => candidate,
@@ -650,7 +650,7 @@ impl GroupedCandidate {
     }
 
     /// Returns the children holding the group's members, bit `i` for child `i`.
-    #[allow(dead_code, reason = "Only tests read it for now.")]
+    #[cfg(test)]
     pub(crate) fn member_mask(&self) -> u32 {
         self.members
             .iter()
