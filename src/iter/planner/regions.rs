@@ -1,7 +1,8 @@
 //! Segments of a grouped alternative, over the storages a query borrows.
 //!
 //! [`grouped_entities`] publishes the walks [`select`](super::select) estimated as a plan:
-//! one segment per walk, each with the row it installs and the regions earlier walks own.\
+//! one segment per piece of a walk, each with the row it installs and the regions earlier
+//! pieces own. Walks are cut where one of their captains' rings wraps.\
 //! It doesn't read entities, segments are carved out of the members' entities from metadata alone.
 //!
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
@@ -13,8 +14,10 @@ use crate::iter::plan::{
     SegmentSchedule,
 };
 use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
+use crate::sparse_set::Ring;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::ops::Range;
 
 /// Returns the entities driving `root` through every walk of `alternative`, with `root`
 /// installed for the first one.
@@ -42,8 +45,10 @@ pub(crate) fn grouped_entities<S: Shiperator>(
     let mut entry = SegmentEntry::new(schedule.plan(), &first);
     // SAFE: `grouped_plan` built every row for `root`'s own layout. In each segment, a captain
     // window starts at the index, in its own storage, of the segment's first entity and the
-    // segment fits in that storage. For the aligned walk, this relies on members holding
-    // the same entities over the prefix they all trust, which their group metadata guarantees.
+    // segment fits in that storage. Segments stop at every captain's wrap point, so each
+    // captain's entities are consecutive from there. With several captains, this relies on
+    // members holding the same entities at the logical positions they all trust, which their
+    // group metadata guarantees.
     // The `Mixed`s above the group's owner only have the child leading to it as captain, they
     // pass the candidates down unchanged.
     // `root` gets this segment's candidates from `first`'s cursor, which we return along with
@@ -60,36 +65,50 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 
 // Why the walks yield every match of the query exactly once.
 //
-// Members are the selected group's storages, each one held by a plain window child of the
-// `Mixed` owning the group. A match owns a component in all of them. Other children are only
-// looked up.
+// Required members are the storages of the selected cover set, each one held by a plain window
+// child of the `Mixed` owning the group. A match owns a component in all of them.
+// Other children are looked up, except where a range proves they hold the walked entity.
 //
 // When that `Mixed` is nested, its ancestors drive through it alone and look the rest of the
 // query up. Their matches are its matches that pass these lookups, so the walks below yield
 // each of them exactly once too. Lookups don't depend on the segment, a candidate rejected
 // in one segment would be rejected in all of them.
 //
+// Each walk draws its entities from a required member `X`: any required member for an aligned
+// walk since they all hold the same entities there, the owner otherwise. The walk meets `e`
+// exactly when `e`'s component in `X` is in the region of `X` the walk visits.
+// Placement cuts walks into pieces wherever a captain's ring wraps, so that each captain
+// advances linearly. Pieces visit the same positions as their walk, the cuts don't change
+// which entities are met.
+//
 // Completeness, for a match `e`:
-// - When one of `e`'s members is unevaluated, that member's unevaluated walk meets `e`.
+// - When one of `e`'s required members is unevaluated, that member's unevaluated walk meets `e`.
 //   Coverage only rejects it when an earlier walk already met it, and so yielded it.
 //   This doesn't depend on the other members' regions: if A was evaluated as ungrouped
 //   and `e` gained B afterwards, B's walk finds `e` and looks A up. Owning A doesn't mean
 //   one of A's walks met `e`.
-// - Otherwise all of `e`'s members are evaluated. Regroup never leaves components that
-//   satisfy a group together in ungrouped regions, so `e` is in every member's group range.
-//   Say it's at logical position `p` of the damaged owner's range:
-//   - below the aligned length, all members hold the same entity at `p`: the aligned walk yields `e`
-//   - from the aligned length on, `p` is in the owner's damaged suffix: the damaged walk yields `e`
-//   That's why evaluated ungrouped regions are never walked, they can't hold a match.
+// - Otherwise all of `e`'s required components are evaluated. Regroup places an entity in the
+//   union of the connected groups it satisfies. `e` satisfies every group of the cover set and
+//   they're connected, so `e` is in a range whose group contains all required members, the
+//   same range in each of them. Say it's at logical position `p` of the range's damaged owner:
+//   - below the aligned length, all required members hold the same entity at `p`:
+//     the range's aligned walks yield `e`
+//   - from the aligned length on, `p` is in the owner's damaged suffix: the damaged walks yield `e`
+//   That's why ranges missing a required member and evaluated ungrouped regions are never
+//   walked, they can't hold a match. With AB and AC, an entity holding A, B and C is in ABC.
 //
 // Uniqueness:
-// - A walk visits a range of a single storage, it meets each entity at most once.
-// - The aligned walk's entities have every member in the aligned prefix. Later walks only meet
-//   entities whose owner component is outside of it, none of them were yielded there.
+// - A walk visits distinct positions of a single region of `X`, it meets each entity at most once.
+// - An aligned walk meets `e` when `e` is at one of its positions in every required member.
+//   Every other walk visits other regions of its own `X`: other positions of the range,
+//   other ranges or the unevaluated region. None of them meets `e`, aligned walks need no record.
 // - Otherwise, a later walk meets `e` again only if `e`'s component in an earlier walk's owner
 //   storage lies in the region that walk visited. Later walks get a coverage record for each of
 //   these regions and reject their candidates before creating any item.
-//   Regions in the later walk's own storage are left out, its candidates are in another region.
+//   When the earlier owner is one of the later walk's captains, its record is left out: that
+//   captain reads `e` in the region the later walk visits, which is distinct from the
+//   earlier one. Having several captains doesn't make a damaged walk aligned, it still records
+//   what it owns.
 //   An earlier candidate a lookup rejected isn't a match, the later walk rejects it too.
 
 /// Builds the plan walking `alternative`'s walks in order, `None` when it has none.
@@ -117,10 +136,11 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
         );
     }
 
+    // Walks are never empty and neither are their pieces, every placement is a segment.
     let placements: Vec<Placement> = candidate
         .walks
         .iter()
-        .map(|&walk| Placement::new(walk, candidate))
+        .flat_map(|&walk| Placement::of(walk, candidate))
         .collect();
 
     let mut segments = Vec::with_capacity(placements.len());
@@ -146,30 +166,23 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
     Some(plan)
 }
 
-/// A walk placed in its members' storages.
+/// A piece of a walk placed in its captains' storages, one segment of the plan.
 struct Placement {
-    /// The entities the walk visits, from the storage of one of its captains.
+    /// The entities the piece visits, from the storage of one of its captains.
     entities: EntityCursor,
-    /// Children driving the walk, each with the index in its storage of the walk's first entity.
+    /// Children driving the piece, each with the index in its storage of the piece's first entity.
     captains: Vec<(usize, usize)>,
-    /// The region later walks must not yield again, `None` for the aligned walk.
+    /// The region later pieces must not yield again, `None` for aligned walks.
     owned: Option<Coverage>,
 }
 
 impl Placement {
     /// Places `walk`, one of `candidate`'s walks, in its captains' storages.
     ///
-    /// This is where range positions become physical indices.
-    fn new(walk: Walk, candidate: &GroupedCandidate) -> Placement {
-        let member = |child| {
-            candidate
-                .members
-                .iter()
-                .find(|member| member.child == child)
-                .expect("members drive grouped walks")
-        };
-
-        let placement = match walk {
+    /// This is where logical positions become physical indices. A walk crossing the wrap point
+    /// of one of its captains' rings is cut there, so it can give several placements.
+    fn of(walk: Walk, candidate: &GroupedCandidate) -> Vec<Placement> {
+        let placements = match walk {
             Walk::Aligned {
                 range,
                 start,
@@ -177,14 +190,17 @@ impl Placement {
                 captains,
             } => {
                 // Captains hold the same entities over these positions, any of them can drive.
+                // Later walks never meet these entities, see the reasoning above `grouped_plan`.
                 let driver = captains.trailing_zeros() as usize;
-                let placement = Placement::range(candidate, range, driver, start, len, captains);
 
-                Placement {
-                    // Later walks never meet these entities, see the reasoning above `grouped_plan`.
-                    owned: None,
-                    ..placement
-                }
+                Placement::ring(
+                    candidate,
+                    range,
+                    driver,
+                    start..start + len,
+                    captains,
+                    false,
+                )
             }
             Walk::Damaged {
                 range,
@@ -192,99 +208,117 @@ impl Placement {
                 start,
                 len,
                 captains,
-            } => Placement::range(candidate, range, owner, start, len, captains),
-            Walk::Unevaluated { owner, start, len } => Placement::single(member(owner), start, len),
+            } => Placement::ring(candidate, range, owner, start..start + len, captains, true),
+            // The unevaluated region isn't a ring, its positions are physical indices already.
+            Walk::Unevaluated { owner, start, len } => {
+                vec![Placement::piece(
+                    candidate,
+                    owner,
+                    vec![(owner, start)],
+                    len,
+                    true,
+                )]
+            }
         };
 
         // Captain windows resolve `segment_start + local index` without bounds checks,
-        // every captain's part of the walk has to fit in its storage.
-        for &(child, start) in &placement.captains {
-            let end = start.checked_add(walk.len());
+        // every captain's part of a piece has to fit in its storage.
+        for placement in &placements {
+            for &(child, start) in &placement.captains {
+                let end = start.checked_add(placement.entities.len());
 
-            assert!(
-                end.is_some_and(|end| end <= member(child).len),
-                "a walk fits in its captains' storages"
-            );
+                assert!(
+                    end.is_some_and(|end| end <= member(candidate, child).len),
+                    "a walk fits in its captains' storages"
+                );
+            }
         }
 
-        placement
+        placements
     }
 
-    /// Places logical positions `start..start + len` of `candidate`'s range at position `range`,
+    /// Places logical positions `positions` of `candidate`'s range at position `range`,
     /// driven by child `driver` with the children `captains` flags.
     ///
-    /// The walk owns `driver`'s part of the range.
-    fn range(
+    /// Gives one piece per stretch where every captain's part is physically consecutive.
+    /// When `owns` is set, each piece owns `driver`'s part of it.
+    fn ring(
         candidate: &GroupedCandidate,
         range: usize,
         driver: usize,
-        start: usize,
-        len: usize,
+        positions: Range<usize>,
         captains: u32,
-    ) -> Placement {
+        owns: bool,
+    ) -> Vec<Placement> {
         let range = &candidate.ranges[range];
-
-        // `is_placeable` only lets unrotated rings through, so logical position `p` is at
-        // physical index `ring.start + p` and each walk is a single physical piece in every
-        // captain. Rings will split the walks crossing their wrap point here.
-        let captains: Vec<(usize, usize)> = mask_children(captains)
+        let rings: Vec<(usize, Ring)> = mask_children(captains)
             .map(|child| {
-                let ring = range
+                let member = range
                     .members
                     .iter()
                     .find(|member| member.child == child)
-                    .expect("captains are members of their range")
-                    .ring;
-                assert!(
-                    ring.contiguous_len(start) >= len,
-                    "walks don't cross a wrap point"
-                );
+                    .expect("captains are members of their range");
 
-                (child, ring.physical_of(start))
+                (child, member.ring)
             })
             .collect();
 
+        let mut placements = Vec::new();
+        let mut position = positions.start;
+        while position < positions.end {
+            // Members' rings wrap at their own points, unrelated to each other's.
+            // The piece stops at the first one coming up in any captain.
+            // `contiguous_len` is at least 1, so we always make progress.
+            let len = rings
+                .iter()
+                .map(|(_, ring)| ring.contiguous_len(position))
+                .fold(positions.end - position, usize::min);
+            let starts = rings
+                .iter()
+                .map(|&(child, ring)| (child, ring.physical_of(position)))
+                .collect();
+
+            placements.push(Placement::piece(candidate, driver, starts, len, owns));
+            position += len;
+        }
+
+        placements
+    }
+
+    /// Places `len` entities from `captains`, each one with the index in its storage of the
+    /// piece's first entity, driven by child `driver`.
+    ///
+    /// When `owns` is set, the piece owns `driver`'s part of it.
+    fn piece(
+        candidate: &GroupedCandidate,
+        driver: usize,
+        captains: Vec<(usize, usize)>,
+        len: usize,
+        owns: bool,
+    ) -> Placement {
         let driver_start = captains
             .iter()
             .find(|&&(child, _)| child == driver)
             .expect("the driver is a captain")
             .1;
-        let driver = candidate
-            .members
-            .iter()
-            .find(|member| member.child == driver)
-            .expect("members drive grouped walks");
-        // `segment` checks the walk is inside the storage, `driver_start + len` can't overflow below.
+        let driver = member(candidate, driver);
+        // `segment` checks the piece is inside the storage, `driver_start + len` can't overflow below.
         let entities = driver.entities.segment(driver_start, len);
+
+        let owned = owns.then(|| Coverage {
+            child: u32::try_from(driver.child).expect("a Mixed has at most 32 children"),
+            start: driver_start,
+            end: driver_start + len,
+        });
 
         Placement {
             entities,
             captains,
-            owned: Some(Coverage {
-                child: u32::try_from(driver.child).expect("a Mixed has at most 32 children"),
-                start: driver_start,
-                end: driver_start + len,
-            }),
+            owned,
         }
     }
 
-    /// Places a walk driven by `owner` alone, over `len` entities from physical index `start`.
-    fn single(owner: &Member, start: usize, len: usize) -> Placement {
-        // `segment` checks the walk is inside the storage, `start + len` can't overflow below.
-        let entities = owner.entities.segment(start, len);
-
-        Placement {
-            entities,
-            captains: vec![(owner.child, start)],
-            owned: Some(Coverage {
-                child: u32::try_from(owner.child).expect("a Mixed has at most 32 children"),
-                start,
-                end: start + len,
-            }),
-        }
-    }
-
-    /// Returns the regions earlier walks own that this walk could meet again.
+    /// Returns the regions earlier pieces own that this piece could meet again.
     fn coverage(&self, earlier: &[Placement]) -> Vec<Coverage> {
         // Our candidates are in another region of our own storage, matching them against
         // that storage's earlier regions would never reject anything.
@@ -328,6 +362,15 @@ impl Placement {
 
         row
     }
+}
+
+/// Returns `candidate`'s member held by the child at position `child`.
+fn member(candidate: &GroupedCandidate, child: usize) -> &Member {
+    candidate
+        .members
+        .iter()
+        .find(|member| member.child == child)
+        .expect("members drive grouped walks")
 }
 
 /// Follows `alternative`'s route from `layout`'s root down to the `Mixed` owning its group.

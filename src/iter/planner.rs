@@ -567,10 +567,10 @@ fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
     alternatives
 }
 
-/// Returns `true` when the walks of `set` can be placed in storages.
+/// Returns `true` when the walks of `set` can be selected.
 ///
-/// Placement doesn't split walks at wrap points or across several ranges yet,
-/// so each required member has to hold a single range, unrotated. Other sets stay ordinary.
+/// Placement handles several ranges and rotated rings, but selecting them isn't enabled yet.
+/// So each required member has to hold a single range, unrotated. Other sets stay ordinary.
 fn is_placeable(children: &[Child], set: &CoverSet) -> bool {
     mask_children(set.required).all(|child| {
         let window = children[child]
@@ -768,7 +768,7 @@ impl Alternative {
     /// read `lookups` components as sailors.
     ///
     /// Returns `None` when the estimate doesn't fit in a `u64`.
-    fn local(candidate: GroupedCandidate, lookups: usize) -> Option<Alternative> {
+    pub(crate) fn local(candidate: GroupedCandidate, lookups: usize) -> Option<Alternative> {
         let mut candidates = 0usize;
         let mut work = 0u64;
 
@@ -824,7 +824,7 @@ impl Alternative {
 
 impl GroupedCandidate {
     /// Returns the walks covering `set`'s required members, for a `Mixed` with these `children`.
-    fn new(children: &[Child], set: CoverSet) -> GroupedCandidate {
+    pub(crate) fn new(children: &[Child], set: CoverSet) -> GroupedCandidate {
         // Required members walk their unevaluated regions, any member of a range can drive part of it.
         let member_mask = set
             .ranges

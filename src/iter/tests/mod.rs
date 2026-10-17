@@ -7,6 +7,7 @@ mod grouping_nested;
 mod grouping_parallel;
 mod grouping_regions;
 mod grouping_resolution;
+mod grouping_rings;
 mod grouping_selection;
 mod grouping_split_ownership;
 mod grouping_transition;
