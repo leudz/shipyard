@@ -638,6 +638,185 @@ fn group_members(children: &[Child], group: &Arc<[StorageId]>) -> Option<Vec<Mem
     (members.len() == group.len()).then_some(members)
 }
 
+/// Members a grouped alternative of a `Mixed` has to cover, and the ranges it can walk.
+///
+/// Built from the group metadata of the `Mixed`'s immediate window children alone.
+#[derive(Clone, Debug)]
+pub(crate) struct CoverSet {
+    /// Children holding the required members, bit `i` for child `i`.
+    ///
+    /// They're the union of overlapping groups the children fully hold. Only they establish
+    /// completeness: every match has a component in each of them.
+    pub(crate) required: u32,
+    /// Every range whose group contains all required members, in the first required child's
+    /// range order.
+    pub(crate) ranges: Vec<CoverRange>,
+}
+
+/// A range whose group contains all required members of a [`CoverSet`].
+#[derive(Clone, Debug)]
+pub(crate) struct CoverRange {
+    /// Sorted member ids of the range's group, compared by pointer.
+    pub(crate) group: Arc<[StorageId]>,
+    /// Each child holding a member of the group, in child order, with its part of the range.
+    ///
+    /// The required members are always there. Other members the query holds can come along,
+    /// members the query doesn't borrow never do.
+    pub(crate) members: Vec<RangeMember>,
+}
+
+/// A child's part of a [`CoverRange`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct RangeMember {
+    /// Position of the child among the `Mixed`'s children.
+    pub(crate) child: usize,
+    pub(crate) ring: Ring,
+    /// Length of the child's logical prefix of the range unchanged since the last regroup.
+    pub(crate) trust: usize,
+}
+
+/// Returns the cover sets of `children`, one per set of overlapping groups they fully hold,
+/// ordered by their first child.
+///
+/// A group is fully held when each of its members is held by exactly one window child.
+/// With an `(A, B)` query and only an ABC group, matches without C sit outside the group's
+/// ranges and only an ordinary walk finds them.\
+/// Groups sharing a member are joined: with AB and AC, an entity holding A, B and C is in
+/// an ABC union, not in AB or AC. So an `(A, B, C)` query covers ABC, whether or not the
+/// union exists yet, and doesn't walk AB or AC.\
+/// Disjoint groups give distinct sets, they compete as distinct alternatives.
+pub(crate) fn cover_sets(children: &[Child]) -> Vec<CoverSet> {
+    // Each fully held group as the children holding its members, deduplicated by pointer.
+    // Every member lists the group, the first one we meet is enough.
+    let mut seen: Vec<&Arc<[StorageId]>> = Vec::new();
+    let mut held: Vec<u32> = Vec::new();
+    for window in children.iter().filter_map(Child::window) {
+        for range in &window.ranges {
+            if seen.iter().any(|group| Arc::ptr_eq(group, &range.group)) {
+                continue;
+            }
+            seen.push(&range.group);
+
+            if let Some(mask) = member_mask(children, &range.group) {
+                held.push(mask);
+            }
+        }
+    }
+
+    // We join groups sharing a member until no two sets overlap.
+    let mut required: Vec<u32> = Vec::new();
+    for mut mask in held {
+        // Merging can make a set overlap others it didn't before, so we absorb them all.
+        while let Some(position) = required.iter().position(|&other| other & mask != 0) {
+            mask |= required.swap_remove(position);
+        }
+        required.push(mask);
+    }
+    // The lowest bit is the first child, the order doesn't depend on how groups were found.
+    required.sort_unstable_by_key(|mask| mask.trailing_zeros());
+
+    required
+        .into_iter()
+        .map(|required| CoverSet {
+            required,
+            ranges: containing_ranges(children, required),
+        })
+        .collect()
+}
+
+/// Returns the children holding `group`'s members, bit `i` for child `i`,
+/// `None` unless each member is held by exactly one window child.
+fn member_mask(children: &[Child], group: &[StorageId]) -> Option<u32> {
+    group.iter().try_fold(0, |mask, &storage_id| {
+        let child = window_child(children, storage_id)?;
+
+        Some(mask | 1u32.checked_shl(u32::try_from(child).ok()?)?)
+    })
+}
+
+/// Returns the position of the window child over the storage with id `storage_id`,
+/// `None` when no child or several children hold it.
+///
+/// A storage held by several children, like A in `(&a, &a, &b)`, is ambiguous and we don't
+/// pick which child would drive.
+fn window_child(children: &[Child], storage_id: StorageId) -> Option<usize> {
+    let mut holders = children
+        .iter()
+        .enumerate()
+        .filter(|(_, child)| {
+            child
+                .window()
+                .is_some_and(|window| window.storage_id == storage_id)
+        })
+        .map(|(position, _)| position);
+
+    let child = holders.next()?;
+    holders.next().is_none().then_some(child)
+}
+
+/// Returns every range whose group contains all members `required` flags.
+fn containing_ranges(children: &[Child], required: u32) -> Vec<CoverRange> {
+    let storage_of = |child: usize| {
+        children[child]
+            .window()
+            .expect("required members are window children")
+            .storage_id
+    };
+    let required_storages: Vec<StorageId> = (0..children.len())
+        .filter(|&child| required & (1 << child) != 0)
+        .map(storage_of)
+        .collect();
+
+    // A group containing every required member is attached to each of them,
+    // the first one's ranges list all of them.
+    let first = required.trailing_zeros() as usize;
+    let first_window = children[first]
+        .window()
+        .expect("required members are window children");
+
+    first_window
+        .ranges
+        .iter()
+        .filter(|range| {
+            required_storages
+                .iter()
+                .all(|storage_id| range.group.binary_search(storage_id).is_ok())
+        })
+        .map(|range| CoverRange {
+            group: range.group.clone(),
+            members: range_members(children, &range.group),
+        })
+        .collect()
+}
+
+/// Returns each child holding a member of `group` alone, in child order, with its part of `group`'s range.
+fn range_members(children: &[Child], group: &Arc<[StorageId]>) -> Vec<RangeMember> {
+    let mut members: Vec<RangeMember> = group
+        .iter()
+        .filter_map(|&storage_id| window_child(children, storage_id))
+        .map(|child| {
+            let range = children[child]
+                .window()
+                .expect("window_child only returns windows")
+                .ranges
+                .iter()
+                .find(|range| Arc::ptr_eq(&range.group, group))
+                .expect("every member holds a range for its group");
+
+            RangeMember {
+                child,
+                ring: range.ring,
+                trust: range.trust,
+            }
+        })
+        .collect();
+
+    // Group ids are sorted by storage, we want the members in child order.
+    members.sort_unstable_by_key(|member| member.child);
+
+    members
+}
+
 impl Alternative {
     /// Returns the alternative walking `candidate`'s walks, for a `Mixed` whose children
     /// read `lookups` components as sailors.
@@ -1390,5 +1569,298 @@ mod grouping_selection_arithmetic {
         ];
 
         assert!(select(&mut children).alternatives.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod grouping_cover_sets {
+    use super::*;
+
+    const A: u64 = 0;
+    const B: u64 = 1;
+    const C: u64 = 2;
+    const D: u64 = 3;
+
+    /// Returns the group made of the storages `ids`.
+    fn group(ids: &[u64]) -> Arc<[StorageId]> {
+        let mut ids: Vec<StorageId> = ids.iter().map(|&id| StorageId::Custom(id)).collect();
+        ids.sort_unstable();
+
+        Arc::from(ids)
+    }
+
+    /// A window child over storage `storage` holding a range for each of `groups`,
+    /// back to back, each with 2 fully trusted components.
+    fn window(storage: u64, groups: &[&Arc<[StorageId]>]) -> Child {
+        let ranges: Vec<RangeMetadata> = groups
+            .iter()
+            .enumerate()
+            .map(|(position, &group)| RangeMetadata {
+                group: group.clone(),
+                ring: Ring {
+                    start: position * 2,
+                    len: 2,
+                    shift: 0,
+                },
+                trust: 2,
+            })
+            .collect();
+        let len = ranges.len() * 2;
+
+        Child {
+            can_captain: true,
+            can_sailor: true,
+            sail_time: len,
+            candidates: Some(len),
+            entities: EntityCursor::empty(),
+            metadata: NodeMetadata::Window(WindowMetadata {
+                storage_id: StorageId::Custom(storage),
+                len,
+                unevaluated_start: len,
+                ranges,
+            }),
+        }
+    }
+
+    /// A nested `Mixed` child, it never holds group members of its parent.
+    fn nested() -> Child {
+        Child {
+            metadata: NodeMetadata::Mixed(Selection {
+                ordinary: OrdinaryCandidate {
+                    captain: 0,
+                    work: Some(4),
+                },
+                alternatives: Vec::new(),
+                lookups: 1,
+                filtered: false,
+            }),
+            ..window(9, &[])
+        }
+    }
+
+    /// Returns the groups of `set`'s ranges, in order.
+    fn range_groups(set: &CoverSet) -> Vec<Arc<[StorageId]>> {
+        set.ranges.iter().map(|range| range.group.clone()).collect()
+    }
+
+    /// Returns the children taking part in `range`, in order.
+    fn range_children(range: &CoverRange) -> Vec<usize> {
+        range.members.iter().map(|member| member.child).collect()
+    }
+
+    /// Asserts that with AB and AC and no ABC union yet, an `(A, B, C)` query has to cover
+    /// A, B and C, with no range to walk: its matches can only be unevaluated.
+    #[test]
+    fn absent_union() {
+        let (ab, ac) = (group(&[A, B]), group(&[A, C]));
+        let children = [window(A, &[&ab, &ac]), window(B, &[&ab]), window(C, &[&ac])];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].required, 0b111);
+        assert!(sets[0].ranges.is_empty());
+    }
+
+    /// Asserts that with AB, AC and their ABC union, an `(A, B, C)` query only walks ABC,
+    /// AB and AC can't hold a fully evaluated match.
+    #[test]
+    fn union_only() {
+        let (ab, ac, abc) = (group(&[A, B]), group(&[A, C]), group(&[A, B, C]));
+        let children = [
+            window(A, &[&ab, &ac, &abc]),
+            window(B, &[&ab, &abc]),
+            window(C, &[&ac, &abc]),
+        ];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].required, 0b111);
+        assert_eq!(sets[0].ranges.len(), 1);
+        assert!(Arc::ptr_eq(&range_groups(&sets[0])[0], &abc));
+        assert_eq!(range_children(&sets[0].ranges[0]), [0, 1, 2]);
+    }
+
+    /// Asserts that with AB, AC and ABC, an `(A, B)` query walks AB and ABC
+    /// using A and B alone, C isn't borrowed.
+    #[test]
+    fn projection() {
+        let (ab, ac, abc) = (group(&[A, B]), group(&[A, C]), group(&[A, B, C]));
+        let children = [window(A, &[&ab, &ac, &abc]), window(B, &[&ab, &abc])];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].required, 0b11);
+        let groups = range_groups(&sets[0]);
+        assert_eq!(groups.len(), 2);
+        assert!(Arc::ptr_eq(&groups[0], &ab) && Arc::ptr_eq(&groups[1], &abc));
+        assert_eq!(range_children(&sets[0].ranges[1]), [0, 1]);
+    }
+
+    /// Asserts that an ABC group alone doesn't cover an `(A, B)` query,
+    /// AB matches without C sit outside its ranges.
+    #[test]
+    fn larger_only() {
+        let abc = group(&[A, B, C]);
+        let children = [window(A, &[&abc]), window(B, &[&abc])];
+
+        assert!(cover_sets(&children).is_empty());
+    }
+
+    /// Asserts that disjoint AB and CD give distinct sets, ordered by their first child.
+    #[test]
+    fn disjoint() {
+        let (ab, cd) = (group(&[A, B]), group(&[C, D]));
+        let children = [
+            window(C, &[&cd]),
+            window(D, &[&cd]),
+            window(A, &[&ab]),
+            window(B, &[&ab]),
+        ];
+
+        let sets = cover_sets(&children);
+
+        let required: Vec<u32> = sets.iter().map(|set| set.required).collect();
+        assert_eq!(required, [0b0011, 0b1100]);
+        assert!(Arc::ptr_eq(&range_groups(&sets[0])[0], &cd));
+        assert!(Arc::ptr_eq(&range_groups(&sets[1])[0], &ab));
+    }
+
+    /// Asserts that with AB and ACD, an `(A, B, C)` query covers AB, walking AB and the ABCD
+    /// union, where C comes along as an extra member and D isn't borrowed.
+    #[test]
+    fn extra_member() {
+        let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
+        let children = [
+            window(A, &[&ab, &acd, &abcd]),
+            window(B, &[&ab, &abcd]),
+            window(C, &[&acd, &abcd]),
+        ];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].required, 0b011);
+        let groups = range_groups(&sets[0]);
+        assert_eq!(groups.len(), 2);
+        assert!(Arc::ptr_eq(&groups[0], &ab) && Arc::ptr_eq(&groups[1], &abcd));
+        assert_eq!(range_children(&sets[0].ranges[0]), [0, 1]);
+        assert_eq!(range_children(&sets[0].ranges[1]), [0, 1, 2]);
+    }
+
+    /// Asserts that overlaps are transitive: AB, BC and CD give a single set.
+    #[test]
+    fn transitive() {
+        let (ab, bc, cd) = (group(&[A, B]), group(&[B, C]), group(&[C, D]));
+        let children = [
+            window(A, &[&ab]),
+            window(B, &[&ab, &bc]),
+            window(C, &[&bc, &cd]),
+            window(D, &[&cd]),
+        ];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].required, 0b1111);
+        assert!(sets[0].ranges.is_empty());
+    }
+
+    /// Asserts that a declared group and a larger one containing it are joined,
+    /// only the larger one's range contains every required member.
+    #[test]
+    fn subset() {
+        let (ab, abc) = (group(&[A, B]), group(&[A, B, C]));
+        let children = [
+            window(A, &[&ab, &abc]),
+            window(B, &[&ab, &abc]),
+            window(C, &[&abc]),
+        ];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].required, 0b111);
+        assert_eq!(sets[0].ranges.len(), 1);
+        assert!(Arc::ptr_eq(&range_groups(&sets[0])[0], &abc));
+    }
+
+    /// Asserts that a group with a member held by two children isn't used,
+    /// we don't pick which one would drive.
+    #[test]
+    fn ambiguous_required() {
+        let ab = group(&[A, B]);
+        let children = [window(A, &[&ab]), window(A, &[&ab]), window(B, &[&ab])];
+
+        assert!(cover_sets(&children).is_empty());
+    }
+
+    /// Asserts that an extra member held by two children doesn't come along.
+    #[test]
+    fn ambiguous_extra() {
+        let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
+        let children = [
+            window(A, &[&ab, &acd, &abcd]),
+            window(B, &[&ab, &abcd]),
+            window(C, &[&acd, &abcd]),
+            window(C, &[&acd, &abcd]),
+        ];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets.len(), 1);
+        assert_eq!(range_children(&sets[0].ranges[1]), [0, 1]);
+    }
+
+    /// Asserts that groups don't cross `Mixed` boundaries: a member held below a nested `Mixed`
+    /// doesn't make its parent hold the group.
+    #[test]
+    fn nested_boundary() {
+        let ab = group(&[A, B]);
+        let children = [window(A, &[&ab]), nested()];
+
+        assert!(cover_sets(&children).is_empty());
+    }
+
+    /// Asserts that each member reports its own part of a range, in child order,
+    /// whatever the order of the group's ids.
+    #[test]
+    fn member_parts() {
+        let ab = group(&[A, B]);
+        let mut a = window(A, &[&ab]);
+        if let NodeMetadata::Window(window) = &mut a.metadata {
+            window.ranges[0].ring.shift = -1;
+            window.ranges[0].trust = 1;
+        }
+        let children = [window(B, &[&ab]), a];
+
+        let sets = cover_sets(&children);
+
+        assert_eq!(sets[0].required, 0b11);
+        assert_eq!(
+            sets[0].ranges[0].members,
+            [
+                RangeMember {
+                    child: 0,
+                    ring: Ring {
+                        start: 0,
+                        len: 2,
+                        shift: 0,
+                    },
+                    trust: 2,
+                },
+                RangeMember {
+                    child: 1,
+                    ring: Ring {
+                        start: 0,
+                        len: 2,
+                        shift: -1,
+                    },
+                    trust: 1,
+                },
+            ]
+        );
     }
 }
