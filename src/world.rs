@@ -1314,13 +1314,14 @@ impl World {
 
     /// Declares a group made of the given storages, creating the ones that don't exist yet.
     ///
-    /// Declaring a group that already exists does nothing.\
+    /// Groups can share storages. Entities satisfying overlapping groups are grouped
+    /// in a union of them.\
+    /// Declaring a group that already exists, declared or created as a union, does nothing.\
     /// Declaring a new group runs a full [`regroup`](World::regroup).
     ///
     /// ### Panics
     ///
     /// - The same storage is listed twice.
-    /// - A storage already belongs to another group.
     #[doc(hidden)]
     #[track_caller]
     pub fn group<G: TupleGroup>(&mut self) -> &mut World {

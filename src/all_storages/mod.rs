@@ -1279,13 +1279,14 @@ let i = all_storages.run(sys1);
 
     /// Declares a group made of the given storages, creating the ones that don't exist yet.
     ///
-    /// Declaring a group that already exists does nothing.\
+    /// Groups can share storages. Entities satisfying overlapping groups are grouped
+    /// in a union of them.\
+    /// Declaring a group that already exists, declared or created as a union, does nothing.\
     /// Declaring a new group runs a full [`regroup`](AllStorages::regroup).
     ///
     /// ### Panics
     ///
     /// - The same storage is listed twice.
-    /// - A storage already belongs to another group.
     #[doc(hidden)]
     #[track_caller]
     pub fn group<G: TupleGroup>(&mut self) -> &mut AllStorages {
@@ -1309,7 +1310,8 @@ let i = all_storages.run(sys1);
 
         let storages = self.storages.get_mut();
 
-        // Every member holds a range for each of its groups, so checking one member is enough.
+        // Every member holds a range for each of its groups, unions included,
+        // so checking one member is enough.
         if member_groups(storages, ids[0])
             .find_by_value(&ids)
             .is_some()
@@ -1317,19 +1319,13 @@ let i = all_storages.run(sys1);
             return;
         }
 
-        for &storage_id in &ids {
-            assert!(
-                !member_groups(storages, storage_id).has_ranges(),
-                "a storage can only belong to one group for now"
-            );
-        }
+        invalidate_overlaps(storages, &ids);
 
         let group: Arc<[StorageId]> = Arc::from(ids);
         for &storage_id in group.iter() {
             member_groups(storages, storage_id).attach(group.clone(), storage_id);
         }
 
-        // A new member had no range before, so all its components are already unevaluated.
         self.regroup();
     }
 
@@ -1856,6 +1852,49 @@ fn member_groups(
         .get_mut()
         .groups_mut()
         .expect("grouping only supports SparseSet storages")
+}
+
+/// Marks for re-evaluation every component a new group made of `ids` can move.
+///
+/// An entity moves only if it satisfies the new group, so it owns a component in each of its
+/// members. Each of these components is either:
+/// - in the range of a group sharing that member: we drop the trust of these groups,
+///   regroup's repair then evicts their ranges to their members' unevaluated regions
+/// - ungrouped: we make the new members' ungrouped regions unevaluated
+/// - unevaluated already
+///
+/// Its other components move only to join a union with the new group. The groups linking them
+/// to the new group's members already linked them before, so they're in a range that contains
+/// one of these members, and gets evicted as well. Other ranges and regions are left alone.
+fn invalidate_overlaps(storages: &mut ShipHashMap<StorageId, SBox>, ids: &[StorageId]) {
+    // We collect the groups first, each one is invalidated once in all its members.
+    let mut overlapping: Vec<Arc<[StorageId]>> = Vec::new();
+    for &storage_id in ids {
+        for range in &member_groups(storages, storage_id).ranges {
+            if !overlapping
+                .iter()
+                .any(|group| Arc::ptr_eq(group, &range.group))
+            {
+                overlapping.push(range.group.clone());
+            }
+        }
+    }
+
+    for group in &overlapping {
+        for &member_id in group.iter() {
+            member_groups(storages, member_id)
+                .range_mut(group)
+                .expect("every member holds a range for its group")
+                .trust = 0;
+        }
+    }
+
+    // Moving the boundary is enough, ungrouped and unevaluated components are both unordered.
+    for &storage_id in ids {
+        let groups = member_groups(storages, storage_id);
+
+        groups.unevaluated_start = groups.grouped_end();
+    }
 }
 
 impl core::fmt::Debug for AllStorages {

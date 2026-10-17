@@ -129,7 +129,9 @@ group![
 
 #[cfg(test)]
 mod tests {
-    use crate::{track, Component, Get, IntoIter, View, World};
+    use crate::sparse_set::SparseSet;
+    use crate::storage::StorageId;
+    use crate::{track, Component, EntityId, Get, IntoIter, View, World};
     use alloc::sync::Arc;
     use alloc::vec::Vec;
 
@@ -248,13 +250,198 @@ mod tests {
         world.group::<(A, A)>();
     }
 
-    /// Asserts that adding a storage to a second group is rejected until storages can hold several ranges.
+    fn id<T: Component + Send + Sync>() -> StorageId {
+        StorageId::of::<SparseSet<T>>()
+    }
+
+    /// Returns `ids` sorted, a group's identity.
+    fn group_ids(ids: &[StorageId]) -> Vec<StorageId> {
+        let mut ids = ids.to_vec();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// Returns the members of each of `T`'s groups, in range order.
+    fn groups_of<T: Component + Send + Sync>(world: &World) -> Vec<Vec<StorageId>> {
+        let view = world.borrow::<View<'_, T>>().unwrap();
+
+        view.groups
+            .ranges
+            .iter()
+            .map(|range| range.group.to_vec())
+            .collect()
+    }
+
+    /// Returns the entities of `T`'s range for the group made of `ids`, sorted.
+    fn range_of<T: Component + Send + Sync>(world: &World, ids: &[StorageId]) -> Vec<EntityId> {
+        let view = world.borrow::<View<'_, T>>().unwrap();
+        let ids = group_ids(ids);
+        let range = view
+            .groups
+            .ranges
+            .iter()
+            .find(|range| range.group[..] == ids[..])
+            .expect("the group is attached to the storage");
+
+        let mut entities = view.dense[range.start..range.end()].to_vec();
+        entities.sort_unstable();
+        entities
+    }
+
+    /// Returns `true` when `T` has no unevaluated component.
+    fn is_evaluated<T: Component + Send + Sync>(world: &World) -> bool {
+        let view = world.borrow::<View<'_, T>>().unwrap();
+
+        view.groups.unevaluated_start == view.len()
+    }
+
+    /// Asserts that a storage can be part of two groups, holding a range for each.
     #[test]
-    #[should_panic(expected = "a storage can only belong to one group for now")]
     fn second_group() {
         let mut world = World::new();
 
         world.group::<(A, B)>().group::<(A, C)>();
+
+        assert_eq!(
+            groups_of::<A>(&world),
+            [
+                group_ids(&[id::<A>(), id::<B>()]),
+                group_ids(&[id::<A>(), id::<C>()])
+            ]
+        );
+        assert_eq!(groups_of::<B>(&world).len(), 1);
+        assert_eq!(groups_of::<C>(&world).len(), 1);
+    }
+
+    /// Asserts that declaring AC after AB was populated moves the AB entities holding C
+    /// to an ABC union, while the others stay in AB or join AC.
+    #[test]
+    fn overlap_populated() {
+        let mut world = World::new();
+        let abc = world.add_entity((A(0), B(0), C));
+        let ab = world.add_entity((A(1), B(1)));
+        let ac = world.add_entity((A(2), C));
+        world.group::<(A, B)>();
+        assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]).len(), 2);
+
+        world.group::<(A, C)>();
+
+        let all = [id::<A>(), id::<B>(), id::<C>()];
+        assert_eq!(range_of::<A>(&world, &all), [abc]);
+        assert_eq!(range_of::<B>(&world, &all), [abc]);
+        assert_eq!(range_of::<C>(&world, &all), [abc]);
+        assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), [ab]);
+        assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<C>()]), [ac]);
+        assert!(
+            is_evaluated::<A>(&world) && is_evaluated::<B>(&world) && is_evaluated::<C>(&world)
+        );
+    }
+
+    /// Asserts that declaring BC connects the disjoint AB and CD,
+    /// an entity holding all four moving to an ABCD union.
+    #[test]
+    fn overlap_connecting() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), B(0), C, D));
+        world.group::<(A, B)>().group::<(C, D)>();
+        assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), [entity]);
+
+        world.group::<(B, C)>();
+
+        let all = [id::<A>(), id::<B>(), id::<C>(), id::<D>()];
+        assert_eq!(range_of::<A>(&world, &all), [entity]);
+        assert_eq!(range_of::<D>(&world, &all), [entity]);
+        assert!(range_of::<A>(&world, &[id::<A>(), id::<B>()]).is_empty());
+        assert!(range_of::<D>(&world, &[id::<C>(), id::<D>()]).is_empty());
+    }
+
+    /// Asserts that a component left ungrouped by an earlier group joins a new group it satisfies.
+    #[test]
+    fn overlap_ungrouped() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), C));
+        world.group::<(A, B)>();
+        assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), []);
+
+        world.group::<(A, C)>();
+
+        assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<C>()]), [entity]);
+        assert_eq!(range_of::<C>(&world, &[id::<A>(), id::<C>()]), [entity]);
+    }
+
+    /// Asserts that declaring an existing group again doesn't regroup,
+    /// even when other components are waiting for it.
+    #[test]
+    fn duplicate_unevaluated() {
+        let mut world = World::new();
+        world.group::<(A, B)>().group::<(A, C)>();
+        world.add_entity((A(0), B(0), C));
+
+        world.group::<(B, A)>();
+
+        assert!(!is_evaluated::<A>(&world));
+        assert!(!is_evaluated::<C>(&world));
+    }
+
+    /// Asserts that declaring a group equal to an existing union reuses the union,
+    /// without attaching anything or regrouping.
+    #[test]
+    fn duplicate_union() {
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), B(0), C));
+        world.group::<(A, B)>().group::<(A, C)>();
+        let union = world.borrow::<View<'_, A>>().unwrap().groups.ranges[2]
+            .group
+            .clone();
+        world.add_entity((A(1), B(1), C));
+
+        world.group::<(C, B, A)>();
+
+        let a = world.borrow::<View<'_, A>>().unwrap();
+        assert_eq!(a.groups.ranges.len(), 3);
+        assert!(Arc::ptr_eq(&a.groups.ranges[2].group, &union));
+        assert_eq!(a.dense[a.groups.ranges[2].start], entity);
+        assert_ne!(a.groups.unevaluated_start, a.len());
+    }
+
+    /// Asserts that overlapping groups can be declared on empty storages.
+    #[test]
+    fn overlap_empty() {
+        let mut world = World::new();
+
+        world.group::<(A, B)>().group::<(A, C)>().group::<(C, D)>();
+
+        assert_eq!(groups_of::<A>(&world).len(), 2);
+        assert_eq!(groups_of::<C>(&world).len(), 2);
+        assert!(world.borrow::<View<'_, A>>().unwrap().is_empty());
+    }
+
+    /// Asserts that the order of declarations doesn't change which entities end in which group.
+    #[test]
+    fn overlap_order() {
+        let populate = |world: &mut World| {
+            for index in 0..12 {
+                match index % 3 {
+                    0 => world.add_entity((A(index), B(index), C)),
+                    1 => world.add_entity((A(index), B(index))),
+                    _ => world.add_entity((A(index), C)),
+                };
+            }
+        };
+        let mut ab_first = World::new();
+        populate(&mut ab_first);
+        ab_first.group::<(A, B)>().group::<(A, C)>();
+        let mut ac_first = World::new();
+        populate(&mut ac_first);
+        ac_first.group::<(A, C)>().group::<(A, B)>();
+
+        for ids in [
+            [id::<A>(), id::<B>()].as_slice(),
+            &[id::<A>(), id::<C>()],
+            &[id::<A>(), id::<B>(), id::<C>()],
+        ] {
+            assert_eq!(range_of::<A>(&ab_first, ids), range_of::<A>(&ac_first, ids));
+        }
     }
 
     /// Asserts that `AllStorages::group` attaches a group like `World::group` does.
@@ -293,6 +480,35 @@ mod tests {
             b.groups.storage_id,
             Some(StorageId::of::<NonSend<SparseSet<B>>>())
         );
+    }
+
+    /// Asserts that a `NonSend` member can be part of overlapping groups,
+    /// an entity satisfying both ending in their union.
+    #[cfg(feature = "thread_local")]
+    #[test]
+    fn non_send_overlap() {
+        use crate::borrow::NonSend;
+        use crate::{AddComponent, ViewMut};
+
+        let mut world = World::new();
+        let entity = world.add_entity((A(0), C));
+        world
+            .borrow::<NonSend<ViewMut<'_, B>>>()
+            .unwrap()
+            .add_component_unchecked(entity, B(0));
+
+        world.group::<(A, NonSend<B>)>().group::<(A, C)>();
+
+        let all = [
+            id::<A>(),
+            StorageId::of::<NonSend<SparseSet<B>>>(),
+            id::<C>(),
+        ];
+        assert_eq!(range_of::<A>(&world, &all), [entity]);
+        assert_eq!(range_of::<C>(&world, &all), [entity]);
+        let b = world.borrow::<NonSend<View<'_, B>>>().unwrap();
+        assert_eq!(b.groups.ranges.len(), 2);
+        assert_eq!(b.dense[b.groups.ranges[1].start], entity);
     }
 
     /// Asserts that iterating grouped storages yields the same components as before grouping,
