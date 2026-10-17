@@ -23,7 +23,7 @@ pub use sparse_array::SparseArray;
 #[doc(hidden)]
 pub use window::EntityCursor;
 
-pub(crate) use groups::GroupRange;
+pub(crate) use groups::{GroupRange, Ring};
 pub(crate) use sparse_array::BUCKET_SIZE;
 pub(crate) use window::{FullRawWindow, FullRawWindowMut};
 

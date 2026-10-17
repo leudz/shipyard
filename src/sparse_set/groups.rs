@@ -24,15 +24,36 @@ pub struct Groups {
 }
 
 /// The part of a storage's vectors that holds a group's components.
+///
+/// A range is a ring, see [`Ring`].
 pub(crate) struct GroupRange {
     /// The group's sorted member ids. Shared by every member and compared by pointer.
     pub(crate) group: Arc<[StorageId]>,
     pub(crate) start: usize,
     pub(crate) len: usize,
-    /// Rotation of the range once ranges become rings. Always 0 for now.
+    /// Rotation of the ring, see [`Ring`]. It's never normalized.
     pub(crate) shift: isize,
-    /// Length of the prefix that is unchanged since the last regroup.
+    /// Length of the logical prefix that is unchanged since the last regroup.
     pub(crate) trust: usize,
+}
+
+/// Position and rotation of a group range, with the arithmetic between its logical and physical orders.
+///
+/// Members are aligned by logical position, physical positions differ from one member to the next.
+/// For a non-empty ring:
+///
+/// ```text
+/// physical index of logical k = start + (shift + k).rem_euclid(len)
+/// ```
+///
+/// Calling `s` the shift's remainder, physical offsets `[s, len)` hold logical `[0, len - s)`
+/// and offsets `[0, s)` hold logical `[len - s, len)`.\
+/// The boundary between the logical last position and logical 0 is the wrap point.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct Ring {
+    pub(crate) start: usize,
+    pub(crate) len: usize,
+    pub(crate) shift: isize,
 }
 
 /// A region of a grouped storage, used as the destination of a regroup move.
@@ -51,6 +72,156 @@ impl GroupRange {
     /// Returns the physical index right after this range.
     pub(crate) fn end(&self) -> usize {
         self.start + self.len
+    }
+
+    /// Returns this range's position and rotation.
+    pub(crate) fn ring(&self) -> Ring {
+        Ring {
+            start: self.start,
+            len: self.len,
+            shift: self.shift,
+        }
+    }
+
+    /// Moves the whole range one slot to the left, keeping every component's logical position.
+    ///
+    /// The caller moves the range's physical last component to the slot before `start`.
+    pub(crate) fn move_left(&mut self) {
+        // The component that was at offset `len - 1` is now at offset 0, every other one moved
+        // one offset further. One more shift keeps them all at their logical position.
+        self.start -= 1;
+        self.shift = self
+            .shift
+            .checked_add(1)
+            .expect("ring shifts fit in an isize");
+    }
+
+    /// Moves the whole range one slot to the right, keeping every component's logical position.
+    ///
+    /// The caller moves the range's physical first component to the slot after its end.
+    pub(crate) fn move_right(&mut self) {
+        // The component that was at offset 0 is now at offset `len - 1`, every other one moved
+        // one offset back. One less shift keeps them all at their logical position.
+        self.start += 1;
+        self.shift = self
+            .shift
+            .checked_sub(1)
+            .expect("ring shifts fit in an isize");
+    }
+
+    /// Changes the range's length, logical 0 then being `wrap_offset` slots after `start`.
+    ///
+    /// The length is the ring's modulus, so the shift has to be recomputed when it changes.
+    /// We move it by less than the new length to reach the new remainder, instead of normalizing it.\
+    /// An empty range keeps its shift as is, it has no position to place.
+    pub(crate) fn resize(&mut self, len: usize, wrap_offset: usize) {
+        self.len = len;
+        if len == 0 {
+            return;
+        }
+
+        assert!(wrap_offset < len, "the wrap point is inside the range");
+
+        let current = self.ring().wrap_offset();
+        // Both offsets are smaller than `len`, which fits in an isize like every dense length.
+        let to_isize = |offset| isize::try_from(offset).expect("range lengths fit in an isize");
+        let delta = to_isize(wrap_offset) - to_isize(current);
+
+        self.shift = self
+            .shift
+            .checked_add(delta)
+            .expect("ring shifts fit in an isize");
+    }
+}
+
+impl Ring {
+    /// Returns the physical index right after this ring.
+    pub(crate) fn end(&self) -> usize {
+        self.start + self.len
+    }
+
+    /// Returns `true` when `physical` is one of this ring's slots.
+    pub(crate) fn contains(&self, physical: usize) -> bool {
+        self.start <= physical && physical < self.end()
+    }
+
+    /// Returns the offset of logical 0 from `start`, `shift.rem_euclid(len)`.
+    ///
+    /// ### Panics
+    ///
+    /// - The ring is empty.
+    pub(crate) fn wrap_offset(&self) -> usize {
+        assert_ne!(self.len, 0, "an empty ring has no wrap point");
+
+        // We take the remainder of the magnitude so no signed value has to be converted.
+        let remainder = self.shift.unsigned_abs() % self.len;
+
+        if self.shift < 0 && remainder != 0 {
+            self.len - remainder
+        } else {
+            remainder
+        }
+    }
+
+    /// Returns the number of logical positions physically after the wrap point, `[0, len - s)`.
+    fn unwrapped_len(&self) -> usize {
+        self.len - self.wrap_offset()
+    }
+
+    /// Returns the physical index of logical position `logical`.
+    ///
+    /// ### Panics
+    ///
+    /// - `logical` isn't smaller than the ring's length.
+    pub(crate) fn physical_of(&self, logical: usize) -> usize {
+        assert!(logical < self.len, "logical positions are inside the ring");
+
+        let unwrapped_len = self.unwrapped_len();
+
+        if logical < unwrapped_len {
+            self.start + self.wrap_offset() + logical
+        } else {
+            self.start + (logical - unwrapped_len)
+        }
+    }
+
+    /// Returns the logical position of the component at physical index `physical`.
+    ///
+    /// ### Panics
+    ///
+    /// - `physical` isn't one of the ring's slots.
+    pub(crate) fn logical_of(&self, physical: usize) -> usize {
+        assert!(
+            self.contains(physical),
+            "physical indices are inside the ring"
+        );
+
+        let offset = physical - self.start;
+        let wrap_offset = self.wrap_offset();
+
+        if offset >= wrap_offset {
+            offset - wrap_offset
+        } else {
+            offset + self.unwrapped_len()
+        }
+    }
+
+    /// Returns how many logical positions from `logical` on are physically consecutive,
+    /// up to the wrap point or the ring's end.
+    ///
+    /// ### Panics
+    ///
+    /// - `logical` isn't smaller than the ring's length.
+    pub(crate) fn contiguous_len(&self, logical: usize) -> usize {
+        assert!(logical < self.len, "logical positions are inside the ring");
+
+        let unwrapped_len = self.unwrapped_len();
+
+        if logical < unwrapped_len {
+            unwrapped_len - logical
+        } else {
+            self.len - logical
+        }
     }
 }
 
@@ -80,17 +251,31 @@ impl Groups {
 
     /// Returns the region holding the component at physical `index`.
     pub(crate) fn region_of(&self, index: usize) -> GroupRegion<'_> {
-        if let Some(range) = self
-            .ranges
-            .iter()
-            .find(|range| range.start <= index && index < range.end())
-        {
-            GroupRegion::Range(&range.group)
+        if let Some(range_index) = self.range_index_of(index) {
+            GroupRegion::Range(&self.ranges[range_index].group)
         } else if index < self.unevaluated_start {
             GroupRegion::Ungrouped
         } else {
             GroupRegion::Unevaluated
         }
+    }
+
+    /// Returns the position in `ranges` of the range holding the component at physical `index`.
+    ///
+    /// Empty ranges hold nothing, so they're never returned.
+    pub(crate) fn range_index_of(&self, index: usize) -> Option<usize> {
+        self.ranges
+            .iter()
+            .position(|range| range.ring().contains(index))
+    }
+
+    /// Returns the position in `ranges` of `group`'s range.
+    ///
+    /// Groups are compared by pointer, an equal group allocated separately doesn't match.
+    pub(crate) fn range_index(&self, group: &Arc<[StorageId]>) -> Option<usize> {
+        self.ranges
+            .iter()
+            .position(|range| Arc::ptr_eq(&range.group, group))
     }
 
     /// Returns `group`'s range in this storage.
@@ -105,7 +290,6 @@ impl Groups {
     /// Returns `group`'s range in this storage.
     ///
     /// Groups are compared by pointer, an equal group allocated separately doesn't match.
-    #[allow(dead_code, reason = "Used once storages can hold several ranges.")]
     pub(crate) fn range_mut(&mut self, group: &Arc<[StorageId]>) -> Option<&mut GroupRange> {
         self.ranges
             .iter_mut()
@@ -130,8 +314,8 @@ impl Groups {
 
     /// Returns the group of a range whose member ids are equal to `ids`.
     ///
-    /// This compares by value and is only meant to detect duplicate declarations.\
-    /// Everywhere else groups are compared by pointer.
+    /// This compares by value. It's only meant to detect duplicate declarations and to reuse
+    /// an existing union, everywhere else groups are compared by pointer.
     pub(crate) fn find_by_value(&self, ids: &[StorageId]) -> Option<&Arc<[StorageId]>> {
         self.ranges
             .iter()
@@ -148,6 +332,7 @@ impl Groups {
         // the removal design replaces it.
         // Iteration stays correct: our trust is 0 so every group's aligned part is empty,
         // and all our components are found in the unevaluated region.
+        // Shifts are kept, an empty range doesn't use it and growing it picks a new remainder.
         for range in &mut self.ranges {
             range.start = 0;
             range.len = 0;
@@ -161,6 +346,8 @@ impl Groups {
     #[cfg(debug_assertions)]
     #[track_caller]
     pub(crate) fn assert_invariants(&self, dense_len: usize) {
+        // Rings can have any shift, only their slots have to tile the start of the storage.
+        // Empty ranges take no slot, several of them can share a start.
         let mut previous_end = 0;
         for range in &self.ranges {
             assert_eq!(
@@ -171,16 +358,9 @@ impl Groups {
                 range.trust <= range.len,
                 "a range's trust cannot exceed its length"
             );
-            assert_eq!(range.shift, 0, "ranges cannot be rotated yet");
 
             previous_end = range.end();
         }
-
-        // Temporary until ranges become rings and storages can hold several of them.
-        assert!(
-            self.ranges.len() <= 1,
-            "a storage can only belong to one group for now"
-        );
 
         if self.ranges.is_empty() {
             assert_eq!(
@@ -408,23 +588,342 @@ mod tests {
         assert!(groups.find_by_value(&ac).is_none());
     }
 
+    fn ring(start: usize, len: usize, shift: isize) -> Ring {
+        Ring { start, len, shift }
+    }
+
+    /// Returns the physical index of every logical position of `ring`, in logical order.
+    fn physical_order(ring: Ring) -> Vec<usize> {
+        (0..ring.len).map(|k| ring.physical_of(k)).collect()
+    }
+
+    /// Asserts that an unrotated ring maps logical `k` to `start + k`.
+    #[test]
+    fn ring_unrotated() {
+        assert_eq!(physical_order(ring(2, 4, 0)), [2, 3, 4, 5]);
+    }
+
+    /// Asserts that a shift of 2 puts logical 0 two slots after `start`,
+    /// the last two logical positions wrapping to the front: `[L3 L4 L0 L1 L2]`.
+    #[test]
+    fn ring_positive() {
+        assert_eq!(physical_order(ring(3, 5, 2)), [5, 6, 7, 3, 4]);
+    }
+
+    /// Asserts that a shift of -1 puts logical 0 on the ring's last slot.
+    #[test]
+    fn ring_negative() {
+        assert_eq!(physical_order(ring(0, 5, -1)), [4, 0, 1, 2, 3]);
+    }
+
+    /// Asserts that shifts larger than the length, in either direction, only count by their remainder.
+    #[test]
+    fn ring_large_shift() {
+        assert_eq!(physical_order(ring(3, 5, 12)), [5, 6, 7, 3, 4]);
+        assert_eq!(physical_order(ring(3, 5, -13)), [5, 6, 7, 3, 4]);
+        assert_eq!(physical_order(ring(3, 5, -10)), [3, 4, 5, 6, 7]);
+    }
+
+    /// Asserts that the most extreme shifts give the same remainder as an exact `rem_euclid`.
+    #[test]
+    fn ring_extreme_shift() {
+        for shift in [isize::MIN, isize::MIN + 1, isize::MAX] {
+            for len in 1..=7usize {
+                let expected = i128::try_from(shift)
+                    .unwrap()
+                    .rem_euclid(i128::try_from(len).unwrap());
+
+                assert_eq!(
+                    i128::try_from(ring(0, len, shift).wrap_offset()).unwrap(),
+                    expected,
+                    "shift {shift}, len {len}"
+                );
+            }
+        }
+    }
+
+    /// Asserts that a ring of length 1 always holds logical 0 at `start`.
+    #[test]
+    fn ring_len_one() {
+        for shift in [-3, -1, 0, 1, 7] {
+            assert_eq!(physical_order(ring(4, 1, shift)), [4]);
+        }
+    }
+
+    /// Asserts that, for every small length and shift, logical positions map to every slot once
+    /// and `logical_of` maps each slot back.
+    #[test]
+    fn ring_round_trip() {
+        for len in 1..=6 {
+            for shift in -13..=13 {
+                let ring = ring(3, len, shift);
+
+                let mut slots = physical_order(ring);
+                for (logical, &physical) in slots.iter().enumerate() {
+                    assert_eq!(ring.logical_of(physical), logical, "{ring:?}");
+                }
+
+                slots.sort_unstable();
+                assert_eq!(slots, (3..3 + len).collect::<Vec<_>>(), "{ring:?}");
+            }
+        }
+    }
+
+    /// Asserts that an empty ring has no wrap point instead of taking a remainder by zero.
+    #[test]
+    #[should_panic(expected = "an empty ring has no wrap point")]
+    fn ring_empty() {
+        let _ = ring(0, 0, 3).wrap_offset();
+    }
+
+    /// Asserts that an empty ring has no logical position.
+    #[test]
+    #[should_panic(expected = "logical positions are inside the ring")]
+    fn ring_empty_position() {
+        let _ = ring(0, 0, 0).physical_of(0);
+    }
+
+    /// Asserts that `logical_of` rejects slots outside the ring.
+    #[test]
+    #[should_panic(expected = "physical indices are inside the ring")]
+    fn ring_outside() {
+        let _ = ring(2, 3, 1).logical_of(5);
+    }
+
+    /// Asserts that consecutive logical positions are physically consecutive up to the wrap point
+    /// and up to the ring's end, `[L3 L4 L0 L1 L2]` splitting into `L0..L3` and `L3..L5`.
+    #[test]
+    fn ring_contiguous_len() {
+        let rotated = ring(3, 5, 2);
+
+        assert_eq!(rotated.contiguous_len(0), 3);
+        assert_eq!(rotated.contiguous_len(2), 1);
+        assert_eq!(rotated.contiguous_len(3), 2);
+        assert_eq!(rotated.contiguous_len(4), 1);
+        assert_eq!(ring(3, 5, 0).contiguous_len(1), 4);
+    }
+
+    /// Returns a range over `ring` without a meaningful group or trust.
+    fn ring_range(ring: Ring) -> GroupRange {
+        GroupRange {
+            group: group(&[0, 1]),
+            start: ring.start,
+            len: ring.len,
+            shift: ring.shift,
+            trust: 0,
+        }
+    }
+
+    /// Asserts that moving a range left keeps every logical position,
+    /// only the physical last component lands on the slot before the old start.
+    #[test]
+    fn move_left() {
+        for len in 1..=4 {
+            for shift in -5..=5 {
+                let before = ring(3, len, shift);
+                let mut range = ring_range(before);
+
+                range.move_left();
+
+                let expected: Vec<usize> = physical_order(before)
+                    .into_iter()
+                    .map(|physical| {
+                        if physical == before.end() - 1 {
+                            before.start - 1
+                        } else {
+                            physical
+                        }
+                    })
+                    .collect();
+                assert_eq!(physical_order(range.ring()), expected, "{before:?}");
+            }
+        }
+    }
+
+    /// Asserts that moving a range right keeps every logical position,
+    /// only the physical first component lands on the slot after the old end.
+    #[test]
+    fn move_right() {
+        for len in 1..=4 {
+            for shift in -5..=5 {
+                let before = ring(3, len, shift);
+                let mut range = ring_range(before);
+
+                range.move_right();
+
+                let expected: Vec<usize> = physical_order(before)
+                    .into_iter()
+                    .map(|physical| {
+                        if physical == before.start {
+                            before.end()
+                        } else {
+                            physical
+                        }
+                    })
+                    .collect();
+                assert_eq!(physical_order(range.ring()), expected, "{before:?}");
+            }
+        }
+    }
+
+    /// Asserts that moving an empty range only moves its start.
+    #[test]
+    fn move_empty() {
+        let mut range = ring_range(ring(3, 0, -2));
+
+        range.move_left();
+        assert_eq!(range.start, 2);
+        range.move_right();
+        range.move_right();
+        assert_eq!(range.start, 4);
+    }
+
+    /// Asserts that resizing picks the requested wrap point by moving the shift by the difference
+    /// between the new and current remainders, instead of normalizing it.
+    #[test]
+    fn resize() {
+        let mut range = ring_range(ring(0, 5, 17));
+
+        range.resize(4, 1);
+
+        assert_eq!(range.ring().wrap_offset(), 1);
+        // 17 has a remainder of 1 modulo 4, it's already right.
+        assert_eq!(range.shift, 17);
+
+        range.resize(6, 4);
+        // 17 has a remainder of 5 modulo 6, one less gives 4.
+        assert_eq!((range.ring().wrap_offset(), range.shift), (4, 16));
+
+        range.resize(3, 2);
+        // 16 has a remainder of 1 modulo 3, one more gives 2.
+        assert_eq!((range.ring().wrap_offset(), range.shift), (2, 17));
+    }
+
+    /// Asserts that resizing to 0 keeps the shift, an empty range has no wrap point.
+    #[test]
+    fn resize_empty() {
+        let mut range = ring_range(ring(0, 2, -9));
+
+        range.resize(0, 0);
+
+        assert_eq!((range.len, range.shift), (0, -9));
+    }
+
+    /// Asserts that an empty range with a large retained shift grows like any other.
+    #[test]
+    fn resize_from_empty() {
+        let mut range = ring_range(ring(2, 0, isize::MIN + 1));
+
+        range.resize(1, 0);
+        assert_eq!(physical_order(range.ring()), [2]);
+        range.resize(2, 1);
+        assert_eq!(physical_order(range.ring()), [3, 2]);
+    }
+
+    /// Asserts that a reset storage can grow its ranges again whatever shift they kept.
+    #[test]
+    fn reset_reuse() {
+        let ab = group(&[0, 1]);
+        let mut ab_range = range(&ab, 0, 3);
+        ab_range.shift = -7;
+        let mut groups = Groups {
+            storage_id: None,
+            ranges: vec![ab_range],
+            unevaluated_start: 3,
+        };
+
+        groups.reset();
+        groups.ranges[0].resize(1, 0);
+        groups.unevaluated_start = 1;
+
+        assert_eq!(groups.ranges[0].shift, -7);
+        assert_eq!(physical_order(groups.ranges[0].ring()), [0]);
+        #[cfg(debug_assertions)]
+        groups.assert_invariants(1);
+    }
+
+    /// Asserts that empty ranges between non-empty ones hold nothing,
+    /// every slot is classified in the range actually covering it.
+    #[test]
+    fn region_of_empty_interior() {
+        let ab = group(&[0, 1]);
+        let ac = group(&[0, 2]);
+        let ad = group(&[0, 3]);
+        let groups = Groups {
+            storage_id: None,
+            ranges: vec![range(&ab, 0, 2), range(&ac, 2, 0), range(&ad, 2, 3)],
+            unevaluated_start: 6,
+        };
+
+        assert_eq!(groups.range_index_of(1), Some(0));
+        assert_eq!(groups.range_index_of(2), Some(2));
+        assert_eq!(groups.range_index_of(4), Some(2));
+        assert_eq!(groups.range_index_of(5), None);
+        assert!(
+            matches!(groups.region_of(2), GroupRegion::Range(group) if Arc::ptr_eq(group, &ad))
+        );
+        assert!(matches!(groups.region_of(5), GroupRegion::Ungrouped));
+        assert_eq!(groups.range_index(&ac), Some(1));
+        assert_eq!(groups.range_index(&group(&[0, 2])), None);
+    }
+
+    /// Asserts that rotations don't change which region holds a slot.
+    #[test]
+    fn region_of_rotated() {
+        let ab = group(&[0, 1]);
+        let ac = group(&[0, 2]);
+        let mut ab_range = range(&ab, 0, 2);
+        ab_range.shift = 1;
+        let mut ac_range = range(&ac, 2, 3);
+        ac_range.shift = -4;
+        let groups = Groups {
+            storage_id: None,
+            ranges: vec![ab_range, ac_range],
+            unevaluated_start: 5,
+        };
+
+        assert_eq!(groups.range_index_of(0), Some(0));
+        assert_eq!(groups.range_index_of(1), Some(0));
+        assert_eq!(groups.range_index_of(4), Some(1));
+        assert!(matches!(groups.region_of(5), GroupRegion::Unevaluated));
+    }
+
     #[cfg(debug_assertions)]
     mod invariants {
         use super::*;
 
-        /// Asserts that two ranges are rejected while a storage can only belong to one group.
+        /// Asserts that several ranges, rotated or empty, are accepted.
         #[test]
-        #[should_panic(expected = "a storage can only belong to one group for now")]
-        fn two_ranges() {
+        fn several_ranges() {
             let ab = group(&[0, 1]);
             let ac = group(&[0, 2]);
+            let ad = group(&[0, 3]);
+            let mut ab_range = range(&ab, 0, 2);
+            ab_range.shift = 5;
+            let mut ad_range = range(&ad, 2, 3);
+            ad_range.shift = -2;
             let groups = Groups {
                 storage_id: None,
-                ranges: vec![range(&ab, 0, 2), range(&ac, 2, 3)],
+                ranges: vec![ab_range, range(&ac, 2, 0), ad_range],
                 unevaluated_start: 5,
             };
 
             groups.assert_invariants(5);
+        }
+
+        /// Asserts that a range overlapping the previous one is rejected.
+        #[test]
+        #[should_panic(expected = "group ranges must tile the start of the storage in order")]
+        fn tiling_overlap() {
+            let ab = group(&[0, 1]);
+            let ac = group(&[0, 2]);
+            let groups = Groups {
+                storage_id: None,
+                ranges: vec![range(&ab, 0, 2), range(&ac, 1, 3)],
+                unevaluated_start: 4,
+            };
+
+            groups.assert_invariants(4);
         }
 
         /// Asserts that a first range that doesn't start at index 0 is rejected.
@@ -485,26 +984,12 @@ mod tests {
             groups.assert_invariants(2);
         }
 
-        /// Asserts that a range with a shift of 0 is accepted.
+        /// Asserts that a rotated range is accepted, whatever its shift.
         #[test]
-        fn shift() {
-            let ab = group(&[0, 1]);
-            let groups = Groups {
-                storage_id: None,
-                ranges: vec![range(&ab, 0, 2)],
-                unevaluated_start: 2,
-            };
-
-            groups.assert_invariants(2);
-        }
-
-        /// Asserts that a rotated range is rejected while ranges can't be rings.
-        #[test]
-        #[should_panic(expected = "ranges cannot be rotated yet")]
         fn shift_rotated() {
             let ab = group(&[0, 1]);
             let mut ab_range = range(&ab, 0, 2);
-            ab_range.shift = -1;
+            ab_range.shift = isize::MIN;
             let groups = Groups {
                 storage_id: None,
                 ranges: vec![ab_range],
