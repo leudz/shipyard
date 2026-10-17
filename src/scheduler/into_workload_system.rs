@@ -146,8 +146,8 @@ macro_rules! impl_into_workload_system {
                 Ok(WorkloadSystem {
                     borrow_constraints: borrows,
                     tracking_to_enable,
-                    display_name: self.label(),
-                    tags: vec![self.label()],
+                    display_name: <Func as IntoWorkloadSystem<($($type,)+), Ret>>::label(&self),
+                    tags: vec![<Func as IntoWorkloadSystem<($($type,)+), Ret>>::label(&self)],
                     system_fn: Box::new(move |world: &World| {
                         let current = world.get_current();
                         let last_run = TrackingTimestamp::new(last_run.swap(current.get(), Ordering::Acquire));
