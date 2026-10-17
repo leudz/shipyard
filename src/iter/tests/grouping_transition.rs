@@ -4,18 +4,13 @@
 //! the state each node holds after entering a segment.
 
 use crate::component::Component;
-use crate::entity_id::EntityId;
-use crate::iter::plan::{CoverageSpan, NodeKind, NodeState, OrBranch, PlanBuilder};
-use crate::iter::{
-    EntityCursor, IntoIter, IntoShiperator, Mixed, RawEntityIdAccess, Shiper, Shiperator,
-};
-use crate::or::{OneOfTwo, OrWindow};
-use crate::sparse_set::FullRawWindow;
+use crate::iter::plan::{CoverageSpan, NodeState, OrBranch};
+use crate::iter::{IntoIter, IntoShiperator};
+use crate::or::OneOfTwo;
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
 use alloc::vec::Vec;
-use core::ptr::NonNull;
 
 #[derive(Debug, PartialEq)]
 struct A(u32);
@@ -41,11 +36,6 @@ impl Component for Ins {
     type Tracking = track::Insertion;
 }
 
-fn cursor(entities: &[EntityId]) -> EntityCursor {
-    // SAFE: Every test keeps the storage `entities` belongs to borrowed while its iterators are used.
-    unsafe { EntityCursor::new(NonNull::from(entities).cast(), entities.len()) }
-}
-
 fn window(segment_start: usize) -> NodeState {
     NodeState::Window { segment_start }
 }
@@ -59,47 +49,6 @@ fn mixed(captain_mask: u32) -> NodeState {
 
 fn or(branch: OrBranch) -> NodeState {
     NodeState::Or { branch }
-}
-
-/// Returns an iterator walking `segments` in order, each installing its row.
-///
-/// The iterator starts without any candidate so even the first segment is entered.
-fn planned<S: Shiperator>(
-    shiperator: S,
-    layout: &[NodeKind],
-    segments: &[(&[EntityId], &[NodeState])],
-) -> Shiper<S> {
-    let mut plan = PlanBuilder::new(layout);
-    for &(entities, row) in segments {
-        plan.push_segment(cursor(entities), row);
-    }
-
-    Shiper {
-        shiperator,
-        cursor: EntityCursor::empty(),
-        schedule: plan.finish(),
-        is_exact_sized: false,
-    }
-}
-
-const MIXED_LAYOUT: [NodeKind; 3] = [
-    NodeKind::Mixed { children: 2 },
-    NodeKind::Window,
-    NodeKind::Window,
-];
-
-/// Entity `i` owns `A(i)` at index `i` of `A`.
-/// Entities 2 to 5 also own `B(10 + i)` at index `i - 1` of `B`, after an unrelated `B(100)`.
-fn shifted_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
-
-    world.add_entity(B(100));
-    let e: Vec<EntityId> = (0..6).map(|i| world.add_entity(A(i))).collect();
-    for (i, &entity) in e.iter().enumerate().skip(2) {
-        world.add_component(entity, B(10 + i as u32));
-    }
-
-    (world, e)
 }
 
 /// Entities `e0` to `e{a_len - 1}` own `A(i)`, then `f0` to `f{b_len - 1}` own `B(10 + i)`.
@@ -121,125 +70,6 @@ fn or_value(item: OneOfTwo<&A, &B>) -> u32 {
         OneOfTwo::One(a) => a.0,
         OneOfTwo::Two(b) => b.0,
     }
-}
-
-/// Asserts that entering a segment installs each captain window's own start with the cursor:
-/// for the same entities, `A` starts at 2 and `B` at 1.
-#[test]
-fn unequal_starts() {
-    let (world, e) = shifted_world();
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let windows = Mixed::new(
-        (FullRawWindow::from_view(&a), FullRawWindow::from_view(&b)),
-        0b01,
-    );
-    let row = [mixed(0b11), window(2), window(1)];
-    let mut iter = planned(windows, &MIXED_LAYOUT, &[(&a.dense[2..6], &row)]);
-
-    assert_eq!(iter.next().map(|(a, b)| (a.0, b.0)), Some((2, 12)));
-
-    let state = &iter.shiperator;
-    assert_eq!(state.captain_mask, 0b11);
-    assert_eq!(
-        (
-            state.shiperator.0.segment_start,
-            state.shiperator.1.segment_start
-        ),
-        (2, 1)
-    );
-
-    let rest: Vec<_> = iter.with_id().map(|(id, (a, b))| (id, a.0, b.0)).collect();
-    assert_eq!(rest, [(e[3], 3, 13), (e[4], 4, 14), (e[5], 5, 15)]);
-}
-
-/// Asserts that a one segment plan is still owned after entering its segment,
-/// with no follow-up left, and that the window resolves from the installed start.
-#[test]
-fn one_segment() {
-    let (world, _) = shifted_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let row = [window(3)];
-    let mut iter = planned(
-        FullRawWindow::from_view(&a),
-        &[NodeKind::Window],
-        &[(&a.dense[3..6], &row)],
-    );
-
-    assert_eq!(iter.next(), Some(&A(3)));
-    assert_eq!(iter.shiperator.segment_start, 3);
-
-    let schedule = iter.schedule.as_ref().unwrap();
-    assert!(schedule.follow_ups().is_empty());
-    assert_eq!(schedule.remaining_len(), 0);
-
-    assert_eq!(iter.by_ref().collect::<Vec<_>>(), [&A(4), &A(5)]);
-    assert!(iter.next().is_none());
-    assert!(iter.schedule.is_some());
-}
-
-/// Asserts that entering a segment leaves a sailor subtree untouched:
-/// the sailor `Or` keeps its branch and its windows keep their segment starts.
-#[test]
-fn inactive_sailor() {
-    let mut world = World::new();
-    let e: Vec<EntityId> = (0..4).map(|i| world.add_entity(C(i))).collect();
-    world.add_component(e[1], A(1));
-    world.add_component(e[2], B(2));
-    let (a, b, c) = world
-        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
-        .unwrap();
-
-    let mut a_window = FullRawWindow::from_view(&a);
-    let mut b_window = FullRawWindow::from_view(&b);
-    // SAFE: Both windows are only sailors, they never receive a local index.
-    unsafe {
-        a_window.set_segment_start(7);
-        b_window.set_segment_start(8);
-    }
-    let windows = Mixed::new(
-        (
-            FullRawWindow::from_view(&c),
-            OrWindow {
-                storages: (a_window, b_window),
-                branch: OrBranch::B,
-            },
-        ),
-        0b01,
-    );
-    let layout = [
-        NodeKind::Mixed { children: 2 },
-        NodeKind::Window,
-        NodeKind::Or,
-        NodeKind::Window,
-        NodeKind::Window,
-    ];
-    let row = [
-        mixed(0b01),
-        window(0),
-        NodeState::Sailor,
-        NodeState::Sailor,
-        NodeState::Sailor,
-    ];
-    let mut iter = planned(windows, &layout, &[(&c.dense[..], &row)]);
-
-    let first = iter.next().map(|(c, a_or_b)| (c.0, a_or_b));
-    assert_eq!(first, Some((1, OneOfTwo::One(&A(1)))));
-
-    let sailor = &iter.shiperator.shiperator.1;
-    assert_eq!(sailor.branch, OrBranch::B);
-    assert_eq!(
-        (
-            sailor.storages.0.segment_start,
-            sailor.storages.1.segment_start
-        ),
-        (7, 8)
-    );
-
-    assert_eq!(
-        iter.next().map(|(c, a_or_b)| (c.0, a_or_b)),
-        Some((2, OneOfTwo::Two(&B(2))))
-    );
-    assert!(iter.next().is_none());
 }
 
 /// Asserts that an `Or` whose branches both have candidates starts with the first one
@@ -441,27 +271,17 @@ fn mixed_or_captain() {
     assert_eq!(iter.shiperator.shiperator.0.branch, OrBranch::B);
 }
 
-/// Asserts that every iterator obtained from an `IntoIterRef` starts from fresh positions
-/// in the shared plan, and replays the same segments.
+/// Replaying an owned grouped iterator must reinstall the initial state and all follow-ups.
 #[test]
 fn replay() {
-    let world = or_world(6, 0);
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let mut iter_ref = world.iter::<&A>();
-
-    let mut plan = PlanBuilder::new(&[NodeKind::Window]);
-    plan.push_segment(cursor(&a.dense[4..6]), &[window(4)]);
-    iter_ref.entities = RawEntityIdAccess {
-        cursor: cursor(&a.dense[..2]),
-        schedule: plan.finish(),
-        metadata: Default::default(),
-    };
-
-    let first: Vec<_> = iter_ref.iter().map(|a| a.0).collect();
-    let second: Vec<_> = iter_ref.iter().map(|a| a.0).collect();
-
-    assert_eq!(first, [0, 1, 4, 5]);
-    assert_eq!(second, first);
+    use super::grouping_fixtures::{coverage_world, A, B};
+    let (world, ids) = coverage_world();
+    let mut iter_ref = world.iter::<(&A, &B)>();
+    for _ in 0..2 {
+        let iter = iter_ref.iter();
+        assert_eq!(iter.schedule.as_ref().unwrap().follow_ups().len(), 2);
+        assert_eq!(iter.with_id().map(|(id, _)| id).collect::<Vec<_>>(), ids);
+    }
 }
 
 /// Asserts that size hints count the candidates of the current segment and of all follow-ups.

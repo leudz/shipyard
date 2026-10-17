@@ -283,6 +283,30 @@ fn zero_sized() {
     assert_eq!((&z0, &z1).iter().size_hint(), (4, Some(4)));
 }
 
+/// Mutable ZST outputs can stay alive across an aligned prefix and late coverage.
+#[test]
+fn zero_sized_held_mut() {
+    let mut world = World::new();
+    let mut ids: Vec<_> = (0..10).map(|_| world.add_entity((Zst0, Zst1))).collect();
+    world.group::<(Zst0, Zst1)>();
+    ids.push(world.add_entity((Zst0, Zst1)));
+    let (mut z0, mut z1) = world.borrow::<(ViewMut<Zst0>, ViewMut<Zst1>)>().unwrap();
+    let iter = (&mut z0, &mut z1).iter();
+    // 10 aligned candidates and the late pair walked by each member.
+    assert_eq!(iter.size_hint(), (0, Some(12)));
+    let held = iter.with_id().fold(Vec::new(), |mut acc, item| {
+        acc.push(item);
+        acc
+    });
+    let mut found = Vec::new();
+    for (id, (z0, z1)) in held {
+        *z0 = Zst0;
+        *z1 = Zst1;
+        found.push(id);
+    }
+    assert_eq!(sorted(found), sorted(ids));
+}
+
 /// Asserts that pairs added after a regroup are yielded once each, along with the regrouped ones.
 #[test]
 fn new_entities() {

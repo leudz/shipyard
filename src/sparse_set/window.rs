@@ -869,8 +869,12 @@ mod grouping_cursor {
 
 #[cfg(test)]
 mod grouping_coordinates {
+    // These are raw-window contract tests, not alternate iterator constructors.
+    // Keep direct resolution checks for local/absolute indices and timestamp
+    // access; traversal, cloning through splits, empty and ZST behavior use the
+    // public API in the iterator suites.
     use super::{EntityCursor, FullRawWindow, FullRawWindowMut};
-    use crate::iter::{Mixed, Shiper, Shiperator};
+    use crate::iter::Shiperator;
     use crate::tracking::Modified;
     use crate::{track, Component, EntityId, Get, View, ViewMut, World};
     use alloc::vec::Vec;
@@ -894,12 +898,6 @@ mod grouping_coordinates {
         type Tracking = track::Modification;
     }
 
-    #[derive(Debug, PartialEq)]
-    struct Zst;
-    impl Component for Zst {
-        type Tracking = track::Untracked;
-    }
-
     /// Builds six entities where entity `i` owns `A(i)` at index `i` of `A`.
     /// Entities 2 to 5 also own `B(10 + i)` at index `i - 1` of `B`,
     /// after an unrelated `B(100)` at index 0.
@@ -921,25 +919,6 @@ mod grouping_coordinates {
 
         // SAFE: The storage `dense` belongs to stays borrowed while the tests use the cursor.
         unsafe { EntityCursor::new(NonNull::from(segment).cast(), len) }
-    }
-
-    /// Iterates `len` items of `shiperator`, reading entities from `dense` starting at `start`.
-    ///
-    /// Segment starts must be set on `shiperator`'s windows beforehand.
-    fn segment_iter<S: Shiperator>(
-        shiperator: S,
-        dense: &[EntityId],
-        start: usize,
-        len: usize,
-    ) -> Shiper<S> {
-        let is_exact_sized = shiperator.is_exact_sized();
-
-        Shiper {
-            shiperator,
-            cursor: entities_from(dense, start, len),
-            schedule: None,
-            is_exact_sized,
-        }
     }
 
     /// Asserts that two windows with different nonzero segment starts resolve the same
@@ -979,33 +958,6 @@ mod grouping_coordinates {
         }
     }
 
-    /// Asserts that `Mixed` forwards local indices unchanged to multiple captains,
-    /// each applying its own start, and that `WithId` yields the matching entities.
-    #[test]
-    fn mixed_captains() {
-        let (world, entities) = world();
-        let a = world.borrow::<View<'_, A>>().unwrap();
-        let b = world.borrow::<View<'_, B>>().unwrap();
-
-        let mut a_window = FullRawWindow::from_view(&a);
-        let mut b_window = FullRawWindow::from_view(&b);
-        // SAFE: Both segments are 4 components long and cover entities 2 to 5,
-        // stored at 2..6 in A, at 1..5 in B and at 0..4 in the iterator's entity source.
-        unsafe {
-            a_window.set_segment_start(2);
-            b_window.set_segment_start(1);
-        }
-
-        let mixed = Mixed::new((a_window, b_window), 0b11);
-        let iter = segment_iter(mixed, &a.dense, 2, 4);
-
-        let items: Vec<_> = iter.with_id().map(|(id, (a, b))| (id, a.0, b.0)).collect();
-        let expected: Vec<_> = (2..6)
-            .map(|i| (entities[i], i as u32, 10 + i as u32))
-            .collect();
-        assert_eq!(items, expected);
-    }
-
     /// Asserts that sparse lookups ignore the segment start and return absolute indices,
     /// including for an entity stored before the segment.
     #[test]
@@ -1024,34 +976,6 @@ mod grouping_coordinates {
         assert_eq!(index, 1);
         // SAFE: `index` was returned by `sailor_indices_of`.
         assert_eq!(unsafe { a_window.get_data(index) }, &A(1));
-    }
-
-    /// Asserts that a sailor with a nonzero segment start returns the components of
-    /// the captain's entities, even the ones stored before its own segment.
-    #[test]
-    fn nested_sailor() {
-        let (world, entities) = world();
-        let a = world.borrow::<View<'_, A>>().unwrap();
-        let b = world.borrow::<View<'_, B>>().unwrap();
-
-        let mut a_window = FullRawWindow::from_view(&a);
-        let mut b_window = FullRawWindow::from_view(&b);
-        // SAFE: A is only a sailor, its segment start is never applied.
-        // B's segment is 4 components long and covers entities 2 to 5,
-        // stored at 1..5 in B and at 0..4 in the iterator's entity source.
-        unsafe {
-            a_window.set_segment_start(4);
-            b_window.set_segment_start(1);
-        }
-
-        let mixed = Mixed::new((a_window, b_window), 0b10);
-        let iter = segment_iter(mixed, &b.dense, 1, 4);
-
-        let items: Vec<_> = iter.with_id().map(|(id, (a, b))| (id, a.0, b.0)).collect();
-        let expected: Vec<_> = (2..6)
-            .map(|i| (entities[i], i as u32, 10 + i as u32))
-            .collect();
-        assert_eq!(items, expected);
     }
 
     /// Asserts that resolving indices and creating `Mut`s without writing through them
@@ -1130,57 +1054,5 @@ mod grouping_coordinates {
         assert_eq!((&tracked).get(entities[2]).unwrap(), &Tracked(42));
         assert!(tracked.is_modified(entities[2]));
         assert!(!tracked.is_modified(entities[1]));
-    }
-
-    /// Asserts that iterating an empty storage yields nothing.
-    #[test]
-    fn empty_storage() {
-        let world = World::new();
-        let a = world.borrow::<View<'_, A>>().unwrap();
-
-        let window = FullRawWindow::from_view(&a);
-        let iter = segment_iter(window, &a.dense, 0, 0);
-
-        assert_eq!(iter.count(), 0);
-    }
-
-    /// Asserts that a zero-sized component's window resolves local indices
-    /// to the entities of its segment.
-    #[test]
-    fn zero_sized() {
-        let mut world = World::new();
-        let entities: Vec<EntityId> = (0..5).map(|_| world.add_entity(Zst)).collect();
-        let zsts = world.borrow::<View<'_, Zst>>().unwrap();
-
-        let mut window = FullRawWindow::from_view(&zsts);
-        // SAFE: The segment covers entities 2 to 4, stored at 2..5 in the storage and at 0..3
-        // in the iterator's entity source.
-        unsafe {
-            window.set_segment_start(2);
-        }
-        let iter = segment_iter(window, &zsts.dense, 2, 3);
-
-        let items: Vec<_> = iter.with_id().map(|(id, _)| id).collect();
-        assert_eq!(items, &entities[2..]);
-    }
-
-    /// Asserts that cloning a window keeps its segment start.
-    #[test]
-    fn clone_keeps_start() {
-        let (world, entities) = world();
-        let a = world.borrow::<View<'_, A>>().unwrap();
-
-        let mut window = FullRawWindow::from_view(&a);
-        // SAFE: The segment covers entities 2 to 5, stored at 2..6 in A and at 0..4 in
-        // the iterator's entity source.
-        unsafe {
-            window.set_segment_start(2);
-        }
-
-        let iter = segment_iter(window.clone(), &a.dense, 2, 4);
-
-        let items: Vec<_> = iter.with_id().map(|(id, a)| (id, a.0)).collect();
-        let expected: Vec<_> = (2..6).map(|i| (entities[i], i as u32)).collect();
-        assert_eq!(items, expected);
     }
 }

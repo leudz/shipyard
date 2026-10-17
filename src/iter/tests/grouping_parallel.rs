@@ -1,25 +1,12 @@
-//! The parallel producers through Rayon's traits, and whole traversals bridged by Rayon.
+//! Rayon producer contracts and cleanup on publicly constructed iterators.
 //!
-//! How a split shares candidates, follow-ups and the plan is tested without Rayon in
-//! `grouping_split_ownership`, whose fixtures we reuse. Here we check that the producers use
-//! that split, that `fold_with` honors cancellation and that Rayon's own scheduling,
-//! whatever order it picks, yields every entity once.\
-//! Exact traversals without follow-ups are driven as indexed, Rayon picks their split indices.
+//! Internal producer calls let us inspect exact split/cancellation behavior; query
+//! construction always goes through iter/par_iter, including automatic selection.
 
-use super::grouping_bulk::cursor;
-use super::grouping_split_ownership::{
-    coverage_plan, coverage_world, pair, split_all, window_entered, window_expected, window_plan,
-    window_world, A, B,
-};
-use crate::entity_id::EntityId;
+use super::grouping_fixtures::{coverage_world, late_iter, A, B};
 use crate::iter::parallel::ExactProducer;
-use crate::iter::{
-    EntityCursor, IntoIter, Mixed, ParShiperator, RawEntityIdAccess, Shiper, WithId,
-};
-use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::views::{View, ViewMut};
-use crate::world::World;
-use crate::Get;
+use crate::iter::{IntoIter, ParShiperator};
+use crate::{EntityId, Get, View, ViewMut, World};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use rayon::iter::plumbing::{Folder, Producer, UnindexedProducer};
@@ -73,149 +60,233 @@ fn ids<T>(items: Vec<(EntityId, T)>) -> Vec<EntityId> {
     items.into_iter().map(|(id, _)| id).collect()
 }
 
-/// Asserts that the producer doesn't split a single candidate in front of a 7 candidates
-/// follow-up and still folds all 8 items.
 #[test]
-fn producer_no_split() {
-    let (world, _) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-
-    let (iter, right) = window_entered(&a, &[1, 7]).split();
-
-    assert!(right.is_none());
-    let values: Vec<_> = fold_with(iter, usize::MAX).iter().map(|a| a.0).collect();
-    assert_eq!(values, [0, 1, 2, 3, 4, 5, 6, 7]);
-}
-
-/// Asserts that the `WithId` producer splits 5 candidates 2 and 3, the right half keeping
-/// the follow-up, with ids matching their components.
-#[test]
-fn producer_halves() {
-    let (world, e) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-
-    let (left, right) = WithId(window_entered(&a, &[5, 2])).split();
-    let right = right.unwrap();
-
-    assert_eq!(right.0.cursor.local_index(), 2);
-    let left: Vec<_> = fold_with(left, usize::MAX);
-    let right: Vec<_> = fold_with(right, usize::MAX);
-    for (id, a) in left.iter().chain(&right) {
-        assert_eq!(e[a.0 as usize], *id);
+fn producer_splits() {
+    let (world, expected) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    for len in [0, 1] {
+        let mut iter = (&a, &b).iter();
+        iter.by_ref().take(20 - len).for_each(drop);
+        let (iter, right) = iter.split();
+        assert!(right.is_none());
+        assert_eq!(iter.cursor.len(), len);
+        assert_eq!(
+            ids(fold_with(iter.with_id(), usize::MAX)),
+            expected[20 - len..]
+        );
     }
-    assert_eq!(ids(left), e[..2]);
-    assert_eq!(ids(right), e[2..7]);
+    let (left, right) = late_iter(&a, &b).with_id().split();
+    let right = right.unwrap();
+    assert_eq!(right.0.cursor.local_index(), 3);
+    assert_eq!(ids(fold_with(left, usize::MAX)), expected[20..23]);
+    assert_eq!(ids(fold_with(right, usize::MAX)), expected[23..]);
 }
 
-/// Asserts that splitting through the producer until it can't anymore gives the same pieces
-/// as the split it uses: after a 2 items prefix, every remaining candidate exactly once.
 #[test]
 fn producer_recursive() {
-    fn split_producer<P: UnindexedProducer>(producer: P, pieces: &mut Vec<P>) {
-        match producer.split() {
+    fn split<P: UnindexedProducer>(p: P, pieces: &mut Vec<P>) {
+        match p.split() {
             (left, Some(right)) => {
-                split_producer(left, pieces);
-                split_producer(right, pieces);
+                split(left, pieces);
+                split(right, pieces);
             }
-            (producer, None) => pieces.push(producer),
+            (p, None) => pieces.push(p),
         }
     }
-
-    let (world, e) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let iter = || {
-        let mut iter = window_entered(&a, &[7, 1]);
-        assert_eq!(iter.by_ref().take(2).count(), 2);
-
-        iter
-    };
-
-    let mut producers = Vec::new();
-    split_producer(WithId(iter()), &mut producers);
-    let mut shipers = Vec::new();
-    split_all(iter(), &mut shipers);
-
-    assert_eq!(producers.len(), shipers.len());
-    let items: Vec<_> = producers
+    let (world, expected) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let mut pieces = Vec::new();
+    split(late_iter(&a, &b).with_id(), &mut pieces);
+    assert_eq!(pieces.len(), 6);
+    let found: Vec<_> = pieces
         .into_iter()
-        .flat_map(|producer| fold_with(producer, usize::MAX))
-        .map(|(id, a)| (id, a.0))
+        .flat_map(|p| ids(fold_with(p, usize::MAX)))
         .collect();
-    assert_eq!(items, window_expected(&e, 2, 8));
+    assert_eq!(found, expected[20..]);
 }
 
-/// Asserts that `fold_with` stops once the folder is full, here in the middle of the follow-up,
-/// instead of folding every item left.
 #[test]
 fn fold_with_full() {
-    let (world, e) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-
-    let values: Vec<_> = fold_with(window_entered(&a, &[3, 5]), 5)
-        .iter()
-        .map(|a| a.0)
-        .collect();
-    assert_eq!(values, [0, 1, 2, 3, 4]);
-
-    let items = fold_with(WithId(window_entered(&a, &[3, 5])), 5);
-    assert_eq!(ids(items), e[..5]);
+    let (world, expected) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    // Stop inside the current segment, then inside the covered follow-up.
+    for limit in [1, 5] {
+        assert_eq!(fold_with(late_iter(&a, &b), limit).len(), limit);
+        assert_eq!(
+            ids(fold_with(late_iter(&a, &b).with_id(), limit)),
+            expected[20..20 + limit]
+        );
+    }
 }
 
-/// Asserts that Rayon bridging a plan with coverage and a segment without match yields every
-/// entity once, with or without ids, whatever order the threads walk the pieces in.
 #[test]
 fn bridge_coverage() {
-    let (world, e) = coverage_world();
+    let (world, expected) = coverage_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let iter = || ParShiperator(coverage_plan(pair(&a, &b), &a.dense, &b.dense));
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
-
     let (mut items, mut values) = pool.install(|| {
-        let items: Vec<_> = iter()
+        let items: Vec<_> = (&a, &b)
+            .par_iter()
             .with_id()
             .map(|(id, (a, b))| (id, a.0, b.0))
             .collect();
-        let values: Vec<_> = iter().map(|(a, b)| (a.0, b.0)).collect();
-
+        let values: Vec<_> = (&a, &b).par_iter().map(|(a, b)| (a.0, b.0)).collect();
         (items, values)
     });
     items.sort_unstable_by_key(|&(_, a, _)| a);
     values.sort_unstable();
-
-    let expected: Vec<_> = (0..6u32).map(|i| (e[i as usize], i, 10 + i)).collect();
-    assert_eq!(items, expected);
-    let expected: Vec<_> = (0..6).map(|i| (i, 10 + i)).collect();
-    assert_eq!(values, expected);
+    assert_eq!(
+        items,
+        expected
+            .iter()
+            .enumerate()
+            .map(|(i, &id)| (id, i as u32, 10 + i as u32))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(values, (0..26).map(|i| (i, 10 + i)).collect::<Vec<_>>());
 }
 
-/// Asserts that mutable outputs bridged by Rayon over a plan with coverage are written exactly
-/// once each: a covered duplicate would be written twice.
 #[test]
 fn bridge_mutable() {
-    let (world, e) = coverage_world();
+    let (world, ids) = coverage_world();
     let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
-    let a_dense = a.dense.clone();
-    let b_dense = b.dense.clone();
-    let windows = Mixed::new(
-        (FullRawWindowMut::new(&mut a), FullRawWindowMut::new(&mut b)),
-        0b01,
-    );
-    let iter = ParShiperator(coverage_plan(windows, &a_dense, &b_dense));
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
-
     pool.install(|| {
-        iter.for_each(|(a, b)| {
+        (&mut a, &mut b).par_iter().for_each(|(a, b)| {
             a.0 += 100;
             b.0 += 100;
         })
     });
-
-    for (i, &id) in e.iter().enumerate() {
-        assert_eq!((&a).get(id).unwrap(), &A(100 + i as u32));
-        assert_eq!((&b).get(id).unwrap(), &B(110 + i as u32));
+    for (i, &id) in ids.iter().enumerate() {
+        assert_eq!((&a).get(id).unwrap().0, 100 + i as u32);
+        assert_eq!((&b).get(id).unwrap().0, 110 + i as u32);
     }
 }
 
+#[test]
+fn opt_len_follow_ups() {
+    let (world, _) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let iter = (&a, &b).iter();
+    // The current aligned segment is exact, but later checked segments can reject.
+    assert_eq!(iter.cursor.len(), 20);
+    assert_eq!(ParShiperator(iter).opt_len(), None);
+    let mut last = late_iter(&a, &b);
+    assert_eq!(last.by_ref().take(4).count(), 4);
+    assert!(last.schedule.as_ref().unwrap().follow_ups().is_empty());
+    assert_eq!(ParShiperator(last).with_id().opt_len(), None);
+}
+
+fn aligned_world() -> World {
+    let mut world = World::new();
+    for i in 0..200 {
+        world.add_entity((A(i), B(i)));
+    }
+    world.group::<(A, B)>();
+    world
+}
+
+#[test]
+fn indexed_collect() {
+    let world = aligned_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+    assert_eq!((&a, &b).par_iter().opt_len(), Some(200));
+    let (items, values) = pool.install(|| {
+        let items: Vec<_> = (&a, &b)
+            .par_iter()
+            .with_id()
+            .map(|(id, (a, b))| (id, a.0, b.0))
+            .collect();
+        let values: Vec<_> = (&a, &b).par_iter().map(|(a, b)| (a.0, b.0)).collect();
+        (items, values)
+    });
+    let sequential: Vec<_> = (&a, &b)
+        .iter()
+        .with_id()
+        .map(|(id, (a, b))| (id, a.0, b.0))
+        .collect();
+    assert_eq!(items, sequential);
+    assert_eq!(values, (0..200).map(|i| (i, i)).collect::<Vec<_>>());
+}
+
+#[test]
+fn exact_split_at() {
+    let world = aligned_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    for index in [0, 5, 198] {
+        let mut iter = (&a, &b).iter();
+        iter.by_ref().take(2).for_each(drop);
+        let (left, right) = ExactProducer(iter).split_at(index);
+        assert_eq!(
+            fold_exact(left)
+                .iter()
+                .map(|(a, _)| a.0)
+                .collect::<Vec<_>>(),
+            (2..2 + index as u32).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            fold_exact(right)
+                .iter()
+                .map(|(a, _)| a.0)
+                .collect::<Vec<_>>(),
+            (2 + index as u32..200).collect::<Vec<_>>()
+        );
+
+        let mut iter = (&a, &b).iter().with_id();
+        iter.by_ref().take(2).for_each(drop);
+        let (left, right) = ExactProducer(iter).split_at(index);
+        let found = ids(fold_exact(left))
+            .into_iter()
+            .chain(ids(fold_exact(right)))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            found,
+            (&a, &b)
+                .iter()
+                .with_id()
+                .skip(2)
+                .map(|(id, _)| id)
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn bridge_short_circuit() {
+    let (world, _) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let visited = AtomicUsize::new(0);
+    let found = pool.install(|| {
+        (&a, &b)
+            .par_iter()
+            .inspect(|_| {
+                visited.fetch_add(1, Ordering::Relaxed);
+            })
+            .find_any(|(a, _)| a.0 == 1)
+    });
+    assert_eq!(found.unwrap().0 .0, 1);
+    assert_eq!(visited.load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn indexed_short_circuit() {
+    let world = aligned_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
+    let visited = AtomicUsize::new(0);
+    let found = pool.install(|| {
+        (&a, &b)
+            .par_iter()
+            .inspect(|_| {
+                visited.fetch_add(1, Ordering::Relaxed);
+            })
+            .find_any(|(a, _)| a.0 == 1)
+    });
+    assert_eq!(found.unwrap().0 .0, 1);
+    assert_eq!(visited.load(Ordering::Relaxed), 2);
+}
 /// Increments its counter when dropped, from whichever thread drops it.
 struct Dropped<'a>(&'a AtomicUsize);
 
@@ -225,14 +296,14 @@ impl Drop for Dropped<'_> {
     }
 }
 
-/// Asserts that a `for_each` callback panicking on `e4`, in the follow-up B walks, propagates
+/// Asserts that a `for_each` callback panicking on `e24`, in the follow-up B walks, propagates
 /// out of Rayon, drops the callback exactly once and releases the plan every piece shared.
 #[cfg(feature = "std")]
 #[test]
 fn bridge_panic() {
     let (world, _) = coverage_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let iter = ParShiperator(coverage_plan(pair(&a, &b), &a.dense, &b.dense));
+    let iter = (&a, &b).par_iter();
     let plan = iter.0.schedule.as_ref().unwrap().downgrade();
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
     let guard_drops = AtomicUsize::new(0);
@@ -243,8 +314,8 @@ fn bridge_panic() {
         pool.install(move || {
             iter.for_each(move |(a, _)| {
                 let _ = &guard;
-                if a.0 == 4 {
-                    panic!("callback panic on e4");
+                if a.0 == 24 {
+                    panic!("callback panic on e24");
                 }
             })
         });
@@ -255,14 +326,14 @@ fn bridge_panic() {
     assert!(plan.upgrade().is_none());
 }
 
-/// Asserts that when a `fold` callback panics on `e4`, every accumulated value Rayon's pieces
+/// Asserts that when a `fold` callback panics on `e24`, every accumulated value Rayon's pieces
 /// created is dropped exactly once and the plan is released.
 #[cfg(feature = "std")]
 #[test]
 fn bridge_fold_panic() {
     let (world, _) = coverage_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let iter = ParShiperator(coverage_plan(pair(&a, &b), &a.dense, &b.dense));
+    let iter = (&a, &b).par_iter();
     let plan = iter.0.schedule.as_ref().unwrap().downgrade();
     let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
     let created = AtomicUsize::new(0);
@@ -271,8 +342,8 @@ fn bridge_fold_panic() {
     let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
         pool.install(|| {
             iter.fold(Vec::new, |mut acc, (a, _)| {
-                if a.0 == 4 {
-                    panic!("callback panic on e4");
+                if a.0 == 24 {
+                    panic!("callback panic on e24");
                 }
 
                 created.fetch_add(1, Ordering::Relaxed);
@@ -289,190 +360,4 @@ fn bridge_fold_panic() {
         created.load(Ordering::Relaxed)
     );
     assert!(plan.upgrade().is_none());
-}
-
-/// Asserts that a short-circuiting consumer stops the traversal: on a single thread the
-/// iterator splits once, the left half stops after finding `e1` and the right half is skipped.
-/// Ignoring cancellation would also visit `e2`, then the right half.
-#[test]
-fn bridge_short_circuit() {
-    let (world, _) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let visited = AtomicUsize::new(0);
-    let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-
-    let found = pool.install(|| {
-        ParShiperator(window_entered(&a, &[6, 2]))
-            .inspect(|_| {
-                visited.fetch_add(1, Ordering::Relaxed);
-            })
-            .find_any(|a| a.0 == 1)
-    });
-
-    assert_eq!(found, Some(&A(1)));
-    assert_eq!(visited.load(Ordering::Relaxed), 2);
-}
-
-/// Asserts that `opt_len` only reports a length once every item left is in the current segment:
-/// a window with a follow-up has none, until it enters its last segment.
-#[test]
-fn opt_len_follow_ups() {
-    let (world, _) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let iter = || {
-        let schedule = window_plan(&a, &[3, 2]).schedule;
-
-        // SAFE: The cursor is empty, nothing is resolved before entering the first follow-up.
-        // `window_plan` built its rows for a window over `a`, with each segment's start.
-        unsafe {
-            Shiper::new(
-                FullRawWindow::from_view(&a),
-                RawEntityIdAccess {
-                    cursor: EntityCursor::empty(),
-                    schedule,
-                    metadata: Default::default(),
-                },
-            )
-        }
-    };
-    let last_segment = || {
-        let mut iter = iter();
-        assert_eq!(iter.by_ref().take(4).count(), 4);
-
-        iter
-    };
-
-    assert!(iter().is_exact_sized);
-    assert_eq!(ParShiperator(iter()).opt_len(), None);
-    assert_eq!(ParShiperator(last_segment()).opt_len(), Some(1));
-    assert_eq!(ParShiperator(last_segment()).with_id().opt_len(), Some(1));
-}
-
-/// Asserts that an exact `Mixed` with follow-ups reports no length, a later segment might reject.
-#[test]
-fn opt_len_mixed() {
-    let (world, _) = coverage_world();
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let aligned = Mixed::new(
-        (FullRawWindow::from_view(&a), FullRawWindow::from_view(&b)),
-        0b11,
-    );
-    let schedule = coverage_plan(pair(&a, &b), &a.dense, &b.dense).schedule;
-
-    // SAFE: The cursor is empty, nothing is resolved before entering the first follow-up.
-    // `coverage_plan` built its rows for a pair over `a` and `b`, the same layout as `aligned`.
-    let iter = unsafe {
-        Shiper::new(
-            aligned,
-            RawEntityIdAccess {
-                cursor: EntityCursor::empty(),
-                schedule,
-                metadata: Default::default(),
-            },
-        )
-    };
-
-    assert_eq!(ParShiperator(iter).opt_len(), None);
-}
-
-/// Asserts that the exact producer splits at the index Rayon asks for, even an uneven one after
-/// a 2 items prefix, with or without ids.
-#[test]
-fn exact_split_at() {
-    let (world, e) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let iter = || {
-        let mut iter = (&a).iter();
-        assert_eq!(iter.by_ref().take(2).count(), 2);
-
-        iter
-    };
-
-    let (left, right) = ExactProducer(iter()).split_at(2);
-    let left: Vec<_> = fold_exact(left).iter().map(|a| a.0).collect();
-    let right: Vec<_> = fold_exact(right).iter().map(|a| a.0).collect();
-    assert_eq!(left, [1, 2]);
-    assert_eq!(right, [3, 4, 5, 6, 7]);
-
-    let (left, right) = ExactProducer(WithId(iter())).split_at(5);
-    assert_eq!(ids(fold_exact(left)), e[1..6]);
-    assert_eq!(ids(fold_exact(right)), e[6..]);
-}
-
-/// `e0` to `e199` own `A(i)` and `B(i)`, at index `i` of both storages.
-fn aligned_world() -> World {
-    let mut world = World::new();
-
-    for i in 0..200 {
-        world.add_entity((A(i), B(i)));
-    }
-
-    world
-}
-
-/// Asserts that an exact `Mixed`, every child driving its only segment, is collected through
-/// the indexed path: items come out in traversal order, ids matching their components.
-#[test]
-fn indexed_collect() {
-    let world = aligned_world();
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let iter = || {
-        let aligned = Mixed::new(
-            (FullRawWindow::from_view(&a), FullRawWindow::from_view(&b)),
-            0b11,
-        );
-
-        // SAFE: `aligned_world` holds the same entities at the same indices of `a` and `b`,
-        // both windows start at 0 and the cursor walks all of `a`'s entities.
-        unsafe {
-            Shiper::new(
-                aligned,
-                RawEntityIdAccess {
-                    cursor: cursor(&a.dense),
-                    schedule: None,
-                    metadata: Default::default(),
-                },
-            )
-        }
-    };
-    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
-
-    assert_eq!(ParShiperator(iter()).opt_len(), Some(200));
-    let (items, values) = pool.install(|| {
-        let items: Vec<_> = ParShiperator(iter())
-            .with_id()
-            .map(|(id, (a, b))| (id, a.0, b.0))
-            .collect();
-        let values: Vec<_> = ParShiperator(iter()).map(|(a, b)| (a.0, b.0)).collect();
-
-        (items, values)
-    });
-
-    let sequential: Vec<_> = iter()
-        .with_id()
-        .map(|(id, (a, b))| (id, a.0, b.0))
-        .collect();
-    assert_eq!(items, sequential);
-    assert_eq!(values, (0..200).map(|i| (i, i)).collect::<Vec<_>>());
-}
-
-/// Asserts that the indexed path honors cancellation too: on a single thread the 9 items split
-/// 4 and 5, the left half stops after finding `e0` behind `A(100)` and the right half is skipped.
-#[test]
-fn indexed_short_circuit() {
-    let (world, _) = window_world();
-    let a = world.borrow::<View<'_, A>>().unwrap();
-    let visited = AtomicUsize::new(0);
-    let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
-
-    let found = pool.install(|| {
-        ParShiperator((&a).iter())
-            .inspect(|_| {
-                visited.fetch_add(1, Ordering::Relaxed);
-            })
-            .find_any(|a| a.0 == 0)
-    });
-
-    assert_eq!(found, Some(&A(0)));
-    assert_eq!(visited.load(Ordering::Relaxed), 2);
 }
