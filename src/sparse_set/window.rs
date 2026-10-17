@@ -591,7 +591,7 @@ impl EntityCursor {
     }
 
     /// Returns `true` when all entities have been consumed.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn is_empty(&self) -> bool {
         self.next == self.end
     }
@@ -605,7 +605,7 @@ impl EntityCursor {
     }
 
     /// Returns the local index of the next unconsumed entity.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn local_index(&self) -> usize {
         self.local_index
     }
@@ -623,7 +623,7 @@ impl EntityCursor {
     /// ### Safety
     ///
     /// The cursor must not be empty.
-    #[inline]
+    #[inline(always)]
     pub(crate) unsafe fn current(&self) -> EntityId {
         debug_assert!(!self.is_empty());
 
@@ -635,7 +635,7 @@ impl EntityCursor {
     /// Consumes the next entity.
     ///
     /// Returns `false` without moving when the cursor is empty.
-    #[inline]
+    #[inline(always)]
     pub(crate) fn advance(&mut self) -> bool {
         if self.is_empty() {
             return false;

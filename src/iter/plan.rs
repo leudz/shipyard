@@ -506,7 +506,7 @@ impl Clone for SegmentSchedule {
 }
 
 impl Drop for SegmentSchedule {
-    #[inline]
+    #[inline(always)]
     fn drop(&mut self) {
         // SAFE: `plan` is initialized by every constructor and only taken here.
         // `drop` runs once and nothing reads `self` afterwards.

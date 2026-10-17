@@ -196,7 +196,7 @@ macro_rules! impl_shiperator_output {
             /// - `entities` must not be empty
             /// - `index` must be the local index of the current candidate of `entities`
             /// - the plan of the last segment we entered, if any, must still be alive
-            #[inline]
+            #[inline(always)]
             unsafe fn masked_indices_of(
                 &self,
                 entities: &EntityCursor,
@@ -225,7 +225,7 @@ macro_rules! impl_shiperator_output {
             /// - `entities` must not be empty
             /// - `index` must be the local index of the current candidate of `entities`
             /// - the plan of the last segment we entered, if any, must still be alive
-            #[inline]
+            #[inline(always)]
             unsafe fn checked_captain_indices_of(
                 &self,
                 entities: &EntityCursor,
@@ -299,7 +299,7 @@ macro_rules! impl_shiperator_output {
             /// - `entities`' local indices must be local indices of our current segment
             /// - `CAPTAIN` must be the position of our single captain and we must have no coverage
             /// - the plan of the last segment we entered, if any, must still be alive
-            #[inline]
+            #[inline(always)]
             unsafe fn fold_single_captain<const CAPTAIN: u32, const WITH_ID: bool, Acc, Fold>(
                 &self,
                 entities: &mut EntityCursor,
@@ -434,7 +434,9 @@ macro_rules! impl_shiperator_output {
 
             // The loop is picked once for the whole segment, each one only does the checks
             // its segment needs.
-            #[inline]
+            // Not inlined so each loop is compiled on its own, it doesn't have to share registers
+            // with the iterator's segment state. It's called once per non-empty segment.
+            #[inline(never)]
             unsafe fn fold_segment<const WITH_ID: bool, Acc, Fold>(
                 &self,
                 entities: &mut EntityCursor,

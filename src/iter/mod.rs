@@ -77,7 +77,7 @@ impl<S: Shiperator> Shiper<S> {
     /// Segments are never empty so a successful entry always has a candidate.
     ///
     /// Returns `false` when there is no follow-up left.
-    #[inline]
+    #[inline(always)]
     fn enter_next_segment(&mut self) -> bool {
         let Some(schedule) = &mut self.schedule else {
             return false;
