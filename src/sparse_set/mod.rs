@@ -323,6 +323,14 @@ impl<T: Component> SparseSet<T> {
                         .get_unchecked_mut(sparse_entity.uindex()) = current;
                 }
             }
+            // The new entity's component was never modified, it doesn't inherit the old one's timestamp.
+            if self.is_tracking_modification {
+                unsafe {
+                    *self
+                        .modification_data
+                        .get_unchecked_mut(sparse_entity.uindex()) = TrackingTimestamp::origin();
+                }
+            }
 
             dense_entity.copy_index_gen(entity);
 

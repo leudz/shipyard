@@ -2,6 +2,7 @@ mod grouping;
 mod miri;
 mod moves;
 mod range_moves;
+mod replacement;
 
 use super::groups::GroupRange;
 use super::*;
