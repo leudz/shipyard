@@ -60,13 +60,17 @@ pub struct MissingThreadId;
 pub struct ThreadIdPresent;
 
 /// Contains all storages present in the [`World`](crate::world::World).
-// The lock is held very briefly:
-// - shared: when trying to find a storage
-// - unique: when adding a storage
-// once the storage is found or created the lock is released
-// this is safe since World is still borrowed and there is no way to delete a storage
-// so any access to storages are valid as long as the World exists
-// we use a HashMap, it can reallocate, but even in this case the storages won't move since they are boxed
+// The registry lock is held very briefly:
+// - shared: when looking up a storage
+// - exclusive: when adding or removing a storage
+// Storages are boxed, so they don't move when the HashMap reallocates.
+//
+// Once we find a storage, we borrow it *before* releasing the lock. From then on, the runtime
+// borrow is what keeps the storage valid, not the lock:
+// - through `&AllStorages`, a storage can only be removed (`remove_unique`) or have its value
+//   replaced (`add_unique*`) after borrowing it exclusively, which fails while any guard is alive
+// - everything else that drops storages takes `&mut AllStorages`, which can't coexist with a guard
+// So a storage guard stays valid for as long as it's alive, even without the lock.
 pub struct AllStorages {
     pub(crate) storages: RwLock<ShipHashMap<StorageId, SBox>>,
     #[cfg(feature = "thread_local")]
@@ -97,13 +101,28 @@ impl AllStorages {
             counter,
         }
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].  
+    /// Adds a new unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].
+    ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.\
+    /// The replacement is tracked as a modification, not an insertion.\
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// ### Borrows
+    ///
+    /// - `T` storage (exclusive), only if it already exists
+    ///
+    /// ### Panics
+    ///
+    /// - `T` storage borrow failed, only if it already exists.
+    ///   This happens when the storage is already borrowed, or when it was inserted as `!Send`
+    ///   and we're not on the thread it was inserted on.
     ///
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{AllStoragesViewMut, Unique, World};
+    /// use shipyard::{AllStoragesViewMut, Unique, UniqueView, World};
     ///
     /// #[derive(Unique)]
     /// struct USIZE(usize);
@@ -112,78 +131,220 @@ impl AllStorages {
     /// let mut all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
     ///
     /// all_storages.add_unique(USIZE(0));
+    /// all_storages.add_unique(USIZE(1));
+    ///
+    /// let i = all_storages.borrow::<UniqueView<USIZE>>().unwrap();
+    /// assert_eq!(i.0, 1);
     /// ```
     ///
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
+    #[track_caller]
     pub fn add_unique<T: Send + Sync + Unique>(&self, component: T) {
-        let storage_id = StorageId::of::<UniqueStorage<T>>();
-
-        self.storages
-            .write()
-            .entry(storage_id)
-            .insert(SBox::new(UniqueStorage::new(
-                component,
-                self.get_tracking_timestamp(),
-            )));
+        self.add_or_replace_unique(component, SBox::new);
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [NonSend] and [UniqueViewMut] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.
+    /// Adds `T`'s unique storage, built by `new_storage`, or replaces the value of the existing one.
     ///
-    /// [NonSend]: crate::borrow::NonSend
-    /// [UniqueView]: crate::UniqueView
-    /// [UniqueViewMut]: crate::UniqueViewMut
-    #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_send<T: Sync + Unique>(&self, component: T) {
-        if (self.thread_id_generator)() == self.main_thread_id {
-            let storage_id = StorageId::of::<UniqueStorage<T>>();
+    /// ### Panics
+    ///
+    /// - `T`'s existing storage can't be borrowed exclusively.
+    #[track_caller]
+    fn add_or_replace_unique<T: Unique>(
+        &self,
+        component: T,
+        new_storage: impl FnOnce(UniqueStorage<T>) -> SBox,
+    ) {
+        let storage_id = StorageId::of::<UniqueStorage<T>>();
+        let current = self.get_tracking_timestamp();
+        let mut storages = self.storages.write();
 
-            self.storages.write().entry(storage_id).or_insert_with(|| {
-                SBox::new_non_send(
-                    NonSend(UniqueStorage::new(component, self.get_tracking_timestamp())),
-                    self.thread_id_generator.clone(),
+        let Some(sbox) = storages.get(&storage_id) else {
+            storages.insert(
+                storage_id,
+                new_storage(UniqueStorage::new(component, current)),
+            );
+            return;
+        };
+
+        // We borrow the storage before releasing the registry lock, so nobody can remove it in between.
+        // SAFE: `sbox.0` comes from the `SBox` we just found in the registry, so it points to a live
+        // boxed `AtomicRefCell`. We only use `storage` while that box stays alive. While we hold the
+        // registry lock nobody can remove it, and we drop our borrow before taking it out ourselves.
+        // After releasing the lock we only touch it through a successful exclusive borrow, which
+        // keeps `remove_unique` from taking the box out. Freeing it any other way requires
+        // `&mut AllStorages`, which can't coexist with our `&self`.
+        let storage = unsafe { &*sbox.0 };
+        let mut storage = match storage.borrow_mut() {
+            Ok(storage) => storage,
+            Err(err) => {
+                // We panic after releasing the registry lock, so we don't poison it.
+                drop(storages);
+
+                panic!(
+                    "{:?}",
+                    error::GetStorage::StorageBorrow {
+                        name: Some(type_name::<UniqueStorage<T>>()),
+                        id: storage_id,
+                        borrow: err,
+                    }
                 )
-            });
-        }
-    }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.
-    ///
-    /// [NonSync]: crate::borrow::NonSync
-    /// [UniqueView]: crate::UniqueView
-    /// [UniqueViewMut]: crate::UniqueViewMut
-    #[cfg(feature = "thread_local")]
-    pub fn add_unique_non_sync<T: Send + Unique>(&self, component: T) {
-        let storage_id = StorageId::of::<UniqueStorage<T>>();
+            }
+        };
 
-        self.storages.write().entry(storage_id).or_insert_with(|| {
-            SBox::new_non_sync(NonSync(UniqueStorage::new(
-                component,
-                self.get_tracking_timestamp(),
-            )))
+        // The first insertion determines the storage's wrapper and thread-access policy.
+        // Replacing its value preserves both, even when called through a different
+        // add_unique* variant. The existing storage's thread restrictions still apply.
+        let Some(unique) = unique_storage_mut::<T>(&mut *storage) else {
+            // Someone registered a custom storage that isn't a unique storage under `T`'s unique
+            // storage id. We hold the only borrow of it, so we can take it out and insert a fresh
+            // unique storage in its place. Its destructor might be user code, we run it once the
+            // registry is unlocked.
+            drop(storage);
+            let foreign = storages.insert(
+                storage_id,
+                new_storage(UniqueStorage::new(component, current)),
+            );
+            drop(storages);
+            drop(foreign);
+
+            return;
+        };
+
+        drop(storages);
+
+        let displaced = core::mem::replace(&mut unique.value, component);
+        unique.modification = current;
+
+        // The displaced value's destructor is user code, it could panic or access the world again.
+        // We release our borrow first, so it only ever sees the storage with its new value, unborrowed.
+        drop(storage);
+        drop(displaced);
+    }
+    /// Adds a new `!Send` unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].
+    ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.\
+    /// The replacement is tracked as a modification, not an insertion.\
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// The first insertion decides which wrapper views have to use, whichever `add_unique*` method
+    /// replaces the value later. A unique added with this method is always borrowed with
+    /// [`NonSend`], even after [`add_unique`](AllStorages::add_unique) replaces its value.
+    ///
+    /// ### Borrows
+    ///
+    /// - `T` storage (exclusive), only if it already exists
+    ///
+    /// ### Panics
+    ///
+    /// - Not called from the [`World`]'s thread.
+    /// - `T` storage borrow failed, only if it already exists.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{borrow::NonSend, AllStoragesViewMut, Unique, UniqueView, World};
+    ///
+    /// #[derive(Unique)]
+    /// struct U32(u32);
+    ///
+    /// let world = World::new();
+    /// let all_storages = world.borrow::<AllStoragesViewMut>().unwrap();
+    ///
+    /// // I'm using `u32` here but imagine it's a `!Send` type
+    /// all_storages.add_unique_non_send(U32(0));
+    /// all_storages.add_unique(U32(1));
+    ///
+    /// // The storage is still `NonSend`, it was first inserted with `add_unique_non_send`.
+    /// let i = all_storages.borrow::<NonSend<UniqueView<U32>>>().unwrap();
+    /// assert_eq!(i.0, 1);
+    /// ```
+    ///
+    /// [`NonSend`]: crate::borrow::NonSend
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
+    /// [`World`]: crate::World
+    #[cfg(feature = "thread_local")]
+    #[track_caller]
+    pub fn add_unique_non_send<T: Sync + Unique>(&self, component: T) {
+        assert!(
+            (self.thread_id_generator)() == self.main_thread_id,
+            "Cannot add {} unique from other thread than the World's because it's !Send.",
+            type_name::<T>()
+        );
+
+        self.add_or_replace_unique(component, |unique| {
+            SBox::new_non_send(NonSend(unique), self.thread_id_generator.clone())
         });
     }
-    /// Adds a new unique storage, unique storages store exactly one `T` at any time.  
-    /// To access a unique storage value, use [NonSync] and [UniqueViewMut] or [UniqueViewMut].  
-    /// Does nothing if the storage already exists.  
+    /// Adds a new `!Sync` unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].
     ///
-    /// [NonSync]: crate::borrow::NonSync
-    /// [UniqueView]: crate::UniqueView
-    /// [UniqueViewMut]: crate::UniqueViewMut
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.\
+    /// The replacement is tracked as a modification, not an insertion.\
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// The first insertion decides which wrapper views have to use, whichever `add_unique*` method
+    /// replaces the value later. See [`add_unique_non_send`](AllStorages::add_unique_non_send)
+    /// for an example.
+    ///
+    /// ### Borrows
+    ///
+    /// - `T` storage (exclusive), only if it already exists
+    ///
+    /// ### Panics
+    ///
+    /// - `T` storage borrow failed, only if it already exists.
+    ///   This happens when the storage is already borrowed, or when it was inserted as `!Send`
+    ///   and we're not on the thread it was inserted on.
+    ///
+    /// [`NonSync`]: crate::borrow::NonSync
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
     #[cfg(feature = "thread_local")]
+    #[track_caller]
+    pub fn add_unique_non_sync<T: Send + Unique>(&self, component: T) {
+        self.add_or_replace_unique(component, |unique| SBox::new_non_sync(NonSync(unique)));
+    }
+    /// Adds a new `!Send + !Sync` unique storage, unique storages store exactly one `T` at any time.\
+    /// To access a unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].
+    ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.\
+    /// The replacement is tracked as a modification, not an insertion.\
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// The first insertion decides which wrapper views have to use, whichever `add_unique*` method
+    /// replaces the value later. See [`add_unique_non_send`](AllStorages::add_unique_non_send)
+    /// for an example.
+    ///
+    /// ### Borrows
+    ///
+    /// - `T` storage (exclusive), only if it already exists
+    ///
+    /// ### Panics
+    ///
+    /// - Not called from the [`World`]'s thread.
+    /// - `T` storage borrow failed, only if it already exists.
+    ///
+    /// [`NonSendSync`]: crate::borrow::NonSendSync
+    /// [`UniqueView`]: crate::UniqueView
+    /// [`UniqueViewMut`]: crate::UniqueViewMut
+    /// [`World`]: crate::World
+    #[cfg(feature = "thread_local")]
+    #[track_caller]
     pub fn add_unique_non_send_sync<T: Unique>(&self, component: T) {
-        if (self.thread_id_generator)() == self.main_thread_id {
-            let storage_id = StorageId::of::<UniqueStorage<T>>();
+        assert!(
+            (self.thread_id_generator)() == self.main_thread_id,
+            "Cannot add {} unique from other thread than the World's because it's !Send.",
+            type_name::<T>()
+        );
 
-            self.storages.write().entry(storage_id).or_insert_with(|| {
-                SBox::new_non_send_sync(
-                    NonSendSync(UniqueStorage::new(component, self.get_tracking_timestamp())),
-                    self.thread_id_generator.clone(),
-                )
-            });
-        }
+        self.add_or_replace_unique(component, |unique| {
+            SBox::new_non_send_sync(NonSendSync(unique), self.thread_id_generator.clone())
+        });
     }
     /// Removes a unique storage.
     ///
@@ -1873,6 +2034,34 @@ unsafe fn take_storage<S>(sbox: SBox) -> S {
     let cell = unsafe { Box::from_raw(ptr) };
 
     cell.into_inner()
+}
+
+/// Returns `T`'s unique storage, looking through the thread-local wrapper it might be stored in.
+///
+/// Returns `None` if `storage` isn't one of `T`'s unique storages.
+fn unique_storage_mut<T: Unique>(storage: &mut dyn Storage) -> Option<&mut UniqueStorage<T>> {
+    // `SizedAny` is implemented for every type, unlike `Storage::any_mut` custom storages can't
+    // override it. So this check can't run user code and always sees the real type.
+    let storage = storage.as_any_mut();
+
+    if storage.is::<UniqueStorage<T>>() {
+        return storage.downcast_mut();
+    }
+
+    #[cfg(feature = "thread_local")]
+    {
+        if storage.is::<NonSend<UniqueStorage<T>>>() {
+            return Some(&mut storage.downcast_mut::<NonSend<UniqueStorage<T>>>()?.0);
+        }
+        if storage.is::<NonSync<UniqueStorage<T>>>() {
+            return Some(&mut storage.downcast_mut::<NonSync<UniqueStorage<T>>>()?.0);
+        }
+        if storage.is::<NonSendSync<UniqueStorage<T>>>() {
+            return Some(&mut storage.downcast_mut::<NonSendSync<UniqueStorage<T>>>()?.0);
+        }
+    }
+
+    None
 }
 
 /// Returns the grouping metadata of the storage stored under `storage_id`.

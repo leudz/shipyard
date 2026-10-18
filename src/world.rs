@@ -94,13 +94,22 @@ impl World {
     /// Adds a new unique storage, unique storages store a single value.
     /// To access a unique storage value, use [`UniqueView`] or [`UniqueViewMut`].
     ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.\
+    /// The replacement is tracked as a modification, not an insertion.\
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
     /// ### Borrows
     ///
     /// - [`AllStorages`] (shared)
+    /// - `T` storage (exclusive), only if it already exists
     ///
     /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
+    /// - `T` storage borrow failed, only if it already exists.
+    ///   This happens when the storage is already borrowed, or when it was inserted as `!Send`
+    ///   and we're not on the thread it was inserted on.
     ///
     /// ### Example
     ///
@@ -113,9 +122,10 @@ impl World {
     /// let world = World::new();
     ///
     /// world.add_unique(U32(0));
+    /// world.add_unique(U32(1));
     ///
     /// let i = world.borrow::<UniqueView<U32>>().unwrap();
-    /// assert_eq!(i.0, 0);
+    /// assert_eq!(i.0, 1);
     /// ```
     ///
     /// [`AllStorages`]: crate::all_storages::AllStorages
@@ -127,15 +137,26 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store a single value.
     /// To access a `!Send` unique storage value, use [`NonSend`] with [`UniqueView`] or [`UniqueViewMut`].
-    /// Does nothing if the storage already exists.
+    ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.
+    /// The replacement is tracked as a modification, not an insertion.
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// The first insertion decides which wrapper views have to use, whichever `add_unique*` method
+    /// replaces the value later. A unique added with this method is always borrowed with
+    /// [`NonSend`], even after [`add_unique`](World::add_unique) replaces its value.
     ///
     /// ### Borrows
     ///
     /// - [`AllStorages`] (shared)
+    /// - `T` storage (exclusive), only if it already exists
     ///
     /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
+    /// - Not called from the [`World`]'s thread.
+    /// - `T` storage borrow failed, only if it already exists.
     ///
     /// ### Example
     ///
@@ -149,9 +170,11 @@ impl World {
     ///
     /// // I'm using `u32` here but imagine it's a `!Send` type
     /// world.add_unique_non_send(U32(0));
+    /// world.add_unique(U32(1));
     ///
+    /// // The storage is still `NonSend`, it was first inserted with `add_unique_non_send`.
     /// let i = world.borrow::<NonSend<UniqueView<U32>>>().unwrap();
-    /// assert_eq!(i.0, 0);
+    /// assert_eq!(i.0, 1);
     /// ```
     ///
     /// [`AllStorages`]: crate::all_storages::AllStorages
@@ -169,15 +192,27 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store a single value.
     /// To access a `!Sync` unique storage value, use [`NonSync`] with [`UniqueView`] or [`UniqueViewMut`].
-    /// Does nothing if the storage already exists.
+    ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.
+    /// The replacement is tracked as a modification, not an insertion.
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// The first insertion decides which wrapper views have to use, whichever `add_unique*` method
+    /// replaces the value later. See [`add_unique_non_send`](World::add_unique_non_send) for an
+    /// example.
     ///
     /// ### Borrows
     ///
     /// - [`AllStorages`] (shared)
+    /// - `T` storage (exclusive), only if it already exists
     ///
     /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
+    /// - `T` storage borrow failed, only if it already exists.
+    ///   This happens when the storage is already borrowed, or when it was inserted as `!Send`
+    ///   and we're not on the thread it was inserted on.
     ///
     /// ### Example
     ///
@@ -211,15 +246,26 @@ impl World {
     }
     /// Adds a new unique storage, unique storages store a single value.
     /// To access a `!Send + !Sync` unique storage value, use [`NonSendSync`] with [`UniqueView`] or [`UniqueViewMut`].
-    /// Does nothing if the storage already exists.
+    ///
+    /// If `T`'s unique storage already exists, `component` replaces its value instead.
+    /// The replacement is tracked as a modification, not an insertion.
+    /// Everything else about the storage is preserved: its insertion tracking, its registered
+    /// clone function, and the wrapper and thread restrictions it was first inserted with.
+    ///
+    /// The first insertion decides which wrapper views have to use, whichever `add_unique*` method
+    /// replaces the value later. See [`add_unique_non_send`](World::add_unique_non_send) for an
+    /// example.
     ///
     /// ### Borrows
     ///
     /// - [`AllStorages`] (shared)
+    /// - `T` storage (exclusive), only if it already exists
     ///
     /// ### Panics
     ///
     /// - [`AllStorages`] borrow failed.
+    /// - Not called from the [`World`]'s thread.
+    /// - `T` storage borrow failed, only if it already exists.
     ///
     /// ### Example
     ///
@@ -241,7 +287,7 @@ impl World {
     /// [`AllStorages`]: crate::all_storages::AllStorages
     /// [`UniqueView`]: crate::UniqueView
     /// [`UniqueViewMut`]: crate::UniqueViewMut
-    /// [`NonSendSync`]: crate::borrow::NonSync
+    /// [`NonSendSync`]: crate::borrow::NonSendSync
     #[cfg(feature = "thread_local")]
     #[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
     #[track_caller]

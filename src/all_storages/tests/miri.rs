@@ -5,18 +5,33 @@
 //! every erased storage is reached with the right type and dropped exactly once.
 
 use crate::all_storages::CustomStorageAccess;
+#[cfg(all(feature = "std", feature = "thread_local"))]
+use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::{Component, Unique};
 use crate::entity_id::EntityId;
+#[cfg(feature = "std")]
+use crate::error;
 use crate::get::Get;
 #[cfg(feature = "std")]
 use crate::sparse_set::SparseSet;
 use crate::storage::{Storage, StorageId};
 use crate::track;
+use crate::unique::UniqueStorage;
+#[cfg(feature = "std")]
+use crate::views::UniqueViewMut;
 use crate::views::{UniqueView, View};
 use crate::world::World;
+#[cfg(feature = "std")]
+use alloc::format;
+#[cfg(feature = "std")]
+use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use core::any::type_name;
+#[cfg(feature = "std")]
+use core::panic::AssertUnwindSafe;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Heap-owning value that counts how many times it's dropped, clones included.
@@ -210,6 +225,231 @@ fn remove_unique() {
 
     drop(unique);
     assert_eq!(drops.load(Ordering::Relaxed), 1);
+}
+
+/// Asserts that replacing a unique drops the displaced value exactly once, right away, and keeps
+/// the new value in the same storage until the world drops it.
+#[test]
+fn replace_unique() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    world.add_unique(counted(0, &counter));
+
+    world.add_unique(counted(1, &counter));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(
+        world.borrow::<UniqueView<'_, Counted>>().unwrap().values,
+        [1]
+    );
+
+    drop(world);
+    assert_eq!(drops(&counter), 2);
+}
+
+/// Calls `f` and returns the message it panicked with, if it did.
+#[cfg(feature = "std")]
+fn catch_panic(f: impl FnOnce()) -> Result<(), String> {
+    std::panic::catch_unwind(AssertUnwindSafe(f))
+        .map_err(|payload| *payload.downcast::<String>().unwrap())
+}
+
+/// Returns the message `add_unique` panics with when `Counted`'s unique storage is borrowed.
+#[cfg(feature = "std")]
+fn borrowed_panic() -> String {
+    format!(
+        "{:?}",
+        error::GetStorage::StorageBorrow {
+            name: Some(type_name::<UniqueStorage<Counted>>()),
+            id: StorageId::of::<UniqueStorage<Counted>>(),
+            borrow: error::Borrow::Unique,
+        }
+    )
+}
+
+/// Asserts that `add_unique` panics instead of replacing a unique while a `UniqueView` of it is
+/// alive. The view keeps reading the original value and only the rejected value is dropped. Once
+/// the view is gone a replacement goes through, so the registry lock wasn't poisoned and no
+/// borrow was leaked.
+#[cfg(feature = "std")]
+#[test]
+fn replace_shared_view() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique(counted(0, &counter));
+
+    let view = all_storages.borrow::<UniqueView<'_, Counted>>().unwrap();
+    let result = catch_panic(|| all_storages.add_unique(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    all_storages.add_unique(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+    assert_eq!(
+        all_storages
+            .borrow::<UniqueView<'_, Counted>>()
+            .unwrap()
+            .values,
+        [2]
+    );
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique` panics instead of replacing a unique while a `UniqueViewMut` of it is
+/// alive. The view can still write to the original value and only the rejected value is dropped.
+/// Once the view is gone a replacement goes through, so the registry lock wasn't poisoned and no
+/// borrow was leaked.
+#[cfg(feature = "std")]
+#[test]
+fn replace_exclusive_view() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique(counted(0, &counter));
+
+    let mut view = all_storages.borrow::<UniqueViewMut<'_, Counted>>().unwrap();
+    let result = catch_panic(|| all_storages.add_unique(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    view.values.push(10);
+    assert_eq!(view.values, [0, 10]);
+    drop(view);
+
+    all_storages.add_unique(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+    assert_eq!(
+        all_storages
+            .borrow::<UniqueView<'_, Counted>>()
+            .unwrap()
+            .values,
+        [2]
+    );
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique` panics instead of replacing a unique while its storage is borrowed
+/// directly with `custom_storage`. The guard keeps reading the original value and only the
+/// rejected value is dropped. Once the guard is gone a replacement goes through.
+#[cfg(feature = "std")]
+#[test]
+fn replace_shared_custom() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique(counted(0, &counter));
+
+    let storage = all_storages
+        .custom_storage::<UniqueStorage<Counted>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(storage.value.values, [0]);
+    drop(storage);
+
+    all_storages.add_unique(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique` panics instead of replacing a unique while its storage is borrowed
+/// directly with `custom_storage_mut`. The guard can still write to the original value and only
+/// the rejected value is dropped. Once the guard is gone a replacement goes through.
+#[cfg(feature = "std")]
+#[test]
+fn replace_exclusive_custom() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique(counted(0, &counter));
+
+    let mut storage = all_storages
+        .custom_storage_mut::<UniqueStorage<Counted>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    storage.value.values.push(10);
+    assert_eq!(storage.value.values, [0, 10]);
+    drop(storage);
+
+    all_storages.add_unique(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique` replaces a custom storage registered under the unique's storage id
+/// that isn't a unique storage. The custom storage is dropped exactly once and a fresh unique
+/// storage, flagged as inserted, takes its place.
+#[test]
+fn replace_foreign() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    world
+        .add_custom_storage(
+            StorageId::of::<UniqueStorage<Counted>>(),
+            counted(0, &counter),
+        )
+        .unwrap();
+
+    world.add_unique(counted(1, &counter));
+    assert_eq!(drops(&counter), 1);
+    let view = world.borrow::<UniqueView<'_, Counted>>().unwrap();
+    assert_eq!(view.values, [1]);
+    assert!(view.is_inserted());
+    drop(view);
+
+    drop(world);
+    assert_eq!(drops(&counter), 2);
+}
+
+/// Asserts that `add_unique` panics instead of replacing a custom storage registered under the
+/// unique's storage id while it's borrowed. The guard keeps reading the custom storage and only
+/// the rejected value is dropped. Once the guard is gone the custom storage is replaced.
+#[cfg(feature = "std")]
+#[test]
+fn replace_borrowed_foreign() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let id = StorageId::of::<UniqueStorage<Counted>>();
+    world.add_custom_storage(id, counted(0, &counter)).unwrap();
+    let all_storages = world.all_storages().unwrap();
+
+    let storage = all_storages.custom_storage_by_id(id).unwrap();
+    let result = catch_panic(|| all_storages.add_unique(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    let foreign = storage.any().downcast_ref::<Counted>().unwrap();
+    assert_eq!(foreign.values, [0]);
+    drop(storage);
+
+    all_storages.add_unique(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+    assert_eq!(
+        all_storages
+            .borrow::<UniqueView<'_, Counted>>()
+            .unwrap()
+            .values,
+        [2]
+    );
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
 }
 
 /// Asserts that the wrapper returned by `AllStorages::iter` owns its storage borrow: writes
@@ -485,4 +725,295 @@ fn remove_wrapped_uniques() {
 
     drop((non_send, non_sync));
     assert_eq!(drops(&counter), 2);
+}
+
+#[cfg(all(feature = "std", feature = "thread_local"))]
+fn local(value: u32, drops: &Arc<AtomicUsize>) -> Local {
+    Local {
+        values: vec![value],
+        drops: drops.clone(),
+        _non_send_sync: core::marker::PhantomData,
+    }
+}
+
+#[cfg(feature = "thread_local")]
+fn send_only(value: u32, drops: &Arc<AtomicUsize>) -> SendOnly {
+    SendOnly(counted(value, drops), core::marker::PhantomData)
+}
+
+/// Asserts that replacing uniques added with each thread-local method drops each displaced value
+/// exactly once, right away, and keeps the new values in their wrapped storages until the world
+/// drops them.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_wrapped_uniques() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    world.add_unique_non_send(counted(0, &counter));
+    world.add_unique_non_sync(send_only(0, &counter));
+    world.add_unique_non_send_sync(local(0, &counter));
+
+    world.add_unique_non_send(counted(1, &counter));
+    world.add_unique_non_sync(send_only(1, &counter));
+    world.add_unique_non_send_sync(local(1, &counter));
+    assert_eq!(drops(&counter), 3);
+
+    let non_send = world.borrow::<NonSend<UniqueView<'_, Counted>>>().unwrap();
+    let non_sync = world.borrow::<NonSync<UniqueView<'_, SendOnly>>>().unwrap();
+    let non_send_sync = world
+        .borrow::<NonSendSync<UniqueView<'_, Local>>>()
+        .unwrap();
+    assert_eq!(non_send.values, [1]);
+    assert_eq!((**non_sync).0.values, [1]);
+    assert_eq!(non_send_sync.values, [1]);
+    drop((non_send, non_sync, non_send_sync));
+
+    drop(world);
+    assert_eq!(drops(&counter), 6);
+}
+
+/// Asserts that `add_unique_non_send` panics instead of replacing a unique while a shared view of
+/// it is alive. The view keeps reading the original value, the tracking is left untouched and
+/// only the rejected value is dropped. Once the view is gone a replacement goes through.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_non_send_shared() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique_non_send(counted(0, &counter));
+
+    let view = all_storages
+        .borrow::<NonSend<UniqueView<'_, Counted>>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique_non_send(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    let view = all_storages
+        .borrow::<NonSend<UniqueView<'_, Counted>>>()
+        .unwrap();
+    assert!(view.is_inserted());
+    assert!(!view.is_modified());
+    drop(view);
+
+    all_storages.add_unique_non_send(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique_non_send` panics instead of replacing a unique while an exclusive view
+/// of it is alive. The view keeps reading the original value, the tracking is left untouched and
+/// only the rejected value is dropped. Once the view is gone a replacement goes through.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_non_send_exclusive() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique_non_send(counted(0, &counter));
+
+    let view = all_storages
+        .borrow::<NonSend<UniqueViewMut<'_, Counted>>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique_non_send(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    let view = all_storages
+        .borrow::<NonSend<UniqueView<'_, Counted>>>()
+        .unwrap();
+    assert!(view.is_inserted());
+    assert!(!view.is_modified());
+    drop(view);
+
+    all_storages.add_unique_non_send(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique_non_sync` panics instead of replacing a unique while a shared view of
+/// it is alive. The view keeps reading the original value, the tracking is left untouched and
+/// only the rejected value is dropped. Once the view is gone a replacement goes through.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_non_sync_shared() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique_non_sync(counted(0, &counter));
+
+    let view = all_storages
+        .borrow::<NonSync<UniqueView<'_, Counted>>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique_non_sync(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    let view = all_storages
+        .borrow::<NonSync<UniqueView<'_, Counted>>>()
+        .unwrap();
+    assert!(view.is_inserted());
+    assert!(!view.is_modified());
+    drop(view);
+
+    all_storages.add_unique_non_sync(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique_non_sync` panics instead of replacing a unique while an exclusive view
+/// of it is alive. The view keeps reading the original value, the tracking is left untouched and
+/// only the rejected value is dropped. Once the view is gone a replacement goes through.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_non_sync_exclusive() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique_non_sync(counted(0, &counter));
+
+    let view = all_storages
+        .borrow::<NonSync<UniqueViewMut<'_, Counted>>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique_non_sync(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    let view = all_storages
+        .borrow::<NonSync<UniqueView<'_, Counted>>>()
+        .unwrap();
+    assert!(view.is_inserted());
+    assert!(!view.is_modified());
+    drop(view);
+
+    all_storages.add_unique_non_sync(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique_non_send_sync` panics instead of replacing a unique while a shared
+/// view of it is alive. The view keeps reading the original value, the tracking is left untouched
+/// and only the rejected value is dropped. Once the view is gone a replacement goes through.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_non_send_sync_shared() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique_non_send_sync(counted(0, &counter));
+
+    let view = all_storages
+        .borrow::<NonSendSync<UniqueView<'_, Counted>>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique_non_send_sync(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    let view = all_storages
+        .borrow::<NonSendSync<UniqueView<'_, Counted>>>()
+        .unwrap();
+    assert!(view.is_inserted());
+    assert!(!view.is_modified());
+    drop(view);
+
+    all_storages.add_unique_non_send_sync(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that `add_unique_non_send_sync` panics instead of replacing a unique while an exclusive
+/// view of it is alive. The view keeps reading the original value, the tracking is left untouched
+/// and only the rejected value is dropped. Once the view is gone a replacement goes through.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_non_send_sync_exclusive() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let all_storages = world.all_storages().unwrap();
+    all_storages.add_unique_non_send_sync(counted(0, &counter));
+
+    let view = all_storages
+        .borrow::<NonSendSync<UniqueViewMut<'_, Counted>>>()
+        .unwrap();
+    let result = catch_panic(|| all_storages.add_unique_non_send_sync(counted(1, &counter)));
+    assert_eq!(result, Err(borrowed_panic()));
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(view.values, [0]);
+    drop(view);
+
+    let view = all_storages
+        .borrow::<NonSendSync<UniqueView<'_, Counted>>>()
+        .unwrap();
+    assert!(view.is_inserted());
+    assert!(!view.is_modified());
+    drop(view);
+
+    all_storages.add_unique_non_send_sync(counted(2, &counter));
+    assert_eq!(drops(&counter), 2);
+
+    drop(all_storages);
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that each thread-local method replaces a custom storage registered under the unique's
+/// storage id that isn't a unique storage with a fresh storage using that method's wrapper. Each
+/// custom storage is dropped exactly once.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+#[test]
+fn replace_foreign_wrapped() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new_for_test();
+    let ids = [
+        StorageId::of::<UniqueStorage<Counted>>(),
+        StorageId::of::<UniqueStorage<SendOnly>>(),
+        StorageId::of::<UniqueStorage<Local>>(),
+    ];
+    for id in ids {
+        world.add_custom_storage(id, counted(0, &counter)).unwrap();
+    }
+
+    world.add_unique_non_send(counted(1, &counter));
+    world.add_unique_non_sync(send_only(1, &counter));
+    world.add_unique_non_send_sync(local(1, &counter));
+    assert_eq!(drops(&counter), 3);
+
+    let non_send = world.borrow::<NonSend<UniqueView<'_, Counted>>>().unwrap();
+    let non_sync = world.borrow::<NonSync<UniqueView<'_, SendOnly>>>().unwrap();
+    let non_send_sync = world
+        .borrow::<NonSendSync<UniqueView<'_, Local>>>()
+        .unwrap();
+    assert_eq!(non_send.values, [1]);
+    assert_eq!((**non_sync).0.values, [1]);
+    assert_eq!(non_send_sync.values, [1]);
+    drop((non_send, non_sync, non_send_sync));
+
+    drop(world);
+    assert_eq!(drops(&counter), 6);
 }
