@@ -76,3 +76,40 @@ fn update() {
     );
     assert_eq!(usizes.removed().count(), 0);
 }
+
+/// Asserts that deleting grouped entities leaves the remaining pairs yielded with their values,
+/// before and after a regroup.
+#[test]
+fn grouped() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::new();
+    let entities: Vec<EntityId> = (0..6)
+        .map(|i| world.add_entity((USIZE(i), U32(i as u32))))
+        .collect();
+    world.group::<(USIZE, U32)>();
+
+    assert!(world.delete_entity(entities[2]));
+    assert!(world.delete_entity(entities[5]));
+
+    let pairs = |world: &World| {
+        world.run(|(usizes, u32s): (View<USIZE>, View<U32>)| {
+            let mut pairs: Vec<_> = (&usizes, &u32s)
+                .iter()
+                .with_id()
+                .map(|(id, (usize, u32))| (id, usize.0, u32.0))
+                .collect();
+            pairs.sort_unstable();
+            pairs
+        })
+    };
+    let expected = [0, 1, 3, 4].map(|i| (entities[i], i, i as u32));
+    assert_eq!(pairs(&world), expected);
+
+    world.regroup();
+    assert_eq!(pairs(&world), expected);
+}

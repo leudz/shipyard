@@ -128,3 +128,44 @@ fn newer_key() {
         assert_eq!(u32s.len(), 0);
     });
 }
+
+/// Asserts that removing grouped components hands them back, and that the remaining pairs are
+/// yielded with their values, before and after a regroup.
+#[test]
+fn grouped() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::new();
+    let entities: Vec<EntityId> = (0..6)
+        .map(|i| world.add_entity((USIZE(i), U32(i as u32))))
+        .collect();
+    world.group::<(USIZE, U32)>();
+
+    assert_eq!(world.remove::<(USIZE,)>(entities[1]), (Some(USIZE(1)),));
+    assert_eq!(
+        world.remove::<(USIZE, U32)>(entities[4]),
+        (Some(USIZE(4)), Some(U32(4)))
+    );
+    assert_eq!(world.remove::<(U32,)>(entities[0]), (Some(U32(0)),));
+
+    let pairs = |world: &World| {
+        world.run(|(usizes, u32s): (View<USIZE>, View<U32>)| {
+            let mut pairs: Vec<_> = (&usizes, &u32s)
+                .iter()
+                .with_id()
+                .map(|(id, (usize, u32))| (id, usize.0, u32.0))
+                .collect();
+            pairs.sort_unstable();
+            pairs
+        })
+    };
+    let expected = [2, 3, 5].map(|i| (entities[i], i, i as u32));
+    assert_eq!(pairs(&world), expected);
+
+    world.regroup();
+    assert_eq!(pairs(&world), expected);
+}

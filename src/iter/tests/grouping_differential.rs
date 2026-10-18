@@ -5,9 +5,13 @@
 //! several ways and compared with what the model says it should yield.\
 //! The model never iterates a storage: expected items come from scanning its rows.
 //!
-//! Mutations go through the public API, except `Damage`. It moves a grouped component to its
-//! storage's unevaluated region, which changes no component but leaves the partially trusted
-//! ranges public operations can't produce yet. That way damaged walks get compared too.
+//! Mutations go through the public API, except `Damage`. Removals, deletions and retains already
+//! leave partially trusted ranges. `Damage` moves a grouped component to its storage's unevaluated
+//! region instead, which changes no component and damages ranges with a logical swap-remove.
+//!
+//! `Orphan` deletes an entity but not its components. They stay in their storages under the old id
+//! until an entity reusing the index replaces or removes them, newer generations replacing grouped
+//! components that way.
 //!
 //! Groups overlap freely, so regroup creates unions and rotates rings. Layouts are checked on
 //! their own after each step, independently of what queries yield.
@@ -24,9 +28,9 @@ use crate::r#mut::Mut;
 use crate::sparse_set::{GroupRegion, Ring, SparseSet};
 use crate::storage::StorageId;
 use crate::track;
-use crate::views::{View, ViewMut};
+use crate::views::{EntitiesViewMut, View, ViewMut};
 use crate::world::World;
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -200,6 +204,10 @@ enum Op {
     DeleteEntity {
         id: EntityId,
     },
+    /// Deletes `id` with `delete_unchecked`, its components stay.
+    Orphan {
+        id: EntityId,
+    },
     Write {
         id: EntityId,
         slot: usize,
@@ -226,8 +234,15 @@ enum Op {
 struct Scenario {
     rng: Rng,
     world: World,
-    /// Rows of the alive entities.
+    /// Rows of the alive entities and of the orphans.
     model: BTreeMap<EntityId, Row>,
+    /// Deleted entities whose components are still in the storages, along with their rows.
+    ///
+    /// Storages hold a single component per index, so a newer generation adding or removing a
+    /// component replaces or removes the orphan's.
+    orphans: BTreeSet<EntityId>,
+    /// Orphan components a newer generation replaced.
+    replaced: usize,
     /// Groups declared so far, as slot masks.
     ///
     /// Picks damaged storages and checks unions, the model doesn't know about layouts.
@@ -244,6 +259,8 @@ impl Scenario {
             rng: Rng(seed),
             world: World::new_for_test(),
             model: BTreeMap::new(),
+            orphans: BTreeSet::new(),
+            replaced: 0,
             declared: Vec::new(),
             last_value: 0,
         };
@@ -294,7 +311,10 @@ impl Scenario {
                 id: self.pick_entity()?,
                 slot,
             },
-            58..66 => Op::DeleteEntity {
+            58..63 => Op::DeleteEntity {
+                id: self.pick_entity()?,
+            },
+            63..66 => Op::Orphan {
                 id: self.pick_entity()?,
             },
             66..74 => {
@@ -317,14 +337,20 @@ impl Scenario {
         Some(op)
     }
 
+    /// Picks an alive entity.
     fn pick_entity(&mut self) -> Option<EntityId> {
-        if self.model.is_empty() {
+        let alive = self.model.len() - self.orphans.len();
+        if alive == 0 {
             return None;
         }
 
-        let position = self.rng.below(self.model.len());
+        let position = self.rng.below(alive);
 
-        self.model.keys().nth(position).copied()
+        self.model
+            .keys()
+            .filter(|id| !self.orphans.contains(id))
+            .nth(position)
+            .copied()
     }
 
     /// Picks a component in the range of one of the declared groups.
@@ -359,20 +385,36 @@ impl Scenario {
                     self.world.add_component(id, K::new(value));
                     self.model.get_mut(&id).unwrap()[slot] = Some(K::new(value).value());
                 });
+                self.replace_orphans(id, slot);
             }
             Op::Remove { id, slot } => {
                 with_kind!(slot, K => {
                     self.world.remove::<K>(id);
                 });
                 self.model.get_mut(&id).unwrap()[slot] = None;
+                self.remove_orphans(id, slot);
             }
             Op::DeleteComponent { id, slot } => {
                 with_kind!(slot, K => self.world.delete_component::<K>(id));
                 self.model.get_mut(&id).unwrap()[slot] = None;
+                self.remove_orphans(id, slot);
             }
             Op::DeleteEntity { id } => {
                 self.world.delete_entity(id);
                 self.model.remove(&id);
+
+                // Deleting the entity deletes every component at its index, the orphans' too.
+                for slot in 0..SLOTS {
+                    self.remove_orphans(id, slot);
+                }
+            }
+            Op::Orphan { id } => {
+                self.world
+                    .borrow::<EntitiesViewMut<'_>>()
+                    .unwrap()
+                    .delete_unchecked(id);
+                self.orphans.insert(id);
+                self.forget_empty_orphans();
             }
             Op::Write { id, slot } => {
                 let value = self.new_value();
@@ -387,6 +429,7 @@ impl Scenario {
                 for row in self.model.values_mut() {
                     row[slot] = None;
                 }
+                self.forget_empty_orphans();
             }
             Op::Retain { slot } => {
                 with_kind!(slot, K => self
@@ -397,6 +440,7 @@ impl Scenario {
                 for row in self.model.values_mut() {
                     row[slot] = row[slot].filter(|value| value % 3 != 0);
                 }
+                self.forget_empty_orphans();
             }
             Op::Group { mask } => self.group(mask),
             Op::Regroup => self.world.regroup(),
@@ -436,6 +480,53 @@ impl Scenario {
         };
 
         self.model.insert(id, row);
+        for slot in (0..SLOTS).filter(|slot| mask & (1 << slot) != 0) {
+            self.replace_orphans(id, slot);
+        }
+    }
+
+    /// Takes the component at `slot` from the orphans sharing `id`'s index, `id` replaced it.
+    fn replace_orphans(&mut self, id: EntityId, slot: usize) {
+        self.replaced += self.take_from_orphans(id, slot);
+        self.forget_empty_orphans();
+    }
+
+    /// Takes the component at `slot` from the orphans sharing `id`'s index, `id` removed it.
+    fn remove_orphans(&mut self, id: EntityId, slot: usize) {
+        self.take_from_orphans(id, slot);
+        self.forget_empty_orphans();
+    }
+
+    /// Takes the component at `slot` from the orphans sharing `id`'s index.\
+    /// Returns how many there were, at most one since a storage holds one component per index.
+    fn take_from_orphans(&mut self, id: EntityId, slot: usize) -> usize {
+        let mut taken = 0;
+        for orphan in self
+            .orphans
+            .iter()
+            .filter(|orphan| orphan.index() == id.index())
+        {
+            let row = self.model.get_mut(orphan).unwrap();
+            if row[slot].take().is_some() {
+                taken += 1;
+            }
+        }
+
+        taken
+    }
+
+    /// Forgets the orphans left without any component, nothing can reach them anymore.
+    fn forget_empty_orphans(&mut self) {
+        let model = &mut self.model;
+
+        self.orphans.retain(|orphan| {
+            let is_empty = model[orphan].iter().all(Option::is_none);
+            if is_empty {
+                model.remove(orphan);
+            }
+
+            !is_empty
+        });
     }
 
     /// Declares the group of `mask`.
@@ -547,6 +638,8 @@ struct Stats {
     extra_captain: usize,
     /// Steps where an alive entity reused a deleted one's index.
     reused: usize,
+    /// Orphan components a newer generation replaced.
+    replaced: usize,
     /// Steps where a union regroup created was attached.
     unions: usize,
     /// Regroups leaving a group whose members are rotated differently.
@@ -1230,6 +1323,7 @@ fn reads() {
                 stats.reused += 1;
             }
         }
+        stats.replaced += scenario.replaced;
     }
 
     // Under Miri the corpus is too small to promise every kind of walk.
@@ -1247,6 +1341,7 @@ fn reads() {
             rotated,
             extra_captain,
             reused,
+            replaced,
             unions,
             distinct_rotations,
         } = stats;
@@ -1262,6 +1357,7 @@ fn reads() {
                 rotated,
                 extra_captain,
                 reused,
+                replaced,
                 unions,
                 distinct_rotations,
             ]
@@ -1360,6 +1456,248 @@ fn promotions() {
         check_reads(&scenario, &mut rng, &mut stats, "promotions, last step");
     }
     assert!(stats.distinct_rotations > 0, "{stats:?}");
+}
+
+/// Applies scripted mutations to a scenario starting without any group.
+///
+/// When `checked`, the layout is checked after every mutation, and reads are compared after every
+/// one outside Miri. Under Miri, `finish` compares them once.
+struct Script {
+    scenario: Scenario,
+    checked: bool,
+    name: &'static str,
+    rng: Rng,
+    stats: Stats,
+    seen: Vec<Arc<[StorageId]>>,
+}
+
+impl Script {
+    fn new(name: &'static str, checked: bool) -> Script {
+        Script {
+            // Seed 0 starts without any group.
+            scenario: Scenario::new(0),
+            checked,
+            name,
+            rng: Rng(0),
+            stats: Stats::default(),
+            seen: Vec::new(),
+        }
+    }
+
+    fn run(&mut self, op: Op) {
+        let attached = group_masks(&self.scenario.world);
+        self.scenario.apply(op);
+        if !self.checked {
+            return;
+        }
+
+        // Declaring a group regroups, unless the same group is already attached.
+        let regrouped = match op {
+            Op::Regroup => true,
+            Op::Group { mask } => !attached.contains(&mask),
+            _ => false,
+        };
+        let context = format!("{}, {op:?}", self.name);
+        check_layout(
+            &self.scenario,
+            regrouped,
+            &mut self.seen,
+            &mut self.stats,
+            &context,
+        );
+        if !cfg!(miri) {
+            check_reads(&self.scenario, &mut self.rng, &mut self.stats, &context);
+        }
+    }
+
+    /// Adds an entity owning the components of `mask` and returns it.
+    fn add(&mut self, mask: u8) -> EntityId {
+        let before: Vec<EntityId> = self.scenario.model.keys().copied().collect();
+        self.run(Op::AddEntity { mask });
+
+        *self
+            .scenario
+            .model
+            .keys()
+            .find(|id| !before.contains(id))
+            .unwrap()
+    }
+
+    fn finish(&mut self) {
+        if self.checked && cfg!(miri) {
+            let context = format!("{}, last step", self.name);
+            check_reads(&self.scenario, &mut self.rng, &mut self.stats, &context);
+        }
+    }
+}
+
+const A_ONLY: u8 = 0b00001;
+const AB: u8 = 0b00011;
+const AC: u8 = 0b00101;
+const ABC: u8 = 0b00111;
+const CD: u8 = 0b01100;
+
+/// Returns `true` when one of `world`'s ranges is partially trusted.
+fn is_damaged(world: &World) -> bool {
+    layouts(world)
+        .iter()
+        .flat_map(|layout| &layout.ranges)
+        .any(|(_, ring, trust)| *trust < ring.len)
+}
+
+/// Returns `slot`'s range of the group made of the slots of `mask`, in logical order, with its ring.
+fn logical_range(world: &World, slot: usize, mask: u8) -> (Vec<EntityId>, Ring) {
+    let layouts = layouts(world);
+    let layout = &layouts[slot];
+    let (group, ring, _) = layout
+        .ranges
+        .iter()
+        .find(|(group, _, _)| slot_mask(&layouts, group) == mask)
+        .unwrap();
+
+    (layout.logical(group), *ring)
+}
+
+/// Groups AC, AB and the disjoint CD, entities in each of them and in the ABC union, then
+/// removes, deletes and retains components through the public API, without any regroup:
+/// - A's rotated AB loses its logical last component, which isn't in its physical last slot
+/// - B's and A's AB lose another component each
+/// - an ABC entity loses its C, it's still in the union in A and B, a subset of the union
+/// - an ABC entity loses its B, an AB entity is deleted, A is retained and CD loses a D
+fn removal_script(script: &mut Script) -> Vec<EntityId> {
+    let ab: Vec<EntityId> = (0..10).map(|_| script.add(AB)).collect();
+    let abc: Vec<EntityId> = (0..4).map(|_| script.add(ABC)).collect();
+    let cd: Vec<EntityId> = (0..4).map(|_| script.add(CD)).collect();
+    script.add(AC);
+    for mask in [AC, AB, CD] {
+        script.run(Op::Group { mask });
+    }
+
+    // AC is A's first range, appending to it passes holes through AB and rotates it in A.
+    for _ in 0..3 {
+        script.add(AC);
+    }
+    script.run(Op::Regroup);
+    let (order, ring) = logical_range(&script.scenario.world, A::SLOT, AB);
+    assert!(is_rotated(ring));
+
+    let ops = [
+        Op::Remove {
+            id: *order.last().unwrap(),
+            slot: A::SLOT,
+        },
+        Op::Remove {
+            id: ab[1],
+            slot: B::SLOT,
+        },
+        Op::Remove {
+            id: ab[6],
+            slot: A::SLOT,
+        },
+        Op::DeleteComponent {
+            id: abc[0],
+            slot: C::SLOT,
+        },
+        Op::Remove {
+            id: abc[2],
+            slot: B::SLOT,
+        },
+        Op::DeleteEntity { id: ab[3] },
+        Op::Retain { slot: A::SLOT },
+        Op::Remove {
+            id: cd[0],
+            slot: D::SLOT,
+        },
+    ];
+    for op in ops {
+        script.run(op);
+    }
+
+    ab
+}
+
+/// Asserts that removals through the public API, repeated without regroup, leave partially
+/// trusted ranges the grouped walks drive through, every read agreeing with the model.
+/// After a regroup, every group is aligned again, and stays so through more removals and a
+/// second regroup.
+#[test]
+fn removals() {
+    let mut script = Script::new("removals", true);
+    let ab = removal_script(&mut script);
+
+    assert!(is_damaged(&script.scenario.world));
+    {
+        let (a, b) = script
+            .scenario
+            .world
+            .borrow::<(View<'_, A>, View<'_, B>)>()
+            .unwrap();
+        assert!(winner_walks((&a, &b)).contains(&"damaged"));
+    }
+
+    script.run(Op::Regroup);
+    assert!(!is_damaged(&script.scenario.world));
+
+    script.run(Op::Remove {
+        id: ab[0],
+        slot: A::SLOT,
+    });
+    script.run(Op::DeleteEntity { id: ab[8] });
+    script.run(Op::Regroup);
+    script.finish();
+}
+
+/// Groups AB and AC, entities in AB and in the ABC union, then orphans grouped entities and
+/// lets newer generations reuse their indices:
+/// - the ABC orphan's A is replaced by an entity owning only A, B and C keep the old generation
+/// - the AB orphan's A and B are both replaced by an AB entity, added in one go
+/// - the entity owning only A gains a B, replacing the orphan's, and now satisfies AB
+/// - removing its C, which it doesn't own, removes the orphan's last component
+fn replacement_script(script: &mut Script) -> EntityId {
+    let ab: Vec<EntityId> = (0..10).map(|_| script.add(AB)).collect();
+    let abc: Vec<EntityId> = (0..4).map(|_| script.add(ABC)).collect();
+    for mask in [AB, AC] {
+        script.run(Op::Group { mask });
+    }
+
+    script.run(Op::Orphan { id: abc[1] });
+    let reused = script.add(A_ONLY);
+    assert_eq!(reused, EntityId::new_from_parts(abc[1].index(), 1));
+
+    script.run(Op::Orphan { id: ab[4] });
+    let pair = script.add(AB);
+    assert_eq!(pair, EntityId::new_from_parts(ab[4].index(), 1));
+
+    script.run(Op::AddComponent {
+        id: reused,
+        slot: B::SLOT,
+    });
+    script.run(Op::Remove {
+        id: reused,
+        slot: C::SLOT,
+    });
+    assert_eq!(script.scenario.replaced, 4);
+    assert!(script.scenario.orphans.is_empty());
+
+    reused
+}
+
+/// Asserts that newer generations replacing grouped components, in a range or not, leave every
+/// read in agreement with the model, the old generation never yielded with the new components.
+/// After a regroup, the entity reusing an orphan's index is in AB, every group aligned.
+#[test]
+fn replacements() {
+    let mut script = Script::new("replacements", true);
+    let reused = replacement_script(&mut script);
+    assert!(is_damaged(&script.scenario.world));
+
+    script.run(Op::Regroup);
+
+    let a = script.scenario.world.borrow::<View<'_, A>>().unwrap();
+    let index = a.index_of(reused).unwrap();
+    assert!(matches!(a.groups.region_of(index), GroupRegion::Range(_)));
+    drop(a);
+    script.finish();
 }
 
 /// How a mutable consumer is driven.
@@ -1576,6 +1914,57 @@ fn writes() {
                         &context,
                     );
                 }
+            }
+        }
+    }
+}
+
+/// Asserts that every mutable consumer writes exactly the components of the model's matches,
+/// each once per pass, over the ranges the removal and replacement scripts damage.
+///
+/// Each consumer runs on its own world, scripted again without checks.
+#[test]
+fn scripted_writes() {
+    let scripts: [(&'static str, fn(&mut Script)); 2] = [
+        ("removals", |script| {
+            removal_script(script);
+        }),
+        ("replacements", |script| {
+            replacement_script(script);
+        }),
+    ];
+    let mut combination = 0;
+
+    for (name, build) in scripts {
+        for case in &WRITE_CASES {
+            // Under Miri, each combination is driven in a single way, the ways take turns.
+            let ways = if cfg!(miri) {
+                &WAYS[combination % WAYS.len()..][..1]
+            } else {
+                WAYS
+            };
+            combination += 1;
+
+            for &way in ways {
+                let mut script = Script::new(name, false);
+                build(&mut script);
+                let scenario = &script.scenario;
+                let context = format!("{name}, {} {way:?}", case.shape);
+
+                (case.write)(&scenario.world, way);
+
+                let passes = if way == Way::Replay { 2 } else { 1 };
+                let matches = |row: &Row| {
+                    (0..SLOTS).all(|slot| case.required & (1 << slot) == 0 || row[slot].is_some())
+                };
+                assert_components(
+                    &scenario.world,
+                    &scenario.model,
+                    matches,
+                    case.written,
+                    DELTA * passes,
+                    &context,
+                );
             }
         }
     }

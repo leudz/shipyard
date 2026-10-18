@@ -622,14 +622,15 @@ fn b_ungrouped_then_a() {
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
 }
 
-/// Asserts that once a removal resets A, the remaining pairs are yielded,
+/// Asserts that after removals damage both members of AB, the remaining pairs are yielded,
 /// and still are after a new pair and a full regroup.
 #[test]
-fn reset_then_regroup() {
+fn removal_then_regroup() {
     let mut world = World::new();
     let mut pairs = add_ab(&mut world, 0, 10);
     world.group::<(A, B)>();
     world.remove::<A>(pairs.remove(0));
+    world.remove::<B>(pairs.remove(4));
 
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
 
@@ -639,7 +640,170 @@ fn reset_then_regroup() {
     world.regroup();
     assert_eq!(pair_items(&world), pair_values(&world, &pairs));
     let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
-    assert_eq!((&a, &b).iter().size_hint(), (10, Some(10)));
+    assert_eq!((&a, &b).iter().size_hint(), (9, Some(9)));
+}
+
+/// Asserts that deleting grouped components, one after the other without regroup,
+/// leaves the remaining pairs yielded, before and after a regroup.
+#[test]
+fn deletion() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    world.group::<(A, B)>();
+    world.delete_component::<B>(pairs.remove(7));
+    world.delete_component::<A>(pairs.remove(2));
+    world.delete_component::<(A, B)>(pairs.remove(0));
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    world.regroup();
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that deleting grouped entities, without regroup, leaves the remaining pairs yielded,
+/// before and after a regroup.
+#[test]
+fn entity_deletion() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    let lone = world.add_entity(A(100));
+    world.group::<(A, B)>();
+    world.delete_entity(pairs.remove(9));
+    world.delete_entity(pairs.remove(3));
+    world.delete_entity(lone);
+
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    world.regroup();
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that `retain` and `retain_mut` over a grouped storage leave the kept pairs yielded,
+/// with the values `retain_mut` wrote, before and after a regroup.
+#[test]
+fn retain() {
+    let mut world = World::new();
+    let pairs = add_ab(&mut world, 0, 12);
+    world.group::<(A, B)>();
+
+    world.retain::<A>(|_, a| a.0 % 3 != 0);
+    world.retain_mut::<B>(|_, mut b| {
+        b.0 += 100;
+        b.0 % 2 == 0
+    });
+
+    let kept: Vec<EntityId> = (0..12)
+        .filter(|i| i % 3 != 0 && i % 2 == 0)
+        .map(|i| pairs[i])
+        .collect();
+    let expected: Vec<_> = kept
+        .iter()
+        .map(|&id| {
+            let i = pairs.iter().position(|&pair| pair == id).unwrap() as u32;
+            (id, (i, i + 100))
+        })
+        .collect();
+    assert_eq!(pair_items(&world), expected);
+
+    world.regroup();
+    assert_eq!(pair_items(&world), expected);
+}
+
+/// Asserts that a newer generation replacing a grouped pair's components one at a time is only
+/// yielded once it owns both, the orphaned components never are, before and after a regroup.
+#[test]
+fn replacement() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    world.group::<(A, B)>();
+    let orphan = pairs.remove(4);
+    world
+        .borrow::<EntitiesViewMut>()
+        .unwrap()
+        .delete_unchecked(orphan);
+
+    // The new entity's A replaces the orphan's, the orphan keeps its B.
+    let reused = world.add_entity(A(99));
+    assert_eq!(reused.index(), orphan.index());
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+    assert!(world.get::<&B>(orphan).is_ok());
+
+    world.add_component(reused, B(99));
+    pairs.push(reused);
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+
+    world.regroup();
+    assert_eq!(pair_items(&world), pair_values(&world, &pairs));
+}
+
+/// Asserts that mutable outputs of a pair damaged by removals, held all at once, each write
+/// their own entity's components once.
+#[test]
+fn removal_mut() {
+    let mut world = World::new();
+    let mut pairs = add_ab(&mut world, 0, 10);
+    world.group::<(A, B)>();
+    world.remove::<A>(pairs.remove(8));
+    world.remove::<B>(pairs.remove(1));
+    let expected = pair_values(&world, &pairs);
+
+    let (mut a, mut b) = world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
+    let held: Vec<(&mut A, &mut B)> = (&mut a, &mut b).iter().collect();
+    for (a, b) in held {
+        a.0 += 1000;
+        b.0 += 2000;
+    }
+    drop((a, b));
+
+    let written: Vec<_> = expected
+        .iter()
+        .map(|&(id, (a, b))| (id, (a + 1000, b + 2000)))
+        .collect();
+    assert_eq!(pair_values(&world, &pairs), written);
+}
+
+/// Asserts that removals, deletions and a retain over a thread-local storage in a group leave
+/// the remaining pairs yielded, before and after a regroup.
+#[cfg(feature = "thread_local")]
+#[test]
+fn thread_local_removal() {
+    use shipyard::borrow::NonSend;
+
+    let mut world = World::new();
+    let pairs: Vec<EntityId> = world.run(
+        |mut entities: EntitiesViewMut, mut a: NonSend<ViewMut<A>>, mut b: ViewMut<B>| {
+            (0..10)
+                .map(|i| entities.add_entity((&mut *a, &mut b), (A(i), B(i))))
+                .collect()
+        },
+    );
+    world.group::<(NonSend<A>, B)>();
+
+    world.run(|mut a: NonSend<ViewMut<A>>| {
+        (&mut *a).remove(pairs[2]);
+        a.retain(|_, a| a.0 != 6);
+    });
+    world.delete_entity(pairs[8]);
+
+    let items = |world: &World| {
+        world.run(|a: NonSend<View<A>>, b: View<B>| {
+            sorted(
+                (&*a, &b)
+                    .iter()
+                    .with_id()
+                    .map(|(id, (a, b))| (id, (a.0, b.0)))
+                    .collect::<Vec<_>>(),
+            )
+        })
+    };
+    let expected: Vec<_> = [0, 1, 3, 4, 5, 7, 9]
+        .into_iter()
+        .map(|i| (pairs[i], (i as u32, i as u32)))
+        .collect();
+    assert_eq!(items(&world), expected);
+
+    world.regroup();
+    assert_eq!(items(&world), expected);
 }
 
 /// Asserts that an entity reusing a deleted pair's index is yielded with its new generation,
