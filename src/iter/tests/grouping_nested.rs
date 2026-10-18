@@ -652,10 +652,10 @@ fn coverage() {
     );
 }
 
-/// Asserts that once a removal resets A, the nested walk ties with the ordinary one and loses,
-/// then wins again after a regroup.
+/// Asserts that once removing A's logical 0 leaves its range untrusted, the nested walk ties
+/// with the ordinary one and loses, then wins again after a regroup.
 #[test]
-fn reset_then_regroup() {
+fn removal_then_regroup() {
     let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs);
@@ -668,8 +668,8 @@ fn reset_then_regroup() {
             .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
             .unwrap();
 
-        // A's 9 components are unevaluated: 27 for the pair and 9 more for C,
-        // as much as the pair's ordinary walk.
+        // A's 9 components are still in its range, but none is trusted:
+        // 27 for the pair's damaged walk and 9 more for C, as much as the pair's ordinary walk.
         let iter = ((&a, &b), &c).iter();
         assert!(iter.schedule.is_none());
         assert_eq!(iter.shiperator.captain_mask, 0b01);

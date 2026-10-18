@@ -331,9 +331,9 @@ impl Groups {
     /// Definitions, creation order and signed shifts survive. Every range becomes empty with
     /// zero trust, and the ungrouped region becomes empty too.
     pub(crate) fn reset(&mut self) {
-        // This is a temporary reset rule.
-        // Ordinary removal, deletion, retain, generation replacement, sorting, clear and drain
-        // land here. Regroup's own movements preserve ranges instead.
+        // Sorting, clear and drain land here, they change the layout of the whole storage.
+        // Removals and generation replacements damage their range locally instead,
+        // and regroup's own movements preserve ranges.
         // Iteration stays correct: our trust is 0 so every group's aligned part is empty,
         // and all our components are found in the unevaluated region.
         // Shifts are kept, an empty range doesn't use it and growing it picks a new remainder.

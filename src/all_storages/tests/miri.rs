@@ -321,8 +321,8 @@ fn regroup_moves() {
     world.regroup();
     assert!(has_wrapped_range::<Counted>(&world));
 
-    // An entity in both groups, then a deletion resetting `Counted` and `Marker` before the
-    // next regroup places everything again.
+    // An entity in both groups, then a deletion damaging the (Counted, Marker) range in both
+    // members before the next regroup places everything again.
     let both3 = world.add_entity((counted(3, &counter), Aligned(3), Marker));
     world.regroup();
     world.delete_entity(cm0);

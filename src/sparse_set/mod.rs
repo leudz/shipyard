@@ -437,7 +437,8 @@ impl<T: Component> SparseSet<T> {
 
     /// Makes the whole storage unevaluated if it has any group range.
     ///
-    /// Called before any mutation that changes the layout of the storage, see [`Groups::reset`].
+    /// Called by sorting, clear and drain, before they change the layout of the whole storage,
+    /// see [`Groups::reset`].
     #[inline]
     fn reset_groups(&mut self) {
         // Most storages have no group, we keep their cost to this single branch.
