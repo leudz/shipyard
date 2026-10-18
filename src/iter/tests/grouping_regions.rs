@@ -245,7 +245,7 @@ fn set_regions(groups: &mut Groups, range: Range<usize>, trust: usize, unevaluat
 /// skipping the components each storage evaluated as ungrouped.
 #[test]
 fn aligned() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
     all.push(world.add_entity(A(10)));
     all.push(world.add_entity(B(10)));
@@ -268,7 +268,7 @@ fn aligned() {
 /// which rejects the entities lacking C, so the traversal isn't exact.
 #[test]
 fn rejecting_sailor() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let all: Vec<EntityId> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
     world.add_component(all[1], C(1));
     world.add_component(all[3], C(3));
@@ -313,7 +313,7 @@ fn rejecting_sailor() {
 /// rejected by B's thanks to the record of A's unevaluated region.
 #[test]
 fn new_entities() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..3).map(|i| world.add_entity((A(i), B(i)))).collect();
     world.group::<(A, B)>();
     all.push(world.add_entity(A(10)));
@@ -337,7 +337,7 @@ fn new_entities() {
 /// by B's unevaluated walk: A's ungrouped region is neither walked nor covered.
 #[test]
 fn a_ungrouped_then_b() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..2).map(|i| world.add_entity((A(i), B(i)))).collect();
     let late = world.add_entity(A(10));
     all.push(late);
@@ -362,7 +362,7 @@ fn a_ungrouped_then_b() {
 /// by A's unevaluated walk: B's ungrouped region is neither walked nor covered.
 #[test]
 fn b_ungrouped_then_a() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..2).map(|i| world.add_entity((A(i), B(i)))).collect();
     let late = world.add_entity(B(10));
     all.push(late);
@@ -387,7 +387,7 @@ fn b_ungrouped_then_a() {
 /// walks and yielded once, by the first.
 #[test]
 fn both_unevaluated() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
     let all = [world.add_entity((A(0), B(0)))];
 
@@ -407,7 +407,7 @@ fn both_unevaluated() {
 /// walk alone finds every match. A regroup then makes the pair aligned again.
 #[test]
 fn reset() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let all: Vec<EntityId> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
     world.group::<(A, B)>();
     world.remove::<A>(all[0]);
@@ -438,7 +438,7 @@ fn reset() {
 /// without a plan.
 #[test]
 fn empty_group() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
     world.add_entity(C(0));
 
@@ -455,7 +455,7 @@ fn empty_group() {
 /// a nonempty segment can yield nothing.
 #[test]
 fn unmatched_candidates() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
     let all = [world.add_entity(A(0)), world.add_entity(A(1))];
 
@@ -475,7 +475,7 @@ fn unmatched_candidates() {
 /// B trusts all of it, the unevaluated regions are empty.
 #[test]
 fn zero_trust() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
     let first = world.add_entity(B(0));
     let second = world.add_entity((A(1), B(1)));
@@ -525,7 +525,7 @@ struct Partial {
 /// Members hold the same entities over the 2 positions they both trust and every match
 /// with both components evaluated is in both ranges, as group metadata guarantees.
 fn partial_world() -> Partial {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
 
     // Every component lands at the end of its storage, the regions are set afterwards.

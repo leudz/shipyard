@@ -607,7 +607,7 @@ mod tests {
     fn single_immutable() {
         fn system1(_: View<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("System1")
             .with_system(system1)
@@ -636,7 +636,7 @@ mod tests {
     fn single_mutable() {
         fn system1(_: ViewMut<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("System1")
             .with_system(system1)
@@ -666,7 +666,7 @@ mod tests {
         fn system1(_: View<'_, Usize>) {}
         fn system2(_: View<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system1)
@@ -697,7 +697,7 @@ mod tests {
         fn system1(_: ViewMut<'_, Usize>) {}
         fn system2(_: ViewMut<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system1)
@@ -728,7 +728,7 @@ mod tests {
         fn system1(_: ViewMut<'_, Usize>) {}
         fn system2(_: View<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system1)
@@ -753,7 +753,7 @@ mod tests {
         );
         assert_eq!(&scheduler.default, &label);
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system2)
@@ -785,7 +785,7 @@ mod tests {
         fn system_a2(_: View<'_, Usize>, _: ViewMut<'_, U32>) {}
         fn system_b1(_: View<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         let mut group_a = Workload::new("Group A")
             .with_system(system_a1)
@@ -822,7 +822,7 @@ mod tests {
         fn system1(_: View<'_, Usize>) {}
         fn system2(_: AllStoragesViewMut<'_>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system2)
@@ -846,7 +846,7 @@ mod tests {
         );
         assert_eq!(&scheduler.default, &label);
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system2)
@@ -870,7 +870,7 @@ mod tests {
         );
         assert_eq!(&scheduler.default, &label);
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system1)
@@ -895,7 +895,7 @@ mod tests {
         );
         assert_eq!(&scheduler.default, &label);
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system2)
@@ -937,7 +937,7 @@ mod tests {
         fn sys3(_: View<'_, Usize>) {}
         fn sys4(_: ViewMut<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Test")
             .with_system(sys1)
@@ -967,7 +967,7 @@ mod tests {
                 .is_none()
         );
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Test")
             .with_system(sys1)
@@ -991,7 +991,7 @@ mod tests {
         );
         assert_eq!(&scheduler.default, &label);
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Test")
             .with_system(sys2)
@@ -1015,7 +1015,7 @@ mod tests {
         );
         assert_eq!(&scheduler.default, &label);
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Test")
             .with_system(sys1)
@@ -1044,7 +1044,7 @@ mod tests {
                 .is_none()
         );
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Test")
             .with_system(sys1)
@@ -1074,7 +1074,7 @@ mod tests {
         fn system1(_: ViewMut<'_, Usize>) {}
         fn system2(_: UniqueViewMut<'_, Usize>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems")
             .with_system(system1)
@@ -1102,7 +1102,7 @@ mod tests {
 
     #[test]
     fn empty_workload() {
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("Systems").add_to_world(&world).unwrap();
 
@@ -1131,7 +1131,7 @@ mod tests {
         fn sys_b1(_: View<'_, Usize>) {}
         fn sys_c1(_: View<'_, U16>) {}
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         let mut group_a = Workload::new("Group A")
             .with_system(sys_a1)
@@ -1166,7 +1166,7 @@ mod tests {
 
     #[test]
     fn skip_if_missing_storage() {
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("test")
             .skip_if_storage_empty::<Usize>()
@@ -1188,7 +1188,7 @@ mod tests {
 
     #[test]
     fn system_skip_if_missing_storage() {
-        let world = World::new();
+        let world = World::new_for_test();
 
         Workload::new("test")
             .with_system((|| -> () { panic!() }).skip_if_storage_empty::<Usize>())
@@ -1208,7 +1208,7 @@ mod tests {
 
     #[test]
     fn skip_if_empty_storage() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid = world.add_entity((Usize(0),));
         world.remove::<(Usize,)>(eid);
@@ -1233,7 +1233,7 @@ mod tests {
 
     #[test]
     fn system_skip_if_empty_storage() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid = world.add_entity((Usize(0),));
         world.remove::<(Usize,)>(eid);
@@ -1256,7 +1256,7 @@ mod tests {
 
     #[test]
     fn workload_merge_skip_if() {
-        let world = World::new();
+        let world = World::new_for_test();
 
         world.add_unique(Usize(0));
 
@@ -1564,7 +1564,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let world = World::new();
+        let world = World::new_for_test();
 
         assert!(workload
             .run_with_world(&world)
@@ -1791,7 +1791,7 @@ mod info_tests {
     use crate::sparse_set::SparseSet;
     use crate::views::{View, ViewMut};
     use alloc::format;
-    use std::string::ToString;
+    use alloc::string::ToString;
 
     #[allow(unused)]
     struct Usize(usize);

@@ -46,7 +46,7 @@ impl Drop for Counter {
 /// released with it.
 #[test]
 fn as_view() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity = world.add_entity(Heap(vec![1]));
 
     let mut heaps = world.borrow::<ViewMut<'_, Heap>>().unwrap();
@@ -70,7 +70,7 @@ fn as_view() {
 /// both are released once the reference is dropped.
 #[test]
 fn get_refs() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity = world.add_entity(Heap(vec![1]));
 
     let mut values = RefMut::map(world.get::<&mut Heap>(entity).unwrap(), |heap| &mut heap.0);
@@ -91,7 +91,7 @@ fn get_refs() {
 /// and `AllStorages` borrows it took before finding out.
 #[test]
 fn get_missing() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity = world.add_entity(Other(0));
 
     assert!(world.get::<&mut Heap>(entity).is_err());
@@ -105,7 +105,7 @@ fn get_missing() {
 /// afterwards `Other` can be borrowed exclusively.
 #[test]
 fn tuple_partial() {
-    let world = World::new();
+    let world = World::new_for_test();
     let heaps = world.borrow::<ViewMut<'_, Heap>>().unwrap();
 
     assert!(world
@@ -121,7 +121,7 @@ fn tuple_partial() {
 /// views out, and that the views `get_unique` returns hold their borrow the same way.
 #[test]
 fn unique_views() {
-    let world = World::new();
+    let world = World::new_for_test();
     world.add_unique(Config(vec![1]));
 
     let mut config = world.borrow::<UniqueViewMut<'_, Config>>().unwrap();
@@ -144,7 +144,7 @@ fn unique_views() {
 /// the lazy view is dropped.
 #[test]
 fn unique_or_init() {
-    let world = World::new();
+    let world = World::new_for_test();
 
     let mut lazy = world.borrow::<UniqueOrInitViewMut<'_, Config>>().unwrap();
     assert!(lazy.get().is_none());
@@ -162,7 +162,7 @@ fn unique_or_init() {
 /// rejected while the wrapper is alive, and the writes are visible after it's dropped.
 #[test]
 fn world_iter() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity0 = world.add_entity((Heap(vec![0]), Other(10)));
     let entity1 = world.add_entity((Heap(vec![1]), Other(11)));
 
@@ -191,7 +191,7 @@ fn system_unwind() {
     use alloc::sync::Arc;
     use core::sync::atomic::{AtomicUsize, Ordering};
 
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity = world.add_entity(Heap(vec![1]));
     world.add_unique(Config(vec![]));
     let drops = Arc::new(AtomicUsize::new(0));
@@ -242,7 +242,7 @@ fn other_thread() {
     use crate::borrow::NonSend;
     use crate::EntitiesView;
 
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity = world.add_entity(Heap(vec![1]));
     world.run(
         |entities: EntitiesView<'_>, mut sync_only: NonSend<ViewMut<'_, SyncOnly>>| {

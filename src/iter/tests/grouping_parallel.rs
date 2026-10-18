@@ -178,7 +178,7 @@ fn opt_len_follow_ups() {
 }
 
 fn aligned_world() -> World {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..200 {
         world.add_entity((A(i), B(i)));
     }

@@ -147,7 +147,7 @@ fn strategies_and_prefixes() {
 
 #[test]
 fn partial_strategy() {
-    let mut world = crate::World::new();
+    let mut world = crate::World::new_for_test();
     let ids: Vec<_> = (0..10)
         .map(|i| world.add_entity((A(i), B(10 + i))))
         .collect();

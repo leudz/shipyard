@@ -902,7 +902,7 @@ mod grouping_coordinates {
     /// Entities 2 to 5 also own `B(10 + i)` at index `i - 1` of `B`,
     /// after an unrelated `B(100)` at index 0.
     fn world() -> (World, Vec<EntityId>) {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.add_entity(B(100));
         let entities: Vec<EntityId> = (0..6).map(|i| world.add_entity(A(i))).collect();
@@ -982,7 +982,7 @@ mod grouping_coordinates {
     /// doesn't mark any component as modified.
     #[test]
     fn resolve_no_modify() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entities: Vec<EntityId> = (0..4).map(|i| world.add_entity(Tracked(i))).collect();
         let mut tracked = world.borrow::<ViewMut<'_, Tracked>>().unwrap();
         let mut segment_entities = entities_from(&tracked.dense, 1, 3);
@@ -1015,7 +1015,7 @@ mod grouping_coordinates {
     /// of the resolved component, not the one at the unadjusted local index.
     #[test]
     fn tracked_resolution() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entities: Vec<EntityId> = (0..4).map(|i| world.add_entity(Tracked(i))).collect();
         let mut tracked = world.borrow::<ViewMut<'_, Tracked>>().unwrap();
         let mut segment_entities = entities_from(&tracked.dense, 1, 3);

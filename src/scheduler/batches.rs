@@ -22,7 +22,7 @@ pub(crate) struct Batches {
 
 #[cfg(test)]
 impl core::fmt::Debug for Batches {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Batches")
             .field("parallel", &self.parallel)
             .field("sequential", &self.sequential)

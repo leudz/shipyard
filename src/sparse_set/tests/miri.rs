@@ -523,7 +523,7 @@ fn zero_sized() {
 #[test]
 fn tracked_reorder() {
     let counter = counter();
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let e0 = world.add_entity(TrackedItem(item(2, &counter)));
     let e1 = world.add_entity(TrackedItem(item(1, &counter)));
     world.run(|items: ViewMut<'_, TrackedItem, track::All>| items.clear_all_inserted());
@@ -561,7 +561,7 @@ fn tracked_reorder() {
 #[test]
 fn bulk_page_boundary() {
     let counter = counter();
-    let mut world = World::new();
+    let mut world = World::new_for_test();
 
     world.spawn(id(BUCKET_SIZE - 2));
     let pairs: Vec<EntityId> = world
@@ -653,7 +653,7 @@ fn cursor_split() {
 #[test]
 fn window_segment_start() {
     let counter = counter();
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     // `Aligned` gets an extra component first, so its segment starts one index later.
     world.add_entity(Aligned(100));
     let e: Vec<EntityId> = (0..4)
@@ -702,7 +702,7 @@ fn window_segment_start() {
 #[test]
 fn window_mut_tracked() {
     let counter = counter();
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let e: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity(TrackedItem(item(i, &counter))))
         .collect();

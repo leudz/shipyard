@@ -128,7 +128,7 @@ fn add_ab(world: &mut World, count: u32) -> Vec<EntityId> {
 /// and the regions of the storage, read from the base's metadata.
 #[test]
 fn window_metadata() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     add_ab(&mut world, 3);
     world.add_entity(A(10));
     world.group::<(A, B)>();
@@ -162,7 +162,7 @@ fn window_metadata() {
 /// Asserts that a window over a storage in two overlapping groups reports each of its ranges.
 #[test]
 fn window_metadata_overlapping() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.add_entity((A(0), B(0)));
     world.add_entity((A(1), C(1)));
     world.add_entity((A(2), B(2), C(2)));
@@ -185,7 +185,7 @@ fn window_metadata_overlapping() {
 /// and keeps its smallest captain.
 #[test]
 fn no_metadata() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     add_ab(&mut world, 3);
     world.add_entity(A(10));
 
@@ -199,7 +199,7 @@ fn no_metadata() {
 /// Asserts that a group of storages outside the query doesn't give it a grouped alternative.
 #[test]
 fn unrelated_group() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     add_ab(&mut world, 3);
     for i in 0..5 {
         world.add_entity((C(i), D(i)));
@@ -217,7 +217,7 @@ fn unrelated_group() {
 /// which ties with the empty ordinary walk and loses.
 #[test]
 fn empty_group() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -233,7 +233,7 @@ fn empty_group() {
 /// evaluated ungrouped components, while the iterator still installs the ordinary walk.
 #[test]
 fn aligned() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     add_ab(&mut world, 5);
     world.add_entity(A(10));
     world.add_entity(A(11));
@@ -256,7 +256,7 @@ fn aligned() {
 /// groups are hints and don't force their walks.
 #[test]
 fn small_captain() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 20);
     for &entity in &entities[..2] {
         world.add_component(entity, C(0));
@@ -275,7 +275,7 @@ fn small_captain() {
 /// Asserts that with two disjoint groups, the one with the cheaper complete walk wins.
 #[test]
 fn disjoint_groups() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 20);
     for &entity in &entities[..10] {
         world.add_component(entity, (C(0), D(0)));
@@ -296,7 +296,7 @@ fn disjoint_groups() {
 /// first member comes first in the query.
 #[test]
 fn disjoint_tie() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..10 {
         world.add_entity((A(i), B(i), C(i), D(i)));
     }
@@ -318,7 +318,7 @@ fn disjoint_tie() {
 /// A's whole storage as unevaluated and loses the tie against the ordinary walk.
 #[test]
 fn reset() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 10);
     world.group::<(A, B)>();
     world.remove::<A>(entities[0]);
@@ -346,7 +346,7 @@ fn reset() {
 /// region, which costs more than the ordinary walk, until the next regroup aligns them.
 #[test]
 fn multiwalk() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     add_ab(&mut world, 10);
     world.group::<(A, B)>();
     add_ab(&mut world, 10);
@@ -387,7 +387,7 @@ fn multiwalk() {
 /// cost as much as C's 3 candidates looking up A and B.
 #[test]
 fn equal_cost() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 4);
     for &entity in &entities[..3] {
         world.add_component(entity, C(0));
@@ -410,7 +410,7 @@ fn equal_cost() {
 /// and still yields the AB entities lacking C.
 #[test]
 fn projection() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 5);
     for &entity in &entities[..3] {
         world.add_component(entity, C(0));
@@ -430,7 +430,7 @@ fn projection() {
 /// - ABC holds 7 entities, the 4 owning A, B and C from the start and the 3 promoted
 /// - 3 entities own a B alone
 fn overlap_world() -> World {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let ab: Vec<EntityId> = (0..8).map(|i| world.add_entity((A(i), B(i)))).collect();
     let ac: Vec<EntityId> = (0..8).map(|i| world.add_entity((A(i), C(i)))).collect();
     for i in 0..4 {
@@ -520,7 +520,7 @@ fn overlap_small_captain() {
 /// `(A, B, C)` query an alternative made of unevaluated walks alone: no ABC union exists yet.
 #[test]
 fn absent_union() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..3 {
         world.add_entity((A(i), B(i)));
         world.add_entity((A(i), C(i)));
@@ -561,7 +561,7 @@ fn absent_union() {
 /// AB and ACD groups holding 6 AB entities, 6 ACD entities and 5 entities owning all four
 /// components in their ABCD union.
 fn extra_world() -> World {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..6 {
         world.add_entity((A(i), B(i)));
         world.add_entity((A(i), C(i), D(i)));
@@ -631,7 +631,7 @@ fn overlap_disjoint() {
 /// ordinary selection even though their storages are grouped, and report it to parents.
 #[test]
 fn filters() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..5 {
         world.add_entity((A(i), B(i), C(i), Ins(i)));
     }
@@ -673,7 +673,7 @@ fn filters() {
 /// Asserts that a modification tracked window isn't a filter and stays eligible.
 #[test]
 fn modification_tracked() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..5 {
         world.add_entity((Modif(i), B(i)));
     }
@@ -689,7 +689,7 @@ fn modification_tracked() {
 /// position would drive, so the query keeps ordinary selection.
 #[test]
 fn repeated_storage() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     add_ab(&mut world, 4);
     world.group::<(A, B)>();
 
@@ -711,7 +711,7 @@ fn thread_local_identity() {
     use crate::borrow::NonSend;
     use crate::AddComponent;
 
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 4);
     {
         let mut local_a = world.borrow::<NonSend<ViewMut<'_, A>>>().unwrap();
@@ -739,7 +739,7 @@ fn thread_local_identity() {
 /// against 40 for C looking the pair up.
 #[test]
 fn nested() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 10);
     for &entity in &entities {
         world.add_component(entity, C(0));
@@ -768,7 +768,7 @@ fn nested() {
 
 /// A world where AB is grouped over 20 entities and only 2 of them own C.
 fn owned_world() -> World {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 20);
     for &entity in &entities[..2] {
         world.add_component(entity, C(0));

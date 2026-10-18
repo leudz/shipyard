@@ -242,7 +242,7 @@ impl Scenario {
     fn new(seed: u64) -> Scenario {
         let mut scenario = Scenario {
             rng: Rng(seed),
-            world: World::new(),
+            world: World::new_for_test(),
             model: BTreeMap::new(),
             declared: Vec::new(),
             last_value: 0,
@@ -1593,7 +1593,7 @@ impl Component for Tracked {
 ///
 /// No component is flagged as modified.
 fn tracked_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut e: Vec<EntityId> = (0..12)
         .map(|i| world.add_entity((A(i), Tracked(i))))
         .collect();
@@ -1701,7 +1701,7 @@ fn tracked_writes() {
 ///
 /// No component is flagged as modified.
 fn tracked_overlap_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut e: Vec<EntityId> = (0..8)
         .map(|i| world.add_entity((A(i), Tracked(i))))
         .collect();
@@ -1783,7 +1783,7 @@ fn thread_local_overlap() {
     use crate::borrow::NonSend;
     use crate::AddComponent;
 
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let e: Vec<EntityId> = (0..12).map(|_| world.add_entity(())).collect();
     {
         let (mut local_a, mut b, mut c) = world

@@ -91,7 +91,7 @@ fn or_value(item: OneOfTwo<&A, &B>) -> u32 {
 #[test]
 fn segment_lengths() {
     for len in [0, 1, 2, 4, 5] {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         for i in 0..len.max(1) {
             world.add_entity(A(i));
         }
@@ -124,7 +124,7 @@ fn segment_lengths() {
 
 #[test]
 fn ordinary_and_exact_boundaries() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     for i in 0..7 {
         world.add_entity(A(i));
     }
@@ -270,7 +270,7 @@ impl Component for Modif {
 
 #[test]
 fn tracked_mutation() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut ids: Vec<_> = (0..10)
         .map(|i| world.add_entity((Modif(i), A(i))))
         .collect();

@@ -14,6 +14,7 @@ use crate::iter::{
 use crate::sparse_set::FullRawWindow;
 use crate::{track, Component, EntityId, Get, View, ViewMut, World};
 use alloc::vec::Vec;
+#[cfg(feature = "std")]
 use core::cell::Cell;
 
 #[derive(Debug, PartialEq)]
@@ -58,8 +59,10 @@ impl Component for Aligned {
 }
 
 /// Counts how many times it's dropped.
+#[cfg(feature = "std")]
 struct Dropped<'a>(&'a Cell<usize>);
 
+#[cfg(feature = "std")]
 impl Drop for Dropped<'_> {
     fn drop(&mut self) {
         self.0.set(self.0.get() + 1);
@@ -118,7 +121,7 @@ fn route<S: Shiperator>(iter: &Shiper<S>, nested: Option<usize>) -> Vec<(u32, us
 
 /// `e0`, `e2` and `e4` own `A(i)` and `B(10 + i)`, `e1` only owns `A(1)` and `e3` only `B(13)`.
 fn ordinary_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let e = (0..5)
         .map(|i| match i {
             1 => world.add_entity(A(i)),
@@ -146,7 +149,7 @@ fn ordinary_world() -> (World, Vec<EntityId>) {
 /// Every entity owns `A(i)` and `B(10 + i)`, in the order returned:
 /// `e0`, `e1`, `e2`, `damaged`, `late_b`, `unevaluated` then `late_a`.
 fn partial_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
 
     // Components land at the end of their storage in the order they're added,
@@ -261,7 +264,7 @@ fn not_and_optional() {
 /// modified.
 #[test]
 fn tracking_filter() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let old: Vec<EntityId> = (0..2).map(|i| world.add_entity(Tracked(i))).collect();
     world.run(|tracked: ViewMut<'_, Tracked, track::All>| tracked.clear_all_inserted());
     let new: Vec<EntityId> = (2..4).map(|i| world.add_entity(Tracked(i))).collect();
@@ -310,7 +313,7 @@ fn grouped_held_mut() {
 /// at A's wrap point, and that items held from the first piece stay valid after the second.
 #[test]
 fn ring_wrap() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>().group::<(A, C)>();
     // The AC range is filled first. Appending to the AB range, which comes before it in A,
     // then rotates it in A only.
@@ -342,7 +345,7 @@ fn ring_wrap() {
 /// held until the end.
 #[test]
 fn nested_held_mut() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut e: Vec<EntityId> = (0..3)
         .map(|i| world.add_entity((A(i), B(10 + i), C(i))))
         .collect();
@@ -573,7 +576,7 @@ fn for_each_panic() {
 /// landing on an aligned component of the right entity.
 #[test]
 fn zero_sized_and_aligned() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(Zst, Aligned)>();
     let e: Vec<EntityId> = (0..3)
         .map(|i| world.add_entity((Zst, Aligned(i))))
@@ -618,7 +621,7 @@ fn non_send_sync_owned() {
     use crate::borrow::NonSendSync;
     use crate::EntitiesViewMut;
 
-    let world = World::new();
+    let world = World::new_for_test();
     let e: Vec<EntityId> = world.run(
         |mut entities: EntitiesViewMut<'_>,
          mut locals: NonSendSync<ViewMut<'_, Local>>,

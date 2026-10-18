@@ -144,7 +144,7 @@ mod tests {
     /// - the component is not flagged as modified.
     #[test]
     fn add_no_component() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid = world.add_entity(());
 
@@ -165,7 +165,7 @@ mod tests {
     /// - the component is flagged as modified.
     #[test]
     fn add_distinct_component() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid = world.add_entity(USIZE(1));
 
@@ -190,7 +190,7 @@ mod tests {
     /// - the component is not flagged as modified.
     #[test]
     fn add_identical_component() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid = world.add_entity(USIZE(0));
 
@@ -214,7 +214,7 @@ mod tests {
     /// - the component is not flagged as modified.
     #[test]
     fn add_smaller_gen_component() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid1 = world.add_entity(());
         world.delete_entity(eid1);
@@ -241,7 +241,7 @@ mod tests {
     /// - the component is not flagged as modified.
     #[test]
     fn add_larger_gen_component() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         let eid1 = world.add_entity(USIZE(1));
 

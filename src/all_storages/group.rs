@@ -161,7 +161,7 @@ mod tests {
     /// sharing the same `Arc` to each member, regroups them, and keeps every component reachable.
     #[test]
     fn basic() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let e0 = world.add_entity((A(0), B(0)));
         let e1 = world.add_entity(A(1));
 
@@ -187,7 +187,7 @@ mod tests {
     /// Asserts that grouping storages that don't exist yet creates them empty.
     #[test]
     fn missing_storages() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, B)>();
 
@@ -202,7 +202,7 @@ mod tests {
     /// leaves the original range and `Arc` untouched.
     #[test]
     fn duplicate() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, B)>();
         let original = world.borrow::<View<'_, A>>().unwrap().groups.ranges[0]
@@ -222,7 +222,7 @@ mod tests {
     /// Asserts that `group` calls can be chained and that each call attaches its own group.
     #[test]
     fn chaining() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, B)>().group::<(C, D)>();
 
@@ -245,7 +245,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "a group cannot contain identical storages")]
     fn repeated_storage() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, A)>();
     }
@@ -298,7 +298,7 @@ mod tests {
     /// Asserts that a storage can be part of two groups, holding a range for each.
     #[test]
     fn second_group() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, B)>().group::<(A, C)>();
 
@@ -317,7 +317,7 @@ mod tests {
     /// to an ABC union, while the others stay in AB or join AC.
     #[test]
     fn overlap_populated() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let abc = world.add_entity((A(0), B(0), C));
         let ab = world.add_entity((A(1), B(1)));
         let ac = world.add_entity((A(2), C));
@@ -341,7 +341,7 @@ mod tests {
     /// an entity holding all four moving to an ABCD union.
     #[test]
     fn overlap_connecting() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C, D));
         world.group::<(A, B)>().group::<(C, D)>();
         assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), [entity]);
@@ -358,7 +358,7 @@ mod tests {
     /// Asserts that a component left ungrouped by an earlier group joins a new group it satisfies.
     #[test]
     fn overlap_ungrouped() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), C));
         world.group::<(A, B)>();
         assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), []);
@@ -373,7 +373,7 @@ mod tests {
     /// even when other components are waiting for it.
     #[test]
     fn duplicate_unevaluated() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.group::<(A, B)>().group::<(A, C)>();
         world.add_entity((A(0), B(0), C));
 
@@ -387,7 +387,7 @@ mod tests {
     /// without attaching anything or regrouping.
     #[test]
     fn duplicate_union() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C));
         world.group::<(A, B)>().group::<(A, C)>();
         let union = world.borrow::<View<'_, A>>().unwrap().groups.ranges[2]
@@ -407,7 +407,7 @@ mod tests {
     /// Asserts that overlapping groups can be declared on empty storages.
     #[test]
     fn overlap_empty() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, B)>().group::<(A, C)>().group::<(C, D)>();
 
@@ -428,10 +428,10 @@ mod tests {
                 };
             }
         };
-        let mut ab_first = World::new();
+        let mut ab_first = World::new_for_test();
         populate(&mut ab_first);
         ab_first.group::<(A, B)>().group::<(A, C)>();
-        let mut ac_first = World::new();
+        let mut ac_first = World::new_for_test();
         populate(&mut ac_first);
         ac_first.group::<(A, C)>().group::<(A, B)>();
 
@@ -447,7 +447,7 @@ mod tests {
     /// Asserts that `AllStorages::group` attaches a group like `World::group` does.
     #[test]
     fn all_storages() {
-        let world = World::new();
+        let world = World::new_for_test();
 
         world.all_storages_mut().unwrap().group::<(A, B)>();
 
@@ -467,7 +467,7 @@ mod tests {
         use crate::sparse_set::SparseSet;
         use crate::storage::StorageId;
 
-        let mut world = World::new();
+        let mut world = World::new_for_test();
 
         world.group::<(A, NonSend<B>)>();
 
@@ -490,7 +490,7 @@ mod tests {
         use crate::borrow::NonSend;
         use crate::{AddComponent, ViewMut};
 
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), C));
         world
             .borrow::<NonSend<ViewMut<'_, B>>>()
@@ -515,7 +515,7 @@ mod tests {
     /// in any order since regroup can reorder them and iteration doesn't read the ranges yet.
     #[test]
     fn iteration() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0)));
         world.add_entity(A(1));
         world.add_entity((A(2), B(2)));

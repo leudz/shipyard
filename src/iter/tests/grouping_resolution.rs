@@ -15,7 +15,7 @@ impl Component for C {
 
 #[test]
 fn captain_positions() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let ids: Vec<_> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
     for i in [0, 2, 3] {
         world.add_component(ids[i], C(i as u32));
@@ -56,7 +56,7 @@ fn captain_32() {
     }
     macro_rules! check {
         ($($n:tt),+) => {{
-            let mut world = World::new();
+            let mut world = World::new_for_test();
             let ids: Vec<_> = (0..3).map(|i| world.add_entity(($(Member::<$n>(i),)+))).collect();
             // Before grouping, make the final child the cheapest ordinary captain.
             $(if $n != 31 { world.add_entity(Member::<$n>(100)); })+

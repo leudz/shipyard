@@ -5,6 +5,7 @@
 //! every erased storage is reached with the right type and dropped exactly once.
 
 use crate::all_storages::CustomStorageAccess;
+#[cfg(feature = "std")]
 use crate::sparse_set::SparseSet;
 use crate::storage::{Storage, StorageId};
 use crate::{track, Component, EntityId, Get, Unique, UniqueView, View, World};
@@ -83,7 +84,7 @@ fn counted(value: u32, drops: &Arc<AtomicUsize>) -> Counted {
 #[test]
 fn registry_growth() {
     let drops = Arc::new(AtomicUsize::new(0));
-    let world = World::new();
+    let world = World::new_for_test();
 
     {
         let all_storages = world.all_storages().unwrap();
@@ -113,7 +114,7 @@ fn registry_growth() {
 #[test]
 fn custom_access() {
     let drops = Arc::new(AtomicUsize::new(0));
-    let world = World::new();
+    let world = World::new_for_test();
     let id = StorageId::of::<Counted>();
     world.add_custom_storage(id, Counted::new(&drops)).unwrap();
     let all_storages = world.all_storages().unwrap();
@@ -153,7 +154,7 @@ fn custom_access() {
 #[test]
 fn iter_storages() {
     let drops = Arc::new(AtomicUsize::new(0));
-    let world = World::new();
+    let world = World::new_for_test();
     world
         .add_custom_storage(StorageId::of::<Counted>(), Counted::new(&drops))
         .unwrap();
@@ -187,7 +188,7 @@ fn iter_storages() {
 #[test]
 fn remove_unique() {
     let drops = Arc::new(AtomicUsize::new(0));
-    let world = World::new();
+    let world = World::new_for_test();
     let all_storages = world.all_storages().unwrap();
     all_storages.add_unique(Counted::new(&drops));
 
@@ -211,7 +212,7 @@ fn remove_unique() {
 /// elsewhere until it's dropped, and the writes are visible afterwards.
 #[test]
 fn iter_borrows() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let entity0 = world.add_entity(Heap(vec![0]));
     let entity1 = world.add_entity(Heap(vec![1]));
     let all_storages = world.all_storages().unwrap();
@@ -234,8 +235,8 @@ fn iter_borrows() {
 #[test]
 fn move_entity() {
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut source = World::new();
-    let mut destination = World::new();
+    let mut source = World::new_for_test();
+    let mut destination = World::new_for_test();
     let moved = source.add_entity(counted(0, &counter));
     let stays = source.add_entity(counted(1, &counter));
 
@@ -254,17 +255,18 @@ fn move_entity() {
 /// Asserts that cloning a registered storage into a new world, and a single entity into another
 /// world while a view of the source storage is alive, builds independent copies: each original
 /// and each copy is dropped exactly once, by its own world.
+#[cfg(feature = "std")]
 #[test]
 fn clone() {
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.register_clone::<SparseSet<Counted>>();
     let entity = world.add_entity(counted(0, &counter));
 
     let copy = world.clone();
     assert_eq!(copy.get::<&Counted>(entity).unwrap().values, [0]);
 
-    let mut other = World::new();
+    let mut other = World::new_for_test();
     let view = world.borrow::<View<'_, Counted>>().unwrap();
     world.clone_entity_to(&mut other, entity);
     assert_eq!(view.get(entity).unwrap().values, [0]);
@@ -301,7 +303,7 @@ fn values_of(world: &World, entity: EntityId) -> Vec<u32> {
 #[test]
 fn regroup_moves() {
     let counter = Arc::new(AtomicUsize::new(0));
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(Counted, Aligned)>();
     world.group::<(Counted, Marker)>();
 
@@ -384,7 +386,7 @@ fn thread_local_storages() {
     use crate::UniqueViewMut;
 
     let counter = Arc::new(AtomicUsize::new(0));
-    let world = World::new();
+    let world = World::new_for_test();
     world.add_unique_non_send_sync(Local::new(&counter));
     let _ = world
         .all_storages()
@@ -463,7 +465,7 @@ impl Unique for SendOnly {}
 #[test]
 fn remove_wrapped_uniques() {
     let counter = Arc::new(AtomicUsize::new(0));
-    let world = World::new();
+    let world = World::new_for_test();
     world.add_unique_non_send(counted(1, &counter));
     world.add_unique_non_sync(SendOnly(counted(2, &counter), core::marker::PhantomData));
 

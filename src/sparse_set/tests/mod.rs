@@ -5,6 +5,7 @@ use super::*;
 use crate::Component;
 use alloc::sync::Arc;
 use alloc::vec;
+#[cfg(feature = "std")]
 use std::println;
 
 #[derive(PartialEq, Eq, Debug)]
@@ -482,6 +483,7 @@ fn debug() {
         .insert(EntityId::new(10), STR("10"), TrackingTimestamp::new(0))
         .assert_inserted();
 
+    #[cfg(feature = "std")]
     println!("{:#?}", sparse_set);
 }
 

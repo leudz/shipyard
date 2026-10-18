@@ -163,7 +163,7 @@ fn assert_triples(a: &View<'_, A>, b: &View<'_, B>, c: &View<'_, C>, all: &[Enti
 /// Both members hold the same logical sequence, as group metadata requires.\
 /// `shifts` are A's and B's shifts, any shift with these remainders describes the same rings.
 fn rotated_world(shifts: (isize, isize)) -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
     let e: Vec<EntityId> = (0..4).map(|_| world.add_entity(())).collect();
 
@@ -235,7 +235,7 @@ fn unnormalized_shifts() {
 /// ranges.
 #[test]
 fn damaged_wrap() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>();
     let e: Vec<EntityId> = (0..5).map(|_| world.add_entity(())).collect();
     let late = e[4];
@@ -288,7 +288,7 @@ fn damaged_wrap() {
 /// A and B hold the same logical sequences in both ranges, C holds ABCD's as well.\
 /// No query borrows D, its reset doesn't change what the others' metadata says.
 fn projection_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>().group::<(A, B, C, D)>();
     let p: Vec<EntityId> = (0..2).map(|_| world.add_entity(())).collect();
     let q: Vec<EntityId> = (0..3).map(|_| world.add_entity(())).collect();
@@ -385,7 +385,7 @@ fn projection() {
 /// a component in A's or B's range and the other one unevaluated.
 #[test]
 fn damaged_captains() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>().group::<(A, B, C, D)>();
     let q: Vec<EntityId> = (0..3).map(|_| world.add_entity(())).collect();
     let r = world.add_entity(());
@@ -443,7 +443,7 @@ fn damaged_captains() {
 /// Builds a world with AB and AC groups through public calls only, where regroup promoted
 /// grouped entities into ABC after they gained a component.
 fn promoted_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..6).map(|i| world.add_entity((A(i), B(i)))).collect();
     all.extend((6..10).map(|i| world.add_entity((A(i), C(i)))));
     world.group::<(A, B)>().group::<(A, C)>();

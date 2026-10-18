@@ -27,7 +27,7 @@ pub(super) const ALIGNED: usize = 20;
 /// The real planner prefers these walks (76) over the ordinary walk (78).
 /// Returned ids are indexed by their A value, independent of storage order.
 pub(super) fn coverage_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut ids: Vec<_> = (0..ALIGNED as u32)
         .map(|i| world.add_entity((A(i), B(10 + i))))
         .collect();
@@ -95,7 +95,7 @@ pub(super) const RING_PAIRS: usize = 15;
 /// - B's unevaluated pairs, which A's region covers\
 /// Returned ids are indexed by pair, independent of storage order.
 pub(super) fn ring_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut pairs: Vec<EntityId> = (0..8)
         .map(|i| world.add_entity((A(i), B(100 + i))))
         .collect();
@@ -154,7 +154,7 @@ fn set_regions(
 /// two damaged segments split at C's wrap point where A and C drive, A's unevaluated segment,
 /// then B's which rejects `q2` thanks to the damaged walk's records.
 pub(super) fn trust_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.group::<(A, B)>().group::<(A, B, C, D)>();
     let e: Vec<EntityId> = (0..4).map(|_| world.add_entity(())).collect();
     let (q0, q1, q2, r) = (0, 1, 2, 3);

@@ -545,7 +545,7 @@ mod tests {
     /// and the entities holding only one in that storage's ungrouped region.
     #[test]
     fn declare() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let ab0 = world.add_entity((A(0), B(0)));
         let a1 = world.add_entity(A(1));
         let b2 = world.add_entity(B(2));
@@ -562,7 +562,7 @@ mod tests {
     /// Asserts that every component keeps its value after declaring a group moves it.
     #[test]
     fn declare_values() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let ab0 = world.add_entity((A(0), B(0)));
         let a1 = world.add_entity(A(1));
         let b2 = world.add_entity(B(2));
@@ -583,7 +583,7 @@ mod tests {
     /// components added since the first declaration stay unevaluated.
     #[test]
     fn declare_duplicate() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.group::<(A, B)>();
         let ab = world.add_entity((A(0), B(0)));
 
@@ -597,7 +597,7 @@ mod tests {
     /// and that regroup appends them to both ranges without moving the previous range contents.
     #[test]
     fn new_components() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0)));
         world.add_entity(A(1));
         world.add_entity((A(2), B(2)));
@@ -622,7 +622,7 @@ mod tests {
     /// and that regroup then moves the entity into both ranges.
     #[test]
     fn late_component() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let ab0 = world.add_entity((A(0), B(0)));
         let a1 = world.add_entity(A(1));
         world.group::<(A, B)>();
@@ -643,7 +643,7 @@ mod tests {
     /// and that regroup then evicts B's suffix and places the remaining entities again.
     #[test]
     fn removal() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let ab0 = world.add_entity((A(0), B(0)));
         let ab1 = world.add_entity((A(1), B(1)));
         let ab2 = world.add_entity((A(2), B(2)));
@@ -665,7 +665,7 @@ mod tests {
     /// Asserts that regroup moves insertion and modification timestamps with their components.
     #[test]
     fn tracking() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         // Holding only A, it sits before the others in A and forces them to move.
         world.add_entity(TrackedA(0));
         let old = world.add_entity((TrackedA(1), TrackedB));
@@ -695,7 +695,7 @@ mod tests {
 
     /// Builds a world with a group, then adds, removes and regroups components.
     fn build_world() -> World {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let mut entities = Vec::new();
         for index in 0..30 {
             let entity = match index % 3 {
@@ -739,7 +739,7 @@ mod tests {
     /// Asserts that regroup leaves storages without a range untouched.
     #[test]
     fn ungrouped_storage() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), C));
         world.add_entity((B(1), C));
         world.add_entity((A(2), B(2), C));
@@ -756,7 +756,7 @@ mod tests {
     /// Asserts that iterating `(A, B)` yields the same items before and after regroup, in any order.
     #[test]
     fn iteration() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0)));
         world.add_entity(A(1));
         world.group::<(A, B)>();
@@ -786,7 +786,7 @@ mod tests {
         use crate::borrow::NonSend;
         use crate::AddComponent;
 
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let ab0 = world.add_entity(A(0));
         let a1 = world.add_entity(A(1));
         let ab2 = world.add_entity(A(2));
@@ -872,7 +872,7 @@ mod tests {
     ///
     /// AC is filled first, so each AB append passes a hole through it and rotates it in A.
     fn overlapping() -> (World, Arc<[StorageId]>, Arc<[StorageId]>, Vec<EntityId>) {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let mut entities = Vec::new();
         for index in 0..3 {
             entities.push(world.add_entity((A(index), B(index))));
@@ -1071,7 +1071,7 @@ mod tests {
     /// from any of them.
     #[test]
     fn discover_overlapping() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
         attach_ids(&world, &[id::<A>(), id::<C>()]);
@@ -1084,7 +1084,7 @@ mod tests {
     /// Asserts that with AB and AC, an entity holding only A and B has to be grouped in A and B.
     #[test]
     fn discover_one_satisfied() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0), C));
         let entity = world.add_entity((A(1), B(1)));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
@@ -1099,7 +1099,7 @@ mod tests {
     /// Asserts that an entity satisfying none of a storage's groups has nowhere to be grouped.
     #[test]
     fn discover_none() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0), C));
         let entity = world.add_entity(A(1));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
@@ -1112,7 +1112,7 @@ mod tests {
     /// from either end of the chain.
     #[test]
     fn discover_chain() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C, D));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
         attach_ids(&world, &[id::<B>(), id::<C>()]);
@@ -1127,7 +1127,7 @@ mod tests {
     /// with AB, BE, EC and CD and no E, AB and CD stay apart.
     #[test]
     fn discover_unsatisfied_link() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((B(0), C, E));
         let entity = world.add_entity((A(0), B(0), C, D));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
@@ -1148,7 +1148,7 @@ mod tests {
     /// Asserts that owning the components of two disjoint groups doesn't merge them.
     #[test]
     fn discover_disjoint() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C, D));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
         attach_ids(&world, &[id::<C>(), id::<D>()]);
@@ -1166,7 +1166,7 @@ mod tests {
     /// Asserts that with AB and ABC, the larger group adds C only to entities holding C.
     #[test]
     fn discover_subset() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let abc_entity = world.add_entity((A(0), B(0), C));
         let ab_entity = world.add_entity((A(1), B(1)));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
@@ -1188,7 +1188,7 @@ mod tests {
     fn discover_stale_generation() {
         use crate::AddComponent;
 
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let deleted = world.add_entity((A(0), B(0)));
         world.delete_entity(deleted);
         let entity = world.add_entity(A(1));
@@ -1206,7 +1206,7 @@ mod tests {
     /// as an empty range after the last range of every member, and then reused.
     #[test]
     fn union_created_once() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0), C));
         let ab = attach_ids(&world, &[id::<A>(), id::<B>()]);
         let ac = attach_ids(&world, &[id::<A>(), id::<C>()]);
@@ -1234,7 +1234,7 @@ mod tests {
     /// Asserts that a group satisfied alone is its own union, nothing new is attached.
     #[test]
     fn union_existing_group() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0)));
         let ab = attach_ids(&world, &[id::<A>(), id::<B>()]);
 
@@ -1245,7 +1245,7 @@ mod tests {
     /// Asserts that a declared group equal to the union is reused instead of creating a new one.
     #[test]
     fn union_declared() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity((A(0), B(0), C));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
         attach_ids(&world, &[id::<A>(), id::<C>()]);
@@ -1262,7 +1262,7 @@ mod tests {
     /// with AB, BC and CD, only ABCD is added.
     #[test]
     fn union_direct() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C, D));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
         attach_ids(&world, &[id::<B>(), id::<C>()]);
@@ -1292,7 +1292,7 @@ mod tests {
     /// while AB keeps the others, aligned and fully trusted.
     #[test]
     fn promote_gained() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let e0 = world.add_entity((A(0), B(0)));
         let e1 = world.add_entity((A(1), B(1)));
         let e2 = world.add_entity((A(2), B(2)));
@@ -1316,7 +1316,7 @@ mod tests {
     /// without creating ABC or BCD on the way.
     #[test]
     fn promote_transitive() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0)));
         world.add_entity((C, D));
         attach_ids(&world, &[id::<A>(), id::<B>()]);
@@ -1338,7 +1338,7 @@ mod tests {
     /// connects them through BE and EC, leaving both AB and CD.
     #[test]
     fn promote_two_sources() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), C, D));
         let other = world.add_entity((A(1), B(1), C, D));
         world.add_entity((B(2), E));
@@ -1369,7 +1369,7 @@ mod tests {
     /// holding an ungrouped D gains C.
     #[test]
     fn promote_mixed_sources() {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let entity = world.add_entity((A(0), B(0), D));
         world.add_entity((A(1), C));
         world.add_entity((C, D));
@@ -1398,7 +1398,7 @@ mod tests {
     /// Builds a world with AB and AC holding entities in every combination,
     /// some of them gaining components after a first regroup.
     fn overlapping_world() -> World {
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         let mut entities = Vec::new();
         for index in 0..24 {
             let entity = match index % 4 {
@@ -1492,7 +1492,7 @@ mod tests {
     fn promote_tracking() {
         use core::sync::atomic::{AtomicUsize, Ordering};
 
-        let mut world = World::new();
+        let mut world = World::new_for_test();
         world.add_entity(TrackedA(0));
         let old = world.add_entity((TrackedA(1), TrackedB));
         world.run(|a: ViewMut<'_, TrackedA, track::All>| a.clear_all_inserted());

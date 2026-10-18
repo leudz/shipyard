@@ -211,7 +211,7 @@ fn add_lone_c(world: &mut World, count: u32) {
 /// B's covered by A's.\
 /// Returns the pairs, the late ones last.
 fn late_pairs_world(grouped: u32, late: u32) -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut pairs = add_ab(&mut world, 0, grouped);
     world.group::<(A, B)>();
     pairs.extend(add_ab(&mut world, grouped, late));
@@ -248,7 +248,7 @@ fn abc_values(
 /// The pair's ordinary walk costs 30 and looking C up 10 more. Its aligned walk costs 20.\
 /// Returns the pairs.
 fn large_c_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs);
     add_lone_c(&mut world, 10);
@@ -299,7 +299,7 @@ fn large_c() {
 /// the pair up, the pair keeping its ordinary state.
 #[test]
 fn tiny_c() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs[3..5]);
     world.group::<(A, B)>();
@@ -358,7 +358,7 @@ fn second_position() {
 /// with its members in the reverse of the group's order.
 #[test]
 fn deeper() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     for (i, &id) in (0..).zip(&pairs) {
         world.add_component(id, (C(i), D(i)));
@@ -408,7 +408,7 @@ fn deeper() {
 /// Asserts that the grouped pair drives from the middle of `(C, (A, B), D)`.
 #[test]
 fn middle_position() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     for (i, &id) in (0..).zip(&pairs) {
         world.add_component(id, (C(i), D(i)));
@@ -451,7 +451,7 @@ fn middle_position() {
 ///
 /// Returns the 21 entities owning every component.
 fn disjoint_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..20)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
@@ -527,7 +527,7 @@ fn disjoint_cd() {
 /// through the CD pair's lookups.
 #[test]
 fn disjoint_ab() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let mut all: Vec<EntityId> = (0..4)
         .map(|i| world.add_entity((A(i), B(i), C(i), D(i))))
         .collect();
@@ -573,7 +573,7 @@ fn disjoint_ab() {
 /// it would cross the nested `Mixed`'s boundary.
 #[test]
 fn cross_boundary() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let all: Vec<EntityId> = (0..10)
         .map(|i| world.add_entity((A(i), B(i), C(i))))
         .collect();
@@ -656,7 +656,7 @@ fn coverage() {
 /// then wins again after a regroup.
 #[test]
 fn reset_then_regroup() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     add_c(&mut world, &pairs);
     add_lone_c(&mut world, 10);
@@ -789,7 +789,7 @@ fn repeated_pair() {
 ///
 /// Returns `lone`, followed by the aligned pairs.
 fn sparse_c_world() -> (World, Vec<EntityId>) {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let pairs = add_ab(&mut world, 0, 10);
     let lone = world.add_entity(A(10));
     world.group::<(A, B)>();
@@ -850,7 +850,7 @@ fn empty_segments() {
 /// at once, each write landing once on its own entity and flagging only the matches.
 #[test]
 fn held_mut() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     let all: Vec<EntityId> = (0..6)
         .map(|i| world.add_entity((A(i), Modif(i), C(i))))
         .collect();

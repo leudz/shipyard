@@ -53,7 +53,7 @@ fn or(branch: OrBranch) -> NodeState {
 
 /// Entities `e0` to `e{a_len - 1}` own `A(i)`, then `f0` to `f{b_len - 1}` own `B(10 + i)`.
 fn or_world(a_len: u32, b_len: u32) -> World {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
 
     for i in 0..a_len {
         world.add_entity(A(i));
@@ -156,7 +156,7 @@ fn no_eager_entry() {
 /// moves on to the second branch.
 #[test]
 fn rejected_segment() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.add_entity(Ins(0));
     world.add_entity(Ins(1));
     let f = world.add_entity(B(20));
@@ -183,7 +183,7 @@ fn rejected_segment() {
 /// embedded under the outer `Or`'s second branch, and that both `Or`s end on their second branch.
 #[test]
 fn nested_or() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.add_entity((A(0), B(0)));
     world.add_entity((B(1), C(1)));
     world.add_entity(C(2));
@@ -237,7 +237,7 @@ fn nested_or() {
 /// own state and routes the entry to it.
 #[test]
 fn mixed_or_captain() {
-    let mut world = World::new();
+    let mut world = World::new_for_test();
     world.add_entity((A(0), C(0)));
     world.add_entity((B(1), C(1)));
     for i in 2..8 {
