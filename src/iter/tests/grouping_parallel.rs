@@ -288,8 +288,10 @@ fn indexed_short_circuit() {
     assert_eq!(visited.load(Ordering::Relaxed), 2);
 }
 /// Increments its counter when dropped, from whichever thread drops it.
+#[cfg(feature = "std")]
 struct Dropped<'a>(&'a AtomicUsize);
 
+#[cfg(feature = "std")]
 impl Drop for Dropped<'_> {
     fn drop(&mut self) {
         self.0.fetch_add(1, Ordering::Relaxed);

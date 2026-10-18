@@ -223,13 +223,13 @@ fn system_unwind() {
 }
 
 /// Heap-owning component that is `Sync` but not `Send`, like a type holding a `MutexGuard`.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 struct SyncOnly(
     Vec<u32>,
     core::marker::PhantomData<std::sync::MutexGuard<'static, ()>>,
 );
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Component for SyncOnly {
     type Tracking = track::Untracked;
 }
@@ -238,7 +238,7 @@ impl Component for SyncOnly {
 /// `AllStorages` can be shared but not borrowed exclusively, `Send + Sync` components and shared
 /// views of `!Send` ones stay readable, and exclusive views of `!Send` ones are rejected. The
 /// world's thread then writes everything.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn other_thread() {
     use crate::borrow::NonSend;

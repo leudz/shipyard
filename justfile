@@ -1,8 +1,19 @@
 test-all:
     cargo test --all-features
 
-check-no-default:
+check-features $RUSTFLAGS="-D warnings":
     cargo check --no-default-features
+    cargo check --no-default-features --features=proc
+    cargo check --no-default-features --features=std
+    cargo check --no-default-features --features=thread_local
+    cargo check --no-default-features --features=std,thread_local
+    cargo check --no-default-features --features=parallel
+    cargo check --no-default-features --features=parallel,thread_local
+    cargo check --no-default-features --features=serde1
+    cargo check --no-default-features --features=serde1,thread_local
+    cargo check --no-default-features --features=memory_constrained
+    cargo check --no-default-features --features=extended_tuple
+    cargo check --all-features
 
 miri:
     cargo +nightly miri test --lib --no-default-features --features=std tests::miri::
@@ -32,7 +43,7 @@ move_square_eater:
 
 square_eater: build_square_eater move_square_eater
 
-test: fmt check-no-default test-all doc miri clippy
+test: fmt check-features test-all doc miri clippy
 
 dev_visualizer $RUSTFLAGS = "--cfg=web_sys_unstable_apis":
     trunk serve visualizer/index.html

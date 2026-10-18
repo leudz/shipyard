@@ -34,6 +34,8 @@ impl World {
                 crate::all_storages::MissingLock,
                 ThreadIdPresent,
             >::new(),
+            #[cfg(feature = "parallel")]
+            thread_pool: None,
         }
     }
 
@@ -47,6 +49,8 @@ impl World {
                 crate::all_storages::MissingLock,
                 crate::all_storages::MissingThreadId,
             >::new(),
+            #[cfg(feature = "parallel")]
+            thread_pool: None,
         }
     }
 }

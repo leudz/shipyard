@@ -1,6 +1,8 @@
 use crate::ShipHashMap;
 #[cfg(not(feature = "std"))]
 use crate::all_storages::MissingLock;
+#[cfg(all(not(feature = "std"), feature = "thread_local"))]
+use crate::all_storages::MissingThreadId;
 use crate::all_storages::{AllStorages, LockPresent, ThreadIdPresent};
 use crate::atomic_refcell::AtomicRefCell;
 use crate::entities::Entities;

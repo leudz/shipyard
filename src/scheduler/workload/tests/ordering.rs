@@ -224,9 +224,7 @@ fn contains() {
     fn w() -> Workload {
         (|| {}).into_workload()
     }
-    let world = World::builder()
-        .with_custom_lock::<parking_lot::RawRwLock>()
-        .build();
+    let world = World::new_for_test();
     world.add_workload(w);
     assert!(world.contains_workload(WorkloadLabel {
         type_id: type_id_of(&w),

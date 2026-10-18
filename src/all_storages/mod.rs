@@ -35,7 +35,7 @@ use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{
     BulkAddEntity, Groups, SparseSet, TupleAddComponent, TupleDelete, TupleRemove,
 };
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 use crate::std_thread_id_generator;
 use crate::storage::{SBox, Storage, StorageId};
 use crate::system::AllSystem;

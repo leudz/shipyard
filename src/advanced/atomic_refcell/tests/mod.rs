@@ -73,7 +73,7 @@ fn exclusive_thread() {
     refcell.borrow_mut().unwrap();
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn non_send() {
     use crate::std_thread_id_generator;
@@ -100,7 +100,7 @@ fn non_send() {
     refcell.borrow_mut().unwrap();
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn non_sync() {
     let refcell = AtomicRefCell::new_non_sync(0);
@@ -123,7 +123,7 @@ fn non_sync() {
     refcell.borrow_mut().unwrap();
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn non_send_sync() {
     use crate::std_thread_id_generator;

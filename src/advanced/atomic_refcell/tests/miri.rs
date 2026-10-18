@@ -231,14 +231,14 @@ fn cross_thread_release() {
 }
 
 /// Returns the thread id generator worlds use by default.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 fn thread_id() -> alloc::sync::Arc<dyn Fn() -> u64 + Send + Sync> {
     alloc::sync::Arc::new(crate::std_thread_id_generator)
 }
 
 /// Asserts the `new_non_send` contract: another thread can share the value but not borrow it
 /// exclusively, and an exclusive borrow held by the owner thread still keeps it out.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn non_send() {
     let cell = AtomicRefCell::new_non_send(vec![1u32], thread_id());
@@ -263,7 +263,7 @@ fn non_send() {
 /// Asserts the `new_non_sync` contract: shared borrows are exclusive, so a second one is
 /// rejected even on the same thread. Once the owner's borrow is released, another thread can
 /// borrow the `!Sync` value and the owner sees its write afterwards.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn non_sync() {
     use core::cell::Cell;
@@ -290,7 +290,7 @@ fn non_sync() {
 
 /// Asserts the `new_non_send_sync` contract: other threads can't borrow the value at all, while
 /// the owner thread can still share it.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn non_send_sync() {
     use alloc::rc::Rc;

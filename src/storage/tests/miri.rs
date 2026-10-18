@@ -4,7 +4,7 @@
 //! dropped. These tests reach the storage back through that pointer and count drops, so a lost
 //! or doubled free shows up as a wrong count (or a Miri error).
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 use crate::error::Borrow;
 use crate::storage::{SBox, SBoxBuilder, Storage};
 use alloc::sync::Arc;
@@ -44,9 +44,15 @@ fn build(builder: SBoxBuilder) -> SBox {
 /// Finishes `builder`, the way `AllStorages` does when it stores a cloned storage.
 #[cfg(feature = "thread_local")]
 fn build(builder: SBoxBuilder) -> SBox {
+    // Without `std` there is no thread id, the tests running without it stay on a single thread.
+    #[cfg(feature = "std")]
+    let thread_id = Arc::new(crate::std_thread_id_generator);
+    #[cfg(not(feature = "std"))]
+    let thread_id = Arc::new(|| 0);
+
     // SAFE: the builder holds a `Counted`, which only owns a `Vec<u32>` and an
     // `Arc<AtomicUsize>`, so it really is both `Send` and `Sync`.
-    unsafe { builder.build(Arc::new(crate::std_thread_id_generator), true, true) }
+    unsafe { builder.build(thread_id, true, true) }
 }
 
 /// Asserts that a storage boxed by `SBox::new` can be written and read back through the erased
@@ -108,45 +114,45 @@ fn builder_built() {
 }
 
 /// Heap-owning custom storage that is `Sync` but not `Send`, like a type holding a `MutexGuard`.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 struct NonSendStorage {
     values: Vec<u32>,
     drops: Arc<AtomicUsize>,
     _non_send: core::marker::PhantomData<std::sync::MutexGuard<'static, ()>>,
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Drop for NonSendStorage {
     fn drop(&mut self) {
         self.drops.fetch_add(1, Ordering::Relaxed);
     }
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Storage for NonSendStorage {}
 
 /// Heap-owning custom storage that is neither `Send` nor `Sync`, like a type holding an `Rc`.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 struct NonSendSyncStorage {
     values: Vec<u32>,
     drops: Arc<AtomicUsize>,
     _non_send_sync: core::marker::PhantomData<alloc::rc::Rc<()>>,
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Drop for NonSendSyncStorage {
     fn drop(&mut self) {
         self.drops.fetch_add(1, Ordering::Relaxed);
     }
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Storage for NonSendSyncStorage {}
 
 /// Asserts that finishing a builder for a storage that isn't `Send` records it on the erased
 /// cell: another thread can still share the storage but not borrow it exclusively, the owner
 /// thread can, and the storage is dropped exactly once.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn builder_non_send() {
     let drops = Arc::new(AtomicUsize::new(0));
@@ -185,7 +191,7 @@ fn builder_non_send() {
 /// Asserts that finishing a builder for a storage that is neither `Send` nor `Sync` records it on
 /// the erased cell: another thread can't borrow the storage at all, the owner thread can, and the
 /// storage is dropped exactly once.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn builder_non_send_sync() {
     let drops = Arc::new(AtomicUsize::new(0));

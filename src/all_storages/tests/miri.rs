@@ -348,14 +348,14 @@ fn regroup_moves() {
 /// Heap-owning value that is neither `Send` nor `Sync` and counts how many times it's dropped.
 ///
 /// Used as a custom storage and as a unique.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 struct Local {
     values: Vec<u32>,
     drops: Arc<AtomicUsize>,
     _non_send_sync: core::marker::PhantomData<alloc::rc::Rc<()>>,
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Local {
     fn new(drops: &Arc<AtomicUsize>) -> Local {
         Local {
@@ -366,24 +366,24 @@ impl Local {
     }
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Drop for Local {
     fn drop(&mut self) {
         self.drops.fetch_add(1, Ordering::Relaxed);
     }
 }
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Storage for Local {}
 
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 impl Unique for Local {}
 
 /// Asserts that a `!Send + !Sync` unique and custom storage are only reachable from the world's
 /// thread: another thread is rejected with `WrongThread`, removing the unique included, without
 /// changing anything. The world's thread then writes both and removes the unique, which casts
 /// its erased box back to the unique storage, and each value is dropped exactly once.
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "std", feature = "thread_local"))]
 #[test]
 fn thread_local_storages() {
     use crate::UniqueViewMut;
