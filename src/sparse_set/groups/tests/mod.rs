@@ -18,15 +18,57 @@ fn range(group: &Arc<[StorageId]>, start: usize, len: usize) -> GroupRange {
     }
 }
 
-/// Asserts that a storage without ranges is entirely unevaluated.
+/// Asserts that a storage of 5 components without ranges is entirely ungrouped,
+/// with an empty unevaluated region at its end, while its stored boundary stays at 0.
 #[test]
 fn regions_empty() {
     let groups = Groups::default();
 
     assert!(!groups.has_ranges());
     assert_eq!(groups.grouped_end(), 0);
-    assert_eq!(groups.ungrouped_range(), 0..0);
-    assert_eq!(groups.unevaluated_range(5), 0..5);
+    assert_eq!(groups.ungrouped_range(5), 0..5);
+    assert_eq!(groups.unevaluated_range(5), 5..5);
+    assert_eq!(groups.unevaluated_start, 0);
+}
+
+/// Asserts that an empty storage without ranges has empty ungrouped and unevaluated regions.
+#[test]
+fn regions_empty_storage() {
+    let groups = Groups::default();
+
+    assert_eq!(groups.ungrouped_range(0), 0..0);
+    assert_eq!(groups.unevaluated_range(0), 0..0);
+}
+
+/// Asserts that a storage of 4 components with an attached but empty range and the boundary
+/// at 0 is grouped: nothing is ungrouped and every component is unevaluated.
+#[test]
+fn regions_attached_empty() {
+    let ab = group(&[0, 1]);
+    let groups = Groups {
+        storage_id: None,
+        ranges: vec![range(&ab, 0, 0)],
+        unevaluated_start: 0,
+    };
+
+    assert!(groups.has_ranges());
+    assert_eq!(groups.ungrouped_range(4), 0..0);
+    assert_eq!(groups.unevaluated_range(4), 0..4);
+}
+
+/// Asserts that a storage of 4 components with an attached but empty range and the boundary
+/// at 3 has an ungrouped region `[0, 3)` and an unevaluated region `[3, 4)`.
+#[test]
+fn regions_attached_empty_evaluated() {
+    let ab = group(&[0, 1]);
+    let groups = Groups {
+        storage_id: None,
+        ranges: vec![range(&ab, 0, 0)],
+        unevaluated_start: 3,
+    };
+
+    assert_eq!(groups.ungrouped_range(4), 0..3);
+    assert_eq!(groups.unevaluated_range(4), 3..4);
 }
 
 /// Asserts that with one range of 3 and 2 ungrouped components,
@@ -42,7 +84,7 @@ fn regions_one() {
 
     assert!(groups.has_ranges());
     assert_eq!(groups.grouped_end(), 3);
-    assert_eq!(groups.ungrouped_range(), 3..5);
+    assert_eq!(groups.ungrouped_range(8), 3..5);
     assert_eq!(groups.unevaluated_range(8), 5..8);
 }
 
@@ -59,7 +101,7 @@ fn regions_two() {
     };
 
     assert_eq!(groups.grouped_end(), 5);
-    assert_eq!(groups.ungrouped_range(), 5..6);
+    assert_eq!(groups.ungrouped_range(9), 5..6);
     assert_eq!(groups.unevaluated_range(9), 6..9);
 }
 
@@ -85,10 +127,25 @@ fn region_of() {
     assert!(matches!(groups.region_of(4), GroupRegion::Unevaluated));
 }
 
-/// Asserts that `region_of` maps every index of a storage without ranges to the unevaluated region.
+/// Asserts that `region_of` maps every index of a storage without ranges to the ungrouped region.
 #[test]
 fn region_of_empty() {
     let groups = Groups::default();
+
+    assert!(matches!(groups.region_of(0), GroupRegion::Ungrouped));
+    assert!(matches!(groups.region_of(3), GroupRegion::Ungrouped));
+}
+
+/// Asserts that `region_of` maps every index of a storage with only an empty range and the boundary
+/// at 0 to the unevaluated region, an attached range makes the storage grouped.
+#[test]
+fn region_of_attached_empty() {
+    let ab = group(&[0, 1]);
+    let groups = Groups {
+        storage_id: None,
+        ranges: vec![range(&ab, 0, 0)],
+        unevaluated_start: 0,
+    };
 
     assert!(matches!(groups.region_of(0), GroupRegion::Unevaluated));
     assert!(matches!(groups.region_of(3), GroupRegion::Unevaluated));
@@ -166,7 +223,7 @@ fn reset() {
 }
 
 /// Asserts that `attach` on a storage without ranges adds an empty range at index 0,
-/// keeps every component unevaluated and records the storage's id.
+/// leaves the boundary at 0 so every component becomes unevaluated, and records the storage's id.
 #[test]
 fn attach() {
     let ab = group(&[0, 1]);
@@ -181,6 +238,7 @@ fn attach() {
     assert_eq!(groups.ranges[0].shift, 0);
     assert_eq!(groups.ranges[0].trust, 0);
     assert_eq!(groups.unevaluated_start, 0);
+    assert_eq!(groups.unevaluated_range(3), 0..3);
     assert_eq!(groups.storage_id, Some(StorageId::Custom(0)));
 }
 

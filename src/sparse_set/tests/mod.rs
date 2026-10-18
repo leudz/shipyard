@@ -186,8 +186,8 @@ fn layout<T: Component>(sparse_set: &SparseSet<T>) -> Layout {
 
     Layout {
         ranges,
-        ungrouped: indices(&sparse_set.dense[groups.grouped_end()..groups.unevaluated_start]),
-        unevaluated: indices(&sparse_set.dense[groups.unevaluated_start..]),
+        ungrouped: indices(&sparse_set.dense[groups.ungrouped_range(sparse_set.len())]),
+        unevaluated: indices(&sparse_set.dense[groups.unevaluated_range(sparse_set.len())]),
     }
 }
 

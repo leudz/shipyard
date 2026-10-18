@@ -174,8 +174,7 @@ fn groups_of<T: Component + Send + Sync>(world: &World) -> Vec<Arc<[StorageId]>>
 fn ungrouped_of<T: Component + Send + Sync>(world: &World) -> Vec<EntityId> {
     let view = world.borrow::<View<'_, T>>().unwrap();
 
-    let mut entities =
-        view.dense[view.groups.grouped_end()..view.groups.unevaluated_start].to_vec();
+    let mut entities = view.dense[view.groups.ungrouped_range(view.len())].to_vec();
     entities.sort_unstable();
     entities
 }
@@ -184,7 +183,7 @@ fn ungrouped_of<T: Component + Send + Sync>(world: &World) -> Vec<EntityId> {
 fn unevaluated_of<T: Component + Send + Sync>(world: &World) -> Vec<EntityId> {
     let view = world.borrow::<View<'_, T>>().unwrap();
 
-    let mut entities = view.dense[view.groups.unevaluated_start..].to_vec();
+    let mut entities = view.dense[view.groups.unevaluated_range(view.len())].to_vec();
     entities.sort_unstable();
     entities
 }

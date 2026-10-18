@@ -392,8 +392,8 @@ fn snapshot<T: Component>(sparse_set: &SparseSet<T>) -> Snapshot {
 
     Snapshot {
         ranges: logical_order(sparse_set),
-        ungrouped: sorted(&sparse_set.dense[groups.grouped_end()..groups.unevaluated_start]),
-        unevaluated: sorted(&sparse_set.dense[groups.unevaluated_start..]),
+        ungrouped: sorted(&sparse_set.dense[groups.ungrouped_range(sparse_set.len())]),
+        unevaluated: sorted(&sparse_set.dense[groups.unevaluated_range(sparse_set.len())]),
     }
 }
 

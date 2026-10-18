@@ -532,10 +532,13 @@ impl<T: Component> SparseSet<T> {
     /// Every other range keeps its logical order and trust.\
     /// Timestamps move with the component. A move isn't a modification and doesn't call any callback.
     ///
+    /// A storage without any range is implicitly ungrouped, moving to `Ungrouped` does nothing.
+    ///
     /// ### Panics
     ///
     /// - `entity` doesn't have a component in this storage.
     /// - `destination` is a group without a range in this storage.
+    /// - `destination` is `Unevaluated` and this storage has no range.
     #[track_caller]
     pub(crate) fn private_move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
         let index = self
@@ -551,6 +554,18 @@ impl<T: Component> SparseSet<T> {
             GroupRegion::Ungrouped => LocalRegion::Ungrouped,
             GroupRegion::Unevaluated => LocalRegion::Unevaluated,
         };
+
+        // Without range every component is already ungrouped, and there's no unevaluated region.
+        // A range destination can't get here, finding its range would have panicked.
+        if !self.groups.has_ranges() {
+            assert!(
+                destination == LocalRegion::Ungrouped,
+                "a storage without group ranges has no unevaluated region"
+            );
+
+            return;
+        }
+
         let source = match self.groups.range_index_of(index) {
             Some(range_index) => LocalRegion::Range(range_index),
             None if index < self.groups.unevaluated_start => LocalRegion::Ungrouped,

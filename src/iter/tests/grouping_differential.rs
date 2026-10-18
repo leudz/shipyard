@@ -1069,11 +1069,11 @@ fn check_views(scenario: &Scenario, rng: &mut Rng, stats: &mut Stats, context: &
         )>()
         .unwrap();
     let storages = [
-        (&a.dense[..], a.groups.ungrouped_range()),
-        (&b.dense[..], b.groups.ungrouped_range()),
-        (&c.dense[..], c.groups.ungrouped_range()),
-        (&d.dense[..], d.groups.ungrouped_range()),
-        (&z.dense[..], z.groups.ungrouped_range()),
+        (&a.dense[..], a.groups.ungrouped_range(a.dense.len())),
+        (&b.dense[..], b.groups.ungrouped_range(b.dense.len())),
+        (&c.dense[..], c.groups.ungrouped_range(c.dense.len())),
+        (&d.dense[..], d.groups.ungrouped_range(d.dense.len())),
+        (&z.dense[..], z.groups.ungrouped_range(z.dense.len())),
     ];
 
     stats.observe((&a, &b));

@@ -14,7 +14,9 @@ use core::ops::Range;
 /// [ Group range(s) ][ Ungrouped ][ Unevaluated ]
 /// ```
 ///
-/// A storage without any range is entirely unevaluated, which is how storages behave without grouping.
+/// A storage without any range is implicitly ungrouped: every component is in the ungrouped region.
+/// Its stored `unevaluated_start` is unused and stays at 0, so ordinary insertions and removals
+/// don't have to maintain it. The region helpers derive the effective regions from the storage's length.
 #[doc(hidden)]
 #[derive(Default)]
 pub struct Groups {
@@ -23,6 +25,8 @@ pub struct Groups {
     /// In creation order, tiling the physical prefix from index 0. Empty ranges stay attached.
     pub(crate) ranges: Vec<GroupRange>,
     /// Physical index where the unevaluated region starts.
+    ///
+    /// Unused and kept at 0 while there's no range, see [`Groups`].
     pub(crate) unevaluated_start: usize,
 }
 
@@ -240,21 +244,38 @@ impl Groups {
         self.ranges.last().map_or(0, GroupRange::end)
     }
 
-    /// Returns the physical indices of the ungrouped region.
+    /// Returns the physical indices of the ungrouped region of a storage of `dense_len` components.
+    ///
+    /// A storage without any range is entirely ungrouped.
     #[allow(dead_code, reason = "Used once grouped iteration lands.")]
-    pub(crate) fn ungrouped_range(&self) -> Range<usize> {
+    pub(crate) fn ungrouped_range(&self, dense_len: usize) -> Range<usize> {
+        if !self.has_ranges() {
+            return 0..dense_len;
+        }
+
         self.grouped_end()..self.unevaluated_start
     }
 
-    /// Returns the physical indices of the unevaluated region.
+    /// Returns the physical indices of the unevaluated region of a storage of `dense_len` components.
+    ///
+    /// A storage without any range has no unevaluated component.
     #[allow(dead_code, reason = "Used once grouped iteration lands.")]
     pub(crate) fn unevaluated_range(&self, dense_len: usize) -> Range<usize> {
+        if !self.has_ranges() {
+            return dense_len..dense_len;
+        }
+
         self.unevaluated_start..dense_len
     }
 
     /// Returns the region holding the component at physical `index`.
+    ///
+    /// `index` must be the index of one of the storage's components.
+    /// Every component of a storage without any range is ungrouped.
     pub(crate) fn region_of(&self, index: usize) -> GroupRegion<'_> {
-        if let Some(range_index) = self.range_index_of(index) {
+        if !self.has_ranges() {
+            GroupRegion::Ungrouped
+        } else if let Some(range_index) = self.range_index_of(index) {
             GroupRegion::Range(&self.ranges[range_index].group)
         } else if index < self.unevaluated_start {
             GroupRegion::Ungrouped
@@ -301,7 +322,9 @@ impl Groups {
 
     /// Attaches an empty range for `group` after the last range.
     ///
-    /// No component moves. Components that were never grouped stay in the unevaluated region.
+    /// No component moves and the regions keep their bounds.\
+    /// On a storage's first range, the unused boundary left at 0 turns every implicitly ungrouped
+    /// component into an unevaluated one, for the next regroup to evaluate.
     pub(crate) fn attach(&mut self, group: Arc<[StorageId]>, storage_id: StorageId) {
         let start = self.grouped_end();
 
@@ -369,7 +392,7 @@ impl Groups {
         if self.ranges.is_empty() {
             assert_eq!(
                 self.unevaluated_start, 0,
-                "a storage without group ranges must be fully unevaluated"
+                "a storage without group ranges keeps its unused unevaluated boundary at 0"
             );
         }
 

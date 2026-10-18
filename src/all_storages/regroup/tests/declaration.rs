@@ -9,6 +9,9 @@ fn range_of<T: Component + Send + Sync>(world: &World) -> Vec<EntityId> {
 
 /// Asserts that declaring a group places the entities holding both components in both ranges,
 /// and the entities holding only one in that storage's ungrouped region.
+///
+/// Before the declaration, every component is implicitly ungrouped, the first declaration
+/// evaluates them all again.
 #[test]
 fn declare() {
     let mut world = World::new_for_test();
@@ -16,13 +19,18 @@ fn declare() {
     let a1 = world.add_entity(A(1));
     let b2 = world.add_entity(B(2));
     let ab3 = world.add_entity((A(3), B(3)));
+    assert_eq!(ungrouped_of::<A>(&world), [ab0, a1, ab3]);
+    assert!(unevaluated_of::<A>(&world).is_empty());
 
     world.group::<(A, B)>();
 
     assert_regrouped(&world);
     assert_eq!(sorted(range_of::<A>(&world)), [ab0, ab3]);
+    assert_eq!(sorted(range_of::<B>(&world)), [ab0, ab3]);
     assert_eq!(ungrouped_of::<A>(&world), [a1]);
     assert_eq!(ungrouped_of::<B>(&world), [b2]);
+    assert!(unevaluated_of::<A>(&world).is_empty());
+    assert!(unevaluated_of::<B>(&world).is_empty());
 }
 
 /// Asserts that every component keeps its value after declaring a group moves it.
@@ -202,17 +210,21 @@ fn determinism() {
     assert_eq!(dense_of::<C>(&world0), dense_of::<C>(&world1));
 }
 
-/// Asserts that regroup leaves storages without a range untouched.
+/// Asserts that regroup leaves storages without a range untouched,
+/// all their components stay implicitly ungrouped.
 #[test]
 fn ungrouped_storage() {
     let mut world = World::new_for_test();
-    world.add_entity((A(0), C));
-    world.add_entity((B(1), C));
-    world.add_entity((A(2), B(2), C));
+    let e0 = world.add_entity((A(0), C));
+    let e1 = world.add_entity((B(1), C));
+    let e2 = world.add_entity((A(2), B(2), C));
     let dense_before = dense_of::<C>(&world);
 
     world.group::<(A, B)>();
+    world.regroup();
 
+    assert_eq!(ungrouped_of::<C>(&world), [e0, e1, e2]);
+    assert!(unevaluated_of::<C>(&world).is_empty());
     let c = world.borrow::<View<'_, C>>().unwrap();
     assert_eq!(c.dense, dense_before);
     assert!(!c.groups.has_ranges());

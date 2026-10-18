@@ -102,8 +102,8 @@ fn layout(
 
 /// Returns the sorted entity indices of the range, the ungrouped region and the unevaluated region.
 fn regions(sparse_set: &SparseSet<I32>) -> [Vec<u64>; 3] {
-    let grouped_end = sparse_set.groups.grouped_end();
-    let unevaluated_start = sparse_set.groups.unevaluated_start;
+    let groups = &sparse_set.groups;
+    let len = sparse_set.len();
 
     let sorted = |entities: &[EntityId]| {
         let mut indices: Vec<u64> = entities.iter().map(|entity| entity.index()).collect();
@@ -112,9 +112,9 @@ fn regions(sparse_set: &SparseSet<I32>) -> [Vec<u64>; 3] {
     };
 
     [
-        sorted(&sparse_set.dense[..grouped_end]),
-        sorted(&sparse_set.dense[grouped_end..unevaluated_start]),
-        sorted(&sparse_set.dense[unevaluated_start..]),
+        sorted(&sparse_set.dense[..groups.grouped_end()]),
+        sorted(&sparse_set.dense[groups.ungrouped_range(len)]),
+        sorted(&sparse_set.dense[groups.unevaluated_range(len)]),
     ]
 }
 
@@ -348,4 +348,109 @@ fn move_non_send() {
         regions(&sparse_set),
         [vec![0, 1], vec![2, 3, 5], vec![4, 6]]
     );
+}
+
+/// Builds a storage without any range, holding entities `0..len` in order, each with `I32(index)`.
+fn group_free(len: usize) -> SparseSet<I32> {
+    let mut sparse_set = SparseSet::new();
+    for index in 0..len {
+        sparse_set
+            .insert(
+                EntityId::new(index as u64),
+                I32(i32::try_from(index).unwrap()),
+                TrackingTimestamp::new(0),
+            )
+            .assert_inserted();
+    }
+
+    sparse_set
+}
+
+/// Asserts that moving a component of a storage without ranges to the ungrouped region
+/// doesn't move anything, every component is already implicitly ungrouped.
+#[test]
+fn move_group_free_ungrouped() {
+    let mut sparse_set = group_free(3);
+    let dense = sparse_set.dense.clone();
+
+    sparse_set.private_move_to(EntityId::new(1), GroupRegion::Ungrouped);
+
+    assert_eq!(sparse_set.dense, dense);
+    assert!(!sparse_set.groups.has_ranges());
+    assert_eq!(sparse_set.groups.unevaluated_start, 0);
+    assert_eq!(regions(&sparse_set), [vec![], vec![0, 1, 2], vec![]]);
+    assert_reachable(&sparse_set);
+}
+
+/// Asserts that moving a component of a storage without ranges to the unevaluated region panics,
+/// such a storage has no unevaluated region.
+#[test]
+#[should_panic(expected = "a storage without group ranges has no unevaluated region")]
+fn move_group_free_unevaluated() {
+    let mut sparse_set = group_free(3);
+
+    sparse_set.private_move_to(EntityId::new(1), GroupRegion::Unevaluated);
+}
+
+/// Asserts that the panic of a move to the unevaluated region of a storage without ranges
+/// happens before anything moves: entities, components and metadata are unchanged.
+#[cfg(feature = "std")]
+#[test]
+fn move_group_free_unevaluated_untouched() {
+    let mut sparse_set = group_free(3);
+    let dense = sparse_set.dense.clone();
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        sparse_set.private_move_to(EntityId::new(1), GroupRegion::Unevaluated);
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(sparse_set.dense, dense);
+    assert!(!sparse_set.groups.has_ranges());
+    assert_eq!(sparse_set.groups.unevaluated_start, 0);
+    assert_reachable(&sparse_set);
+}
+
+/// Asserts that moving an entity without a component in a storage without ranges panics.
+#[test]
+#[should_panic(expected = "only components present in the storage can be moved")]
+fn move_group_free_missing() {
+    let mut sparse_set = group_free(3);
+
+    sparse_set.private_move_to(EntityId::new(10), GroupRegion::Ungrouped);
+}
+
+/// Asserts that moving to a group in a storage without ranges panics, the group can't be attached.
+#[test]
+#[should_panic(expected = "the destination group has no range in this storage")]
+fn move_group_free_unattached() {
+    let mut sparse_set = group_free(3);
+    let group: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(1)]);
+
+    sparse_set.private_move_to(EntityId::new(1), GroupRegion::Range(&group));
+}
+
+/// Asserts that `Storage::move_to` on a `NonSend` `SparseSet` without ranges
+/// doesn't move anything when moving to the ungrouped region.
+#[cfg(feature = "thread_local")]
+#[test]
+fn move_group_free_non_send() {
+    let mut sparse_set = crate::borrow::NonSend(group_free(3));
+    let dense = sparse_set.dense.clone();
+
+    Storage::move_to(&mut sparse_set, EntityId::new(1), GroupRegion::Ungrouped);
+
+    assert_eq!(sparse_set.dense, dense);
+    assert_eq!(regions(&sparse_set), [vec![], vec![0, 1, 2], vec![]]);
+}
+
+/// Asserts that `Storage::move_to` on a `NonSend` `SparseSet` without ranges
+/// panics when moving to the unevaluated region.
+#[cfg(feature = "thread_local")]
+#[test]
+#[should_panic(expected = "a storage without group ranges has no unevaluated region")]
+fn move_group_free_non_send_unevaluated() {
+    let mut sparse_set = crate::borrow::NonSend(group_free(3));
+
+    Storage::move_to(&mut sparse_set, EntityId::new(1), GroupRegion::Unevaluated);
 }

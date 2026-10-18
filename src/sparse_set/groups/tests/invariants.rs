@@ -161,7 +161,7 @@ fn unevaluated_past_end() {
     groups.assert_invariants(4);
 }
 
-/// Asserts that a storage without ranges and fully unevaluated is accepted.
+/// Asserts that a storage without ranges and its unused boundary at 0 is accepted.
 #[test]
 fn no_ranges() {
     let groups = Groups::default();
@@ -169,9 +169,20 @@ fn no_ranges() {
     groups.assert_invariants(3);
 }
 
-/// Asserts that a storage without ranges but with an ungrouped region is rejected.
+/// Asserts that an empty storage without ranges is accepted.
 #[test]
-#[should_panic(expected = "a storage without group ranges must be fully unevaluated")]
+fn no_ranges_empty() {
+    let groups = Groups::default();
+
+    groups.assert_invariants(0);
+}
+
+/// Asserts that a storage without ranges but a nonzero stored boundary is rejected,
+/// the boundary isn't tracked while the storage is implicitly ungrouped.
+#[test]
+#[should_panic(
+    expected = "a storage without group ranges keeps its unused unevaluated boundary at 0"
+)]
 fn no_ranges_ungrouped() {
     let groups = Groups {
         storage_id: None,

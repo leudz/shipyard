@@ -73,5 +73,5 @@ fn range_of<T: Component + Send + Sync>(world: &World, ids: &[StorageId]) -> Vec
 fn is_evaluated<T: Component + Send + Sync>(world: &World) -> bool {
     let view = world.borrow::<View<'_, T>>().unwrap();
 
-    view.groups.unevaluated_start == view.len()
+    view.groups.unevaluated_range(view.len()).is_empty()
 }

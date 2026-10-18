@@ -10,7 +10,8 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
 use crate::iter::mixed::BulkStrategy;
-use crate::iter::{IntoIter, Shiper, Shiperator};
+use crate::iter::planner::NodeMetadata;
+use crate::iter::{IntoIter, IntoShiperator, Shiper, Shiperator};
 use crate::sparse_set::{GroupRange, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
@@ -176,6 +177,39 @@ fn rejecting_sailor() {
     );
     assert!(!iter.is_exact_sized);
     assert_eq!(next_ids(iter), sorted(vec![pairs[1], pairs[3]]));
+}
+
+/// Asserts that a storage without group, implicitly ungrouped, keeps an ordinary window:
+/// iterating it alone yields every one of its components, and as the sailor of an aligned
+/// AB pair it still finds the pairs owning it, with their values.
+#[test]
+fn group_free_sailor() {
+    let mut world = World::new_for_test();
+    let pairs = add_ab(&mut world, 4);
+    world.add_component(pairs[1], C(1));
+    world.add_component(pairs[3], C(3));
+    let mut owners = vec![pairs[1], pairs[3]];
+    for i in 0..5 {
+        owners.push(world.add_entity(C(10 + i)));
+    }
+    world.group::<(A, B)>();
+
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+
+    let (_, _, entities) = (&c).into_shiperator();
+    assert!(matches!(entities.metadata, NodeMetadata::Ungrouped));
+    assert_eq!(next_ids((&c).iter()), sorted(owners));
+
+    let iter = (&a, &b, &c).iter();
+    assert!(iter.schedule.is_some());
+    let mut items: Vec<(EntityId, u32, u32, u32)> = iter
+        .with_id()
+        .map(|(id, (a, b, c))| (id, a.0, b.0, c.0))
+        .collect();
+    items.sort_unstable();
+    assert_eq!(items, [(pairs[1], 1, 1, 1), (pairs[3], 3, 3, 3)]);
 }
 
 /// Asserts that a single C is a cheaper captain than the aligned AB pair:

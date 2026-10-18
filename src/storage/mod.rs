@@ -145,11 +145,17 @@ pub trait Storage: SizedAny {
 
     /// Moves `entity`'s component to `destination`, wherever it currently is in this storage.
     ///
-    /// Regroup only calls it on storages that support grouping.
+    /// Regroup only calls it on storages that support grouping.\
+    /// A storage without any group range is implicitly ungrouped: moving to
+    /// [`GroupRegion::Ungrouped`] does nothing and no component can be moved to
+    /// [`GroupRegion::Unevaluated`].
     ///
     /// ### Panics
     ///
     /// - The storage doesn't support grouping.
+    /// - `entity` doesn't have a component in this storage.
+    /// - `destination` is a group without a range in this storage.
+    /// - `destination` is [`GroupRegion::Unevaluated`] and the storage has no group range.
     #[doc(hidden)]
     #[allow(unused_variables)]
     #[track_caller]

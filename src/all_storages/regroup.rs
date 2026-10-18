@@ -194,7 +194,7 @@ fn evaluate(
     // and nothing adds to it, so the loop ends.
     loop {
         let storage = storage_mut(storages, storage_id);
-        // Storages without group stay entirely unevaluated, like storages that don't support grouping.
+        // Storages without group are implicitly ungrouped, they have nothing to evaluate.
         let Some(groups) = storage.groups().filter(|groups| groups.has_ranges()) else {
             return;
         };
