@@ -5,10 +5,15 @@
 //! every erased storage is reached with the right type and dropped exactly once.
 
 use crate::all_storages::CustomStorageAccess;
+use crate::component::{Component, Unique};
+use crate::entity_id::EntityId;
+use crate::get::Get;
 #[cfg(feature = "std")]
 use crate::sparse_set::SparseSet;
 use crate::storage::{Storage, StorageId};
-use crate::{track, Component, EntityId, Get, Unique, UniqueView, View, World};
+use crate::track;
+use crate::views::{UniqueView, View};
+use crate::world::World;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -381,9 +386,9 @@ impl Unique for Local {}
 #[cfg(feature = "thread_local")]
 #[test]
 fn thread_local_storages() {
+    use crate::UniqueViewMut;
     use crate::borrow::NonSendSync;
     use crate::error;
-    use crate::UniqueViewMut;
 
     let counter = Arc::new(AtomicUsize::new(0));
     let world = World::new_for_test();
@@ -406,9 +411,11 @@ fn thread_local_storages() {
                     ..
                 })
             ));
-            assert!(all_storages
-                .borrow::<NonSendSync<UniqueViewMut<'_, Local>>>()
-                .is_err());
+            assert!(
+                all_storages
+                    .borrow::<NonSendSync<UniqueViewMut<'_, Local>>>()
+                    .is_err()
+            );
             assert!(matches!(
                 all_storages.remove_unique::<Local>(),
                 Err(error::UniqueRemove::StorageBorrow((

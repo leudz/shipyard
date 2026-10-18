@@ -1,8 +1,8 @@
+use crate::ShipHashSet;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::sparse_set::SparseSet;
 use crate::tracking::TrackingTimestamp;
-use crate::ShipHashSet;
 
 /// Trait used as a bound for AllStorages::delete_any.
 pub trait CustomDeleteAny {

@@ -3,7 +3,7 @@
 use super::ways::every_way;
 use shipyard::advanced::Mut;
 use shipyard::*;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 #[derive(Debug, PartialEq)]
 struct A(u32);

@@ -306,7 +306,7 @@ impl Entities {
     pub fn spawn(&mut self, entity: EntityId) -> bool {
         if let Some(&old_entity) = self.data.get(entity.index() as usize) {
             if self.is_alive(old_entity) {
-                if old_entity.gen() <= entity.gen() {
+                if old_entity.generation() <= entity.generation() {
                     self.data[entity.uindex()] = entity;
 
                     true
@@ -314,7 +314,7 @@ impl Entities {
                     false
                 }
             } else if let Some((new, old)) = self.list {
-                if old_entity.gen() <= entity.gen() + 1 {
+                if old_entity.generation() <= entity.generation() + 1 {
                     // pop from removed list
                     if entity.uindex() == old {
                         if new == old {
@@ -421,13 +421,13 @@ impl Storage for Entities {
         let begin = self
             .data
             .iter()
-            .position(|id| id.gen() < EntityId::max_gen())
+            .position(|id| id.generation() < EntityId::max_gen())
             .unwrap();
         let end = self
             .data
             .iter()
             .rev()
-            .position(|id| id.gen() < EntityId::max_gen())
+            .position(|id| id.generation() < EntityId::max_gen())
             .unwrap();
         self.list = Some((self.data.len() - end - 1, begin));
     }

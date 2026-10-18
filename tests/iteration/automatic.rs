@@ -434,11 +434,7 @@ fn overlapping_resume() {
             seen.push(id);
             a.0 += 1;
             b.0 += 1;
-            if id == stop {
-                Err(())
-            } else {
-                Ok(())
-            }
+            if id == stop { Err(()) } else { Ok(()) }
         });
         assert_eq!(result, Err(()));
         iter.for_each(|(id, (a, b))| {

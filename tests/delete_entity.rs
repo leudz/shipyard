@@ -89,8 +89,8 @@ fn update() {
 #[test]
 fn on_deletion() {
     use std::sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     };
 
     let mut world = World::new();

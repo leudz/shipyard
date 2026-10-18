@@ -31,9 +31,9 @@ fn recycle() {
     let recycled1 = entities.generate();
     let recycled2 = entities.generate();
     let fresh = entities.generate();
-    assert_eq!((recycled1.index(), recycled1.gen()), (1, 1));
-    assert_eq!((recycled2.index(), recycled2.gen()), (2, 1));
-    assert_eq!((fresh.index(), fresh.gen()), (4, 0));
+    assert_eq!((recycled1.index(), recycled1.generation()), (1, 1));
+    assert_eq!((recycled2.index(), recycled2.generation()), (2, 1));
+    assert_eq!((fresh.index(), fresh.generation()), (4, 0));
 
     assert!(!entities.is_alive(e[1]));
     assert!(entities.is_alive(recycled1));
@@ -76,7 +76,7 @@ fn bulk() {
     assert_eq!(bulk_indexes, [2, 3]);
 
     let recycled = entities.generate();
-    assert_eq!((recycled.index(), recycled.gen()), (0, 1));
+    assert_eq!((recycled.index(), recycled.generation()), (0, 1));
     assert_eq!(alive(&entities), [recycled, e1, bulk[0], bulk[1]]);
 }
 
@@ -96,7 +96,7 @@ fn clear() {
     recycled.sort_unstable_by_key(|entity| entity.index());
     let recycled: Vec<(u64, u16)> = recycled
         .iter()
-        .map(|entity| (entity.index(), entity.gen()))
+        .map(|entity| (entity.index(), entity.generation()))
         .collect();
     assert_eq!(recycled, [(0, 1), (1, 2), (2, 1)]);
     assert_eq!(entities.generate().index(), 3);

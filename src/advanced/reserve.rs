@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::ViewMut;
+use crate::views::ViewMut;
 use core::iter::{Copied, DoubleEndedIterator, ExactSizeIterator, FusedIterator, Iterator};
 use core::slice::Iter;
 

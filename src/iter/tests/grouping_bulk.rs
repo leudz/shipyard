@@ -3,7 +3,7 @@
 //! General output, mutable tracking, ZST and adapter checks live in the public
 //! `tests/iteration` suite. These tests additionally inspect strategy and plan ownership.
 
-use super::grouping_fixtures::{coverage_world, ring_world, trust_world, A, B, C, RING_PAIRS};
+use super::grouping_fixtures::{A, B, C, RING_PAIRS, coverage_world, ring_world, trust_world};
 use super::grouping_regions::grouped;
 use crate::iter::mixed::BulkStrategy;
 use crate::iter::{IntoIter, IntoShiperator, Shiper, Shiperator};
@@ -126,10 +126,10 @@ fn strategies_and_prefixes() {
     let mut iter = (&a, &b).iter();
     assert_eq!(iter.shiperator.bulk_strategy(), BulkStrategy::Aligned);
     assert_eq!(iter.by_ref().take(20).count(), 20);
-    assert_eq!(iter.next().unwrap().0 .0, 20);
+    assert_eq!(iter.next().unwrap().0.0, 20);
     assert_eq!(iter.shiperator.bulk_strategy(), BulkStrategy::SingleCaptain);
     assert_eq!(iter.by_ref().take(2).count(), 2);
-    assert_eq!(iter.next().unwrap().0 .0, 23);
+    assert_eq!(iter.next().unwrap().0.0, 23);
     assert_eq!(iter.shiperator.bulk_strategy(), BulkStrategy::Checked);
     assert!(iter.schedule.as_ref().unwrap().follow_ups().is_empty());
 

@@ -144,7 +144,7 @@ impl<T: Component> SparseSet<T> {
     #[inline]
     pub fn index_of(&self, entity: EntityId) -> Option<usize> {
         if let Some(sparse_entity) = self.sparse.get(entity) {
-            if entity.gen() == sparse_entity.gen() {
+            if entity.generation() == sparse_entity.generation() {
                 Some(sparse_entity.uindex())
             } else {
                 None
@@ -162,7 +162,8 @@ impl<T: Component> SparseSet<T> {
     /// The index is only valid until a modification occurs in the storage.
     #[inline]
     pub unsafe fn index_of_unchecked(&self, entity: EntityId) -> usize {
-        self.sparse.get_unchecked(entity).uindex()
+        // SAFE: Our caller guarantees `entity` owns a component, so its bucket is allocated.
+        unsafe { self.sparse.get_unchecked(entity).uindex() }
     }
     /// Returns the `EntityId` at a given `index`.
     #[inline]
@@ -263,7 +264,7 @@ impl<T: Component> SparseSet<T> {
             }
 
             *sparse_entity =
-                EntityId::new_from_index_and_gen(self.dense.len() as u64, entity.gen());
+                EntityId::new_from_index_and_gen(self.dense.len() as u64, entity.generation());
 
             if self.is_tracking_insertion {
                 self.insertion_data.push(current);
@@ -276,7 +277,7 @@ impl<T: Component> SparseSet<T> {
             self.data.push(value);
 
             old_component = InsertionResult::Inserted;
-        } else if entity.gen() == sparse_entity.gen() {
+        } else if entity.generation() == sparse_entity.generation() {
             if let Some(on_insertion) = &mut self.on_insertion {
                 on_insertion(entity, &value);
             }
@@ -300,7 +301,7 @@ impl<T: Component> SparseSet<T> {
             }
 
             dense_entity.copy_index_gen(entity);
-        } else if entity.gen() > sparse_entity.gen() {
+        } else if entity.generation() > sparse_entity.generation() {
             if let Some(on_insertion) = &mut self.on_insertion {
                 on_insertion(entity, &value);
             }
@@ -366,7 +367,7 @@ impl<T: Component> SparseSet<T> {
     pub(crate) fn actual_remove(&mut self, entity: EntityId) -> Option<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
-        if entity.gen() >= sparse_entity.gen() {
+        if entity.generation() >= sparse_entity.generation() {
             self.reset_groups();
 
             unsafe {
@@ -392,7 +393,7 @@ impl<T: Component> SparseSet<T> {
                 }
             }
 
-            if entity.gen() == sparse_entity.gen() {
+            if entity.generation() == sparse_entity.generation() {
                 if let Some(on_remove) = &mut self.on_removal {
                     on_remove(entity, &component);
                 }
@@ -1162,16 +1163,15 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
         to: EntityId,
         other_current: TrackingTimestamp,
     ) {
-        if let Some(clone) = &self.clone {
-            if let Some(component) = self.private_get(from) {
-                let other_sparse_set = other_all_storages.exclusive_storage_or_insert_mut(
-                    StorageId::of::<SparseSet<T>>(),
-                    SparseSet::<T>::new,
-                );
+        if let Some(clone) = &self.clone
+            && let Some(component) = self.private_get(from)
+        {
+            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_mut(
+                StorageId::of::<SparseSet<T>>(),
+                SparseSet::<T>::new,
+            );
 
-                let _ =
-                    other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
-            }
+            let _ = other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
         }
     }
 

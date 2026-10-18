@@ -5,12 +5,17 @@
 //! Worlds and iterators are built through the public API; no plans are injected.
 
 use super::grouping_fixtures::{
-    coverage_world, late_iter, ring_world, trust_world, PairIter, A, B, C,
+    A, B, C, PairIter, coverage_world, late_iter, ring_world, trust_world,
 };
 use super::grouping_regions::grouped;
+use crate::component::Component;
+use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::{IntoIter, IntoShiperator, Shiper, Shiperator};
 use crate::or::OneOfTwo;
-use crate::{track, Component, EntityId, Get, View, ViewMut, World};
+use crate::track;
+use crate::views::{View, ViewMut};
+use crate::world::World;
 use alloc::vec::Vec;
 
 /// Returns the number of follow-ups left, `None` without plan.
@@ -157,7 +162,7 @@ fn recursive_and_boundary_splits() {
     let (world, ids) = coverage_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let mut iter = late_iter(&a, &b);
-    assert_eq!(iter.next().unwrap().0 .0, 20);
+    assert_eq!(iter.next().unwrap().0.0, 20);
     let mut pieces = Vec::new();
     split_all(iter, &mut pieces);
     assert_eq!(pieces.len(), 5);

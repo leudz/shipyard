@@ -274,7 +274,7 @@ fn mixed_or_captain() {
 /// Replaying an owned grouped iterator must reinstall the initial state and all follow-ups.
 #[test]
 fn replay() {
-    use super::grouping_fixtures::{coverage_world, A, B};
+    use super::grouping_fixtures::{A, B, coverage_world};
     let (world, ids) = coverage_world();
     let mut iter_ref = world.iter::<(&A, &B)>();
     for _ in 0..2 {
@@ -350,7 +350,7 @@ mod split {
 /// whether segments are entered by `next` or by `fold`.
 #[test]
 fn ring_entry() {
-    use super::grouping_fixtures::{ring_world, A, B};
+    use super::grouping_fixtures::{A, B, ring_world};
 
     let (world, _) = ring_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
@@ -418,7 +418,7 @@ fn ring_entry() {
 /// while A keeps driving and B's later unevaluated candidate is rejected by coverage.
 #[test]
 fn trust_entry() {
-    use super::grouping_fixtures::{trust_world, A, B, C};
+    use super::grouping_fixtures::{A, B, C, trust_world};
     use super::grouping_regions::grouped;
 
     let (world, ids) = trust_world();

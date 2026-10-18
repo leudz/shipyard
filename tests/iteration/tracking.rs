@@ -2,7 +2,7 @@
 
 use super::ways::every_way;
 use shipyard::advanced::Mut;
-use shipyard::{track, Component, EntityId, Get, IntoIter, View, ViewMut, World};
+use shipyard::{Component, EntityId, Get, IntoIter, View, ViewMut, World, track};
 
 #[derive(Debug)]
 struct Modif(u32);

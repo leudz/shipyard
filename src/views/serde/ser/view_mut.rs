@@ -1,7 +1,7 @@
 use crate::component::Component;
 use crate::tracking::Tracking;
-use crate::views::serde::ser::view::ViewSerializer;
 use crate::views::ViewMut;
+use crate::views::serde::ser::view::ViewSerializer;
 use serde::{Serialize, Serializer};
 
 /// Builder to customize [`ViewMut`]'s serialization format.

@@ -1,4 +1,4 @@
-use shipyard::{sparse_set::SparseSet, track, Component, View, World};
+use shipyard::{Component, View, World, sparse_set::SparseSet, track};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 struct USIZE(usize);

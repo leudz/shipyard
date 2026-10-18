@@ -5,8 +5,8 @@ mod tracking;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::iter::{EntityCursor, SegmentEntry, SegmentRow};
-use crate::optional::Optional;
 use crate::r#mut::Mut;
+use crate::optional::Optional;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::track;
 use crate::tracking::Tracking;
@@ -491,7 +491,8 @@ impl<'tmp, T: Component, Track: Tracking> Shiperator for Optional<FullRawWindow<
     #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         if let Some(index) = index {
-            Some(self.0.get_data(index))
+            // SAFE: Our caller upholds `get_data`'s contract for the inner window.
+            Some(unsafe { self.0.get_data(index) })
         } else {
             None
         }
@@ -537,7 +538,8 @@ where
         entities: &EntityCursor,
         index: usize,
     ) -> Option<Self::Index> {
-        Some(self.0.captain_indices_of(entities, index))
+        // SAFE: Our caller upholds `captain_indices_of`'s contract for the inner window.
+        Some(unsafe { self.0.captain_indices_of(entities, index) })
     }
 
     #[inline]
@@ -553,7 +555,8 @@ where
     #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
         if let Some(index) = index {
-            Some(self.0.get_data(index))
+            // SAFE: Our caller upholds `get_data`'s contract for the inner window.
+            Some(unsafe { self.0.get_data(index) })
         } else {
             None
         }

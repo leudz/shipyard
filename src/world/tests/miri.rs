@@ -7,8 +7,8 @@
 use crate::get_component::{Ref, RefMut};
 use crate::views::UniqueOrInitViewMut;
 use crate::{
-    track, AllStoragesViewMut, Component, Get, Unique, UniqueView, UniqueViewMut, View, ViewMut,
-    World,
+    AllStoragesViewMut, Component, Get, Unique, UniqueView, UniqueViewMut, View, ViewMut, World,
+    track,
 };
 use alloc::vec;
 use alloc::vec::Vec;
@@ -108,9 +108,11 @@ fn tuple_partial() {
     let world = World::new_for_test();
     let heaps = world.borrow::<ViewMut<'_, Heap>>().unwrap();
 
-    assert!(world
-        .borrow::<(View<'_, Other>, ViewMut<'_, Heap>)>()
-        .is_err());
+    assert!(
+        world
+            .borrow::<(View<'_, Other>, ViewMut<'_, Heap>)>()
+            .is_err()
+    );
     assert!(world.borrow::<ViewMut<'_, Other>>().is_ok());
 
     drop(heaps);
@@ -240,7 +242,7 @@ impl Component for SyncOnly {
 #[test]
 fn other_thread() {
     use crate::borrow::NonSend;
-    use crate::EntitiesView;
+    use crate::views::EntitiesView;
 
     let mut world = World::new_for_test();
     let entity = world.add_entity(Heap(vec![1]));

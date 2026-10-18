@@ -5,13 +5,18 @@
 //! so a lost, duplicated or misplaced component shows up as a wrong value, a wrong count or a
 //! Miri error.
 
+use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::Shiperator;
+use crate::remove::Remove;
 use crate::sparse_set::{
-    EntityCursor, FullRawWindow, FullRawWindowMut, InsertionResult, SparseSet, BUCKET_SIZE,
+    BUCKET_SIZE, EntityCursor, FullRawWindow, FullRawWindowMut, InsertionResult, SparseSet,
 };
+use crate::track;
 use crate::tracking::TrackingTimestamp;
-use crate::{track, Component, Get, Remove, View, ViewMut, World};
+use crate::views::{View, ViewMut};
+use crate::world::World;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -222,7 +227,7 @@ fn deletion_tracking() {
 
     assert!(sparse_set.dyn_delete(id(0), now()));
     assert_eq!(drops(&counter), 0);
-    assert_eq!(sparse_set.deletion_data[0].2 .0.values, [0]);
+    assert_eq!(sparse_set.deletion_data[0].2.0.values, [0]);
 
     let removed = sparse_set.dyn_remove(id(1), now()).unwrap();
     assert_eq!(sparse_set.removal_data.len(), 1);

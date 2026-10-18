@@ -10,7 +10,7 @@ use crate::world::World;
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::any::{type_name, TypeId};
+use core::any::{TypeId, type_name};
 use core::sync::atomic::{AtomicU64, Ordering};
 
 /// Validates a function can become a system.

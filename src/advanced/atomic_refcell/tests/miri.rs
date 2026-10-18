@@ -207,21 +207,23 @@ fn cross_thread_release() {
     let cell = AtomicRefCell::new(vec![0u32]);
 
     std::thread::scope(|scope| {
-        scope.spawn(|| loop {
-            if let Ok(mut values) = cell.borrow_mut() {
-                values[0] = 1;
-                values.push(2);
-                break;
+        scope.spawn(|| {
+            loop {
+                if let Ok(mut values) = cell.borrow_mut() {
+                    values[0] = 1;
+                    values.push(2);
+                    break;
+                }
+                std::hint::spin_loop();
             }
-            std::hint::spin_loop();
         });
 
         loop {
-            if let Ok(values) = cell.borrow() {
-                if values[0] == 1 {
-                    assert_eq!(*values, [1, 2]);
-                    break;
-                }
+            if let Ok(values) = cell.borrow()
+                && values[0] == 1
+            {
+                assert_eq!(*values, [1, 2]);
+                break;
             }
             std::hint::spin_loop();
         }

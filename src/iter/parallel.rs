@@ -1,8 +1,8 @@
 use crate::entity_id::EntityId;
 use crate::iter::{Shiper, Shiperator, WithId};
 use rayon::iter::plumbing::{
-    bridge_producer_consumer, bridge_unindexed, Folder, Producer, UnindexedConsumer,
-    UnindexedProducer,
+    Folder, Producer, UnindexedConsumer, UnindexedProducer, bridge_producer_consumer,
+    bridge_unindexed,
 };
 
 #[allow(missing_docs)]

@@ -5,16 +5,16 @@
 //! We check which walk won and the segments it installed, then compare the items with
 //! the entities we know own every component.
 
-use super::grouping_regions::{assert_skipped, record, segment, segments, Segment};
+use super::grouping_regions::{Segment, assert_skipped, record, segment, segments};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::mixed::BulkStrategy;
 use crate::iter::{IntoIter, Shiper, Shiperator};
 use crate::sparse_set::{GroupRange, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
-use crate::Get;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;

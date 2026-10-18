@@ -2,7 +2,7 @@
 authors = ["leudz <dylan.ancel@gmail.com>"]
 categories = ["data-structures", "game-development", "concurrency", "no-std"]
 description = "Entity Component System"
-edition = "2021"
+edition = "2024"
 keywords = ["ecs", "entity", "component"]
 license = "MIT OR Apache-2.0"
 name = "shipyard"

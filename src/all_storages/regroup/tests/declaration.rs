@@ -244,8 +244,8 @@ fn iteration() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn non_send() {
+    use crate::add_component::AddComponent;
     use crate::borrow::NonSend;
-    use crate::AddComponent;
 
     let mut world = World::new_for_test();
     let ab0 = world.add_entity(A(0));

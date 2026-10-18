@@ -17,7 +17,7 @@ use crate::error;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
 use crate::iter::Shiperator;
-use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
+use crate::iter_component::{IntoIterRef, IterComponent, into_iter};
 use crate::memory_usage::WorldMemoryUsage;
 use crate::r#mut::Mut;
 use crate::reserve::BulkEntityIter;
@@ -756,13 +756,12 @@ let i = world.run(sys1);
         batches: &Batches,
         workload_name: &dyn Label,
     ) -> Result<(), error::RunWorkload> {
-        if let Some(run_if) = &batches.workload_run_if {
-            if !run_if
+        if let Some(run_if) = &batches.workload_run_if
+            && !run_if
                 .run(self)
                 .map_err(|err| error::RunWorkload::Run((workload_name.dyn_clone(), err)))?
-            {
-                return Ok(());
-            }
+        {
+            return Ok(());
         }
 
         #[cfg(feature = "parallel")]
@@ -1408,7 +1407,7 @@ assert!(*j == &U32(1));
                 Err(err) => {
                     return Err(error::GetComponent::StorageBorrow(
                         error::GetStorage::AllStoragesBorrow(err),
-                    ))
+                    ));
                 }
             })
         };

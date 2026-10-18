@@ -7,13 +7,13 @@
 use super::grouping_regions::{record, walked};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::plan::{Coverage, NodeState};
 use crate::iter::planner::{NodeMetadata, Route};
 use crate::iter::{IntoIter, IntoShiperator, SegmentRow, Shiper, Shiperator};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
-use crate::Get;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Debug;
@@ -982,7 +982,7 @@ fn split_left_dropped() {
 /// held all at once each write once.
 #[test]
 fn ring_nested() {
-    use super::grouping_fixtures::{ring_world, A, B, C};
+    use super::grouping_fixtures::{A, B, C, ring_world};
 
     let (world, pairs) = ring_world();
     {

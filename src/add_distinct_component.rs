@@ -3,7 +3,7 @@ mod tests;
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::ViewMut;
+use crate::views::ViewMut;
 
 /// Adds components to an existing entity only if not already present.
 pub trait AddDistinctComponent {
@@ -59,10 +59,10 @@ impl<T: Component + PartialEq> AddDistinctComponent for ViewMut<'_, T> {
         entity: EntityId,
         component: Self::Component,
     ) -> bool {
-        if let Some(c) = self.sparse_set.private_get(entity) {
-            if *c == component {
-                return false;
-            }
+        if let Some(c) = self.sparse_set.private_get(entity)
+            && *c == component
+        {
+            return false;
         }
 
         self.sparse_set
@@ -81,10 +81,10 @@ impl<T: Component + PartialEq> AddDistinctComponent for &mut ViewMut<'_, T> {
         entity: EntityId,
         component: Self::Component,
     ) -> bool {
-        if let Some(c) = self.sparse_set.private_get(entity) {
-            if *c == component {
-                return false;
-            }
+        if let Some(c) = self.sparse_set.private_get(entity)
+            && *c == component
+        {
+            return false;
         }
 
         self.sparse_set

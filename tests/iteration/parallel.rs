@@ -3,8 +3,8 @@
 //! Rayon picks the order, so items are sorted before being compared.
 
 use core::sync::atomic::{AtomicUsize, Ordering};
-use rayon::prelude::*;
 use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 use shipyard::iter::OneOfTwo;
 use shipyard::*;
 

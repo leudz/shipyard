@@ -27,10 +27,10 @@ use crate::entity_id::EntityId;
 use crate::get_component::GetComponent;
 use crate::get_unique::GetUnique;
 use crate::iter::Shiperator;
-use crate::iter_component::{into_iter, IntoIterRef, IterComponent};
+use crate::iter_component::{IntoIterRef, IterComponent, into_iter};
 use crate::memory_usage::AllStoragesMemoryUsage;
-use crate::public_transport::RwLock;
 use crate::r#mut::Mut;
+use crate::public_transport::RwLock;
 use crate::reserve::BulkEntityIter;
 use crate::sparse_set::{
     BulkAddEntity, Groups, SparseSet, TupleAddComponent, TupleDelete, TupleRemove,
@@ -42,7 +42,7 @@ use crate::system::AllSystem;
 use crate::tracking::{TrackingTimestamp, TupleTrack};
 use crate::unique::UniqueStorage;
 use crate::views::EntitiesViewMut;
-use crate::{error, ShipHashMap};
+use crate::{ShipHashMap, error};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;

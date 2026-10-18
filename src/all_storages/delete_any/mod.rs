@@ -1,10 +1,10 @@
 mod custom_delete_any;
 
+use crate::ShipHashSet;
 use crate::all_storages::AllStorages;
 use crate::storage::{Storage, StorageId};
 #[cfg(doc)]
 use crate::world::World;
-use crate::ShipHashSet;
 pub use custom_delete_any::CustomDeleteAny;
 
 /// Trait used as a bound for [`World::delete_any`] and [AllStorages::delete_any].

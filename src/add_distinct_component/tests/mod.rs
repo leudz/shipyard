@@ -1,5 +1,5 @@
 use super::*;
-use crate::{track, Component, EntitiesViewMut, Get, ViewMut, World};
+use crate::{Component, EntitiesViewMut, Get, ViewMut, World, track};
 
 #[derive(PartialEq, Debug)]
 struct USIZE(usize);

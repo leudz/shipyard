@@ -5,7 +5,7 @@ mod thread_local;
 
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
-use crate::{track, Component, EntityId, Get, IntoIter, View, World};
+use crate::{Component, EntityId, Get, IntoIter, View, World, track};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 

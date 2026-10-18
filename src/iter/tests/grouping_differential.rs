@@ -17,6 +17,7 @@
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::planner::{NodeMetadata, Route, Walk};
 use crate::iter::{IntoIter, IntoShiperator, OneOfTwo, Shiper, Shiperator};
 use crate::r#mut::Mut;
@@ -25,7 +26,6 @@ use crate::storage::StorageId;
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
-use crate::Get;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::sync::Arc;
@@ -1226,7 +1226,7 @@ fn reads() {
             if (step + 1).is_multiple_of(READ_EVERY) {
                 check_reads(&scenario, &mut rng, &mut stats, &context);
             }
-            if scenario.model.keys().any(|id| id.gen() > 0) {
+            if scenario.model.keys().any(|id| id.generation() > 0) {
                 stats.reused += 1;
             }
         }
@@ -1780,8 +1780,8 @@ fn tracked_overlap_writes() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn thread_local_overlap() {
-    use crate::borrow::NonSend;
     use crate::AddComponent;
+    use crate::borrow::NonSend;
 
     let mut world = World::new_for_test();
     let e: Vec<EntityId> = (0..12).map(|_| world.add_entity(())).collect();

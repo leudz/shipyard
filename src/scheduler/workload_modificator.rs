@@ -1,17 +1,17 @@
 use crate::component::{Component, Unique};
 use crate::error;
+use crate::scheduler::AsLabel;
 use crate::scheduler::into_workload_run_if::IntoWorkloadRunIf;
 use crate::scheduler::label::WorkloadLabel;
 use crate::scheduler::workload::Workload;
-use crate::scheduler::AsLabel;
 use crate::sparse_set::SparseSet;
 use crate::storage::StorageId;
 use crate::unique::UniqueStorage;
 use crate::views::AllStoragesViewMut;
 use crate::world::World;
 use alloc::boxed::Box;
-use core::any::type_name;
 use core::any::TypeId;
+use core::any::type_name;
 use core::ops::Not;
 
 /// Allows to set if and when a workload runs.

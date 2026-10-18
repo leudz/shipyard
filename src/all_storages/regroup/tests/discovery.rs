@@ -171,12 +171,16 @@ fn union_created_once() {
     let a = groups_of::<A>(&world);
     assert!(Arc::ptr_eq(&a[0], &ab) && Arc::ptr_eq(&a[1], &ac) && Arc::ptr_eq(&a[2], &abc));
     assert_eq!(a.len(), 3);
-    assert!(groups_of::<B>(&world)
-        .iter()
-        .any(|group| Arc::ptr_eq(group, &abc)));
-    assert!(groups_of::<C>(&world)
-        .iter()
-        .any(|group| Arc::ptr_eq(group, &abc)));
+    assert!(
+        groups_of::<B>(&world)
+            .iter()
+            .any(|group| Arc::ptr_eq(group, &abc))
+    );
+    assert!(
+        groups_of::<C>(&world)
+            .iter()
+            .any(|group| Arc::ptr_eq(group, &abc))
+    );
     let view = world.borrow::<View<'_, A>>().unwrap();
     assert_eq!(
         (view.groups.ranges[2].len, view.groups.ranges[2].trust),

@@ -9,12 +9,12 @@
 use super::grouping_regions::{assert_skipped, grouped, record, segment, segments};
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::{IntoShiperator, Mixed, Shiper};
 use crate::sparse_set::{FullRawWindow, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
-use crate::Get;
 use alloc::vec::Vec;
 use core::ptr;
 

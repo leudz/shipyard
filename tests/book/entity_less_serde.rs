@@ -258,7 +258,9 @@ fn recipe_test() {
         where
             D: Deserializer<'de>,
         {
-            panic!("LanguagesViewMut cannot be directly deserialized. Use deserialize_in_place instead.")
+            panic!(
+                "LanguagesViewMut cannot be directly deserialized. Use deserialize_in_place instead."
+            )
         }
 
         fn deserialize_in_place<D>(deserializer: D, place: &mut Self) -> Result<(), D::Error>

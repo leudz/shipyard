@@ -1,8 +1,8 @@
 use crate::entity_id::EntityId;
 use crate::iter::plan::{Coverage, CoverageSpan, NodeKind, NodeState, PlanBuilder};
 use crate::iter::shiperator::fold_candidates;
-use crate::iter::{into_shiperator::strip_plus, Shiperator};
 use crate::iter::{EntityCursor, RawEntityIdAccess, SegmentEntry, SegmentRow};
+use crate::iter::{Shiperator, into_shiperator::strip_plus};
 use core::ptr::NonNull;
 
 /// Weight of a sailor child next to a captain, the planner's estimates use it too.
@@ -427,9 +427,12 @@ macro_rules! impl_shiperator_output {
 
             #[inline]
             unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-                ($(
-                    self.shiperator.$index.get_data(index.$index),
-                )+)
+                // SAFE: Each index was resolved by the matching shiperator, our caller upholds the rest.
+                unsafe {
+                    ($(
+                        self.shiperator.$index.get_data(index.$index),
+                    )+)
+                }
             }
 
             // The loop is picked once for the whole segment, each one only does the checks

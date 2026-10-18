@@ -3,9 +3,14 @@
 // access; traversal, cloning through splits, empty and ZST behavior use the
 // public API in the iterator suites.
 use super::super::{EntityCursor, FullRawWindow, FullRawWindowMut};
+use crate::component::Component;
+use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::Shiperator;
+use crate::track;
 use crate::tracking::Modified;
-use crate::{track, Component, EntityId, Get, View, ViewMut, World};
+use crate::views::{View, ViewMut};
+use crate::world::World;
 use alloc::vec::Vec;
 use core::ptr::NonNull;
 

@@ -1,3 +1,4 @@
+use crate::ShipHashMap;
 use crate::all_storages::AllStorages;
 use crate::borrow::Mutability;
 use crate::error;
@@ -6,7 +7,6 @@ use crate::scheduler::info::{
 };
 use crate::scheduler::{Batches, Label, TypeId, TypeInfo, Workload, WorkloadInfo, WorkloadSystem};
 use crate::world::World;
-use crate::ShipHashMap;
 use alloc::boxed::Box;
 use alloc::format;
 // use alloc::string::String;
@@ -701,14 +701,14 @@ fn check_can_go_in_parallel_batch(
     batch_info: &BatchInfo,
     tested_system: &ToBePlacedSystem,
 ) -> Option<Conflict> {
-    if let Some(single_system_info) = &batch_info.systems.0 {
-        if let Some(conflict) = check_conflict(
+    if let Some(single_system_info) = &batch_info.systems.0
+        && let Some(conflict) = check_conflict(
             tested_system,
             single_system_info.unique_id,
             &single_system_info.borrow,
-        ) {
-            return Some(conflict);
-        };
+        )
+    {
+        return Some(conflict);
     }
 
     for system_info in &batch_info.systems.1 {

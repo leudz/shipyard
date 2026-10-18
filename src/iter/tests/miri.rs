@@ -5,14 +5,19 @@
 //! transitions and splits, then use them, so a stale pointer, an aliasing `&mut` or a plan
 //! released too early shows up as a wrong value or a Miri error.
 
+use crate::component::Component;
+use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::plan::NodeState;
-use crate::iter::planner::regions::grouped_entities;
 use crate::iter::planner::NodeMetadata;
+use crate::iter::planner::regions::grouped_entities;
 use crate::iter::{
     IntoIter, IntoShiperator, Mixed, OneOfTwo, RawEntityIdAccess, Shiper, Shiperator,
 };
 use crate::sparse_set::FullRawWindow;
-use crate::{track, Component, EntityId, Get, View, ViewMut, World};
+use crate::track;
+use crate::views::{View, ViewMut};
+use crate::world::World;
 use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use core::cell::Cell;
@@ -619,7 +624,7 @@ impl Component for Local {
 #[test]
 fn non_send_sync_owned() {
     use crate::borrow::NonSendSync;
-    use crate::EntitiesViewMut;
+    use crate::views::EntitiesViewMut;
 
     let world = World::new_for_test();
     let e: Vec<EntityId> = world.run(

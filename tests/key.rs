@@ -81,7 +81,7 @@ fn key_gen_after_slot_reuse() {
     let e2 = world.add_entity((USIZE(2), U32(2)));
 
     assert_eq!(e2.index(), e0.index());
-    assert_eq!(e2.gen(), 2);
+    assert_eq!(e2.generation(), 2);
 
     world.run(|(usizes, u32s): (View<USIZE>, View<U32>)| {
         // `dense` has to hold `e2` and not `gen 1 | gen 2 == gen 3`.

@@ -343,7 +343,7 @@ fn parallel() {
 
 #[cfg(feature = "proc")]
 mod derived {
-    use super::{abc_values, late_pairs_world, sorted, A, B, C};
+    use super::{A, B, C, abc_values, late_pairs_world, sorted};
     use crate::iteration::ways::every_way;
     use shipyard::*;
 

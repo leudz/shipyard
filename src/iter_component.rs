@@ -18,7 +18,7 @@ use crate::storage::StorageId;
 use crate::tracking::Tracking;
 use crate::tracking::TrackingTimestamp;
 use crate::views::{View, ViewMut};
-use crate::{error, track, ShipHashSet};
+use crate::{ShipHashSet, error, track};
 use core::any::type_name;
 
 /// Trait used as bound for [`World::iter`] and [`AllStorages::iter`].

@@ -53,18 +53,18 @@ impl EntityId {
     }
     /// Returns the generation part of the `EntityId`.
     #[inline]
-    pub fn gen(self) -> u16 {
+    pub fn generation(self) -> u16 {
         ((self.0.get() & Self::GEN_MASK) >> Self::INDEX_LEN) as u16
     }
     /// Increments the generation, returns Err if gen + 1 == gen::MAX().
     #[inline]
     pub(super) fn bump_gen(&mut self) -> Result<(), ()> {
-        if self.gen() < Self::MAX_GEN - 1 {
+        if self.generation() < Self::MAX_GEN - 1 {
             // SAFE never zero
             self.0 = unsafe {
                 NonZeroU64::new_unchecked(
                     (self.0.get() & !Self::GEN_MASK)
-                        | (((self.gen() + 1) as u64) << Self::INDEX_LEN),
+                        | (((self.generation() + 1) as u64) << Self::INDEX_LEN),
                 )
             };
             Ok(())
@@ -80,17 +80,17 @@ impl EntityId {
         EntityId(unsafe { NonZeroU64::new_unchecked(index + 1) })
     }
     #[inline]
-    pub(crate) const fn new_from_parts(index: u64, gen: u16) -> Self {
+    pub(crate) const fn new_from_parts(index: u64, generation: u16) -> Self {
         assert!(index < Self::INDEX_MASK);
 
         EntityId(unsafe {
-            NonZeroU64::new_unchecked((index + 1) | ((gen as u64) << Self::INDEX_LEN))
+            NonZeroU64::new_unchecked((index + 1) | ((generation as u64) << Self::INDEX_LEN))
         })
     }
     /// Build a new `EntityId` with the given index and generation.
     #[inline]
-    pub const fn new_from_index_and_gen(index: u64, gen: u16) -> Self {
-        EntityId::new_from_parts(index, gen)
+    pub const fn new_from_index_and_gen(index: u64, generation: u16) -> Self {
+        EntityId::new_from_parts(index, generation)
     }
     #[cfg(test)]
     pub(crate) fn zero() -> Self {
@@ -161,7 +161,7 @@ impl core::fmt::Debug for EntityId {
         if *self == EntityId::dead() {
             f.write_str("EId(dead)")
         } else {
-            write!(f, "EId({}.{})", self.index(), self.gen())
+            write!(f, "EId({}.{})", self.index(), self.generation())
         }
     }
 }

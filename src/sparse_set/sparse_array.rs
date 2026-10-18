@@ -101,23 +101,29 @@ impl SparseArray {
     }
     #[inline]
     pub(super) unsafe fn get_unchecked(&self, entity: EntityId) -> EntityId {
-        match self.0.get_unchecked(entity.bucket()) {
-            Some(bucket) => *bucket.0.get_unchecked(entity.bucket_index()),
-            None => unreachable_unchecked(),
+        // SAFE: Our caller guarantees `entity`'s bucket is allocated.
+        unsafe {
+            match self.0.get_unchecked(entity.bucket()) {
+                Some(bucket) => *bucket.0.get_unchecked(entity.bucket_index()),
+                None => unreachable_unchecked(),
+            }
         }
     }
     #[inline]
     pub(crate) unsafe fn get_mut_unchecked(&mut self, entity: EntityId) -> &mut EntityId {
-        match self.0.get_unchecked_mut(entity.bucket()) {
-            Some(bucket) => bucket.0.get_unchecked_mut(entity.bucket_index()),
-            None => unreachable_unchecked(),
+        // SAFE: Our caller guarantees `entity`'s bucket is allocated.
+        unsafe {
+            match self.0.get_unchecked_mut(entity.bucket()) {
+                Some(bucket) => bucket.0.get_unchecked_mut(entity.bucket_index()),
+                None => unreachable_unchecked(),
+            }
         }
     }
     #[inline]
     #[allow(missing_docs)]
     pub fn contains(&self, entity: EntityId) -> bool {
         if let Some(sparse_entity) = self.get(entity) {
-            sparse_entity.gen() == entity.gen()
+            sparse_entity.generation() == entity.generation()
         } else {
             false
         }

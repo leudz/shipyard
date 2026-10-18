@@ -1,8 +1,12 @@
 //! Publicly constructed grouped worlds shared by traversal and ownership tests.
 
+use crate::component::Component;
+use crate::entity_id::EntityId;
 use crate::iter::{IntoIter, Mixed, Shiper};
 use crate::sparse_set::{FullRawWindow, Groups};
-use crate::{track, Component, EntityId, View, ViewMut, World};
+use crate::track;
+use crate::views::{View, ViewMut};
+use crate::world::World;
 use alloc::vec::Vec;
 
 #[derive(Debug, PartialEq)]

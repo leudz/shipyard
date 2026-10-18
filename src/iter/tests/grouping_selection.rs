@@ -4,6 +4,7 @@
 //! reports in its construction metadata, constructors always install the ordinary walk.\
 //! Installing the winner is tested in `grouping_automatic`.
 
+use crate::ShipHashSet;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::iter::planner::{Alternative, NodeMetadata, Route, Selection, Walk};
@@ -14,7 +15,6 @@ use crate::track;
 use crate::tracking::TrackingTimestamp;
 use crate::views::{AllStoragesView, View, ViewMut};
 use crate::world::World;
-use crate::ShipHashSet;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
@@ -708,8 +708,8 @@ fn repeated_storage() {
 #[cfg(feature = "thread_local")]
 #[test]
 fn thread_local_identity() {
+    use crate::add_component::AddComponent;
     use crate::borrow::NonSend;
-    use crate::AddComponent;
 
     let mut world = World::new_for_test();
     let entities = add_ab(&mut world, 4);

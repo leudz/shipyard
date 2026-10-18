@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::ViewMut;
+use crate::views::ViewMut;
 
 /// Adds components to an existing entity.
 pub trait AddComponent<T> {

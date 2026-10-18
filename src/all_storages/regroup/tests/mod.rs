@@ -3,10 +3,16 @@ mod discovery;
 mod promotion;
 mod repair;
 
-use super::{repair_all, sorted_storage_ids, storage_ptr, union_group, Discovery};
+use super::{Discovery, repair_all, sorted_storage_ids, storage_ptr, union_group};
+use crate::component::Component;
+use crate::entity_id::EntityId;
+use crate::get::Get;
+use crate::iter::IntoIter;
 use crate::sparse_set::{GroupRegion, SparseSet};
 use crate::storage::{Storage, StorageId};
-use crate::{track, Component, EntityId, Get, IntoIter, View, ViewMut, World};
+use crate::track;
+use crate::views::{View, ViewMut};
+use crate::world::World;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;

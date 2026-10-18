@@ -221,10 +221,10 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             // if Send - accessible from any thread, shared only if not world thread
             // if !Send - accessible from world thread only
-            if let Some(thread_id) = self.send {
-                if thread_id != (self.thread_id)() {
-                    return Err(error::Borrow::WrongThread);
-                }
+            if let Some(thread_id) = self.send
+                && thread_id != (self.thread_id)()
+            {
+                return Err(error::Borrow::WrongThread);
             }
         }
 
@@ -246,10 +246,10 @@ impl<T: ?Sized> AtomicRefCell<T> {
         {
             // if Send - accessible from any thread, shared only if not world thread
             // if !Send - accessible from world thread only
-            if let Some(thread_id) = self.send {
-                if thread_id != (self.thread_id)() {
-                    panic!("{:?}", error::Borrow::WrongThread);
-                }
+            if let Some(thread_id) = self.send
+                && thread_id != (self.thread_id)()
+            {
+                panic!("{:?}", error::Borrow::WrongThread);
             }
         }
 

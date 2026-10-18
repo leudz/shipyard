@@ -6,7 +6,7 @@ use crate::scheduler::{AsLabel, IntoWorkloadSystem, WorkloadModificator};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;
-use core::any::{type_name, Any};
+use core::any::{Any, type_name};
 // macro not module
 use alloc::vec;
 
@@ -122,7 +122,10 @@ impl IntoWorkload<Workload, Workload> for Workload {
 
         for system in &self.systems {
             if !system_names.add(system.type_id.as_label()) {
-                panic!("{:?} appears twice in this workload. `into_sequential_workload` cannot currently handle this case.", system.display_name);
+                panic!(
+                    "{:?} appears twice in this workload. `into_sequential_workload` cannot currently handle this case.",
+                    system.display_name
+                );
             }
         }
 

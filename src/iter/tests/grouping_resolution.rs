@@ -5,7 +5,11 @@
 //! range starts and partial trust remain isolated in grouping_regions.
 
 use super::grouping_fixtures::{A, B};
-use crate::{track, Component, IntoIter, View, World};
+use crate::component::Component;
+use crate::iter::IntoIter;
+use crate::track;
+use crate::views::View;
+use crate::world::World;
 use alloc::vec::Vec;
 
 struct C(u32);

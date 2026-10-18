@@ -1,5 +1,5 @@
 use shipyard::{
-    borrow::NonSendSync, iter::IntoIter, track, Component, EntitiesViewMut, View, ViewMut, World,
+    Component, EntitiesViewMut, View, ViewMut, World, borrow::NonSendSync, iter::IntoIter, track,
 };
 use std::cell::RefCell;
 use std::rc::Rc;

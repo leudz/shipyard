@@ -4,7 +4,7 @@ use crate::seal::Sealed;
 use crate::sparse_set::SparseSet;
 use crate::track::Deletion;
 use crate::tracking::{
-    map_deletion_data, DeletionTracking, RemovalOrDeletionTracking, Tracking, TrackingTimestamp,
+    DeletionTracking, RemovalOrDeletionTracking, Tracking, TrackingTimestamp, map_deletion_data,
 };
 
 impl Sealed for Deletion {}

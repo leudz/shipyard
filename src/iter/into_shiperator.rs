@@ -4,10 +4,10 @@ mod tracking;
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::iter::mixed::{embed_captain_entities, Mixed};
-use crate::iter::planner::{self, Child, NodeMetadata};
 #[cfg(feature = "parallel")]
 use crate::iter::ParShiperator;
+use crate::iter::mixed::{Mixed, embed_captain_entities};
+use crate::iter::planner::{self, Child, NodeMetadata};
 use crate::iter::{RawEntityIdAccess, Shiper, Shiperator};
 use crate::optional::Optional;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};

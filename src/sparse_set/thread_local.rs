@@ -3,7 +3,7 @@ use crate::borrow::{NonSend, NonSendSync, NonSync};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::sparse_set::{sparse_array::SparseArray, GroupRegion, Groups, SparseSet};
+use crate::sparse_set::{GroupRegion, Groups, SparseSet, sparse_array::SparseArray};
 use crate::storage::{SBoxBuilder, Storage, StorageId};
 use crate::tracking::TrackingTimestamp;
 
@@ -96,16 +96,15 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
         to: EntityId,
         other_current: TrackingTimestamp,
     ) {
-        if let Some(clone) = &self.clone {
-            if let Some(component) = self.private_get(from) {
-                let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_send_mut(
-                    StorageId::of::<NonSend<SparseSet<T>>>(),
-                    || NonSend(SparseSet::<T>::new()),
-                );
+        if let Some(clone) = &self.clone
+            && let Some(component) = self.private_get(from)
+        {
+            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_send_mut(
+                StorageId::of::<NonSend<SparseSet<T>>>(),
+                || NonSend(SparseSet::<T>::new()),
+            );
 
-                let _ =
-                    other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
-            }
+            let _ = other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
         }
     }
 
@@ -215,16 +214,15 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
         to: EntityId,
         other_current: TrackingTimestamp,
     ) {
-        if let Some(clone) = &self.clone {
-            if let Some(component) = self.private_get(from) {
-                let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_sync_mut(
-                    StorageId::of::<NonSync<SparseSet<T>>>(),
-                    || NonSync(SparseSet::<T>::new()),
-                );
+        if let Some(clone) = &self.clone
+            && let Some(component) = self.private_get(from)
+        {
+            let other_sparse_set = other_all_storages.exclusive_storage_or_insert_non_sync_mut(
+                StorageId::of::<NonSync<SparseSet<T>>>(),
+                || NonSync(SparseSet::<T>::new()),
+            );
 
-                let _ =
-                    other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
-            }
+            let _ = other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
         }
     }
 
@@ -336,17 +334,16 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
         to: EntityId,
         other_current: TrackingTimestamp,
     ) {
-        if let Some(clone) = &self.clone {
-            if let Some(component) = self.private_get(from) {
-                let other_sparse_set = other_all_storages
-                    .exclusive_storage_or_insert_non_send_sync_mut(
-                        StorageId::of::<NonSendSync<SparseSet<T>>>(),
-                        || NonSendSync(SparseSet::<T>::new()),
-                    );
+        if let Some(clone) = &self.clone
+            && let Some(component) = self.private_get(from)
+        {
+            let other_sparse_set = other_all_storages
+                .exclusive_storage_or_insert_non_send_sync_mut(
+                    StorageId::of::<NonSendSync<SparseSet<T>>>(),
+                    || NonSendSync(SparseSet::<T>::new()),
+                );
 
-                let _ =
-                    other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
-            }
+            let _ = other_sparse_set.insert(to, (clone.clone_component)(component), other_current);
         }
     }
 

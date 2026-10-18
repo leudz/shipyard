@@ -70,14 +70,20 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
     ) -> Option<Self::Index> {
         match self.branch {
             OrBranch::A => {
-                let Some(index) = (self.storages).0.captain_indices_of(entities, index) else {
+                // SAFE: Our caller upholds `captain_indices_of`'s contract for the active branch.
+                let Some(index) =
+                    (unsafe { (self.storages).0.captain_indices_of(entities, index) })
+                else {
                     return None;
                 };
 
                 Some(OneOfTwo::One(index))
             }
             OrBranch::B => {
-                let Some(index) = (self.storages).1.captain_indices_of(entities, index) else {
+                // SAFE: Our caller upholds `captain_indices_of`'s contract for the active branch.
+                let Some(index) =
+                    (unsafe { (self.storages).1.captain_indices_of(entities, index) })
+                else {
                     return None;
                 };
 
@@ -115,9 +121,12 @@ impl<T: Shiperator, U: Shiperator> Shiperator for OrWindow<(T, U)> {
 
     #[inline]
     unsafe fn get_data(&self, index: Self::Index) -> Self::Out {
-        match index {
-            OneOfTwo::One(index) => OneOfTwo::One((self.storages).0.get_data(index)),
-            OneOfTwo::Two(index) => OneOfTwo::Two((self.storages).1.get_data(index)),
+        // SAFE: Each index was resolved by the storage of its branch, our caller upholds the rest.
+        unsafe {
+            match index {
+                OneOfTwo::One(index) => OneOfTwo::One((self.storages).0.get_data(index)),
+                OneOfTwo::Two(index) => OneOfTwo::Two((self.storages).1.get_data(index)),
+            }
         }
     }
 

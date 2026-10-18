@@ -4,7 +4,7 @@
 //! straight from construction. Checks compare iteration against that model, never against
 //! another iteration.
 
-use shipyard::{track, Component, EntityId, Get, ViewMut, World};
+use shipyard::{Component, EntityId, Get, ViewMut, World, track};
 
 /// Entities in the dense and aligned fixtures. Not a multiple of any vector width,
 /// so vector loops also run their scalar remainder.

@@ -24,7 +24,7 @@ pub(crate) use info::TypeInfo;
 
 use crate::scheduler::info::WorkloadInfo;
 use crate::world::World;
-use crate::{error, ShipHashMap};
+use crate::{ShipHashMap, error};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::any::TypeId;

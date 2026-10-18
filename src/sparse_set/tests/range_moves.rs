@@ -582,10 +582,10 @@ fn expected_trust<T: Component>(sparse_set: &SparseSet<T>, entity: u64, to: To) 
     if let To::Range(range_index) = from {
         trust[range_index] = trust[range_index].min(logical);
     }
-    if let To::Range(range_index) = to {
-        if trust[range_index] == before.ranges[range_index].len() {
-            trust[range_index] += 1;
-        }
+    if let To::Range(range_index) = to
+        && trust[range_index] == before.ranges[range_index].len()
+    {
+        trust[range_index] += 1;
     }
 
     trust

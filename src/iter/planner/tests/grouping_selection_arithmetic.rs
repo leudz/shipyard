@@ -385,10 +385,12 @@ fn metadata_reset() {
     let window = metadata(&groups, 6).unwrap();
 
     assert_eq!(window.unevaluated_start, 0);
-    assert!(window
-        .ranges
-        .iter()
-        .all(|range| range.ring.start == 0 && range.ring.len == 0 && range.trust == 0));
+    assert!(
+        window
+            .ranges
+            .iter()
+            .all(|range| range.ring.start == 0 && range.ring.len == 0 && range.trust == 0)
+    );
 }
 
 /// Asserts that layouts outside the storage or out of order aren't trusted.

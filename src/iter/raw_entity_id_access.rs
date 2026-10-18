@@ -1,7 +1,7 @@
 use crate::entity_id::EntityId;
+use crate::iter::EntityCursor;
 use crate::iter::plan::SegmentSchedule;
 use crate::iter::planner::NodeMetadata;
-use crate::iter::EntityCursor;
 use core::ptr::NonNull;
 
 /// Entities driving a new iteration.

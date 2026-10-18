@@ -15,7 +15,7 @@ mod fixtures;
 use consumers::*;
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, Throughput};
-use fixtures::{Fixture, A, B, C};
+use fixtures::{A, B, C, Fixture};
 use shipyard::{EntityId, IntoIter, View, ViewMut};
 use std::hint::black_box;
 use std::time::{Duration, Instant};

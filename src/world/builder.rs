@@ -40,8 +40,8 @@ impl World {
     /// Returns a builder for [`World`] when one wants custom lock, custom thread pool
     /// or custom thread id provider function.
     #[cfg(all(not(feature = "std"), feature = "thread_local"))]
-    pub fn builder(
-    ) -> WorldBuilder<crate::all_storages::MissingLock, crate::all_storages::MissingThreadId> {
+    pub fn builder()
+    -> WorldBuilder<crate::all_storages::MissingLock, crate::all_storages::MissingThreadId> {
         WorldBuilder {
             all_storages_builder: AllStoragesBuilder::<
                 crate::all_storages::MissingLock,

@@ -15,7 +15,7 @@ pub trait AllSystem<Data, Borrow> {
 
     #[allow(missing_docs)]
     fn run(self, data: Data, all_storages: &AllStorages)
-        -> Result<Self::Return, error::GetStorage>;
+    -> Result<Self::Return, error::GetStorage>;
 }
 
 // Nothing has to be used and not () to not conflict where A = ()

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use shipyard::{track, Component};
+use shipyard::{Component, track};
 
 mod add_components;
 mod add_entity;

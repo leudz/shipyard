@@ -6,10 +6,10 @@ mod requirements;
 
 use super::*;
 use crate::component::{Component, Unique};
-use crate::{
-    scheduler::Batches, scheduler::SystemModificator, scheduler::WorkloadModificator,
-    AllStoragesViewMut, IntoWorkload, UniqueView, UniqueViewMut, View, ViewMut, World,
-};
+use crate::scheduler::IntoWorkload;
+use crate::scheduler::{Batches, SystemModificator, WorkloadModificator};
+use crate::views::{AllStoragesViewMut, UniqueView, UniqueViewMut, View, ViewMut};
+use crate::world::World;
 
 struct Usize(usize);
 #[allow(unused)]

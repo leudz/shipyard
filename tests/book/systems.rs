@@ -1,7 +1,7 @@
 use super::Vel;
 use shipyard::{
-    sparse_set::SparseSet, AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter,
-    IntoWorkload, View, ViewMut, Workload, World,
+    AddComponent, AllStoragesViewMut, Component, EntitiesViewMut, IntoIter, IntoWorkload, View,
+    ViewMut, Workload, World, sparse_set::SparseSet,
 };
 
 #[derive(Component)]

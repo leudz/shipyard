@@ -6,15 +6,15 @@
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
+use crate::get::Get;
 use crate::iter::plan::{Coverage, NodeState, SegmentDescriptor};
-use crate::iter::planner::regions::grouped_entities;
 use crate::iter::planner::NodeMetadata;
+use crate::iter::planner::regions::grouped_entities;
 use crate::iter::{IntoShiperator, Mixed, RawEntityIdAccess, SegmentRow, Shiper, Shiperator};
 use crate::sparse_set::{FullRawWindow, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
-use crate::Get;
 use alloc::vec::Vec;
 use core::ops::Range;
 use core::ptr;

@@ -412,16 +412,20 @@ fn test_sorting() {
     hierarchy.0.add_component(e3, &mut vm_pos, Pos(1.0, 0.0));
     hierarchy.0.add_component(e4, &mut vm_pos, Pos(3.0, 0.0));
 
-    assert!((&hierarchy.1, &hierarchy.2)
-        .children(root)
-        .eq([e0, e1, e2, e3, e4].iter().cloned()));
+    assert!(
+        (&hierarchy.1, &hierarchy.2)
+            .children(root)
+            .eq([e0, e1, e2, e3, e4].iter().cloned())
+    );
 
     hierarchy.sort_children_by(root, |a, b| {
         vm_pos[*a].0.partial_cmp(&vm_pos[*b].0).unwrap()
     });
 
-    assert!((&hierarchy.1, &hierarchy.2)
-        .children(root)
-        .eq([e3, e4, e1, e2, e0].iter().cloned()));
+    assert!(
+        (&hierarchy.1, &hierarchy.2)
+            .children(root)
+            .eq([e3, e4, e1, e2, e0].iter().cloned())
+    );
 }
 // ANCHOR_END: test_sorting

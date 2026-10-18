@@ -126,10 +126,12 @@ fn try_system_run_if() {
 
     let world = World::new_for_test();
 
-    assert!(workload
-        .run_with_world(&world)
-        .err()
-        .unwrap()
-        .custom_error()
-        .is_some());
+    assert!(
+        workload
+            .run_with_world(&world)
+            .err()
+            .unwrap()
+            .custom_error()
+            .is_some()
+    );
 }

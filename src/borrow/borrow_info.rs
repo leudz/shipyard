@@ -1,10 +1,10 @@
+use super::Mutability;
 #[cfg(feature = "thread_local")]
 use super::non_send::NonSend;
 #[cfg(feature = "thread_local")]
 use super::non_send_sync::NonSendSync;
 #[cfg(feature = "thread_local")]
 use super::non_sync::NonSync;
-use super::Mutability;
 use crate::all_storages::{AllStorages, CustomStorageAccess};
 use crate::component::{Component, Unique};
 use crate::entities::Entities;

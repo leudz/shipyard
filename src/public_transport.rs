@@ -178,7 +178,8 @@ where
     }
 
     unsafe fn unlock_shared(&self) {
-        lock_api::RawRwLock::unlock_shared(self)
+        // SAFE: Our caller guarantees a shared lock is held.
+        unsafe { lock_api::RawRwLock::unlock_shared(self) }
     }
 
     fn lock_exclusive(&self) {
@@ -186,6 +187,7 @@ where
     }
 
     unsafe fn unlock_exclusive(&self) {
-        lock_api::RawRwLock::unlock_exclusive(self)
+        // SAFE: Our caller guarantees an exclusive lock is held.
+        unsafe { lock_api::RawRwLock::unlock_exclusive(self) }
     }
 }

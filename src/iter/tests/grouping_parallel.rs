@@ -3,15 +3,15 @@
 //! Internal producer calls let us inspect exact split/cancellation behavior; query
 //! construction always goes through iter/par_iter, including automatic selection.
 
-use super::grouping_fixtures::{coverage_world, late_iter, ring_world, A, B};
+use super::grouping_fixtures::{A, B, coverage_world, late_iter, ring_world};
 use crate::iter::parallel::ExactProducer;
 use crate::iter::{IntoIter, ParShiperator};
 use crate::{EntityId, Get, View, ViewMut, World};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use rayon::iter::plumbing::{Folder, Producer, UnindexedProducer};
-use rayon::iter::ParallelIterator;
 use rayon::ThreadPoolBuilder;
+use rayon::iter::ParallelIterator;
+use rayon::iter::plumbing::{Folder, Producer, UnindexedProducer};
 
 /// Folder collecting items until it holds `limit` of them.
 struct Collect<T> {
@@ -266,7 +266,7 @@ fn bridge_short_circuit() {
             })
             .find_any(|(a, _)| a.0 == 1)
     });
-    assert_eq!(found.unwrap().0 .0, 1);
+    assert_eq!(found.unwrap().0.0, 1);
     assert_eq!(visited.load(Ordering::Relaxed), 2);
 }
 
@@ -284,7 +284,7 @@ fn indexed_short_circuit() {
             })
             .find_any(|(a, _)| a.0 == 1)
     });
-    assert_eq!(found.unwrap().0 .0, 1);
+    assert_eq!(found.unwrap().0.0, 1);
     assert_eq!(visited.load(Ordering::Relaxed), 2);
 }
 /// Increments its counter when dropped, from whichever thread drops it.
@@ -431,7 +431,7 @@ fn ring_short_circuit() {
 /// unevaluated candidates update every component exactly once.
 #[test]
 fn trust_mutable() {
-    use super::grouping_fixtures::{trust_world, C};
+    use super::grouping_fixtures::{C, trust_world};
     use super::grouping_regions::grouped;
     use crate::iter::IntoShiperator;
 

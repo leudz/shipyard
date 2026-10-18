@@ -5,7 +5,7 @@ use core::marker::PhantomData;
 use shipyard::advanced::tracking::{
     InsertionOrModificationTracking, InsertionTracking, ModificationTracking, Tracking,
 };
-use shipyard::{error::GetStorage, track, Component, IntoIter, View, ViewMut, World};
+use shipyard::{Component, IntoIter, View, ViewMut, World, error::GetStorage, track};
 
 struct Probe<Track>(u32, PhantomData<Track>);
 impl<Track: Tracking> Component for Probe<Track> {
@@ -312,15 +312,21 @@ fn tracking_inheritance() {
     world.track_modification::<UnitInsert>();
 
     assert!(world.borrow::<View<UnitInsert, track::Insertion>>().is_ok());
-    assert!(world
-        .borrow::<ViewMut<UnitInsert, track::Insertion>>()
-        .is_ok());
-    assert!(world
-        .borrow::<View<UnitInsert, track::InsertionAndModification>>()
-        .is_ok());
-    assert!(world
-        .borrow::<ViewMut<UnitInsert, track::InsertionAndModification>>()
-        .is_ok());
+    assert!(
+        world
+            .borrow::<ViewMut<UnitInsert, track::Insertion>>()
+            .is_ok()
+    );
+    assert!(
+        world
+            .borrow::<View<UnitInsert, track::InsertionAndModification>>()
+            .is_ok()
+    );
+    assert!(
+        world
+            .borrow::<ViewMut<UnitInsert, track::InsertionAndModification>>()
+            .is_ok()
+    );
 }
 
 #[test]

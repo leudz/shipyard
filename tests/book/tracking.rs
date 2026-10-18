@@ -1,4 +1,4 @@
-use shipyard::{track, AddComponent, Component, IntoIter, View, ViewMut};
+use shipyard::{AddComponent, Component, IntoIter, View, ViewMut, track};
 
 // ANCHOR: component
 struct Life(f32);

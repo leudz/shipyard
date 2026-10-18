@@ -1,9 +1,9 @@
 //! Types for displaying workload information.
 
+use crate::ShipHashMap;
 use crate::borrow::Mutability;
 use crate::scheduler::{AsLabel, Label};
 use crate::storage::StorageId;
-use crate::ShipHashMap;
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;

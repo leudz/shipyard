@@ -5,9 +5,9 @@ use super::EntityId;
 use core::fmt;
 use core::num::NonZeroU64;
 use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
     de::{self, MapAccess, SeqAccess, Visitor},
     ser::SerializeStruct,
-    Deserialize, Deserializer, Serialize, Serializer,
 };
 
 const FIELDS: &[&str] = &["index", "gen"];
@@ -20,7 +20,7 @@ impl Serialize for EntityId {
         if serializer.is_human_readable() {
             let mut ser_struct = serializer.serialize_struct("EntityId", 2)?;
             ser_struct.serialize_field(FIELDS[0], &(self.index()))?;
-            ser_struct.serialize_field(FIELDS[1], &(self.gen()))?;
+            ser_struct.serialize_field(FIELDS[1], &(self.generation()))?;
             ser_struct.end()
         } else {
             let clone = self.clone();

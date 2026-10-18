@@ -48,7 +48,8 @@ impl SBoxBuilder {
         is_sync: bool,
     ) -> SBox {
         let storage = unsafe { &mut *self.sbox.0 };
-        storage.override_send_sync(thread_id_generator, is_send, is_sync);
+        // SAFE: Our caller guarantees `is_send` and `is_sync` are accurate to this type.
+        unsafe { storage.override_send_sync(thread_id_generator, is_send, is_sync) };
 
         self.sbox
     }
