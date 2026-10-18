@@ -5,16 +5,18 @@
 //! every erased storage is reached with the right type and dropped exactly once.
 
 use crate::all_storages::CustomStorageAccess;
+use crate::sparse_set::SparseSet;
 use crate::storage::{Storage, StorageId};
-use crate::{track, Component, Get, Unique, UniqueView, View, World};
+use crate::{track, Component, EntityId, Get, Unique, UniqueView, View, World};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-/// Heap-owning value that counts how many times it's dropped.
+/// Heap-owning value that counts how many times it's dropped, clones included.
 ///
-/// Used both as a custom storage and as a unique.
+/// Used as a custom storage, a unique and a component.
+#[derive(Clone)]
 struct Counted {
     values: Vec<u32>,
     drops: Arc<AtomicUsize>,
@@ -39,10 +41,39 @@ impl Storage for Counted {}
 
 impl Unique for Counted {}
 
+impl Component for Counted {
+    type Tracking = track::Untracked;
+}
+
 struct Heap(Vec<u32>);
 
 impl Component for Heap {
     type Tracking = track::Untracked;
+}
+
+/// Component aligned more strictly than any of its fields need.
+#[repr(align(64))]
+struct Aligned(u64);
+
+impl Component for Aligned {
+    type Tracking = track::Untracked;
+}
+
+struct Marker;
+
+impl Component for Marker {
+    type Tracking = track::Untracked;
+}
+
+fn drops(counter: &Arc<AtomicUsize>) -> usize {
+    counter.load(Ordering::Relaxed)
+}
+
+fn counted(value: u32, drops: &Arc<AtomicUsize>) -> Counted {
+    Counted {
+        values: vec![value],
+        drops: drops.clone(),
+    }
 }
 
 /// Asserts that a custom storage borrowed through the shared registry API stays valid while
@@ -195,4 +226,114 @@ fn iter_borrows() {
     let heaps = all_storages.borrow::<View<'_, Heap>>().unwrap();
     assert_eq!((&heaps).get(entity0).unwrap().0, [0, 10]);
     assert_eq!((&heaps).get(entity1).unwrap().0, [1, 10]);
+}
+
+/// Asserts that moving an entity to another world hands its component over: the source no
+/// longer has it and still reaches the component swapped into its slot, the destination reads it,
+/// and each component is dropped exactly once, by the world holding it.
+#[test]
+fn move_entity() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut source = World::new();
+    let mut destination = World::new();
+    let moved = source.add_entity(counted(0, &counter));
+    let stays = source.add_entity(counted(1, &counter));
+
+    source.move_entity(&mut destination, moved);
+
+    assert!(source.get::<&Counted>(moved).is_err());
+    assert_eq!(source.get::<&Counted>(stays).unwrap().values, [1]);
+    assert_eq!(destination.get::<&Counted>(moved).unwrap().values, [0]);
+
+    drop(source);
+    assert_eq!(drops(&counter), 1);
+    drop(destination);
+    assert_eq!(drops(&counter), 2);
+}
+
+/// Asserts that cloning a registered storage into a new world, and a single entity into another
+/// world while a view of the source storage is alive, builds independent copies: each original
+/// and each copy is dropped exactly once, by its own world.
+#[test]
+fn clone() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new();
+    world.register_clone::<SparseSet<Counted>>();
+    let entity = world.add_entity(counted(0, &counter));
+
+    let copy = world.clone();
+    assert_eq!(copy.get::<&Counted>(entity).unwrap().values, [0]);
+
+    let mut other = World::new();
+    let view = world.borrow::<View<'_, Counted>>().unwrap();
+    world.clone_entity_to(&mut other, entity);
+    assert_eq!(view.get(entity).unwrap().values, [0]);
+    drop(view);
+    assert_eq!(other.get::<&Counted>(entity).unwrap().values, [0]);
+
+    drop(world);
+    assert_eq!(drops(&counter), 1);
+    drop(copy);
+    assert_eq!(drops(&counter), 2);
+    drop(other);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Returns `true` if one of the ranges in `T`'s storage wraps around its physical end.
+fn has_wrapped_range<T: Component + Send + Sync>(world: &World) -> bool {
+    let view = world.borrow::<View<'_, T>>().unwrap();
+
+    view.groups
+        .ranges
+        .iter()
+        .any(|range| range.ring().wrap_offset() != 0)
+}
+
+/// Returns the values of `entity`'s `Counted` component.
+fn values_of(world: &World, entity: EntityId) -> Vec<u32> {
+    world.get::<&Counted>(entity).unwrap().values.clone()
+}
+
+/// Asserts that regrouping overlapping groups physically moves rows of heap-owning,
+/// over-aligned and zero-sized components, including through a range that wraps around its
+/// physical end. Every component stays reachable with its value, writes through a grouped
+/// iteration land on the right components, and each component is dropped exactly once.
+#[test]
+fn regroup_moves() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new();
+    world.group::<(Counted, Aligned)>();
+    world.group::<(Counted, Marker)>();
+
+    // The (Counted, Marker) range is filled first. Appending to the (Counted, Aligned) range,
+    // which comes before it in `Counted`, then rotates it.
+    let cm0 = world.add_entity((counted(0, &counter), Marker));
+    let cm1 = world.add_entity((counted(1, &counter), Marker));
+    world.regroup();
+    let ca2 = world.add_entity((counted(2, &counter), Aligned(2)));
+    world.regroup();
+    assert!(has_wrapped_range::<Counted>(&world));
+
+    // An entity in both groups, then a deletion resetting `Counted` and `Marker` before the
+    // next regroup places everything again.
+    let both3 = world.add_entity((counted(3, &counter), Aligned(3), Marker));
+    world.regroup();
+    world.delete_entity(cm0);
+    world.regroup();
+    assert_eq!(drops(&counter), 1);
+
+    assert_eq!(values_of(&world, cm1), [1]);
+    assert_eq!(values_of(&world, ca2), [2]);
+    assert_eq!(values_of(&world, both3), [3]);
+    assert_eq!(world.get::<&Aligned>(both3).unwrap().0, 3);
+
+    for (counted, _) in &mut world.iter::<(&mut Counted, &Marker)>() {
+        counted.values.push(10);
+    }
+    assert_eq!(values_of(&world, cm1), [1, 10]);
+    assert_eq!(values_of(&world, ca2), [2]);
+    assert_eq!(values_of(&world, both3), [3, 10]);
+
+    drop(world);
+    assert_eq!(drops(&counter), 4);
 }

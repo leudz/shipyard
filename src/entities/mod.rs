@@ -1,4 +1,6 @@
 mod iterator;
+#[cfg(test)]
+mod tests;
 
 pub use iterator::EntitiesIter;
 
