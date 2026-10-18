@@ -227,3 +227,83 @@ fn cross_thread_release() {
         }
     });
 }
+
+/// Returns the thread id generator worlds use by default.
+#[cfg(feature = "thread_local")]
+fn thread_id() -> alloc::sync::Arc<dyn Fn() -> u64 + Send + Sync> {
+    alloc::sync::Arc::new(crate::std_thread_id_generator)
+}
+
+/// Asserts the `new_non_send` contract: another thread can share the value but not borrow it
+/// exclusively, and an exclusive borrow held by the owner thread still keeps it out.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send() {
+    let cell = AtomicRefCell::new_non_send(vec![1u32], thread_id());
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            assert_eq!(cell.borrow().unwrap()[0], 1);
+            assert_eq!(cell.borrow_mut().err(), Some(error::Borrow::WrongThread));
+        });
+    });
+
+    let mut values = cell.borrow_mut().unwrap();
+    values.push(2);
+    std::thread::scope(|scope| {
+        scope.spawn(|| assert_eq!(cell.borrow().err(), Some(error::Borrow::Shared)));
+    });
+    drop(values);
+
+    assert_eq!(*cell.borrow().unwrap(), [1, 2]);
+}
+
+/// Asserts the `new_non_sync` contract: shared borrows are exclusive, so a second one is
+/// rejected even on the same thread. Once the owner's borrow is released, another thread can
+/// borrow the `!Sync` value and the owner sees its write afterwards.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_sync() {
+    use core::cell::Cell;
+
+    let cell = AtomicRefCell::new_non_sync(Cell::new(1u32));
+
+    let value = cell.borrow().unwrap();
+    assert_eq!(cell.borrow().err(), Some(error::Borrow::Shared));
+    std::thread::scope(|scope| {
+        scope.spawn(|| assert_eq!(cell.borrow_mut().err(), Some(error::Borrow::Unique)));
+    });
+    value.set(2);
+    drop(value);
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            let value = cell.borrow().unwrap();
+            value.set(value.get() + 1);
+        });
+    });
+
+    assert_eq!(cell.borrow().unwrap().get(), 3);
+}
+
+/// Asserts the `new_non_send_sync` contract: other threads can't borrow the value at all, while
+/// the owner thread can still share it.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_sync() {
+    use alloc::rc::Rc;
+
+    let cell = AtomicRefCell::new_non_send_sync(Rc::new(1u32), thread_id());
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            assert_eq!(cell.borrow().err(), Some(error::Borrow::WrongThread));
+            assert_eq!(cell.borrow_mut().err(), Some(error::Borrow::WrongThread));
+        });
+    });
+
+    let first = cell.borrow().unwrap();
+    let second = cell.borrow().unwrap();
+    assert_eq!(**first + **second, 2);
+    assert_eq!(cell.borrow_mut().err(), Some(error::Borrow::Unique));
+}

@@ -337,3 +337,114 @@ fn regroup_moves() {
     drop(world);
     assert_eq!(drops(&counter), 4);
 }
+
+/// Heap-owning value that is neither `Send` nor `Sync` and counts how many times it's dropped.
+///
+/// Used as a custom storage and as a unique.
+#[cfg(feature = "thread_local")]
+struct Local {
+    values: Vec<u32>,
+    drops: Arc<AtomicUsize>,
+    _non_send_sync: core::marker::PhantomData<alloc::rc::Rc<()>>,
+}
+
+#[cfg(feature = "thread_local")]
+impl Local {
+    fn new(drops: &Arc<AtomicUsize>) -> Local {
+        Local {
+            values: vec![1, 2],
+            drops: drops.clone(),
+            _non_send_sync: core::marker::PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl Drop for Local {
+    fn drop(&mut self) {
+        self.drops.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+#[cfg(feature = "thread_local")]
+impl Storage for Local {}
+
+#[cfg(feature = "thread_local")]
+impl Unique for Local {}
+
+/// Asserts that a `!Send + !Sync` unique and custom storage are only reachable from the world's
+/// thread: another thread is rejected with `WrongThread`, removing the unique included, without
+/// changing anything. The world's thread then writes both and removes the unique, which casts
+/// its erased box back to the unique storage, and each value is dropped exactly once.
+#[cfg(feature = "thread_local")]
+#[test]
+fn thread_local_storages() {
+    use crate::borrow::NonSendSync;
+    use crate::error;
+    use crate::UniqueViewMut;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new();
+    world.add_unique_non_send_sync(Local::new(&counter));
+    let _ = world
+        .all_storages()
+        .unwrap()
+        .custom_storage_or_insert_non_send_sync(|| Local::new(&counter))
+        .unwrap();
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            let all_storages = world.all_storages().unwrap();
+
+            let custom = all_storages.custom_storage::<Local>();
+            assert!(matches!(
+                custom,
+                Err(error::GetStorage::StorageBorrow {
+                    borrow: error::Borrow::WrongThread,
+                    ..
+                })
+            ));
+            assert!(all_storages
+                .borrow::<NonSendSync<UniqueViewMut<'_, Local>>>()
+                .is_err());
+            assert!(matches!(
+                all_storages.remove_unique::<Local>(),
+                Err(error::UniqueRemove::StorageBorrow((
+                    _,
+                    error::Borrow::WrongThread
+                )))
+            ));
+        });
+    });
+    assert_eq!(drops(&counter), 0);
+
+    {
+        let all_storages = world.all_storages().unwrap();
+        all_storages
+            .custom_storage_mut::<Local>()
+            .unwrap()
+            .values
+            .push(3);
+        let mut unique = all_storages
+            .borrow::<NonSendSync<UniqueViewMut<'_, Local>>>()
+            .unwrap();
+        unique.values.push(4);
+    }
+
+    let unique = world.remove_unique::<Local>().unwrap();
+    assert_eq!(unique.values, [1, 2, 4]);
+    assert_eq!(
+        world
+            .all_storages()
+            .unwrap()
+            .custom_storage::<Local>()
+            .unwrap()
+            .values,
+        [1, 2, 3]
+    );
+
+    drop(world);
+    assert_eq!(drops(&counter), 1);
+    drop(unique);
+    assert_eq!(drops(&counter), 2);
+}

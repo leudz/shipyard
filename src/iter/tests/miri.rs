@@ -599,3 +599,51 @@ fn zero_sized_and_aligned() {
         assert_eq!(aligned.get(entity).unwrap().0, i + 100);
     }
 }
+
+/// Component that is neither `Send` nor `Sync`.
+#[cfg(feature = "thread_local")]
+struct Local(u32, core::marker::PhantomData<alloc::rc::Rc<()>>);
+
+#[cfg(feature = "thread_local")]
+impl Component for Local {
+    type Tracking = track::Untracked;
+}
+
+/// Asserts the owned iteration of a `!Send + !Sync` component: `World::iter` over
+/// `NonSendSync<&mut Local>` keeps its storage borrowed, its mutable items can all be held and
+/// written, and the storage is released once the iterator is dropped.
+#[cfg(feature = "thread_local")]
+#[test]
+fn non_send_sync_owned() {
+    use crate::borrow::NonSendSync;
+    use crate::EntitiesViewMut;
+
+    let world = World::new();
+    let e: Vec<EntityId> = world.run(
+        |mut entities: EntitiesViewMut<'_>,
+         mut locals: NonSendSync<ViewMut<'_, Local>>,
+         mut a: ViewMut<'_, A>| {
+            (0..3)
+                .map(|i| {
+                    let components = (Local(i, core::marker::PhantomData), A(i));
+                    entities.add_entity((&mut *locals, &mut a), components)
+                })
+                .collect()
+        },
+    );
+
+    {
+        let mut iter = world.iter::<(NonSendSync<&mut Local>, &A)>();
+        let items: Vec<(&mut Local, &A)> = (&mut iter).into_iter().collect();
+        assert_eq!(items.len(), 3);
+        for (local, a) in items {
+            local.0 += 100 + a.0;
+        }
+        assert!(world.borrow::<NonSendSync<View<'_, Local>>>().is_err());
+    }
+
+    let locals = world.borrow::<NonSendSync<View<'_, Local>>>().unwrap();
+    for (i, &entity) in (0..).zip(&e) {
+        assert_eq!((&*locals).get(entity).unwrap().0, 2 * i + 100);
+    }
+}

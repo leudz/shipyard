@@ -219,3 +219,55 @@ fn system_unwind() {
 
     assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
 }
+
+/// Heap-owning component that is `Sync` but not `Send`, like a type holding a `MutexGuard`.
+#[cfg(feature = "thread_local")]
+struct SyncOnly(
+    Vec<u32>,
+    core::marker::PhantomData<std::sync::MutexGuard<'static, ()>>,
+);
+
+#[cfg(feature = "thread_local")]
+impl Component for SyncOnly {
+    type Tracking = track::Untracked;
+}
+
+/// Asserts the default thread id path through public world operations. From another thread,
+/// `AllStorages` can be shared but not borrowed exclusively, `Send + Sync` components and shared
+/// views of `!Send` ones stay readable, and exclusive views of `!Send` ones are rejected. The
+/// world's thread then writes everything.
+#[cfg(feature = "thread_local")]
+#[test]
+fn other_thread() {
+    use crate::borrow::NonSend;
+    use crate::EntitiesView;
+
+    let mut world = World::new();
+    let entity = world.add_entity(Heap(vec![1]));
+    world.run(
+        |entities: EntitiesView<'_>, mut sync_only: NonSend<ViewMut<'_, SyncOnly>>| {
+            let component = SyncOnly(vec![2], core::marker::PhantomData);
+            entities.add_component(entity, &mut *sync_only, component);
+        },
+    );
+
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            assert!(world.borrow::<AllStoragesViewMut<'_>>().is_err());
+
+            let heaps = world.borrow::<View<'_, Heap>>().unwrap();
+            assert_eq!((&heaps).get(entity).unwrap().0, [1]);
+
+            let sync_only = world.borrow::<NonSend<View<'_, SyncOnly>>>().unwrap();
+            assert_eq!((&*sync_only).get(entity).unwrap().0, [2]);
+            assert!(world.borrow::<NonSend<ViewMut<'_, SyncOnly>>>().is_err());
+        });
+    });
+
+    let mut sync_only = world.borrow::<NonSend<ViewMut<'_, SyncOnly>>>().unwrap();
+    (&mut *sync_only).get(entity).unwrap().0.push(3);
+    assert_eq!((&*sync_only).get(entity).unwrap().0, [2, 3]);
+    drop(sync_only);
+
+    assert!(world.borrow::<AllStoragesViewMut<'_>>().is_ok());
+}
