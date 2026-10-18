@@ -1,4 +1,6 @@
 mod borrow_state;
+#[cfg(test)]
+mod tests;
 
 pub use borrow_state::{ExclusiveBorrow, SharedBorrow};
 

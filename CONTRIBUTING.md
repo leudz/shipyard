@@ -22,3 +22,7 @@ Currently, Shipyard uses [`just`](https://github.com/casey/just) alongside our [
 # run all tests and static checks (miri may not work for macOS)
 cargo just test
 ```
+
+### Focused Miri suite
+
+Small, purpose-built Miri scenarios live next to the code they cover, in `tests/miri.rs` files (for example `src/public_transport/tests/miri.rs`), so their names all contain `tests::miri::`.

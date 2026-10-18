@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use alloc::boxed::Box;
 use core::cell::UnsafeCell;
 use core::ops::{Deref, DerefMut};
