@@ -73,10 +73,19 @@ impl<T: Send + Sync + Component> BulkInsert for T {
         // add components to the storage
         sparse_set.data.extend(iter);
 
-        // generate new EntityId for the entities created
-        let entities_len = entities.data.len();
         let old_len = sparse_set.dense.len();
         let new_entities_count = sparse_set.data.len() - old_len;
+
+        // an empty source added nothing, there's no entity to create
+        if new_entities_count == 0 {
+            return BulkEntityIter {
+                iter: [].iter().copied(),
+                slice: &[],
+            };
+        }
+
+        // generate new EntityId for the entities created
+        let entities_len = entities.data.len();
         let new_entities = entities.bulk_generate(new_entities_count);
 
         // add new EntityId to the storage for the components we added above
@@ -152,8 +161,17 @@ macro_rules! impl_bulk_insert {
                     )*
                 }
 
-                let entities_len = entities.data.len();
                 let new_entities_count = $sparse_set1.data.len() - $sparse_set1.dense.len();
+
+                // an empty source added nothing, there's no entity to create
+                if new_entities_count == 0 {
+                    return BulkEntityIter {
+                        iter: [].iter().copied(),
+                        slice: &[],
+                    };
+                }
+
+                let entities_len = entities.data.len();
                 let new_entities = entities.bulk_generate(new_entities_count);
 
                 $sparse_set1.dense.extend_from_slice(new_entities);

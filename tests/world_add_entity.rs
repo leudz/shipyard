@@ -194,3 +194,50 @@ fn bulk_inserted() {
     assert_eq!(u32s.inserted().iter().count(), 5);
     assert_eq!(usizes.inserted().iter().count(), 5);
 }
+
+/// Asserts that bulk adding no entity with a single component, into an empty storage and into a
+/// non-empty one, adds nothing and leaves the existing component reachable.
+#[test]
+fn bulk_single_empty() {
+    let mut world = World::new();
+
+    assert_eq!(world.bulk_add_entity(std::iter::empty::<U32>()).count(), 0);
+    let entity = world.add_entity(U32(0));
+    assert_eq!(world.bulk_add_entity(std::iter::empty::<U32>()).count(), 0);
+
+    let u32s = world.borrow::<View<U32>>().unwrap();
+    assert_eq!(u32s.len(), 1);
+    assert_eq!(u32s.get(entity), Ok(&U32(0)));
+}
+
+/// Asserts that bulk adding no entity with multiple components, into empty storages and into
+/// non-empty ones, adds nothing and leaves the existing components reachable.
+#[test]
+fn bulk_empty() {
+    #[derive(PartialEq, Eq, Debug)]
+    struct USIZE(usize);
+    impl Component for USIZE {
+        type Tracking = track::Untracked;
+    }
+
+    let mut world = World::new();
+
+    assert_eq!(
+        world
+            .bulk_add_entity(std::iter::empty::<(U32, USIZE)>())
+            .count(),
+        0
+    );
+    let entity = world.add_entity((U32(0), USIZE(1)));
+    assert_eq!(
+        world
+            .bulk_add_entity(std::iter::empty::<(U32, USIZE)>())
+            .count(),
+        0
+    );
+
+    let (u32s, usizes) = world.borrow::<(View<U32>, View<USIZE>)>().unwrap();
+    assert_eq!((u32s.len(), usizes.len()), (1, 1));
+    assert_eq!(u32s.get(entity), Ok(&U32(0)));
+    assert_eq!(usizes.get(entity), Ok(&USIZE(1)));
+}
