@@ -31,7 +31,7 @@ impl<'tmp, 'view, 'de: 'view> DeserializeSeed<'de> for EntitiesViewMutDeserializ
             place: EntitiesViewMutDeserializer<'tmp, 'view>,
         }
 
-        impl<'tmp2, 'tmp, 'view, 'de: 'view> Visitor<'de> for SeqVisitor<'tmp, 'view> {
+        impl<'tmp, 'view, 'de: 'view> Visitor<'de> for SeqVisitor<'tmp, 'view> {
             type Value = ();
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

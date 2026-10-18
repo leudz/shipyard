@@ -116,6 +116,10 @@ pub trait CustomStorageAccess {
         S: 'static + Storage + Send + Sync,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
+    #[allow(
+        clippy::mut_from_ref,
+        reason = "ARefMut retains a runtime-checked exclusive borrow"
+    )]
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_mut<S, F>(
         &self,
@@ -125,6 +129,10 @@ pub trait CustomStorageAccess {
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
+    #[allow(
+        clippy::mut_from_ref,
+        reason = "ARefMut retains a runtime-checked exclusive borrow"
+    )]
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_mut_by_id<S, F>(
         &self,
@@ -135,6 +143,10 @@ pub trait CustomStorageAccess {
         S: 'static + Storage + Sync,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
+    #[allow(
+        clippy::mut_from_ref,
+        reason = "ARefMut retains a runtime-checked exclusive borrow"
+    )]
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_sync_mut<S, F>(
         &self,
@@ -144,6 +156,10 @@ pub trait CustomStorageAccess {
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
+    #[allow(
+        clippy::mut_from_ref,
+        reason = "ARefMut retains a runtime-checked exclusive borrow"
+    )]
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_sync_mut_by_id<S, F>(
         &self,
@@ -154,6 +170,10 @@ pub trait CustomStorageAccess {
         S: 'static + Storage + Send,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage and create it if it does not exist.
+    #[allow(
+        clippy::mut_from_ref,
+        reason = "ARefMut retains a runtime-checked exclusive borrow"
+    )]
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_sync_mut<S, F>(
         &self,
@@ -163,6 +183,10 @@ pub trait CustomStorageAccess {
         S: 'static + Storage,
         F: FnOnce() -> S;
     /// Returns a [`ARefMut`] to the requested `S` storage using a [`StorageId`] and create it if it does not exist.
+    #[allow(
+        clippy::mut_from_ref,
+        reason = "ARefMut retains a runtime-checked exclusive borrow"
+    )]
     #[cfg(feature = "thread_local")]
     fn custom_storage_or_insert_non_send_sync_mut_by_id<S, F>(
         &self,

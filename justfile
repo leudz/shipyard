@@ -26,7 +26,7 @@ clean:
     cargo clean -p shipyard
 
 clippy $RUSTFLAGS="-D warnings":
-    cargo clippy
+    cargo clippy --all-features
 
 fmt:
     cargo fmt

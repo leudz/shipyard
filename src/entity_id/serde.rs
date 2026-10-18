@@ -23,7 +23,7 @@ impl Serialize for EntityId {
             ser_struct.serialize_field(FIELDS[1], &(self.generation()))?;
             ser_struct.end()
         } else {
-            let clone = self.clone();
+            let clone = self;
             ((clone.0).get() - 1).serialize(serializer)
         }
     }

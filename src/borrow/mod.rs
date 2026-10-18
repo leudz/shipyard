@@ -327,8 +327,8 @@ where
             last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
-            borrow: borrow,
-            all_borrow: all_borrow,
+            borrow,
+            all_borrow,
             phantom: PhantomData,
         }))
     }
@@ -361,8 +361,8 @@ where
             last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
-            borrow: borrow,
-            all_borrow: all_borrow,
+            borrow,
+            all_borrow,
             phantom: PhantomData,
         }))
     }
@@ -395,8 +395,8 @@ where
             last_removal_or_deletion: last_run.unwrap_or(TrackingTimestamp::origin()),
             current,
             sparse_set,
-            borrow: borrow,
-            all_borrow: all_borrow,
+            borrow,
+            all_borrow,
             phantom: PhantomData,
         }))
     }
