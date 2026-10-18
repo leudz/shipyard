@@ -41,6 +41,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use clone::SparseSetCloneFunctions;
 use core::any::type_name;
+use core::ops::Range;
 use core::{
     cmp::{Ord, Ordering},
     fmt,
@@ -437,8 +438,7 @@ impl<T: Component> SparseSet<T> {
 
     /// Makes the whole storage unevaluated if it has any group range.
     ///
-    /// Called by sorting, clear and drain, before they change the layout of the whole storage,
-    /// see [`Groups::reset`].
+    /// Called by clear and drain, before they empty the whole storage, see [`Groups::reset`].
     #[inline]
     fn reset_groups(&mut self) {
         // Most storages have no group, we keep their cost to this single branch.
@@ -944,42 +944,58 @@ impl<T: Component> SparseSet<T> {
         self.dense.reserve(additional);
         self.data.reserve(additional);
     }
-    /// Sorts the `SparseSet` with a comparator function, but may not preserve the order of equal elements.
+    /// Sorts the ungrouped components with a comparator function, but may not preserve the order of equal elements.
+    ///
+    /// In a storage that isn't part of any group, every component is sorted.\
+    /// In a grouped storage, only the components regroup found to belong to no group are sorted.
+    /// Group ranges and components added since the last regroup keep their position.
+    ///
+    /// ### Panics
+    ///
+    /// If `compare` panics, the components being sorted can be left in any order.
+    /// The storage stays valid: every entity keeps its component and timestamps,
+    /// and the components that weren't being sorted don't move.
     pub fn sort_unstable_by<F: FnMut(&T, &T) -> Ordering>(&mut self, mut compare: F) {
-        self.reset_groups();
+        let sortable = self.groups.ungrouped_range(self.dense.len());
+        if sortable.len() < 2 {
+            return;
+        }
 
-        let mut transform: Vec<usize> = (0..self.dense.len()).collect();
+        // We only sort the entity ids. Components, timestamps and the sparse array stay where they
+        // are until `repair` moves them to follow their entity, when it's dropped.
+        // That happens on return or while unwinding from `compare`.
+        let repair = SortRepair {
+            sortable: sortable.clone(),
+            dense: &mut self.dense,
+            sparse: &mut self.sparse,
+            data: &mut self.data,
+            insertion_data: self
+                .is_tracking_insertion
+                .then_some(&mut self.insertion_data[..]),
+            modification_data: self
+                .is_tracking_modification
+                .then_some(&mut self.modification_data[..]),
+        };
 
-        transform.sort_unstable_by(|&i, &j| {
-            // SAFE dense and data have the same length
-            compare(unsafe { self.data.get_unchecked(i) }, unsafe {
-                self.data.get_unchecked(j)
-            })
+        // The sparse array still points each entity at its component's original row while the ids move.
+        // Even if `compare` panics, the slice ends with all its ids, in some order.
+        repair.dense[sortable].sort_unstable_by(|&a, &b| {
+            // SAFE: `a` and `b` are ids of the sorted slice, which only ever holds the ids it started with.
+            // These come from `dense` so they own a component and their sparse page is allocated.
+            // Their sparse entries hold the row of their component, smaller than `data`'s length.
+            // Neither `sparse` nor `data` change until `repair` is dropped, so these rows stay valid.
+            let (a_component, b_component) = unsafe {
+                let a_index = repair.sparse.get_unchecked(a).uindex();
+                let b_index = repair.sparse.get_unchecked(b).uindex();
+
+                (
+                    repair.data.get_unchecked(a_index),
+                    repair.data.get_unchecked(b_index),
+                )
+            };
+
+            compare(a_component, b_component)
         });
-
-        let mut pos;
-        for i in 0..transform.len() {
-            // SAFE we're in bound
-            pos = unsafe { *transform.get_unchecked(i) };
-            while pos < i {
-                // SAFE we're in bound
-                pos = unsafe { *transform.get_unchecked(pos) };
-            }
-            self.dense.swap(i, pos);
-            self.data.swap(i, pos);
-            if self.is_tracking_insertion {
-                self.insertion_data.swap(i, pos);
-            }
-            if self.is_tracking_modification {
-                self.modification_data.swap(i, pos);
-            }
-        }
-
-        for (i, id) in self.dense.iter().enumerate() {
-            unsafe {
-                self.sparse.get_mut_unchecked(*id).set_index(i as u64);
-            }
-        }
     }
 
     /// Applies the given function `f` to the entities `a` and `b`.\
@@ -1173,10 +1189,103 @@ impl<T: Component> SparseSet<T> {
 }
 
 impl<T: Ord + Component> SparseSet<T> {
-    /// Sorts the `SparseSet`, but may not preserve the order of equal elements.
+    /// Sorts the ungrouped components, but may not preserve the order of equal elements.
+    ///
+    /// See [`sort_unstable_by`](Self::sort_unstable_by) for which components are sorted
+    /// and what happens on panic.
     pub fn sort_unstable(&mut self) {
         self.sort_unstable_by(Ord::cmp)
     }
+}
+
+/// Moves the rows of a [`SparseSet`] to follow its sorted entity ids, when dropped.
+///
+/// Sorting only reorders `dense[sortable]`. Until we're dropped, every sorted entity's
+/// sparse entry still holds the original row of its component and timestamps.
+struct SortRepair<'a, T> {
+    /// Physical indices of the sorted rows.
+    sortable: Range<usize>,
+    dense: &'a mut [EntityId],
+    sparse: &'a mut SparseArray,
+    data: &'a mut [T],
+    /// `None` when the storage doesn't track insertion.
+    insertion_data: Option<&'a mut [TrackingTimestamp]>,
+    /// `None` when the storage doesn't track modification.
+    modification_data: Option<&'a mut [TrackingTimestamp]>,
+}
+
+impl<T> Drop for SortRepair<'_, T> {
+    fn drop(&mut self) {
+        // Calling `original(d)` the sparse index of `dense[d]`, the row that should end at `d`:
+        // `original` is a permutation of `sortable`. The sort kept the same ids in the slice,
+        // and before it each of them was pointed at by its own sparse entry, inside `sortable`.
+        //
+        // We follow each of its cycles. The component `start` needs is moved there,
+        // and the one it displaces is carried forward: after the swap, `current` always holds
+        // `start`'s original component. When the cycle comes back to `start`,
+        // `current` is the destination that needs it, so it's already in place.
+        // A cycle of `k` rows takes `k - 1` swaps.
+        //
+        // We read `next` before overwriting the sparse entry with `current`.
+        // The overwrite marks the destination repaired: `original(d) == d` from then on,
+        // so when the outer loop reaches a destination of a cycle we already walked,
+        // it's a fixed point and nothing moves.
+        //
+        // Only rows of `sortable` are read or written, with indices `original` produced,
+        // and only the sparse entries of the ids in `dense[sortable]` change.
+        // None of this calls user code, allocates or drops a component, so it can't panic.
+        //
+        // `current` and `next` are always rows of `sortable`: `current` starts as `start`
+        // then takes the values of `next`, which `original` maps inside `sortable`.
+        // `sortable` is part of the ungrouped region, inside the storage, and `dense`, `data`
+        // and the enabled timestamp vectors all have the storage's length.
+        for start in self.sortable.clone() {
+            let mut current = start;
+
+            loop {
+                // SAFE: `current` is a row of `sortable`, in bounds of `dense`.
+                let entity = unsafe { *self.dense.get_unchecked(current) };
+
+                // SAFE: `entity` is one of the sorted ids, they come from `dense`
+                // so they own a component and their sparse page is allocated.
+                let sparse_entity = unsafe { self.sparse.get_mut_unchecked(entity) };
+                let next = sparse_entity.uindex();
+                // `current` was already the index of a component of the storage, it's a valid index.
+                sparse_entity.set_index(current as u64);
+
+                if next == start {
+                    break;
+                }
+
+                // SAFE: `current` and `next` are rows of `sortable`, in bounds of `data`
+                // and of the timestamp vectors the storage tracks.
+                unsafe {
+                    swap_unchecked(self.data, current, next);
+                    if let Some(insertion_data) = &mut self.insertion_data {
+                        swap_unchecked(insertion_data, current, next);
+                    }
+                    if let Some(modification_data) = &mut self.modification_data {
+                        swap_unchecked(modification_data, current, next);
+                    }
+                }
+
+                current = next;
+            }
+        }
+    }
+}
+
+/// Swaps the elements at indices `a` and `b` of `slice`, without bounds checks.
+///
+/// ### Safety
+///
+/// `a` and `b` must be smaller than `slice`'s length.
+unsafe fn swap_unchecked<U>(slice: &mut [U], a: usize, b: usize) {
+    let ptr = slice.as_mut_ptr();
+
+    // SAFE: Our caller guarantees both indices are in bounds, so both pointers point to elements
+    // of `slice`, which we borrow mutably. `ptr::swap` also accepts two equal pointers.
+    unsafe { core::ptr::swap(ptr.add(a), ptr.add(b)) }
 }
 
 impl<T: Clone + Component> SparseSet<T> {

@@ -247,7 +247,6 @@ impl Groups {
     /// Returns the physical indices of the ungrouped region of a storage of `dense_len` components.
     ///
     /// A storage without any range is entirely ungrouped.
-    #[allow(dead_code, reason = "Used once grouped iteration lands.")]
     pub(crate) fn ungrouped_range(&self, dense_len: usize) -> Range<usize> {
         if !self.has_ranges() {
             return 0..dense_len;
@@ -354,9 +353,9 @@ impl Groups {
     /// Definitions, creation order and signed shifts survive. Every range becomes empty with
     /// zero trust, and the ungrouped region becomes empty too.
     pub(crate) fn reset(&mut self) {
-        // Sorting, clear and drain land here, they change the layout of the whole storage.
+        // Clear and drain land here, they empty the whole storage.
         // Removals and generation replacements damage their range locally instead,
-        // and regroup's own movements preserve ranges.
+        // sorting only reorders the ungrouped region and regroup's own movements preserve ranges.
         // Iteration stays correct: our trust is 0 so every group's aligned part is empty,
         // and all our components are found in the unevaluated region.
         // Shifts are kept, an empty range doesn't use it and growing it picks a new remainder.

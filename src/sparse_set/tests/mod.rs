@@ -4,6 +4,7 @@ mod moves;
 mod range_moves;
 mod removal;
 mod replacement;
+mod sorting;
 
 use super::groups::GroupRange;
 use super::*;

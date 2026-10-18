@@ -153,14 +153,17 @@ fn groups_insert_older() {
     assert_eq!(sparse_set.dense, dense);
 }
 
-/// Asserts that sorting a grouped storage resets its groups.
+/// Asserts that sorting a storage whose components are all in a group range keeps its groups
+/// and doesn't move anything, there is no ungrouped component to sort.
 #[test]
 fn groups_sort() {
     let mut sparse_set = grouped_sparse_set();
+    let dense = sparse_set.dense.clone();
 
-    sparse_set.sort_unstable();
+    sparse_set.sort_unstable_by(|a, b| b.cmp(a));
 
-    assert_reset(&sparse_set.groups);
+    assert_untouched(&sparse_set.groups);
+    assert_eq!(sparse_set.dense, dense);
 }
 
 /// Asserts that clearing a grouped storage resets its groups.
