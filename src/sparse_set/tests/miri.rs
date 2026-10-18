@@ -6,12 +6,16 @@
 //! Miri error.
 
 use crate::entity_id::EntityId;
-use crate::sparse_set::{InsertionResult, SparseSet, BUCKET_SIZE};
+use crate::iter::Shiperator;
+use crate::sparse_set::{
+    EntityCursor, FullRawWindow, FullRawWindowMut, InsertionResult, SparseSet, BUCKET_SIZE,
+};
 use crate::tracking::TrackingTimestamp;
 use crate::{track, Component, Get, Remove, View, ViewMut, World};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 /// Heap-owning component that counts how many times it's dropped.
@@ -581,4 +585,158 @@ fn bulk_page_boundary() {
     drop((items, aligned));
     drop(world);
     assert_eq!(drops(&counter), 4);
+}
+
+/// Returns a cursor over `entities`.
+fn cursor_over(entities: &[EntityId]) -> EntityCursor {
+    // SAFE: `entities` is a live slice, and every test keeps it alive and unmodified for as long
+    // as it uses the cursor.
+    unsafe { EntityCursor::new(NonNull::from(entities).cast(), entities.len()) }
+}
+
+/// Asserts the cursor's empty and single entity states over a live slice: an empty cursor, built
+/// empty or from a zero-length range, reports nothing and never moves, so nothing ever reads its
+/// dangling pointer. A single entity cursor reads its entity once, then stays exhausted.
+#[test]
+fn cursor_empty_and_single() {
+    let entities = [id(4)];
+    // SAFE: `len` is 0, so the pointer is never read.
+    let zero_len = unsafe { EntityCursor::new(NonNull::from(&entities).cast(), 0) };
+
+    for mut cursor in [EntityCursor::empty(), zero_len] {
+        assert!(cursor.is_empty());
+        assert_eq!(cursor.len(), 0);
+        assert!(!cursor.advance());
+    }
+
+    let mut single = cursor_over(&entities);
+    // SAFE: The cursor holds one entity.
+    assert_eq!(unsafe { single.current() }, id(4));
+    assert!(single.advance());
+    assert!(single.is_empty());
+    assert!(!single.advance());
+    assert_eq!(single.local_index(), 1);
+}
+
+/// Asserts that splitting a partially consumed cursor at either end and in the middle hands out
+/// halves over the right entities, keeping the original local indices, and that a segment taken
+/// from it restarts them. Only non-empty halves are read.
+#[test]
+fn cursor_split() {
+    let entities: Vec<EntityId> = (0..5).map(id).collect();
+    let mut cursor = cursor_over(&entities);
+    cursor.advance();
+
+    for index in [0, 2, 4] {
+        let (left, right) = cursor.split_at(index);
+        assert_eq!((left.local_index(), left.len()), (1, index));
+        assert_eq!((right.local_index(), right.len()), (1 + index, 4 - index));
+
+        if !left.is_empty() {
+            // SAFE: `left` isn't empty.
+            assert_eq!(unsafe { left.current() }, entities[1]);
+        }
+        if !right.is_empty() {
+            // SAFE: `right` isn't empty.
+            assert_eq!(unsafe { right.current() }, entities[1 + index]);
+        }
+    }
+
+    let segment = cursor.segment(1, 3);
+    assert_eq!((segment.local_index(), segment.len()), (0, 3));
+    // SAFE: The segment holds 3 entities.
+    assert_eq!(unsafe { segment.current() }, entities[2]);
+}
+
+/// Asserts that windows with different nonzero segment starts resolve the same local index to
+/// the components of the same entity, and that sparse lookups ignore the segment start.
+#[test]
+fn window_segment_start() {
+    let counter = counter();
+    let mut world = World::new();
+    // `Aligned` gets an extra component first, so its segment starts one index later.
+    world.add_entity(Aligned(100));
+    let e: Vec<EntityId> = (0..4)
+        .map(|i| world.add_entity((item(i, &counter), Aligned(i as u64))))
+        .collect();
+    let (items, aligned) = world
+        .borrow::<(View<'_, Item>, View<'_, Aligned>)>()
+        .unwrap();
+
+    let mut item_window = FullRawWindow::from_view(&items);
+    let mut aligned_window = FullRawWindow::from_view(&aligned);
+    let mut cursor = item_window.entity_iter().cursor.segment(1, 3);
+    // SAFE: Both segments are 3 components long and cover entities 1 to 3, stored at 1..4 in
+    // `items`, at 2..5 in `aligned` and at local indices 0..3 in `cursor`.
+    unsafe {
+        item_window.set_segment_start(1);
+        aligned_window.set_segment_start(2);
+    }
+
+    for local in 0..3 {
+        // SAFE: `cursor` isn't empty, `local` is the local index of its current candidate and
+        // it's within both segments.
+        let (item, aligned) = unsafe {
+            let item_index = item_window.captain_indices_of(&cursor, local).unwrap();
+            let aligned_index = aligned_window.captain_indices_of(&cursor, local).unwrap();
+
+            (
+                item_window.get_data(item_index),
+                aligned_window.get_data(aligned_index),
+            )
+        };
+        assert_eq!(item.values, [local as u32 + 1]);
+        assert_eq!(aligned.0, local as u64 + 1);
+
+        cursor.advance();
+    }
+
+    let index = item_window.sailor_indices_of(e[0]).unwrap();
+    assert_eq!(index, 0);
+    // SAFE: `index` was just returned by `sailor_indices_of`.
+    assert_eq!(unsafe { item_window.get_data(index) }.values, [0]);
+}
+
+/// Asserts that a tracked mutable window at a nonzero segment start writes the component and the
+/// modification timestamp of the resolved entity, not the ones at the unadjusted local index.
+#[test]
+fn window_mut_tracked() {
+    let counter = counter();
+    let mut world = World::new();
+    let e: Vec<EntityId> = (0..4)
+        .map(|i| world.add_entity(TrackedItem(item(i, &counter))))
+        .collect();
+    let mut tracked = world
+        .borrow::<ViewMut<'_, TrackedItem, track::All>>()
+        .unwrap();
+
+    {
+        let mut window = FullRawWindowMut::new(&mut tracked);
+        let mut cursor = window.entity_iter().cursor.segment(1, 3);
+        // SAFE: The segment is 3 components long and covers entities 1 to 3, stored at 1..4 in
+        // the storage and at local indices 0..3 in `cursor`.
+        unsafe { window.set_segment_start(1) };
+        cursor.advance();
+
+        // SAFE: `cursor` isn't empty, local index 1 is its current candidate's and it's within
+        // the segment. `component` is the only reference to this component while it lives.
+        let index = unsafe {
+            let index = window.captain_indices_of(&cursor, 1).unwrap();
+            let mut component = window.get_data(index);
+            component.0.values.push(10);
+
+            index
+        };
+        assert_eq!(index, 2);
+
+        // SAFE: Indices 1 to 3 are within the storage's 4 components.
+        let modified: Vec<bool> = (1..4)
+            .map(|index| unsafe { window.is_modified(index) })
+            .collect();
+        assert_eq!(modified, [false, true, false]);
+    }
+
+    assert_eq!((&tracked).get(e[2]).unwrap().0.values, [2, 10]);
+    assert!(tracked.is_modified(e[2]));
+    assert!(!tracked.is_modified(e[1]));
 }
