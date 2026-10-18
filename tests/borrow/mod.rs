@@ -160,7 +160,7 @@ fn all_storages_option_borrow() {
 }
 
 #[test]
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "thread_local", feature = "parallel"))]
 fn non_send_storage_in_other_thread() {
     let world = World::new();
     rayon::join(
@@ -179,7 +179,7 @@ fn non_send_storage_in_other_thread() {
 }
 
 #[test]
-#[cfg(feature = "thread_local")]
+#[cfg(all(feature = "thread_local", feature = "parallel"))]
 fn non_send_sync_storage_in_other_thread() {
     let world = World::new();
     rayon::join(
