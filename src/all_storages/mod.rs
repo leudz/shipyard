@@ -229,12 +229,38 @@ impl AllStorages {
                 return Err(error::UniqueRemove::MissingUnique(type_name::<T>()));
             };
 
-            let unique: Box<AtomicRefCell<UniqueStorage<T>>> =
-                unsafe { Box::from_raw(storage.0 as *mut AtomicRefCell<UniqueStorage<T>>) };
+            // Depending on how it was added, the unique storage is wrapped in a thread-local type
+            // or not. We check which type it is to take it out as the type it was created with.
+            // SAFE: `storage.0` comes from `Box::into_raw` and we hold the only `SBox` owning it,
+            // we just removed it from the map. No borrow of it is alive: `borrow_mut` succeeded
+            // and we still hold the map's lock, nobody could have found it since.
+            let stored = unsafe { &mut *storage.0 }.get_mut().any();
 
-            core::mem::forget(storage);
+            if stored.is::<UniqueStorage<T>>() {
+                // SAFE: We just checked `storage` holds a `UniqueStorage<T>`.
+                return Ok(unsafe { take_storage::<UniqueStorage<T>>(storage) }.value);
+            }
 
-            Ok(unique.into_inner().value)
+            #[cfg(feature = "thread_local")]
+            {
+                if stored.is::<NonSend<UniqueStorage<T>>>() {
+                    // SAFE: We just checked `storage` holds a `NonSend<UniqueStorage<T>>`.
+                    let unique = unsafe { take_storage::<NonSend<UniqueStorage<T>>>(storage) };
+                    return Ok(unique.0.value);
+                }
+                if stored.is::<NonSync<UniqueStorage<T>>>() {
+                    // SAFE: We just checked `storage` holds a `NonSync<UniqueStorage<T>>`.
+                    let unique = unsafe { take_storage::<NonSync<UniqueStorage<T>>>(storage) };
+                    return Ok(unique.0.value);
+                }
+                if stored.is::<NonSendSync<UniqueStorage<T>>>() {
+                    // SAFE: We just checked `storage` holds a `NonSendSync<UniqueStorage<T>>`.
+                    let unique = unsafe { take_storage::<NonSendSync<UniqueStorage<T>>>(storage) };
+                    return Ok(unique.0.value);
+                }
+            }
+
+            unreachable!("unique storages are only added with these types")
         }
     }
     /// Delete an entity and all its components.
@@ -1830,6 +1856,23 @@ for (i, j) in &mut iter {
                 .clone_component_to(other_all_storages, from, to, other_current);
         }
     }
+}
+
+/// Takes the storage out of `sbox` and frees its allocation.
+///
+/// ### Safety
+///
+/// `sbox` must hold an `S`.
+unsafe fn take_storage<S>(sbox: SBox) -> S {
+    let ptr = sbox.0 as *mut AtomicRefCell<S>;
+    // `sbox` would free the allocation as a `dyn Storage`, we free it as an `S` below instead.
+    core::mem::forget(sbox);
+
+    // SAFE: `ptr` comes from `Box::into_raw` of an `AtomicRefCell` holding an `S`, as our caller
+    // guarantees, so it's an `AtomicRefCell<S>` allocation. We forgot `sbox`, this box is its only owner.
+    let cell = unsafe { Box::from_raw(ptr) };
+
+    cell.into_inner()
 }
 
 /// Returns the grouping metadata of the storage stored under `storage_id`.

@@ -448,3 +448,32 @@ fn thread_local_storages() {
     drop(unique);
     assert_eq!(drops(&counter), 2);
 }
+
+/// Unique that is `Send` but not `Sync`.
+#[cfg(feature = "thread_local")]
+struct SendOnly(Counted, core::marker::PhantomData<core::cell::Cell<()>>);
+
+#[cfg(feature = "thread_local")]
+impl Unique for SendOnly {}
+
+/// Asserts that `remove_unique` takes uniques added with `add_unique_non_send` and
+/// `add_unique_non_sync` out as the wrapped types they were stored as: each value is handed back
+/// intact and dropped exactly once, by us.
+#[cfg(feature = "thread_local")]
+#[test]
+fn remove_wrapped_uniques() {
+    let counter = Arc::new(AtomicUsize::new(0));
+    let world = World::new();
+    world.add_unique_non_send(counted(1, &counter));
+    world.add_unique_non_sync(SendOnly(counted(2, &counter), core::marker::PhantomData));
+
+    let non_send = world.remove_unique::<Counted>().unwrap();
+    let non_sync = world.remove_unique::<SendOnly>().unwrap();
+    drop(world);
+    assert_eq!(drops(&counter), 0);
+    assert_eq!(non_send.values, [1]);
+    assert_eq!(non_sync.0.values, [2]);
+
+    drop((non_send, non_sync));
+    assert_eq!(drops(&counter), 2);
+}
