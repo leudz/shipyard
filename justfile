@@ -7,6 +7,10 @@ check-no-default:
 miri: clean _miri
 
 _miri:
+    cargo +nightly miri test --lib --no-default-features --features=std tests::miri::
+    cargo +nightly miri test --lib --no-default-features --features=std,thread_local tests::miri::
+
+miri-full: clean
     cargo +nightly miri test --tests --lib --no-default-features --features=std
 
 clean:
