@@ -299,3 +299,22 @@ fn replay() {
     assert_eq!(first, [(e[1], 1), (e[3], 3)]);
     assert_eq!(second, first);
 }
+
+/// Asserts that an `Or` over two mutable views only borrows them for the iteration: writes
+/// through either branch land on the right component and both views are usable afterwards.
+#[test]
+fn mutable() {
+    let (world, e, f) = world();
+    let (mut a, mut b) = world.borrow::<(ViewMut<A>, ViewMut<B>)>().unwrap();
+
+    for item in (&mut a | &mut b).iter() {
+        match item {
+            OneOfTwo::One(a) => a.0 += 100,
+            OneOfTwo::Two(b) => b.0 += 100,
+        }
+    }
+
+    assert_eq!(a[e[1]], A(101));
+    assert_eq!(b[e[1]], B(11));
+    assert_eq!(b[f[0]], B(120));
+}

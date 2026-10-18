@@ -67,7 +67,7 @@ impl<'a, T: Component, Track: Tracking, U> BitOr<U> for &'a ViewMut<'a, T, Track
     }
 }
 
-impl<'a, T: Component, Track: Tracking, U> BitOr<U> for &'a mut ViewMut<'a, T, Track> {
+impl<'a, 'v, T: Component, Track: Tracking, U> BitOr<U> for &'a mut ViewMut<'v, T, Track> {
     type Output = Or<(Self, U)>;
 
     fn bitor(self, rhs: U) -> Self::Output {
