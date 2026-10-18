@@ -35,7 +35,7 @@ impl Debug for Borrow {
                 f.write_str("Cannot immutably borrow while already mutably borrowed.")
             }
             Borrow::WrongThread => {
-                f.write_str("Can't access from another thread because it's !Send and !Sync.")
+                f.write_str("Can't access from another thread because it's !Send.")
             }
             Borrow::MultipleThreads => f.write_str(
                 "Can't access from multiple threads at the same time because it's !Sync.",
@@ -160,7 +160,7 @@ impl Debug for GetStorage {
                         f.write_fmt(format_args!("Cannot immutably borrow {} storage while it's already mutably borrowed.", name))
                     },
                     Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
-                    Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
+                    Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send.", name)),
                 }
             } else {
                 match borrow {
@@ -169,7 +169,7 @@ impl Debug for GetStorage {
                         f.write_fmt(format_args!("Cannot immutably borrow {:?} storage while it's already mutably borrowed.", id))
                     },
                     Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {:?} storage from multiple thread at the same time because it's !Sync.", id)),
-                    Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {:?} storage from other thread than the one it was created in because it's !Send and !Sync.", id)),
+                    Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {:?} storage from other thread than the one it was created in because it's !Send.", id)),
                 }
             }
             GetStorage::Entities(borrow) => match borrow {
@@ -363,7 +363,7 @@ impl Debug for AddWorkload {
                             f.write_fmt(format_args!("Cannot immutably borrow {} storage while it's already mutably borrowed.", name))
                         },
                         Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {} storage from multiple thread at the same time because it's !Sync.", name)),
-                        Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
+                        Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send.", name)),
                     }
                 } else {
                     match borrow {
@@ -372,7 +372,7 @@ impl Debug for AddWorkload {
                             f.write_fmt(format_args!("Cannot immutably borrow {:?} storage while it's already mutably borrowed.", id))
                         },
                         Borrow::MultipleThreads => f.write_fmt(format_args!("Cannot borrow {:?} storage from multiple thread at the same time because it's !Sync.", id)),
-                        Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {:?} storage from other thread than the one it was created in because it's !Send and !Sync.", id)),
+                        Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {:?} storage from other thread than the one it was created in because it's !Send.", id)),
                     }
                 }
             }
@@ -625,7 +625,7 @@ impl Debug for UniqueRemove {
             UniqueRemove::MissingUnique(name) => f.write_fmt(format_args!("No unique storage exists for {}.\n", name)),
             UniqueRemove::StorageBorrow((name, borrow)) => match borrow {
                 Borrow::Unique => f.write_fmt(format_args!("Cannot mutably borrow {} storage while it's already borrowed.", name)),
-                Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send and !Sync.", name)),
+                Borrow::WrongThread => f.write_fmt(format_args!("Cannot borrow {} storage from other thread than the one it was created in because it's !Send.", name)),
                 _ => unreachable!()
             }
         }
