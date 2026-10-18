@@ -30,6 +30,8 @@
 #![allow(clippy::needless_lifetimes)]
 // The question mark operator can damage performance
 #![allow(clippy::question_mark)]
+// Map can throw the compiler off
+#![allow(clippy::manual_map)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![warn(missing_docs)]
 #![no_std]

@@ -544,7 +544,7 @@ fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
     let mut local = local.into_iter().peekable();
     let mut alternatives = Vec::new();
 
-    for position in 0..children.len() {
+    for (position, child) in children.iter_mut().enumerate() {
         // Only a window can start a cover set and only a nested `Mixed` has alternatives,
         // at most one of these two adds something.
         // Cover sets come ordered by their first required member.
@@ -556,7 +556,6 @@ fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
 
         // Groups don't cross `Mixed` boundaries: a nested `Mixed` is never a member of our
         // groups and we drive through its alternatives as a whole, its masks stay its own.
-        let child = &mut children[position];
         let sailor_lookups = lookups - child.lookups();
         for alternative in child.take_alternatives() {
             alternatives.extend(Alternative::nested(position, alternative, sailor_lookups));
