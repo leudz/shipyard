@@ -588,39 +588,6 @@ fn ungrouped_member() {
     assert_eq!(next_ids(iter), sorted(pairs));
 }
 
-/// Asserts that once a removal resets A, the grouped walk ties with the ordinary one and
-/// the ordinary walk is installed. After a regroup, the pair is aligned again.
-#[test]
-fn reset_then_regroup() {
-    let mut world = World::new_for_test();
-    let pairs = add_ab(&mut world, 10);
-    world.group::<(A, B)>();
-    world.remove::<A>(pairs[0]);
-
-    {
-        let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-        assert_eq!((a.groups.ranges[0].len, b.groups.ranges[0].len), (0, 10));
-
-        let iter = (&a, &b).iter();
-        assert_eq!(iter.shiperator.captain_mask, 0b01);
-        assert!(iter.schedule.is_none());
-        assert_eq!(next_ids(iter), sorted(pairs[1..].to_vec()));
-    }
-
-    world.regroup();
-
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let iter = (&a, &b).iter();
-    let segments = segments(&iter, &[&a.dense, &b.dense]);
-
-    assert_eq!(
-        segments,
-        [segment((0, 0..9), 0b11, &[Some(0), Some(0)], &[])]
-    );
-    assert_skipped(&segments, 1, 9..10);
-    assert_eq!(next_ids(iter), sorted(pairs[1..].to_vec()));
-}
-
 /// Asserts that an entity reusing a deleted pair's index is yielded with its new generation
 /// once regrouped, and the deleted one isn't.
 #[test]

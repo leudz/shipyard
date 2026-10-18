@@ -403,37 +403,6 @@ fn both_unevaluated() {
     assert_pairs(&a, &b, &all);
 }
 
-/// Asserts that after a removal resets A while B keeps its 4 long range, A's unevaluated
-/// walk alone finds every match. A regroup then makes the pair aligned again.
-#[test]
-fn reset() {
-    let mut world = World::new_for_test();
-    let all: Vec<EntityId> = (0..4).map(|i| world.add_entity((A(i), B(i)))).collect();
-    world.group::<(A, B)>();
-    world.remove::<A>(all[0]);
-
-    {
-        let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-        assert_eq!((a.groups.ranges[0].len, b.groups.ranges[0].len), (0, 4));
-
-        assert_eq!(
-            pair_segments(&a, &b),
-            [segment((0, 0..3), 0b01, &[Some(0), None], &[])]
-        );
-        assert_pairs(&a, &b, &all);
-    }
-
-    world.regroup();
-
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-
-    assert_eq!(
-        pair_segments(&a, &b),
-        [segment((0, 0..3), 0b11, &[Some(0), Some(0)], &[])]
-    );
-    assert_pairs(&a, &b, &all);
-}
-
 /// Asserts that a group without any component has no segment: the iterator is exhausted
 /// without a plan.
 #[test]

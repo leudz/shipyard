@@ -314,34 +314,6 @@ fn disjoint_tie() {
     assert_grouped_wins(&entities, 0b0011);
 }
 
-/// Asserts that once removal resets A's group metadata, the grouped alternative walks
-/// A's whole storage as unevaluated and loses the tie against the ordinary walk.
-#[test]
-fn reset() {
-    let mut world = World::new_for_test();
-    let entities = add_ab(&mut world, 10);
-    world.group::<(A, B)>();
-    world.remove::<A>(entities[0]);
-
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (mixed, _, entities) = (&a, &b).into_shiperator();
-
-    // B's range is still there but untrusted, A drives the damaged part since its own is empty.
-    assert_eq!(
-        walks(&entities),
-        [Walk::Unevaluated {
-            owner: 0,
-            start: 0,
-            len: 9
-        }]
-    );
-    let selection = selection(&entities).unwrap();
-    assert_eq!(selection.cheapest().unwrap().work, 27);
-    assert_eq!(selection.ordinary.work, Some(27));
-    assert_ordinary_wins(&entities, 0);
-    assert_eq!(mixed.captain_mask, 0b01);
-}
-
 /// Asserts that entities added after a regroup make every member walk its unevaluated
 /// region, which costs more than the ordinary walk, until the next regroup aligns them.
 #[test]

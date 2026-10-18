@@ -376,30 +376,37 @@ impl<T: Component> SparseSet<T> {
         let sparse_entity = self.sparse.get(entity)?;
 
         if entity.generation() >= sparse_entity.generation() {
-            self.reset_groups();
+            // In a grouped storage, the component first moves to the unevaluated region.
+            // The swap-remove below then only moves the storage's last component, which is unevaluated too.
+            // Its sparse entry is still live here, so the moves keep it up to date.
+            let index = self.extract_to_unevaluated(sparse_entity.uindex());
 
+            // SAFE: `sparse.get` found an entry for `entity`, so its sparse page is allocated.
             unsafe {
                 *self.sparse.get_mut_unchecked(entity) = EntityId::dead();
             }
 
-            self.dense.swap_remove(sparse_entity.uindex());
+            self.dense.swap_remove(index);
             if self.is_tracking_insertion() {
-                self.insertion_data.swap_remove(sparse_entity.uindex());
+                self.insertion_data.swap_remove(index);
             }
             if self.is_tracking_modification() {
-                self.modification_data.swap_remove(sparse_entity.uindex());
+                self.modification_data.swap_remove(index);
             }
-            let component = self.data.swap_remove(sparse_entity.uindex());
+            let component = self.data.swap_remove(index);
 
             // The SparseSet could now be empty or the removed component could have been the last one
-            if sparse_entity.uindex() < self.dense.len() {
+            if index < self.dense.len() {
+                // SAFE: `index` is in bounds, and `last` was read from `dense`
+                // so it owns a component and its sparse page is allocated.
                 unsafe {
-                    let last = *self.dense.get_unchecked(sparse_entity.uindex());
-                    self.sparse
-                        .get_mut_unchecked(last)
-                        .copy_index(sparse_entity);
+                    let last = *self.dense.get_unchecked(index);
+                    self.sparse.get_mut_unchecked(last).set_index(index as u64);
                 }
             }
+
+            #[cfg(debug_assertions)]
+            self.groups.assert_invariants(self.dense.len());
 
             if entity.generation() == sparse_entity.generation() {
                 if let Some(on_remove) = &mut self.on_removal {
@@ -689,6 +696,67 @@ impl<T: Component> SparseSet<T> {
         self.groups.unevaluated_start += 1;
 
         new_index
+    }
+
+    /// Moves the component at `index` to the unevaluated region, wherever it is.\
+    /// Returns its new index.
+    ///
+    /// This prepares a component to be removed or replaced. Unlike a regroup move, it leaves its
+    /// range with a physical swap-remove, so its cost doesn't depend on the range's length.
+    /// That range only keeps trusting the logical positions the move didn't change.
+    /// Every other range keeps its logical order and trust.\
+    /// Timestamps move with the component. A move isn't a modification and doesn't call any callback.
+    #[inline]
+    fn extract_to_unevaluated(&mut self, index: usize) -> usize {
+        // Most storages have no group, we keep their cost to this single branch.
+        if !self.groups.has_ranges() || index >= self.groups.unevaluated_start {
+            return index;
+        }
+
+        let index = match self.groups.range_index_of(index) {
+            Some(range_index) => self.extract_from_range(range_index, index),
+            None => index,
+        };
+        self.ungrouped_to_unevaluated(index);
+
+        self.groups.unevaluated_start
+    }
+
+    /// Moves the component at `index`, inside range `range_index`, to the ungrouped region
+    /// with a physical swap-remove.\
+    /// Returns its new index.
+    ///
+    /// Unlike [`take_from_range`](Self::take_from_range), its cost doesn't depend on the range's length.
+    /// Other members can't reproduce the resulting order though, so the range's trust gets lowered further.
+    fn extract_from_range(&mut self, range_index: usize, index: usize) -> usize {
+        let ring = self.groups.ranges[range_index].ring();
+        let logical = ring.logical_of(index);
+        let wrap_offset = ring.wrap_offset();
+        // Physical offsets `[s, len)` hold logical `[0, len - s)`, so the last slot holds `len - 1 - s`.
+        let physical_last_logical = ring.len - 1 - wrap_offset;
+
+        // The physical last component fills the hole, ours sits right after the shrunk range.
+        self.swap_rows(index, ring.end() - 1);
+
+        // Only the positions before `logical` and `physical_last_logical` are unchanged.
+        // Our hole at `logical` now holds another component, and dropping the last slot
+        // moves every logical position after `physical_last_logical` back by one.\
+        // Logical 0 keeps its slot, unless it was the dropped one. Then the ring starts at its first slot.
+        let new_len = ring.len - 1;
+        let new_wrap_offset = if wrap_offset < new_len {
+            wrap_offset
+        } else {
+            0
+        };
+
+        let range = &mut self.groups.ranges[range_index];
+        range.trust = range.trust.min(logical).min(physical_last_logical);
+        range.resize(new_len, new_wrap_offset);
+
+        // The later ranges move left over our component and leave it as the first ungrouped component.
+        self.move_ranges_left(range_index + 1);
+
+        self.groups.grouped_end()
     }
 }
 
@@ -1034,6 +1102,8 @@ impl<T: Component> SparseSet<T> {
         current: TrackingTimestamp,
         mut f: F,
     ) {
+        // A removal only moves components at its index or after it, even in a grouped storage.
+        // So the visited components stay before `i`, and the component that takes `i` hasn't been visited yet.
         let mut removed = 0;
         for i in 0..self.len() {
             let i = i - removed;
@@ -1053,6 +1123,7 @@ impl<T: Component> SparseSet<T> {
         current: TrackingTimestamp,
         mut f: F,
     ) {
+        // Same traversal as `private_retain`, removals never move a visited component.
         let mut removed = 0;
         for i in 0..self.len() {
             let i = i - removed;

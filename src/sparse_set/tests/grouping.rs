@@ -33,6 +33,24 @@ fn assert_reset(groups: &Groups) {
     assert_eq!(groups.unevaluated_start, 0);
 }
 
+/// Panics unless entity 1 left the range with a physical swap-remove: the range keeps entities 0
+/// and 2 and only trusts entity 0, nothing is ungrouped or unevaluated.
+fn assert_shrunk(sparse_set: &SparseSet<I32>) {
+    let groups = &sparse_set.groups;
+    assert_eq!(groups.ranges.len(), 1);
+    assert_eq!(groups.ranges[0].start, 0);
+    assert_eq!(groups.ranges[0].len, 2);
+    assert_eq!(groups.ranges[0].trust, 1);
+    assert_eq!(groups.unevaluated_start, 2);
+    assert_eq!(
+        sparse_set.dense,
+        [
+            EntityId::new_from_parts(0, 0),
+            EntityId::new_from_parts(2, 0)
+        ]
+    );
+}
+
 fn assert_untouched(groups: &Groups) {
     assert_eq!(groups.ranges.len(), 1);
     assert_eq!(groups.ranges[0].start, 0);
@@ -41,7 +59,8 @@ fn assert_untouched(groups: &Groups) {
     assert_eq!(groups.unevaluated_start, 3);
 }
 
-/// Asserts that removing a component from a grouped storage resets its groups.
+/// Asserts that removing a component from a grouped storage keeps its range,
+/// without the component and only trusting the positions before it.
 #[test]
 fn groups_remove() {
     let mut sparse_set = grouped_sparse_set();
@@ -49,10 +68,11 @@ fn groups_remove() {
     let removed = sparse_set.dyn_remove(EntityId::new_from_parts(1, 0), TrackingTimestamp::new(0));
 
     assert_eq!(removed, Some(I32(1)));
-    assert_reset(&sparse_set.groups);
+    assert_shrunk(&sparse_set);
 }
 
-/// Asserts that deleting a component from a grouped storage resets its groups.
+/// Asserts that deleting a component from a grouped storage keeps its range,
+/// without the component and only trusting the positions before it.
 #[test]
 fn groups_delete() {
     let mut sparse_set = grouped_sparse_set();
@@ -60,18 +80,29 @@ fn groups_delete() {
     let deleted = sparse_set.dyn_delete(EntityId::new_from_parts(1, 0), TrackingTimestamp::new(0));
 
     assert!(deleted);
-    assert_reset(&sparse_set.groups);
+    assert_shrunk(&sparse_set);
 }
 
-/// Asserts that `retain` removing a single component from a grouped storage resets its groups.
+/// Asserts that `retain` removing a single component from a grouped storage keeps its range,
+/// without the component and only trusting the positions before it.
 #[test]
 fn groups_retain() {
     let mut sparse_set = grouped_sparse_set();
 
     sparse_set.private_retain(TrackingTimestamp::new(0), |_, component| component.0 != 1);
 
-    assert_eq!(sparse_set.len(), 2);
-    assert_reset(&sparse_set.groups);
+    assert_shrunk(&sparse_set);
+}
+
+/// Asserts that `retain_mut` removing a single component from a grouped storage keeps its range,
+/// without the component and only trusting the positions before it.
+#[test]
+fn groups_retain_mut() {
+    let mut sparse_set = grouped_sparse_set();
+
+    sparse_set.private_retain_mut(TrackingTimestamp::new(0), |_, component| component.0 != 1);
+
+    assert_shrunk(&sparse_set);
 }
 
 /// Asserts that inserting over the slot of an entity with a smaller generation

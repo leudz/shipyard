@@ -11,8 +11,10 @@ use crate::get::Get;
 use crate::iter::Shiperator;
 use crate::remove::Remove;
 use crate::sparse_set::{
-    BUCKET_SIZE, EntityCursor, FullRawWindow, FullRawWindowMut, InsertionResult, SparseSet,
+    BUCKET_SIZE, EntityCursor, FullRawWindow, FullRawWindowMut, GroupRange, InsertionResult,
+    SparseSet,
 };
+use crate::storage::StorageId;
 use crate::track;
 use crate::tracking::TrackingTimestamp;
 use crate::views::{View, ViewMut};
@@ -744,4 +746,224 @@ fn window_mut_tracked() {
     assert_eq!((&tracked).get(e[2]).unwrap().0.values, [2, 10]);
     assert!(tracked.is_modified(e[2]));
     assert!(!tracked.is_modified(e[1]));
+}
+
+/// Places the components of `sparse_set`, in physical order, in back to back fully trusted ranges
+/// of `(len, shift)`, then `ungrouped_len` of them in the ungrouped region. The rest is unevaluated.
+fn group<T: Component>(
+    sparse_set: &mut SparseSet<T>,
+    ranges: &[(usize, isize)],
+    ungrouped_len: usize,
+) {
+    let mut start = 0;
+    for (position, &(len, shift)) in ranges.iter().enumerate() {
+        sparse_set.groups.ranges.push(GroupRange {
+            group: Arc::from([StorageId::Custom(0), StorageId::Custom(position as u64 + 1)]),
+            start,
+            len,
+            shift,
+            trust: len,
+        });
+        start += len;
+    }
+    sparse_set.groups.unevaluated_start = start + ungrouped_len;
+}
+
+/// Panics unless every entity in `dense` resolves to its own row and the regions are valid.
+fn assert_consistent<T: Component>(sparse_set: &SparseSet<T>) {
+    for (index, &entity) in sparse_set.dense.iter().enumerate() {
+        assert_eq!(sparse_set.index_of(entity), Some(index));
+    }
+
+    #[cfg(debug_assertions)]
+    sparse_set.groups.assert_invariants(sparse_set.len());
+}
+
+/// Builds a storage of `count` items whose values are their entity's index, in two rotated
+/// ranges of 3 and 2 components, then 1 ungrouped component. The rest is unevaluated.
+fn grouped_items(count: usize, counter: &Arc<AtomicUsize>) -> SparseSet<Item> {
+    let mut sparse_set = SparseSet::new();
+    for index in 0..count {
+        sparse_set
+            .insert(id(index), item(index as u32, counter), now())
+            .assert_inserted();
+    }
+    group(&mut sparse_set, &[(3, 1), (2, -1)], 1);
+
+    sparse_set
+}
+
+/// Asserts that removing from each region of a grouped storage, and deleting from one of its
+/// ranges, hands back or drops the right component exactly once while every other one stays
+/// reachable with its value. A newer generation removes the stale component without handing it back.
+#[test]
+fn grouped_removal() {
+    let counter = counter();
+    let mut sparse_set = grouped_items(8, &counter);
+
+    for index in [1, 4, 5, 7] {
+        let removed = sparse_set.dyn_remove(id(index), now()).unwrap();
+        assert_eq!(removed.values, [index as u32]);
+        assert_consistent(&sparse_set);
+    }
+    assert_eq!(drops(&counter), 4);
+
+    assert!(sparse_set.dyn_delete(id(0), now()));
+    assert_eq!(drops(&counter), 5);
+    let newer = EntityId::new_from_index_and_gen(3, 1);
+    assert!(sparse_set.dyn_remove(newer, now()).is_none());
+    assert_eq!(drops(&counter), 6);
+    assert_consistent(&sparse_set);
+
+    for index in [2, 6] {
+        assert_eq!(values_of(&sparse_set, id(index)), [index as u32]);
+    }
+    drop(sparse_set);
+    assert_eq!(drops(&counter), 8);
+}
+
+/// Asserts that deleting from a range of a deletion-tracking grouped storage keeps the component
+/// alive in the deletion data, and that clearing the deletion data drops it exactly once.
+#[test]
+fn grouped_deletion_tracking() {
+    let counter = counter();
+    let mut sparse_set = SparseSet::new();
+    for index in 0..4 {
+        sparse_set
+            .insert(id(index), TrackedItem(item(index as u32, &counter)), now())
+            .assert_inserted();
+    }
+    group(&mut sparse_set, &[(3, 2)], 0);
+
+    assert!(sparse_set.dyn_delete(id(1), now()));
+    assert_eq!(drops(&counter), 0);
+    assert_eq!(sparse_set.deletion_data[0].2.0.values, [1]);
+    assert_consistent(&sparse_set);
+
+    sparse_set.clear_all_deleted();
+    assert_eq!(drops(&counter), 1);
+}
+
+/// Asserts that `retain_mut` and `retain` on a grouped storage hand each callback the right
+/// component while rejections move components across regions, and that every rejected component
+/// is dropped exactly once.
+#[test]
+fn grouped_retain() {
+    let counter = counter();
+    let mut sparse_set = grouped_items(8, &counter);
+
+    sparse_set.private_retain_mut(now(), |entity, mut component| {
+        assert_eq!(component.values[0] as u64, entity.index());
+        component.values.push(10);
+        entity.index() % 2 == 0
+    });
+    assert_eq!(drops(&counter), 4);
+    assert_consistent(&sparse_set);
+    for index in [0, 2, 4, 6] {
+        assert_eq!(values_of(&sparse_set, id(index)), [index as u32, 10]);
+    }
+
+    sparse_set.private_retain(now(), |entity, component| {
+        assert_eq!(component.values[0] as u64, entity.index());
+        entity == id(4)
+    });
+    assert_eq!(drops(&counter), 7);
+    assert_consistent(&sparse_set);
+    assert_eq!(values_of(&sparse_set, id(4)), [4, 10]);
+}
+
+/// Asserts that a `retain_mut` callback unwinding partway through a grouped storage leaves it
+/// consistent: the components it already rejected are gone and dropped once, the others are all
+/// still reachable.
+#[cfg(feature = "std")]
+#[test]
+fn grouped_retain_panic() {
+    let counter = counter();
+    let mut sparse_set = grouped_items(7, &counter);
+    let mut visited = 0;
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        sparse_set.private_retain_mut(now(), |_, _| {
+            visited += 1;
+            if visited <= 2 {
+                return false;
+            }
+            panic!("retain callback panicked");
+        });
+    }));
+    assert!(result.is_err());
+    assert_eq!(drops(&counter), 2);
+    assert_eq!(sparse_set.len(), 5);
+    assert_consistent(&sparse_set);
+    for &entity in &sparse_set.dense {
+        assert_eq!(values_of(&sparse_set, entity), [entity.index() as u32]);
+    }
+
+    drop(sparse_set);
+    assert_eq!(drops(&counter), 7);
+}
+
+/// Asserts that a removal callback unwinding, after the component left a grouped range, drops
+/// that component exactly once while the storage stays consistent.
+#[cfg(feature = "std")]
+#[test]
+fn grouped_removal_callback_panic() {
+    let counter = counter();
+    let mut sparse_set = grouped_items(7, &counter);
+    sparse_set.on_removal(|_, _| panic!("removal callback panicked"));
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        let _ = sparse_set.dyn_remove(id(1), now());
+    }));
+    assert!(result.is_err());
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(sparse_set.len(), 6);
+    assert_consistent(&sparse_set);
+    for &entity in &sparse_set.dense {
+        assert_eq!(values_of(&sparse_set, entity), [entity.index() as u32]);
+    }
+
+    let _ = sparse_set.take_on_removal();
+    drop(sparse_set);
+    assert_eq!(drops(&counter), 7);
+}
+
+/// Asserts that removing over-aligned components from a grouped storage moves them between rows
+/// with every access aligned, each component keeping its value.
+#[test]
+fn grouped_over_aligned() {
+    let mut sparse_set = SparseSet::new();
+    for index in 0..6 {
+        sparse_set
+            .insert(id(index), Aligned(index as u64), now())
+            .assert_inserted();
+    }
+    group(&mut sparse_set, &[(3, 1), (2, -1)], 1);
+
+    for index in [1, 3] {
+        let removed = sparse_set.dyn_remove(id(index), now()).unwrap();
+        assert_eq!(removed.0, index as u64);
+    }
+    assert_consistent(&sparse_set);
+    for index in [0, 2, 4, 5] {
+        let moved = sparse_set.private_get(id(index)).unwrap();
+        assert_eq!(moved.0, index as u64);
+        assert_eq!(core::ptr::from_ref(moved) as usize % 64, 0);
+    }
+}
+
+/// Asserts that zero-sized components leave each region of a grouped storage.
+#[test]
+fn grouped_zero_sized() {
+    let mut sparse_set = SparseSet::new();
+    for index in 0..7 {
+        sparse_set.insert(id(index), Zst, now()).assert_inserted();
+    }
+    group(&mut sparse_set, &[(3, 1), (2, -1)], 1);
+
+    for index in [6, 5, 0, 3] {
+        assert!(sparse_set.dyn_remove(id(index), now()).is_some());
+        assert_consistent(&sparse_set);
+    }
+    assert_eq!(sparse_set.len(), 3);
 }

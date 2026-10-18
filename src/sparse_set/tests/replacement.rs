@@ -62,7 +62,7 @@ fn timestamps<T: Component>(
 
 /// Inserts `make(10)` for entity 1 at generation 1 and timestamp 3, then panics unless it replaced
 /// generation 0's component as a fresh insertion, with an origin modification timestamp.
-fn assert_replaced<T: Component + PartialEq + core::fmt::Debug>(
+fn assert_replaced<T: Component + PartialEq + fmt::Debug>(
     mut sparse_set: SparseSet<T>,
     make: impl Fn(i32) -> T,
 ) {

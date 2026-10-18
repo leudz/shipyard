@@ -146,20 +146,3 @@ fn repair_keeps_other_groups() {
     assert_eq!(group_of::<A>(&world, &ac), (vec![e[3], e[4]], 2));
     assert_eq!(group_of::<C>(&world, &ac), (vec![e[3], e[4]], 2));
 }
-
-/// Asserts that a member reset by a removal empties its groups in every member,
-/// while groups it isn't part of stay as they were.
-#[test]
-fn repair_reset_member() {
-    let (mut world, ab, ac, e) = overlapping();
-    world.remove::<(C,)>(e[4]);
-
-    repair(&world);
-
-    assert_eq!(group_of::<A>(&world, &ac), (vec![], 0));
-    assert_eq!(group_of::<C>(&world, &ac), (vec![], 0));
-    assert_eq!(group_of::<A>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
-    assert_eq!(group_of::<B>(&world, &ab), (vec![e[0], e[1], e[2]], 3));
-    assert_eq!(unevaluated_of::<A>(&world), [e[3], e[4]]);
-    assert_eq!(unevaluated_of::<C>(&world), [e[3]]);
-}

@@ -125,14 +125,6 @@ impl EntityId {
         (self.0.get() & Self::GEN_MASK) == Self::GEN_MASK
     }
     #[inline]
-    pub(crate) fn copy_index(&mut self, other: EntityId) {
-        unsafe {
-            self.0 = NonZeroU64::new_unchecked(
-                (self.0.get() & !Self::INDEX_MASK) | (other.0.get() & Self::INDEX_MASK),
-            );
-        }
-    }
-    #[inline]
     pub(crate) fn copy_gen(&mut self, other: EntityId) {
         unsafe {
             self.0 = NonZeroU64::new_unchecked(

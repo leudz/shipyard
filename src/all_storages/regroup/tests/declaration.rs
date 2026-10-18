@@ -105,8 +105,9 @@ fn late_component() {
     assert!(ungrouped_of::<A>(&world).is_empty());
 }
 
-/// Asserts that removing a grouped A resets A while B keeps its range,
-/// and that regroup then evicts B's suffix and places the remaining entities again.
+/// Asserts that removing a grouped A leaves the rest of A's range in place, only trusting the
+/// positions before the removed one, while B keeps its range.
+/// Regroup then evicts B's untrusted suffix and places the remaining entities again.
 #[test]
 fn removal() {
     let mut world = World::new_for_test();
@@ -117,8 +118,12 @@ fn removal() {
 
     world.remove::<(A,)>(ab1);
 
-    assert!(range_of::<A>(&world).is_empty());
-    assert_eq!(unevaluated_of::<A>(&world), sorted(vec![ab0, ab2]));
+    assert_eq!(range_of::<A>(&world), [ab0, ab2]);
+    assert_eq!(
+        world.borrow::<View<'_, A>>().unwrap().groups.ranges[0].trust,
+        1
+    );
+    assert!(unevaluated_of::<A>(&world).is_empty());
     assert_eq!(range_of::<B>(&world).len(), 3);
 
     world.regroup();
