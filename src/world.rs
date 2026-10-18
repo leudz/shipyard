@@ -1,5 +1,7 @@
 mod builder;
 mod run_batches;
+#[cfg(test)]
+mod tests;
 
 pub use builder::WorldBuilder;
 

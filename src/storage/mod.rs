@@ -1,5 +1,7 @@
 mod sbox;
 mod storage_id;
+#[cfg(test)]
+mod tests;
 
 pub use sbox::SBoxBuilder;
 pub use storage_id::StorageId;

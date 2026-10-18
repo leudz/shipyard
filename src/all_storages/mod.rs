@@ -5,6 +5,8 @@ mod delete_any;
 mod group;
 mod regroup;
 mod retain;
+#[cfg(test)]
+mod tests;
 
 pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
