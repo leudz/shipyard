@@ -1280,14 +1280,13 @@ let i = all_storages.run(sys1);
     /// Declares a group made of the given storages, creating the ones that don't exist yet.
     ///
     /// Groups can share storages. Entities satisfying overlapping groups are grouped
-    /// in a union of them.\
+    /// in their connected union, disjoint groups stay independent.\
     /// Declaring a group that already exists, declared or created as a union, does nothing.\
     /// Declaring a new group runs a full [`regroup`](AllStorages::regroup).
     ///
     /// ### Panics
     ///
     /// - The same storage is listed twice.
-    #[doc(hidden)]
     #[track_caller]
     pub fn group<G: TupleGroup>(&mut self) -> &mut AllStorages {
         G::get_or_insert_storages(self);
@@ -1295,9 +1294,10 @@ let i = all_storages.run(sys1);
         self
     }
 
-    /// Attaches an empty range for the group made of `ids` to every member, then regroups.
+    /// Declares the group made of `ids`, invalidates affected placements and regroups.
     ///
-    /// Every member storage must already exist.
+    /// Every member storage must already exist. An equal definition, including a union,
+    /// returns without regrouping. A new definition attaches one shared empty range to each member.
     #[track_caller]
     fn group_by_id(&mut self, mut ids: Vec<StorageId>) {
         // Sorted ids are the group's identity, `(A, B)` and `(B, A)` are the same group.

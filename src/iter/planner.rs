@@ -584,7 +584,8 @@ pub(crate) struct CoverSet {
 /// A range whose group contains all required members of a [`CoverSet`].
 #[derive(Clone, Debug)]
 pub(crate) struct CoverRange {
-    /// Sorted member ids of the range's group, compared by pointer.
+    /// Canonical identity retained for topology assertions in tests.
+    #[cfg(test)]
     pub(crate) group: Arc<[StorageId]>,
     /// Each child holding a member of the group, in child order, with its part of the range.
     ///
@@ -711,6 +712,7 @@ fn containing_ranges(children: &[Child], required: u32) -> Vec<CoverRange> {
                 .all(|storage_id| range.group.binary_search(storage_id).is_ok())
         })
         .map(|range| CoverRange {
+            #[cfg(test)]
             group: range.group.clone(),
             members: range_members(children, &range.group),
         })

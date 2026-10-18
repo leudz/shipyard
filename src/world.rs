@@ -1315,22 +1315,20 @@ impl World {
     /// Declares a group made of the given storages, creating the ones that don't exist yet.
     ///
     /// Groups can share storages. Entities satisfying overlapping groups are grouped
-    /// in a union of them.\
+    /// in their connected union, disjoint groups stay independent.\
     /// Declaring a group that already exists, declared or created as a union, does nothing.\
     /// Declaring a new group runs a full [`regroup`](World::regroup).
     ///
     /// ### Panics
     ///
     /// - The same storage is listed twice.
-    #[doc(hidden)]
     #[track_caller]
     pub fn group<G: TupleGroup>(&mut self) -> &mut World {
         self.all_storages.get_mut().group::<G>();
         self
     }
 
-    /// Moves every grouped component to where it belongs.
-    #[doc(hidden)]
+    /// Reorganizes components according to the declared groups to improve iteration performance.
     pub fn regroup(&mut self) {
         self.all_storages.get_mut().regroup();
     }

@@ -22,8 +22,7 @@ type StoragePtr = *mut (dyn Storage + 'static);
 //   invalidates the previous one.
 
 impl AllStorages {
-    /// Moves every grouped component to where it belongs.
-    #[doc(hidden)]
+    /// Reorganizes components according to the declared groups to improve iteration performance.
     pub fn regroup(&mut self) {
         let storages = self.storages.get_mut();
         let storage_ids = sorted_storage_ids(storages);
@@ -43,8 +42,9 @@ impl AllStorages {
 
 /// Returns the id of every storage, sorted.
 ///
-/// The map's iteration order can change between runs.
-/// Sorting keeps the layout, and therefore grouped iteration order, reproducible.
+/// The map's iteration order can change between runs.\
+/// Sorting keeps the layout, and therefore grouped iteration order, reproducible within a build.\
+/// Storage IDs do not promise the same order across compiler builds.
 fn sorted_storage_ids(storages: &ShipHashMap<StorageId, SBox>) -> Vec<StorageId> {
     let mut storage_ids: Vec<StorageId> = storages.keys().copied().collect();
     storage_ids.sort_unstable();

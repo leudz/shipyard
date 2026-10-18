@@ -2,7 +2,8 @@
 //!
 //! [`grouped_entities`] publishes the walks [`select`](super::select) estimated as a plan:
 //! one segment per piece of a walk, each with the row it installs and the regions earlier
-//! pieces own. Walks are cut where one of their captains' rings wraps.\
+//! pieces own. Walks already split at trust endpoints; placement also cuts them wherever
+//! one of their active captains' rings wraps. Neither cut changes the covered logical positions.\
 //! It doesn't read entities, segments are carved out of the members' entities from metadata alone.
 //!
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
