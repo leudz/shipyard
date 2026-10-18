@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use crate::error;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
@@ -124,20 +127,5 @@ impl BorrowState {
     #[inline(never)]
     fn cold_check_overflow(&self, new: usize) {
         self.check_overflow(new)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reborrow() {
-        let borrow = BorrowState::new();
-        let write = borrow.write().unwrap();
-
-        let read = write.shared_reborrow();
-
-        assert_eq!(HIGH_BIT + 1, (read.0).0.load(Ordering::Relaxed));
     }
 }
