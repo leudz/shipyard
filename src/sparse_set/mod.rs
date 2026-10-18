@@ -306,41 +306,54 @@ impl<T: Component> SparseSet<T> {
                 on_insertion(entity, &value);
             }
 
-            let _ = unsafe {
-                core::mem::replace(self.data.get_unchecked_mut(sparse_entity.uindex()), value)
-            };
+            let index = sparse_entity.uindex();
+            self.replace_older_generation(entity, index, value, current);
 
             old_component = InsertionResult::OtherComponentOverride;
-
-            sparse_entity.copy_gen(entity);
-
-            let dense_entity = unsafe { self.dense.get_unchecked_mut(sparse_entity.uindex()) };
-
-            if self.is_tracking_insertion {
-                unsafe {
-                    *self
-                        .insertion_data
-                        .get_unchecked_mut(sparse_entity.uindex()) = current;
-                }
-            }
-            // The new entity's component was never modified, it doesn't inherit the old one's timestamp.
-            if self.is_tracking_modification {
-                unsafe {
-                    *self
-                        .modification_data
-                        .get_unchecked_mut(sparse_entity.uindex()) = TrackingTimestamp::origin();
-                }
-            }
-
-            dense_entity.copy_index_gen(entity);
-
-            // A different entity now sits in this slot, so a range holding it isn't aligned anymore.
-            self.reset_groups();
         } else {
             old_component = InsertionResult::NotInserted;
         }
 
         old_component
+    }
+
+    /// Replaces the component at `index`, owned by an older generation of `entity`, with `value`.
+    ///
+    /// The new component counts as inserted. The old one is dropped, it isn't a removal
+    /// so there's no removal callback or tracking.
+    fn replace_older_generation(
+        &mut self,
+        entity: EntityId,
+        index: usize,
+        value: T,
+        current: TrackingTimestamp,
+    ) {
+        // The other members of the old entity's ranges don't hold the new entity,
+        // so its component can't stay in them.
+        let index = self.extract_to_unevaluated(index);
+
+        // SAFE: The extraction returns an index of the storage, so it's in bounds of every vector.
+        // `entity`'s sparse entry was allocated by `insert`, the extraction kept it pointing at `index`.
+        let old_value = unsafe {
+            self.sparse.get_mut_unchecked(entity).copy_gen(entity);
+            self.dense.get_unchecked_mut(index).copy_index_gen(entity);
+
+            if self.is_tracking_insertion {
+                *self.insertion_data.get_unchecked_mut(index) = current;
+            }
+            // The new entity's component was never modified, it doesn't inherit the old one's timestamp.
+            if self.is_tracking_modification {
+                *self.modification_data.get_unchecked_mut(index) = TrackingTimestamp::origin();
+            }
+
+            core::mem::replace(self.data.get_unchecked_mut(index), value)
+        };
+
+        #[cfg(debug_assertions)]
+        self.groups.assert_invariants(self.dense.len());
+
+        // The storage is consistent by now, in case dropping the old value panics.
+        drop(old_value);
     }
 }
 

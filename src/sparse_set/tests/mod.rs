@@ -57,7 +57,8 @@ impl Component for Zst {
 /// Builds a storage holding one entity per slot, in physical order, each with `make(index)`.
 ///
 /// `ranges` are `(len, shift)` pairs placed back to back and fully trusted, followed by
-/// `ungrouped_len` ungrouped and `unevaluated_len` unevaluated components.\n/// Tracked entities are inserted at timestamp `index` and modified at `100 + index`.
+/// `ungrouped_len` ungrouped and `unevaluated_len` unevaluated components.\
+/// Tracked entities are inserted at timestamp `index` and modified at `100 + index`.
 fn storage_with_tails<T: Component>(
     ranges: &[(usize, isize)],
     ungrouped_len: usize,
@@ -114,25 +115,147 @@ fn ints_with_tails(
 ///
 /// `value` reads the entity index a component was built with, `None` when it can't.
 fn assert_rows<T: Component>(sparse_set: &SparseSet<T>, value: impl Fn(&T) -> Option<u64>) {
-    for (index, entity) in sparse_set.dense.iter().enumerate() {
-        assert_eq!(sparse_set.index_of(*entity), Some(index));
-        if let Some(value) = value(&sparse_set.data[index]) {
-            assert_eq!(value, entity.index());
-        }
-
-        if sparse_set.is_tracking_insertion {
-            assert_eq!(sparse_set.insertion_data[index].get(), entity.index());
-        }
-        if sparse_set.is_tracking_modification {
-            assert_eq!(
-                sparse_set.modification_data[index].get(),
-                100 + entity.index()
-            );
-        }
+    for index in 0..sparse_set.len() {
+        assert_row(sparse_set, index, &value);
     }
 
     #[cfg(debug_assertions)]
     sparse_set.groups.assert_invariants(sparse_set.len());
+}
+
+/// Same as [`assert_rows`] for the row at physical `index` alone, without checking the layout.
+fn assert_row<T: Component>(
+    sparse_set: &SparseSet<T>,
+    index: usize,
+    value: &impl Fn(&T) -> Option<u64>,
+) {
+    let entity = sparse_set.dense[index];
+
+    assert_eq!(sparse_set.index_of(entity), Some(index));
+    if let Some(value) = value(&sparse_set.data[index]) {
+        assert_eq!(value, entity.index());
+    }
+
+    if sparse_set.is_tracking_insertion {
+        assert_eq!(sparse_set.insertion_data[index].get(), entity.index());
+    }
+    if sparse_set.is_tracking_modification {
+        assert_eq!(
+            sparse_set.modification_data[index].get(),
+            100 + entity.index()
+        );
+    }
+}
+
+/// Layout of a storage by entity index: each range in logical order with its trust,
+/// then the sorted ungrouped and unevaluated regions.
+///
+/// It's read with the ring formula directly, not with `Ring`, so extraction tests don't rely
+/// on the arithmetic the extraction itself uses.
+#[derive(Clone, PartialEq, Debug)]
+struct Layout {
+    ranges: Vec<(Vec<u64>, usize)>,
+    ungrouped: Vec<u64>,
+    unevaluated: Vec<u64>,
+}
+
+fn layout<T: Component>(sparse_set: &SparseSet<T>) -> Layout {
+    let groups = &sparse_set.groups;
+    let indices = |entities: &[EntityId]| {
+        let mut indices: Vec<u64> = entities.iter().map(|entity| entity.index()).collect();
+        indices.sort_unstable();
+        indices
+    };
+
+    let ranges = groups
+        .ranges
+        .iter()
+        .map(|range| {
+            let len = isize::try_from(range.len).unwrap();
+            let order = (0..len)
+                .map(|logical| {
+                    let offset = usize::try_from((range.shift + logical).rem_euclid(len)).unwrap();
+                    let physical = range.start + offset;
+                    sparse_set.dense[physical].index()
+                })
+                .collect();
+
+            (order, range.trust)
+        })
+        .collect();
+
+    Layout {
+        ranges,
+        ungrouped: indices(&sparse_set.dense[groups.grouped_end()..groups.unevaluated_start]),
+        unevaluated: indices(&sparse_set.dense[groups.unevaluated_start..]),
+    }
+}
+
+/// What an extraction test remembers of a storage before the extraction.
+struct Before {
+    layout: Layout,
+    shifts: Vec<isize>,
+    groups: Vec<Arc<[StorageId]>>,
+}
+
+impl Before {
+    fn of<T: Component>(sparse_set: &SparseSet<T>) -> Before {
+        let ranges = &sparse_set.groups.ranges;
+
+        Before {
+            layout: layout(sparse_set),
+            shifts: ranges.iter().map(|range| range.shift).collect(),
+            groups: ranges.iter().map(|range| range.group.clone()).collect(),
+        }
+    }
+}
+
+/// Panics unless `after` is `before` once the component with `entity`'s index left with a
+/// physical extraction, and `sparse_set` still has every group attached in the same order.
+///
+/// The range the component left only keeps the logical positions before both its own and the one
+/// in the range's physical last slot. The order after them isn't specified, so we compare it as a set.
+/// Every other range keeps its logical order and trust.
+fn assert_extracted<T: Component>(
+    before: &Before,
+    mut after: Layout,
+    sparse_set: &SparseSet<T>,
+    entity: u64,
+    context: &str,
+) {
+    let mut expected = before.layout.clone();
+    expected.ungrouped.retain(|&index| index != entity);
+    expected.unevaluated.retain(|&index| index != entity);
+
+    let source = expected
+        .ranges
+        .iter()
+        .position(|(order, _)| order.contains(&entity));
+    if let Some(range_index) = source {
+        let (order, trust) = &mut expected.ranges[range_index];
+        let logical = order.iter().position(|&index| index == entity).unwrap();
+        let len = order.len();
+        let shift = before.shifts[range_index];
+        let wrap_offset = usize::try_from(shift.rem_euclid(isize::try_from(len).unwrap())).unwrap();
+        let physical_last = len - 1 - wrap_offset;
+
+        *trust = (*trust).min(logical).min(physical_last);
+        order.remove(logical);
+        order[*trust..].sort_unstable();
+
+        // We sort the same untrusted part of what we got.
+        let order = &mut after.ranges[range_index].0;
+        if *trust <= order.len() {
+            order[*trust..].sort_unstable();
+        }
+    }
+    assert_eq!(after, expected, "{context}");
+
+    let ranges = &sparse_set.groups.ranges;
+    assert_eq!(ranges.len(), before.groups.len(), "{context}");
+    for (range, group) in ranges.iter().zip(&before.groups) {
+        assert!(Arc::ptr_eq(&range.group, group), "{context}");
+    }
 }
 
 fn int_value(component: &I32) -> Option<u64> {

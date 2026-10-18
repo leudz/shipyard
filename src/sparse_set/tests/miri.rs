@@ -967,3 +967,101 @@ fn grouped_zero_sized() {
     }
     assert_eq!(sparse_set.len(), 3);
 }
+
+/// Asserts that replacing older generations from a range, the ungrouped and the unevaluated
+/// region drops each old component exactly once, right away, while the new components and every
+/// other one stay reachable with their values.
+#[test]
+fn grouped_replacement() {
+    let counter = counter();
+    let mut sparse_set = grouped_items(7, &counter);
+
+    for (dropped, index) in [1, 4, 5, 6].into_iter().enumerate() {
+        let newer = EntityId::new_from_index_and_gen(index as u64, 1);
+
+        let result = sparse_set.insert(newer, item(10 + index as u32, &counter), now());
+
+        assert!(matches!(result, InsertionResult::OtherComponentOverride));
+        assert_eq!(drops(&counter), dropped + 1);
+        assert_eq!(values_of(&sparse_set, newer), [10 + index as u32]);
+        assert!(sparse_set.private_get(id(index)).is_none());
+        assert_consistent(&sparse_set);
+    }
+
+    for index in [0, 2, 3] {
+        assert_eq!(values_of(&sparse_set, id(index)), [index as u32]);
+    }
+    drop(sparse_set);
+    assert_eq!(drops(&counter), 11);
+}
+
+/// Asserts that an insertion callback unwinding while replacing a grouped component leaves the
+/// storage as it was: the old component is still there, the new value is dropped exactly once.
+#[cfg(feature = "std")]
+#[test]
+fn grouped_replacement_insertion_panic() {
+    let counter = counter();
+    let mut sparse_set = grouped_items(7, &counter);
+    sparse_set.on_insertion(|_, _| panic!("insertion callback panicked"));
+    let dense = sparse_set.dense.clone();
+    let newer = EntityId::new_from_index_and_gen(1, 1);
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        let _ = sparse_set.insert(newer, item(10, &counter), now());
+    }));
+
+    assert!(result.is_err());
+    assert_eq!(drops(&counter), 1);
+    assert_eq!(sparse_set.dense, dense);
+    assert_eq!(sparse_set.groups.ranges[0].trust, 3);
+    assert_eq!(values_of(&sparse_set, id(1)), [1]);
+    assert!(sparse_set.private_get(newer).is_none());
+    assert_consistent(&sparse_set);
+
+    let _ = sparse_set.take_on_insertion();
+    drop(sparse_set);
+    assert_eq!(drops(&counter), 8);
+}
+
+/// Component whose drop panics when asked to.
+struct Fragile {
+    panics: bool,
+}
+
+impl Drop for Fragile {
+    fn drop(&mut self) {
+        if self.panics {
+            panic!("fragile component dropped");
+        }
+    }
+}
+
+impl Component for Fragile {
+    type Tracking = track::Untracked;
+}
+
+/// Asserts that an old component panicking while it's dropped by a replacement only does so once
+/// the storage is consistent: the new component is reachable, the old entity isn't.
+#[cfg(feature = "std")]
+#[test]
+fn grouped_replacement_drop_panic() {
+    let mut sparse_set = SparseSet::new();
+    for index in 0..5 {
+        let fragile = Fragile { panics: index == 1 };
+        sparse_set
+            .insert(id(index), fragile, now())
+            .assert_inserted();
+    }
+    group(&mut sparse_set, &[(3, 1), (1, 0)], 1);
+    let newer = EntityId::new_from_index_and_gen(1, 1);
+
+    let result = std::panic::catch_unwind(core::panic::AssertUnwindSafe(|| {
+        let _ = sparse_set.insert(newer, Fragile { panics: false }, now());
+    }));
+
+    assert!(result.is_err());
+    assert!(sparse_set.private_get(id(1)).is_none());
+    assert!(!sparse_set.private_get(newer).unwrap().panics);
+    assert_eq!(sparse_set.len(), 5);
+    assert_consistent(&sparse_set);
+}

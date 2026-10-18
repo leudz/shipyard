@@ -1,76 +1,6 @@
 //! Removal from grouped storages.
-//!
-//! Layouts are read with the ring formula directly, not with `Ring`, so these tests don't rely
-//! on the arithmetic the removal itself uses.
 
 use super::*;
-
-/// Layout of a storage by entity index: each range in logical order with its trust,
-/// then the sorted ungrouped and unevaluated regions.
-#[derive(Clone, PartialEq, Debug)]
-struct Layout {
-    ranges: Vec<(Vec<u64>, usize)>,
-    ungrouped: Vec<u64>,
-    unevaluated: Vec<u64>,
-}
-
-fn layout<T: Component>(sparse_set: &SparseSet<T>) -> Layout {
-    let groups = &sparse_set.groups;
-    let indices = |entities: &[EntityId]| {
-        let mut indices: Vec<u64> = entities.iter().map(|entity| entity.index()).collect();
-        indices.sort_unstable();
-        indices
-    };
-
-    let ranges = groups
-        .ranges
-        .iter()
-        .map(|range| {
-            let len = isize::try_from(range.len).unwrap();
-            let order = (0..len)
-                .map(|logical| {
-                    let offset = usize::try_from((range.shift + logical).rem_euclid(len)).unwrap();
-                    let physical = range.start + offset;
-                    sparse_set.dense[physical].index()
-                })
-                .collect();
-
-            (order, range.trust)
-        })
-        .collect();
-
-    Layout {
-        ranges,
-        ungrouped: indices(&sparse_set.dense[groups.grouped_end()..groups.unevaluated_start]),
-        unevaluated: indices(&sparse_set.dense[groups.unevaluated_start..]),
-    }
-}
-
-/// Returns `before` once `entity` was removed, with the untrusted part of its range sorted.
-///
-/// The range only keeps the positions before both `entity`'s and the one in its physical last slot.
-/// The order after them isn't specified, so we compare it as a set.
-fn expected(before: &Layout, shifts: &[isize], entity: u64) -> Layout {
-    let mut after = before.clone();
-    after.ungrouped.retain(|&index| index != entity);
-    after.unevaluated.retain(|&index| index != entity);
-
-    for ((order, trust), &shift) in after.ranges.iter_mut().zip(shifts) {
-        let Some(logical) = order.iter().position(|&index| index == entity) else {
-            continue;
-        };
-
-        let len = order.len();
-        let wrap_offset = usize::try_from(shift.rem_euclid(isize::try_from(len).unwrap())).unwrap();
-        let physical_last = len - 1 - wrap_offset;
-
-        *trust = (*trust).min(logical).min(physical_last);
-        order.remove(logical);
-        order[*trust..].sort_unstable();
-    }
-
-    after
-}
 
 /// Removes `entity`, then panics unless the storage lost the component with `entity`'s index and
 /// nothing else changed: other ranges keep their logical order and trust, the range it left only
@@ -82,50 +12,23 @@ fn assert_removal<T: Component>(
     entity: EntityId,
     value: impl Fn(&T) -> Option<u64>,
 ) -> Option<T> {
-    let before = layout(sparse_set);
-    let shifts: Vec<isize> = sparse_set
-        .groups
-        .ranges
-        .iter()
-        .map(|range| range.shift)
-        .collect();
-    let groups: Vec<Arc<[StorageId]>> = sparse_set
-        .groups
-        .ranges
-        .iter()
-        .map(|range| range.group.clone())
-        .collect();
+    let before = Before::of(sparse_set);
     let len = sparse_set.len();
 
     let removed = sparse_set.dyn_remove(entity, TrackingTimestamp::new(0));
 
-    let context = alloc::format!("{before:?}, removing {entity:?}");
+    let context = alloc::format!("{:?}, removing {entity:?}", before.layout);
     if let Some(index) = removed.as_ref().and_then(&value) {
         assert_eq!(index, entity.index(), "{context}");
     }
     assert_eq!(sparse_set.len(), len - 1, "{context}");
-
-    let mut after = layout(sparse_set);
-    let expected = expected(&before, &shifts, entity.index());
-    // `expected` sorts the untrusted part of the range the entity left, we do the same here.
-    let source = before
-        .ranges
-        .iter()
-        .position(|(order, _)| order.contains(&entity.index()));
-    if let Some(range_index) = source {
-        let trust = expected.ranges[range_index].1;
-        let order = &mut after.ranges[range_index].0;
-
-        if trust <= order.len() {
-            order[trust..].sort_unstable();
-        }
-    }
-    assert_eq!(after, expected, "{context}");
-
-    assert_eq!(sparse_set.groups.ranges.len(), groups.len(), "{context}");
-    for (range, group) in sparse_set.groups.ranges.iter().zip(&groups) {
-        assert!(Arc::ptr_eq(&range.group, group), "{context}");
-    }
+    assert_extracted(
+        &before,
+        layout(sparse_set),
+        sparse_set,
+        entity.index(),
+        &context,
+    );
     assert_rows(sparse_set, value);
 
     removed

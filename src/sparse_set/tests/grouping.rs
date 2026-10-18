@@ -2,11 +2,18 @@ use super::*;
 
 /// Builds a storage with entities 0, 1 and 2, all placed in a single fully trusted group range.
 fn grouped_sparse_set() -> SparseSet<I32> {
+    grouped_with_generation(0)
+}
+
+/// Same as `grouped_sparse_set`, with entity 1 at `generation`.
+fn grouped_with_generation(generation: u16) -> SparseSet<I32> {
     let mut sparse_set = SparseSet::new();
     for index in 0..3 {
+        let generation = if index == 1 { generation } else { 0 };
+
         sparse_set
             .insert(
-                EntityId::new_from_parts(index, 0),
+                EntityId::new_from_parts(index, generation),
                 I32(index as i32),
                 TrackingTimestamp::new(0),
             )
@@ -105,11 +112,35 @@ fn groups_retain_mut() {
     assert_shrunk(&sparse_set);
 }
 
-/// Asserts that inserting over the slot of an entity with a smaller generation
-/// resets the storage's groups, since a different entity now sits in the range.
+/// Asserts that inserting over the component of an entity with a smaller generation moves the
+/// new component to the unevaluated region, the range losing the old one like with a removal.
 #[test]
 fn groups_other_override() {
     let mut sparse_set = grouped_sparse_set();
+    let entity = EntityId::new_from_parts(1, 1);
+
+    let result = sparse_set.insert(entity, I32(10), TrackingTimestamp::new(0));
+
+    assert!(matches!(result, InsertionResult::OtherComponentOverride));
+    let range = &sparse_set.groups.ranges[0];
+    assert_eq!((range.start, range.len, range.trust), (0, 2, 1));
+    assert_eq!(sparse_set.groups.unevaluated_start, 2);
+    assert_eq!(
+        sparse_set.dense,
+        [
+            EntityId::new_from_parts(0, 0),
+            EntityId::new_from_parts(2, 0),
+            entity
+        ]
+    );
+    assert_eq!(sparse_set.private_get(entity), Some(&I32(10)));
+}
+
+/// Asserts that inserting with a generation older than the stored one leaves the groups untouched.
+#[test]
+fn groups_insert_older() {
+    let mut sparse_set = grouped_with_generation(2);
+    let dense = sparse_set.dense.clone();
 
     let result = sparse_set.insert(
         EntityId::new_from_parts(1, 1),
@@ -117,8 +148,9 @@ fn groups_other_override() {
         TrackingTimestamp::new(0),
     );
 
-    assert!(matches!(result, InsertionResult::OtherComponentOverride));
-    assert_reset(&sparse_set.groups);
+    assert!(matches!(result, InsertionResult::NotInserted));
+    assert_untouched(&sparse_set.groups);
+    assert_eq!(sparse_set.dense, dense);
 }
 
 /// Asserts that sorting a grouped storage resets its groups.
