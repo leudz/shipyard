@@ -1,11 +1,23 @@
 //! A small iteration regression suite built only on public APIs.
 //!
 //! Worlds are grouped with `World::group` and queried with the normal constructors, so the
-//! planner picks each walk itself. See `benches/iteration/README.md` for what each case guards,
-//! the timing boundaries and how to compare two builds.
+//! planner picks each walk itself.
+//!
+//! Each Criterion group times one boundary:
+//!
+//! - `ordinary`, `selection` and `grouped` time traversal. The iterator is built before the
+//!   timer starts, the timer covers consuming it to exhaustion and dropping it.
+//! - `construction+traversal` times small queries end to end: building the iterator,
+//!   consuming it and dropping it.
+//! - `construction+drop` times building an iterator and dropping it without advancing it.
 //!
 //! Every fixture is checked against its model before any timing, whether or not its cases are
-//! filtered out. `--test` runs those checks plus every registered routine once.
+//! filtered out.
+//!
+//! - `cargo bench --bench iteration` runs every case, a filter after `--` picks cases by id.
+//! - `cargo bench --bench iteration -- --test` runs the checks plus every registered routine once.
+//! - `-- --save-baseline <name>` on one build then `-- --baseline <name>` on another compares
+//!   the two with Criterion's own report.
 
 #[path = "iteration/consumers.rs"]
 mod consumers;
@@ -24,73 +36,38 @@ const SAMPLE_SIZE: usize = 30;
 const WARM_UP: Duration = Duration::from_millis(250);
 const MEASUREMENT: Duration = Duration::from_secs(1);
 
-/// When set, the suite writes the cases it registered to this path once every case ran.
-const MANIFEST_VAR: &str = "SHIPYARD_ITERATION_MANIFEST";
-
-/// What a registered case measures. Comparisons only pair cases with the same id and version.
-struct Case {
-    id: String,
-    /// Bump it when the case's fixture or consumer changes.
-    version: u32,
-    /// `"traversal"` or `"construction+traversal"`.
-    boundary: &'static str,
-    candidates: usize,
-    yielded: usize,
+/// Registers a large case. `routine` returns the time `iters` traversals took.
+fn traversal(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    name: &str,
+    fixture: &Fixture,
+    mut routine: impl FnMut(u64) -> Duration,
+) {
+    group.throughput(Throughput::Elements(fixture.yielded() as u64));
+    group.bench_function(name, |bencher| bencher.iter_custom(&mut routine));
 }
 
-/// Collects the registered cases of one Criterion group.
-struct Group<'c> {
-    name: &'static str,
-    group: BenchmarkGroup<'c, WallTime>,
-    cases: &'c mut Vec<Case>,
+/// Registers a small case. Criterion times whole calls to `routine`.
+fn construction_traversal(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    name: &str,
+    fixture: &Fixture,
+    mut routine: impl FnMut() -> u32,
+) {
+    group.throughput(Throughput::Elements(fixture.yielded() as u64));
+    group.bench_function(name, |bencher| bencher.iter(&mut routine));
 }
 
-impl Group<'_> {
-    /// Registers a large case. `routine` returns the time `iters` traversals took.
-    fn traversal(
-        &mut self,
-        name: &str,
-        version: u32,
-        fixture: &Fixture,
-        mut routine: impl FnMut(u64) -> Duration,
-    ) {
-        self.record(name, version, "traversal", fixture);
-        self.group
-            .bench_function(name, |bencher| bencher.iter_custom(&mut routine));
-    }
-
-    /// Registers a small case. Criterion times whole calls to `routine`.
-    fn construction(
-        &mut self,
-        name: &str,
-        version: u32,
-        fixture: &Fixture,
-        mut routine: impl FnMut() -> u32,
-    ) {
-        self.record(name, version, "construction+traversal", fixture);
-        self.group
-            .bench_function(name, |bencher| bencher.iter(&mut routine));
-    }
-
-    fn record(&mut self, name: &str, version: u32, boundary: &'static str, fixture: &Fixture) {
-        self.cases.push(Case {
-            id: format!("{}/{name}", self.name),
-            version,
-            boundary,
-            candidates: fixture.candidates,
-            yielded: fixture.yielded(),
-        });
-        self.group
-            .throughput(Throughput::Elements(fixture.yielded() as u64));
-    }
-}
-
-fn group<'c>(c: &'c mut Criterion, cases: &'c mut Vec<Case>, name: &'static str) -> Group<'c> {
-    Group {
-        name,
-        group: c.benchmark_group(name),
-        cases,
-    }
+/// Registers a case that builds an iterator and drops it untouched. Criterion times whole calls
+/// to `routine`.
+///
+/// There's no throughput, no item is yielded.
+fn construction_drop(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    name: &str,
+    mut routine: impl FnMut(),
+) {
+    group.bench_function(name, |bencher| bencher.iter(&mut routine));
 }
 
 /// Times `$iters` traversals and returns their sum.
@@ -122,6 +99,7 @@ fn check_members(
     hint: (usize, Option<usize>),
     ids: impl Iterator<Item = EntityId>,
 ) {
+    assert!(fixture.yielded() > 0, "{case}: empty workload");
     assert_eq!(hint, fixture.expected_hint(), "{case}: unexpected walk");
 
     let mut ids: Vec<_> = ids.collect();
@@ -134,8 +112,8 @@ fn check_sum(case: &str, got: u32, expected: u32) {
     assert_eq!(got, expected, "{case}: wrong checksum");
 }
 
-fn ordinary(c: &mut Criterion, cases: &mut Vec<Case>) {
-    let mut group = group(c, cases, "ordinary");
+fn ordinary(c: &mut Criterion) {
+    let mut group = c.benchmark_group("ordinary");
 
     let dense = fixtures::dense();
     let (a, b) = dense.world.borrow::<(View<A>, View<B>)>().unwrap();
@@ -144,18 +122,18 @@ fn ordinary(c: &mut Criterion, cases: &mut Vec<Case>) {
     check_members("dense", &dense, hint, ids);
 
     check_sum("dense_next", next_pair((&a, &b).iter()), dense.pair_sum());
-    group.traversal("dense_next", 1, &dense, |iters| {
+    traversal(&mut group, "dense_next", &dense, |iters| {
         time_traversals!(iters, (&a, &b).iter(), next_pair)
     });
 
     let ids = next_pair_ids((&a, &b).iter().with_id());
     check_sum("dense_next_ids", ids, dense.pair_id_sum());
-    group.traversal("dense_next_ids", 1, &dense, |iters| {
+    traversal(&mut group, "dense_next_ids", &dense, |iters| {
         time_traversals!(iters, (&a, &b).iter().with_id(), next_pair_ids)
     });
 
     check_sum("dense_fold", fold_pair((&a, &b).iter()), dense.pair_sum());
-    group.traversal("dense_fold", 1, &dense, |iters| {
+    traversal(&mut group, "dense_fold", &dense, |iters| {
         time_traversals!(iters, (&a, &b).iter(), fold_pair)
     });
 
@@ -168,7 +146,7 @@ fn ordinary(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     next_pair_mut((&mut a, &b).iter());
     dense_mut.check_mutated(&a, "dense_next_mut");
-    group.traversal("dense_next_mut", 1, &dense_mut, |iters| {
+    traversal(&mut group, "dense_next_mut", &dense_mut, |iters| {
         time_traversals!(iters, (&mut a, &b).iter(), next_pair_mut)
     });
 
@@ -179,7 +157,7 @@ fn ordinary(c: &mut Criterion, cases: &mut Vec<Case>) {
     check_members("sparse", &sparse, hint, ids);
 
     check_sum("sparse_next", next_pair((&a, &b).iter()), sparse.pair_sum());
-    group.traversal("sparse_next", 1, &sparse, |iters| {
+    traversal(&mut group, "sparse_next", &sparse, |iters| {
         time_traversals!(iters, (&a, &b).iter(), next_pair)
     });
 
@@ -194,13 +172,13 @@ fn ordinary(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     let sum = next_nested(((&a, &b), &c).iter());
     check_sum("nested_next", sum, nested.triple_sum());
-    group.traversal("nested_next", 1, &nested, |iters| {
+    traversal(&mut group, "nested_next", &nested, |iters| {
         time_traversals!(iters, ((&a, &b), &c).iter(), next_nested)
     });
 }
 
-fn selection(c: &mut Criterion, cases: &mut Vec<Case>) {
-    let mut group = group(c, cases, "selection");
+fn selection(c: &mut Criterion) {
+    let mut group = c.benchmark_group("selection");
 
     let small = fixtures::small_captain();
     let (a, b, c) = small.world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
@@ -210,13 +188,13 @@ fn selection(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     let sum = next_triple((&a, &b, &c).iter());
     check_sum("small_captain_next", sum, small.triple_sum());
-    group.traversal("small_captain_next", 1, &small, |iters| {
+    traversal(&mut group, "small_captain_next", &small, |iters| {
         time_traversals!(iters, (&a, &b, &c).iter(), next_triple)
     });
 }
 
-fn grouped(c: &mut Criterion, cases: &mut Vec<Case>) {
-    let mut group = group(c, cases, "grouped");
+fn grouped(c: &mut Criterion) {
+    let mut group = c.benchmark_group("grouped");
 
     let aligned = fixtures::aligned();
     let (a, b) = aligned.world.borrow::<(View<A>, View<B>)>().unwrap();
@@ -229,19 +207,19 @@ fn grouped(c: &mut Criterion, cases: &mut Vec<Case>) {
         fold_pair((&a, &b).iter()),
         aligned.pair_sum(),
     );
-    group.traversal("aligned_fold", 1, &aligned, |iters| {
+    traversal(&mut group, "aligned_fold", &aligned, |iters| {
         time_traversals!(iters, (&a, &b).iter(), fold_pair)
     });
 
     let ids = fold_pair_ids((&a, &b).iter().with_id());
     check_sum("aligned_fold_ids", ids, aligned.pair_id_sum());
-    group.traversal("aligned_fold_ids", 1, &aligned, |iters| {
+    traversal(&mut group, "aligned_fold_ids", &aligned, |iters| {
         time_traversals!(iters, (&a, &b).iter().with_id(), fold_pair_ids)
     });
 
     let sum = for_each_pair((&a, &b).iter());
     check_sum("aligned_for_each", sum, aligned.pair_sum());
-    group.traversal("aligned_for_each", 1, &aligned, |iters| {
+    traversal(&mut group, "aligned_for_each", &aligned, |iters| {
         time_traversals!(iters, (&a, &b).iter(), for_each_pair)
     });
 
@@ -254,7 +232,7 @@ fn grouped(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     fold_pair_mut((&mut a, &b).iter());
     aligned_mut.check_mutated(&a, "aligned_fold_mut");
-    group.traversal("aligned_fold_mut", 1, &aligned_mut, |iters| {
+    traversal(&mut group, "aligned_fold_mut", &aligned_mut, |iters| {
         time_traversals!(iters, (&mut a, &b).iter(), fold_pair_mut)
     });
 
@@ -269,7 +247,7 @@ fn grouped(c: &mut Criterion, cases: &mut Vec<Case>) {
         fold_pair((&a, &b).iter()),
         coverage.pair_sum(),
     );
-    group.traversal("coverage_fold", 1, &coverage, |iters| {
+    traversal(&mut group, "coverage_fold", &coverage, |iters| {
         time_traversals!(iters, (&a, &b).iter(), fold_pair)
     });
 
@@ -278,7 +256,7 @@ fn grouped(c: &mut Criterion, cases: &mut Vec<Case>) {
         next_pair((&a, &b).iter()),
         coverage.pair_sum(),
     );
-    group.traversal("coverage_next", 1, &coverage, |iters| {
+    traversal(&mut group, "coverage_next", &coverage, |iters| {
         time_traversals!(iters, (&a, &b).iter(), next_pair)
     });
 
@@ -293,13 +271,13 @@ fn grouped(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     let sum = fold_triple((&a, &b, &c).iter());
     check_sum("partial_fold", sum, partial.triple_sum());
-    group.traversal("partial_fold", 1, &partial, |iters| {
+    traversal(&mut group, "partial_fold", &partial, |iters| {
         time_traversals!(iters, (&a, &b, &c).iter(), fold_triple)
     });
 }
 
-fn construction(c: &mut Criterion, cases: &mut Vec<Case>) {
-    let mut group = group(c, cases, "construction");
+fn end_to_end(c: &mut Criterion) {
+    let mut group = c.benchmark_group("construction+traversal");
 
     let ordinary = fixtures::small_ordinary();
     let (a, b) = ordinary.world.borrow::<(View<A>, View<B>)>().unwrap();
@@ -309,7 +287,7 @@ fn construction(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     let sum = construct_next_pair(&a, &b);
     check_sum("ordinary_next_103", sum, ordinary.pair_sum());
-    group.construction("ordinary_next_103", 1, &ordinary, || {
+    construction_traversal(&mut group, "ordinary_next_103", &ordinary, || {
         construct_next_pair(black_box(&a), black_box(&b))
     });
 
@@ -321,34 +299,34 @@ fn construction(c: &mut Criterion, cases: &mut Vec<Case>) {
 
     let sum = construct_fold_pair(&a, &b);
     check_sum("grouped_fold_103", sum, grouped.pair_sum());
-    group.construction("grouped_fold_103", 1, &grouped, || {
+    construction_traversal(&mut group, "grouped_fold_103", &grouped, || {
         construct_fold_pair(black_box(&a), black_box(&b))
     });
 }
 
-/// Writes the registered cases and timing settings as JSON, for `scripts/iteration-bench.py`.
-fn write_manifest(path: &std::ffi::OsStr, cases: &[Case]) {
-    let cases: Vec<_> = cases
-        .iter()
-        .map(|case| {
-            serde_json::json!({
-                "id": case.id,
-                "version": case.version,
-                "boundary": case.boundary,
-                "candidates": case.candidates,
-                "yielded": case.yielded,
-            })
-        })
-        .collect();
-    let manifest = serde_json::json!({
-        "sample_size": SAMPLE_SIZE,
-        "warm_up_ms": WARM_UP.as_millis() as u64,
-        "measurement_ms": MEASUREMENT.as_millis() as u64,
-        "cases": cases,
-    });
+fn build_and_drop(c: &mut Criterion) {
+    let mut group = c.benchmark_group("construction+drop");
 
-    std::fs::write(path, serde_json::to_string_pretty(&manifest).unwrap())
-        .expect("couldn't write the manifest");
+    // Small and large ordinary queries, then grouped ones: a single aligned segment at both
+    // sizes and `coverage`, whose plan also holds the unevaluated walks.
+    let cases = [
+        ("small_ordinary", fixtures::small_ordinary()),
+        ("dense", fixtures::dense()),
+        ("small_grouped", fixtures::small_grouped()),
+        ("aligned", fixtures::aligned()),
+        ("coverage", fixtures::coverage()),
+    ];
+
+    for (name, fixture) in &cases {
+        let (a, b) = fixture.world.borrow::<(View<A>, View<B>)>().unwrap();
+        let hint = (&a, &b).iter().size_hint();
+        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+        check_members(name, fixture, hint, ids);
+
+        construction_drop(&mut group, name, || {
+            construct_drop_pair(black_box(&a), black_box(&b))
+        });
+    }
 }
 
 fn main() {
@@ -358,15 +336,12 @@ fn main() {
         .measurement_time(MEASUREMENT)
         .without_plots()
         .configure_from_args();
-    let mut cases = Vec::new();
 
-    ordinary(&mut criterion, &mut cases);
-    selection(&mut criterion, &mut cases);
-    grouped(&mut criterion, &mut cases);
-    construction(&mut criterion, &mut cases);
+    ordinary(&mut criterion);
+    selection(&mut criterion);
+    grouped(&mut criterion);
+    end_to_end(&mut criterion);
+    build_and_drop(&mut criterion);
 
     criterion.final_summary();
-    if let Some(path) = std::env::var_os(MANIFEST_VAR) {
-        write_manifest(&path, &cases);
-    }
 }

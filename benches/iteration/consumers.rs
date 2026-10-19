@@ -12,6 +12,7 @@
 
 use crate::fixtures::{A, B, C};
 use shipyard::{EntityId, IntoIter, View};
+use std::hint::black_box;
 
 fn id_hash(id: EntityId) -> u32 {
     (id.index() as u32).wrapping_mul(0x9E37_79B9)
@@ -117,4 +118,12 @@ pub fn construct_fold_pair(a: &View<'_, A>, b: &View<'_, B>) -> u32 {
     (a, b)
         .iter()
         .fold(0u32, |acc, (a, b)| acc.wrapping_add(a.0 ^ (b.0 << 3)))
+}
+
+/// Builds the pair iterator and drops it without advancing it.
+#[inline(never)]
+pub fn construct_drop_pair(a: &View<'_, A>, b: &View<'_, B>) {
+    let iter = (a, b).iter();
+    // We hide the iterator so its construction can't be optimized out, then drop it untouched.
+    drop(black_box(iter));
 }
