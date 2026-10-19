@@ -100,7 +100,7 @@ fn one_segment() {
         (schedule.follow_ups().len(), schedule.remaining_len()),
         (0, 0)
     );
-    assert!(schedule.follow_ups().is_empty());
+    assert!(!schedule.has_follow_ups());
 }
 
 /// Asserts that follow-ups come out in order with their own rows
@@ -115,7 +115,7 @@ fn follow_ups() {
     assert_eq!(schedule.remaining_len(), 8);
 
     for (entities, remaining_len) in [(&first, 6), (&second, 1), (&third, 0)] {
-        let peeked = schedule.follow_ups()[0];
+        let peeked = schedule.follow_ups().next().unwrap();
         let segment = schedule.take_next().unwrap();
 
         assert_eq!(peeked.entities, segment.entities);
@@ -580,4 +580,226 @@ fn layout() {
 
         assert_eq!(result.err(), Some(PlanError::MalformedLayout));
     }
+}
+
+/// Builds a schedule over entities `0..10` in four segments of 3, 1, 4 and 2 candidates,
+/// with rows `window(0)` to `window(30)`.
+fn four_segments(all: &[EntityId]) -> SegmentSchedule {
+    SegmentSchedule::new(window_plan(&[&all[..3], &all[3..4], &all[4..8], &all[8..]]))
+}
+
+/// Returns the number of candidates of each follow-up left.
+fn lens(schedule: &SegmentSchedule) -> Vec<usize> {
+    schedule.follow_ups().map(|segment| segment.len()).collect()
+}
+
+/// Returns the entities of every follow-up left, in order, without consuming them.
+fn stream(schedule: &SegmentSchedule) -> Vec<EntityId> {
+    schedule
+        .follow_ups()
+        .flat_map(|segment| collect(segment.cursor()))
+        .collect()
+}
+
+/// Returns the entities of `cut`'s segment from the cut on, checking they keep their local indices.
+fn suffix(cut: &FollowUpCut) -> Vec<EntityId> {
+    let (_, suffix) = cut.segment.cursor().split_at(cut.local_index);
+    assert_eq!(suffix.local_index(), cut.local_index);
+
+    collect(suffix)
+}
+
+/// Asserts that a cut inside a later segment leaves a prefix of it, with the segment's own row,
+/// and hands the suffix and the following segments to the rest.
+#[test]
+fn split_at_inside() {
+    let all = entities(10);
+    let mut left = four_segments(&all);
+
+    let cut = left.split_follow_ups_at(6);
+
+    assert_eq!(lens(&left), [3, 1, 2]);
+    assert_eq!(left.remaining_len(), 6);
+    assert_eq!(stream(&left), all[..6]);
+    let prefix = left.follow_ups().last().unwrap();
+    assert_eq!(left.plan().row(&prefix), [window(20)]);
+
+    assert_eq!((cut.segment.len(), cut.local_index), (4, 2));
+    assert_eq!(cut.rest.plan().row(&cut.segment), [window(20)]);
+    assert_eq!(suffix(&cut), all[6..8]);
+    assert_eq!(lens(&cut.rest), [2]);
+    assert_eq!(cut.rest.remaining_len(), 2);
+}
+
+/// Asserts that a cut at a segment boundary leaves whole segments on both sides,
+/// the rest starting with the segment after the cut.
+#[test]
+fn split_at_boundary() {
+    let all = entities(10);
+    let mut left = four_segments(&all);
+
+    let cut = left.split_follow_ups_at(4);
+
+    assert_eq!(lens(&left), [3, 1]);
+    assert_eq!(left.remaining_len(), 4);
+    assert_eq!((cut.segment.len(), cut.local_index), (4, 0));
+    assert_eq!(suffix(&cut), all[4..8]);
+    assert_eq!(lens(&cut.rest), [2]);
+}
+
+/// Asserts that a cut before the first candidate leaves no follow-up but keeps the plan,
+/// everything goes to the rest.
+#[test]
+fn split_at_start() {
+    let all = entities(10);
+    let mut left = four_segments(&all);
+    let weak = Arc::downgrade(&left.plan);
+
+    let cut = left.split_follow_ups_at(0);
+
+    assert!(!left.has_follow_ups());
+    assert_eq!(left.remaining_len(), 0);
+    assert!(left.take_next().is_none());
+    assert_eq!((cut.segment.len(), cut.local_index), (3, 0));
+    assert_eq!(lens(&cut.rest), [1, 4, 2]);
+
+    drop(cut);
+    assert_eq!(weak.strong_count(), 1);
+}
+
+/// Asserts that a cut inside an already cut last segment splits the prefix we own,
+/// not the plan's whole segment, and leaves the earlier rest untouched.
+#[test]
+fn split_at_prefix() {
+    let all = entities(10);
+    let mut left = four_segments(&all);
+    let first_cut = left.split_follow_ups_at(6);
+
+    let cut = left.split_follow_ups_at(5);
+
+    assert_eq!(lens(&left), [3, 1, 1]);
+    assert_eq!(left.remaining_len(), 5);
+    assert_eq!((cut.segment.len(), cut.local_index), (2, 1));
+    assert_eq!(suffix(&cut), all[5..6]);
+    assert!(!cut.rest.has_follow_ups());
+    assert_eq!(cut.rest.remaining_len(), 0);
+    assert_eq!(suffix(&first_cut), all[6..8]);
+    assert_eq!(lens(&first_cut.rest), [2]);
+}
+
+/// Asserts that every cut, before or after taking a follow-up, shares the candidates without
+/// losing or repeating one: our follow-ups, the cut segment's suffix and the rest's follow-ups
+/// give back the original stream, and the counts add up.
+#[test]
+fn split_at_every_count() {
+    let all = entities(10);
+
+    for taken in 0..2 {
+        let mut original = four_segments(&all);
+        for _ in 0..taken {
+            original.take_next();
+        }
+        let total = original.remaining_len();
+
+        for count in 0..total {
+            let mut left = original.clone();
+            let before = stream(&left);
+
+            let cut = left.split_follow_ups_at(count);
+
+            let mut after = stream(&left);
+            after.extend(suffix(&cut));
+            after.extend(stream(&cut.rest));
+            assert_eq!(after, before, "{taken} {count}");
+
+            assert_eq!(left.remaining_len(), count, "{taken} {count}");
+            assert_eq!(lens(&left).iter().sum::<usize>(), count, "{taken} {count}");
+            let rest_len: usize = lens(&cut.rest).iter().sum();
+            assert_eq!(cut.rest.remaining_len(), rest_len, "{taken} {count}");
+            assert_eq!(
+                cut.segment.len() - cut.local_index + rest_len,
+                total - count,
+                "{taken} {count}"
+            );
+        }
+    }
+}
+
+/// Asserts that a cut has to leave a candidate to the rest.
+#[test]
+#[should_panic(expected = "the rest of the follow-ups keeps at least one candidate")]
+fn split_at_end() {
+    let all = entities(10);
+    let mut schedule = four_segments(&all);
+
+    schedule.split_follow_ups_at(10);
+}
+
+/// Asserts that advancing the clone of a cut schedule doesn't move the original, and that both
+/// stop at the prefix we own and stay exhausted afterwards.
+#[test]
+fn split_at_clone() {
+    let all = entities(10);
+    let mut left = four_segments(&all);
+    let _cut = left.split_follow_ups_at(6);
+
+    let mut clone = left.clone();
+    let taken: Vec<usize> = core::iter::from_fn(|| clone.take_next())
+        .map(|segment| segment.len())
+        .collect();
+
+    assert_eq!(taken, [3, 1, 2]);
+    assert!(ptr::eq(left.plan(), clone.plan()));
+    for _ in 0..2 {
+        assert!(clone.take_next().is_none());
+        assert_eq!(clone.remaining_len(), 0);
+    }
+    assert_eq!(lens(&left), [3, 1, 2]);
+    assert_eq!(left.remaining_len(), 6);
+}
+
+/// Asserts that the plan is released once the last of the cut schedules is dropped,
+/// whichever is dropped first.
+#[test]
+fn split_at_release() {
+    let all = entities(10);
+
+    for drop_left_first in [true, false] {
+        let mut left = four_segments(&all);
+        let weak = Arc::downgrade(&left.plan);
+        let FollowUpCut { rest, .. } = left.split_follow_ups_at(6);
+        assert_eq!(weak.strong_count(), 2);
+
+        if drop_left_first {
+            drop(left);
+            assert_eq!(stream(&rest), all[8..]);
+            drop(rest);
+        } else {
+            drop(rest);
+            assert_eq!(stream(&left), all[..6]);
+            drop(left);
+        }
+        assert!(weak.upgrade().is_none());
+    }
+}
+
+/// Asserts that embedding a cut schedule in a parent plan copies the parts it owns,
+/// ending with its prefix, each with its own row.
+#[test]
+fn split_at_embed() {
+    let all = entities(10);
+    let mut child = four_segments(&all);
+    let _cut = child.split_follow_ups_at(6);
+
+    let mut builder = PlanBuilder::new(&[NodeKind::Window]);
+    builder.push_child_follow_ups(&child, &[window(0)], 0);
+    let parent = builder.finish().unwrap();
+
+    assert_eq!(lens(&parent), [3, 1, 2]);
+    assert_eq!(stream(&parent), all[..6]);
+    let rows: Vec<NodeState> = parent
+        .follow_ups()
+        .map(|segment| parent.plan().row(&segment)[0])
+        .collect();
+    assert_eq!(rows, [window(0), window(10), window(20)]);
 }

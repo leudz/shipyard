@@ -173,7 +173,7 @@ fn opt_len_follow_ups() {
     assert_eq!(ParShiperator(iter).opt_len(), None);
     let mut last = late_iter(&a, &b);
     assert_eq!(last.by_ref().take(4).count(), 4);
-    assert!(last.schedule.as_ref().unwrap().follow_ups().is_empty());
+    assert!(!last.schedule.as_ref().unwrap().has_follow_ups());
     assert_eq!(ParShiperator(last).with_id().opt_len(), None);
 }
 

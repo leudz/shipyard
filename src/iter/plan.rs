@@ -161,6 +161,24 @@ impl SegmentDescriptor {
         // while this descriptor and the cursors obtained from it are used.
         unsafe { EntityCursor::new(self.entities, self.len) }
     }
+
+    /// Returns the descriptor of the segment's first `len` candidates.
+    ///
+    /// It keeps the segment's row and its local indices: candidate `i` of the prefix is
+    /// candidate `i` of the segment.
+    ///
+    /// ### Panics
+    ///
+    /// - `len` is 0 or larger than the segment's length.
+    #[inline]
+    fn prefix(self, len: usize) -> SegmentDescriptor {
+        assert!(
+            0 < len && len <= self.len,
+            "a prefix keeps at least one of the segment's candidates"
+        );
+
+        SegmentDescriptor { len, ..self }
+    }
 }
 
 /// Structural defect found when building a [`Plan`].
@@ -411,9 +429,12 @@ fn active_children(
     }
 }
 
-/// Shared ownership of a [`Plan`] and the position of the next follow-up segment.
+/// Shared ownership of a [`Plan`] and of an interval of its segments, the follow-ups.
 ///
 /// Each schedule advances independently, the plan itself is never modified.\
+/// The interval can end inside a segment, the schedule then only owns that segment's first
+/// `end_len` candidates, see [`split_follow_ups_at`](SegmentSchedule::split_follow_ups_at).
+/// It never starts inside one: whoever owns a segment's suffix walks it with its own cursor.\
 /// A schedule without follow-ups still keeps the plan alive, the current segment might
 /// be reading its coverage.
 pub(crate) struct SegmentSchedule {
@@ -425,6 +446,12 @@ pub(crate) struct SegmentSchedule {
     plan: ManuallyDrop<Arc<Plan>>,
     /// Index of the next follow-up segment.
     next: usize,
+    /// Index one past the last segment we own.
+    end: usize,
+    /// Number of candidates we own in segment `end - 1`, all of them unless a split cut it.
+    ///
+    /// Only read while `next < end`.
+    end_len: usize,
     /// Number of candidates in the follow-up segments.
     remaining_len: usize,
 }
@@ -434,10 +461,15 @@ impl SegmentSchedule {
     #[inline]
     pub(crate) fn new(plan: Plan) -> SegmentSchedule {
         let remaining_len = plan.total_len;
+        let end = plan.segments.len();
+        // Plans have at least one segment.
+        let end_len = plan.segments[end - 1].len;
 
         SegmentSchedule {
             plan: ManuallyDrop::new(Arc::new(plan)),
             next: 0,
+            end,
+            end_len,
             remaining_len,
         }
     }
@@ -449,15 +481,39 @@ impl SegmentSchedule {
     }
 
     /// Returns the follow-up segments left, in order.
+    ///
+    /// They're the parts we own: the last one can be a prefix of its segment.
     #[inline]
-    pub(crate) fn follow_ups(&self) -> &[SegmentDescriptor] {
-        &self.plan.segments[self.next..]
+    pub(crate) fn follow_ups(&self) -> impl ExactSizeIterator<Item = SegmentDescriptor> + '_ {
+        (self.next..self.end).map(|index| self.owned(index))
+    }
+
+    /// Returns `true` when a follow-up segment is left.
+    #[inline]
+    pub(crate) fn has_follow_ups(&self) -> bool {
+        self.next < self.end
+    }
+
+    /// Returns the part we own of segment `index`, one of `next..end`.
+    #[inline]
+    fn owned(&self, index: usize) -> SegmentDescriptor {
+        debug_assert!(self.next <= index && index < self.end);
+
+        let segment = self.plan.segments[index];
+        if index + 1 == self.end {
+            segment.prefix(self.end_len)
+        } else {
+            segment
+        }
     }
 
     /// Consumes and returns the next follow-up segment.
     #[inline]
     pub(crate) fn take_next(&mut self) -> Option<SegmentDescriptor> {
-        let segment = *self.follow_ups().first()?;
+        if !self.has_follow_ups() {
+            return None;
+        }
+        let segment = self.owned(self.next);
 
         self.next += 1;
         // `remaining_len` is the sum of the lengths of the segments from the old `self.next`,
@@ -483,10 +539,76 @@ impl SegmentSchedule {
     pub(crate) fn split_follow_ups(&mut self) -> SegmentSchedule {
         let follow_ups = self.clone();
 
-        self.next = self.plan.segments.len();
+        self.next = self.end;
         self.remaining_len = 0;
 
         follow_ups
+    }
+
+    /// Splits the follow-ups after their first `count` candidates.
+    ///
+    /// `self` keeps these `count` candidates, ending with a prefix of the segment the cut falls in
+    /// when it isn't at a segment boundary. The rest starts with the segment holding the cut:
+    /// the returned [`FollowUpCut`] has that segment, the local index of its first candidate
+    /// after the cut and a schedule of every segment after it.\
+    /// Nothing is allocated, both schedules share the plan.
+    ///
+    /// ### Panics
+    ///
+    /// - `count` isn't smaller than the number of candidates in the follow-ups.
+    #[allow(
+        dead_code,
+        reason = "Temporary, the whole-traversal split uses it next."
+    )]
+    pub(crate) fn split_follow_ups_at(&mut self, count: usize) -> FollowUpCut {
+        assert!(
+            count < self.remaining_len,
+            "the rest of the follow-ups keeps at least one candidate"
+        );
+
+        // Finds the segment holding candidate `count`, counting the candidates before it.
+        let mut index = self.next;
+        let mut before = 0;
+        let segment = loop {
+            let segment = self.owned(index);
+            if count < before + segment.len {
+                break segment;
+            }
+
+            before += segment.len;
+            index += 1;
+        };
+        let local_index = count - before;
+
+        let rest = SegmentSchedule {
+            plan: ManuallyDrop::new(Arc::clone(&self.plan)),
+            next: index + 1,
+            end: self.end,
+            end_len: self.end_len,
+            remaining_len: self.remaining_len - before - segment.len,
+        };
+
+        // We keep the segments before the cut, and the prefix of `segment` before it if there's one.
+        // A cut at a boundary leaves us ending on the previous segment, which isn't our old last
+        // one since the cut leaves at least one candidate after it, so we own all of it.
+        if local_index == 0 {
+            self.end = index;
+            self.end_len = if index > self.next {
+                self.plan.segments[index - 1].len
+            } else {
+                0
+            };
+        } else {
+            self.end = index + 1;
+            self.end_len = local_index;
+        }
+        self.remaining_len = count;
+
+        FollowUpCut {
+            segment,
+            local_index,
+            rest,
+        }
     }
 
     /// Returns a weak reference to the shared plan, to check when it's released.
@@ -502,9 +624,27 @@ impl Clone for SegmentSchedule {
         SegmentSchedule {
             plan: ManuallyDrop::new(Arc::clone(&self.plan)),
             next: self.next,
+            end: self.end,
+            end_len: self.end_len,
             remaining_len: self.remaining_len,
         }
     }
+}
+
+/// Where [`SegmentSchedule::split_follow_ups_at`] cut the follow-ups, and what follows the cut.
+#[allow(
+    dead_code,
+    reason = "Temporary, the whole-traversal split uses it next."
+)]
+pub(crate) struct FollowUpCut {
+    /// The segment holding the cut, with its original row and local indices.
+    ///
+    /// It's the part the schedule owned, it can be a prefix of the plan's segment.
+    pub(crate) segment: SegmentDescriptor,
+    /// Local index in `segment` of the first candidate after the cut.
+    pub(crate) local_index: usize,
+    /// The follow-ups after `segment`.
+    pub(crate) rest: SegmentSchedule,
 }
 
 impl Drop for SegmentSchedule {
@@ -701,12 +841,13 @@ impl PlanBuilder {
         let coverage_offset = self.coverage.len();
         self.coverage.extend_from_slice(&plan.coverage);
 
+        // We copy the parts the child owns, a bounded schedule's last one can be a prefix.
         for segment in schedule.follow_ups() {
             let row_index = self.rows.len() / self.layout.len();
 
             self.rows.extend_from_slice(&parent_row[..slot]);
             self.rows.extend(
-                plan.row(segment)
+                plan.row(&segment)
                     .iter()
                     .map(|state| state.with_coverage_offset(coverage_offset)),
             );
@@ -714,7 +855,7 @@ impl PlanBuilder {
 
             self.segments.push(SegmentDescriptor {
                 row: row_index,
-                ..*segment
+                ..segment
             });
         }
     }

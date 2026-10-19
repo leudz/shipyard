@@ -85,7 +85,7 @@ fn or_both() {
     assert_eq!(len, 2);
 
     let schedule = entities.schedule.unwrap();
-    let follow_ups = schedule.follow_ups();
+    let follow_ups: Vec<_> = schedule.follow_ups().collect();
     assert_eq!(follow_ups.len(), 1);
     assert_eq!(follow_ups[0].len(), 1);
     assert_eq!(
@@ -149,7 +149,7 @@ fn no_eager_entry() {
 
     assert_eq!(iter.next().map(or_value), Some(10));
     assert_eq!(iter.shiperator.branch, OrBranch::B);
-    assert!(iter.schedule.as_ref().unwrap().follow_ups().is_empty());
+    assert!(!iter.schedule.as_ref().unwrap().has_follow_ups());
 }
 
 /// Asserts that a first branch with candidates that all fail their lookups still
@@ -196,8 +196,7 @@ fn nested_or() {
     let schedule = iter.schedule.as_ref().unwrap();
     let rows: Vec<_> = schedule
         .follow_ups()
-        .iter()
-        .map(|segment| schedule.plan().row(segment).to_vec())
+        .map(|segment| schedule.plan().row(&segment).to_vec())
         .collect();
     assert_eq!(
         rows,
@@ -251,7 +250,7 @@ fn mixed_or_captain() {
 
     assert_eq!(iter.shiperator.captain_mask, 0b01);
     let schedule = iter.schedule.as_ref().unwrap();
-    let follow_up = schedule.follow_ups()[0];
+    let follow_up = schedule.follow_ups().next().unwrap();
     assert_eq!(
         schedule.plan().row(&follow_up),
         [
@@ -313,7 +312,7 @@ mod split {
         let right = right.unwrap();
 
         assert_eq!(left.cursor.len(), 2);
-        assert!(left.schedule.as_ref().unwrap().follow_ups().is_empty());
+        assert!(!left.schedule.as_ref().unwrap().has_follow_ups());
         assert_eq!(right.cursor.len(), 2);
         assert_eq!(right.schedule.as_ref().unwrap().follow_ups().len(), 1);
     }

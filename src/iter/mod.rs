@@ -233,7 +233,7 @@ impl<S> Shiper<S> {
         let has_follow_ups = self
             .schedule
             .as_ref()
-            .is_some_and(|schedule| !schedule.follow_ups().is_empty());
+            .is_some_and(SegmentSchedule::has_follow_ups);
 
         if !self.is_exact_sized || has_follow_ups {
             return None;
@@ -255,7 +255,7 @@ pub(crate) fn is_exact_traversal<S: Shiperator>(
     let has_follow_ups = entities
         .schedule
         .as_ref()
-        .is_some_and(|schedule| !schedule.follow_ups().is_empty());
+        .is_some_and(SegmentSchedule::has_follow_ups);
 
     shiperator.is_exact_sized() && (S::node_count() == 1 || !has_follow_ups)
 }

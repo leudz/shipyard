@@ -131,7 +131,7 @@ fn strategies_and_prefixes() {
     assert_eq!(iter.by_ref().take(2).count(), 2);
     assert_eq!(iter.next().unwrap().0.0, 23);
     assert_eq!(iter.shiperator.bulk_strategy(), BulkStrategy::Checked);
-    assert!(iter.schedule.as_ref().unwrap().follow_ups().is_empty());
+    assert!(!iter.schedule.as_ref().unwrap().has_follow_ups());
 
     let expected: Vec<_> = ids
         .iter()
