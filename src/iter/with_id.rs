@@ -115,7 +115,7 @@ impl<S: Shiperator> Iterator for WithId<Shiper<S>> {
 
 /// Unwraps the id `fold_segment` captures when asked to.
 #[inline(always)]
-fn with_id(entity_id: Option<EntityId>) -> EntityId {
+pub(super) fn with_id(entity_id: Option<EntityId>) -> EntityId {
     match entity_id {
         Some(entity_id) => entity_id,
         None => unreachable!("`fold_segment` captures ids when `WITH_ID` is true"),
@@ -151,7 +151,8 @@ impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for 
     where
         F: rayon::iter::plumbing::Folder<Self::Item>,
     {
-        // Like `Shiper`'s producer, the folder has to be able to stop once it's `full`.
-        folder.consume_iter(self)
+        // Like `Shiper`'s producer, we fold in bulk.
+        self.0
+            .fold_chunks::<true, _, _, _>(folder, |entity_id, out| (with_id(entity_id), out))
     }
 }

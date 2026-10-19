@@ -191,16 +191,21 @@ fn tracked() {
     assert_eq!(modified_parallel, modified(&sequential_world));
 }
 
+/// Entities in `short_circuit`'s world, more than one bulk chunk in each half.
+const LARGE: u32 = 10_000;
+
 /// Asserts that a short-circuiting consumer stops the traversal. On a single thread the
-/// iterator splits once and the left half is walked first: it stops at the match and
-/// the right half is skipped.
+/// iterator splits in a few pieces and the first one is walked first: it stops at the end of
+/// the chunk holding the match and the other pieces are skipped.
 #[test]
 fn short_circuit() {
-    let world = world();
+    let mut world = World::new();
+    for i in 0..LARGE {
+        world.add_entity((A(i), B(i)));
+    }
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
 
-    // `B` captains, `e0` then `e3` are its first two items.
     let visited = AtomicUsize::new(0);
     let found = pool.install(|| {
         (&a, &b)
@@ -211,9 +216,9 @@ fn short_circuit() {
             .find_any(|(a, _)| a.0 == 3)
     });
     assert_eq!(found.map(|(a, b)| (a.0, b.0)), Some((3, 3)));
-    assert_eq!(visited.load(Ordering::Relaxed), 2);
+    assert!(visited.load(Ordering::Relaxed) < LARGE as usize / 2);
 
-    // The first branch drives the current segment, `e0` then `e1`.
+    // The first branch drives the current segment, the second one is a follow-up.
     let visited = AtomicUsize::new(0);
     let found = pool.install(|| {
         (&a | &b)
@@ -224,5 +229,5 @@ fn short_circuit() {
             .find_any(|item| or_value(*item) == 1)
     });
     assert_eq!(found.map(or_value), Some(1));
-    assert_eq!(visited.load(Ordering::Relaxed), 2);
+    assert!(visited.load(Ordering::Relaxed) < LARGE as usize / 2);
 }

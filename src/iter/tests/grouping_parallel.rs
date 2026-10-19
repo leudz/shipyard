@@ -4,7 +4,7 @@
 //! construction always goes through iter/par_iter, including automatic selection.
 
 use super::grouping_fixtures::{A, B, coverage_world, late_iter, ring_world};
-use crate::iter::parallel::ExactProducer;
+use crate::iter::parallel::{ExactProducer, FOLD_CHUNK, Piece, min_piece_len};
 use crate::iter::{IntoIter, ParShiperator};
 use crate::or::OneOfTwo;
 use crate::{EntityId, Get, View, ViewMut, World};
@@ -315,16 +315,94 @@ fn tail_bridge() {
     );
 }
 
+/// Asserts that a folder getting full in the current segment, smaller than a chunk, receives
+/// the whole segment but no follow-up, and that one still accepting items enters the follow-up.
+/// `late_iter`'s segment yields 3 pairs, its covered follow-up the 3 others.
 #[test]
 fn fold_with_full() {
     let (world, expected) = coverage_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    // Stop inside the current segment, then inside the covered follow-up.
-    for limit in [1, 5] {
-        assert_eq!(fold_with(late_iter(&a, &b), limit).len(), limit);
+
+    for (limit, len) in [(1, 3), (3, 3), (4, 6)] {
+        assert_eq!(
+            fold_with(late_iter(&a, &b), limit).len(),
+            len,
+            "limit {limit}"
+        );
         assert_eq!(
             ids(fold_with(late_iter(&a, &b).with_id(), limit)),
-            expected[20..20 + limit]
+            expected[20..20 + len],
+            "limit {limit}"
+        );
+    }
+}
+
+/// Asserts that a piece splits while both halves keep at least its minimum: 100 candidates
+/// split with a minimum of 50, not with 51.
+#[test]
+fn piece_min_len() {
+    let mut world = World::new_for_test();
+    for i in 0..100 {
+        world.add_entity((A(i), B(i)));
+    }
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    let (left, right) = Piece {
+        producer: (&a, &b).iter(),
+        min_len: 50,
+    }
+    .split();
+    assert_eq!(left.producer.cursor.len(), 50);
+    assert_eq!(right.unwrap().producer.cursor.len(), 50);
+
+    let (piece, right) = Piece {
+        producer: (&a, &b).iter(),
+        min_len: 51,
+    }
+    .split();
+    assert!(right.is_none());
+    assert_eq!(piece.producer.cursor.len(), 100);
+}
+
+/// Asserts that a traversal's minimum piece length gives each of 4 threads 4 pieces,
+/// and never goes below its floor of 32, even when the candidates can't be counted.
+#[test]
+fn min_piece() {
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+
+    pool.install(|| {
+        assert_eq!(min_piece_len(Some(16_000)), 1_000);
+        assert_eq!(min_piece_len(Some(100)), 32);
+        assert_eq!(min_piece_len(None), 32);
+    });
+}
+
+/// Asserts that a folder getting full inside a segment longer than a chunk stops at the end
+/// of that chunk, and that one never full receives every item.
+#[test]
+fn fold_with_chunks() {
+    let mut world = World::new_for_test();
+    let total = 2 * FOLD_CHUNK + 5;
+    for i in 0..total as u32 {
+        world.add_entity((A(i), B(i)));
+    }
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    for (limit, len) in [
+        (1, FOLD_CHUNK),
+        (FOLD_CHUNK, FOLD_CHUNK),
+        (FOLD_CHUNK + 1, 2 * FOLD_CHUNK),
+        (usize::MAX, total),
+    ] {
+        assert_eq!(
+            fold_with((&a, &b).iter(), limit).len(),
+            len,
+            "limit {limit}"
+        );
+        assert_eq!(
+            fold_with((&a, &b).iter().with_id(), limit).len(),
+            len,
+            "limit {limit}"
         );
     }
 }
@@ -427,7 +505,11 @@ fn exact_split_at() {
     for index in [0, 5, 198] {
         let mut iter = (&a, &b).iter();
         iter.by_ref().take(2).for_each(drop);
-        let (left, right) = ExactProducer(iter).split_at(index);
+        let (left, right) = ExactProducer {
+            producer: iter,
+            min_len: 1,
+        }
+        .split_at(index);
         assert_eq!(
             fold_exact(left)
                 .iter()
@@ -445,7 +527,11 @@ fn exact_split_at() {
 
         let mut iter = (&a, &b).iter().with_id();
         iter.by_ref().take(2).for_each(drop);
-        let (left, right) = ExactProducer(iter).split_at(index);
+        let (left, right) = ExactProducer {
+            producer: iter,
+            min_len: 1,
+        }
+        .split_at(index);
         let found = ids(fold_exact(left))
             .into_iter()
             .chain(ids(fold_exact(right)))
@@ -462,10 +548,31 @@ fn exact_split_at() {
     }
 }
 
+/// 1,000 grouped pairs, then 100 pairs added after grouping, unevaluated in A and B.
+///
+/// The planner prefers its grouped walks, they have follow-ups so they're unindexed,
+/// and they're longer than a chunk.
+fn late_world() -> World {
+    let mut world = World::new_for_test();
+    for i in 0..1000 {
+        world.add_entity((A(i), B(i)));
+    }
+    world.group::<(A, B)>();
+    for i in 1000..1100 {
+        world.add_entity((A(i), B(i)));
+    }
+
+    world
+}
+
+/// Asserts that a single-threaded search over grouped walks with follow-ups finds its pair in
+/// the first piece and skips the others: it visits fewer items than the query yields.
 #[test]
 fn bridge_short_circuit() {
-    let (world, _) = coverage_world();
+    let world = late_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    assert!((&a, &b).iter().schedule.is_some());
+    let total = (&a, &b).iter().count();
     let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     let visited = AtomicUsize::new(0);
     let found = pool.install(|| {
@@ -477,13 +584,16 @@ fn bridge_short_circuit() {
             .find_any(|(a, _)| a.0 == 1)
     });
     assert_eq!(found.unwrap().0.0, 1);
-    assert_eq!(visited.load(Ordering::Relaxed), 2);
+    assert!(visited.load(Ordering::Relaxed) < total);
 }
 
+/// Asserts that a single-threaded search over an exact traversal finds its pair in the first
+/// piece and skips the others: it visits fewer items than the query yields.
 #[test]
 fn indexed_short_circuit() {
     let world = aligned_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let total = (&a, &b).iter().count();
     let pool = ThreadPoolBuilder::new().num_threads(1).build().unwrap();
     let visited = AtomicUsize::new(0);
     let found = pool.install(|| {
@@ -495,8 +605,9 @@ fn indexed_short_circuit() {
             .find_any(|(a, _)| a.0 == 1)
     });
     assert_eq!(found.unwrap().0.0, 1);
-    assert_eq!(visited.load(Ordering::Relaxed), 2);
+    assert!(visited.load(Ordering::Relaxed) < total);
 }
+
 /// Increments its counter when dropped, from whichever thread drops it.
 #[cfg(feature = "std")]
 struct Dropped<'a>(&'a AtomicUsize);
