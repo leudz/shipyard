@@ -1381,6 +1381,8 @@ impl World {
     /// - All of a group's storages have to be in the same tuple when creating an iterator.\
     ///   `((&a, &b), &c)` uses an `A+B` group, `(&a, (&b, &c))` doesn't.
     /// - Queries using `Not`, `Optional`, `Or` or a tracking filter like `inserted` don't use groups.
+    /// - Only bulk consumers like `for_each` or `fold` benefit from groups.\
+    ///   A `for` loop, or any other use of `next`, can be slower than without groups.
     ///
     /// ### Panics
     ///
