@@ -261,3 +261,48 @@ fn storage_groups_non_send() {
         Some(&[EntityId::new(0), EntityId::new(5)][..])
     );
 }
+
+/// Asserts that clear and refill cycles don't add up rotations: each refill grows the first range,
+/// which moves the second one right twice, and each clear puts both shifts back to 0, so every
+/// cycle ends with the same shifts.
+#[test]
+fn groups_clear_refill() {
+    let ab: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(1)]);
+    let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
+    let mut sparse_set = SparseSet::new();
+    sparse_set.groups.attach(ab.clone(), StorageId::Custom(0));
+    sparse_set.groups.attach(ac.clone(), StorageId::Custom(0));
+
+    for _ in 0..3 {
+        for index in 0..4 {
+            sparse_set
+                .insert(
+                    EntityId::new(index),
+                    I32(index as i32),
+                    TrackingTimestamp::new(0),
+                )
+                .assert_inserted();
+        }
+
+        // The second range fills first, so the first one's growth moves it.
+        for (index, group) in [(2, &ac), (3, &ac), (0, &ab), (1, &ab)] {
+            sparse_set.private_move_to(EntityId::new(index), GroupRegion::Range(group));
+        }
+        let shifts: Vec<isize> = sparse_set
+            .groups
+            .ranges
+            .iter()
+            .map(|range| range.shift)
+            .collect();
+        assert_eq!(shifts, [0, -2]);
+
+        sparse_set.private_clear(TrackingTimestamp::new(0));
+        assert!(
+            sparse_set
+                .groups
+                .ranges
+                .iter()
+                .all(|range| range.shift == 0)
+        );
+    }
+}

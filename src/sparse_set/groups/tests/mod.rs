@@ -197,14 +197,19 @@ fn lookup_mut() {
     assert!(groups.range_mut(&group(&[0, 1])).is_none());
 }
 
-/// Asserts that `reset` empties every range and the ungrouped region but keeps ranges attached.
+/// Asserts that `reset` empties and unrotates every range and empties the ungrouped region,
+/// but keeps ranges attached.
 #[test]
 fn reset() {
     let ab = group(&[0, 1]);
     let ac = group(&[0, 2]);
+    let mut ab_range = range(&ab, 0, 2);
+    ab_range.shift = isize::MIN;
+    let mut ac_range = range(&ac, 2, 3);
+    ac_range.shift = 5;
     let mut groups = Groups {
         storage_id: Some(StorageId::Custom(0)),
-        ranges: vec![range(&ab, 0, 2), range(&ac, 2, 3)],
+        ranges: vec![ab_range, ac_range],
         unevaluated_start: 6,
     };
 
@@ -214,6 +219,7 @@ fn reset() {
     for range in &groups.ranges {
         assert_eq!(range.start, 0);
         assert_eq!(range.len, 0);
+        assert_eq!(range.shift, 0);
         assert_eq!(range.trust, 0);
     }
     assert!(Arc::ptr_eq(&groups.ranges[0].group, &ab));
@@ -497,7 +503,8 @@ fn resize_from_empty() {
     assert_eq!(physical_order(range.ring()), [3, 2]);
 }
 
-/// Asserts that a reset storage can grow its ranges again whatever shift they kept.
+/// Asserts that a reset storage grows its ranges again from an unrotated ring, whatever shift
+/// they had before.
 #[test]
 fn reset_reuse() {
     let ab = group(&[0, 1]);
@@ -513,7 +520,7 @@ fn reset_reuse() {
     groups.ranges[0].resize(1, 0);
     groups.unevaluated_start = 1;
 
-    assert_eq!(groups.ranges[0].shift, -7);
+    assert_eq!(groups.ranges[0].shift, 0);
     assert_eq!(physical_order(groups.ranges[0].ring()), [0]);
     #[cfg(debug_assertions)]
     groups.assert_invariants(1);

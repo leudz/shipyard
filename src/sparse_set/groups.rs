@@ -38,7 +38,7 @@ pub(crate) struct GroupRange {
     pub(crate) group: Arc<[StorageId]>,
     pub(crate) start: usize,
     pub(crate) len: usize,
-    /// Rotation of the ring, see [`Ring`]. It's never normalized.
+    /// Rotation of the ring, see [`Ring`]. It's only normalized by [`Groups::reset`].
     pub(crate) shift: isize,
     /// Length of the logical prefix that is unchanged since the last regroup.
     pub(crate) trust: usize,
@@ -350,7 +350,7 @@ impl Groups {
 
     /// Makes the whole storage unevaluated, without moving any component.
     ///
-    /// Definitions, creation order and signed shifts survive. Every range becomes empty with
+    /// Definitions and creation order survive. Every range becomes empty and unrotated with
     /// zero trust, and the ungrouped region becomes empty too.
     pub(crate) fn reset(&mut self) {
         // Clear and drain land here, they empty the whole storage.
@@ -358,10 +358,12 @@ impl Groups {
         // sorting only reorders the ungrouped region and regroup's own movements preserve ranges.
         // Iteration stays correct: our trust is 0 so every group's aligned part is empty,
         // and all our components are found in the unevaluated region.
-        // Shifts are kept, an empty range doesn't use it and growing it picks a new remainder.
+        // An empty range doesn't use its shift, we put it back to 0. Shifts are never normalized
+        // otherwise, so without this, each clear and refill would keep adding to them.
         for range in &mut self.ranges {
             range.start = 0;
             range.len = 0;
+            range.shift = 0;
             range.trust = 0;
         }
 

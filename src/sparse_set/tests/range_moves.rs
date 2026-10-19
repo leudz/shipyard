@@ -611,7 +611,7 @@ fn move_empty_tails() {
     assert_move(&mut sparse_set, 2, To::Unevaluated, int_value);
 }
 
-/// Asserts that a reset storage refills its ranges, whatever shifts they kept.
+/// Asserts that a reset storage refills its ranges, whatever shifts they had before.
 #[test]
 fn move_after_reset() {
     let mut sparse_set = ints_with_tails(&[(3, 2), (2, -1)], 1, 1);
