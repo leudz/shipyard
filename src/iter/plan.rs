@@ -445,9 +445,12 @@ pub(crate) struct SegmentSchedule {
     /// a plain `Arc` field would be just as correct.
     plan: ManuallyDrop<Arc<Plan>>,
     /// Index of the next follow-up segment.
-    next: usize,
+    ///
+    /// Segment indices are `u32` to keep every iterator small enough to be copied inline,
+    /// two more `usize` made constructing even ordinary queries noticeably slower.
+    next: u32,
     /// Index one past the last segment we own.
-    end: usize,
+    end: u32,
     /// Number of candidates we own in segment `end - 1`, all of them unless a split cut it.
     ///
     /// Only read while `next < end`.
@@ -468,7 +471,7 @@ impl SegmentSchedule {
         SegmentSchedule {
             plan: ManuallyDrop::new(Arc::new(plan)),
             next: 0,
-            end,
+            end: u32::try_from(end).expect("plans have fewer than u32::MAX segments"),
             end_len,
             remaining_len,
         }
@@ -485,7 +488,7 @@ impl SegmentSchedule {
     /// They're the parts we own: the last one can be a prefix of its segment.
     #[inline]
     pub(crate) fn follow_ups(&self) -> impl ExactSizeIterator<Item = SegmentDescriptor> + '_ {
-        (self.next..self.end).map(|index| self.owned(index))
+        (self.next..self.end).map(|index| self.owned(index as usize))
     }
 
     /// Returns `true` when a follow-up segment is left.
@@ -497,10 +500,10 @@ impl SegmentSchedule {
     /// Returns the part we own of segment `index`, one of `next..end`.
     #[inline]
     fn owned(&self, index: usize) -> SegmentDescriptor {
-        debug_assert!(self.next <= index && index < self.end);
+        debug_assert!(self.next as usize <= index && index < self.end as usize);
 
         let segment = self.plan.segments[index];
-        if index + 1 == self.end {
+        if index + 1 == self.end as usize {
             segment.prefix(self.end_len)
         } else {
             segment
@@ -513,7 +516,7 @@ impl SegmentSchedule {
         if !self.has_follow_ups() {
             return None;
         }
-        let segment = self.owned(self.next);
+        let segment = self.owned(self.next as usize);
 
         self.next += 1;
         // `remaining_len` is the sum of the lengths of the segments from the old `self.next`,
@@ -564,7 +567,7 @@ impl SegmentSchedule {
         );
 
         // Finds the segment holding candidate `count`, counting the candidates before it.
-        let mut index = self.next;
+        let mut index = self.next as usize;
         let mut before = 0;
         let segment = loop {
             let segment = self.owned(index);
@@ -577,9 +580,10 @@ impl SegmentSchedule {
         };
         let local_index = count - before;
 
+        // `index` is below `end`, a `u32`, so `index + 1` fits in one.
         let rest = SegmentSchedule {
             plan: ManuallyDrop::new(Arc::clone(&self.plan)),
-            next: index + 1,
+            next: (index + 1) as u32,
             end: self.end,
             end_len: self.end_len,
             remaining_len: self.remaining_len - before - segment.len,
@@ -589,14 +593,14 @@ impl SegmentSchedule {
         // A cut at a boundary leaves us ending on the previous segment, which isn't our old last
         // one since the cut leaves at least one candidate after it, so we own all of it.
         if local_index == 0 {
-            self.end = index;
-            self.end_len = if index > self.next {
+            self.end = index as u32;
+            self.end_len = if index > self.next as usize {
                 self.plan.segments[index - 1].len
             } else {
                 0
             };
         } else {
-            self.end = index + 1;
+            self.end = (index + 1) as u32;
             self.end_len = local_index;
         }
         self.remaining_len = count;
