@@ -556,10 +556,7 @@ impl SegmentSchedule {
     /// ### Panics
     ///
     /// - `count` isn't smaller than the number of candidates in the follow-ups.
-    #[allow(
-        dead_code,
-        reason = "Temporary, the whole-traversal split uses it next."
-    )]
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     pub(crate) fn split_follow_ups_at(&mut self, count: usize) -> FollowUpCut {
         assert!(
             count < self.remaining_len,
@@ -632,10 +629,7 @@ impl Clone for SegmentSchedule {
 }
 
 /// Where [`SegmentSchedule::split_follow_ups_at`] cut the follow-ups, and what follows the cut.
-#[allow(
-    dead_code,
-    reason = "Temporary, the whole-traversal split uses it next."
-)]
+#[cfg_attr(not(feature = "parallel"), allow(dead_code))]
 pub(crate) struct FollowUpCut {
     /// The segment holding the cut, with its original row and local indices.
     ///

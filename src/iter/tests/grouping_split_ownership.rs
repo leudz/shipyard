@@ -429,3 +429,279 @@ fn trust_pieces_mut() {
         assert_eq!((&c).get(id).unwrap().0, 1200 + i);
     }
 }
+
+/// Splits `iter` over its whole traversal until no piece can split, pushing the pieces in
+/// traversal order.
+///
+/// Every split is checked: with `n` candidates left, follow-ups included, the left half keeps
+/// `floor(n / 2)` of them and the right half the rest. A piece only stays whole with fewer than 2.
+fn split_remaining_all<S: Shiperator + Clone>(iter: Shiper<S>, pieces: &mut Vec<Shiper<S>>) {
+    let total = iter.remaining_candidates().unwrap();
+
+    match iter.split_remaining() {
+        (left, Some(right)) => {
+            assert_eq!(left.remaining_candidates(), Some(total / 2));
+            assert_eq!(right.remaining_candidates(), Some(total - total / 2));
+
+            split_remaining_all(left, pieces);
+            split_remaining_all(right, pieces);
+        }
+        (iter, None) => {
+            assert!(total < 2);
+            pieces.push(iter);
+        }
+    }
+}
+
+/// Returns the pieces of `iter`, see [`split_remaining_all`].
+fn remaining_pieces<S: Shiperator + Clone>(iter: Shiper<S>) -> Vec<Shiper<S>> {
+    let mut pieces = Vec::new();
+    split_remaining_all(iter, &mut pieces);
+
+    pieces
+}
+
+/// A world with entities owning `A(0..a_len)`, then entities owning `B(100..100 + b_len)`.
+fn or_world(a_len: u32, b_len: u32) -> World {
+    let mut world = World::new_for_test();
+    for i in 0..a_len {
+        world.add_entity(A(i));
+    }
+    for i in 100..100 + b_len {
+        world.add_entity(B(i));
+    }
+
+    world
+}
+
+/// Asserts that an `Or` splits over both branches whatever their lengths and however much of the
+/// first one was consumed: cuts before, at and after the boundary, a one or zero candidate first
+/// segment in front of a longer second one. Pieces yield every value once, in order or reversed.
+#[test]
+fn remaining_or_lengths() {
+    for a_len in 0..=5 {
+        for b_len in 1..=6 {
+            let world = or_world(a_len, b_len);
+            let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+            for consumed in 0..=a_len {
+                let expected: Vec<u32> = (consumed..a_len).chain(100..100 + b_len).collect();
+                let context = alloc::format!("{a_len} {b_len} {consumed}");
+
+                let mut iter = (&a | &b).iter();
+                iter.by_ref().take(consumed as usize).for_each(drop);
+                let pieces = remaining_pieces(iter);
+                let values: Vec<u32> = pieces.into_iter().flatten().map(or_value).collect();
+                assert_eq!(values, expected, "{context}");
+
+                let mut iter = (&a | &b).iter();
+                iter.by_ref().take(consumed as usize).for_each(drop);
+                let pieces = remaining_pieces(iter);
+                let mut values: Vec<u32> =
+                    pieces.into_iter().rev().flatten().map(or_value).collect();
+                values.sort_unstable();
+                assert_eq!(values, expected, "{context}");
+            }
+        }
+    }
+}
+
+/// Asserts that a single candidate left in front of a long follow-up splits in the middle of the
+/// follow-up: the left half keeps the candidate and the follow-up's start, the right half walks
+/// the rest of the follow-up from its original local index.
+#[test]
+fn remaining_short_head() {
+    let world = or_world(1, 8);
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let iter = (&a | &b).iter();
+    assert_eq!(iter.cursor.len(), 1);
+
+    let (left, right) = iter.split_remaining();
+    let right = right.unwrap();
+
+    assert_eq!(right.cursor.local_index(), 3);
+    assert_eq!(follow_ups(&left), Some(1));
+    assert_eq!(follow_ups(&right), Some(0));
+    assert_eq!(left.map(or_value).collect::<Vec<_>>(), [0, 100, 101, 102]);
+    assert_eq!(
+        right.map(or_value).collect::<Vec<_>>(),
+        [103, 104, 105, 106, 107]
+    );
+}
+
+/// Asserts that a cut inside a later grouped segment gives the right half that segment's own
+/// state and original local indices, while the left half keeps its current segment and the
+/// later segment's prefix.
+#[test]
+fn remaining_later_segment() {
+    let (world, ids) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let mut iter = (&a, &b).iter();
+    iter.by_ref().take(10).for_each(drop);
+    // 10 aligned candidates are left, then 6 in A's late walk and 6 in B's.
+    assert_eq!(iter.remaining_candidates(), Some(22));
+
+    let (left, right) = iter.split_remaining();
+    let right = right.unwrap();
+
+    assert_eq!(left.cursor.len(), 10);
+    assert_eq!(follow_ups(&left), Some(1));
+    // The late A walk starts at 23, after three evaluated ungrouped A's, we resume at its second candidate.
+    assert_eq!(right.shiperator.shiperator.0.segment_start, 23);
+    assert_eq!(right.cursor.local_index(), 1);
+    assert_eq!(follow_ups(&right), Some(1));
+    let mut yielded = pair_ids(left);
+    yielded.extend(pair_ids(right));
+    assert_eq!(yielded, ids[10..]);
+}
+
+/// Asserts that grouped walks split down to single candidates from many positions, inside the
+/// aligned segment, at its end and inside the later walks, yield every remaining pair once
+/// whichever order the pieces are consumed in.
+#[test]
+fn remaining_grouped_order() {
+    let (world, ids) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    for consumed in [0, 10, 19, 20, 21, 23, 25] {
+        let mut iter = (&a, &b).iter();
+        iter.by_ref().take(consumed).for_each(drop);
+        let in_order: Vec<EntityId> = remaining_pieces(iter)
+            .into_iter()
+            .flat_map(pair_ids)
+            .collect();
+        assert_eq!(in_order, ids[consumed..], "{consumed}");
+
+        let mut iter = (&a, &b).iter();
+        iter.by_ref().take(consumed).for_each(drop);
+        let reversed: Vec<EntityId> = remaining_pieces(iter)
+            .into_iter()
+            .rev()
+            .flat_map(pair_ids)
+            .collect();
+        assert_eq!(
+            sorted(reversed),
+            sorted(ids[consumed..].to_vec()),
+            "{consumed}"
+        );
+    }
+}
+
+/// Asserts that mutable outputs of a prefix and of every piece of the grouped walks can all be
+/// held at once while later walks reject covered candidates: each pair is written exactly once.
+#[test]
+fn remaining_mut() {
+    let (world, ids) = coverage_world();
+    let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+    let mut iter = (&mut a, &mut b).iter();
+
+    let prefix: Vec<_> = iter.by_ref().take(5).collect();
+    let pieces = remaining_pieces(iter);
+    let outputs: Vec<_> = pieces.into_iter().rev().flatten().collect();
+    assert_eq!(prefix.len() + outputs.len(), ids.len());
+    for (a, b) in prefix.into_iter().chain(outputs) {
+        a.0 += 100;
+        b.0 += 100;
+    }
+
+    for (i, &id) in (0..).zip(&ids) {
+        assert_eq!((&a).get(id).unwrap().0, 100 + i);
+        assert_eq!((&b).get(id).unwrap().0, 110 + i);
+    }
+}
+
+/// Splits the late walks of `coverage_world` once A's three late matches are consumed: the cut
+/// falls inside B's walk, which reads coverage, the right half having no follow-up left.
+fn covered_remaining<'a>(a: &'a View<'_, A>, b: &'a View<'_, B>) -> (PairIter<'a>, PairIter<'a>) {
+    let mut iter = late_iter(a, b);
+    assert_eq!(iter.by_ref().take(3).count(), 3);
+
+    let (left, right) = iter.split_remaining();
+    let right = right.unwrap();
+    assert_eq!(right.shiperator.coverage.len(), 1);
+    assert_eq!(follow_ups(&left), Some(1));
+    assert_eq!(follow_ups(&right), Some(0));
+
+    (left, right)
+}
+
+/// Asserts that either half of a cut inside a covered walk yields what it yields on its own once
+/// the other half is dropped first: both keep the plan, and its coverage, alive.
+#[test]
+fn remaining_coverage_drop() {
+    let (world, ids) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    let (left, right) = covered_remaining(&a, &b);
+    let (left_alone, right_alone) = (pair_ids(left), pair_ids(right));
+    let mut together = left_alone.clone();
+    together.extend(&right_alone);
+    assert_eq!(together, ids[23..]);
+
+    for drop_left in [false, true] {
+        let (left, right) = covered_remaining(&a, &b);
+        let plan = left.schedule.as_ref().unwrap().downgrade();
+        assert_eq!(plan.strong_count(), 2);
+
+        let survivor = if drop_left {
+            drop(left);
+            pair_ids(right)
+        } else {
+            drop(right);
+            pair_ids(left)
+        };
+
+        let expected = if drop_left { &right_alone } else { &left_alone };
+        assert_eq!(&survivor, expected, "drop left {drop_left}");
+        assert!(plan.upgrade().is_none());
+    }
+}
+
+/// 10 pairs owning A, B and C grouped by AB, 4 late ones and 3 entities only owning C.
+///
+/// The pairs' grouped walks are the aligned pairs, then A's and B's unevaluated regions, B's
+/// covered by A's. Each entity `i` owns `A(i)`, `B(10 + i)` and `C(20 + i)`.\
+/// Returns the pairs, the late ones last.
+fn nested_world() -> (World, Vec<EntityId>) {
+    let mut world = World::new_for_test();
+    let add = |world: &mut World, i: u32| world.add_entity((A(i), B(10 + i), C(20 + i)));
+
+    let mut pairs: Vec<EntityId> = (0..10).map(|i| add(&mut world, i)).collect();
+    world.group::<(A, B)>();
+    pairs.extend((10..14).map(|i| add(&mut world, i)));
+    for i in 0..3 {
+        world.add_entity(C(1000 + i));
+    }
+
+    (world, pairs)
+}
+
+/// Asserts that a query driven through a nested grouped pair splits across all of the pair's
+/// walks and that the mutable outputs of every piece can all be held at once: each entity owning
+/// A, B and C is written exactly once and nothing else is.
+#[test]
+fn remaining_nested_mut() {
+    let (world, pairs) = nested_world();
+    let (mut a, mut b, mut c) = world
+        .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+        .unwrap();
+
+    let iter = grouped(((&mut a, &mut b), &mut c).into_shiperator());
+    assert_eq!(follow_ups(&iter), Some(2));
+    let outputs: Vec<_> = remaining_pieces(iter).into_iter().rev().flatten().collect();
+    assert_eq!(outputs.len(), pairs.len());
+    for ((a, b), c) in outputs {
+        assert_eq!((a.0 + 10, a.0 + 20), (b.0, c.0));
+        a.0 += 1000;
+        b.0 += 1000;
+        c.0 += 1000;
+    }
+
+    for (i, &id) in (0..).zip(&pairs) {
+        assert_eq!((&a).get(id).unwrap().0, 1000 + i);
+        assert_eq!((&b).get(id).unwrap().0, 1010 + i);
+        assert_eq!((&c).get(id).unwrap().0, 1020 + i);
+    }
+    // The entities only owning C weren't yielded, they still hold their own values.
+    assert_eq!(c.iter().filter(|c| (1000..1003).contains(&c.0)).count(), 3);
+}

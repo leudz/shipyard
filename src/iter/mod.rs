@@ -39,7 +39,7 @@ use crate::entity_id::EntityId;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::tracking::Tracking;
 use core::iter::FusedIterator;
-use plan::SegmentSchedule;
+use plan::{FollowUpCut, SegmentSchedule};
 
 /// Handles storages iteration.
 pub struct Shiper<S> {
@@ -218,6 +218,88 @@ impl<S: Clone> Shiper<S> {
         };
 
         (self, right)
+    }
+}
+
+impl<S: Shiperator + Clone> Shiper<S> {
+    /// Splits the candidates left, follow-ups included, near their middle.
+    ///
+    /// With `n` candidates left, the left half keeps the first `floor(n / 2)` and the right half
+    /// gets the rest. When the cut falls in a follow-up, the right half starts there and the left
+    /// half keeps the part of that segment before the cut.\
+    /// Returns `self` unchanged with `None` when fewer than 2 candidates are left.
+    ///
+    /// Splitting only reads segment descriptors and installs state. It doesn't read any entity,
+    /// create any item or call any consumer.
+    #[inline]
+    #[allow(dead_code, reason = "Temporary, Rayon producers move to it next.")]
+    pub(crate) fn split_remaining(mut self) -> (Self, Option<Self>) {
+        let current_len = self.cursor.len();
+        let Some(total) = self.remaining_candidates() else {
+            // We can't count every candidate, but the current segment alone still splits correctly.
+            return self.split_current_segment();
+        };
+        if total < 2 {
+            return (self, None);
+        }
+
+        let middle = total / 2;
+        if middle < current_len {
+            let (left, right) = self.split_current_segment_at(middle);
+
+            return (left, Some(right));
+        }
+
+        // `middle < total`, so the follow-ups keep at least one candidate after the cut.
+        let right = self.split_follow_ups_at(middle - current_len);
+
+        (self, Some(right))
+    }
+
+    /// Splits our follow-ups after their first `count` candidates and returns the half walking
+    /// the rest.
+    ///
+    /// We keep our current segment and the follow-ups before the cut. The returned half is a clone
+    /// of our Shiperator that entered the segment holding the cut, it walks that segment from the
+    /// cut on, then the follow-ups after it.
+    ///
+    /// ### Panics
+    ///
+    /// - We don't have more than `count` candidates in our follow-ups.
+    fn split_follow_ups_at(&mut self, count: usize) -> Self {
+        let schedule = self
+            .schedule
+            .as_mut()
+            .expect("follow-ups belong to a schedule");
+        let FollowUpCut {
+            segment,
+            local_index,
+            rest,
+        } = schedule.split_follow_ups_at(count);
+
+        // The right half gets its own state for the segment, like `enter_next_segment` would
+        // install it. Our state stays on our current segment.
+        let mut shiperator = self.shiperator.clone();
+        let mut entry = SegmentEntry::new(rest.plan(), &segment);
+        // SAFE: `new`'s caller guarantees every row of our schedule was built for `shiperator`'s
+        // layout, pairing its segment with the entities its nodes resolve. `segment` is one of
+        // these segments, or a prefix of one, with its original row.
+        // The right half only walks `segment`'s candidates with their original local indices.
+        // `rest` shares the plan and stays with this Shiperator, as its schedule.
+        unsafe { shiperator.enter_segment(&mut entry) };
+        debug_assert!(entry.is_done());
+
+        // Starting at the cut keeps the segment's local indices, the state we just installed
+        // resolves them from the segment's own start. They must never restart at 0.
+        let (_, cursor) = segment.cursor().split_at(local_index);
+
+        Shiper {
+            shiperator,
+            cursor,
+            schedule: Some(rest),
+            // Splits only remove candidates, exactness can only stay true.
+            is_exact_sized: self.is_exact_sized,
+        }
     }
 }
 
