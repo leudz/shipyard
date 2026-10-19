@@ -81,11 +81,12 @@ where
         // We're the query's root, every node has been built and nothing will pick another walk.
         let entities = planner::install_winner(&mut shiperator, entities);
 
-        // SAFE: `into_shiperator` returns a Shiperator whose state matches the first segment of
-        // the entities it returns, along with the follow-ups its constructors built rows for.
+        // SAFE: `IntoShiperator` is an unsafe trait, its implementation guarantees `shiperator`'s
+        // installed state matches the first segment of `entities` and every follow-up has a row
+        // built for `shiperator`'s layout, from the same storage borrows.
         // `install_winner` either keeps that pair or installs the first grouped segment on
         // `shiperator` and returns that segment's entities, with the plan `grouped_entities`
-        // built for `shiperator`'s own layout.
+        // built from `shiperator`'s own description and the metadata of these same borrows.
         unsafe { Shiper::new(shiperator, entities) }
     }
 
@@ -97,7 +98,78 @@ where
 }
 
 /// Turns a view into a Shiperator.
-pub trait IntoShiperator {
+///
+/// Calling [`iter`](IntoIter::iter), [`par_iter`](IntoIter::par_iter) or
+/// [`into_shiperator`](IntoShiperator::into_shiperator) is always safe.\
+/// Implementing this trait is only needed for custom views, `#[derive(IntoIter)]` generates it.
+/// The simplest implementation delegates to an existing one, a view or a tuple of views,
+/// and returns its results unchanged:
+///
+/// ```
+/// use shipyard::iter::{IntoShiperator, RawEntityIdAccess};
+/// use shipyard::{Component, IntoIter, View, World};
+///
+/// #[derive(Component)]
+/// struct Pos(f32);
+///
+/// struct Positions<'a, 'v>(&'a View<'v, Pos>);
+///
+/// // SAFE: We return the view's own Shiperator and entities, unchanged.
+/// // `Positions` holds the view's borrow for 'a, as long as the Shiperator.
+/// unsafe impl<'a, 'v: 'a> IntoShiperator for Positions<'a, 'v> {
+///     type Shiperator = <&'a View<'v, Pos> as IntoShiperator>::Shiperator;
+///
+///     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+///         self.0.into_shiperator()
+///     }
+///
+///     fn can_captain() -> bool {
+///         <&'a View<'v, Pos> as IntoShiperator>::can_captain()
+///     }
+///
+///     fn can_sailor() -> bool {
+///         <&'a View<'v, Pos> as IntoShiperator>::can_sailor()
+///     }
+/// }
+///
+/// let mut world = World::new();
+/// world.add_entity(Pos(1.0));
+/// world.add_entity(Pos(2.0));
+///
+/// let positions = world.borrow::<View<Pos>>().unwrap();
+/// let sum: f32 = Positions(&positions).iter().map(|pos| pos.0).sum();
+/// assert_eq!(sum, 3.0);
+/// ```
+///
+/// ### Safety
+///
+/// Iterators trust what [`into_shiperator`](IntoShiperator::into_shiperator) returns without
+/// checking it. Implementations must uphold all of the following, for the returned
+/// Shiperator, its clones and every segment state they install:
+///
+/// - The Shiperator, the length and the [`RawEntityIdAccess`] describe the same query, built
+///   from the same storage borrows. The length is the number of candidates of the access's
+///   first segment. The access, follow-ups and grouping metadata included, must come from the
+///   `into_shiperator` of the views the Shiperator is made of. An access returned by another
+///   call can't be paired with an unrelated Shiperator, even one of the same type.
+/// - [`captain_indices_of`](Shiperator::captain_indices_of) resolves a candidate's local index
+///   to the components of that candidate's entity.
+///   [`sailor_indices_of`](Shiperator::sailor_indices_of) and
+///   [`storage_index`](Shiperator::storage_index) return absolute indices. Whether an entity is
+///   a match doesn't depend on the segment currently traversed.
+/// - The storages and the entities the access points to stay allocated and unmodified as long
+///   as the Shiperator, its clones, the iterators built from them and the items they yield are
+///   alive. Holding the borrows they come from for the Shiperator's lifetime does it.
+/// - Two candidates the traversal accepts, across follow-up segments and split halves, never
+///   yield overlapping mutable outputs. A clone resolves candidates exactly like its original
+///   and each candidate is handed to a single one of them, cloning doesn't allow a mutable
+///   component to be yielded twice.
+/// - [`node_count`](Shiperator::node_count), [`describe`](Shiperator::describe) and
+///   [`enter_segment`](Shiperator::enter_segment) agree on the Shiperator's layout and states,
+///   [`is_exact_sized`](Shiperator::is_exact_sized) only returns `true` when no candidate of the
+///   current segment can be rejected. Entering a segment only installs state: it creates no
+///   reference to a component and calls no consumer callback.
+pub unsafe trait IntoShiperator {
     #[allow(missing_docs)]
     type Shiperator;
 
@@ -114,7 +186,12 @@ pub trait IntoShiperator {
     fn can_sailor() -> bool;
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp View<'v, T, Track> {
+// SAFE: The window and its entities are both read from the view's storage, which stays borrowed
+// for 'tmp. A window resolves `segment_start + local_index`, the index of the candidate's own
+// component, and its metadata describes this same storage. It only yields shared references.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+    for &'tmp View<'v, T, Track>
+{
     type Shiperator = FullRawWindow<'tmp, T, Track>;
 
     #[inline]
@@ -139,7 +216,10 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp ViewMut<'v, T, Track> {
+// SAFE: Same as `&View`, the storage stays borrowed for 'tmp and only shared references are yielded.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+    for &'tmp ViewMut<'v, T, Track>
+{
     type Shiperator = FullRawWindow<'tmp, T, Track>;
 
     #[inline]
@@ -164,7 +244,10 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator for &'tmp Vie
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+// SAFE: Same as `&View`, with the storage exclusively borrowed for 'tmp. Each component belongs
+// to a single entity and segments never walk an entity twice without a coverage record rejecting
+// it, so each mutable component is yielded at most once.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for &'tmp mut ViewMut<'v, T, Track>
 {
     type Shiperator = FullRawWindowMut<'tmp, T, Track>;
@@ -190,7 +273,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     }
 }
 
-impl<'tmp> IntoShiperator for &'tmp [EntityId] {
+// SAFE: The slice is its own single segment, borrowed for 'tmp. It yields entity ids by value.
+unsafe impl<'tmp> IntoShiperator for &'tmp [EntityId] {
     type Shiperator = &'tmp [EntityId];
 
     #[inline]
@@ -214,7 +298,9 @@ impl<'tmp> IntoShiperator for &'tmp [EntityId] {
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>> {
+// SAFE: We wrap the view's own results. `Optional` can't captain so it's only ever looked up,
+// its entities are marked filtered and never drive a grouped walk.
+unsafe impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>> {
     type Shiperator = Optional<FullRawWindow<'tmp, T, T::Tracking>>;
 
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
@@ -232,7 +318,8 @@ impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+// SAFE: See `Optional<&View>`.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Optional<&'tmp ViewMut<'v, T, Track>>
 {
     type Shiperator = Optional<FullRawWindow<'tmp, T, Track>>;
@@ -252,7 +339,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+// SAFE: See `Optional<&View>`, the inner `&mut ViewMut` upholds the uniqueness of mutable outputs.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Optional<&'tmp mut ViewMut<'v, T, Track>>
 {
     type Shiperator = Optional<FullRawWindowMut<'tmp, T, Track>>;
@@ -272,7 +360,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     }
 }
 
-impl<T: IntoShiperator> IntoShiperator for (T,) {
+// SAFE: We return `T`'s results unchanged, its implementation upholds the contract.
+unsafe impl<T: IntoShiperator> IntoShiperator for (T,) {
     type Shiperator = T::Shiperator;
 
     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
@@ -301,7 +390,12 @@ pub(crate) use strip_plus;
 
 macro_rules! impl_into_shiperator_tuple {
     ($(($type: ident, $index: tt))+) => {
-        impl<$($type: IntoShiperator),+> IntoShiperator for ($($type,)+) where $(<$type as IntoShiperator>::Shiperator: Shiperator),+ {
+        // SAFE: Each child's results come from its own implementation, which upholds the contract.
+        // The children are borrowed separately so their mutable outputs can't overlap.
+        // `Mixed` keeps the captain's entities and follow-ups, embedded under rows built from its
+        // own description, and looks the other children up by entity.
+        // `planner::select` only reads the children's metadata, nothing is installed here.
+        unsafe impl<$($type: IntoShiperator),+> IntoShiperator for ($($type,)+) where $(<$type as IntoShiperator>::Shiperator: Shiperator),+ {
             type Shiperator = Mixed<($($type::Shiperator,)+)>;
 
             #[inline]

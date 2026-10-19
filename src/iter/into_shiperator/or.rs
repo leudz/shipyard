@@ -3,7 +3,11 @@ use crate::iter::planner::NodeMetadata;
 use crate::iter::{IntoShiperator, RawEntityIdAccess, Shiperator};
 use crate::or::{Or, OrWindow};
 
-impl<T: IntoShiperator, U: IntoShiperator> IntoShiperator for Or<(T, U)>
+// SAFE: Each branch's results come from its own implementation. Each branch's segments are
+// embedded under rows built from our own description, with the branch driving them.
+// An entity matching both branches is only yielded by the first one, the second branch looks
+// candidates up in the first one and rejects them before creating any item.
+unsafe impl<T: IntoShiperator, U: IntoShiperator> IntoShiperator for Or<(T, U)>
 where
     T::Shiperator: Shiperator,
     U::Shiperator: Shiperator,

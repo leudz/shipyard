@@ -10,7 +10,9 @@ use crate::views::{View, ViewMut};
 
 macro_rules! impl_into_shiperator_tracking {
     ($($type: ident => $capability: ident)+) => {$(
-        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
+        // SAFE: We wrap the view's own results and mark them filtered, they never drive a grouped
+        // walk. The filter only rejects candidates of the view's window, which upholds the rest.
+        unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for $type<&'tmp View<'v, T, Track>>
         {
             type Shiperator = $type<FullRawWindow<'tmp, T, Track>>;
@@ -35,7 +37,9 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
+        // SAFE: We wrap the view's own results and mark them filtered, they never drive a grouped
+        // walk. The filter only rejects candidates of the view's window, which upholds the rest.
+        unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for $type<&'tmp ViewMut<'v, T, Track>>
         {
             type Shiperator = $type<FullRawWindow<'tmp, T, Track>>;
@@ -60,7 +64,9 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
+        // SAFE: We wrap the view's own results and mark them filtered, they never drive a grouped
+        // walk. The filter only rejects candidates of the view's window, which upholds the rest.
+        unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for $type<&'tmp mut ViewMut<'v, T, Track>>
         {
             type Shiperator = $type<FullRawWindowMut<'tmp, T, Track>>;

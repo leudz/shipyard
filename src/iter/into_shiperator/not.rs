@@ -9,7 +9,9 @@ use crate::tracking::{
 };
 use crate::views::{View, ViewMut};
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+// SAFE: We wrap the view's own results. `Not` can't captain so it's only ever looked up,
+// its entities are marked filtered and never drive a grouped walk. It yields `()`.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Not<&'tmp View<'v, T, Track>>
 {
     type Shiperator = Not<FullRawWindow<'tmp, T, Track>>;
@@ -32,7 +34,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+// SAFE: See `Not<&View>`.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Not<&'tmp ViewMut<'v, T, Track>>
 {
     type Shiperator = Not<FullRawWindow<'tmp, T, Track>>;
@@ -55,7 +58,8 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     }
 }
 
-impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
+// SAFE: See `Not<&View>`.
+unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     for Not<&'tmp mut ViewMut<'v, T, Track>>
 {
     type Shiperator = Not<FullRawWindowMut<'tmp, T, Track>>;
@@ -80,7 +84,9 @@ impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 
 macro_rules! impl_into_shiperator_tracking {
     ($($type: ident => $capability: ident)+) => {$(
-        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
+        // SAFE: We wrap the view's own results and mark them filtered, they never drive a grouped
+        // walk. The filter only rejects candidates, it never yields a component.
+        unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for Not<$type<&'tmp View<'v, T, Track>>>
         {
             type Shiperator = Not<$type<FullRawWindow<'tmp, T, Track>>>;
@@ -105,7 +111,9 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
+        // SAFE: We wrap the view's own results and mark them filtered, they never drive a grouped
+        // walk. The filter only rejects candidates, it never yields a component.
+        unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for Not<$type<&'tmp ViewMut<'v, T, Track>>>
         {
             type Shiperator = Not<$type<FullRawWindow<'tmp, T, Track>>>;
@@ -130,7 +138,9 @@ macro_rules! impl_into_shiperator_tracking {
             }
         }
 
-        impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
+        // SAFE: We wrap the view's own results and mark them filtered, they never drive a grouped
+        // walk. The filter only rejects candidates, it never yields a component.
+        unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: $capability> IntoShiperator
             for Not<$type<&'tmp mut ViewMut<'v, T, Track>>>
         {
             type Shiperator = Not<$type<FullRawWindowMut<'tmp, T, Track>>>;

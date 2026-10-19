@@ -248,7 +248,9 @@ pub(crate) fn expand_into_iter(
                     <(#iter_fields) as shipyard::iter::IntoShiperator>::Shiperator
                 );
 
-                impl #iter_impl_generics shipyard::iter::IntoShiperator for &'__tmp #r#mut #name #ty_generics #where_clause {
+                // SAFE: We return the tuple of our views' results, only wrapping its Shiperator in
+                // a newtype forwarding every method. The tuple's implementation upholds the contract.
+                unsafe impl #iter_impl_generics shipyard::iter::IntoShiperator for &'__tmp #r#mut #name #ty_generics #where_clause {
                     type Shiperator = #iter_name #iter_ty_generics;
 
                     #[inline]
@@ -412,7 +414,9 @@ pub(crate) fn expand_into_iter(
             };
 
             Ok(quote!(
-                impl #iter_impl_generics shipyard::iter::IntoShiperator for &'__tmp #r#mut #name #ty_generics #where_clause {
+                // SAFE: We return the tuple of our views' results unchanged,
+                // the tuple's implementation upholds the contract.
+                unsafe impl #iter_impl_generics shipyard::iter::IntoShiperator for &'__tmp #r#mut #name #ty_generics #where_clause {
                     type Shiperator = <#tuple_ty as shipyard::iter::IntoShiperator>::Shiperator;
 
                     #[inline]

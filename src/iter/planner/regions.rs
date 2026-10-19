@@ -44,7 +44,9 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 
     // The first segment is entered like any follow-up, from its row in the published plan.
     let mut entry = SegmentEntry::new(schedule.plan(), &first);
-    // SAFE: `grouped_plan` built every row for `root`'s own layout. In each segment, a captain
+    // SAFE: `IntoShiperator`'s contract ties `alternative`'s metadata and member entities to
+    // the storages `root`'s windows borrow. `grouped_plan` built every row for `root`'s own
+    // layout, from `root`'s description. In each segment, a captain
     // window starts at the index, in its own storage, of the segment's first entity and the
     // segment fits in that storage. Segments stop at every captain's wrap point, so each
     // captain's entities are consecutive from there. With several captains, this relies on

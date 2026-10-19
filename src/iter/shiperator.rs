@@ -12,6 +12,11 @@ use crate::track;
 use crate::tracking::Tracking;
 
 /// Provides iteration costs, component lookup, and data access for a storage iterator.
+///
+/// Implementing this trait is safe on its own: iterators only drive a Shiperator returned by
+/// an [`IntoShiperator`](crate::iter::IntoShiperator) implementation, and that `unsafe impl`
+/// vouches for the behavior each method documents under "Implementations".\
+/// The "Safety" sections list what callers guarantee.
 pub trait Shiperator {
     /// The type this Shiperator will yield.
     ///
@@ -25,16 +30,31 @@ pub trait Shiperator {
     ///
     /// Plan rows hold one state per node, in preorder.\
     /// Composite Shiperators use it to skip the states of their sailor children.
+    ///
+    /// ### Implementations
+    ///
+    /// Must be the number of nodes [`describe`](Shiperator::describe) appends.
     fn node_count() -> usize;
     /// Appends this node's kind and current state to `row`, followed by its children's.
     ///
     /// `active` is `false` when the node only answers sailor lookups,
     /// its whole subtree is then described as sailors.
+    ///
+    /// ### Implementations
+    ///
+    /// The kinds don't depend on the state. Installing the described states with
+    /// [`enter_segment`](Shiperator::enter_segment) gives back the current state.
     fn describe(&self, active: bool, row: &mut SegmentRow);
     /// Installs the state this node and its active children hold for the segment about to be iterated.
     ///
     /// Takes this node's state from `entry` then routes `entry` through the active children,
     /// skipping the states of the sailor ones. Sailors are left untouched.
+    ///
+    /// ### Implementations
+    ///
+    /// Takes exactly the states of this node's subtree from `entry`.\
+    /// Only installs state: it must not create a reference to a component or call back into
+    /// a consumer, another split half might hold items of these storages.
     ///
     /// ### Safety
     ///
@@ -51,12 +71,20 @@ pub trait Shiperator {
     /// Iterating a `Vec` of length 100 will return 100.
     fn sail_time(&self) -> usize;
     /// `true` when this Shiperator cannot return `None`.
+    ///
+    /// ### Implementations
+    ///
+    /// Only returns `true` when no candidate of the current segment can be rejected.
     fn is_exact_sized(&self) -> bool;
     /// Returns the absolute index in this node's storage that `index` points to.
     ///
     /// Only plain component windows have a single storage index, other nodes return `None`.\
     /// `Mixed` uses it to reject candidates an earlier segment already walked,
     /// without creating any component reference.
+    ///
+    /// ### Implementations
+    ///
+    /// When it returns `Some`, it's the index of the component `get_data` reads for `index`.
     fn storage_index(index: &Self::Index) -> Option<usize>;
     /// Returns the indices of the components matching the current candidate of `entities`.
     ///
@@ -72,6 +100,11 @@ pub trait Shiperator {
     /// This function is only called when this Shiperator is the Captain.
     ///
     /// It only resolves indices, it never creates a component reference.
+    ///
+    /// ### Implementations
+    ///
+    /// Returns the indices of the components of the candidate's entity, or `None` when it isn't
+    /// a match. Clones resolve every candidate to the same indices.
     ///
     /// # Safety
     ///
@@ -89,11 +122,18 @@ pub trait Shiperator {
     ///
     /// Returns the absolute index of the component owned by `entity_id`.
     ///
+    /// ### Implementations
+    ///
     /// The result doesn't depend on the segment currently iterated.
     fn sailor_indices_of(&self, entity_id: EntityId) -> Option<Self::Index>;
     /// Returns the component at `index`.
     ///
     /// `index` is already resolved, implementations must not add their segment start again.
+    ///
+    /// ### Implementations
+    ///
+    /// Distinct entities never get overlapping mutable outputs. The output stays valid as long
+    /// as the storage borrow the Shiperator was built from.
     ///
     /// # Safety
     ///
@@ -110,6 +150,11 @@ pub trait Shiperator {
     /// [`captain_indices_of`](Shiperator::captain_indices_of).
     /// Composite Shiperators override it to pick a loop suited to the segment once,
     /// outside the loop.
+    ///
+    /// ### Implementations
+    ///
+    /// Yields the items the default implementation would, in the same order, and consumes each
+    /// candidate before creating its item.
     ///
     /// ### Safety
     ///

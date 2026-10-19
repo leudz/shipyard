@@ -10,6 +10,10 @@ mod with_id;
 
 #[cfg(test)]
 mod tests;
+// Rustdoc doesn't set `test` when it collects doc tests, these checks need their own gate.
+#[cfg(doctest)]
+#[path = "tests/compile_fail.rs"]
+mod compile_fail_tests;
 
 pub use crate::iter_component::{IntoIterRef, IterComponent};
 pub use crate::not::Not;
@@ -59,6 +63,12 @@ impl<S: Shiperator> Shiper<S> {
     /// - every follow-up of `entities` must have a row built for `shiperator`'s layout,
     ///   pairing its segment with the entities its captains resolve, see
     ///   [`Shiperator::enter_segment`]
+    /// - `shiperator` and `entities` must come from the same storage borrows and uphold the rest
+    ///   of [`IntoShiperator`]'s contract, from an implementation of it or from the planner
+    ///   rebuilding one of its results
+    ///
+    /// We then rely on that contract for the whole traversal: entering follow-ups, resolving
+    /// candidates and splitting.
     #[inline]
     pub(crate) unsafe fn new(shiperator: S, entities: RawEntityIdAccess) -> Shiper<S> {
         let is_exact_sized = is_exact_traversal(&shiperator, &entities);
@@ -87,9 +97,9 @@ impl<S: Shiperator> Shiper<S> {
         };
 
         let mut entry = SegmentEntry::new(schedule.plan(), &segment);
-        // SAFE: Schedules are only built by this Shiperator's constructors (`IntoShiperator`),
-        // they pair each row with the entities its own nodes resolve:
-        // windows' segment starts are the storage indices of the segment's first entity.
+        // SAFE: `new`'s caller guarantees our schedule's rows were built for `shiperator`'s
+        // layout, pairing each row with the entities its own nodes resolve: windows' segment
+        // starts are the storage indices of the segment's first entity.
         // We own the schedule sharing the plan, it stays alive as long as we use `shiperator`.
         // A split half gets its own share along with its clone of `shiperator`.
         unsafe { self.shiperator.enter_segment(&mut entry) };
