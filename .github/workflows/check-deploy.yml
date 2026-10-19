@@ -24,6 +24,8 @@ jobs:
           code:
             - 'src/**'
             - 'tests/**'
+            - 'shipyard_proc/**'
+            - 'benches/**'
             - 'Cargo.toml'
             - '.github/**'
           deploy:
@@ -92,6 +94,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - run: cargo test --all-features
+  bench-test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Runs the fixture checks and every routine once, it doesn't time anything.
+      - run: cargo bench --bench iteration -- --test
   guide_master:
     runs-on: ubuntu-latest
     needs: changes
@@ -341,6 +353,7 @@ jobs:
       miri,
       clippy,
       all-features,
+      bench-test,
       guide_master,
       guide_0_11,
       guide_0_10,
