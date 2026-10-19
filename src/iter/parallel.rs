@@ -20,7 +20,9 @@ impl<S: Shiperator + Send + Clone> UnindexedProducer for Shiper<S> {
 
     #[inline]
     fn split(self) -> (Self, Option<Self>) {
-        self.split_current_segment()
+        // We balance the whole traversal, follow-ups included, so a short current segment
+        // doesn't keep a long follow-up on a single thread.
+        self.split_remaining()
     }
 
     #[inline]

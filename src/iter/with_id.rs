@@ -140,7 +140,8 @@ impl<S: Shiperator + Send + Clone> rayon::iter::plumbing::UnindexedProducer for 
 
     #[inline]
     fn split(self) -> (Self, Option<Self>) {
-        let (left, right) = self.0.split_current_segment();
+        // Like `Shiper`'s producer, we balance the whole traversal.
+        let (left, right) = self.0.split_remaining();
 
         (WithId(left), right.map(WithId))
     }

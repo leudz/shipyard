@@ -170,11 +170,13 @@ impl<S: Clone> Shiper<S> {
     /// the rest of the segment followed by every follow-up left.\
     /// Returns `self` unchanged with `None` when fewer than 2 candidates are left in the current
     /// segment, even if follow-ups are left.
+    ///
+    /// This is the local primitive, [`split_remaining`](Shiper::split_remaining) balances the
+    /// whole traversal.
     #[inline]
     #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     pub(crate) fn split_current_segment(self) -> (Self, Option<Self>) {
-        // We never enter a segment here. A long follow-up behind a short current segment
-        // doesn't allow a split, that's the contract, not a balancing problem to fix.
+        // We never enter a segment here, that's `split_remaining`'s job.
         let len = self.cursor.len();
         if len < 2 {
             return (self, None);
@@ -232,7 +234,7 @@ impl<S: Shiperator + Clone> Shiper<S> {
     /// Splitting only reads segment descriptors and installs state. It doesn't read any entity,
     /// create any item or call any consumer.
     #[inline]
-    #[allow(dead_code, reason = "Temporary, Rayon producers move to it next.")]
+    #[cfg_attr(not(feature = "parallel"), allow(dead_code))]
     pub(crate) fn split_remaining(mut self) -> (Self, Option<Self>) {
         let current_len = self.cursor.len();
         let Some(total) = self.remaining_candidates() else {

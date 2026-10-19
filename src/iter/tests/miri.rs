@@ -719,3 +719,82 @@ fn non_send_sync_owned() {
         assert_eq!((&*locals).get(entity).unwrap().0, 2 * i + 100);
     }
 }
+
+/// Asserts that a whole-traversal split cutting inside a later segment shares the plan and keeps
+/// every item: the right half, a clone that entered A's covered unevaluated walk partway, is
+/// consumed first, and mutable items from both halves and the consumed prefix are held at once.
+#[test]
+fn split_remaining_mut() {
+    let (world, e) = partial_world();
+
+    {
+        let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+        let mut iter = grouped((&mut a, &mut b).into_shiperator());
+        let plan = iter.schedule.as_ref().unwrap().downgrade();
+
+        // 1 aligned candidate is left, then B's damaged walk and A's and B's unevaluated walks.
+        let mut items: Vec<(&mut A, &mut B)> = iter.by_ref().take(2).collect();
+        let (left, right) = iter.split_remaining();
+        let right = right.expect("6 candidates are left");
+        assert_eq!(left.cursor.len(), 1);
+        assert_eq!(right.cursor.local_index(), 1);
+        assert_eq!(right.shiperator.coverage.len(), 1);
+        assert_eq!(plan.strong_count(), 2);
+
+        items.extend(right);
+        items.extend(left);
+        assert!(plan.upgrade().is_none());
+
+        assert_eq!(items.len(), e.len());
+        for (a, b) in items {
+            a.0 += 100;
+            b.0 += 100;
+        }
+    }
+
+    assert_written(&world, &e);
+}
+
+/// Splits `partial_world`'s grouped walks over their whole traversal once 2 items are consumed:
+/// the cut falls inside A's unevaluated walk, which reads coverage, and both halves walk part of it.
+fn split_in_covered_segment<'a>(
+    a: &'a View<'_, A>,
+    b: &'a View<'_, B>,
+) -> (PairIter<'a>, PairIter<'a>) {
+    let mut iter = grouped((a, b).into_shiperator());
+    assert_eq!(iter.by_ref().take(2).count(), 2);
+
+    let (left, right) = iter.split_remaining();
+    let right = right.expect("6 candidates are left");
+    assert_eq!(right.shiperator.coverage.len(), 1);
+
+    (left, right)
+}
+
+/// Asserts that after a whole-traversal split inside a segment reading coverage, either half can
+/// be dropped first while the other still reads the plan: the survivor yields its own entities,
+/// the coverage still rejecting the duplicate, and the plan is released with it.
+#[test]
+fn split_remaining_drop_either() {
+    let (world, _) = partial_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    let (left, right) = split_in_covered_segment(&a, &b);
+    let (left_alone, right_alone) = (ids(left), ids(right));
+
+    for drop_left in [false, true] {
+        let (left, right) = split_in_covered_segment(&a, &b);
+        let plan = left.schedule.as_ref().unwrap().downgrade();
+
+        let (survivor, expected) = if drop_left {
+            drop(left);
+            (ids(right), &right_alone)
+        } else {
+            drop(right);
+            (ids(left), &left_alone)
+        };
+
+        assert_eq!(&survivor, expected, "drop left {drop_left}");
+        assert!(plan.upgrade().is_none());
+    }
+}

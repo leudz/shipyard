@@ -92,7 +92,8 @@ fn or_value(item: OneOfTwo<&A, &B>) -> u32 {
     }
 }
 
-/// Even a long real Or follow-up cannot make a zero/one-candidate segment split.
+/// Asserts that the current-segment primitive keeps its local behavior: a zero or one candidate
+/// segment doesn't split, even in front of a long `Or` follow-up. `split_remaining` balances those.
 #[test]
 fn segment_lengths() {
     for len in [0, 1, 2, 4, 5] {

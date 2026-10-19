@@ -348,23 +348,30 @@ fn parallel_or() {
     assert_eq!(items, expected);
 }
 
-/// Asserts that an `Or` whose current range holds a single candidate doesn't split,
-/// even with a long follow-up, and still yields every entity.
+/// Asserts that an `Or` whose current range holds a single candidate still splits in the middle
+/// of its long follow-up, both halves together yielding every entity once.
 #[cfg(feature = "parallel")]
 #[test]
 fn parallel_single_candidate() {
     use rayon::iter::plumbing::UnindexedProducer;
 
     let mut world = World::new();
-    world.add_entity(A(0));
+    let mut expected = vec![world.add_entity(A(0))];
     for i in 0..100 {
-        world.add_entity(B(i));
+        expected.push(world.add_entity(B(i)));
     }
 
     let (a, b) = world.borrow::<(View<A>, View<B>)>().unwrap();
 
     let (left, right) = (&a | &b).iter().split();
+    let right = right.expect("101 candidates split");
 
-    assert!(right.is_none());
-    assert_eq!(left.count(), 101);
+    let left: Vec<_> = left.with_id().map(|(id, _)| id).collect();
+    let right: Vec<_> = right.with_id().map(|(id, _)| id).collect();
+    assert_eq!((left.len(), right.len()), (50, 51));
+    let mut ids = left;
+    ids.extend(right);
+    ids.sort_unstable();
+    expected.sort_unstable();
+    assert_eq!(ids, expected);
 }

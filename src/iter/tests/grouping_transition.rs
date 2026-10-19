@@ -301,8 +301,8 @@ mod split {
     use super::*;
     use rayon::iter::plumbing::UnindexedProducer;
 
-    /// Asserts that splitting keeps the plan on both halves, without follow-ups on the left one
-    /// and with all of them on the right one.
+    /// Asserts that splitting the 7 candidates of `A | B` in the middle of the A segment keeps the
+    /// plan on both halves, without follow-ups on the left one and with all of them on the right one.
     #[test]
     fn follow_ups() {
         let world = or_world(4, 3);
@@ -311,9 +311,9 @@ mod split {
         let (left, right) = (&a | &b).iter().split();
         let right = right.unwrap();
 
-        assert_eq!(left.cursor.len(), 2);
+        assert_eq!(left.cursor.len(), 3);
         assert!(!left.schedule.as_ref().unwrap().has_follow_ups());
-        assert_eq!(right.cursor.len(), 2);
+        assert_eq!(right.cursor.len(), 1);
         assert_eq!(right.schedule.as_ref().unwrap().follow_ups().len(), 1);
     }
 
@@ -327,7 +327,7 @@ mod split {
         drop(left);
 
         let values: Vec<_> = right.unwrap().map(or_value).collect();
-        assert_eq!(values, [2, 3, 10, 11, 12]);
+        assert_eq!(values, [3, 10, 11, 12]);
     }
 
     /// Asserts that the left half keeps working once the right half is dropped.
@@ -340,7 +340,7 @@ mod split {
         drop(right);
 
         let values: Vec<_> = left.map(or_value).collect();
-        assert_eq!(values, [0, 1]);
+        assert_eq!(values, [0, 1, 2]);
     }
 }
 

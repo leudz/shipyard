@@ -6,6 +6,7 @@
 use super::grouping_fixtures::{A, B, coverage_world, late_iter, ring_world};
 use crate::iter::parallel::ExactProducer;
 use crate::iter::{IntoIter, ParShiperator};
+use crate::or::OneOfTwo;
 use crate::{EntityId, Get, View, ViewMut, World};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -60,49 +61,258 @@ fn ids<T>(items: Vec<(EntityId, T)>) -> Vec<EntityId> {
     items.into_iter().map(|(id, _)| id).collect()
 }
 
-#[test]
-fn producer_splits() {
-    let (world, expected) = coverage_world();
-    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    for len in [0, 1] {
-        let mut iter = (&a, &b).iter();
-        iter.by_ref().take(20 - len).for_each(drop);
-        let (iter, right) = iter.split();
-        assert!(right.is_none());
-        assert_eq!(iter.cursor.len(), len);
-        assert_eq!(
-            ids(fold_with(iter.with_id(), usize::MAX)),
-            expected[20 - len..]
-        );
-    }
-    let (left, right) = late_iter(&a, &b).with_id().split();
-    let right = right.unwrap();
-    assert_eq!(right.0.cursor.local_index(), 3);
-    assert_eq!(ids(fold_with(left, usize::MAX)), expected[20..23]);
-    assert_eq!(ids(fold_with(right, usize::MAX)), expected[23..]);
+fn sorted<T: Ord>(mut items: Vec<T>) -> Vec<T> {
+    items.sort_unstable();
+    items
 }
 
-#[test]
-fn producer_recursive() {
-    fn split<P: UnindexedProducer>(p: P, pieces: &mut Vec<P>) {
-        match p.split() {
+/// Splits `producer` until no piece splits, the pieces are returned in traversal order.
+fn split_pieces<P: UnindexedProducer>(producer: P) -> Vec<P> {
+    fn split<P: UnindexedProducer>(producer: P, pieces: &mut Vec<P>) {
+        match producer.split() {
             (left, Some(right)) => {
                 split(left, pieces);
                 split(right, pieces);
             }
-            (p, None) => pieces.push(p),
+            (producer, None) => pieces.push(producer),
         }
     }
+
+    let mut pieces = Vec::new();
+    split(producer, &mut pieces);
+
+    pieces
+}
+
+/// Asserts that producers split over the whole traversal: a current segment with zero or one
+/// candidate left still splits, handing a part of the follow-ups to each half, and a cut at the
+/// end of the current segment gives the right half the next segment from its start.
+#[test]
+fn producer_splits() {
     let (world, expected) = coverage_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let mut pieces = Vec::new();
-    split(late_iter(&a, &b).with_id(), &mut pieces);
-    assert_eq!(pieces.len(), 6);
+    // With no candidate left, the cut is at the boundary between the late walks.
+    for (len, right_start) in [(0, 0), (1, 5)] {
+        let mut iter = (&a, &b).iter();
+        iter.by_ref().take(20 - len).for_each(drop);
+        assert_eq!(iter.cursor.len(), len);
+
+        let (left, right) = iter.with_id().split();
+        let right = right.expect("12 candidates are left in the follow-ups");
+        assert_eq!(left.0.cursor.len(), len);
+        assert_eq!(right.0.cursor.local_index(), right_start);
+
+        let mut found = ids(fold_with(left, usize::MAX));
+        found.extend(ids(fold_with(right, usize::MAX)));
+        assert_eq!(found, expected[20 - len..]);
+    }
+
+    let (left, right) = late_iter(&a, &b).with_id().split();
+    let right = right.unwrap();
+    assert_eq!(right.0.cursor.local_index(), 0);
+    assert_eq!(ids(fold_with(left, usize::MAX)), expected[20..23]);
+    assert_eq!(ids(fold_with(right, usize::MAX)), expected[23..]);
+}
+
+/// Asserts that splitting the late walks until no piece splits leaves one piece per candidate,
+/// both walks included, and that the pieces yield every late pair once, in order.
+#[test]
+fn producer_recursive() {
+    let (world, expected) = coverage_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let pieces = split_pieces(late_iter(&a, &b).with_id());
+    assert_eq!(pieces.len(), 12);
     let found: Vec<_> = pieces
         .into_iter()
         .flat_map(|p| ids(fold_with(p, usize::MAX)))
         .collect();
     assert_eq!(found, expected[20..]);
+}
+
+/// A world with one entity owning `A(0)`, then `tail` entities owning `B(100 + i)`.
+///
+/// `A | B` walks A's single candidate, then a long B follow-up.
+fn tail_world(tail: u32) -> World {
+    let mut world = World::new_for_test();
+    world.add_entity(A(0));
+    for i in 0..tail {
+        world.add_entity(B(100 + i));
+    }
+
+    world
+}
+
+/// Asserts that a single candidate in front of a long follow-up splits right away, and that
+/// splitting it down to single candidates, with or without ids, yields what a sequential
+/// traversal yields.
+#[test]
+fn producer_tail() {
+    let world = tail_world(64);
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let sequential: Vec<EntityId> = (&a | &b).iter().with_id().map(|(id, _)| id).collect();
+
+    let (left, right) = (&a | &b).iter().split();
+    assert_eq!(left.cursor.len(), 1);
+    assert_eq!(right.unwrap().cursor.local_index(), 31);
+
+    let pieces = split_pieces((&a | &b).iter().with_id());
+    assert_eq!(pieces.len(), 65);
+    let found: Vec<_> = pieces
+        .into_iter()
+        .flat_map(|p| ids(fold_with(p, usize::MAX)))
+        .collect();
+    assert_eq!(found, sequential);
+
+    let values: Vec<u32> = split_pieces((&a | &b).iter())
+        .into_iter()
+        .rev()
+        .flat_map(|p| fold_with(p, usize::MAX))
+        .map(|item| match item {
+            OneOfTwo::One(a) => a.0,
+            OneOfTwo::Two(b) => b.0,
+        })
+        .collect();
+    assert_eq!(sorted(values), sorted((0..1).chain(100..164).collect()));
+}
+
+/// Asserts that `ring_world`'s walks, over several ranges with members wrapping at different
+/// points, split down to single candidates and yield every pair once whichever order the pieces
+/// are folded in.
+#[test]
+fn producer_ring() {
+    let (world, pairs) = ring_world();
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+
+    let pieces = split_pieces((&a, &b).iter().with_id());
+    assert!(pieces.iter().all(|piece| piece.0.cursor.len() <= 1));
+    let found: Vec<_> = pieces
+        .into_iter()
+        .rev()
+        .flat_map(|p| ids(fold_with(p, usize::MAX)))
+        .collect();
+    assert_eq!(sorted(found), sorted(pairs));
+}
+
+/// Asserts that every piece of `trust_world`'s walks, a damaged ring with two captains and
+/// a covered unevaluated walk included, can hold its mutable outputs at once with the others':
+/// each match is written exactly once.
+#[test]
+fn producer_trust_mut() {
+    use super::grouping_fixtures::{C, trust_world};
+    use super::grouping_regions::grouped;
+    use crate::iter::IntoShiperator;
+
+    let (world, e) = trust_world();
+    let (mut a, mut b, mut c) = world
+        .borrow::<(ViewMut<'_, A>, ViewMut<'_, B>, ViewMut<'_, C>)>()
+        .unwrap();
+
+    let iter = grouped((&mut a, &mut b, &mut c).into_shiperator());
+    let outputs: Vec<_> = split_pieces(iter)
+        .into_iter()
+        .rev()
+        .flat_map(|p| fold_with(p, usize::MAX))
+        .collect();
+    assert_eq!(outputs.len(), e.len());
+    for (a, b, c) in outputs {
+        a.0 += 1000;
+        b.0 += 1000;
+        c.0 += 1000;
+    }
+
+    for (i, &id) in (0..).zip(&e) {
+        assert_eq!((&a).get(id).unwrap().0, 1000 + i);
+        assert_eq!((&b).get(id).unwrap().0, 1100 + i);
+        assert_eq!((&c).get(id).unwrap().0, 1200 + i);
+    }
+}
+
+/// A world where `(A | B, C)` is driven by its `Or`: 2 entities owning A and C, 3 owning B and C,
+/// 2 owning only B and 10 owning only C.
+fn nested_or_world() -> World {
+    use super::grouping_fixtures::C;
+
+    let mut world = World::new_for_test();
+    for i in 0..2 {
+        world.add_entity((A(i), C(i)));
+    }
+    for i in 10..13 {
+        world.add_entity((B(i), C(i)));
+    }
+    for i in 20..22 {
+        world.add_entity(B(i));
+    }
+    for i in 100..110 {
+        world.add_entity(C(i));
+    }
+
+    world
+}
+
+/// Asserts that a `Mixed` driven by an `Or` splits across the `Or`'s branches, whose follow-up is
+/// embedded in the `Mixed`'s plan, and yields what a sequential traversal yields.
+#[test]
+fn producer_nested_or() {
+    use super::grouping_fixtures::C;
+
+    let world = nested_or_world();
+    let (a, b, c) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
+        .unwrap();
+    let iter = (&a | &b, &c).iter();
+    assert_eq!(iter.shiperator.captain_mask, 0b01);
+    assert_eq!(
+        iter.schedule.as_ref().map(|s| s.follow_ups().len()),
+        Some(1)
+    );
+    let sequential: Vec<EntityId> = (&a | &b, &c).iter().with_id().map(|(id, _)| id).collect();
+
+    let pieces = split_pieces((&a | &b, &c).iter().with_id());
+    assert_eq!(pieces.len(), 7);
+    let found: Vec<_> = pieces
+        .into_iter()
+        .rev()
+        .flat_map(|p| ids(fold_with(p, usize::MAX)))
+        .collect();
+    assert_eq!(sorted(found), sorted(sequential));
+}
+
+/// Asserts that real Rayon traversals of a single candidate in front of a long follow-up collect
+/// every item, write every component once and can stop early inside the follow-up.
+#[test]
+fn tail_bridge() {
+    let world = tail_world(1000);
+    let pool = ThreadPoolBuilder::new().num_threads(4).build().unwrap();
+
+    {
+        let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+        let sequential: Vec<EntityId> = (&a | &b).iter().with_id().map(|(id, _)| id).collect();
+        let collected: Vec<EntityId> =
+            pool.install(|| (&a | &b).par_iter().with_id().map(|(id, _)| id).collect());
+        assert_eq!(sorted(collected), sorted(sequential.clone()));
+
+        let found = pool.install(|| {
+            (&a | &b)
+                .par_iter()
+                .with_id()
+                .find_any(|(_, item)| matches!(item, OneOfTwo::Two(b) if b.0 == 900))
+                .map(|(id, _)| id)
+        });
+        assert_eq!(found, Some(sequential[801]));
+    }
+
+    let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+    pool.install(|| {
+        (&mut a | &mut b).par_iter().for_each(|item| match item {
+            OneOfTwo::One(a) => a.0 += 1000,
+            OneOfTwo::Two(b) => b.0 += 1000,
+        })
+    });
+    assert_eq!(a.iter().map(|a| a.0).collect::<Vec<_>>(), [1000]);
+    assert_eq!(
+        sorted(b.iter().map(|b| b.0).collect()),
+        (1100..2100).collect::<Vec<_>>()
+    );
 }
 
 #[test]
