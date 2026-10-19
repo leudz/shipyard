@@ -11,7 +11,9 @@
 //! from the inserted values.
 
 use crate::fixtures::{A, B, C};
-use shipyard::{EntityId, IntoIter, View};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+use shipyard::{EntityId, IntoIter, View, World};
 use std::hint::black_box;
 
 fn id_hash(id: EntityId) -> u32 {
@@ -118,6 +120,22 @@ pub fn construct_fold_pair(a: &View<'_, A>, b: &View<'_, B>) -> u32 {
     (a, b)
         .iter()
         .fold(0u32, |acc, (a, b)| acc.wrapping_add(a.0 ^ (b.0 << 3)))
+}
+
+/// Reads pairs through Rayon's `fold` and `reduce`.
+#[cfg(feature = "parallel")]
+#[inline(never)]
+pub fn par_fold_pair<'a, I: ParallelIterator<Item = (&'a A, &'a B)>>(iter: I) -> u32 {
+    iter.fold(|| 0u32, |acc, (a, b)| acc.wrapping_add(a.0 ^ (b.0 << 3)))
+        .reduce(|| 0, u32::wrapping_add)
+}
+
+/// Deletes the B of every pair, one storage-local removal each.
+#[inline(never)]
+pub fn delete_b(world: &mut World, pairs: &[(EntityId, u32)]) {
+    for &(id, _) in pairs {
+        world.delete_component::<B>(id);
+    }
 }
 
 /// Builds the pair iterator and drops it without advancing it.

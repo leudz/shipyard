@@ -5,8 +5,11 @@
 //!
 //! Each Criterion group times one boundary:
 //!
-//! - `ordinary`, `selection` and `grouped` time traversal. The iterator is built before the
-//!   timer starts, the timer covers consuming it to exhaustion and dropping it.
+//! - `ordinary`, `selection`, `grouped`, `multiple`, `damage` and `parallel` time traversal.
+//!   The iterator is built before the timer starts, the timer covers consuming it to
+//!   exhaustion and dropping it.
+//! - `lifecycle` times world operations. Restoring the world between two operations happens
+//!   outside the timer.
 //! - `construction+traversal` times small queries end to end: building the iterator,
 //!   consuming it and dropping it.
 //! - `construction+drop` times building an iterator and dropping it without advancing it.
@@ -27,7 +30,7 @@ mod fixtures;
 use consumers::*;
 use criterion::measurement::WallTime;
 use criterion::{BenchmarkGroup, Criterion, Throughput};
-use fixtures::{A, B, C, Fixture};
+use fixtures::{A, B, C, Fixture, Layout};
 use shipyard::{EntityId, IntoIter, View, ViewMut};
 use std::hint::black_box;
 use std::time::{Duration, Instant};
@@ -68,6 +71,18 @@ fn construction_drop(
     mut routine: impl FnMut(),
 ) {
     group.bench_function(name, |bencher| bencher.iter(&mut routine));
+}
+
+/// Registers a world operation over `count` components. `routine` returns the time `iters`
+/// operations took.
+fn operation(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    name: &str,
+    count: usize,
+    mut routine: impl FnMut(u64) -> Duration,
+) {
+    group.throughput(Throughput::Elements(count as u64));
+    group.bench_function(name, |bencher| bencher.iter_custom(&mut routine));
 }
 
 /// Times `$iters` traversals and returns their sum.
@@ -276,6 +291,198 @@ fn grouped(c: &mut Criterion) {
     });
 }
 
+fn multiple(c: &mut Criterion) {
+    let mut group = c.benchmark_group("multiple");
+
+    let pairs = fixtures::multiple_pairs(Layout::Grouped);
+    let (a, b, c) = pairs.world.borrow::<(View<A>, View<B>, View<C>)>().unwrap();
+    let hint = (&a, &b).iter().size_hint();
+    let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+    check_members("pairs", &pairs, hint, ids);
+    pairs.check_wraps(&a, &b, &c, "pairs");
+
+    check_sum("pairs_fold", fold_pair((&a, &b).iter()), pairs.pair_sum());
+    traversal(&mut group, "pairs_fold", &pairs, |iters| {
+        time_traversals!(iters, (&a, &b).iter(), fold_pair)
+    });
+
+    let ids = fold_pair_ids((&a, &b).iter().with_id());
+    check_sum("pairs_fold_ids", ids, pairs.pair_id_sum());
+    traversal(&mut group, "pairs_fold_ids", &pairs, |iters| {
+        time_traversals!(iters, (&a, &b).iter().with_id(), fold_pair_ids)
+    });
+
+    // Mutation gets its own world, built the same way. The read cases above keep their model.
+    let pairs_mut = fixtures::multiple_pairs(Layout::Grouped);
+    let (mut a, b) = pairs_mut.world.borrow::<(ViewMut<A>, View<B>)>().unwrap();
+    let hint = (&mut a, &b).iter().size_hint();
+    let ids = (&mut a, &b).iter().with_id().map(|(id, _)| id);
+    check_members("pairs_mut", &pairs_mut, hint, ids);
+
+    fold_pair_mut((&mut a, &b).iter());
+    pairs_mut.check_mutated(&a, "pairs_fold_mut");
+    traversal(&mut group, "pairs_fold_mut", &pairs_mut, |iters| {
+        time_traversals!(iters, (&mut a, &b).iter(), fold_pair_mut)
+    });
+
+    let triples = fixtures::multiple_triples(Layout::Grouped);
+    let (a, b, c) = triples
+        .world
+        .borrow::<(View<A>, View<B>, View<C>)>()
+        .unwrap();
+    let hint = (&a, &b, &c).iter().size_hint();
+    let ids = (&a, &b, &c).iter().with_id().map(|(id, _)| id);
+    check_members("triples", &triples, hint, ids);
+    triples.check_wraps(&a, &b, &c, "triples");
+
+    let sum = fold_triple((&a, &b, &c).iter());
+    check_sum("triples_fold", sum, triples.triple_sum());
+    traversal(&mut group, "triples_fold", &triples, |iters| {
+        time_traversals!(iters, (&a, &b, &c).iter(), fold_triple)
+    });
+
+    // The same queries on the same entities without any group.
+    let pairs = fixtures::multiple_pairs(Layout::Ordinary);
+    let (a, b) = pairs.world.borrow::<(View<A>, View<B>)>().unwrap();
+    let hint = (&a, &b).iter().size_hint();
+    let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+    check_members("ordinary_pairs", &pairs, hint, ids);
+
+    let sum = fold_pair((&a, &b).iter());
+    check_sum("ordinary_pairs_fold", sum, pairs.pair_sum());
+    traversal(&mut group, "ordinary_pairs_fold", &pairs, |iters| {
+        time_traversals!(iters, (&a, &b).iter(), fold_pair)
+    });
+
+    let triples = fixtures::multiple_triples(Layout::Ordinary);
+    let (a, b, c) = triples
+        .world
+        .borrow::<(View<A>, View<B>, View<C>)>()
+        .unwrap();
+    let hint = (&a, &b, &c).iter().size_hint();
+    let ids = (&a, &b, &c).iter().with_id().map(|(id, _)| id);
+    check_members("ordinary_triples", &triples, hint, ids);
+
+    let sum = fold_triple((&a, &b, &c).iter());
+    check_sum("ordinary_triples_fold", sum, triples.triple_sum());
+    traversal(&mut group, "ordinary_triples_fold", &triples, |iters| {
+        time_traversals!(iters, (&a, &b, &c).iter(), fold_triple)
+    });
+}
+
+fn damage(c: &mut Criterion) {
+    let mut group = c.benchmark_group("damage");
+
+    // The same removals and insertions, before and after regrouping, then without any group.
+    let cases = [
+        ("damaged_fold", fixtures::damaged()),
+        ("repaired_fold", fixtures::repaired()),
+        ("ordinary_fold", fixtures::churned_ordinary()),
+    ];
+
+    for (name, fixture) in &cases {
+        let (a, b) = fixture.world.borrow::<(View<A>, View<B>)>().unwrap();
+        let hint = (&a, &b).iter().size_hint();
+        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+        check_members(name, fixture, hint, ids);
+
+        check_sum(name, fold_pair((&a, &b).iter()), fixture.pair_sum());
+        traversal(&mut group, name, fixture, |iters| {
+            time_traversals!(iters, (&a, &b).iter(), fold_pair)
+        });
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn parallel(c: &mut Criterion) {
+    let mut group = c.benchmark_group("parallel");
+
+    for (name, layout) in [
+        ("tail_fold", Layout::Grouped),
+        ("ordinary_fold", Layout::Ordinary),
+    ] {
+        let tail = fixtures::tail(layout);
+        let (a, b) = tail.world.borrow::<(View<A>, View<B>)>().unwrap();
+        let hint = (&a, &b).iter().size_hint();
+        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+        check_members(name, &tail, hint, ids);
+
+        // The tiny AB range has to come first, the rest of the work sits behind it.
+        let head = &tail.matches[..fixtures::HEAD as usize];
+        let first = (&a, &b).iter().ids().take(head.len());
+        for id in first {
+            assert!(
+                head.iter().any(|m| m.id == id),
+                "{name}: head not walked first"
+            );
+        }
+
+        let sum = par_fold_pair((&a, &b).par_iter());
+        check_sum(name, sum, tail.pair_sum());
+        traversal(&mut group, name, &tail, |iters| {
+            time_traversals!(iters, (&a, &b).par_iter(), par_fold_pair)
+        });
+    }
+}
+
+fn lifecycle(c: &mut Criterion) {
+    let mut group = c.benchmark_group("lifecycle");
+
+    // A full removal, restoration and regroup cycle has to leave the aligned walk as it was.
+    let mut aligned = fixtures::aligned();
+    let churned = aligned.churned();
+    delete_b(&mut aligned.world, &churned);
+    aligned.restore_b(&churned);
+    aligned.world.regroup();
+    {
+        let (a, b) = aligned.world.borrow::<(View<A>, View<B>)>().unwrap();
+        let hint = (&a, &b).iter().size_hint();
+        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+        check_members("aligned_cycle", &aligned, hint, ids);
+    }
+
+    operation(&mut group, "delete", churned.len(), |iters| {
+        let mut total = Duration::ZERO;
+        for _ in 0..iters {
+            let start = Instant::now();
+            delete_b(black_box(&mut aligned.world), &churned);
+            total += start.elapsed();
+
+            aligned.restore_b(&churned);
+            aligned.world.regroup();
+        }
+        total
+    });
+
+    // Each regroup moves the restored B components back into the group.
+    operation(&mut group, "regroup", churned.len(), |iters| {
+        let mut total = Duration::ZERO;
+        for _ in 0..iters {
+            delete_b(&mut aligned.world, &churned);
+            aligned.restore_b(&churned);
+
+            let start = Instant::now();
+            black_box(&mut aligned.world).regroup();
+            total += start.elapsed();
+        }
+        total
+    });
+
+    let mut dense = fixtures::dense();
+    let churned = dense.churned();
+    operation(&mut group, "ordinary_delete", churned.len(), |iters| {
+        let mut total = Duration::ZERO;
+        for _ in 0..iters {
+            let start = Instant::now();
+            delete_b(black_box(&mut dense.world), &churned);
+            total += start.elapsed();
+
+            dense.restore_b(&churned);
+        }
+        total
+    });
+}
+
 fn end_to_end(c: &mut Criterion) {
     let mut group = c.benchmark_group("construction+traversal");
 
@@ -340,6 +547,11 @@ fn main() {
     ordinary(&mut criterion);
     selection(&mut criterion);
     grouped(&mut criterion);
+    multiple(&mut criterion);
+    damage(&mut criterion);
+    #[cfg(feature = "parallel")]
+    parallel(&mut criterion);
+    lifecycle(&mut criterion);
     end_to_end(&mut criterion);
     build_and_drop(&mut criterion);
 

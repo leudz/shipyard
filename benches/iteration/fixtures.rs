@@ -4,7 +4,7 @@
 //! straight from construction. Checks compare iteration against that model, never against
 //! another iteration.
 
-use shipyard::{Component, EntityId, Get, ViewMut, World, track};
+use shipyard::{Component, EntityId, Get, View, ViewMut, World, track};
 
 /// Entities in the dense and aligned fixtures. Not a multiple of any vector width,
 /// so vector loops also run their scalar remainder.
@@ -17,6 +17,18 @@ pub const SMALL_CAPTAIN: u32 = 1_003;
 pub const SMALL_QUERY: u32 = 103;
 /// Size of each late entity set in the coverage fixture.
 pub const LATE: u32 = 10_003;
+/// In the multiple-group fixtures, entities created in AB, in ABC and in AC.
+pub const MULTI_AB: u32 = 40_003;
+pub const MULTI_ABC: u32 = 30_003;
+pub const MULTI_AC: u32 = 24_003;
+/// In the multiple-group fixtures, AB pairs gaining a C and AC pairs gaining a B after grouping.
+pub const JOINS: u32 = 4_003;
+/// Pairs losing their B, then new pairs, in the damage fixtures.
+/// Also the components the lifecycle cases remove.
+pub const CHURN: u32 = 1_003;
+/// Pairs in front of the tail fixture's large segment.
+#[cfg(feature = "parallel")]
+pub const HEAD: u32 = 3;
 
 pub struct A(pub u32);
 impl Component for A {
@@ -60,6 +72,15 @@ pub fn mutated_a(b: u32) -> u32 {
 /// Distinct for distinct `i` as long as `count <= total`.
 fn spread(i: u32, count: u32, total: u32) -> u32 {
     (i as u64 * total as u64 / count as u64) as u32
+}
+
+/// An entity owning an A, with the index its values were built from and its other components.
+#[derive(Clone, Copy)]
+struct Owner {
+    id: EntityId,
+    i: u32,
+    b: bool,
+    c: bool,
 }
 
 /// An entity the fixture's query should yield, with the values it was given.
@@ -167,6 +188,66 @@ impl Fixture {
             sum = sum.wrapping_add(m.a ^ (m.b << 3) ^ (c << 7));
         }
         sum
+    }
+
+    /// Records `owners` as matches when they own every component the query reads,
+    /// as unmatched A otherwise.
+    fn model(&mut self, owners: &[Owner], reads_c: bool) {
+        for owner in owners {
+            if owner.b && (owner.c || !reads_c) {
+                self.matches.push(Match {
+                    id: owner.id,
+                    a: a_value(owner.i),
+                    b: b_value(owner.i),
+                    c: reads_c.then(|| c_value(owner.i)),
+                });
+            } else {
+                self.unmatched_a.push((owner.id, a_value(owner.i)));
+            }
+        }
+    }
+
+    /// `CHURN` matches spread over the fixture, with their B, for the lifecycle cases to delete
+    /// and restore.
+    pub fn churned(&self) -> Vec<(EntityId, u32)> {
+        let count = self.yielded() as u32;
+        (0..CHURN)
+            .map(|k| {
+                let m = self.matches[spread(k, CHURN, count) as usize];
+                (m.id, m.b)
+            })
+            .collect()
+    }
+
+    /// Gives back their B to pairs [`churned`](Fixture::churned) returned.
+    pub fn restore_b(&mut self, pairs: &[(EntityId, u32)]) {
+        for &(id, b) in pairs {
+            self.world.add_component(id, B(b));
+        }
+    }
+
+    /// Asserts that A and B hold the union's matches, the ones owning a C, in different
+    /// physical orders.
+    ///
+    /// Members share the union's logical order, so their rings wrap at different points
+    /// and the union's walk is cut in several segments.
+    pub fn check_wraps(&self, a: &View<'_, A>, b: &View<'_, B>, c: &View<'_, C>, case: &str) {
+        let union: Vec<EntityId> = self
+            .matches
+            .iter()
+            .map(|m| m.id)
+            .filter(|&id| c.contains(id))
+            .collect();
+        assert!(!union.is_empty(), "{case}: empty union");
+
+        let physical_order = |index_of: &dyn Fn(EntityId) -> Option<usize>| {
+            let mut ids = union.clone();
+            ids.sort_by_key(|&id| index_of(id).unwrap());
+            ids
+        };
+        let a_order = physical_order(&|id| a.index_of(id));
+        let b_order = physical_order(&|id| b.index_of(id));
+        assert!(a_order != b_order, "{case}: A and B wrap at the same point");
     }
 
     /// Asserts that every matched A holds `mutated_a(b)` and every unmatched A is unchanged.
@@ -386,4 +467,210 @@ pub fn small_ordinary() -> Fixture {
 /// Candidates: `SMALL_QUERY`, exact. Yields: `SMALL_QUERY`.
 pub fn small_grouped() -> Fixture {
     aligned_pairs(SMALL_QUERY)
+}
+
+/// Whether a fixture declares its groups, or builds the same entities without any as a control.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Layout {
+    Grouped,
+    Ordinary,
+}
+
+/// AB and AC groups, overlapping on A, and the ABC union they generate.
+///
+/// 1. `MULTI_AB` AB pairs, `MULTI_ABC` ABC triples, `MULTI_AC` AC pairs and 3 B-only entities.
+/// 2. `(A, B)` then `(A, C)` are grouped, the ABC triples land in the union.
+/// 3. `JOINS` AB pairs gain a C and `JOINS` AC pairs a B, spread over their sets.
+/// 4. A regroup promotes them into the union.
+///
+/// Values are built from each entity's index in the returned owners.
+/// An ordinary layout creates and mutates the same entities, without any group or regroup.
+fn multiple_world(layout: Layout) -> (World, Vec<Owner>) {
+    let mut world = World::new();
+    let mut owners = Vec::new();
+
+    let abc_start = MULTI_AB;
+    let ac_start = abc_start + MULTI_ABC;
+    for i in 0..ac_start + MULTI_AC {
+        let (b, c) = (i < ac_start, i >= abc_start);
+        let id = world.add_entity(A(a_value(i)));
+        if b {
+            world.add_component(id, B(b_value(i)));
+        }
+        if c {
+            world.add_component(id, C(c_value(i)));
+        }
+        owners.push(Owner { id, i, b, c });
+    }
+    for i in 0..3 {
+        world.add_entity(B(b_value(ac_start + MULTI_AC + i)));
+    }
+
+    if layout == Layout::Grouped {
+        world.group::<(A, B)>().group::<(A, C)>();
+    }
+
+    for k in 0..JOINS {
+        let ab = &mut owners[spread(k, JOINS, MULTI_AB) as usize];
+        world.add_component(ab.id, C(c_value(ab.i)));
+        ab.c = true;
+
+        let ac = &mut owners[(ac_start + spread(k, JOINS, MULTI_AC)) as usize];
+        world.add_component(ac.id, B(b_value(ac.i)));
+        ac.b = true;
+    }
+
+    if layout == Layout::Grouped {
+        world.regroup();
+    }
+
+    (world, owners)
+}
+
+/// The multiple-group world, for `(&A, &B)`: a full match of AB, a projection of the union.
+///
+/// - grouped: AB's range then the union's, which A's and B's wrap points cut in several
+///   segments. Candidates: `MULTI_AB + MULTI_ABC + JOINS`.
+/// - ordinary: B captains, A is looked up. Candidates: `MULTI_AB + MULTI_ABC + JOINS + 3`.
+///
+/// Yields: `MULTI_AB + MULTI_ABC + JOINS` (74,009).
+pub fn multiple_pairs(layout: Layout) -> Fixture {
+    let (world, owners) = multiple_world(layout);
+    let candidates = match layout {
+        Layout::Grouped => MULTI_AB + MULTI_ABC + JOINS,
+        Layout::Ordinary => MULTI_AB + MULTI_ABC + JOINS + 3,
+    };
+    // Neither walk claims an exact length: one has follow-up segments, the other looks up A.
+    let mut fixture = Fixture::new(world, candidates, false);
+    fixture.model(&owners, false);
+
+    fixture
+}
+
+/// The multiple-group world, for `(&A, &B, &C)`: a full match of the union.
+///
+/// - grouped: the union's range, which A's and B's wrap points cut in several segments.
+///   Candidates: `MULTI_ABC + 2 * JOINS`.
+/// - ordinary: C captains, A and B are looked up. Candidates: `MULTI_ABC + MULTI_AC + JOINS`.
+///
+/// Yields: `MULTI_ABC + 2 * JOINS` (38,009).
+pub fn multiple_triples(layout: Layout) -> Fixture {
+    let (world, owners) = multiple_world(layout);
+    let candidates = match layout {
+        Layout::Grouped => MULTI_ABC + 2 * JOINS,
+        Layout::Ordinary => MULTI_ABC + MULTI_AC + JOINS,
+    };
+    // Neither walk claims an exact length: one has follow-up segments, the other has lookups.
+    let mut fixture = Fixture::new(world, candidates, false);
+    fixture.model(&owners, true);
+
+    fixture
+}
+
+/// `N` AB pairs, 3 A-only and 3 B-only entities, optionally grouped. Then `CHURN` pairs spread
+/// over the second half lose their B, storage-local removals leaving A in place,
+/// and `CHURN` new pairs are added.
+fn churned_pairs(layout: Layout, regroup: bool, candidates: u32, exact: bool) -> Fixture {
+    let mut fixture = Fixture::new(World::new(), candidates, exact);
+    let pairs: Vec<_> = (0..N)
+        .map(|i| fixture.world.add_entity((A(a_value(i)), B(b_value(i)))))
+        .collect();
+    for i in N..N + 3 {
+        fixture.add_lone_a(i);
+        fixture.world.add_entity(B(b_value(i)));
+    }
+
+    if layout == Layout::Grouped {
+        fixture.world.group::<(A, B)>();
+    }
+
+    let half = N / 2;
+    let mut loses_b = vec![false; N as usize];
+    for k in 0..CHURN {
+        loses_b[(half + spread(k, CHURN, N - half)) as usize] = true;
+    }
+    for (i, (&id, loses_b)) in (0..).zip(pairs.iter().zip(loses_b)) {
+        if loses_b {
+            fixture.world.delete_component::<B>(id);
+            fixture.unmatched_a.push((id, a_value(i)));
+        } else {
+            fixture.matches.push(Match {
+                id,
+                a: a_value(i),
+                b: b_value(i),
+                c: None,
+            });
+        }
+    }
+
+    for i in N + 3..N + 3 + CHURN {
+        fixture.add_pair(i);
+    }
+
+    if regroup {
+        fixture.world.regroup();
+    }
+
+    fixture
+}
+
+/// `churned_pairs`, grouped and left damaged. The walks are:
+///
+/// - aligned, up to the first position the removals touched in B's range
+/// - the rest of B's range, B being the shorter member, A looked up
+/// - A's and B's unevaluated regions, the new pairs, B's walk covered by A's
+///
+/// Candidates: `N - CHURN + 2 * CHURN`. Yields: `N`.
+pub fn damaged() -> Fixture {
+    churned_pairs(Layout::Grouped, false, N + CHURN, false)
+}
+
+/// `churned_pairs`, grouped then regrouped: a single aligned segment again.
+///
+/// Candidates: `N`, exact. Yields: `N`.
+pub fn repaired() -> Fixture {
+    churned_pairs(Layout::Grouped, true, N, true)
+}
+
+/// `churned_pairs` without any group. B captains, A is looked up.
+///
+/// Candidates: `N + 3`. Yields: `N`.
+pub fn churned_ordinary() -> Fixture {
+    churned_pairs(Layout::Ordinary, false, N + 3, false)
+}
+
+/// `HEAD` AB pairs, `N` entities also owning a C, then 3 A-only and 3 B-only entities.
+///
+/// - grouped as `(A, B)` and `(A, B, C)`: AB's tiny range comes first, then the ABC range
+///   as one large follow-up. The lone components are ungrouped and not walked.
+///   Candidates: `HEAD + N`.
+/// - ordinary: A or B captains, they're the same size. Candidates: `HEAD + N + 3`.
+///
+/// Yields: `HEAD + N`. The first `HEAD` matches are the AB pairs.
+#[cfg(feature = "parallel")]
+pub fn tail(layout: Layout) -> Fixture {
+    let candidates = match layout {
+        Layout::Grouped => HEAD + N,
+        Layout::Ordinary => HEAD + N + 3,
+    };
+    // Neither walk claims an exact length: one has a follow-up segment, the other looks up B.
+    let mut fixture = Fixture::new(World::new(), candidates, false);
+    for i in 0..HEAD {
+        fixture.add_pair(i);
+    }
+    for i in HEAD..HEAD + N {
+        let (a, b) = (a_value(i), b_value(i));
+        let id = fixture.world.add_entity((A(a), B(b), C(c_value(i))));
+        fixture.matches.push(Match { id, a, b, c: None });
+    }
+    for i in HEAD + N..HEAD + N + 3 {
+        fixture.add_lone_a(i);
+        fixture.world.add_entity(B(b_value(i)));
+    }
+
+    if layout == Layout::Grouped {
+        fixture.world.group::<(A, B)>().group::<(A, B, C)>();
+    }
+
+    fixture
 }
