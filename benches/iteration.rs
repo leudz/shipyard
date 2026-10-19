@@ -73,8 +73,8 @@ fn construction_drop(
     group.bench_function(name, |bencher| bencher.iter(&mut routine));
 }
 
-/// Registers a world operation over `count` components. `routine` returns the time `iters`
-/// operations took.
+/// Registers a world operation over `count` components, 1 for an operation without any
+/// component to handle. `routine` returns the time `iters` operations took.
 fn operation(
     group: &mut BenchmarkGroup<'_, WallTime>,
     name: &str,
@@ -454,7 +454,8 @@ fn lifecycle(c: &mut Criterion) {
         total
     });
 
-    // Each regroup moves the restored B components back into the group.
+    // Each regroup moves the restored B components back into the group. The removals are spread
+    // over the whole range, so the first one damages almost all of it.
     operation(&mut group, "regroup", churned.len(), |iters| {
         let mut total = Duration::ZERO;
         for _ in 0..iters {
@@ -463,6 +464,54 @@ fn lifecycle(c: &mut Criterion) {
 
             let start = Instant::now();
             black_box(&mut aligned.world).regroup();
+            total += start.elapsed();
+        }
+        total
+    });
+
+    // With nothing to move, a regroup only goes through the storages and their groups.
+    let mut clean = fixtures::aligned();
+    clean.world.regroup();
+    {
+        let (a, b) = clean.world.borrow::<(View<A>, View<B>)>().unwrap();
+        let hint = (&a, &b).iter().size_hint();
+        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+        check_members("regroup_noop", &clean, hint, ids);
+    }
+
+    operation(&mut group, "regroup_noop", 1, |iters| {
+        let mut total = Duration::ZERO;
+        for _ in 0..iters {
+            let start = Instant::now();
+            black_box(&mut clean.world).regroup();
+            total += start.elapsed();
+        }
+        total
+    });
+
+    // The same cycle as `regroup`, with the removals at the logical end of the range:
+    // regroup only moves the damaged suffix. It appends the restored pairs back at the end,
+    // so every cycle damages the same suffix.
+    let mut tail = fixtures::aligned();
+    let tail_pairs = tail.churned_tail();
+    delete_b(&mut tail.world, &tail_pairs);
+    tail.restore_b(&tail_pairs);
+    tail.world.regroup();
+    {
+        let (a, b) = tail.world.borrow::<(View<A>, View<B>)>().unwrap();
+        let hint = (&a, &b).iter().size_hint();
+        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
+        check_members("regroup_tail", &tail, hint, ids);
+    }
+
+    operation(&mut group, "regroup_tail", tail_pairs.len(), |iters| {
+        let mut total = Duration::ZERO;
+        for _ in 0..iters {
+            delete_b(&mut tail.world, &tail_pairs);
+            tail.restore_b(&tail_pairs);
+
+            let start = Instant::now();
+            black_box(&mut tail.world).regroup();
             total += start.elapsed();
         }
         total

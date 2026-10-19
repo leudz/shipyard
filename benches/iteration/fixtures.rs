@@ -219,7 +219,19 @@ impl Fixture {
             .collect()
     }
 
-    /// Gives back their B to pairs [`churned`](Fixture::churned) returned.
+    /// The last `CHURN` matches, with their B, for the lifecycle cases to delete and restore.
+    ///
+    /// A freshly grouped fixture holds its matches in insertion order, so these are at the
+    /// logical end of the group's range.
+    pub fn churned_tail(&self) -> Vec<(EntityId, u32)> {
+        self.matches[self.matches.len() - CHURN as usize..]
+            .iter()
+            .map(|m| (m.id, m.b))
+            .collect()
+    }
+
+    /// Gives back their B to pairs [`churned`](Fixture::churned) or
+    /// [`churned_tail`](Fixture::churned_tail) returned.
     pub fn restore_b(&mut self, pairs: &[(EntityId, u32)]) {
         for &(id, b) in pairs {
             self.world.add_component(id, B(b));
