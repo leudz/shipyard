@@ -132,3 +132,29 @@ fn iteration() {
     assert_eq!(before, alloc::vec![(0, 0), (2, 2)]);
     assert_eq!(after, before);
 }
+
+/// Storage that isn't a `SparseSet`.
+struct Custom(u32);
+impl crate::storage::Storage for Custom {}
+
+/// Asserts that a custom storage next to group members is left alone by the group declaration
+/// and by regroup, and stays reachable with its content afterwards.
+#[test]
+fn custom_storage() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity((A(0), B(0)));
+    world
+        .all_storages
+        .get_mut()
+        .exclusive_storage_or_insert_mut(StorageId::of::<Custom>(), || Custom(7));
+
+    world.group::<(A, B)>();
+    world.regroup();
+
+    assert_eq!(range_of::<A>(&world, &[id::<A>(), id::<B>()]), [entity]);
+    let custom = world
+        .all_storages
+        .get_mut()
+        .exclusive_storage_or_insert_mut(StorageId::of::<Custom>(), || Custom(0));
+    assert_eq!(custom.0, 7);
+}

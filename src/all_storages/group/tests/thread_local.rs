@@ -51,3 +51,33 @@ fn non_send_overlap() {
     assert_eq!(b.groups.ranges.len(), 2);
     assert_eq!(b.dense[b.groups.ranges[1].start], entity);
 }
+
+/// Asserts that `NonSync` and `NonSendSync` members attach their range to their wrapper's own
+/// storage, sharing the group with their `Send + Sync` partner, without creating the
+/// `Send + Sync` storage of the same component.
+#[test]
+fn non_sync_and_non_send_sync() {
+    use crate::borrow::{NonSendSync, NonSync};
+    use crate::sparse_set::SparseSet;
+    use crate::storage::StorageId;
+
+    let mut world = World::new_for_test();
+
+    world
+        .group::<(A, NonSync<C>)>()
+        .group::<(B, NonSendSync<D>)>();
+
+    let c = world.borrow::<NonSync<View<'_, C>>>().unwrap();
+    let d = world.borrow::<NonSendSync<View<'_, D>>>().unwrap();
+    let c_id = StorageId::of::<NonSync<SparseSet<C>>>();
+    let d_id = StorageId::of::<NonSendSync<SparseSet<D>>>();
+    assert_eq!(c.groups.storage_id, Some(c_id));
+    assert_eq!(d.groups.storage_id, Some(d_id));
+    assert_eq!(&c.groups.ranges[0].group[..], group_ids(&[id::<A>(), c_id]));
+    assert_eq!(&d.groups.ranges[0].group[..], group_ids(&[id::<B>(), d_id]));
+    drop((c, d));
+
+    let storages = world.all_storages.get_mut().storages.get_mut();
+    assert!(!storages.contains_key(&id::<C>()));
+    assert!(!storages.contains_key(&id::<D>()));
+}

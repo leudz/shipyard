@@ -1,5 +1,9 @@
 #[cfg(test)]
 mod tests;
+// Rustdoc doesn't set `test` when it collects doc tests, these checks need their own gate.
+#[cfg(doctest)]
+#[path = "group/tests/compile_fail.rs"]
+mod compile_fail_tests;
 
 use crate::all_storages::AllStorages;
 #[cfg(feature = "thread_local")]
@@ -12,16 +16,30 @@ use crate::world::World;
 use alloc::vec;
 use alloc::vec::Vec;
 
+/// Seals the grouping traits, only built-in storages can be grouped.
+///
+/// The traits are public but can't be named outside the crate, so nobody else can implement them.
+mod seal {
+    /// Implemented by every [`GroupMember`](super::GroupMember).
+    pub trait Member {}
+    /// Implemented by every [`TupleGroup`](super::TupleGroup).
+    pub trait Tuple {}
+}
+
 /// One element of a [`TupleGroup`].
 ///
-/// Thread-local storages are written with the same wrappers used to borrow them, for example `NonSend<T>`.
+/// Thread-local storages are written with the same wrappers used to borrow them, for example `NonSend<T>`.\
+/// Only components and their thread-local wrappers are group members, it can't be implemented
+/// outside of shipyard.
 #[doc(hidden)]
-pub trait GroupMember {
+pub trait GroupMember: seal::Member {
     /// Returns the id of the storage this element refers to.
     fn storage_id() -> StorageId;
     /// Creates the storage if it doesn't exist yet.
     fn get_or_insert(all_storages: &mut AllStorages);
 }
+
+impl<T: Component + Send + Sync> seal::Member for T {}
 
 impl<T: Component + Send + Sync> GroupMember for T {
     #[inline]
@@ -34,6 +52,9 @@ impl<T: Component + Send + Sync> GroupMember for T {
         all_storages.exclusive_storage_or_insert_mut(Self::storage_id(), SparseSet::<T>::new);
     }
 }
+
+#[cfg(feature = "thread_local")]
+impl<T: Component + Sync> seal::Member for NonSend<T> {}
 
 #[cfg(feature = "thread_local")]
 impl<T: Component + Sync> GroupMember for NonSend<T> {
@@ -51,6 +72,9 @@ impl<T: Component + Sync> GroupMember for NonSend<T> {
 }
 
 #[cfg(feature = "thread_local")]
+impl<T: Component + Send> seal::Member for NonSync<T> {}
+
+#[cfg(feature = "thread_local")]
 impl<T: Component + Send> GroupMember for NonSync<T> {
     #[inline]
     fn storage_id() -> StorageId {
@@ -64,6 +88,9 @@ impl<T: Component + Send> GroupMember for NonSync<T> {
         });
     }
 }
+
+#[cfg(feature = "thread_local")]
+impl<T: Component> seal::Member for NonSendSync<T> {}
 
 #[cfg(feature = "thread_local")]
 impl<T: Component> GroupMember for NonSendSync<T> {
@@ -82,9 +109,10 @@ impl<T: Component> GroupMember for NonSendSync<T> {
 
 /// Trait used as bound for [`World::group`] and [`AllStorages::group`].
 ///
-/// Only implemented for tuples of two or more elements, since a group needs at least two storages.
+/// Only implemented for tuples of two or more elements, since a group needs at least two storages.\
+/// It can't be implemented outside of shipyard.
 #[doc(hidden)]
-pub trait TupleGroup {
+pub trait TupleGroup: seal::Tuple {
     /// Returns the id of every member storage, in tuple order.
     fn storage_ids() -> Vec<StorageId>;
     /// Creates every member storage that doesn't exist yet.
@@ -93,6 +121,8 @@ pub trait TupleGroup {
 
 macro_rules! impl_group {
     ($(($member: ident, $index: tt))+) => {
+        impl<$($member: GroupMember),+> seal::Tuple for ($($member,)+) {}
+
         impl<$($member: GroupMember),+> TupleGroup for ($($member,)+) {
             #[inline]
             fn storage_ids() -> Vec<StorageId> {
