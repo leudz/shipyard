@@ -5,6 +5,7 @@
 //! transitions and splits, then use them, so a stale pointer, an aliasing `&mut` or a plan
 //! released too early shows up as a wrong value or a Miri error.
 
+use crate::all_storages::AllStorages;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
@@ -12,11 +13,12 @@ use crate::iter::plan::NodeState;
 use crate::iter::planner::NodeMetadata;
 use crate::iter::planner::regions::grouped_entities;
 use crate::iter::{
-    IntoIter, IntoShiperator, Mixed, OneOfTwo, RawEntityIdAccess, Shiper, Shiperator,
+    IntoIter, IntoIterRef, IntoShiperator, IterComponent, Mixed, OneOfTwo, RawEntityIdAccess,
+    Shiper, Shiperator, is_exact_traversal,
 };
 use crate::sparse_set::FullRawWindow;
 use crate::track;
-use crate::views::{View, ViewMut};
+use crate::views::{AllStoragesView, View, ViewMut};
 use crate::world::World;
 use alloc::vec::Vec;
 #[cfg(feature = "std")]
@@ -96,6 +98,33 @@ fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
     // SAFE: `grouped_entities` installed its first segment on `mixed` and returns that
     // segment's entities, with follow-ups whose rows it built for `mixed`'s layout.
     unsafe { Shiper::new(mixed, entities) }
+}
+
+/// Builds `AllStorages::iter`'s wrapper around the grouped alternative `T` reported, like
+/// `grouped` does for borrowed queries.
+fn grouped_owned<'a, T: IterComponent>(all_storages: &'a AllStorages) -> IntoIterRef<'a, T>
+where
+    T::Shiperator<'a>: Shiperator,
+{
+    let current = all_storages.get_current();
+    let (mut mixed, all_borrow, borrow, _, entities) =
+        T::into_shiperator(all_storages, None, current).unwrap();
+    let NodeMetadata::Mixed(selection) = entities.metadata else {
+        panic!("the query has a grouped alternative");
+    };
+    let alternative = selection.cheapest().unwrap();
+
+    let entities = grouped_entities(&mut mixed, alternative);
+    let is_exact_sized = is_exact_traversal(&mixed, &entities);
+
+    IntoIterRef {
+        shiperator: mixed,
+        _all_borrow: all_borrow,
+        _borrow: borrow,
+        entities,
+        is_exact_sized,
+        phantom: core::marker::PhantomData,
+    }
 }
 
 /// Returns the `(captain_mask, coverage records, candidates)` of every segment of `iter`'s
@@ -217,6 +246,41 @@ fn ordinary_held_mut() {
 
     let values: Vec<u32> = [0, 1, 2, 4].map(|i| a.get(e[i]).unwrap().0).into();
     assert_eq!(values, [10, 1, 14, 18]);
+}
+
+/// Asserts that an owned wrapper hands each iterator its own reborrowed clone over a grouped plan
+/// with coverage: a first iterator dropped inside a covered segment leaves the plan to the next
+/// one, whose mutable items are all held then written, and a last one finds every entity again.
+#[test]
+fn owned_reborrow() {
+    let (world, e) = partial_world();
+
+    {
+        let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
+        let mut iter = grouped_owned::<(&mut A, &mut B)>(&all_storages);
+
+        // The aligned prefix and B's damaged suffix hold 4 candidates, the 5th item comes from
+        // the first segment reading coverage.
+        let mut first = iter.iter();
+        assert_eq!(route(&first, None), PARTIAL_ROUTE);
+        assert!(first.nth(4).is_some());
+        drop(first);
+
+        let items: Vec<(&mut A, &mut B)> = iter.iter().collect();
+        assert_eq!(items.len(), e.len());
+        for (a, b) in items {
+            a.0 += 100;
+            b.0 += 100;
+        }
+
+        let mut ids: Vec<EntityId> = iter.iter().with_id().map(|(id, _)| id).collect();
+        ids.sort_unstable();
+        let mut expected = e.clone();
+        expected.sort_unstable();
+        assert_eq!(ids, expected);
+    }
+
+    assert_written(&world, &e);
 }
 
 /// Asserts that an `Or` yields A's entities then B's remaining ones, and that references from

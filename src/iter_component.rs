@@ -14,18 +14,90 @@ use crate::iter::planner::{self, Child, NodeMetadata};
 use crate::iter::{Mixed, RawEntityIdAccess, Shiperator};
 use crate::r#mut::Mut;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
-use crate::storage::StorageId;
 use crate::tracking::Tracking;
 use crate::tracking::TrackingTimestamp;
 use crate::views::{View, ViewMut};
-use crate::{ShipHashSet, error, track};
+use crate::{error, track};
 use core::any::type_name;
 
 /// Trait used as bound for [`World::iter`] and [`AllStorages::iter`].
 ///
+/// Calling these methods is always safe.\
+/// Implementing this trait is only needed for custom component sets. The simplest
+/// implementation delegates to an existing one and returns its results unchanged:
+///
+/// ```
+/// use shipyard::advanced::atomic_refcell::SharedBorrow;
+/// use shipyard::advanced::tracking::TrackingTimestamp;
+/// use shipyard::all_storages::AllStorages;
+/// use shipyard::error::GetStorage;
+/// use shipyard::iter::{IterComponent, RawEntityIdAccess};
+/// use shipyard::{Component, World};
+///
+/// #[derive(Component)]
+/// struct Pos(f32);
+///
+/// struct Positions;
+///
+/// // SAFE: We return `&mut Pos`'s results unchanged, guards included.
+/// unsafe impl IterComponent for Positions {
+///     type Shiperator<'a> = <&'static mut Pos as IterComponent>::Shiperator<'a>;
+///     type Borrow<'a> = <&'static mut Pos as IterComponent>::Borrow<'a>;
+///
+///     fn into_shiperator<'a>(
+///         all_storages: &'a AllStorages,
+///         all_borrow: Option<SharedBorrow<'a>>,
+///         current: TrackingTimestamp,
+///     ) -> Result<
+///         (
+///             Self::Shiperator<'a>,
+///             Option<SharedBorrow<'a>>,
+///             Self::Borrow<'a>,
+///             usize,
+///             RawEntityIdAccess,
+///         ),
+///         GetStorage,
+///     > {
+///         <&mut Pos>::into_shiperator(all_storages, all_borrow, current)
+///     }
+/// }
+///
+/// let mut world = World::new();
+/// world.add_entity(Pos(1.0));
+///
+/// for pos in &mut world.iter::<Positions>() {
+///     pos.0 += 1.0;
+/// }
+///
+/// let sum: f32 = world.iter::<&Pos>().iter().map(|pos| pos.0).sum();
+/// assert_eq!(sum, 2.0);
+/// ```
+///
+/// ### Safety
+///
+/// Iterators trust what [`into_shiperator`](IterComponent::into_shiperator) returns without
+/// checking it. Implementations must uphold all of the following:
+///
+/// - The returned Shiperator, length and [`RawEntityIdAccess`] uphold
+///   [`IntoShiperator`](crate::iter::IntoShiperator)'s contract, with the returned guards in place
+///   of a Rust borrow: they come from the same storage borrows and agree with each other.
+/// - The returned `Borrow<'a>` and `all_borrow` guards keep every storage the Shiperator reads
+///   borrowed, exclusively when it yields mutable outputs. [`IntoIterRef`] holds them as long as
+///   it and the items of its iterators are alive, nothing the Shiperator or the access points to
+///   may outlive them.
+/// - A conflict with another member of the same query, two exclusive borrows of one storage for
+///   example, is detected and reported as an error. Acquiring the storage borrows, as the
+///   built-in implementations do, detects it.
+/// - For every `'b` shorter than `'a`, a `Shiperator<'a>` is also a valid `Shiperator<'b>` with
+///   the same representation. The two types only differ by this lifetime and shortening it can't
+///   let anything be stored that has to live for `'a`, as if `Shiperator` was covariant.
+/// - Clones of the Shiperator resolve candidates exactly like the original.
+///   [`IntoIterRef::iter`] builds each iterator from a fresh clone, cloning doesn't allow
+///   a mutable component to be yielded twice by the same iterator.
+///
 /// [`World::get`]: crate::World::get
 /// [`World::iter`]: crate::World::iter
-pub trait IterComponent {
+pub unsafe trait IterComponent {
     #[allow(missing_docs)]
     type Shiperator<'a>;
     #[allow(missing_docs)]
@@ -37,7 +109,6 @@ pub trait IterComponent {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -58,9 +129,8 @@ pub(crate) fn into_iter<'a, T: IterComponent>(
 where
     <T as IterComponent>::Shiperator<'a>: Shiperator,
 {
-    let mut storage_ids = ShipHashSet::new();
     let (mut shiperator, all_borrow, borrow, current_len, entities) =
-        T::into_shiperator(all_storages, all_borrow, current, &mut storage_ids)?;
+        T::into_shiperator(all_storages, all_borrow, current)?;
     debug_assert_eq!(current_len, entities.cursor.len());
 
     // We're the query's root, every node has been built and nothing will pick another walk.
@@ -81,7 +151,11 @@ where
     })
 }
 
-impl<T: Component + Send + Sync> IterComponent for &'_ T {
+// SAFE: The window and its entities are read from the view we borrowed, which we return as
+// guards. A view's borrow fails when the storage is already exclusively borrowed, by another
+// member of the query included. Windows only hold raw pointers into the storage, shortening
+// their lifetime is like shortening a reference's. See `IntoShiperator for &View`.
+unsafe impl<T: Component + Send + Sync> IterComponent for &'_ T {
     type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
@@ -89,7 +163,6 @@ impl<T: Component + Send + Sync> IterComponent for &'_ T {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -111,8 +184,9 @@ impl<T: Component + Send + Sync> IterComponent for &'_ T {
     }
 }
 
+// SAFE: See `&T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
+unsafe impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
     type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
@@ -120,7 +194,6 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -142,8 +215,9 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ T> {
     }
 }
 
+// SAFE: See `&T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
+unsafe impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
     type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
@@ -151,7 +225,6 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -173,8 +246,9 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ T> {
     }
 }
 
+// SAFE: See `&T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component> IterComponent for NonSendSync<&'_ T> {
+unsafe impl<T: Component> IterComponent for NonSendSync<&'_ T> {
     type Shiperator<'a> = FullRawWindow<'a, T, T::Tracking>;
     type Borrow<'a> = SharedBorrow<'a>;
 
@@ -182,7 +256,6 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -204,7 +277,9 @@ impl<T: Component> IterComponent for NonSendSync<&'_ T> {
     }
 }
 
-impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
+// SAFE: See `&T`. The view is borrowed exclusively, so is the storage the mutable outputs
+// come from. See `IntoShiperator for &mut ViewMut` for their uniqueness.
+unsafe impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
     type Shiperator<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -213,7 +288,6 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -243,8 +317,9 @@ impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
     }
 }
 
+// SAFE: See `&mut T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
+unsafe impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -252,7 +327,6 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -282,8 +356,9 @@ impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
     }
 }
 
+// SAFE: See `&mut T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
+unsafe impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -291,7 +366,6 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -321,8 +395,9 @@ impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
     }
 }
 
+// SAFE: See `&mut T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
+unsafe impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, T::Tracking>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -330,7 +405,6 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -360,7 +434,8 @@ impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
     }
 }
 
-impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
+// SAFE: See `&mut T`.
+unsafe impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, track::Modification>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -368,7 +443,6 @@ impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -391,8 +465,9 @@ impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
     }
 }
 
+// SAFE: See `&mut T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
+unsafe impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, track::Modification>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -400,7 +475,6 @@ impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -427,8 +501,9 @@ impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
     }
 }
 
+// SAFE: See `&mut T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
+unsafe impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, track::Modification>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -436,7 +511,6 @@ impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -463,8 +537,9 @@ impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
     }
 }
 
+// SAFE: See `&mut T`, the wrapper's borrow also checks the thread we're on.
 #[cfg(feature = "thread_local")]
-impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
+unsafe impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
     type Shiperator<'a> = FullRawWindowMut<'a, T, track::Modification>;
     type Borrow<'a> = ExclusiveBorrow<'a>;
 
@@ -472,7 +547,6 @@ impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
         all_storages: &'a AllStorages,
         all_borrow: Option<SharedBorrow<'a>>,
         current: TrackingTimestamp,
-        _storage_ids: &mut ShipHashSet<StorageId>,
     ) -> Result<
         (
             Self::Shiperator<'a>,
@@ -501,7 +575,12 @@ impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
 
 macro_rules! impl_iter_component {
     ($(($type: ident, $raw_window: ident, $borrow: ident, $len: ident, $entity_iter: ident, $index: tt))+) => {
-        impl<$($type: IterComponent),+> IterComponent for ($($type,)+) where $(for<'a> $type::Shiperator<'a>: Shiperator,)+ {
+        // SAFE: Each child's results come from its own implementation, which upholds the contract.
+        // We return all their guards and our own `all_borrow`, the clone each child got shares it.
+        // Children detect conflicts between themselves, see `&mut T`. `Mixed` holds the children's
+        // Shiperators as is, shortening its lifetime shortens each of theirs.
+        // The rest is the same as `IntoShiperator`'s tuples.
+        unsafe impl<$($type: IterComponent),+> IterComponent for ($($type,)+) where $(for<'a> $type::Shiperator<'a>: Shiperator,)+ {
             type Shiperator<'a> = Mixed<($($type::Shiperator<'a>,)+)>;
             type Borrow<'a> = ($($type::Borrow<'a>,)+);
 
@@ -509,7 +588,6 @@ macro_rules! impl_iter_component {
                 all_storages: &'a AllStorages,
                 all_borrow: Option<SharedBorrow<'a>>,
                 current: TrackingTimestamp,
-                storage_ids: &mut ShipHashSet<StorageId>,
             ) -> Result<
                 (
                     Self::Shiperator<'a>,
@@ -521,7 +599,7 @@ macro_rules! impl_iter_component {
                 error::GetStorage,
             > {
                 $(
-                    let ($raw_window, _, $borrow, $len, mut $entity_iter) = $type::into_shiperator(all_storages, all_borrow.clone(), current, storage_ids)?;
+                    let ($raw_window, _, $borrow, $len, mut $entity_iter) = $type::into_shiperator(all_storages, all_borrow.clone(), current)?;
                 )+
 
                 // Owned iteration only builds windows and tuples of them,

@@ -4,7 +4,6 @@
 //! reports in its construction metadata, constructors always install the ordinary walk.\
 //! Installing the winner is tested in `grouping_automatic`.
 
-use crate::ShipHashSet;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::iter::planner::{Alternative, NodeMetadata, Route, Selection, Walk};
@@ -759,23 +758,13 @@ fn owned_route() {
     let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
     let current = TrackingTimestamp::origin();
 
-    let (mixed, _, _, _, entities) = <(&A, &B) as IterComponent>::into_shiperator(
-        &all_storages,
-        None,
-        current,
-        &mut ShipHashSet::new(),
-    )
-    .unwrap();
+    let (mixed, _, _, _, entities) =
+        <(&A, &B) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
     assert_grouped_wins(&entities, 0b11);
     assert_eq!(mixed.captain_mask, 0b10);
 
-    let (mixed, _, _, _, entities) = <(&A, &B, &C) as IterComponent>::into_shiperator(
-        &all_storages,
-        None,
-        current,
-        &mut ShipHashSet::new(),
-    )
-    .unwrap();
+    let (mixed, _, _, _, entities) =
+        <(&A, &B, &C) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
     assert_ordinary_wins(&entities, 2);
     assert_eq!(mixed.captain_mask, 0b100);
 }

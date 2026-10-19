@@ -2,6 +2,10 @@
 
 use super::ways::every_way;
 use shipyard::advanced::Mut;
+use shipyard::advanced::atomic_refcell::SharedBorrow;
+use shipyard::advanced::tracking::TrackingTimestamp;
+use shipyard::all_storages::AllStorages;
+use shipyard::iter::{IterComponent, RawEntityIdAccess};
 use shipyard::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -201,4 +205,74 @@ fn all_storages_repeat() {
     let items = every_way!(iter.iter(), |(a, b): (&mut A, &B)| (a.0, b.0));
 
     assert_eq!(items, [(e[1], (1, 11)), (e[3], (3, 13))]);
+}
+
+/// Asserts that every mutable item of a `World::iter` iterator can be held at once and written
+/// through, and that the next iterator sees these writes.
+#[test]
+fn held_mut() {
+    let (world, e) = world();
+    let mut iter = world.iter::<(&mut A, &B)>();
+
+    let items: Vec<(&mut A, &B)> = iter.iter().collect();
+    assert_eq!(items.len(), 2);
+    for (a, b) in items {
+        a.0 += b.0;
+    }
+
+    let items = every_way!(iter.iter(), |(a, b): (&mut A, &B)| (a.0, b.0));
+    assert_eq!(items, [(e[1], (12, 11)), (e[3], (16, 13))]);
+}
+
+/// Custom component set delegating to `&mut A`.
+struct CustomA;
+
+// SAFE: We return `&mut A`'s results unchanged, guards included.
+unsafe impl IterComponent for CustomA {
+    type Shiperator<'a> = <&'static mut A as IterComponent>::Shiperator<'a>;
+    type Borrow<'a> = <&'static mut A as IterComponent>::Borrow<'a>;
+
+    fn into_shiperator<'a>(
+        all_storages: &'a AllStorages,
+        all_borrow: Option<SharedBorrow<'a>>,
+        current: TrackingTimestamp,
+    ) -> Result<
+        (
+            Self::Shiperator<'a>,
+            Option<SharedBorrow<'a>>,
+            Self::Borrow<'a>,
+            usize,
+            RawEntityIdAccess,
+        ),
+        error::GetStorage,
+    > {
+        <&mut A>::into_shiperator(all_storages, all_borrow, current)
+    }
+}
+
+/// Asserts that a custom delegating `IterComponent` iterates and writes alongside other
+/// components, keeps its storage exclusively borrowed until its `IntoIterRef` is dropped,
+/// and conflicts with another exclusive borrow of the same storage.
+#[test]
+fn custom() {
+    let (world, e) = world();
+    let mut iter = world.iter::<(CustomA, &B)>();
+
+    iter.iter().for_each(|(a, b)| a.0 += b.0);
+    let items = every_way!(iter.iter(), |(a, b): (&mut A, &B)| (a.0, b.0));
+    assert_eq!(items, [(e[1], (12, 11)), (e[3], (16, 13))]);
+
+    assert!(world.borrow::<View<A>>().is_err());
+    drop(iter);
+    assert!(world.borrow::<ViewMut<A>>().is_ok());
+}
+
+/// Asserts that a custom delegating `IterComponent` is rejected next to an exclusive borrow
+/// of the storage it delegates to.
+#[test]
+#[should_panic(expected = "Cannot mutably borrow")]
+fn custom_duplicate() {
+    let (world, _) = world();
+
+    let _ = world.iter::<(CustomA, &mut A)>();
 }
