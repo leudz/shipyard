@@ -1466,12 +1466,28 @@ let i = all_storages.run(sys1);
         T::track_all(self);
     }
 
-    /// Declares a group made of the given storages, creating the ones that don't exist yet.
+    /// Declares a group made of the given storages.
     ///
-    /// Groups can share storages. Entities satisfying overlapping groups are grouped
-    /// in their connected union, disjoint groups stay independent.\
-    /// Declaring a group that already exists, declared or created as a union, does nothing.\
-    /// Declaring a new group runs a full [`regroup`](AllStorages::regroup).
+    /// Iterating a group's storages together walks their components without check.\
+    /// Other storages in the query are looked up as usual.
+    ///
+    /// Declaring a new group creates the storages that don't exist and runs a [`regroup`](AllStorages::regroup).\
+    /// If the group already exists, nothing happens.\
+    /// Groups can't be removed.
+    ///
+    /// ### Overlapping groups
+    ///
+    /// A storage can belong to multiple groups. When groups overlap, a union is created.\
+    /// With `A+B` and `A+C` groups, an entity owning A, B and C moves to an `A+B+C` union.\
+    /// An `(&a, &b)` query then walks both `A+B` and `A+B+C`.
+    ///
+    /// The more groups overlap, the more pieces a group is split into and the slower iteration gets.
+    ///
+    /// ### Current limitations
+    ///
+    /// - All of a group's storages have to be in the same tuple when creating an iterator.\
+    ///   `((&a, &b), &c)` uses an `A+B` group, `(&a, (&b, &c))` doesn't.
+    /// - Queries using `Not`, `Optional`, `Or` or a tracking filter like `inserted` don't use groups.
     ///
     /// ### Panics
     ///

@@ -258,7 +258,7 @@ impl Groups {
     /// Returns the physical indices of the unevaluated region of a storage of `dense_len` components.
     ///
     /// A storage without any range has no unevaluated component.
-    #[allow(dead_code, reason = "Used once grouped iteration lands.")]
+    #[cfg(test)]
     pub(crate) fn unevaluated_range(&self, dense_len: usize) -> Range<usize> {
         if !self.has_ranges() {
             return dense_len..dense_len;

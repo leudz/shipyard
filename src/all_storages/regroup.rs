@@ -25,7 +25,10 @@ type StoragePtr = *mut (dyn Storage + 'static);
 //   invalidates the previous one.
 
 impl AllStorages {
-    /// Reorganizes components according to the declared groups to improve iteration performance.
+    /// Moves components to the groups they belong to, to speed up iteration.
+    ///
+    /// Components only move to their group during a regroup, explicit or from declaring a new group.\
+    /// Iteration stays correct between regroups, but adding or removing components slows it down.
     pub fn regroup(&mut self) {
         let storages = self.storages.get_mut();
         let storage_ids = sorted_storage_ids(storages);

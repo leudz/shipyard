@@ -25,7 +25,7 @@ pub use crate::tracking::{Inserted, InsertedOrModified, Modified};
 pub use into_shiperator::{IntoIter, IntoShiperator};
 pub use mixed::Mixed;
 #[cfg(feature = "parallel")]
-#[cfg_attr(docsrs, doc(cfg(feature = "thread_local")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "parallel")))]
 pub use parallel::ParShiperator;
 #[doc(hidden)]
 pub use plan::{SegmentEntry, SegmentRow};

@@ -109,7 +109,7 @@ fn all_storages() {
 }
 
 /// Asserts that iterating grouped storages yields the same components as before grouping,
-/// in any order since regroup can reorder them and iteration doesn't read the ranges yet.
+/// in any order since regroup can reorder them.
 #[test]
 fn iteration() {
     let mut world = World::new_for_test();
