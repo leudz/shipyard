@@ -756,6 +756,11 @@ fn layouts(world: &World) -> Vec<Layout> {
                 #[cfg(debug_assertions)]
                 view.groups.assert_invariants(view.dense.len());
 
+                // Every component has to stay reachable from its entity, whatever moved it.
+                for (index, &id) in view.dense.iter().enumerate() {
+                    assert_eq!(view.index_of(id), Some(index), "{id:?} unreachable at slot {slot}");
+                }
+
                 Layout {
                     storage_id: StorageId::of::<SparseSet<K>>(),
                     dense: view.dense.to_vec(),
@@ -793,6 +798,37 @@ fn group_masks(world: &World) -> Vec<u8> {
         .flat_map(|layout| &layout.ranges)
         .map(|(group, _, _)| slot_mask(&layouts, group))
         .collect()
+}
+
+/// Returns the slots `row` owns a component in, as a mask.
+fn owned_mask(row: &Row) -> u8 {
+    (0..SLOTS)
+        .filter(|&slot| row[slot].is_some())
+        .fold(0, |mask, slot| mask | 1 << slot)
+}
+
+/// Returns the union an entity owning the slots of `owned` has to be grouped in at `slot`,
+/// as a slot mask. 0 when it has to be ungrouped there.
+///
+/// It's made of the `declared` groups the entity owns every member of, connected to `slot`
+/// through shared members. Groups it doesn't own every member of don't connect anything.
+fn expected_union(owned: u8, slot: usize, declared: &[u8]) -> u8 {
+    let alone = 1 << slot;
+
+    let mut union = alone;
+    loop {
+        let grown = declared
+            .iter()
+            .filter(|&&group| group & !owned == 0 && group & union != 0)
+            .fold(union, |union, group| union | group);
+
+        if grown == union {
+            break;
+        }
+        union = grown;
+    }
+
+    if union == alone { 0 } else { union }
 }
 
 /// Returns `true` when `groups` join into a single set through shared members.
@@ -899,6 +935,29 @@ fn check_layout(
         );
         for (group, ring, trust) in &layout.ranges {
             assert_eq!(*trust, ring.len, "{group:?} damaged, {context}");
+        }
+    }
+
+    // Each component has to sit in the union its entity's own components call for,
+    // which we get from the model's rows, never from regroup.
+    for (slot, layout) in layouts.iter().enumerate() {
+        if layout.ranges.is_empty() {
+            continue;
+        }
+
+        for (index, id) in layout.dense.iter().enumerate() {
+            let owned = owned_mask(&scenario.model[id]);
+            let expected = expected_union(owned, slot, &scenario.declared);
+            let actual = layout
+                .ranges
+                .iter()
+                .find(|(_, ring, _)| ring.contains(index))
+                .map_or(0, |(group, _, _)| slot_mask(&layouts, group));
+
+            assert_eq!(
+                actual, expected,
+                "{id:?} at slot {slot} in {actual:#07b} instead of {expected:#07b}, {context}"
+            );
         }
     }
 

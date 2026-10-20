@@ -115,7 +115,7 @@ fn late_component() {
 
 /// Asserts that removing a grouped A leaves the rest of A's range in place, only trusting the
 /// positions before the removed one, while B keeps its range.
-/// Regroup then evicts B's untrusted suffix and places the remaining entities again.
+/// Regroup then leaves the entity that lost A ungrouped in B and the others grouped.
 #[test]
 fn removal() {
     let mut world = World::new_for_test();
@@ -276,11 +276,11 @@ fn non_send() {
 
     world.group::<(A, NonSend<B>)>();
 
+    // `assert_regrouped` checks B's range holds the same logical sequence as A's.
     assert_regrouped(&world);
     assert_eq!(sorted(range_of::<A>(&world)), [ab0, ab2]);
     assert_eq!(ungrouped_of::<A>(&world), [a1]);
     let b = world.borrow::<NonSend<View<'_, B>>>().unwrap();
-    assert_eq!(b.dense[..b.groups.grouped_end()], range_of::<A>(&world));
     assert_eq!(b.get(ab0), Ok(&B(0)));
     assert_eq!(b.get(ab2), Ok(&B(2)));
 }

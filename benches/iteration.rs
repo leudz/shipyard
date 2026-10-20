@@ -9,7 +9,10 @@
 //!   The iterator is built before the timer starts, the timer covers consuming it to
 //!   exhaustion and dropping it.
 //! - `lifecycle` times world operations. Restoring the world between two operations happens
-//!   outside the timer.
+//!   outside the timer. Regroups after changes build a fresh world for each regroup instead:
+//!   `regroup*` cases make their changes outside the timer and time the regroup alone,
+//!   `regroup*_cycle` cases time the changes and the regroup. Each prints a fingerprint of the
+//!   layout its regroups start from, the same on two builds when they time the same layout.
 //! - `construction+traversal` times small queries end to end: building the iterator,
 //!   consuming it and dropping it.
 //! - `construction+drop` times building an iterator and dropping it without advancing it.
@@ -29,10 +32,11 @@ mod fixtures;
 
 use consumers::*;
 use criterion::measurement::WallTime;
-use criterion::{BenchmarkGroup, Criterion, Throughput};
-use fixtures::{A, B, C, Fixture, Layout};
-use shipyard::{EntityId, IntoIter, View, ViewMut};
+use criterion::{BenchmarkGroup, Criterion, SamplingMode, Throughput};
+use fixtures::{A, B, C, CHURN, Change, Churn, Fixture, H, Layout, Match, N, QUARTER, h_value};
+use shipyard::{Component, EntityId, Get, IntoIter, View, ViewMut, World};
 use std::hint::black_box;
+use std::ops::Range;
 use std::time::{Duration, Instant};
 
 const SAMPLE_SIZE: usize = 30;
@@ -117,10 +121,15 @@ fn check_members(
     assert!(fixture.yielded() > 0, "{case}: empty workload");
     assert_eq!(hint, fixture.expected_hint(), "{case}: unexpected walk");
 
+    check_ids(case, &fixture.ids(), ids);
+}
+
+/// Asserts that `ids`, in any order, are exactly the sorted `expected`.
+fn check_ids(case: &str, expected: &[EntityId], ids: impl Iterator<Item = EntityId>) {
     let mut ids: Vec<_> = ids.collect();
     ids.sort_unstable();
-    assert_eq!(ids.len(), fixture.yielded(), "{case}: wrong count");
-    assert!(ids == fixture.ids(), "{case}: wrong entities");
+    assert_eq!(ids.len(), expected.len(), "{case}: wrong count");
+    assert!(ids == expected, "{case}: wrong entities");
 }
 
 fn check_sum(case: &str, got: u32, expected: u32) {
@@ -463,21 +472,6 @@ fn lifecycle(c: &mut Criterion) {
         total
     });
 
-    // Each regroup moves the restored B components back into the group. The removals are spread
-    // over the whole range, so the first one damages almost all of it.
-    operation(&mut group, "regroup", churned.len(), |iters| {
-        let mut total = Duration::ZERO;
-        for _ in 0..iters {
-            delete_b(&mut aligned.world, &churned);
-            aligned.restore_b(&churned);
-
-            let start = Instant::now();
-            black_box(&mut aligned.world).regroup();
-            total += start.elapsed();
-        }
-        total
-    });
-
     // With nothing to move, a regroup only goes through the storages and their groups.
     let mut clean = fixtures::aligned();
     clean.world.regroup();
@@ -498,34 +492,6 @@ fn lifecycle(c: &mut Criterion) {
         total
     });
 
-    // The same cycle as `regroup`, with the removals at the logical end of the range:
-    // regroup only moves the damaged suffix. It appends the restored pairs back at the end,
-    // so every cycle damages the same suffix.
-    let mut tail = fixtures::aligned();
-    let tail_pairs = tail.churned_tail();
-    delete_b(&mut tail.world, &tail_pairs);
-    tail.restore_b(&tail_pairs);
-    tail.world.regroup();
-    {
-        let (a, b) = tail.world.borrow::<(View<A>, View<B>)>().unwrap();
-        let hint = (&a, &b).iter().size_hint();
-        let ids = (&a, &b).iter().with_id().map(|(id, _)| id);
-        check_members("regroup_tail", &tail, hint, ids);
-    }
-
-    operation(&mut group, "regroup_tail", tail_pairs.len(), |iters| {
-        let mut total = Duration::ZERO;
-        for _ in 0..iters {
-            delete_b(&mut tail.world, &tail_pairs);
-            tail.restore_b(&tail_pairs);
-
-            let start = Instant::now();
-            black_box(&mut tail.world).regroup();
-            total += start.elapsed();
-        }
-        total
-    });
-
     let mut dense = fixtures::dense();
     let churned = dense.churned();
     operation(&mut group, "ordinary_delete", churned.len(), |iters| {
@@ -539,6 +505,342 @@ fn lifecycle(c: &mut Criterion) {
         }
         total
     });
+
+    // Every case below builds a fresh world for each regroup, the settings only apply to them.
+    // Building one takes up to tens of milliseconds outside the timer, so we keep the iteration
+    // counts low: flat sampling, with as few iterations per sample as the time allows.
+    // Criterion warns that it can't complete the samples in time when a sample gets a single
+    // iteration, which is expected here.
+    group
+        .sampling_mode(SamplingMode::Flat)
+        .warm_up_time(REBUILT_WARM_UP)
+        .measurement_time(REBUILT_MEASUREMENT);
+
+    // Declaring the group on `aligned`'s entities, all of them get evaluated.
+    let mut initial = fixtures::ungrouped();
+    initial.world.group::<(A, B)>();
+    Family::Pairs.check("regroup_initial", &initial);
+
+    operation(&mut group, "regroup_initial", initial.yielded(), |iters| {
+        time_rebuilt(
+            iters,
+            || fixtures::ungrouped().world,
+            |world| {
+                world.group::<(A, B)>();
+            },
+        )
+    });
+
+    for case in rebuilt_cases() {
+        let mut fixture = (case.build)();
+        let churn = (case.churn)(&fixture);
+        fixture.churn(&churn);
+        // Runs on different builds can compare these to make sure they time the same layouts.
+        eprintln!(
+            "lifecycle/{}: entry layout {:016x}",
+            case.name,
+            case.family.fingerprint(&fixture.world)
+        );
+        fixture.world.regroup();
+        case.family.check(case.name, &fixture);
+        drop(fixture);
+
+        operation(&mut group, case.name, churn.len(), |iters| {
+            time_rebuilt(
+                iters,
+                || {
+                    let mut world = (case.build)().world;
+                    churn.apply(&mut world, |_, _| {});
+                    world
+                },
+                |world| world.regroup(),
+            )
+        });
+
+        if case.cycle {
+            let name = format!("{}_cycle", case.name);
+            operation(&mut group, &name, churn.len(), |iters| {
+                time_rebuilt(
+                    iters,
+                    || (case.build)().world,
+                    |world| {
+                        churn.apply(world, |_, _| {});
+                        world.regroup();
+                    },
+                )
+            });
+        }
+    }
+}
+
+/// Warm-up of the lifecycle cases rebuilding their world, measured time only.
+const REBUILT_WARM_UP: Duration = Duration::from_millis(5);
+/// Measured time of the lifecycle cases rebuilding their world.
+const REBUILT_MEASUREMENT: Duration = Duration::from_millis(10);
+
+/// Times `iters` runs of `routine` and returns their sum.
+///
+/// Each run gets a world `setup` builds before the timer starts. The world is dropped after the
+/// timer stops.
+fn time_rebuilt(
+    iters: u64,
+    mut setup: impl FnMut() -> World,
+    mut routine: impl FnMut(&mut World),
+) -> Duration {
+    let mut total = Duration::ZERO;
+    for _ in 0..iters {
+        let mut world = setup();
+
+        let start = Instant::now();
+        routine(black_box(&mut world));
+        total += start.elapsed();
+    }
+    total
+}
+
+/// A lifecycle case building a fresh world for every regroup it times.
+///
+/// Changes and regroups reorder components, so timing them over and over on the same world
+/// would time a different layout each time, a different one on each implementation.
+/// A fresh world always has the same layout: same entities, same values, same order.
+struct Rebuilt {
+    name: &'static str,
+    family: Family,
+    /// Builds the world, with the model of its queries.
+    build: fn() -> Fixture,
+    /// What the case does to `build`'s world before regrouping.
+    churn: fn(&Fixture) -> Churn,
+    /// Whether to also time the churn and the regroup together, as `<name>_cycle`.
+    cycle: bool,
+}
+
+/// The lifecycle cases timing regroups after changes, see [`Rebuilt`].
+///
+/// Pairs in `aligned`'s world, mutated in its range:
+/// - `regroup`, `regroup_tail`: B removed and given back, spread over the range or at its
+///   logical end
+/// - `regroup_removal`, `regroup_deletion`: B removed or entities deleted for good
+/// - `regroup_members`: A or B removed, alternately, so both members are damaged
+/// - `regroup_mixed`: B removed, B given back, entities deleted or A given back, in turn,
+///   then new pairs
+/// - `regroup_additions`: new pairs only, nothing damaged
+/// - `regroup_quarter`: B removed and given back to a quarter of the pairs
+///
+/// `heavy`'s world, its large H never in the way of a pair query but moving with every regroup:
+/// - `regroup_heavy_b`: B removed and given back, H's range isn't damaged
+/// - `regroup_heavy_removal`: H removed for good
+///
+/// `regroup_overlap`: promotions to the union of rotated overlapping groups and demotions from it.
+fn rebuilt_cases() -> Vec<Rebuilt> {
+    vec![
+        Rebuilt {
+            name: "regroup",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| Churn::each(&f.spread_matches(CHURN), readd_b),
+            cycle: true,
+        },
+        Rebuilt {
+            name: "regroup_tail",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| Churn::each(&f.tail_matches(CHURN), readd_b),
+            cycle: true,
+        },
+        Rebuilt {
+            name: "regroup_removal",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| Churn::each(&f.spread_matches(CHURN), |_, _| Change::RemoveB),
+            cycle: true,
+        },
+        Rebuilt {
+            name: "regroup_deletion",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| Churn::each(&f.spread_matches(CHURN), |_, _| Change::Delete),
+            cycle: true,
+        },
+        Rebuilt {
+            name: "regroup_members",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| {
+                Churn::each(&f.spread_matches(CHURN), |k, _| {
+                    if k % 2 == 0 {
+                        Change::RemoveA
+                    } else {
+                        Change::RemoveB
+                    }
+                })
+            },
+            cycle: false,
+        },
+        Rebuilt {
+            name: "regroup_mixed",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| {
+                Churn::each(&f.spread_matches(CHURN), |k, m| match k % 4 {
+                    0 => Change::RemoveB,
+                    1 => Change::ReaddB(m.b),
+                    2 => Change::Delete,
+                    _ => Change::ReaddA(m.a),
+                })
+                .adding(NEW_PAIRS)
+            },
+            cycle: true,
+        },
+        Rebuilt {
+            name: "regroup_additions",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |_| Churn::each(&[], readd_b).adding(NEW_PAIRS),
+            cycle: false,
+        },
+        Rebuilt {
+            name: "regroup_quarter",
+            family: Family::Pairs,
+            build: fixtures::aligned,
+            churn: |f| Churn::each(&f.spread_matches(QUARTER), readd_b),
+            cycle: false,
+        },
+        Rebuilt {
+            name: "regroup_heavy_b",
+            family: Family::Heavy,
+            build: fixtures::heavy,
+            churn: |f| Churn::each(&f.spread_matches(CHURN), readd_b),
+            cycle: true,
+        },
+        Rebuilt {
+            name: "regroup_heavy_removal",
+            family: Family::Heavy,
+            build: fixtures::heavy,
+            churn: |f| Churn::each(&f.spread_matches(CHURN), |_, _| Change::RemoveH),
+            cycle: false,
+        },
+        Rebuilt {
+            name: "regroup_overlap",
+            family: Family::Overlap,
+            build: fixtures::overlap,
+            churn: fixtures::overlap_churn,
+            cycle: true,
+        },
+    ]
+}
+
+/// Value indices of the pairs the rebuilt cases add, after `aligned`'s.
+const NEW_PAIRS: Range<u32> = N + 3..N + 3 + CHURN;
+
+/// Gives back its B to `m`.
+fn readd_b(_: usize, m: &Match) -> Change {
+    Change::ReaddB(m.b)
+}
+
+/// The queries checking a rebuilt case once regrouped, and the storages its fingerprint covers.
+#[derive(Clone, Copy)]
+enum Family {
+    /// `(&A, &B)` over a single AB group.
+    Pairs,
+    /// `(&A, &B, &H)` over a single ABH group.
+    Heavy,
+    /// `(&A, &B)` and `(&A, &B, &C)` over AB, AC and their union.
+    Overlap,
+}
+
+impl Family {
+    /// Returns a hash of the physical order of the family's storages.
+    fn fingerprint(self, world: &World) -> u64 {
+        let mut hash = 0xCBF2_9CE4_8422_2325;
+        hash_dense::<A>(world, &mut hash);
+        hash_dense::<B>(world, &mut hash);
+        match self {
+            Family::Pairs => {}
+            Family::Heavy => hash_dense::<H>(world, &mut hash),
+            Family::Overlap => hash_dense::<C>(world, &mut hash),
+        }
+
+        hash
+    }
+
+    /// Asserts that `fixture`, regrouped, yields exactly its model through the family's queries.
+    fn check(self, case: &str, fixture: &Fixture) {
+        assert!(fixture.yielded() > 0, "{case}: empty workload");
+
+        match self {
+            Family::Pairs => check_aligned_pairs(case, fixture),
+            Family::Heavy => check_heavy(case, fixture),
+            Family::Overlap => check_overlap(case, fixture),
+        }
+    }
+}
+
+/// Mixes the entities of `T`'s storage into `hash` in physical order, FNV-1a style.
+fn hash_dense<T: Component + Send + Sync>(world: &World, hash: &mut u64) {
+    let view = world.borrow::<View<T>>().unwrap();
+    for index in 0..view.len() {
+        let id = view.id_at(index).unwrap();
+        *hash = (*hash ^ id.inner()).wrapping_mul(0x0100_0000_01B3);
+    }
+}
+
+/// Asserts that `(&A, &B)` walks a single aligned segment holding exactly the matches.
+fn check_aligned_pairs(case: &str, fixture: &Fixture) {
+    let (a, b) = fixture.world.borrow::<(View<A>, View<B>)>().unwrap();
+    let n = fixture.yielded();
+
+    let hint = (&a, &b).iter().size_hint();
+    assert_eq!(hint, (n, Some(n)), "{case}: not a single aligned segment");
+    check_ids(case, &fixture.ids(), (&a, &b).iter().ids());
+    check_sum(case, fold_pair((&a, &b).iter()), fixture.pair_sum());
+}
+
+/// Asserts that `(&A, &B, &H)` walks a single aligned segment holding exactly the matches,
+/// with their values.
+fn check_heavy(case: &str, fixture: &Fixture) {
+    let (a, b, h) = fixture
+        .world
+        .borrow::<(View<A>, View<B>, View<H>)>()
+        .unwrap();
+    let n = fixture.yielded();
+
+    let hint = (&a, &b, &h).iter().size_hint();
+    assert_eq!(hint, (n, Some(n)), "{case}: not a single aligned segment");
+    check_ids(case, &fixture.ids(), (&a, &b, &h).iter().ids());
+    for m in &fixture.matches {
+        let (a, b, h) = (&a, &b, &h).get(m.id).unwrap();
+        let values = (a.0, b.0, h.0);
+        assert!(values == (m.a, m.b, h_value(m.a)), "{case}: wrong values");
+    }
+}
+
+/// Asserts that `(&A, &B)` yields every match and `(&A, &B, &C)` the ones owning a C.
+///
+/// Members can wrap their ranges at different points, which cuts walks in several segments,
+/// so the lengths are only bounded.
+fn check_overlap(case: &str, fixture: &Fixture) {
+    let (a, b, c) = fixture
+        .world
+        .borrow::<(View<A>, View<B>, View<C>)>()
+        .unwrap();
+
+    let pairs = fixture.ids();
+    let hint = (&a, &b).iter().size_hint();
+    assert_eq!(hint.1, Some(pairs.len()), "{case}: unexpected pair walk");
+    check_ids(case, &pairs, (&a, &b).iter().ids());
+    check_sum(case, fold_pair((&a, &b).iter()), fixture.pair_sum());
+
+    let mut union: Vec<EntityId> = fixture
+        .matches
+        .iter()
+        .filter(|m| m.c.is_some())
+        .map(|m| m.id)
+        .collect();
+    union.sort_unstable();
+    let hint = (&a, &b, &c).iter().size_hint();
+    assert_eq!(hint.1, Some(union.len()), "{case}: unexpected triple walk");
+    check_ids(case, &union, (&a, &b, &c).iter().ids());
+    check_sum(case, fold_triple((&a, &b, &c).iter()), fixture.union_sum());
 }
 
 fn end_to_end(c: &mut Criterion) {

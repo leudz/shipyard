@@ -1,3 +1,4 @@
+mod churn;
 mod declaration;
 mod discovery;
 mod promotion;
@@ -86,6 +87,12 @@ fn assert_regrouped(world: &World) {
         groups.assert_invariants(dense.len());
         assert_eq!(groups.unevaluated_start, dense.len());
 
+        // Every component has to stay reachable from its entity.
+        let sparse = storage.sparse_array().unwrap();
+        for (index, &entity) in dense.iter().enumerate() {
+            assert_eq!(sparse.get(entity).map(EntityId::uindex), Some(index));
+        }
+
         for range in &groups.ranges {
             assert_eq!(range.trust, range.len);
 
@@ -98,6 +105,60 @@ fn assert_regrouped(world: &World) {
                     logical(&*storage, &range.group)
                 );
             }
+        }
+    }
+}
+
+/// Panics unless every component of a grouped storage sits where its entity's components say:
+/// in the union of the `declared` groups it owns every member of that connect to the storage,
+/// or in the ungrouped region when none holds the storage.
+///
+/// The expected union comes from component ownership alone, never from regroup's own discovery.
+/// Every grouped storage has to be fully evaluated, see [`assert_regrouped`].
+fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
+    let all_storages = world.all_storages().unwrap();
+    let storages = all_storages.storages.read();
+    // SAFE: `sbox.0` comes from a `Box` that lives as long as `all_storages`,
+    // and `borrow` checks no one borrows the storage exclusively.
+    let storage = |storage_id: &StorageId| unsafe { &*storages[storage_id].0 }.borrow().unwrap();
+
+    for (storage_id, sbox) in storages.iter() {
+        // SAFE: same as above.
+        let grouped = unsafe { &*sbox.0 }.borrow().unwrap();
+        let Some(groups) = grouped.groups().filter(|groups| groups.has_ranges()) else {
+            continue;
+        };
+
+        for (index, &entity) in grouped.dense().unwrap().iter().enumerate() {
+            let owns =
+                |member_id: &StorageId| storage(member_id).sparse_array().unwrap().contains(entity);
+            let satisfied: Vec<&[StorageId]> = declared
+                .iter()
+                .copied()
+                .filter(|group| group.iter().all(owns))
+                .collect();
+
+            // Satisfied groups sharing a storage with the union so far join it.
+            let mut union = vec![*storage_id];
+            while let Some(group) = satisfied.iter().find(|group| {
+                group.iter().any(|id| union.contains(id))
+                    && group.iter().any(|id| !union.contains(id))
+            }) {
+                for &id in group.iter() {
+                    if !union.contains(&id) {
+                        union.push(id);
+                    }
+                }
+            }
+            let expected = (union.len() > 1).then(|| sorted_ids(union));
+
+            let actual = match groups.region_of(index) {
+                GroupRegion::Range(group) => Some(group.to_vec()),
+                GroupRegion::Ungrouped => None,
+                GroupRegion::Unevaluated => panic!("{entity:?} is unevaluated"),
+            };
+
+            assert_eq!(actual, expected, "{entity:?} in {storage_id:?}");
         }
     }
 }
