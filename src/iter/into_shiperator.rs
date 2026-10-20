@@ -79,7 +79,8 @@ where
 
         // We're the query's root, every node has been built and nothing will pick another walk.
         // The metadata ends here, the iterator only gets the execution state.
-        let entities = planner::install_winner(&mut shiperator, entities, metadata);
+        // SAFE: All three come from the `into_shiperator` call above.
+        let entities = unsafe { planner::install_winner(&mut shiperator, entities, metadata) };
 
         // SAFE: `IntoShiperator` is an unsafe trait, its implementation guarantees `shiperator`'s
         // installed state matches the first segment of `entities` and every follow-up has a row

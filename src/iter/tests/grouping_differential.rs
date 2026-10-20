@@ -652,7 +652,7 @@ impl Stats {
     where
         Q::Shiperator: Shiperator,
     {
-        let (_, _, metadata) = query.into_shiperator();
+        let (_root, _, metadata) = query.into_shiperator();
         let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
             return;
         };
@@ -666,7 +666,9 @@ impl Stats {
         if matches!(winner.route, Route::Nested { .. }) {
             self.nested += 1;
         }
-        let candidate = winner.group();
+        // SAFE: `_root` keeps the storages `query` borrows borrowed, with their group metadata
+        // unmodified, until we return.
+        let candidate = unsafe { selection.candidate(winner) };
         let mut walked_ranges = Vec::new();
         for walk in candidate.walks() {
             let range = match walk {
@@ -2004,14 +2006,17 @@ fn winner_walks<Q: IntoShiperator>(query: Q) -> Vec<&'static str>
 where
     Q::Shiperator: Shiperator,
 {
-    let (_, _, metadata) = query.into_shiperator();
+    let (_root, _, metadata) = query.into_shiperator();
     let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
         return Vec::new();
     };
 
     selection.winner().map_or(Vec::new(), |winner| {
-        winner
-            .group()
+        // SAFE: `_root` keeps the storages `query` borrows borrowed, with their group metadata
+        // unmodified, until we return.
+        let candidate = unsafe { selection.candidate(winner) };
+
+        candidate
             .walks()
             .map(|walk| match walk {
                 Walk::Aligned { .. } => "aligned",

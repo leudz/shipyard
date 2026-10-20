@@ -1,5 +1,5 @@
 use super::super::*;
-use super::{Storage, walk_list};
+use super::{Storage, local_candidate, walk_list};
 use crate::sparse_set::GroupRange;
 use alloc::vec;
 
@@ -10,12 +10,12 @@ fn group() -> Arc<[StorageId]> {
 /// The storage of the `member`th member of `group`,
 /// with a fully trusted range of `range_len` in a storage of `len` components.
 fn member(group: &Arc<[StorageId]>, member: usize, range_len: usize, len: usize) -> Storage {
-    Storage {
-        id: group[member],
+    Storage::new(
+        group[member],
         len,
-        unevaluated_start: range_len,
-        ranges: vec![group_range(group, 0, range_len, 0, range_len)],
-    }
+        range_len,
+        vec![group_range(group, 0, range_len, 0, range_len)],
+    )
 }
 
 /// Lays a storage made by `member` out with an unrotated range of `range_len`
@@ -27,9 +27,9 @@ fn set_regions(
     unevaluated_start: usize,
     len: usize,
 ) {
-    let range = &mut storage.ranges[0];
+    let range = &mut storage.groups.ranges[0];
     (range.len, range.trust) = (range_len, trust);
-    storage.unevaluated_start = unevaluated_start;
+    storage.groups.unevaluated_start = unevaluated_start;
     storage.len = len;
 }
 
@@ -40,7 +40,6 @@ fn ungrouped(len: usize) -> Child<'static> {
         can_sailor: true,
         sail_time: len,
         candidates: Some(len),
-        entities: EntityCursor::empty(),
         metadata: NodeMetadata::Ungrouped,
     }
 }
@@ -126,8 +125,9 @@ fn aligned_recipe() {
     let selection = select(&mut children);
     let alternative = selection.cheapest().unwrap();
 
+    assert_eq!(alternative.route, Route::Local { required: 0b011 });
     assert_eq!(
-        walk_list(alternative.group()),
+        walk_list(&local_candidate(&children, alternative)),
         [Walk::Aligned {
             range: 0,
             start: 0,
@@ -135,7 +135,6 @@ fn aligned_recipe() {
             captains: 0b011
         }]
     );
-    assert_eq!(alternative.group().required, 0b011);
     // 4 candidates, 1 sailor.
     assert_eq!((alternative.candidates, alternative.work), (4, 12));
 }
@@ -149,12 +148,13 @@ fn damaged_recipe() {
     let mut b = member(&group, 1, 5, 12);
     set_regions(&mut a, 6, 2, 7, 9);
     set_regions(&mut b, 5, 3, 6, 12);
+    let mut children = [a.child(), b.child()];
 
-    let selection = select(&mut [a.child(), b.child()]);
+    let selection = select(&mut children);
     let alternative = selection.cheapest().unwrap();
 
     assert_eq!(
-        walk_list(alternative.group()),
+        walk_list(&local_candidate(&children, alternative)),
         [
             Walk::Aligned {
                 range: 0,
@@ -193,13 +193,14 @@ fn recipe_ties() {
     let group = group();
     let mut a = member(&group, 0, 4, 6);
     let mut b = member(&group, 1, 4, 6);
-    a.ranges[0].trust = 1;
-    b.ranges[0].trust = 1;
+    a.groups.ranges[0].trust = 1;
+    b.groups.ranges[0].trust = 1;
+    let mut children = [a.child(), b.child()];
 
-    let selection = select(&mut [a.child(), b.child()]);
+    let selection = select(&mut children);
 
     assert_eq!(
-        walk_list(selection.cheapest().unwrap().group()),
+        walk_list(&local_candidate(&children, selection.cheapest().unwrap())),
         [
             Walk::Aligned {
                 range: 0,
@@ -259,7 +260,7 @@ fn metadata(groups: &Groups, len: usize) -> Option<WindowMetadata<'_>> {
     match NodeMetadata::of_storage(groups, len) {
         // SAFE: The handle points to `groups`, borrowed for as long as the returned metadata
         // and unmodified meanwhile.
-        NodeMetadata::Window(handle) => Some(unsafe { handle.get() }),
+        NodeMetadata::Window(handle) => Some(unsafe { handle.get(EntityCursor::empty()) }),
         _ => None,
     }
 }
@@ -297,9 +298,10 @@ fn metadata_ranges() {
 
     let window = metadata(&groups, 8).unwrap();
 
-    assert_eq!(window.storage_id, StorageId::Custom(0));
-    assert_eq!((window.len, window.unevaluated_start), (8, 6));
+    assert_eq!(window.storage_id(), StorageId::Custom(0));
+    assert_eq!((window.len, window.groups.unevaluated_start), (8, 6));
     let rings: Vec<(Ring, usize)> = window
+        .groups
         .ranges
         .iter()
         .map(|range| (range.ring(), range.trust))
@@ -333,7 +335,7 @@ fn metadata_ranges() {
             ),
         ]
     );
-    for (range, group) in window.ranges.iter().zip([&ab, &ac, &ad]) {
+    for (range, group) in window.groups.ranges.iter().zip([&ab, &ac, &ad]) {
         assert!(Arc::ptr_eq(&range.group, group));
     }
 }
@@ -353,9 +355,10 @@ fn metadata_reset() {
     groups.reset();
     let window = metadata(&groups, 6).unwrap();
 
-    assert_eq!(window.unevaluated_start, 0);
+    assert_eq!(window.groups.unevaluated_start, 0);
     assert!(
         window
+            .groups
             .ranges
             .iter()
             .all(|range| range.start == 0 && range.len == 0 && range.trust == 0)
@@ -428,11 +431,7 @@ fn nested(
         .map(|&(candidates, work)| Alternative {
             candidates,
             work,
-            route: Route::Local(GroupedCandidate {
-                required: 0,
-                ranges: Vec::new(),
-                members: Vec::new(),
-            }),
+            route: Route::Local { required: 0 },
         })
         .collect();
 
@@ -441,7 +440,6 @@ fn nested(
         can_sailor: true,
         sail_time: candidates,
         candidates: Some(candidates),
-        entities: EntityCursor::empty(),
         // The nested `Mixed` reports its selection like its constructor would.
         metadata: Selection {
             ordinary: OrdinaryCandidate {
@@ -451,6 +449,8 @@ fn nested(
             alternatives,
             lookups,
             filtered: false,
+            windows: ScratchVec::new(),
+            nested: Vec::new(),
         }
         .into_node(),
     }
@@ -504,14 +504,17 @@ fn parent_reranks() {
         .collect();
     assert_eq!(works, [100 + 50 * 3, 110 + 10 * 3]);
 
+    // The child's second alternative.
     let winner = selection.winner().unwrap();
-    let Route::Nested { child, alternative } = &winner.route else {
-        panic!("the child's alternative drives");
-    };
     assert_eq!(
-        (*child, alternative.candidates, alternative.work),
-        (0, 10, 110)
+        winner.route,
+        Route::Nested {
+            child: 0,
+            alternative: 1
+        }
     );
+    let nested = selection.nested(0).alternatives[1];
+    assert_eq!((nested.candidates, nested.work), (10, 110));
     assert_eq!(winner.candidates, 10);
 }
 
@@ -537,11 +540,15 @@ fn two_levels() {
     let Route::Nested {
         child: 0,
         alternative,
-    } = &winner.route
+    } = winner.route
     else {
         panic!("the middle `Mixed` drives");
     };
-    assert!(matches!(alternative.route, Route::Nested { child: 0, .. }));
+    // The middle `Mixed` drives through its own nested `Mixed`.
+    assert!(matches!(
+        root.nested(0).alternatives[alternative].route,
+        Route::Nested { child: 0, .. }
+    ));
 }
 
 /// Asserts that a filtered child drops every alternative, its siblings' included,

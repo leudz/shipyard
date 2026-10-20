@@ -94,7 +94,8 @@ fn grouped<S: Shiperator>(query: (S, RawEntityIdAccess, ConstructionMetadata)) -
     };
     let alternative = selection.cheapest().unwrap();
 
-    let entities = grouped_entities(&mut mixed, alternative);
+    // SAFE: `mixed` and `selection` come from the same `into_shiperator` call.
+    let entities = unsafe { grouped_entities(&mut mixed, &selection, alternative) };
 
     // SAFE: `grouped_entities` installed its first segment on `mixed` and returns that
     // segment's entities, with follow-ups whose rows it built for `mixed`'s layout.
@@ -115,7 +116,8 @@ where
     };
     let alternative = selection.cheapest().unwrap();
 
-    let entities = grouped_entities(&mut mixed, alternative);
+    // SAFE: `mixed` and `selection` come from the same `into_shiperator` call.
+    let entities = unsafe { grouped_entities(&mut mixed, &selection, alternative) };
     let is_exact_sized = is_exact_traversal(&mixed, &entities);
 
     IntoIterRef {

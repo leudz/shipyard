@@ -6,7 +6,8 @@ use core::slice;
 /// A list keeping up to `N` items inline, moving all of them to the heap past that.
 ///
 /// Grouped analysis collects a handful of items at a time, this saves allocating for them.
-/// Longer lists work the same, they're just allocated.
+/// Longer lists work the same, they're just allocated.\
+/// Unused inline slots hold `T::default()`.
 #[derive(Clone)]
 pub(crate) enum ScratchVec<T, const N: usize> {
     /// The first `len` items are the list, the others are placeholders.
@@ -17,11 +18,11 @@ pub(crate) enum ScratchVec<T, const N: usize> {
     Heap(Vec<T>),
 }
 
-impl<T: Copy + Default, const N: usize> ScratchVec<T, N> {
+impl<T: Default, const N: usize> ScratchVec<T, N> {
     /// Returns an empty list.
     pub(crate) fn new() -> ScratchVec<T, N> {
         ScratchVec::Inline {
-            items: [T::default(); N],
+            items: core::array::from_fn(|_| T::default()),
             len: 0,
         }
     }
@@ -36,13 +37,30 @@ impl<T: Copy + Default, const N: usize> ScratchVec<T, N> {
             // The inline items are full, they move to the heap ahead of `item`.
             ScratchVec::Inline { items, .. } => {
                 let mut heap = Vec::with_capacity(2 * N);
-                heap.extend_from_slice(items);
+                heap.extend(items.iter_mut().map(core::mem::take));
                 heap.push(item);
 
                 *self = ScratchVec::Heap(heap);
             }
             ScratchVec::Heap(heap) => heap.push(item),
         }
+    }
+}
+
+impl<T: Default, const N: usize> Default for ScratchVec<T, N> {
+    fn default() -> ScratchVec<T, N> {
+        ScratchVec::new()
+    }
+}
+
+impl<T: Default, const N: usize> FromIterator<T> for ScratchVec<T, N> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> ScratchVec<T, N> {
+        let mut list = ScratchVec::new();
+        for item in iter {
+            list.push(item);
+        }
+
+        list
     }
 }
 

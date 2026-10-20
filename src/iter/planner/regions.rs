@@ -9,7 +9,8 @@
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
 //! drives every segment through the single child leading to it, the rest of the query is looked up.
 
-use super::{Alternative, GroupedCandidate, Member, Route, Walk, mask_children};
+use super::scratch::ScratchVec;
+use super::{Alternative, GroupedCandidate, Member, Route, Selection, Walk, mask_children};
 use crate::iter::plan::{
     Coverage, CoverageSpan, NodeKind, NodeState, Plan, SegmentDescriptor, SegmentEntry, SegmentRow,
     SegmentSchedule,
@@ -23,17 +24,24 @@ use core::ops::Range;
 /// Returns the entities driving `root` through every walk of `alternative`, with `root`
 /// installed for the first one.
 ///
-/// `root` is the `Mixed` that reported `alternative`, in the state its constructor built.
-/// It must be the query's root: rows are built for its whole layout.\
+/// `root` is the `Mixed` that reported `alternative` in `selection`, in the state its
+/// constructor built. It must be the query's root: rows are built for its whole layout.\
 /// `root`'s new state points into the plan held by the returned entities, they have to drive it.
 ///
 /// When `alternative` has no walk, the returned entities have no candidate and no plan,
 /// `root` is left as is.
-pub(crate) fn grouped_entities<S: Shiperator>(
+///
+/// ### Safety
+///
+/// `root` and `selection` must come from the same `into_shiperator` call.
+pub(crate) unsafe fn grouped_entities<S: Shiperator>(
     root: &mut S,
+    selection: &Selection,
     alternative: &Alternative,
 ) -> RawEntityIdAccess {
-    let Some(plan) = grouped_plan(root, alternative) else {
+    // SAFE: Our caller got `root` and `selection` from the same `into_shiperator` call.
+    let plan = unsafe { grouped_plan(root, selection, alternative) };
+    let Some(plan) = plan else {
         return RawEntityIdAccess::empty();
     };
 
@@ -44,7 +52,7 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 
     // The first segment is entered like any follow-up, from its row in the published plan.
     let mut entry = SegmentEntry::new(schedule.plan(), &first);
-    // SAFE: `IntoShiperator`'s contract ties `alternative`'s metadata and member entities to
+    // SAFE: `IntoShiperator`'s contract ties `selection`'s metadata and member entities to
     // the storages `root`'s windows borrow. `grouped_plan` built every row for `root`'s own
     // layout, from `root`'s description. In each segment, a captain
     // window starts at the index, in its own storage, of the segment's first entity and the
@@ -115,14 +123,27 @@ pub(crate) fn grouped_entities<S: Shiperator>(
 
 /// Builds the plan walking `alternative`'s walks in order, `None` when it has none.
 ///
-/// `root` is the query's root, the `Mixed` that reported `alternative`.
-fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Plan> {
+/// `root` is the query's root, the `Mixed` that reported `alternative` in `selection`.
+///
+/// ### Safety
+///
+/// `root` and `selection` must come from the same `into_shiperator` call.
+unsafe fn grouped_plan<S: Shiperator>(
+    root: &S,
+    selection: &Selection,
+    alternative: &Alternative,
+) -> Option<Plan> {
     let row = SegmentRow::of(root);
     let layout = row.layout();
 
     // Every segment drives the same path down to the `Mixed` owning the group,
     // the rest of the query is made of sailors.
-    let (base_row, owner_slot, candidate) = route_row(layout, alternative);
+    let (base_row, owner_slot, owner, required) = route_row(layout, selection, alternative);
+    // Only the winner's walks are listed again, from the same metadata `select` estimated.
+    // SAFE: `owner` is `selection` or one nested in it, all built by the `into_shiperator`
+    // call that returned `root`. `IntoShiperator`'s contract keeps the storages that call
+    // borrowed, with their group metadata unmodified, as long as `root` lives.
+    let candidate = unsafe { owner.local_candidate(required) };
     if candidate.walks().next().is_none() {
         return None;
     }
@@ -139,25 +160,25 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
     }
 
     // Walks are never empty and neither are their pieces, every placement is a segment.
-    let placements: Vec<Placement> = candidate
-        .walks()
-        .flat_map(|walk| Placement::of(walk, candidate))
-        .collect();
+    let mut placements = Placements::new();
+    for walk in candidate.walks() {
+        Placement::place(walk, &candidate, &mut placements);
+    }
 
     let mut segments = Vec::with_capacity(placements.len());
     let mut rows = Vec::with_capacity(placements.len() * layout.len());
     let mut coverage = Vec::new();
 
     for (index, placement) in placements.iter().enumerate() {
-        let records = placement.coverage(&placements[..index]);
+        let coverage_start = coverage.len();
+        coverage.extend(placement.coverage(&placements[..index]));
         let span = CoverageSpan {
-            start: coverage.len(),
-            len: records.len(),
+            start: coverage_start,
+            len: coverage.len() - coverage_start,
         };
-        coverage.extend(records);
 
         // Each segment uses its own row, rows are pushed in segment order.
-        rows.extend(placement.row(&base_row, owner_slot, &slots, span));
+        placement.push_row(&mut rows, &base_row, owner_slot, &slots, span);
         segments.push(SegmentDescriptor::from_cursor(placement.entities, index));
     }
 
@@ -167,23 +188,37 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
     Some(plan)
 }
 
+/// The placements of a grouped alternative, usually a handful.
+type Placements = ScratchVec<Placement, 4>;
+
 /// A piece of a walk placed in its captains' storages, one segment of the plan.
 struct Placement {
     /// The entities the piece visits, from the storage of one of its captains.
     entities: EntityCursor,
     /// Children driving the piece, each with the index in its storage of the piece's first entity.
-    captains: Vec<(usize, usize)>,
+    captains: ScratchVec<(usize, usize), 4>,
     /// The region later pieces must not yield again, `None` for aligned walks.
     owned: Option<Coverage>,
 }
 
+// `ScratchVec` fills its unused slots with this, it never becomes a segment.
+impl Default for Placement {
+    fn default() -> Placement {
+        Placement {
+            entities: EntityCursor::empty(),
+            captains: ScratchVec::new(),
+            owned: None,
+        }
+    }
+}
+
 impl Placement {
-    /// Places `walk`, one of `candidate`'s walks, in its captains' storages.
+    /// Places `walk`, one of `candidate`'s walks, in its captains' storages, after `placements`.
     ///
     /// This is where logical positions become physical indices. A walk crossing the wrap point
     /// of one of its captains' rings is cut there, so it can give several placements.
-    fn of(walk: Walk, candidate: &GroupedCandidate) -> Vec<Placement> {
-        let placements = match walk {
+    fn place(walk: Walk, candidate: &GroupedCandidate, placements: &mut Placements) {
+        match walk {
             Walk::Aligned {
                 range,
                 start,
@@ -193,15 +228,11 @@ impl Placement {
                 // Captains hold the same entities over these positions, any of them can drive.
                 // Later walks never meet these entities, see the reasoning above `grouped_plan`.
                 let driver = captains.trailing_zeros() as usize;
+                let positions = start..start + len;
 
                 Placement::ring(
-                    candidate,
-                    range,
-                    driver,
-                    start..start + len,
-                    captains,
-                    false,
-                )
+                    candidate, range, driver, positions, captains, false, placements,
+                );
             }
             Walk::Damaged {
                 range,
@@ -209,37 +240,24 @@ impl Placement {
                 start,
                 len,
                 captains,
-            } => Placement::ring(candidate, range, owner, start..start + len, captains, true),
-            // The unevaluated region isn't a ring, its positions are physical indices already.
-            Walk::Unevaluated { owner, start, len } => {
-                vec![Placement::piece(
-                    candidate,
-                    owner,
-                    vec![(owner, start)],
-                    len,
-                    true,
-                )]
-            }
-        };
+            } => {
+                let positions = start..start + len;
 
-        // Captain windows resolve `segment_start + local index` without bounds checks,
-        // every captain's part of a piece has to fit in its storage.
-        for placement in &placements {
-            for &(child, start) in &placement.captains {
-                let end = start.checked_add(placement.entities.len());
-
-                assert!(
-                    end.is_some_and(|end| end <= member(candidate, child).len),
-                    "a walk fits in its captains' storages"
+                Placement::ring(
+                    candidate, range, owner, positions, captains, true, placements,
                 );
             }
-        }
+            // The unevaluated region isn't a ring, its positions are physical indices already.
+            Walk::Unevaluated { owner, start, len } => {
+                let captains = [(owner, start)].into_iter().collect();
 
-        placements
+                placements.push(Placement::piece(candidate, owner, captains, len, true));
+            }
+        }
     }
 
     /// Places logical positions `positions` of `candidate`'s range at position `range`,
-    /// driven by child `driver` with the children `captains` flags.
+    /// driven by child `driver` with the children `captains` flags, after `placements`.
     ///
     /// Gives one piece per stretch where every captain's part is physically consecutive.
     /// When `owns` is set, each piece owns `driver`'s part of it.
@@ -250,9 +268,10 @@ impl Placement {
         positions: Range<usize>,
         captains: u32,
         owns: bool,
-    ) -> Vec<Placement> {
+        placements: &mut Placements,
+    ) {
         let range = &candidate.ranges[range];
-        let rings: Vec<(usize, Ring)> = mask_children(captains)
+        let rings: ScratchVec<(usize, Ring), 4> = mask_children(captains)
             .map(|child| {
                 let member = range
                     .members
@@ -264,7 +283,6 @@ impl Placement {
             })
             .collect();
 
-        let mut placements = Vec::new();
         let mut position = positions.start;
         while position < positions.end {
             // Members' rings wrap at their own points, unrelated to each other's.
@@ -282,8 +300,6 @@ impl Placement {
             placements.push(Placement::piece(candidate, driver, starts, len, owns));
             position += len;
         }
-
-        placements
     }
 
     /// Places `len` entities from `captains`, each one with the index in its storage of the
@@ -293,10 +309,21 @@ impl Placement {
     fn piece(
         candidate: &GroupedCandidate,
         driver: usize,
-        captains: Vec<(usize, usize)>,
+        captains: ScratchVec<(usize, usize), 4>,
         len: usize,
         owns: bool,
     ) -> Placement {
+        // Captain windows resolve `segment_start + local index` without bounds checks,
+        // every captain's part of a piece has to fit in its storage.
+        for &(child, start) in &captains {
+            let end = start.checked_add(len);
+
+            assert!(
+                end.is_some_and(|end| end <= member(candidate, child).len),
+                "a walk fits in its captains' storages"
+            );
+        }
+
         let driver_start = captains
             .iter()
             .find(|&&(child, _)| child == driver)
@@ -320,7 +347,7 @@ impl Placement {
     }
 
     /// Returns the regions earlier pieces own that this piece could meet again.
-    fn coverage(&self, earlier: &[Placement]) -> Vec<Coverage> {
+    fn coverage(&self, earlier: &[Placement]) -> impl Iterator<Item = Coverage> {
         // Our candidates are in another region of our own storage, matching them against
         // that storage's earlier regions would never reject anything.
         earlier
@@ -332,27 +359,29 @@ impl Placement {
                     .iter()
                     .any(|&(child, _)| child == region.child as usize)
             })
-            .collect()
     }
 
-    /// Returns the row this walk installs.
+    /// Appends the row this walk installs to `rows`.
     ///
     /// `base_row` is the row leading to the `Mixed` owning the group, at position `owner_slot`.
     /// `slots` holds the position of each of its children.
-    fn row(
+    fn push_row(
         &self,
+        rows: &mut Vec<NodeState>,
         base_row: &[NodeState],
         owner_slot: usize,
         slots: &[usize],
         coverage: CoverageSpan,
-    ) -> Vec<NodeState> {
+    ) {
         let captain_mask = self
             .captains
             .iter()
             .fold(0, |mask, &(child, _)| mask | 1 << child);
 
         // Children not driving the walk are sailors, along with their whole subtree.
-        let mut row = base_row.to_vec();
+        let row_start = rows.len();
+        rows.extend_from_slice(base_row);
+        let row = &mut rows[row_start..];
         row[owner_slot] = NodeState::Mixed {
             captain_mask,
             coverage,
@@ -360,8 +389,6 @@ impl Placement {
         for &(child, segment_start) in &self.captains {
             row[slots[child]] = NodeState::Window { segment_start };
         }
-
-        row
     }
 }
 
@@ -374,26 +401,27 @@ fn member(candidate: &GroupedCandidate, child: usize) -> &Member {
         .expect("members drive grouped walks")
 }
 
-/// Follows `alternative`'s route from `layout`'s root down to the `Mixed` owning its group.
+/// Follows `alternative`'s route from `layout`'s root, the `Mixed` that reported it in
+/// `selection`, down to the `Mixed` owning its group.
 ///
-/// Returns the row every segment shares, the position of the owner in `layout` and its walks.\
+/// Returns the row every segment shares, the position of the owner in `layout`, its selection
+/// and the members its cover set requires.\
 /// In that row, each `Mixed` on the way drives through the child leading to the owner,
 /// without coverage. Every other node is a sailor, the owner's state is left to each segment.
-fn route_row<'a>(
+fn route_row<'s>(
     layout: &[NodeKind],
-    alternative: &'a Alternative,
-) -> (Vec<NodeState>, usize, &'a GroupedCandidate) {
+    selection: &'s Selection,
+    alternative: &Alternative,
+) -> (Vec<NodeState>, usize, &'s Selection, u32) {
     let mut row = vec![NodeState::Sailor; layout.len()];
     let mut slot = 0;
-    let mut alternative = alternative;
+    let mut selection = selection;
+    let mut route = alternative.route;
 
     loop {
-        match &alternative.route {
-            Route::Local(candidate) => return (row, slot, candidate),
-            Route::Nested {
-                child,
-                alternative: nested,
-            } => {
+        match route {
+            Route::Local { required } => return (row, slot, selection, required),
+            Route::Nested { child, alternative } => {
                 // Coverage stays with the owner, the `Mixed`s above it never reject a candidate
                 // because another segment walked it.
                 row[slot] = NodeState::Mixed {
@@ -401,20 +429,21 @@ fn route_row<'a>(
                     coverage: CoverageSpan::EMPTY,
                 };
 
-                slot = child_slots(layout, slot)[*child];
-                alternative = nested;
+                slot = child_slots(layout, slot)[child];
+                selection = selection.nested(child);
+                route = selection.alternatives[alternative].route;
             }
         }
     }
 }
 
 /// Returns the position in `layout` of each immediate child of the `Mixed` at position `node`.
-fn child_slots(layout: &[NodeKind], node: usize) -> Vec<usize> {
+fn child_slots(layout: &[NodeKind], node: usize) -> ScratchVec<usize, 4> {
     let NodeKind::Mixed { children } = layout[node] else {
         panic!("grouped walks drive a Mixed");
     };
 
-    let mut slots = Vec::new();
+    let mut slots = ScratchVec::new();
     let mut next = node + 1;
     for _ in 0..children {
         slots.push(next);

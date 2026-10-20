@@ -37,6 +37,24 @@ impl Component for C {
     type Tracking = track::Untracked;
 }
 
+#[derive(Debug, PartialEq)]
+struct D(u32);
+impl Component for D {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct E(u32);
+impl Component for E {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct F(u32);
+impl Component for F {
+    type Tracking = track::Untracked;
+}
+
 /// Iterator over the pair `(A, B)`.
 type PairIter<'a> = Shiper<
     Mixed<(
@@ -56,7 +74,8 @@ pub(super) fn grouped<S: Shiperator>(
     };
     let alternative = selection.cheapest().unwrap();
 
-    let entities = grouped_entities(&mut mixed, alternative);
+    // SAFE: `mixed` and `selection` come from the same `into_shiperator` call.
+    let entities = unsafe { grouped_entities(&mut mixed, &selection, alternative) };
 
     // SAFE: `grouped_entities` installed its first segment on `mixed` and returns that
     // segment's entities, with follow-ups whose rows it built for `mixed`'s layout.
@@ -666,4 +685,53 @@ fn split_left_dropped() {
         fold_ids(right, &a, &b),
         owners(&[partial.late_a, partial.late_b], &a, &b)
     );
+}
+
+/// Asserts that a winner with more segments, captains and children than placement keeps
+/// inline still yields every match once, each segment with the captains trusting it.
+///
+/// AB and ABCDEF are grouped. F isn't borrowed, so C, D and E only come along with AB.
+/// D, E and C stop trusting the ABCDEF range at 2, 4 and 6, each one splitting it.
+#[test]
+fn many_captains() {
+    let mut world = World::new_for_test();
+    for i in 0..8 {
+        world.add_entity((A(i), B(i), C(i), D(i), E(i), F(i)));
+    }
+    // In the AB range, the second one is rejected looking C up.
+    world.add_entity((A(8), B(8), C(8), D(8), E(8)));
+    world.add_entity((A(9), B(9)));
+    world.group::<(A, B)>().group::<(A, B, C, D, E, F)>();
+    {
+        // Trusting fewer positions is always valid, these members are looked up instead.
+        let (mut c, mut d, mut e) = world
+            .borrow::<(ViewMut<'_, C>, ViewMut<'_, D>, ViewMut<'_, E>)>()
+            .unwrap();
+        c.groups.ranges[0].trust = 6;
+        d.groups.ranges[0].trust = 2;
+        e.groups.ranges[0].trust = 4;
+    }
+
+    let (a, b, c, d, e) = world
+        .borrow::<(
+            View<'_, A>,
+            View<'_, B>,
+            View<'_, C>,
+            View<'_, D>,
+            View<'_, E>,
+        )>()
+        .unwrap();
+    let iter = grouped((&a, &b, &c, &d, &e).into_shiperator());
+
+    let captain_masks: Vec<u32> =
+        segments(&iter, &[&a.dense, &b.dense, &c.dense, &d.dense, &e.dense])
+            .iter()
+            .map(|segment| segment.captain_mask)
+            .collect();
+    assert_eq!(captain_masks, [0b00011, 0b11111, 0b10111, 0b00111, 0b00011]);
+    let mut items: Vec<[u32; 5]> = iter
+        .map(|(a, b, c, d, e)| [a.0, b.0, c.0, d.0, e.0])
+        .collect();
+    items.sort_unstable();
+    assert_eq!(items, (0..9).map(|i| [i; 5]).collect::<Vec<_>>());
 }

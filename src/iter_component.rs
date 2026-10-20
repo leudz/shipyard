@@ -137,7 +137,8 @@ where
 
     // We're the query's root, every node has been built and nothing will pick another walk.
     // The metadata ends here, every iterator starts from these entities.
-    let entities = planner::install_winner(&mut shiperator, entities, metadata);
+    // SAFE: All three come from the `into_shiperator` call above.
+    let entities = unsafe { planner::install_winner(&mut shiperator, entities, metadata) };
     let is_exact_sized = is_exact_traversal(&shiperator, &entities);
 
     Ok(IntoIterRef {

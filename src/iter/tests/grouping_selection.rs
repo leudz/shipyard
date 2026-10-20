@@ -7,9 +7,9 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::iter::planner::{
-    Alternative, ConstructionMetadata, NodeMetadata, Route, Selection, Walk,
+    Alternative, ConstructionMetadata, GroupedCandidate, NodeMetadata, Route, Selection, Walk,
 };
-use crate::iter::{IntoIter, IntoShiperator, IterComponent, Optional};
+use crate::iter::{EntityCursor, IntoIter, IntoShiperator, IterComponent, Optional, Shiperator};
 use crate::sparse_set::{Ring, SparseSet};
 use crate::storage::StorageId;
 use crate::track;
@@ -92,7 +92,7 @@ fn assert_grouped_wins(metadata: &ConstructionMetadata, member_mask: u32) {
     let selection = selection(metadata).expect("a grouped alternative");
     let winner = selection.winner().expect("the grouped alternative wins");
 
-    assert_eq!(winner.group().required, member_mask);
+    assert_eq!(selection.group_owner(winner).1, member_mask);
 }
 
 /// Asserts that `metadata` reports a grouped alternative but its ordinary walk with
@@ -123,9 +123,25 @@ fn aligned_walk(len: usize, captains: u32) -> Walk {
     }
 }
 
-/// Returns the walks of the cheapest grouped alternative of `metadata`.
-fn walks(metadata: &ConstructionMetadata) -> Vec<Walk> {
-    cheapest(metadata).group().walks().collect()
+/// Returns the walks of the cheapest grouped alternative `query` reports.
+fn cheapest_candidate<Q: IntoShiperator>(query: Q) -> GroupedCandidate
+where
+    Q::Shiperator: Shiperator,
+{
+    let (_root, _, metadata) = query.into_shiperator();
+    let selection = selection(&metadata).expect("a grouped alternative");
+
+    // SAFE: `_root` keeps the storages `query` borrows borrowed, with their group metadata
+    // unmodified, until we return.
+    unsafe { selection.candidate(selection.cheapest().unwrap()) }
+}
+
+/// Returns the walks of the cheapest grouped alternative `query` reports.
+fn walks<Q: IntoShiperator>(query: Q) -> Vec<Walk>
+where
+    Q::Shiperator: Shiperator,
+{
+    cheapest_candidate(query).walks().collect()
 }
 
 /// Returns the candidates and work of each grouped alternative of `metadata`, in order.
@@ -160,11 +176,11 @@ fn window_metadata() {
         panic!("a grouped window reports its group");
     };
     // SAFE: `a` keeps A borrowed, and its group metadata unmodified, until the end of the test.
-    let window = unsafe { handle.get() };
-    assert_eq!(window.storage_id, StorageId::of::<SparseSet<A>>());
-    assert_eq!((window.unevaluated_start, window.len), (4, 5));
-    assert!(core::ptr::eq(window.ranges, &a.groups.ranges[..]));
-    let [range] = window.ranges else {
+    let window = unsafe { handle.get(EntityCursor::empty()) };
+    assert!(core::ptr::eq(window.groups, &a.groups));
+    assert_eq!(window.storage_id(), StorageId::of::<SparseSet<A>>());
+    assert_eq!((window.groups.unevaluated_start, window.len), (4, 5));
+    let [range] = &window.groups.ranges[..] else {
         panic!("A holds a single range");
     };
     assert!(Arc::ptr_eq(&range.group, &b.groups.ranges[0].group));
@@ -197,10 +213,10 @@ fn window_metadata_overlapping() {
         panic!("a grouped window reports its groups");
     };
     // SAFE: `a` keeps A borrowed, and its group metadata unmodified, until the end of the test.
-    let window = unsafe { handle.get() };
-    let lens: Vec<usize> = window.ranges.iter().map(|range| range.len).collect();
+    let window = unsafe { handle.get(EntityCursor::empty()) };
+    assert!(core::ptr::eq(window.groups, &a.groups));
+    let lens: Vec<usize> = window.groups.ranges.iter().map(|range| range.len).collect();
     assert_eq!(lens, [1, 1, 1]);
-    assert!(core::ptr::eq(window.ranges, &a.groups.ranges[..]));
 }
 
 /// Asserts that a query over storages without any group has no grouped alternative
@@ -245,7 +261,7 @@ fn empty_group() {
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let (mixed, _, metadata) = (&a, &b).into_shiperator();
 
-    assert!(walks(&metadata).is_empty());
+    assert!(walks((&a, &b)).is_empty());
     assert_eq!(selection(&metadata).unwrap().ordinary.work, Some(0));
     assert_ordinary_wins(&metadata, 0);
     assert_eq!(mixed.captain_mask, 0b01);
@@ -265,7 +281,7 @@ fn aligned() {
     let (mixed, entities, metadata) = (&a, &b).into_shiperator();
 
     assert_grouped_wins(&metadata, 0b11);
-    assert_eq!(walks(&metadata), [aligned_walk(5, 0b11)]);
+    assert_eq!(walks((&a, &b)), [aligned_walk(5, 0b11)]);
     // 5 candidates without sailor against B's 5 candidates with A looked up.
     let selection = selection(&metadata).unwrap();
     assert_eq!(selection.cheapest().unwrap().work, 10);
@@ -311,7 +327,7 @@ fn disjoint_groups() {
     let (_, _, metadata) = (&a, &b, &c, &d).into_shiperator();
 
     assert_grouped_wins(&metadata, 0b1100);
-    assert_eq!(walks(&metadata), [aligned_walk(10, 0b1100)]);
+    assert_eq!(walks((&a, &b, &c, &d)), [aligned_walk(10, 0b1100)]);
 }
 
 /// Asserts that two disjoint groups with equal estimates pick the one whose
@@ -350,7 +366,7 @@ fn multiwalk() {
         let (_, _, metadata) = (&a, &b).into_shiperator();
 
         assert_eq!(
-            walks(&metadata),
+            walks((&a, &b)),
             [
                 aligned_walk(10, 0b11),
                 Walk::Unevaluated {
@@ -377,7 +393,7 @@ fn multiwalk() {
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let (_, _, metadata) = (&a, &b).into_shiperator();
 
-    assert_eq!(walks(&metadata), [aligned_walk(20, 0b11)]);
+    assert_eq!(walks((&a, &b)), [aligned_walk(20, 0b11)]);
     assert_eq!(estimates(&metadata), [(20, 40)]);
     assert_grouped_wins(&metadata, 0b11);
 }
@@ -448,10 +464,12 @@ fn overlap_world() -> World {
     world
 }
 
-/// Returns the length of each range the cheapest alternative of `metadata` walks, by group size.
-fn cover_ranges(metadata: &ConstructionMetadata) -> Vec<usize> {
-    cheapest(metadata)
-        .group()
+/// Returns the length of each range the cheapest alternative `query` reports walks, by group size.
+fn cover_ranges<Q: IntoShiperator>(query: Q) -> Vec<usize>
+where
+    Q::Shiperator: Shiperator,
+{
+    cheapest_candidate(query)
         .ranges
         .iter()
         .map(|range| range.group.len())
@@ -467,9 +485,9 @@ fn overlapping() {
     let (_, _, metadata) = (&a, &b).into_shiperator();
 
     assert_grouped_wins(&metadata, 0b11);
-    assert_eq!(cover_ranges(&metadata), [2, 3]);
+    assert_eq!(cover_ranges((&a, &b)), [2, 3]);
     assert_eq!(
-        walks(&metadata),
+        walks((&a, &b)),
         [
             aligned_walk(6, 0b11),
             Walk::Aligned {
@@ -496,8 +514,8 @@ fn union_exclusion() {
     let (_, _, metadata) = (&a, &b, &c).into_shiperator();
 
     assert_grouped_wins(&metadata, 0b111);
-    assert_eq!(cover_ranges(&metadata), [3]);
-    assert_eq!(walks(&metadata), [aligned_walk(7, 0b111)]);
+    assert_eq!(cover_ranges((&a, &b, &c)), [3]);
+    assert_eq!(walks((&a, &b, &c)), [aligned_walk(7, 0b111)]);
     assert_eq!(estimates(&metadata), [(7, 14)]);
 }
 
@@ -538,9 +556,9 @@ fn absent_union() {
 
     // 3 candidates each looking 2 components up cost 12, C captaining alone 16.
     assert_grouped_wins(&metadata, 0b111);
-    assert!(cover_ranges(&metadata).is_empty());
+    assert!(cover_ranges((&a, &b, &c)).is_empty());
     assert_eq!(
-        walks(&metadata),
+        walks((&a, &b, &c)),
         [
             Walk::Unevaluated {
                 owner: 0,
@@ -590,9 +608,9 @@ fn extra_captain() {
     let (_, _, metadata) = (&a, &b, &c).into_shiperator();
 
     assert_grouped_wins(&metadata, 0b011);
-    assert_eq!(cover_ranges(&metadata), [2, 4]);
+    assert_eq!(cover_ranges((&a, &b, &c)), [2, 4]);
     assert_eq!(
-        walks(&metadata),
+        walks((&a, &b, &c)),
         [
             aligned_walk(6, 0b011),
             Walk::Aligned {
@@ -622,11 +640,11 @@ fn overlap_disjoint() {
         .unwrap();
     let (_, _, metadata) = (&a, &b, &d, &e).into_shiperator();
 
-    let required: Vec<u32> = selection(&metadata)
-        .unwrap()
+    let selection = selection(&metadata).unwrap();
+    let required: Vec<u32> = selection
         .alternatives
         .iter()
-        .map(|alternative| alternative.group().required)
+        .map(|alternative| selection.group_owner(alternative).1)
         .collect();
     assert_eq!(required, [0b0011, 0b1100]);
     // AB walks 16 candidates looking D and E up, DE walks 3 looking A and B up.
@@ -768,7 +786,7 @@ fn nested() {
     assert_eq!(selection.ordinary.work, Some(40));
     assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
     assert_eq!((winner.candidates, winner.work), (10, 30));
-    assert_eq!(winner.group().required, 0b11);
+    assert_eq!(selection.group_owner(winner).1, 0b11);
     // Constructors still install the ordinary walk, only the root swaps it.
     assert_eq!(mixed.captain_mask, 0b10);
 }
@@ -818,9 +836,10 @@ fn locally_losing() {
 
     let (_, _, metadata) = ((&a, &b, &c, &d, &e), &f, &g).into_shiperator();
     assert_eq!(estimates(&metadata), [(6, 36), (5, 35)]);
-    let winner = selection(&metadata).unwrap().winner().unwrap();
+    let selection = selection(&metadata).unwrap();
+    let winner = selection.winner().unwrap();
     assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
-    assert_eq!(winner.group().required, 0b11000);
+    assert_eq!(selection.group_owner(winner).1, 0b11000);
 
     // The DE walk is installed: 5 candidates, the root rejecting none.
     let iter = ((&a, &b, &c, &d, &e), &f, &g).iter();
@@ -861,8 +880,7 @@ fn route_tie() {
     let (_, _, metadata) = (&c, &d, (&a, &b)).into_shiperator();
     assert_eq!(estimates(&metadata), [(5, 20), (5, 20)]);
     let winner = selection(&metadata).unwrap().winner().unwrap();
-    assert!(matches!(winner.route, Route::Local(_)));
-    assert_eq!(winner.group().required, 0b011);
+    assert_eq!(winner.route, Route::Local { required: 0b011 });
 }
 
 /// Asserts that removing a B from the middle of an aligned range splits the walk: the prefix
@@ -881,7 +899,7 @@ fn damaged_owner() {
     let (_, _, metadata) = (&a, &b).into_shiperator();
 
     assert_eq!(
-        walks(&metadata),
+        walks((&a, &b)),
         [
             aligned_walk(6, 0b11),
             Walk::Damaged {

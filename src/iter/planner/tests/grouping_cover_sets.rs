@@ -1,5 +1,5 @@
 use super::super::*;
-use super::{Storage, children, walk_list};
+use super::{Storage, children, walk_list, windows};
 use crate::sparse_set::GroupRange;
 
 const A: u64 = 0;
@@ -33,7 +33,6 @@ fn nested() -> Child<'static> {
         can_sailor: true,
         sail_time: 0,
         candidates: Some(0),
-        entities: EntityCursor::empty(),
         metadata: NodeMetadata::Mixed {
             lookups: 1,
             ordinary_work: Some(4),
@@ -42,13 +41,22 @@ fn nested() -> Child<'static> {
 }
 
 /// Returns the groups of `set`'s ranges, in order.
-fn range_groups(set: &CoverSet) -> Vec<Arc<[StorageId]>> {
+fn range_groups(set: &GroupedCandidate) -> Vec<Arc<[StorageId]>> {
     set.ranges.iter().map(|range| range.group.clone()).collect()
 }
 
 /// Returns the children taking part in `range`, in order.
 fn range_children(range: &CoverRange) -> Vec<usize> {
     range.members.iter().map(|member| member.child).collect()
+}
+
+/// Returns the walks of each cover set of `children`, in order.
+fn candidates(children: &[Child<'_>]) -> Vec<GroupedCandidate> {
+    let windows = windows(children);
+
+    cover_sets(&windows)
+        .map(|required| GroupedCandidate::new(&windows, required))
+        .collect()
 }
 
 /// Asserts that with AB and AC and no ABC union yet, an `(A, B, C)` query has to cover
@@ -59,7 +67,7 @@ fn absent_union() {
     let storages = [window(A, &[&ab, &ac]), window(B, &[&ab]), window(C, &[&ac])];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b111);
@@ -78,7 +86,7 @@ fn union_only() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b111);
@@ -95,7 +103,7 @@ fn projection() {
     let storages = [window(A, &[&ab, &ac, &abc]), window(B, &[&ab, &abc])];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b11);
@@ -113,7 +121,7 @@ fn larger_only() {
     let storages = [window(A, &[&abc]), window(B, &[&abc])];
     let children = children(&storages);
 
-    assert!(cover_sets(&children).next().is_none());
+    assert!(candidates(&children).is_empty());
 }
 
 /// Asserts that disjoint AB and CD give distinct sets, ordered by their first child.
@@ -128,7 +136,7 @@ fn disjoint() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     let required: Vec<u32> = sets.iter().map(|set| set.required).collect();
     assert_eq!(required, [0b0011, 0b1100]);
@@ -148,7 +156,7 @@ fn extra_member() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b011);
@@ -171,7 +179,7 @@ fn transitive() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b1111);
@@ -190,7 +198,7 @@ fn subset() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b111);
@@ -206,7 +214,7 @@ fn ambiguous_required() {
     let storages = [window(A, &[&ab]), window(A, &[&ab]), window(B, &[&ab])];
     let children = children(&storages);
 
-    assert!(cover_sets(&children).next().is_none());
+    assert!(candidates(&children).is_empty());
 }
 
 /// Asserts that an extra member held by two children doesn't come along.
@@ -221,7 +229,7 @@ fn ambiguous_extra() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets.len(), 1);
     assert_eq!(range_children(&sets[0].ranges[1]), [0, 1]);
@@ -235,7 +243,7 @@ fn nested_boundary() {
     let a = window(A, &[&ab]);
     let children = [a.child(), nested()];
 
-    assert!(cover_sets(&children).next().is_none());
+    assert!(candidates(&children).is_empty());
 }
 
 /// Asserts that each member reports its own part of a range, in child order,
@@ -244,12 +252,12 @@ fn nested_boundary() {
 fn member_parts() {
     let ab = group(&[A, B]);
     let mut a = window(A, &[&ab]);
-    a.ranges[0].shift = -1;
-    a.ranges[0].trust = 1;
+    a.groups.ranges[0].shift = -1;
+    a.groups.ranges[0].trust = 1;
     let storages = [window(B, &[&ab]), a];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert_eq!(sets[0].required, 0b11);
     assert_eq!(
@@ -289,7 +297,7 @@ fn members_inline() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert!(matches!(
         sets[0].ranges[0].members,
@@ -312,10 +320,33 @@ fn members_spilled() {
     ];
     let children = children(&storages);
 
-    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+    let sets = candidates(&children);
 
     assert!(matches!(sets[0].ranges[0].members, ScratchVec::Heap(_)));
     assert_eq!(range_children(&sets[0].ranges[0]), [0, 1, 2, 3, 4]);
+}
+
+/// Asserts that a cover set with more ranges than fit inline moves them to the heap,
+/// still lists them all in order and walks each of them.
+#[test]
+fn ranges_spilled() {
+    // C and D aren't borrowed, ABC and ABD only come along with AB.
+    let (ab, abc, abd) = (group(&[A, B]), group(&[A, B, C]), group(&[A, B, D]));
+    let storages = [window(A, &[&ab, &abc, &abd]), window(B, &[&ab, &abc, &abd])];
+    let children = children(&storages);
+
+    let sets = candidates(&children);
+
+    assert!(matches!(sets[0].ranges, ScratchVec::Heap(_)));
+    assert_eq!(range_groups(&sets[0]), [ab, abc, abd]);
+    assert_eq!(
+        walk_list(&sets[0]),
+        [
+            aligned(0, 0, 2, 0b11),
+            aligned(1, 0, 2, 0b11),
+            aligned(2, 0, 2, 0b11),
+        ]
+    );
 }
 
 /// Storage `storage` holding a range for each `(group, len, trust)`,
@@ -344,21 +375,15 @@ fn window_with(
     let unevaluated_start = len;
     len += unevaluated;
 
-    Storage {
-        id: StorageId::Custom(storage),
-        len,
-        unevaluated_start,
-        ranges,
-    }
+    Storage::new(StorageId::Custom(storage), len, unevaluated_start, ranges)
 }
 
 /// Returns the walks of the first cover set of `children`, placeable or not.
 fn first_candidate(children: &[Child<'_>]) -> GroupedCandidate {
-    let set = cover_sets(children)
+    candidates(children)
+        .into_iter()
         .next()
-        .expect("the children hold a group");
-
-    GroupedCandidate::new(children, set)
+        .expect("the children hold a group")
 }
 
 fn aligned(range: usize, start: usize, len: usize, captains: u32) -> Walk {
@@ -402,7 +427,7 @@ fn walks_ranges() {
         [aligned(0, 0, 2, 0b11), aligned(1, 0, 3, 0b11)]
     );
     // 5 candidates without sailor.
-    let alternative = Alternative::local(candidate, 2).unwrap();
+    let alternative = Alternative::local(&candidate, 2).unwrap();
     assert_eq!((alternative.candidates, alternative.work), (5, 10));
 }
 
@@ -506,7 +531,7 @@ fn walks_extra_partial() {
         ]
     );
     // AB's 2 and ABCD's last 3 candidates look C up, ABCD's first 3 look nothing up.
-    let alternative = Alternative::local(candidate, 3).unwrap();
+    let alternative = Alternative::local(&candidate, 3).unwrap();
     assert_eq!(
         (alternative.candidates, alternative.work),
         (8, 2 * 3 + 3 * 2 + 3 * 3)
@@ -570,7 +595,7 @@ fn walks_unevaluated_only() {
         ]
     );
     // Every candidate looks the two other children up.
-    let alternative = Alternative::local(candidate, 3).unwrap();
+    let alternative = Alternative::local(&candidate, 3).unwrap();
     assert_eq!((alternative.candidates, alternative.work), (6, 6 * 4));
 }
 
@@ -586,7 +611,7 @@ fn estimates_ordinary() {
     ];
     let children = children(&storages);
 
-    let grouped = Alternative::local(first_candidate(&children), 3).unwrap();
+    let grouped = Alternative::local(&first_candidate(&children), 3).unwrap();
     let ordinary = ordinary_candidate(&children, 3);
 
     // 50 candidates looking the small storage up against 3 candidates looking A and B up.
@@ -607,12 +632,9 @@ fn estimates_disjoint() {
     ];
     let children = children(&storages);
 
-    let works: Vec<u64> = cover_sets(&children)
-        .map(|set| {
-            Alternative::local(GroupedCandidate::new(&children, set), 4)
-                .unwrap()
-                .work
-        })
+    let works: Vec<u64> = candidates(&children)
+        .iter()
+        .map(|candidate| Alternative::local(candidate, 4).unwrap().work)
         .collect();
 
     // Each walk reads its two members and looks the two others up.

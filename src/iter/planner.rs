@@ -9,12 +9,14 @@
 //! overlapping groups its window children fully hold (see [`cover_sets`]), and the
 //! alternatives its nested `Mixed` children reported, driven through them.\
 //! Everything is kept in a [`Selection`] until the query decides which walk drives.
+//! An alternative only keeps its estimate and where its group is, not its walks.
 //!
 //! Nothing here reads entities. Estimates only use group metadata, and the metadata is
 //! released once the iterator is built.\
 //! Constructors always install their ordinary walk. Once the whole query is built,
 //! [`install_winner`] swaps in its root's cheapest alternative when it beats the ordinary walk,
-//! [`regions::grouped_entities`] turning it into segments.
+//! [`regions::grouped_entities`] reading its walks from the metadata again to turn them into
+//! segments. Estimates and segments list walks the same way, see [`GroupedCandidate::walks`].
 pub(crate) mod regions;
 mod scratch;
 #[cfg(test)]
@@ -23,7 +25,7 @@ mod tests;
 use crate::component::Component;
 use crate::iter::mixed::NON_CAPTAIN_FACTOR;
 use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
-use crate::sparse_set::{GroupRange, Groups, Ring, SparseSet};
+use crate::sparse_set::{Groups, Ring, SparseSet};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -163,24 +165,19 @@ pub(crate) struct WindowHandle {
 }
 
 impl WindowHandle {
-    /// Returns the group metadata this handle points to.
+    /// Returns the group metadata this handle points to, with `entities`, the window's.
     ///
     /// ### Safety
     ///
     /// The storage this handle was taken from must stay borrowed for `'m`, with its group
     /// metadata unmodified and no exclusive reference to it created.
-    pub(crate) unsafe fn get<'m>(self) -> WindowMetadata<'m> {
-        // SAFE: Our caller keeps the storage borrowed for 'm, the pointer we took from its
-        // `Groups` stays valid and nothing modifies them meanwhile.
-        let groups = unsafe { self.groups.as_ref() };
-
+    pub(crate) unsafe fn get<'m>(self, entities: EntityCursor) -> WindowMetadata<'m> {
         WindowMetadata {
-            storage_id: groups
-                .storage_id
-                .expect("handles are only taken for storages recording their id"),
+            // SAFE: Our caller keeps the storage borrowed for 'm, the pointer we took from its
+            // `Groups` stays valid and nothing modifies them meanwhile.
+            groups: unsafe { self.groups.as_ref() },
             len: self.len,
-            unevaluated_start: groups.unevaluated_start,
-            ranges: &groups.ranges,
+            entities,
         }
     }
 }
@@ -192,17 +189,48 @@ impl WindowHandle {
 /// ```
 #[derive(Clone, Copy)]
 pub(crate) struct WindowMetadata<'m> {
-    /// Id of the storage, as its own group metadata records it.
-    ///
-    /// Thread-local storages have ids distinct from their `Send + Sync` counterparts.
-    pub(crate) storage_id: StorageId,
+    /// The storage's group metadata, its layout checked when the handle was taken.
+    pub(crate) groups: &'m Groups,
     /// Number of components in the storage.
     pub(crate) len: usize,
-    /// Physical index where the unevaluated region starts.
-    pub(crate) unevaluated_start: usize,
-    /// Every range of the storage, in physical order.
-    pub(crate) ranges: &'m [GroupRange],
+    /// Every entity of the storage, grouped walks take their segments from it.
+    pub(crate) entities: EntityCursor,
 }
+
+impl WindowMetadata<'_> {
+    /// Returns the id of the storage, as its own group metadata records it.
+    ///
+    /// Thread-local storages have ids distinct from their `Send + Sync` counterparts.
+    pub(crate) fn storage_id(&self) -> StorageId {
+        self.groups
+            .storage_id
+            .expect("handles are only taken for storages recording their id")
+    }
+
+    /// Returns this metadata without its lifetime, see [`KeptWindow`].
+    fn keep(&self) -> KeptWindow {
+        KeptWindow {
+            handle: WindowHandle {
+                groups: NonNull::from(self.groups),
+                len: self.len,
+            },
+            entities: self.entities,
+        }
+    }
+}
+
+/// A window child's [`WindowMetadata`] without its lifetime.
+///
+/// A [`Selection`] keeps one for each of its window children, the root reads them again to
+/// place its winner.
+#[derive(Clone, Copy)]
+struct KeptWindow {
+    handle: WindowHandle,
+    entities: EntityCursor,
+}
+
+/// The [`WindowMetadata`] of each child of a `Mixed`, by position, `None` for other children.
+type Windows<'m> = ScratchVec<Option<WindowMetadata<'m>>, 4>;
 
 /// What the selector needs to know about an immediate child of a `Mixed`.
 ///
@@ -214,11 +242,6 @@ pub(crate) struct Child<'m> {
     pub(crate) sail_time: usize,
     /// Number of candidates the child walks when it drives, `None` when it overflows.
     pub(crate) candidates: Option<usize>,
-    /// The first entities the child walks when it drives.
-    ///
-    /// For a window over a grouped storage, every entity of that storage.\
-    /// Grouped walks take their segments from it.
-    pub(crate) entities: EntityCursor,
     pub(crate) metadata: NodeMetadata<WindowMetadata<'m>>,
 }
 
@@ -243,7 +266,10 @@ impl<'m> Child<'m> {
             NodeMetadata::Ungrouped => NodeMetadata::Ungrouped,
             // SAFE: A window's handle was taken from the storage it borrows, our caller keeps
             // that storage borrowed and its group metadata unmodified for 'm.
-            NodeMetadata::Window(handle) => NodeMetadata::Window(unsafe { handle.get() }),
+            // A window walks every entity of its storage.
+            NodeMetadata::Window(handle) => {
+                NodeMetadata::Window(unsafe { handle.get(entities.cursor) })
+            }
             NodeMetadata::Filtered => NodeMetadata::Filtered,
             NodeMetadata::Mixed {
                 lookups,
@@ -260,7 +286,6 @@ impl<'m> Child<'m> {
             can_sailor,
             sail_time,
             candidates: entities.candidate_count(),
-            entities: entities.cursor,
             metadata,
         }
     }
@@ -296,11 +321,22 @@ impl<'m> Child<'m> {
         }
     }
 
-    /// Moves out the grouped alternatives this child reported, only a nested `Mixed` has some.
-    fn take_alternatives(&mut self) -> Vec<Alternative> {
-        match &mut self.metadata {
-            NodeMetadata::GroupedMixed(selection) => core::mem::take(&mut selection.alternatives),
-            _ => Vec::new(),
+    /// Moves out the selection this child reported, only a nested `Mixed` with grouped
+    /// alternatives has one.
+    ///
+    /// The child still reports its lookups and its ordinary walk.
+    fn take_selection(&mut self) -> Option<Box<Selection>> {
+        let NodeMetadata::GroupedMixed(selection) = &self.metadata else {
+            return None;
+        };
+        let ordinary = NodeMetadata::Mixed {
+            lookups: selection.lookups,
+            ordinary_work: selection.ordinary.work,
+        };
+
+        match core::mem::replace(&mut self.metadata, ordinary) {
+            NodeMetadata::GroupedMixed(selection) => Some(selection),
+            _ => unreachable!("we just matched it"),
         }
     }
 }
@@ -317,6 +353,14 @@ pub(crate) struct Selection {
     pub(crate) lookups: usize,
     /// The query contains a filter, grouping stays disabled up to the root.
     filtered: bool,
+    /// The metadata of each window child, by position, `None` for other children.
+    ///
+    /// A local alternative's walks are read from it again when it wins,
+    /// see [`Selection::local_candidate`].
+    windows: ScratchVec<Option<KeptWindow>, 4>,
+    /// The selection of each nested `Mixed` child that has grouped alternatives,
+    /// with its position. [`Route::Nested`] leads to them.
+    nested: Vec<(usize, Box<Selection>)>,
 }
 
 /// The ordinary walk: a single captain walks all its candidates, the other children are looked up.
@@ -329,7 +373,10 @@ pub(crate) struct OrdinaryCandidate {
 }
 
 /// A grouped way for a `Mixed` to walk every one of its matches.
-#[derive(Clone, Debug)]
+///
+/// Only its estimate and where its group is are kept, its walks are listed again from the
+/// metadata when it wins.
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct Alternative {
     /// Number of candidates walked, an upper bound of the matches since lookups can reject.
     pub(crate) candidates: usize,
@@ -340,32 +387,37 @@ pub(crate) struct Alternative {
 }
 
 /// Where an [`Alternative`]'s group is, relative to the `Mixed` reporting it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Route {
-    /// Walks over a group the `Mixed`'s immediate window children fully hold.
-    Local(GroupedCandidate),
-    /// The nested `Mixed` at position `child` drives through one of its own alternatives,
-    /// the other children are looked up.
+    /// Walks over the cover set of the `Mixed`'s immediate window children requiring the
+    /// members `required` flags, see [`GroupedCandidate`].
+    Local { required: u32 },
+    /// The nested `Mixed` at position `child` drives through its alternative at position
+    /// `alternative`, the other children are looked up.
     ///
     /// The nested `Mixed` keeps its own captain mask and coverage, nothing is flattened.
-    Nested {
-        child: usize,
-        alternative: Box<Alternative>,
-    },
+    Nested { child: usize, alternative: usize },
 }
 
 /// Walks covering every match of a query through the ranges of one of its cover sets.
 ///
+/// A cover set is made of the members a grouped alternative has to cover, and the ranges it
+/// can walk. It's built from the group metadata of the `Mixed`'s immediate window children
+/// alone, see [`cover_sets`].\
 /// This is the region recipe: [`walks`](GroupedCandidate::walks) lists them in the order
 /// they're emitted, the estimate and the plan both follow it.
 #[derive(Clone, Debug)]
 pub(crate) struct GroupedCandidate {
-    /// Children holding the required members, bit `i` for child `i`, see [`CoverSet`].
+    /// Children holding the required members, bit `i` for child `i`.
+    ///
+    /// They're the union of overlapping groups the children fully hold. Only they establish
+    /// completeness: every match has a component in each of them.
     pub(crate) required: u32,
-    /// The ranges walks refer to, by position.
-    pub(crate) ranges: Vec<CoverRange>,
+    /// Every range whose group contains all required members, in the first required child's
+    /// range order. Walks refer to them by position.
+    pub(crate) ranges: ScratchVec<CoverRange, 2>,
     /// Every child taking part in a walk, in child order.
-    pub(crate) members: Vec<Member>,
+    pub(crate) members: ScratchVec<Member, 4>,
 }
 
 /// A child taking part in a grouped alternative, a required member or not.
@@ -379,6 +431,18 @@ pub(crate) struct Member {
     pub(crate) unevaluated_start: usize,
     /// Every entity of the child's storage.
     pub(crate) entities: EntityCursor,
+}
+
+// `ScratchVec` fills its unused slots with this, it never takes part in a walk.
+impl Default for Member {
+    fn default() -> Member {
+        Member {
+            child: 0,
+            len: 0,
+            unevaluated_start: 0,
+            entities: EntityCursor::empty(),
+        }
+    }
 }
 
 impl fmt::Debug for Member {
@@ -503,8 +567,8 @@ fn lookup_work(candidates: usize, lookups: usize) -> Option<u64> {
 ///
 /// `children` must have at least one child able to captain and at most one unable to sail,
 /// constructors reject other queries.\
-/// The alternatives nested `Mixed` children reported move into the returned selection.
-pub(crate) fn select(children: &mut [Child<'_>]) -> Selection {
+/// The selections nested `Mixed` children reported move into the returned selection.
+pub(crate) fn select<const N: usize>(children: &mut [Child<'_>; N]) -> Selection {
     let lookups = children.iter().map(Child::lookups).sum();
     let ordinary = ordinary_candidate(children, lookups);
 
@@ -513,18 +577,67 @@ pub(crate) fn select(children: &mut [Child<'_>]) -> Selection {
         .any(|child| matches!(child.metadata, NodeMetadata::Filtered));
     // A child that can't sail has to drive, no group can replace it.
     let has_forced_captain = children.iter().any(|child| !child.can_sailor);
+    // Only windows over grouped storages and nested `Mixed`s with alternatives bring groups.
+    let has_groups = children.iter().any(|child| {
+        matches!(
+            child.metadata,
+            NodeMetadata::Window(_) | NodeMetadata::GroupedMixed(_)
+        )
+    });
+    if filtered || has_forced_captain || !has_groups {
+        return Selection {
+            ordinary,
+            alternatives: Vec::new(),
+            lookups,
+            filtered,
+            windows: ScratchVec::new(),
+            nested: Vec::new(),
+        };
+    }
 
-    let alternatives = if filtered || has_forced_captain {
-        Vec::new()
-    } else {
-        alternatives(children, lookups)
-    };
+    grouped_selection(children, ordinary, lookups)
+}
+
+/// Returns the selection of a `Mixed` with these immediate `children`, at least one of them
+/// bringing groups, ranking its grouped alternatives against its `ordinary` walk.
+///
+/// See [`select`].
+// Grouped analysis stays out of ordinary constructors, along with its scratch lists.
+#[inline(never)]
+fn grouped_selection<const N: usize>(
+    children: &mut [Child<'_>; N],
+    ordinary: OrdinaryCandidate,
+    lookups: usize,
+) -> Selection {
+    let windows = children.each_ref().map(|child| child.window().copied());
+    let nested: Vec<(usize, Box<Selection>)> = children
+        .iter_mut()
+        .enumerate()
+        .filter_map(|(position, child)| Some((position, child.take_selection()?)))
+        .collect();
+    let alternatives = alternatives(&windows, &nested, lookups);
+    // Our parent only reads our estimates, there's no winner to place.
+    if alternatives.is_empty() {
+        return Selection {
+            ordinary,
+            alternatives,
+            lookups,
+            filtered: false,
+            windows: ScratchVec::new(),
+            nested: Vec::new(),
+        };
+    }
 
     Selection {
         ordinary,
         alternatives,
         lookups,
-        filtered,
+        filtered: false,
+        windows: windows
+            .iter()
+            .map(|window| window.as_ref().map(WindowMetadata::keep))
+            .collect(),
+        nested,
     }
 }
 
@@ -544,6 +657,66 @@ impl Selection {
         let ordinary_work = self.ordinary.work?;
 
         (cheapest.work < ordinary_work).then_some(cheapest)
+    }
+
+    /// Returns the selection the nested `Mixed` at position `child` reported.
+    pub(crate) fn nested(&self, child: usize) -> &Selection {
+        self.nested
+            .iter()
+            .find(|(position, _)| *position == child)
+            .map(|(_, selection)| &**selection)
+            .expect("nested routes lead to a child with alternatives")
+    }
+
+    /// Returns the walks of our local alternative over the cover set requiring the members
+    /// `required` flags.
+    ///
+    /// They're listed again from our window children's metadata, as [`select`] estimated them.
+    ///
+    /// ### Safety
+    ///
+    /// The storages our window children were built from must still be borrowed, with their
+    /// group metadata unmodified and no exclusive reference to it created.
+    pub(crate) unsafe fn local_candidate(&self, required: u32) -> GroupedCandidate {
+        let windows: Windows<'_> = self
+            .windows
+            .iter()
+            .map(|window| {
+                // SAFE: Each handle was taken from the storage a window child borrows,
+                // our caller keeps it borrowed and unmodified while we read it.
+                window.map(|kept| unsafe { kept.handle.get(kept.entities) })
+            })
+            .collect();
+
+        GroupedCandidate::new(&windows, required)
+    }
+
+    /// Follows `alternative`'s route down to the `Mixed` owning its group.
+    ///
+    /// Returns that `Mixed`'s selection and the members its cover set requires.
+    #[cfg(test)]
+    pub(crate) fn group_owner(&self, alternative: &Alternative) -> (&Selection, u32) {
+        match alternative.route {
+            Route::Local { required } => (self, required),
+            Route::Nested { child, alternative } => {
+                let nested = self.nested(child);
+
+                nested.group_owner(&nested.alternatives[alternative])
+            }
+        }
+    }
+
+    /// Returns the walks `alternative`, one of ours, ends up driving, through any nested `Mixed`.
+    ///
+    /// ### Safety
+    ///
+    /// See [`Selection::local_candidate`].
+    #[cfg(test)]
+    pub(crate) unsafe fn candidate(&self, alternative: &Alternative) -> GroupedCandidate {
+        let (owner, required) = self.group_owner(alternative);
+
+        // SAFE: Our caller keeps the storages of every window below us borrowed and unmodified.
+        unsafe { owner.local_candidate(required) }
     }
 
     /// Returns the metadata of the `Mixed` this selection is about, for its parent.
@@ -577,7 +750,11 @@ impl Selection {
 /// Only the root may call this. Each nested `Mixed` keeps the ordinary walk its constructor
 /// installed until then: its parent estimated its own alternatives with that walk and may
 /// drive through it.
-pub(crate) fn install_winner<S: Shiperator>(
+///
+/// ### Safety
+///
+/// `root`, `entities` and `metadata` must come from the same `into_shiperator` call.
+pub(crate) unsafe fn install_winner<S: Shiperator>(
     root: &mut S,
     entities: RawEntityIdAccess,
     metadata: ConstructionMetadata,
@@ -593,7 +770,10 @@ pub(crate) fn install_winner<S: Shiperator>(
 
     // `root` gets the first grouped segment's state, overwriting the ordinary one.
     // The ordinary entities, and any plan they embed, are dropped with `entities`.
-    regions::grouped_entities(root, winner)
+    // SAFE: Our caller got `root` and `selection` from the same `into_shiperator` call.
+    // `IntoShiperator`'s contract keeps the storages that call borrowed, with their group
+    // metadata unmodified, as long as `root` lives, and we hold it.
+    unsafe { regions::grouped_entities(root, selection, winner) }
 }
 
 /// Returns the ordinary walk of `children`, which read `lookups` components as sailors.
@@ -629,56 +809,55 @@ fn ordinary_captain(children: &[Child<'_>]) -> usize {
         .expect("constructors reject queries without captain")
 }
 
-/// Returns every grouped alternative of `children`, which read `lookups` components as sailors.
+/// Returns every grouped alternative of a `Mixed` whose children read `lookups` components
+/// as sailors.
 ///
+/// `windows` holds the metadata of its window children and `nested` the selection of its
+/// nested `Mixed` children with alternatives, see [`Selection`].\
 /// Alternatives are ordered by the first child they involve: a cover set by its first
 /// required member, a nested `Mixed`'s alternatives by its position.\
 /// Alternatives whose estimate doesn't fit in a `u64` can't beat anything and are left out.
-fn alternatives(children: &mut [Child<'_>], lookups: usize) -> Vec<Alternative> {
-    let local: Vec<GroupedCandidate> = cover_sets(children)
-        .map(|set| GroupedCandidate::new(children, set))
-        .collect();
-    let mut local = local.into_iter().peekable();
+fn alternatives(
+    windows: &[Option<WindowMetadata<'_>>],
+    nested: &[(usize, Box<Selection>)],
+    lookups: usize,
+) -> Vec<Alternative> {
+    let mut local = cover_sets(windows).peekable();
+    let mut nested = nested.iter().peekable();
     let mut alternatives = Vec::new();
 
-    for (position, child) in children.iter_mut().enumerate() {
+    for position in 0..windows.len() {
         // Only a window can start a cover set and only a nested `Mixed` has alternatives,
         // at most one of these two adds something.
         // Cover sets come ordered by their first required member.
-        while let Some(candidate) =
-            local.next_if(|candidate| candidate.required.trailing_zeros() as usize == position)
+        while let Some(required) =
+            local.next_if(|required| required.trailing_zeros() as usize == position)
         {
-            alternatives.extend(Alternative::local(candidate, lookups));
+            // Each candidate is only kept until it's estimated.
+            let candidate = GroupedCandidate::new(windows, required);
+            alternatives.extend(Alternative::local(&candidate, lookups));
         }
 
         // Groups don't cross `Mixed` boundaries: a nested `Mixed` is never a member of our
         // groups and we drive through its alternatives as a whole, its masks stay its own.
-        let sailor_lookups = lookups - child.lookups();
-        for alternative in child.take_alternatives() {
-            alternatives.extend(Alternative::nested(position, alternative, sailor_lookups));
+        if let Some((_, selection)) = nested.next_if(|(child, _)| *child == position) {
+            let sailor_lookups = lookups - selection.lookups;
+            for (index, alternative) in selection.alternatives.iter().enumerate() {
+                alternatives.extend(Alternative::nested(
+                    position,
+                    index,
+                    alternative,
+                    sailor_lookups,
+                ));
+            }
         }
     }
 
     alternatives
 }
 
-/// Members a grouped alternative of a `Mixed` has to cover, and the ranges it can walk.
-///
-/// Built from the group metadata of the `Mixed`'s immediate window children alone.
-#[derive(Clone, Debug)]
-pub(crate) struct CoverSet {
-    /// Children holding the required members, bit `i` for child `i`.
-    ///
-    /// They're the union of overlapping groups the children fully hold. Only they establish
-    /// completeness: every match has a component in each of them.
-    pub(crate) required: u32,
-    /// Every range whose group contains all required members, in the first required child's
-    /// range order.
-    pub(crate) ranges: Vec<CoverRange>,
-}
-
-/// A range whose group contains all required members of a [`CoverSet`].
-#[derive(Clone, Debug)]
+/// A range whose group contains all required members of a [`GroupedCandidate`].
+#[derive(Clone, Default, Debug)]
 pub(crate) struct CoverRange {
     /// Canonical identity retained for topology assertions in tests.
     #[cfg(test)]
@@ -703,9 +882,11 @@ pub(crate) struct RangeMember {
     pub(crate) trust: usize,
 }
 
-/// Returns the cover sets of `children`, one per set of overlapping groups they fully hold,
-/// ordered by their first child.
+/// Returns the cover sets of a `Mixed`'s children, one per set of overlapping groups they fully
+/// hold, ordered by their first child. Each set is given by its required members, see
+/// [`GroupedCandidate::required`].
 ///
+/// `windows` holds the metadata of each window child, see [`Selection`].\
 /// A group is fully held when each of its members is held by exactly one window child.
 /// With an `(A, B)` query and only an ABC group, matches without C sit outside the group's
 /// ranges and only an ordinary walk finds them.\
@@ -713,20 +894,20 @@ pub(crate) struct RangeMember {
 /// an ABC union, not in AB or AC. So an `(A, B, C)` query covers ABC, whether or not the
 /// union exists yet, and doesn't walk AB or AC.\
 /// Disjoint groups give distinct sets, they compete as distinct alternatives.
-pub(crate) fn cover_sets<'a>(children: &'a [Child<'_>]) -> impl Iterator<Item = CoverSet> + 'a {
+pub(crate) fn cover_sets(windows: &[Option<WindowMetadata<'_>>]) -> impl Iterator<Item = u32> {
     // `joined[child]` is the set `child` is part of so far, 0 for none.
     // Our masks cap queries at 32 children, so every child has a slot.
     let mut joined = [0u32; u32::BITS as usize];
 
-    for (position, child) in children.iter().enumerate() {
-        let Some(window) = child.window() else {
+    for (position, window) in windows.iter().enumerate() {
+        let Some(window) = window else {
             continue;
         };
 
-        for range in window.ranges {
+        for range in &window.groups.ranges {
             // Every member lists the group, we only take it from its first member.
             // A held group's first member is the window we're reading.
-            let Some(held) = member_mask(children, &range.group) else {
+            let Some(held) = member_mask(windows, &range.group) else {
                 continue;
             };
             if held.trailing_zeros() as usize != position {
@@ -745,20 +926,17 @@ pub(crate) fn cover_sets<'a>(children: &'a [Child<'_>]) -> impl Iterator<Item = 
     // We read each set at its first child, so they come ordered by it.
     joined
         .into_iter()
-        .take(children.len())
+        .take(windows.len())
         .enumerate()
         .filter(|&(position, set)| set.trailing_zeros() as usize == position)
-        .map(|(_, required)| CoverSet {
-            required,
-            ranges: containing_ranges(children, required),
-        })
+        .map(|(_, required)| required)
 }
 
 /// Returns the children holding `group`'s members, bit `i` for child `i`,
 /// `None` unless each member is held by exactly one window child.
-fn member_mask(children: &[Child<'_>], group: &[StorageId]) -> Option<u32> {
+fn member_mask(windows: &[Option<WindowMetadata<'_>>], group: &[StorageId]) -> Option<u32> {
     group.iter().try_fold(0, |mask, &storage_id| {
-        let child = window_child(children, storage_id)?;
+        let child = window_child(windows, storage_id)?;
 
         Some(mask | 1u32.checked_shl(u32::try_from(child).ok()?)?)
     })
@@ -769,14 +947,14 @@ fn member_mask(children: &[Child<'_>], group: &[StorageId]) -> Option<u32> {
 ///
 /// A storage held by several children, like A in `(&a, &a, &b)`, is ambiguous and we don't
 /// pick which child would drive.
-fn window_child(children: &[Child<'_>], storage_id: StorageId) -> Option<usize> {
-    let mut holders = children
+fn window_child(windows: &[Option<WindowMetadata<'_>>], storage_id: StorageId) -> Option<usize> {
+    let mut holders = windows
         .iter()
         .enumerate()
-        .filter(|(_, child)| {
-            child
-                .window()
-                .is_some_and(|window| window.storage_id == storage_id)
+        .filter(|(_, window)| {
+            window
+                .as_ref()
+                .is_some_and(|window| window.storage_id() == storage_id)
         })
         .map(|(position, _)| position);
 
@@ -784,47 +962,54 @@ fn window_child(children: &[Child<'_>], storage_id: StorageId) -> Option<usize> 
     holders.next().is_none().then_some(child)
 }
 
-/// Returns every range whose group contains all members `required` flags.
-fn containing_ranges(children: &[Child<'_>], required: u32) -> Vec<CoverRange> {
-    let window_of = |child: usize| {
-        children[child]
-            .window()
-            .expect("required members are window children")
-    };
+/// Returns the metadata of the window child at position `child`.
+fn window_of<'w, 'm>(
+    windows: &'w [Option<WindowMetadata<'m>>],
+    child: usize,
+) -> &'w WindowMetadata<'m> {
+    windows[child]
+        .as_ref()
+        .expect("group members are window children")
+}
 
+/// Returns every range whose group contains all members `required` flags.
+fn containing_ranges(
+    windows: &[Option<WindowMetadata<'_>>],
+    required: u32,
+) -> ScratchVec<CoverRange, 2> {
     // A group containing every required member is attached to each of them,
     // the first one's ranges list all of them.
-    let first_window = window_of(required.trailing_zeros() as usize);
+    let first_window = window_of(windows, required.trailing_zeros() as usize);
 
     first_window
+        .groups
         .ranges
         .iter()
         .filter(|range| {
             mask_children(required).all(|child| {
                 range
                     .group
-                    .binary_search(&window_of(child).storage_id)
+                    .binary_search(&window_of(windows, child).storage_id())
                     .is_ok()
             })
         })
         .map(|range| CoverRange {
             #[cfg(test)]
             group: range.group.clone(),
-            members: range_members(children, &range.group),
+            members: range_members(windows, &range.group),
         })
         .collect()
 }
 
 /// Returns each child holding a member of `group` alone, in child order, with its part of `group`'s range.
-fn range_members(children: &[Child<'_>], group: &Arc<[StorageId]>) -> RangeMembers {
+fn range_members(windows: &[Option<WindowMetadata<'_>>], group: &Arc<[StorageId]>) -> RangeMembers {
     let mut members = RangeMembers::new();
     for &storage_id in group.iter() {
-        let Some(child) = window_child(children, storage_id) else {
+        let Some(child) = window_child(windows, storage_id) else {
             continue;
         };
-        let range = children[child]
-            .window()
-            .expect("window_child only returns windows")
+        let range = window_of(windows, child)
+            .groups
             .ranges
             .iter()
             .find(|range| Arc::ptr_eq(&range.group, group))
@@ -848,7 +1033,7 @@ impl Alternative {
     /// read `lookups` components as sailors.
     ///
     /// Returns `None` when the estimate doesn't fit in a `u64`.
-    fn local(candidate: GroupedCandidate, lookups: usize) -> Option<Alternative> {
+    fn local(candidate: &GroupedCandidate, lookups: usize) -> Option<Alternative> {
         let mut candidates = 0usize;
         let mut work = 0u64;
 
@@ -863,17 +1048,21 @@ impl Alternative {
         Some(Alternative {
             candidates,
             work,
-            route: Route::Local(candidate),
+            route: Route::Local {
+                required: candidate.required,
+            },
         })
     }
 
-    /// Returns the alternative where the child at position `child` drives through `alternative`
-    /// and the other children read `sailor_lookups` components for each of its candidates.
+    /// Returns the alternative where the child at position `child` drives through `alternative`,
+    /// its alternative at position `index`, and the other children read `sailor_lookups`
+    /// components for each of its candidates.
     ///
     /// Returns `None` when the estimate doesn't fit in a `u64`.
     fn nested(
         child: usize,
-        alternative: Alternative,
+        index: usize,
+        alternative: &Alternative,
         sailor_lookups: usize,
     ) -> Option<Alternative> {
         // The child's candidates are an upper bound of its matches, we look ourselves up
@@ -887,48 +1076,39 @@ impl Alternative {
             work,
             route: Route::Nested {
                 child,
-                alternative: Box::new(alternative),
+                alternative: index,
             },
         })
-    }
-
-    /// Returns the group walks this alternative ends up driving, through any nested `Mixed`.
-    #[cfg(test)]
-    pub(crate) fn group(&self) -> &GroupedCandidate {
-        match &self.route {
-            Route::Local(candidate) => candidate,
-            Route::Nested { alternative, .. } => alternative.group(),
-        }
     }
 }
 
 impl GroupedCandidate {
-    /// Returns the walks covering `set`'s required members, for a `Mixed` with these `children`.
-    fn new(children: &[Child<'_>], set: CoverSet) -> GroupedCandidate {
+    /// Returns the walks covering the cover set requiring the members `required` flags, for a
+    /// `Mixed` whose window children have the metadata in `windows`.
+    fn new(windows: &[Option<WindowMetadata<'_>>], required: u32) -> GroupedCandidate {
+        let ranges = containing_ranges(windows, required);
+
         // Required members walk their unevaluated regions, any member of a range can drive part of it.
-        let member_mask = set
-            .ranges
+        let member_mask = ranges
             .iter()
             .flat_map(|range| &range.members)
-            .fold(set.required, |mask, member| mask | 1 << member.child);
-        let members: Vec<Member> = mask_children(member_mask)
+            .fold(required, |mask, member| mask | 1 << member.child);
+        let members = mask_children(member_mask)
             .map(|child| {
-                let window = children[child]
-                    .window()
-                    .expect("members are window children");
+                let window = window_of(windows, child);
 
                 Member {
                     child,
                     len: window.len,
-                    unevaluated_start: window.unevaluated_start,
-                    entities: children[child].entities,
+                    unevaluated_start: window.groups.unevaluated_start,
+                    entities: window.entities,
                 }
             })
             .collect();
 
         GroupedCandidate {
-            required: set.required,
-            ranges: set.ranges,
+            required,
+            ranges,
             members,
         }
     }
