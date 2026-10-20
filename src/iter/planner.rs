@@ -4,10 +4,11 @@
 //! [`ConstructionMetadata`]. A window's points to its storage's group metadata, nothing is copied:
 //! the storage stays borrowed while the query is built.
 //! It travels next to the node's entities, never inside them.\
-//! A `Mixed` hands its immediate children to [`select`], which ranks the ordinary captains
-//! and estimates its grouped [`Alternative`]s: walks over the ranges containing each set of
-//! overlapping groups its window children fully hold (see [`cover_sets`]), and the
-//! alternatives its nested `Mixed` children reported, driven through them.\
+//! A `Mixed` hands its immediate children to [`choose`], which picks its ordinary captain.
+//! When a child brings groups, [`select`] also estimates its grouped [`Alternative`]s: walks
+//! over the ranges containing each set of overlapping groups its window children fully hold
+//! (see [`cover_sets`]), and the alternatives its nested `Mixed` children reported, driven
+//! through them.\
 //! Everything is kept in a [`Selection`] until the query decides which walk drives.
 //! An alternative only keeps its estimate and where its group is, not its walks.
 //!
@@ -110,11 +111,21 @@ impl NodeMetadata {
     /// Returns the metadata of a plain window over a storage of `len` components with `groups`.
     ///
     /// The returned metadata points to `groups`, see [`WindowHandle::get`].
+    #[inline]
     fn of_storage(groups: &Groups, len: usize) -> NodeMetadata {
-        // Storages without group only pay this check.
+        // Storages without group only pay this check, inlined in their constructor.
         if !groups.has_ranges() {
             return NodeMetadata::Ungrouped;
         }
+
+        NodeMetadata::of_grouped_storage(groups, len)
+    }
+
+    /// Returns the metadata of a plain window over a storage of `len` components with `groups`,
+    /// which holds at least one group range.
+    ///
+    /// See [`NodeMetadata::of_storage`].
+    fn of_grouped_storage(groups: &Groups, len: usize) -> NodeMetadata {
         if groups.storage_id.is_none() {
             return NodeMetadata::Ungrouped;
         }
@@ -302,6 +313,7 @@ impl<'m> Child<'m> {
     ///
     /// A nested `Mixed` looks up each of its own children. Any other child is a single lookup:
     /// filters can read more, but they disable grouping so their estimate is never compared.
+    #[inline]
     fn lookups(&self) -> usize {
         match &self.metadata {
             NodeMetadata::Mixed { lookups, .. } => *lookups,
@@ -313,6 +325,7 @@ impl<'m> Child<'m> {
     /// Returns the estimated work of this child's ordinary walk, without its parent's lookups.
     ///
     /// Returns `None` when it doesn't fit in a `u64`.
+    #[inline]
     fn ordinary_work(&self) -> Option<u64> {
         match &self.metadata {
             NodeMetadata::Mixed { ordinary_work, .. } => *ordinary_work,
@@ -547,6 +560,7 @@ const _: () = assert!(
 /// Coverage checks are free next to a sparse lookup.
 ///
 /// Returns `None` when the result doesn't fit in a `u64`.
+#[inline]
 fn walk_work(candidates: usize, lookups: usize) -> Option<u64> {
     let per_candidate = CANDIDATE_WORK.checked_add(SAILOR_WORK.checked_mul(lookups as u64)?)?;
 
@@ -557,10 +571,74 @@ fn walk_work(candidates: usize, lookups: usize) -> Option<u64> {
 /// candidates someone else walks, see [`walk_work`].
 ///
 /// Returns `None` when the result doesn't fit in a `u64`.
+#[inline]
 fn lookup_work(candidates: usize, lookups: usize) -> Option<u64> {
     let per_candidate = SAILOR_WORK.checked_mul(lookups as u64)?;
 
     u64::try_from(candidates).ok()?.checked_mul(per_candidate)
+}
+
+/// Picks the ordinary captain of a `Mixed` with these immediate `children` and returns it,
+/// along with the metadata the `Mixed` reports to its parent.
+///
+/// This is [`select`] for constructors, they only keep these two.\
+/// `children` must have at least one child able to captain and at most one unable to sail,
+/// constructors reject other queries.
+#[inline(always)]
+pub(crate) fn choose<const N: usize>(
+    children: &mut [Child<'_>; N],
+) -> (usize, ConstructionMetadata) {
+    // Grouped analysis and its scratch lists stay out of ordinary constructors.
+    if needs_analysis(children) {
+        return choose_grouped(children);
+    }
+
+    // Without alternatives, the `Mixed` only reports its ordinary walk, as `select` would.
+    let lookups = children.iter().map(Child::lookups).sum();
+    let ordinary = ordinary_candidate(children, lookups);
+    let metadata = if is_filtered(children) {
+        NodeMetadata::Filtered
+    } else {
+        NodeMetadata::Mixed {
+            lookups,
+            ordinary_work: ordinary.work,
+        }
+    };
+
+    (ordinary.captain, ConstructionMetadata(metadata))
+}
+
+/// Returns what [`choose`] does, for `children` with groups to analyze.
+#[inline(never)]
+fn choose_grouped<const N: usize>(children: &mut [Child<'_>; N]) -> (usize, ConstructionMetadata) {
+    let selection = select(children);
+
+    (selection.ordinary.captain, selection.into_metadata())
+}
+
+/// Returns `true` when grouped alternatives could replace the ordinary walk of a `Mixed`
+/// with these immediate `children`.
+#[inline]
+fn needs_analysis(children: &[Child<'_>]) -> bool {
+    // Only windows over grouped storages and nested `Mixed`s with alternatives bring groups.
+    let has_groups = children.iter().any(|child| {
+        matches!(
+            child.metadata,
+            NodeMetadata::Window(_) | NodeMetadata::GroupedMixed(_)
+        )
+    });
+    // A child that can't sail has to drive, no group can replace it.
+    let has_forced_captain = children.iter().any(|child| !child.can_sailor);
+
+    has_groups && !has_forced_captain && !is_filtered(children)
+}
+
+/// Returns `true` when one of `children` is a filter or contains one.
+#[inline]
+fn is_filtered(children: &[Child<'_>]) -> bool {
+    children
+        .iter()
+        .any(|child| matches!(child.metadata, NodeMetadata::Filtered))
 }
 
 /// Ranks the alternatives of a `Mixed` with these immediate `children`.
@@ -572,24 +650,12 @@ pub(crate) fn select<const N: usize>(children: &mut [Child<'_>; N]) -> Selection
     let lookups = children.iter().map(Child::lookups).sum();
     let ordinary = ordinary_candidate(children, lookups);
 
-    let filtered = children
-        .iter()
-        .any(|child| matches!(child.metadata, NodeMetadata::Filtered));
-    // A child that can't sail has to drive, no group can replace it.
-    let has_forced_captain = children.iter().any(|child| !child.can_sailor);
-    // Only windows over grouped storages and nested `Mixed`s with alternatives bring groups.
-    let has_groups = children.iter().any(|child| {
-        matches!(
-            child.metadata,
-            NodeMetadata::Window(_) | NodeMetadata::GroupedMixed(_)
-        )
-    });
-    if filtered || has_forced_captain || !has_groups {
+    if !needs_analysis(children) {
         return Selection {
             ordinary,
             alternatives: Vec::new(),
             lookups,
-            filtered,
+            filtered: is_filtered(children),
             windows: ScratchVec::new(),
             nested: Vec::new(),
         };
@@ -602,8 +668,6 @@ pub(crate) fn select<const N: usize>(children: &mut [Child<'_>; N]) -> Selection
 /// bringing groups, ranking its grouped alternatives against its `ordinary` walk.
 ///
 /// See [`select`].
-// Grouped analysis stays out of ordinary constructors, along with its scratch lists.
-#[inline(never)]
 fn grouped_selection<const N: usize>(
     children: &mut [Child<'_>; N],
     ordinary: OrdinaryCandidate,
@@ -754,6 +818,7 @@ impl Selection {
 /// ### Safety
 ///
 /// `root`, `entities` and `metadata` must come from the same `into_shiperator` call.
+#[inline]
 pub(crate) unsafe fn install_winner<S: Shiperator>(
     root: &mut S,
     entities: RawEntityIdAccess,
@@ -761,9 +826,29 @@ pub(crate) unsafe fn install_winner<S: Shiperator>(
 ) -> RawEntityIdAccess {
     // Only a `Mixed` reports alternatives. Wrappers either forward their child's report
     // untouched or mark it filtered, so these are about `root`'s own immediate children.
-    let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
+    // Queries without alternatives stop here, the rest stays out of their constructor.
+    let NodeMetadata::GroupedMixed(selection) = metadata.0 else {
         return entities;
     };
+
+    // SAFE: Our caller got all three from the same `into_shiperator` call.
+    unsafe { install_grouped_winner(root, entities, &selection) }
+}
+
+/// Returns the entities driving a whole query, installing the cheapest of `selection`'s
+/// alternatives on `root` when it beats its ordinary walk.
+///
+/// See [`install_winner`].
+///
+/// ### Safety
+///
+/// `root`, `entities` and `selection` must come from the same `into_shiperator` call.
+#[inline(never)]
+unsafe fn install_grouped_winner<S: Shiperator>(
+    root: &mut S,
+    entities: RawEntityIdAccess,
+    selection: &Selection,
+) -> RawEntityIdAccess {
     let Some(winner) = selection.winner() else {
         return entities;
     };
@@ -777,7 +862,11 @@ pub(crate) unsafe fn install_winner<S: Shiperator>(
 }
 
 /// Returns the ordinary walk of `children`, which read `lookups` components as sailors.
-fn ordinary_candidate(children: &[Child<'_>], lookups: usize) -> OrdinaryCandidate {
+#[inline]
+fn ordinary_candidate<const N: usize>(
+    children: &[Child<'_>; N],
+    lookups: usize,
+) -> OrdinaryCandidate {
     let captain = ordinary_captain(children);
     let child = &children[captain];
 
@@ -793,7 +882,8 @@ fn ordinary_candidate(children: &[Child<'_>], lookups: usize) -> OrdinaryCandida
 }
 
 /// Returns the position of the ordinary captain among `children`.
-fn ordinary_captain(children: &[Child<'_>]) -> usize {
+#[inline]
+fn ordinary_captain<const N: usize>(children: &[Child<'_>; N]) -> usize {
     // A child that can't sail has to drive.
     if let Some(captain) = children.iter().position(|child| !child.can_sailor) {
         return captain;

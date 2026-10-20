@@ -1,5 +1,7 @@
 use crate::entity_id::EntityId;
-use crate::iter::plan::{Coverage, CoverageSpan, NodeKind, NodeState, PlanBuilder};
+use crate::iter::plan::{
+    Coverage, CoverageSpan, NodeKind, NodeState, PlanBuilder, SegmentSchedule,
+};
 use crate::iter::shiperator::fold_candidates;
 use crate::iter::{EntityCursor, RawEntityIdAccess, SegmentEntry, SegmentRow};
 use crate::iter::{Shiperator, into_shiperator::strip_plus};
@@ -109,22 +111,37 @@ impl<S> Mixed<S> {
 ///
 /// `entities` are the child's, its states start at index `slot` of `mixed`'s rows.\
 /// Returns `entities` unchanged when the child has no follow-ups.
+#[inline]
 pub(crate) fn embed_captain_entities<S: Shiperator>(
     mixed: &S,
     slot: usize,
     entities: RawEntityIdAccess,
 ) -> RawEntityIdAccess {
-    let Some(schedule) = &entities.schedule else {
+    // Single segments stop here, the rest stays out of their constructor.
+    let Some(schedule) = entities.schedule else {
         return entities;
     };
 
+    embed_follow_ups(mixed, slot, entities.cursor, schedule)
+}
+
+/// Embeds the captain child's `schedule` in `mixed`'s own rows, `cursor` is its first segment.
+///
+/// See [`embed_captain_entities`].
+#[inline(never)]
+fn embed_follow_ups<S: Shiperator>(
+    mixed: &S,
+    slot: usize,
+    cursor: EntityCursor,
+    schedule: SegmentSchedule,
+) -> RawEntityIdAccess {
     // `mixed` is in its initial state, the captain child drives each follow-up in the same way.
     let row = SegmentRow::of(mixed);
     let mut plan = PlanBuilder::new(row.layout());
-    plan.push_child_follow_ups(schedule, row.states(), slot);
+    plan.push_child_follow_ups(&schedule, row.states(), slot);
 
     RawEntityIdAccess {
-        cursor: entities.cursor,
+        cursor,
         schedule: plan.finish(),
     }
 }

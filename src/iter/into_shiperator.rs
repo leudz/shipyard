@@ -412,7 +412,7 @@ macro_rules! impl_into_shiperator_tuple {
         // The children are borrowed separately so their mutable outputs can't overlap.
         // `Mixed` keeps the captain's entities and follow-ups, embedded under rows built from its
         // own description, and looks the other children up by entity.
-        // `planner::select` only reads the children's metadata, nothing is installed here.
+        // `planner::choose` only reads the children's metadata, nothing is installed here.
         unsafe impl<$($type: IntoShiperator),+> IntoShiperator for ($($type,)+) where $(<$type as IntoShiperator>::Shiperator: Shiperator),+ {
             type Shiperator = Mixed<($($type::Shiperator,)+)>;
 
@@ -468,7 +468,7 @@ macro_rules! impl_into_shiperator_tuple {
                         )
                     },
                 )+];
-                let selection = planner::select(&mut children);
+                let (captain, metadata) = planner::choose(&mut children);
 
                 // Preorder position of each child's states in the Mixed's rows.
                 let mut next_slot = 1;
@@ -482,7 +482,6 @@ macro_rules! impl_into_shiperator_tuple {
                 // We always install the ordinary walk, our parent may drive through it.
                 // A cheaper grouped walk, through our groups or our children's, is only installed
                 // by the query's root, `IntoIter::iter`.
-                let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;
                 let mut entity_iter = RawEntityIdAccess::empty();
@@ -498,7 +497,7 @@ macro_rules! impl_into_shiperator_tuple {
                 let mixed = Mixed::new(($(shiperators.$index.0,)+), captain_mask);
                 let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
 
-                (mixed, entity_iter, selection.into_metadata())
+                (mixed, entity_iter, metadata)
             }
 
             #[inline]

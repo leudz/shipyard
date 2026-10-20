@@ -577,3 +577,81 @@ fn nested_overflow() {
 
     assert!(select(&mut children).alternatives.is_empty());
 }
+
+/// Asserts that without groups, `choose` reports the ordinary walk `select` ranks in
+/// `nested_captain` as the metadata of a `Mixed` without alternatives.
+#[test]
+fn chosen_ordinary() {
+    let mut children = [nested(4, 30, 2, &[]), ungrouped(100)];
+
+    let (captain, metadata) = choose(&mut children);
+
+    assert_eq!(captain, 0);
+    assert!(matches!(
+        metadata.0,
+        NodeMetadata::Mixed {
+            lookups: 3,
+            ordinary_work: Some(34)
+        }
+    ));
+}
+
+/// Asserts that `choose` reports a query containing a filter as filtered, along with its
+/// ordinary captain, even when its other children are grouped.
+#[test]
+fn chosen_filtered() {
+    let group = group();
+    let (a, b) = (member(&group, 0, 4, 4), member(&group, 1, 4, 4));
+    let mut filtered = ungrouped(2);
+    filtered.metadata = NodeMetadata::Filtered;
+    let mut children = [a.child(), b.child(), filtered];
+
+    let (captain, metadata) = choose(&mut children);
+
+    assert_eq!(captain, 2);
+    assert!(matches!(metadata.0, NodeMetadata::Filtered));
+}
+
+/// Asserts that `choose` reports no alternative when a child unable to sail drives,
+/// even though its other children are grouped, like `select` in `forced_captain`.
+#[test]
+fn chosen_forced() {
+    let group = group();
+    let mut entities = ungrouped(100);
+    entities.can_sailor = false;
+    let (a, b) = (member(&group, 0, 4, 4), member(&group, 1, 4, 4));
+    let mut children = [a.child(), b.child(), entities];
+
+    let (captain, metadata) = choose(&mut children);
+
+    assert_eq!(captain, 2);
+    // 100 candidates looking A and B up.
+    assert!(matches!(
+        metadata.0,
+        NodeMetadata::Mixed {
+            lookups: 3,
+            ordinary_work: Some(400)
+        }
+    ));
+}
+
+/// Asserts that `choose` hands grouped children to `select`: their alternatives are reported
+/// to the parent, next to the ordinary captain the constructor installs.
+#[test]
+fn chosen_grouped() {
+    let group = group();
+    let (a, b) = (member(&group, 0, 4, 4), member(&group, 1, 4, 4));
+    let mut children = [a.child(), b.child(), ungrouped(9)];
+
+    let (captain, metadata) = choose(&mut children);
+
+    assert_eq!(captain, 0);
+    let NodeMetadata::GroupedMixed(selection) = metadata.0 else {
+        panic!("the aligned group is an alternative");
+    };
+    assert_eq!(selection.ordinary.captain, 0);
+    assert_eq!(
+        selection.cheapest().unwrap().route,
+        Route::Local { required: 0b011 }
+    );
+}

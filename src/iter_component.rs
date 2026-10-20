@@ -596,12 +596,11 @@ macro_rules! impl_iter_component {
                         Child::new(true, true, $raw_window.sail_time(), &$entity_iter, $metadata)
                     },
                 )+];
-                let selection = planner::select(&mut children);
+                let (captain, metadata) = planner::choose(&mut children);
 
                 // We always install the ordinary walk, our parent may drive through it.
                 // A cheaper grouped walk, through our groups or our children's, is only installed
                 // by the query's root, `into_iter`.
-                let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;
                 let mut entity_iter = RawEntityIdAccess::empty();
@@ -623,7 +622,7 @@ macro_rules! impl_iter_component {
                 let mixed = Mixed::new(($($raw_window,)+), captain_mask);
                 let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
 
-                Ok((mixed, all_borrow, ($($borrow,)+), entity_iter, selection.into_metadata()))
+                Ok((mixed, all_borrow, ($($borrow,)+), entity_iter, metadata))
             }
         }
     }
