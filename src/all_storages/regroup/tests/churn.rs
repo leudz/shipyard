@@ -1,15 +1,6 @@
 use super::*;
 use crate::sparse_set::Ring;
 
-/// Returns a world with `count` entities owning `A(i)` and `B(i)`, grouped as `(A, B)`.
-fn pairs(count: u32) -> (World, Vec<EntityId>) {
-    let mut world = World::new_for_test();
-    let entities = (0..count).map(|i| world.add_entity((A(i), B(i)))).collect();
-    world.group::<(A, B)>();
-
-    (world, entities)
-}
-
 /// Returns every `(entity, value)` of `T`'s storage, sorted.
 fn contents<T: Component + Send + Sync>(
     world: &World,
@@ -41,11 +32,6 @@ fn indexed(entities: &[EntityId], keep: impl Fn(usize) -> bool) -> Vec<(EntityId
             .map(|(i, &entity)| (entity, i))
             .collect(),
     )
-}
-
-/// The `(A, B)` group, for [`assert_memberships`].
-fn ab() -> [StorageId; 2] {
-    [id::<A>(), id::<B>()]
 }
 
 /// Asserts that permanent B removals spread over the range leave the pairs that lost B

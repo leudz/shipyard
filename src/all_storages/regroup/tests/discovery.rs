@@ -4,9 +4,11 @@ use super::*;
 fn discover(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Vec<StorageId>> {
     let mut all_storages = world.all_storages_mut().unwrap();
     let storages = all_storages.storages.get_mut();
+    let storage_ids = sorted_storage_ids(storages);
+    let frozen = Frozen::new(storages, &storage_ids);
 
     Discovery::default()
-        .discover(storages, storage_id, entity)
+        .discover(&frozen.memberships, storage_id, entity)
         .map(<[StorageId]>::to_vec)
 }
 

@@ -1,3 +1,4 @@
+mod analysis;
 mod churn;
 mod declaration;
 mod discovery;
@@ -5,7 +6,8 @@ mod original_row;
 mod promotion;
 mod repair;
 
-use super::{Discovery, repair_all, sorted_storage_ids, storage_ptr, union_group};
+use super::analysis::{Discovery, Frozen, Plan, analyze};
+use super::{repair_all, sorted_storage_ids, storage_ptr, union_group};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
@@ -15,6 +17,7 @@ use crate::storage::{Storage, StorageId};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
+use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -131,27 +134,9 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
         };
 
         for (index, &entity) in grouped.dense().unwrap().iter().enumerate() {
-            let owns =
-                |member_id: &StorageId| storage(member_id).sparse_array().unwrap().contains(entity);
-            let satisfied: Vec<&[StorageId]> = declared
-                .iter()
-                .copied()
-                .filter(|group| group.iter().all(owns))
-                .collect();
-
-            // Satisfied groups sharing a storage with the union so far join it.
-            let mut union = vec![*storage_id];
-            while let Some(group) = satisfied.iter().find(|group| {
-                group.iter().any(|id| union.contains(id))
-                    && group.iter().any(|id| !union.contains(id))
-            }) {
-                for &id in group.iter() {
-                    if !union.contains(&id) {
-                        union.push(id);
-                    }
-                }
-            }
-            let expected = (union.len() > 1).then(|| sorted_ids(union));
+            let expected = expected_union(declared, *storage_id, |member_id| {
+                storage(member_id).sparse_array().unwrap().contains(entity)
+            });
 
             let actual = match groups.region_of(index) {
                 GroupRegion::Range(group) => Some(group.to_vec()),
@@ -162,6 +147,169 @@ fn assert_memberships(world: &World, declared: &[&[StorageId]]) {
             assert_eq!(actual, expected, "{entity:?} in {storage_id:?}");
         }
     }
+}
+
+/// Returns a world with `count` entities owning `A(i)` and `B(i)`, grouped as `(A, B)`.
+fn pairs(count: u32) -> (World, Vec<EntityId>) {
+    let mut world = World::new_for_test();
+    let entities = (0..count).map(|i| world.add_entity((A(i), B(i)))).collect();
+    world.group::<(A, B)>();
+
+    (world, entities)
+}
+
+/// The `(A, B)` group, for [`assert_memberships`] and [`assert_plan`].
+fn ab() -> [StorageId; 2] {
+    [id::<A>(), id::<B>()]
+}
+
+/// Returns the sorted members of the union an entity has to be grouped in from `storage_id`,
+/// `None` when it stays ungrouped there.
+///
+/// That's the union of the `declared` groups the entity owns every member of that connect to
+/// the storage, `owns` telling whether it owns a component in a storage.
+/// It comes from component ownership alone, never from regroup's own discovery.
+fn expected_union(
+    declared: &[&[StorageId]],
+    storage_id: StorageId,
+    owns: impl Fn(&StorageId) -> bool,
+) -> Option<Vec<StorageId>> {
+    let satisfied: Vec<&[StorageId]> = declared
+        .iter()
+        .copied()
+        .filter(|group| group.iter().all(&owns))
+        .collect();
+
+    // Satisfied groups sharing a storage with the union so far join it.
+    let mut union = vec![storage_id];
+    while let Some(group) = satisfied.iter().find(|group| {
+        group.iter().any(|id| union.contains(id)) && group.iter().any(|id| !union.contains(id))
+    }) {
+        for &id in group.iter() {
+            if !union.contains(&id) {
+                union.push(id);
+            }
+        }
+    }
+
+    (union.len() > 1).then(|| sorted_ids(union))
+}
+
+/// Analyzes `world` and returns the plan.
+fn analyze_world(world: &World) -> Option<Plan> {
+    let mut all_storages = world.all_storages_mut().unwrap();
+    let storages = all_storages.storages.get_mut();
+    let storage_ids = sorted_storage_ids(storages);
+
+    analyze(storages, &storage_ids)
+}
+
+/// Analyzes `world` and returns the plan, panicking unless:
+/// - every group keeps the prefix all its members trust,
+/// - its `leaving` count is the number of entities of that prefix that belong elsewhere,
+/// - every storage's `promoted` count is the number of its ungrouped components
+///   that belong to a group,
+/// - every group ends up with exactly the entities that belong to it,
+/// - every new union is needed by an entity, and attached to all its members.
+///
+/// Where components belong comes from their ownership and the `declared` groups,
+/// see [`expected_union`].
+fn assert_plan(world: &World, declared: &[&[StorageId]]) -> Plan {
+    let mut all_storages = world.all_storages_mut().unwrap();
+    let storages = all_storages.storages.get_mut();
+    let storage_ids = sorted_storage_ids(storages);
+
+    let frozen = Frozen::new(storages, &storage_ids);
+    let existing: Vec<Arc<[StorageId]>> = frozen
+        .memberships
+        .storages
+        .iter()
+        .flat_map(|membership| membership.groups.ranges.iter())
+        .map(|range| range.group.clone())
+        .collect();
+    drop(frozen);
+
+    let plan = analyze(storages, &storage_ids).expect("the world has something to regroup");
+
+    let frozen = Frozen::new(storages, &storage_ids);
+    let memberships = &frozen.memberships;
+    // Both counted in each group's first member.
+    let mut expected_lens: BTreeMap<Vec<StorageId>, usize> = BTreeMap::new();
+    let mut expected_leaving: BTreeMap<Vec<StorageId>, usize> = BTreeMap::new();
+
+    for (membership, dense) in memberships.storages.iter().zip(&frozen.dense) {
+        let storage_id = membership.storage_id;
+        let groups = membership.groups;
+        let mut promoted = 0;
+
+        for (row, &entity) in dense.iter().enumerate() {
+            let expected = expected_union(declared, storage_id, |member_id| {
+                memberships.get(*member_id).sparse.contains(entity)
+            });
+
+            if let Some(range_index) = groups.range_index_of(row) {
+                let range = &groups.ranges[range_index];
+                let kept = plan.groups[plan.group_index(&range.group)].kept;
+                let leaves = range.ring().logical_of(row) < kept
+                    && expected.as_deref() != Some(&range.group[..]);
+
+                if leaves && range.group[0] == storage_id {
+                    *expected_leaving.entry(range.group.to_vec()).or_default() += 1;
+                }
+            } else if row < groups.unevaluated_start && expected.is_some() {
+                promoted += 1;
+            }
+
+            if let Some(expected) = expected
+                && expected[0] == storage_id
+            {
+                *expected_lens.entry(expected).or_default() += 1;
+            }
+        }
+
+        assert_eq!(
+            plan.storage(storage_id).promoted,
+            promoted,
+            "promoted in {storage_id:?}"
+        );
+    }
+
+    for group_plan in &plan.groups {
+        let group = &group_plan.group;
+        let expected_len = expected_lens.remove(&group[..]).unwrap_or(0);
+        let leaving = expected_leaving.remove(&group[..]).unwrap_or(0);
+        let trust = group
+            .iter()
+            .map(|&member_id| {
+                memberships
+                    .get(member_id)
+                    .groups
+                    .range(group)
+                    .unwrap()
+                    .trust
+            })
+            .min();
+
+        assert_eq!(Some(group_plan.kept), trust, "kept in {group:?}");
+        assert_eq!(group_plan.leaving, leaving, "leaving in {group:?}");
+        assert_eq!(
+            group_plan.kept - group_plan.leaving + group_plan.incoming,
+            expected_len,
+            "len of {group:?}"
+        );
+        assert!(
+            expected_len > 0 || existing.iter().any(|existing| Arc::ptr_eq(existing, group)),
+            "{group:?} isn't needed"
+        );
+    }
+    assert!(expected_lens.is_empty(), "no plan for {expected_lens:?}");
+    assert!(
+        expected_leaving.is_empty(),
+        "no plan for {expected_leaving:?}"
+    );
+    drop(frozen);
+
+    plan
 }
 
 /// Returns `entities` sorted.

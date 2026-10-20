@@ -1,3 +1,8 @@
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "regroup doesn't use the two-phase path yet")
+)]
+mod analysis;
 #[cfg(test)]
 mod tests;
 
