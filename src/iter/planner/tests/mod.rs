@@ -1,7 +1,7 @@
 mod grouping_cover_sets;
 mod grouping_selection_arithmetic;
 
-use super::{Child, NodeMetadata, WindowMetadata};
+use super::{Child, GroupedCandidate, NodeMetadata, Walk, WindowMetadata};
 use crate::iter::EntityCursor;
 use crate::sparse_set::GroupRange;
 use crate::storage::StorageId;
@@ -39,4 +39,9 @@ impl Storage {
 /// Returns a window child over each of `storages`, in order.
 fn children<const N: usize>(storages: &[Storage; N]) -> [Child<'_>; N] {
     storages.each_ref().map(Storage::child)
+}
+
+/// Returns `candidate`'s walks, in emission order.
+fn walk_list(candidate: &GroupedCandidate) -> Vec<Walk> {
+    candidate.walks().collect()
 }

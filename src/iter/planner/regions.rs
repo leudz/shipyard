@@ -123,7 +123,7 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
     // Every segment drives the same path down to the `Mixed` owning the group,
     // the rest of the query is made of sailors.
     let (base_row, owner_slot, candidate) = route_row(layout, alternative);
-    if candidate.walks.is_empty() {
+    if candidate.walks().next().is_none() {
         return None;
     }
 
@@ -140,9 +140,8 @@ fn grouped_plan<S: Shiperator>(root: &S, alternative: &Alternative) -> Option<Pl
 
     // Walks are never empty and neither are their pieces, every placement is a segment.
     let placements: Vec<Placement> = candidate
-        .walks
-        .iter()
-        .flat_map(|&walk| Placement::of(walk, candidate))
+        .walks()
+        .flat_map(|walk| Placement::of(walk, candidate))
         .collect();
 
     let mut segments = Vec::with_capacity(placements.len());

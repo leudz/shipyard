@@ -124,8 +124,8 @@ fn aligned_walk(len: usize, captains: u32) -> Walk {
 }
 
 /// Returns the walks of the cheapest grouped alternative of `metadata`.
-fn walks(metadata: &ConstructionMetadata) -> &[Walk] {
-    &cheapest(metadata).group().walks
+fn walks(metadata: &ConstructionMetadata) -> Vec<Walk> {
+    cheapest(metadata).group().walks().collect()
 }
 
 /// Returns the candidates and work of each grouped alternative of `metadata`, in order.

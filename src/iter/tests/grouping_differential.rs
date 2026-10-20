@@ -668,8 +668,8 @@ impl Stats {
         }
         let candidate = winner.group();
         let mut walked_ranges = Vec::new();
-        for walk in &candidate.walks {
-            let range = match *walk {
+        for walk in candidate.walks() {
+            let range = match walk {
                 Walk::Aligned { range, .. } => {
                     self.aligned += 1;
                     Some(range)
@@ -2012,8 +2012,7 @@ where
     selection.winner().map_or(Vec::new(), |winner| {
         winner
             .group()
-            .walks
-            .iter()
+            .walks()
             .map(|walk| match walk {
                 Walk::Aligned { .. } => "aligned",
                 Walk::Damaged { .. } => "damaged",

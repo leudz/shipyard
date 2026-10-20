@@ -1,5 +1,5 @@
 use super::super::*;
-use super::Storage;
+use super::{Storage, walk_list};
 use crate::sparse_set::GroupRange;
 use alloc::vec;
 
@@ -127,7 +127,7 @@ fn aligned_recipe() {
     let alternative = selection.cheapest().unwrap();
 
     assert_eq!(
-        alternative.group().walks,
+        walk_list(alternative.group()),
         [Walk::Aligned {
             range: 0,
             start: 0,
@@ -154,7 +154,7 @@ fn damaged_recipe() {
     let alternative = selection.cheapest().unwrap();
 
     assert_eq!(
-        alternative.group().walks,
+        walk_list(alternative.group()),
         [
             Walk::Aligned {
                 range: 0,
@@ -199,7 +199,7 @@ fn recipe_ties() {
     let selection = select(&mut [a.child(), b.child()]);
 
     assert_eq!(
-        selection.cheapest().unwrap().group().walks,
+        walk_list(selection.cheapest().unwrap().group()),
         [
             Walk::Aligned {
                 range: 0,
@@ -432,7 +432,6 @@ fn nested(
                 required: 0,
                 ranges: Vec::new(),
                 members: Vec::new(),
-                walks: Vec::new(),
             }),
         })
         .collect();

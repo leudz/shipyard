@@ -1,5 +1,5 @@
 use super::super::*;
-use super::{Storage, children};
+use super::{Storage, children, walk_list};
 use crate::sparse_set::GroupRange;
 
 const A: u64 = 0;
@@ -7,6 +7,7 @@ const B: u64 = 1;
 const C: u64 = 2;
 const D: u64 = 3;
 const E: u64 = 4;
+const F: u64 = 5;
 
 /// Returns the group made of the storages `ids`.
 fn group(ids: &[u64]) -> Arc<[StorageId]> {
@@ -397,7 +398,7 @@ fn walks_ranges() {
     let candidate = first_candidate(&children);
 
     assert_eq!(
-        candidate.walks,
+        walk_list(&candidate),
         [aligned(0, 0, 2, 0b11), aligned(1, 0, 3, 0b11)]
     );
     // 5 candidates without sailor.
@@ -420,7 +421,7 @@ fn walks_unevaluated_once() {
     let candidate = first_candidate(&children);
 
     assert_eq!(
-        candidate.walks,
+        walk_list(&candidate),
         [
             aligned(0, 0, 2, 0b11),
             aligned(1, 0, 1, 0b11),
@@ -446,7 +447,7 @@ fn walks_required_trust() {
 
     // B's suffix is the shortest, A trusts none of it.
     assert_eq!(
-        candidate.walks,
+        walk_list(&candidate),
         [aligned(0, 0, 1, 0b11), damaged(0, 1, 1, 3, 0b10)]
     );
 }
@@ -463,7 +464,7 @@ fn walks_damaged_tie() {
     let children = children(&storages);
 
     assert_eq!(
-        first_candidate(&children).walks,
+        walk_list(&first_candidate(&children)),
         [aligned(0, 0, 1, 0b11), damaged(0, 0, 1, 3, 0b01)]
     );
 }
@@ -485,7 +486,7 @@ fn extra_storages(c_trust: usize) -> [Storage; 3] {
 #[test]
 fn walks_extra_untrusted() {
     assert_eq!(
-        first_candidate(&children(&extra_storages(0))).walks,
+        walk_list(&first_candidate(&children(&extra_storages(0)))),
         [aligned(0, 0, 2, 0b011), aligned(1, 0, 6, 0b011)]
     );
 }
@@ -497,7 +498,7 @@ fn walks_extra_partial() {
     let candidate = first_candidate(&children(&extra_storages(3)));
 
     assert_eq!(
-        candidate.walks,
+        walk_list(&candidate),
         [
             aligned(0, 0, 2, 0b011),
             aligned(1, 0, 3, 0b111),
@@ -516,7 +517,7 @@ fn walks_extra_partial() {
 #[test]
 fn walks_extra_trusted() {
     assert_eq!(
-        first_candidate(&children(&extra_storages(6))).walks,
+        walk_list(&first_candidate(&children(&extra_storages(6)))),
         [aligned(0, 0, 2, 0b011), aligned(1, 0, 6, 0b111)]
     );
 }
@@ -537,7 +538,7 @@ fn walks_damaged_extras() {
 
     // B has the shortest suffix. C trusts up to 4 and B up to 5, past that B drives alone.
     assert_eq!(
-        candidate.walks,
+        walk_list(&candidate),
         [
             aligned(1, 0, 2, 0b111),
             damaged(1, 1, 2, 2, 0b110),
@@ -561,7 +562,7 @@ fn walks_unevaluated_only() {
     let candidate = first_candidate(&children);
 
     assert_eq!(
-        candidate.walks,
+        walk_list(&candidate),
         [
             unevaluated(0, 0, 3),
             unevaluated(2, 0, 2),
@@ -625,8 +626,36 @@ fn split_pieces() {
     let captains_at = |position: usize| if position < 4 { 0b11 } else { 0b01 };
 
     assert_eq!(
-        pieces(1..7, [2, 4, 4, 9, 0].into_iter(), captains_at),
+        pieces(1..7, [2, 4, 4, 9, 0].into_iter(), captains_at).collect::<Vec<_>>(),
         [(1..4, 0b11), (4..7, 0b01)]
     );
-    assert!(pieces(3..3, [3].into_iter(), captains_at).is_empty());
+    assert!(pieces(3..3, [3].into_iter(), captains_at).next().is_none());
+}
+
+/// Asserts that a range with more members than a handful splits its aligned part at each of
+/// their trusts, whatever order the members come in, and only the trusting ones read directly.
+#[test]
+fn walks_many_bounds() {
+    // F isn't borrowed, so C, D and E only come along with AB.
+    let (ab, abcdef) = (group(&[A, B]), group(&[A, B, C, D, E, F]));
+    let storages = [
+        window_with(A, &[(&ab, 2, 2), (&abcdef, 8, 8)], 0),
+        window_with(B, &[(&ab, 2, 2), (&abcdef, 8, 8)], 0),
+        window_with(C, &[(&abcdef, 8, 6)], 0),
+        window_with(D, &[(&abcdef, 8, 2)], 0),
+        window_with(E, &[(&abcdef, 8, 4)], 0),
+    ];
+    let children = children(&storages);
+
+    // D stops trusting at 2, E at 4 and C at 6.
+    assert_eq!(
+        walk_list(&first_candidate(&children)),
+        [
+            aligned(0, 0, 2, 0b11),
+            aligned(1, 0, 2, 0b11111),
+            aligned(1, 2, 2, 0b10111),
+            aligned(1, 4, 2, 0b00111),
+            aligned(1, 6, 2, 0b00011),
+        ]
+    );
 }

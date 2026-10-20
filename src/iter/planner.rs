@@ -356,8 +356,8 @@ pub(crate) enum Route {
 
 /// Walks covering every match of a query through the ranges of one of its cover sets.
 ///
-/// This is the region recipe: the walks are listed in the order they're emitted
-/// and the estimate is computed from these same walks.
+/// This is the region recipe: [`walks`](GroupedCandidate::walks) lists them in the order
+/// they're emitted, the estimate and the plan both follow it.
 #[derive(Clone, Debug)]
 pub(crate) struct GroupedCandidate {
     /// Children holding the required members, bit `i` for child `i`, see [`CoverSet`].
@@ -366,8 +366,6 @@ pub(crate) struct GroupedCandidate {
     pub(crate) ranges: Vec<CoverRange>,
     /// Every child taking part in a walk, in child order.
     pub(crate) members: Vec<Member>,
-    /// Walks in emission order, empty ones are left out.
-    pub(crate) walks: Vec<Walk>,
 }
 
 /// A child taking part in a grouped alternative, a required member or not.
@@ -854,7 +852,7 @@ impl Alternative {
         let mut candidates = 0usize;
         let mut work = 0u64;
 
-        for walk in &candidate.walks {
+        for walk in candidate.walks() {
             // Captains are member windows, each one would otherwise be a single lookup.
             let sailor_lookups = lookups - walk.captains().count_ones() as usize;
 
@@ -928,99 +926,117 @@ impl GroupedCandidate {
             })
             .collect();
 
-        let walks = walks(set.required, &set.ranges, &members);
-
         GroupedCandidate {
             required: set.required,
             ranges: set.ranges,
             members,
-            walks,
         }
+    }
+
+    /// Returns the walks covering every match, in emission order. Empty walks are left out.
+    ///
+    /// Each call lists them again from the candidate's metadata, nothing is stored.
+    pub(crate) fn walks(&self) -> impl Iterator<Item = Walk> {
+        let range_walks = self
+            .ranges
+            .iter()
+            .enumerate()
+            .flat_map(|(range_index, range)| range_walks(self.required, range_index, range));
+
+        range_walks.chain(unevaluated_walks(self.required, &self.members))
     }
 }
 
-/// Returns the walks covering the members `required` flags through `ranges`, in emission order.
-///
-/// `members` lists every child taking part in a walk. Empty walks are left out.
-fn walks(required: u32, ranges: &[CoverRange], members: &[Member]) -> Vec<Walk> {
-    let mut walks = Vec::new();
+/// Returns the walks over `range`, the range at position `range_index`, covering the members
+/// `required` flags, in emission order.
+fn range_walks(
+    required: u32,
+    range_index: usize,
+    range: &CoverRange,
+) -> impl Iterator<Item = Walk> {
+    let required_parts = move || {
+        range
+            .members
+            .iter()
+            .filter(move |member| required & (1 << member.child) != 0)
+    };
+    let trusts = move || range.members.iter().map(|member| member.trust);
 
-    for (range_index, range) in ranges.iter().enumerate() {
-        let required_parts = || {
-            range
-                .members
-                .iter()
-                .filter(|member| required & (1 << member.child) != 0)
-        };
-        let trusts = || range.members.iter().map(|member| member.trust);
+    // Every required member holds the same entities over the logical prefix all of them trust.
+    let aligned_len = required_parts()
+        .map(|member| member.trust)
+        .min()
+        .expect("cover sets require at least two members");
 
-        // Every required member holds the same entities over the logical prefix all of them trust.
-        let aligned_len = required_parts()
-            .map(|member| member.trust)
-            .min()
-            .expect("cover sets require at least two members");
+    // Members trusting the same positions hold the same entities there, so the other
+    // members join the required ones up to their own trust. A member trusting less
+    // doesn't shorten the prefix, it's looked up past its trust.
+    let aligned = pieces(0..aligned_len, trusts(), move |position| {
+        trusting(range, position)
+    })
+    .map(move |(positions, captains)| Walk::Aligned {
+        range: range_index,
+        start: positions.start,
+        len: positions.len(),
+        captains,
+    });
 
-        // Members trusting the same positions hold the same entities there, so the other
-        // members join the required ones up to their own trust. A member trusting less
-        // doesn't shorten the prefix, it's looked up past its trust.
-        for (positions, captains) in pieces(0..aligned_len, trusts(), |position| {
+    // A match of this range past the aligned prefix is in the damaged suffix of every
+    // required member. Walking one of them is enough: the shortest, the first in child order
+    // on ties.
+    let owner = *required_parts()
+        .min_by_key(|member| member.ring.len - aligned_len)
+        .expect("cover sets require at least two members");
+
+    // Another member reads its component directly only where it and the owner both
+    // trust the position. Past the owner's trust, nothing tells where they hold its entity.
+    let damaged = pieces(aligned_len..owner.ring.len, trusts(), move |position| {
+        if position < owner.trust {
             trusting(range, position)
-        }) {
-            walks.push(Walk::Aligned {
-                range: range_index,
-                start: positions.start,
-                len: positions.len(),
-                captains,
-            });
+        } else {
+            1 << owner.child
         }
+    })
+    .map(move |(positions, captains)| Walk::Damaged {
+        range: range_index,
+        owner: owner.child,
+        start: positions.start,
+        len: positions.len(),
+        captains,
+    });
 
-        // A match of this range past the aligned prefix is in the damaged suffix of every
-        // required member. Walking one of them is enough: the shortest, the first in child order
-        // on ties.
-        let owner = required_parts()
-            .min_by_key(|member| member.ring.len - aligned_len)
-            .expect("cover sets require at least two members");
+    aligned.chain(damaged)
+}
 
-        // Another member reads its component directly only where it and the owner both
-        // trust the position. Past the owner's trust, nothing tells where they hold its entity.
-        for (positions, captains) in pieces(aligned_len..owner.ring.len, trusts(), |position| {
-            if position < owner.trust {
-                trusting(range, position)
-            } else {
-                1 << owner.child
-            }
-        }) {
-            walks.push(Walk::Damaged {
-                range: range_index,
-                owner: owner.child,
-                start: positions.start,
-                len: positions.len(),
-                captains,
-            });
-        }
-    }
+/// Returns the walks over the unevaluated regions of the members `required` flags,
+/// in emission order.
+///
+/// `members` lists every child taking part in a walk, in child order.
+fn unevaluated_walks(required: u32, members: &[Member]) -> impl Iterator<Item = Walk> {
+    let unevaluated_len = |member: &Member| member.len - member.unevaluated_start;
 
     // Each required member walks its unevaluated region. A walk rejects what the walks before
     // it covered, so later walks check more regions: the longest go first, in child order on ties.
-    let mut unevaluated: Vec<&Member> = members
-        .iter()
-        .filter(|member| required & (1 << member.child) != 0)
-        .collect();
-    unevaluated.sort_by_key(|member| Reverse(member.len - member.unevaluated_start));
+    // We pick the next one among those left each time, there's only a handful of them.
+    let mut left = required;
+    let ordered = core::iter::from_fn(move || {
+        // `min_by_key` keeps the first of equal keys, so ties go in child order.
+        let member = members
+            .iter()
+            .filter(|member| left & (1 << member.child) != 0)
+            .min_by_key(|&member| Reverse(unevaluated_len(member)))?;
 
-    for member in unevaluated {
-        let len = member.len - member.unevaluated_start;
+        left &= !(1 << member.child);
+        Some(member)
+    });
 
-        if len > 0 {
-            walks.push(Walk::Unevaluated {
-                owner: member.child,
-                start: member.unevaluated_start,
-                len,
-            });
-        }
-    }
-
-    walks
+    ordered
+        .filter(move |&member| unevaluated_len(member) > 0)
+        .map(move |member| Walk::Unevaluated {
+            owner: member.child,
+            start: member.unevaluated_start,
+            len: unevaluated_len(member),
+        })
 }
 
 /// Returns the members of `range` trusting logical position `position`, bit `i` for child `i`.
@@ -1038,32 +1054,36 @@ fn trusting(range: &CoverRange, position: usize) -> u32 {
 /// The captains can only change at one of `bounds`. Empty positions give no piece.
 fn pieces(
     positions: Range<usize>,
-    bounds: impl Iterator<Item = usize>,
+    bounds: impl Iterator<Item = usize> + Clone,
     captains_at: impl Fn(usize) -> u32,
-) -> Vec<(Range<usize>, u32)> {
-    let mut ends: Vec<usize> = bounds
-        .filter(|&bound| positions.start < bound && bound < positions.end)
-        .collect();
-    ends.push(positions.end);
-    ends.sort_unstable();
-    ends.dedup();
+) -> impl Iterator<Item = (Range<usize>, u32)> {
+    let end = positions.end;
+    let mut next = positions.start;
 
-    let mut pieces: Vec<(Range<usize>, u32)> = Vec::new();
-    let mut start = positions.start;
-    for end in ends {
-        if start == end {
-            continue;
+    // Bounds come unsorted, we look for the closest one each time instead of sorting them.
+    // Ranges have a handful of members, so a handful of bounds.
+    let next_bound = move |position: usize| {
+        bounds
+            .clone()
+            .filter(|&bound| position < bound)
+            .fold(end, usize::min)
+    };
+
+    core::iter::from_fn(move || {
+        if next >= end {
+            return None;
         }
 
+        let start = next;
         let captains = captains_at(start);
-        match pieces.last_mut() {
-            // A bound where nothing changes doesn't split anything.
-            Some((last, last_captains)) if *last_captains == captains => last.end = end,
-            _ => pieces.push((start..end, captains)),
+
+        // A bound where nothing changes doesn't split anything, the piece goes on past it.
+        let mut piece_end = next_bound(start);
+        while piece_end < end && captains_at(piece_end) == captains {
+            piece_end = next_bound(piece_end);
         }
 
-        start = end;
-    }
-
-    pieces
+        next = piece_end;
+        Some((start..piece_end, captains))
+    })
 }
