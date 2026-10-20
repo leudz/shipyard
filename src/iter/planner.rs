@@ -1,7 +1,8 @@
 //! Construction-only choice between an ordinary walk and walks over group ranges.
 //!
 //! While a query is built, each node reports what it knows about grouping in a
-//! [`ConstructionMetadata`], read from its storages while they're borrowed.
+//! [`ConstructionMetadata`]. A window's points to its storage's group metadata, nothing is copied:
+//! the storage stays borrowed while the query is built.
 //! It travels next to the node's entities, never inside them.\
 //! A `Mixed` hands its immediate children to [`select`], which ranks the ordinary captains
 //! and estimates its grouped [`Alternative`]s: walks over the ranges containing each set of
@@ -21,7 +22,7 @@ mod tests;
 use crate::component::Component;
 use crate::iter::mixed::NON_CAPTAIN_FACTOR;
 use crate::iter::{EntityCursor, RawEntityIdAccess, Shiperator};
-use crate::sparse_set::{Groups, Ring, SparseSet};
+use crate::sparse_set::{GroupRange, Groups, Ring, SparseSet};
 use crate::storage::StorageId;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
@@ -29,13 +30,16 @@ use alloc::vec::Vec;
 use core::cmp::Reverse;
 use core::fmt;
 use core::ops::Range;
+use core::ptr::NonNull;
 
 /// What a query node knows about grouping, reported by
 /// [`IntoShiperator::into_shiperator`](crate::iter::IntoShiperator::into_shiperator).
 ///
 /// Only shipyard reads it: a node's parent while building its own selection, then the query's
 /// root to pick its walk. The root drops it before building the iterator, iterators and
-/// [`IntoIterRef`](crate::iter::IntoIterRef) never keep it.
+/// [`IntoIterRef`](crate::iter::IntoIterRef) never keep it.\
+/// It points to the group metadata of the storages the node borrows, it's only read while
+/// they're borrowed.
 #[doc(hidden)]
 pub struct ConstructionMetadata(pub(crate) NodeMetadata);
 
@@ -61,15 +65,18 @@ impl ConstructionMetadata {
 
 /// What a query node knows about grouping, see [`ConstructionMetadata`].
 ///
-/// Every node reports one, so variants stay small: whatever only grouped storages need is boxed.
+/// Every node reports one, so variants stay small: a window's group metadata stays in its
+/// storage and whatever only grouped `Mixed`s need is boxed.\
+/// `W` is how a window's group metadata is reached: a [`WindowHandle`] while it travels from
+/// node to node, a borrowed [`WindowMetadata`] once its parent reads it, see [`Child::new`].
 #[derive(Clone)]
-pub(crate) enum NodeMetadata {
+pub(crate) enum NodeMetadata<W = WindowHandle> {
     /// Nothing that could help or prevent grouping.
     ///
     /// A window over a storage without group range or an entity slice.
     Ungrouped,
     /// A plain window over a storage holding group ranges.
-    Window(Box<WindowMetadata>),
+    Window(W),
     /// An `Optional`, `Not`, tracking filter or `Or`, or a query containing one.
     ///
     /// These queries keep ordinary selection all the way up to the root.
@@ -97,47 +104,92 @@ impl NodeMetadata {
     }
 
     /// Returns the metadata of a plain window over a storage of `len` components with `groups`.
+    ///
+    /// The returned metadata points to `groups`, see [`WindowHandle::get`].
     fn of_storage(groups: &Groups, len: usize) -> NodeMetadata {
         // Storages without group only pay this check.
         if !groups.has_ranges() {
             return NodeMetadata::Ungrouped;
         }
-        let Some(storage_id) = groups.storage_id else {
-            return NodeMetadata::Ungrouped;
-        };
-
-        let window = WindowMetadata {
-            storage_id,
-            len,
-            unevaluated_start: groups.unevaluated_start,
-            ranges: groups
-                .ranges
-                .iter()
-                .map(|range| RangeMetadata {
-                    group: range.group.clone(),
-                    ring: range.ring(),
-                    trust: range.trust,
-                })
-                .collect(),
-        };
-
-        // Walks are placed and estimated from these bounds without further checks,
-        // so a layout outside the storage stays ordinary instead of being trusted.
-        if !window.is_valid() {
+        if groups.storage_id.is_none() {
             return NodeMetadata::Ungrouped;
         }
 
-        NodeMetadata::Window(Box::new(window))
+        // Walks are placed and estimated from these bounds without further checks,
+        // so a layout outside the storage stays ordinary instead of being trusted.
+        if !is_valid(groups, len) {
+            return NodeMetadata::Ungrouped;
+        }
+
+        NodeMetadata::Window(WindowHandle {
+            groups: NonNull::from(groups),
+            len,
+        })
     }
 }
 
-/// Group metadata of a plain window's storage, copied while the storage is borrowed.
+/// Returns `true` when the ranges of `groups` tile the start of a storage of `len` components,
+/// each one trusting at most its length, followed by the ungrouped and unevaluated regions
+/// inside the storage.
+fn is_valid(groups: &Groups, len: usize) -> bool {
+    let mut grouped_end = 0usize;
+    for range in &groups.ranges {
+        if range.start != grouped_end || range.trust > range.len {
+            return false;
+        }
+
+        let Some(end) = grouped_end.checked_add(range.len) else {
+            return false;
+        };
+        grouped_end = end;
+    }
+
+    grouped_end <= groups.unevaluated_start && groups.unevaluated_start <= len
+}
+
+/// Where a plain window's storage keeps its group metadata.
+///
+/// Nothing ties a [`ConstructionMetadata`] to the borrow of the storage it was read from,
+/// so it holds a pointer. [`Child::new`] turns it back into a reference while the storage is
+/// still borrowed.
+#[derive(Clone, Copy)]
+pub(crate) struct WindowHandle {
+    /// The storage's group metadata, its layout checked when the handle was taken.
+    groups: NonNull<Groups>,
+    /// Number of components in the storage.
+    len: usize,
+}
+
+impl WindowHandle {
+    /// Returns the group metadata this handle points to.
+    ///
+    /// ### Safety
+    ///
+    /// The storage this handle was taken from must stay borrowed for `'m`, with its group
+    /// metadata unmodified and no exclusive reference to it created.
+    pub(crate) unsafe fn get<'m>(self) -> WindowMetadata<'m> {
+        // SAFE: Our caller keeps the storage borrowed for 'm, the pointer we took from its
+        // `Groups` stays valid and nothing modifies them meanwhile.
+        let groups = unsafe { self.groups.as_ref() };
+
+        WindowMetadata {
+            storage_id: groups
+                .storage_id
+                .expect("handles are only taken for storages recording their id"),
+            len: self.len,
+            unevaluated_start: groups.unevaluated_start,
+            ranges: &groups.ranges,
+        }
+    }
+}
+
+/// Group metadata of a plain window's storage, borrowed while the query is built.
 ///
 /// ```text
 /// [ Group range(s) ][ Ungrouped ][ Unevaluated ]
 /// ```
-#[derive(Clone, Debug)]
-pub(crate) struct WindowMetadata {
+#[derive(Clone, Copy)]
+pub(crate) struct WindowMetadata<'m> {
     /// Id of the storage, as its own group metadata records it.
     ///
     /// Thread-local storages have ids distinct from their `Send + Sync` counterparts.
@@ -147,41 +199,13 @@ pub(crate) struct WindowMetadata {
     /// Physical index where the unevaluated region starts.
     pub(crate) unevaluated_start: usize,
     /// Every range of the storage, in physical order.
-    pub(crate) ranges: Vec<RangeMetadata>,
-}
-
-/// One range of a plain window's storage.
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub(crate) struct RangeMetadata {
-    /// Sorted member ids of the range's group, compared by pointer.
-    pub(crate) group: Arc<[StorageId]>,
-    pub(crate) ring: Ring,
-    /// Length of the range's logical prefix unchanged since the last regroup.
-    pub(crate) trust: usize,
-}
-
-impl WindowMetadata {
-    /// Returns `true` when the ranges tile the start of the storage, each one trusting at most
-    /// its length, followed by the ungrouped and unevaluated regions inside the storage.
-    fn is_valid(&self) -> bool {
-        let mut grouped_end = 0usize;
-        for range in &self.ranges {
-            if range.ring.start != grouped_end || range.trust > range.ring.len {
-                return false;
-            }
-
-            let Some(end) = grouped_end.checked_add(range.ring.len) else {
-                return false;
-            };
-            grouped_end = end;
-        }
-
-        grouped_end <= self.unevaluated_start && self.unevaluated_start <= self.len
-    }
+    pub(crate) ranges: &'m [GroupRange],
 }
 
 /// What the selector needs to know about an immediate child of a `Mixed`.
-pub(crate) struct Child {
+///
+/// A window child borrows its storage's group metadata for `'m`.
+pub(crate) struct Child<'m> {
     pub(crate) can_captain: bool,
     pub(crate) can_sailor: bool,
     /// The child's `Shiperator::sail_time`, it ranks ordinary captains.
@@ -193,33 +217,54 @@ pub(crate) struct Child {
     /// For a window over a grouped storage, every entity of that storage.\
     /// Grouped walks take their segments from it.
     pub(crate) entities: EntityCursor,
-    pub(crate) metadata: NodeMetadata,
+    pub(crate) metadata: NodeMetadata<WindowMetadata<'m>>,
 }
 
-impl Child {
+impl<'m> Child<'m> {
     /// Describes a child from its capabilities, sail time, `entities` and `metadata`.
     ///
     /// `entities` and `metadata` must come from the same `into_shiperator` call.
+    ///
+    /// ### Safety
+    ///
+    /// The storages that `into_shiperator` call borrowed must stay borrowed for `'m`, with
+    /// their group metadata unmodified and no exclusive reference to it created.
     #[inline]
-    pub(crate) fn new(
+    pub(crate) unsafe fn new(
         can_captain: bool,
         can_sailor: bool,
         sail_time: usize,
         entities: &RawEntityIdAccess,
         metadata: ConstructionMetadata,
-    ) -> Child {
+    ) -> Child<'m> {
+        let metadata = match metadata.0 {
+            NodeMetadata::Ungrouped => NodeMetadata::Ungrouped,
+            // SAFE: A window's handle was taken from the storage it borrows, our caller keeps
+            // that storage borrowed and its group metadata unmodified for 'm.
+            NodeMetadata::Window(handle) => NodeMetadata::Window(unsafe { handle.get() }),
+            NodeMetadata::Filtered => NodeMetadata::Filtered,
+            NodeMetadata::Mixed {
+                lookups,
+                ordinary_work,
+            } => NodeMetadata::Mixed {
+                lookups,
+                ordinary_work,
+            },
+            NodeMetadata::GroupedMixed(selection) => NodeMetadata::GroupedMixed(selection),
+        };
+
         Child {
             can_captain,
             can_sailor,
             sail_time,
             candidates: entities.candidate_count(),
             entities: entities.cursor,
-            metadata: metadata.0,
+            metadata,
         }
     }
 
     /// Returns the group metadata of a plain window child over a grouped storage.
-    fn window(&self) -> Option<&WindowMetadata> {
+    fn window(&self) -> Option<&WindowMetadata<'m>> {
         match &self.metadata {
             NodeMetadata::Window(window) => Some(window),
             _ => None,
@@ -459,7 +504,7 @@ fn lookup_work(candidates: usize, lookups: usize) -> Option<u64> {
 /// `children` must have at least one child able to captain and at most one unable to sail,
 /// constructors reject other queries.\
 /// The alternatives nested `Mixed` children reported move into the returned selection.
-pub(crate) fn select(children: &mut [Child]) -> Selection {
+pub(crate) fn select(children: &mut [Child<'_>]) -> Selection {
     let lookups = children.iter().map(Child::lookups).sum();
     let ordinary = ordinary_candidate(children, lookups);
 
@@ -503,7 +548,12 @@ impl Selection {
 
     /// Returns the metadata of the `Mixed` this selection is about, for its parent.
     pub(crate) fn into_metadata(self) -> ConstructionMetadata {
-        let metadata = if self.filtered {
+        ConstructionMetadata(self.into_node())
+    }
+
+    /// Returns the metadata of the `Mixed` this selection is about, never a window's.
+    fn into_node<W>(self) -> NodeMetadata<W> {
+        if self.filtered {
             NodeMetadata::Filtered
         } else if self.alternatives.is_empty() {
             // The parent only needs our ordinary estimate, it doesn't have to be boxed.
@@ -513,9 +563,7 @@ impl Selection {
             }
         } else {
             NodeMetadata::GroupedMixed(Box::new(self))
-        };
-
-        ConstructionMetadata(metadata)
+        }
     }
 }
 
@@ -549,7 +597,7 @@ pub(crate) fn install_winner<S: Shiperator>(
 }
 
 /// Returns the ordinary walk of `children`, which read `lookups` components as sailors.
-fn ordinary_candidate(children: &[Child], lookups: usize) -> OrdinaryCandidate {
+fn ordinary_candidate(children: &[Child<'_>], lookups: usize) -> OrdinaryCandidate {
     let captain = ordinary_captain(children);
     let child = &children[captain];
 
@@ -565,7 +613,7 @@ fn ordinary_candidate(children: &[Child], lookups: usize) -> OrdinaryCandidate {
 }
 
 /// Returns the position of the ordinary captain among `children`.
-fn ordinary_captain(children: &[Child]) -> usize {
+fn ordinary_captain(children: &[Child<'_>]) -> usize {
     // A child that can't sail has to drive.
     if let Some(captain) = children.iter().position(|child| !child.can_sailor) {
         return captain;
@@ -586,7 +634,7 @@ fn ordinary_captain(children: &[Child]) -> usize {
 /// Alternatives are ordered by the first child they involve: a cover set by its first
 /// required member, a nested `Mixed`'s alternatives by its position.\
 /// Alternatives whose estimate doesn't fit in a `u64` can't beat anything and are left out.
-fn alternatives(children: &mut [Child], lookups: usize) -> Vec<Alternative> {
+fn alternatives(children: &mut [Child<'_>], lookups: usize) -> Vec<Alternative> {
     let local: Vec<GroupedCandidate> = cover_sets(children)
         .into_iter()
         .map(|set| GroupedCandidate::new(children, set))
@@ -663,13 +711,13 @@ pub(crate) struct RangeMember {
 /// an ABC union, not in AB or AC. So an `(A, B, C)` query covers ABC, whether or not the
 /// union exists yet, and doesn't walk AB or AC.\
 /// Disjoint groups give distinct sets, they compete as distinct alternatives.
-pub(crate) fn cover_sets(children: &[Child]) -> Vec<CoverSet> {
+pub(crate) fn cover_sets(children: &[Child<'_>]) -> Vec<CoverSet> {
     // Each fully held group as the children holding its members, deduplicated by pointer.
     // Every member lists the group, the first one we meet is enough.
     let mut seen: Vec<&Arc<[StorageId]>> = Vec::new();
     let mut held: Vec<u32> = Vec::new();
     for window in children.iter().filter_map(Child::window) {
-        for range in &window.ranges {
+        for range in window.ranges {
             if seen.iter().any(|group| Arc::ptr_eq(group, &range.group)) {
                 continue;
             }
@@ -704,7 +752,7 @@ pub(crate) fn cover_sets(children: &[Child]) -> Vec<CoverSet> {
 
 /// Returns the children holding `group`'s members, bit `i` for child `i`,
 /// `None` unless each member is held by exactly one window child.
-fn member_mask(children: &[Child], group: &[StorageId]) -> Option<u32> {
+fn member_mask(children: &[Child<'_>], group: &[StorageId]) -> Option<u32> {
     group.iter().try_fold(0, |mask, &storage_id| {
         let child = window_child(children, storage_id)?;
 
@@ -717,7 +765,7 @@ fn member_mask(children: &[Child], group: &[StorageId]) -> Option<u32> {
 ///
 /// A storage held by several children, like A in `(&a, &a, &b)`, is ambiguous and we don't
 /// pick which child would drive.
-fn window_child(children: &[Child], storage_id: StorageId) -> Option<usize> {
+fn window_child(children: &[Child<'_>], storage_id: StorageId) -> Option<usize> {
     let mut holders = children
         .iter()
         .enumerate()
@@ -733,7 +781,7 @@ fn window_child(children: &[Child], storage_id: StorageId) -> Option<usize> {
 }
 
 /// Returns every range whose group contains all members `required` flags.
-fn containing_ranges(children: &[Child], required: u32) -> Vec<CoverRange> {
+fn containing_ranges(children: &[Child<'_>], required: u32) -> Vec<CoverRange> {
     let storage_of = |child: usize| {
         children[child]
             .window()
@@ -769,7 +817,7 @@ fn containing_ranges(children: &[Child], required: u32) -> Vec<CoverRange> {
 }
 
 /// Returns each child holding a member of `group` alone, in child order, with its part of `group`'s range.
-fn range_members(children: &[Child], group: &Arc<[StorageId]>) -> Vec<RangeMember> {
+fn range_members(children: &[Child<'_>], group: &Arc<[StorageId]>) -> Vec<RangeMember> {
     let mut members: Vec<RangeMember> = group
         .iter()
         .filter_map(|&storage_id| window_child(children, storage_id))
@@ -784,7 +832,7 @@ fn range_members(children: &[Child], group: &Arc<[StorageId]>) -> Vec<RangeMembe
 
             RangeMember {
                 child,
-                ring: range.ring,
+                ring: range.ring(),
                 trust: range.trust,
             }
         })
@@ -857,7 +905,7 @@ impl Alternative {
 
 impl GroupedCandidate {
     /// Returns the walks covering `set`'s required members, for a `Mixed` with these `children`.
-    fn new(children: &[Child], set: CoverSet) -> GroupedCandidate {
+    fn new(children: &[Child<'_>], set: CoverSet) -> GroupedCandidate {
         // Required members walk their unevaluated regions, any member of a range can drive part of it.
         let member_mask = set
             .ranges

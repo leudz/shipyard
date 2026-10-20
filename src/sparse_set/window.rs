@@ -4,7 +4,7 @@ mod tests;
 use crate::atomic_refcell::{ExclusiveBorrow, SharedBorrow};
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::iter::{RawEntityIdAccess, SegmentEntry, SegmentRow};
+use crate::iter::{ConstructionMetadata, RawEntityIdAccess, SegmentEntry, SegmentRow};
 use crate::sparse_set::sparse_array::Page;
 use crate::tracking::{Tracking, TrackingTimestamp};
 use crate::views::{View, ViewMut};
@@ -342,10 +342,17 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
         }
     }
 
+    /// Returns the window over `view`'s storage, the guards keeping it borrowed and the storage's
+    /// construction metadata.
     #[inline]
     pub(crate) fn new_owned(
         view: ViewMut<'_, T, Track>,
-    ) -> (Self, Option<SharedBorrow<'_>>, ExclusiveBorrow<'_>) {
+    ) -> (
+        Self,
+        Option<SharedBorrow<'_>>,
+        ExclusiveBorrow<'_>,
+        ConstructionMetadata,
+    ) {
         let ViewMut {
             sparse_set,
             all_borrow,
@@ -360,25 +367,27 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
         let sparse: *mut Option<Box<Page>> = sparse_set.sparse.as_mut_ptr();
         let sparse = sparse as *mut *mut EntityId;
 
-        (
-            FullRawWindowMut {
-                sparse,
-                sparse_len,
-                dense: NonNull::new(sparse_set.dense.as_mut_ptr().cast()).unwrap(),
-                dense_len: sparse_set.dense.len(),
-                segment_start: 0,
-                data: sparse_set.data.as_mut_ptr(),
-                insertion_data: sparse_set.insertion_data.as_ptr(),
-                modification_data: sparse_set.modification_data.as_mut_ptr(),
-                last_insertion,
-                last_modification,
-                current,
-                is_tracking_modification: sparse_set.is_tracking_modification(),
-                _phantom: PhantomData,
-            },
-            all_borrow,
-            borrow,
-        )
+        let window = FullRawWindowMut {
+            sparse,
+            sparse_len,
+            dense: NonNull::new(sparse_set.dense.as_mut_ptr().cast()).unwrap(),
+            dense_len: sparse_set.dense.len(),
+            segment_start: 0,
+            data: sparse_set.data.as_mut_ptr(),
+            insertion_data: sparse_set.insertion_data.as_ptr(),
+            modification_data: sparse_set.modification_data.as_mut_ptr(),
+            last_insertion,
+            last_modification,
+            current,
+            is_tracking_modification: sparse_set.is_tracking_modification(),
+            _phantom: PhantomData,
+        };
+        // The metadata points to the storage, our caller can't take it before handing us the
+        // view: moving it in reborrows the storage exclusively. The window only points into
+        // the storage's allocations.
+        let metadata = ConstructionMetadata::window(sparse_set);
+
+        (window, all_borrow, borrow, metadata)
     }
 
     #[inline]

@@ -144,7 +144,9 @@ where
 /// The [`ConstructionMetadata`] is opaque, only shipyard reads it. While a query is built, each
 /// tuple reads its children's to rank their walks, then the query's root reads its own to pick
 /// one. The root drops it before building the iterator: it doesn't outlive the
-/// [`iter`](IntoIter::iter) call and iterators never hold it.
+/// [`iter`](IntoIter::iter) call and iterators never hold it.\
+/// It points to the group metadata of the storages the views borrow, without borrowing them
+/// itself. The Shiperator returned with it keeps them borrowed.
 ///
 /// ### Safety
 ///
@@ -165,6 +167,9 @@ where
 /// - The storages and the entities the access points to stay allocated and unmodified as long
 ///   as the Shiperator, its clones, the iterators built from them and the items they yield are
 ///   alive. Holding the borrows they come from for the Shiperator's lifetime does it.
+/// - The group metadata the [`ConstructionMetadata`] points to stays unmodified as long as the
+///   Shiperator is alive, and no exclusive reference to it is created after the metadata is
+///   returned. Returning a view's own metadata, without touching its storage afterwards, does it.
 /// - Two candidates the traversal accepts, across follow-up segments and split halves, never
 ///   yield overlapping mutable outputs. A clone resolves candidates exactly like its original
 ///   and each candidate is handed to a single one of them, cloning doesn't allow a mutable
@@ -254,10 +259,11 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 
     #[inline]
     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
-        // `new` takes the view, we read its storage's metadata first.
-        let metadata = ConstructionMetadata::window(self.sparse_set);
         let window = FullRawWindowMut::new(self);
         let entities = window.entity_iter();
+        // The metadata points to the storage, we take it once `new` is done reborrowing the
+        // storage exclusively. The window only points into the storage's allocations.
+        let metadata = ConstructionMetadata::window(self.sparse_set);
 
         (window, entities, metadata)
     }
@@ -446,14 +452,20 @@ macro_rules! impl_into_shiperator_tuple {
                     panic!("Unable to build a Shiperator: Multiple views are unable to be Sailors.")
                 }
 
+                // SAFE: Each child's metadata comes from its own `into_shiperator` call, along with
+                // the Shiperator we keep in `shiperators`, then in `mixed`, and return.
+                // `IntoShiperator`'s contract keeps the storages that call borrowed, with their
+                // group metadata unmodified and readable, as long as that Shiperator lives.
                 let mut children = [$(
-                    Child::new(
-                        can_captains.$index,
-                        can_sailors.$index,
-                        shiperators.$index.0.sail_time(),
-                        &shiperators.$index.1,
-                        shiperators.$index.2,
-                    ),
+                    unsafe {
+                        Child::new(
+                            can_captains.$index,
+                            can_sailors.$index,
+                            shiperators.$index.0.sail_time(),
+                            &shiperators.$index.1,
+                            shiperators.$index.2,
+                        )
+                    },
                 )+];
                 let selection = planner::select(&mut children);
 

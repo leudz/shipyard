@@ -16,6 +16,7 @@ use crate::iter::{
     IntoIter, IntoIterRef, IntoShiperator, IterComponent, Mixed, OneOfTwo, RawEntityIdAccess,
     Shiper, Shiperator, is_exact_traversal,
 };
+use crate::iter_component::into_iter;
 use crate::sparse_set::FullRawWindow;
 use crate::track;
 use crate::views::{AllStoragesView, View, ViewMut};
@@ -797,4 +798,62 @@ fn split_remaining_drop_either() {
         assert_eq!(&survivor, expected, "drop left {drop_left}");
         assert!(plan.upgrade().is_none());
     }
+}
+
+/// Asserts that an owned query whose second member fails to borrow releases the first member's
+/// exclusive borrow along with its construction metadata, and that the next query borrows the
+/// storage again and reads its group metadata to place every grouped walk.
+#[test]
+fn owned_borrow_error() {
+    let (world, e) = partial_world();
+
+    {
+        let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
+        let current = all_storages.get_current();
+
+        {
+            let _b = all_storages.borrow::<View<'_, B>>().unwrap();
+            let query = into_iter::<(&mut A, &mut B)>(&all_storages, None, current);
+            assert!(query.is_err());
+        }
+
+        let mut iter = grouped_owned::<(&mut A, &mut B)>(&all_storages);
+        let items: Vec<(&mut A, &mut B)> = iter.iter().collect();
+        assert_eq!(items.len(), e.len());
+        for (a, b) in items {
+            a.0 += 100;
+            b.0 += 100;
+        }
+    }
+
+    assert_written(&world, &e);
+}
+
+/// Asserts that `World::iter` over exclusive views of a fully grouped pair picks its aligned walk
+/// on its own, reading both storages' group metadata after borrowing them exclusively, and that
+/// its mutable items can all be held then written.
+#[test]
+fn owned_selected_mut() {
+    let mut world = World::new_for_test();
+    let e: Vec<EntityId> = (0..3)
+        .map(|i| world.add_entity((A(i), B(10 + i))))
+        .collect();
+    world.add_entity(A(50));
+    world.group::<(A, B)>();
+
+    {
+        let mut iter = world.iter::<(&mut A, &mut B)>();
+        let iter = iter.iter();
+        // B's 3 candidates looking A up cost more than the 3 aligned ones both read directly.
+        assert_eq!(iter.shiperator.captain_mask, 0b11);
+
+        let items: Vec<(&mut A, &mut B)> = iter.collect();
+        assert_eq!(items.len(), e.len());
+        for (a, b) in items {
+            a.0 += 100;
+            b.0 += 100;
+        }
+    }
+
+    assert_written(&world, &e);
 }

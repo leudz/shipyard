@@ -1,4 +1,5 @@
 use super::super::*;
+use super::Storage;
 use crate::sparse_set::GroupRange;
 use alloc::vec;
 
@@ -6,62 +7,34 @@ fn group() -> Arc<[StorageId]> {
     Arc::from([StorageId::Custom(0), StorageId::Custom(1)])
 }
 
-/// A window child holding the `member`th member of `group`,
+/// The storage of the `member`th member of `group`,
 /// with a fully trusted range of `range_len` in a storage of `len` components.
-fn member(group: &Arc<[StorageId]>, member: usize, range_len: usize, len: usize) -> Child {
-    Child {
-        can_captain: true,
-        can_sailor: true,
-        sail_time: len,
-        candidates: Some(len),
-        entities: EntityCursor::empty(),
-        metadata: NodeMetadata::Window(Box::new(WindowMetadata {
-            storage_id: group[member],
-            len,
-            unevaluated_start: range_len,
-            ranges: vec![RangeMetadata {
-                group: group.clone(),
-                ring: Ring {
-                    start: 0,
-                    len: range_len,
-                    shift: 0,
-                },
-                trust: range_len,
-            }],
-        })),
+fn member(group: &Arc<[StorageId]>, member: usize, range_len: usize, len: usize) -> Storage {
+    Storage {
+        id: group[member],
+        len,
+        unevaluated_start: range_len,
+        ranges: vec![group_range(group, 0, range_len, 0, range_len)],
     }
 }
 
-/// Returns the metadata of a child made by `member`.
-fn window_mut(child: &mut Child) -> &mut WindowMetadata {
-    match &mut child.metadata {
-        NodeMetadata::Window(window) => window,
-        _ => unreachable!(),
-    }
-}
-
-/// Lays the storage of a child made by `member` out with an unrotated range of `range_len`
+/// Lays a storage made by `member` out with an unrotated range of `range_len`
 /// trusting `trust`, then the unevaluated region from `unevaluated_start` to `len`.
 fn set_regions(
-    child: &mut Child,
+    storage: &mut Storage,
     range_len: usize,
     trust: usize,
     unevaluated_start: usize,
     len: usize,
 ) {
-    let window = window_mut(child);
-    window.ranges[0].ring = Ring {
-        start: 0,
-        len: range_len,
-        shift: 0,
-    };
-    window.ranges[0].trust = trust;
-    window.unevaluated_start = unevaluated_start;
-    window.len = len;
+    let range = &mut storage.ranges[0];
+    (range.len, range.trust) = (range_len, trust);
+    storage.unevaluated_start = unevaluated_start;
+    storage.len = len;
 }
 
 /// A window child of `len` components without group metadata.
-fn ungrouped(len: usize) -> Child {
+fn ungrouped(len: usize) -> Child<'static> {
     Child {
         can_captain: true,
         can_sailor: true,
@@ -97,11 +70,11 @@ fn walk_overflow() {
 #[test]
 fn huge_grouped() {
     let group = group();
-    let mut children = [
+    let (a, b) = (
         member(&group, 0, usize::MAX / 2, usize::MAX),
         member(&group, 1, usize::MAX / 2, usize::MAX),
-        ungrouped(5),
-    ];
+    );
+    let mut children = [a.child(), b.child(), ungrouped(5)];
 
     let selection = select(&mut children);
 
@@ -120,7 +93,7 @@ fn huge_unevaluated() {
     let a = member(&group, 0, 3, usize::MAX);
     let b = member(&group, 1, 3, 3);
 
-    assert!(select(&mut [a, b]).alternatives.is_empty());
+    assert!(select(&mut [a.child(), b.child()]).alternatives.is_empty());
 }
 
 /// Asserts that an ordinary walk whose estimate doesn't fit in a `u64` still beats
@@ -131,11 +104,8 @@ fn huge_ordinary() {
     // The smallest sail time drives, but its follow-ups overflow the candidate count.
     let mut overflowing = ungrouped(1);
     overflowing.candidates = None;
-    let mut children = [
-        overflowing,
-        member(&group, 0, 3, 3),
-        member(&group, 1, 3, 3),
-    ];
+    let (a, b) = (member(&group, 0, 3, 3), member(&group, 1, 3, 3));
+    let mut children = [overflowing, a.child(), b.child()];
 
     let selection = select(&mut children);
 
@@ -150,11 +120,8 @@ fn huge_ordinary() {
 #[test]
 fn aligned_recipe() {
     let group = group();
-    let mut children = [
-        member(&group, 0, 4, 4),
-        member(&group, 1, 4, 4),
-        ungrouped(9),
-    ];
+    let (a, b) = (member(&group, 0, 4, 4), member(&group, 1, 4, 4));
+    let mut children = [a.child(), b.child(), ungrouped(9)];
 
     let selection = select(&mut children);
     let alternative = selection.cheapest().unwrap();
@@ -183,7 +150,7 @@ fn damaged_recipe() {
     set_regions(&mut a, 6, 2, 7, 9);
     set_regions(&mut b, 5, 3, 6, 12);
 
-    let selection = select(&mut [a, b]);
+    let selection = select(&mut [a.child(), b.child()]);
     let alternative = selection.cheapest().unwrap();
 
     assert_eq!(
@@ -226,10 +193,10 @@ fn recipe_ties() {
     let group = group();
     let mut a = member(&group, 0, 4, 6);
     let mut b = member(&group, 1, 4, 6);
-    window_mut(&mut a).ranges[0].trust = 1;
-    window_mut(&mut b).ranges[0].trust = 1;
+    a.ranges[0].trust = 1;
+    b.ranges[0].trust = 1;
 
-    let selection = select(&mut [a, b]);
+    let selection = select(&mut [a.child(), b.child()]);
 
     assert_eq!(
         selection.cheapest().unwrap().group().walks,
@@ -288,9 +255,11 @@ fn storage_groups(ranges: Vec<GroupRange>, unevaluated_start: usize) -> Groups {
 }
 
 /// Returns the window metadata of a storage of `len` components with `groups`.
-fn metadata(groups: &Groups, len: usize) -> Option<WindowMetadata> {
+fn metadata(groups: &Groups, len: usize) -> Option<WindowMetadata<'_>> {
     match NodeMetadata::of_storage(groups, len) {
-        NodeMetadata::Window(window) => Some(*window),
+        // SAFE: The handle points to `groups`, borrowed for as long as the returned metadata
+        // and unmodified meanwhile.
+        NodeMetadata::Window(handle) => Some(unsafe { handle.get() }),
         _ => None,
     }
 }
@@ -333,7 +302,7 @@ fn metadata_ranges() {
     let rings: Vec<(Ring, usize)> = window
         .ranges
         .iter()
-        .map(|range| (range.ring, range.trust))
+        .map(|range| (range.ring(), range.trust))
         .collect();
     assert_eq!(
         rings,
@@ -389,7 +358,7 @@ fn metadata_reset() {
         window
             .ranges
             .iter()
-            .all(|range| range.ring.start == 0 && range.ring.len == 0 && range.trust == 0)
+            .all(|range| range.start == 0 && range.len == 0 && range.trust == 0)
     );
 }
 
@@ -437,7 +406,8 @@ fn forced_captain() {
     let group = group();
     let mut entities = ungrouped(100);
     entities.can_sailor = false;
-    let mut children = [member(&group, 0, 4, 4), member(&group, 1, 4, 4), entities];
+    let (a, b) = (member(&group, 0, 4, 4), member(&group, 1, 4, 4));
+    let mut children = [a.child(), b.child(), entities];
 
     let selection = select(&mut children);
 
@@ -447,7 +417,12 @@ fn forced_captain() {
 
 /// A nested `Mixed` child of `lookups` windows whose ordinary walk drives `candidates`
 /// candidates for `work`, reporting `alternatives` as `(candidates, work)`.
-fn nested(candidates: usize, work: u64, lookups: usize, alternatives: &[(usize, u64)]) -> Child {
+fn nested(
+    candidates: usize,
+    work: u64,
+    lookups: usize,
+    alternatives: &[(usize, u64)],
+) -> Child<'static> {
     let alternatives = alternatives
         .iter()
         .map(|&(candidates, work)| Alternative {
@@ -478,8 +453,7 @@ fn nested(candidates: usize, work: u64, lookups: usize, alternatives: &[(usize, 
             lookups,
             filtered: false,
         }
-        .into_metadata()
-        .0,
+        .into_node(),
     }
 }
 
@@ -552,7 +526,7 @@ fn two_levels() {
 
     let mut root_children = [
         Child {
-            metadata: middle.into_metadata().0,
+            metadata: middle.into_node(),
             ..ungrouped(20)
         },
         ungrouped(40),

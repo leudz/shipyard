@@ -1,4 +1,6 @@
 use super::super::*;
+use super::{Storage, children};
+use crate::sparse_set::GroupRange;
 
 const A: u64 = 0;
 const B: u64 = 1;
@@ -13,47 +15,27 @@ fn group(ids: &[u64]) -> Arc<[StorageId]> {
     Arc::from(ids)
 }
 
-/// A window child over storage `storage` holding a range for each of `groups`,
+/// Storage `storage` holding a range for each of `groups`,
 /// back to back, each with 2 fully trusted components.
-fn window(storage: u64, groups: &[&Arc<[StorageId]>]) -> Child {
-    let ranges: Vec<RangeMetadata> = groups
-        .iter()
-        .enumerate()
-        .map(|(position, &group)| RangeMetadata {
-            group: group.clone(),
-            ring: Ring {
-                start: position * 2,
-                len: 2,
-                shift: 0,
-            },
-            trust: 2,
-        })
-        .collect();
-    let len = ranges.len() * 2;
+fn window(storage: u64, groups: &[&Arc<[StorageId]>]) -> Storage {
+    let ranges: Vec<(&Arc<[StorageId]>, usize, usize)> =
+        groups.iter().map(|&group| (group, 2, 2)).collect();
 
-    Child {
-        can_captain: true,
-        can_sailor: true,
-        sail_time: len,
-        candidates: Some(len),
-        entities: EntityCursor::empty(),
-        metadata: NodeMetadata::Window(Box::new(WindowMetadata {
-            storage_id: StorageId::Custom(storage),
-            len,
-            unevaluated_start: len,
-            ranges,
-        })),
-    }
+    window_with(storage, &ranges, 0)
 }
 
 /// A nested `Mixed` child, it never holds group members of its parent.
-fn nested() -> Child {
+fn nested() -> Child<'static> {
     Child {
+        can_captain: true,
+        can_sailor: true,
+        sail_time: 0,
+        candidates: Some(0),
+        entities: EntityCursor::empty(),
         metadata: NodeMetadata::Mixed {
             lookups: 1,
             ordinary_work: Some(4),
         },
-        ..window(9, &[])
     }
 }
 
@@ -72,7 +54,8 @@ fn range_children(range: &CoverRange) -> Vec<usize> {
 #[test]
 fn absent_union() {
     let (ab, ac) = (group(&[A, B]), group(&[A, C]));
-    let children = [window(A, &[&ab, &ac]), window(B, &[&ab]), window(C, &[&ac])];
+    let storages = [window(A, &[&ab, &ac]), window(B, &[&ab]), window(C, &[&ac])];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -86,11 +69,12 @@ fn absent_union() {
 #[test]
 fn union_only() {
     let (ab, ac, abc) = (group(&[A, B]), group(&[A, C]), group(&[A, B, C]));
-    let children = [
+    let storages = [
         window(A, &[&ab, &ac, &abc]),
         window(B, &[&ab, &abc]),
         window(C, &[&ac, &abc]),
     ];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -106,7 +90,8 @@ fn union_only() {
 #[test]
 fn projection() {
     let (ab, ac, abc) = (group(&[A, B]), group(&[A, C]), group(&[A, B, C]));
-    let children = [window(A, &[&ab, &ac, &abc]), window(B, &[&ab, &abc])];
+    let storages = [window(A, &[&ab, &ac, &abc]), window(B, &[&ab, &abc])];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -123,7 +108,8 @@ fn projection() {
 #[test]
 fn larger_only() {
     let abc = group(&[A, B, C]);
-    let children = [window(A, &[&abc]), window(B, &[&abc])];
+    let storages = [window(A, &[&abc]), window(B, &[&abc])];
+    let children = children(&storages);
 
     assert!(cover_sets(&children).is_empty());
 }
@@ -132,12 +118,13 @@ fn larger_only() {
 #[test]
 fn disjoint() {
     let (ab, cd) = (group(&[A, B]), group(&[C, D]));
-    let children = [
+    let storages = [
         window(C, &[&cd]),
         window(D, &[&cd]),
         window(A, &[&ab]),
         window(B, &[&ab]),
     ];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -152,11 +139,12 @@ fn disjoint() {
 #[test]
 fn extra_member() {
     let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
-    let children = [
+    let storages = [
         window(A, &[&ab, &acd, &abcd]),
         window(B, &[&ab, &abcd]),
         window(C, &[&acd, &abcd]),
     ];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -173,12 +161,13 @@ fn extra_member() {
 #[test]
 fn transitive() {
     let (ab, bc, cd) = (group(&[A, B]), group(&[B, C]), group(&[C, D]));
-    let children = [
+    let storages = [
         window(A, &[&ab]),
         window(B, &[&ab, &bc]),
         window(C, &[&bc, &cd]),
         window(D, &[&cd]),
     ];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -192,11 +181,12 @@ fn transitive() {
 #[test]
 fn subset() {
     let (ab, abc) = (group(&[A, B]), group(&[A, B, C]));
-    let children = [
+    let storages = [
         window(A, &[&ab, &abc]),
         window(B, &[&ab, &abc]),
         window(C, &[&abc]),
     ];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -211,7 +201,8 @@ fn subset() {
 #[test]
 fn ambiguous_required() {
     let ab = group(&[A, B]);
-    let children = [window(A, &[&ab]), window(A, &[&ab]), window(B, &[&ab])];
+    let storages = [window(A, &[&ab]), window(A, &[&ab]), window(B, &[&ab])];
+    let children = children(&storages);
 
     assert!(cover_sets(&children).is_empty());
 }
@@ -220,12 +211,13 @@ fn ambiguous_required() {
 #[test]
 fn ambiguous_extra() {
     let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
-    let children = [
+    let storages = [
         window(A, &[&ab, &acd, &abcd]),
         window(B, &[&ab, &abcd]),
         window(C, &[&acd, &abcd]),
         window(C, &[&acd, &abcd]),
     ];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -238,7 +230,8 @@ fn ambiguous_extra() {
 #[test]
 fn nested_boundary() {
     let ab = group(&[A, B]);
-    let children = [window(A, &[&ab]), nested()];
+    let a = window(A, &[&ab]);
+    let children = [a.child(), nested()];
 
     assert!(cover_sets(&children).is_empty());
 }
@@ -249,11 +242,10 @@ fn nested_boundary() {
 fn member_parts() {
     let ab = group(&[A, B]);
     let mut a = window(A, &[&ab]);
-    if let NodeMetadata::Window(window) = &mut a.metadata {
-        window.ranges[0].ring.shift = -1;
-        window.ranges[0].trust = 1;
-    }
-    let children = [window(B, &[&ab]), a];
+    a.ranges[0].shift = -1;
+    a.ranges[0].trust = 1;
+    let storages = [window(B, &[&ab]), a];
+    let children = children(&storages);
 
     let sets = cover_sets(&children);
 
@@ -283,40 +275,42 @@ fn member_parts() {
     );
 }
 
-/// A window child over storage `storage` holding a range for each `(group, len, trust)`,
+/// Storage `storage` holding a range for each `(group, len, trust)`,
 /// back to back and unrotated, followed by `unevaluated` unevaluated components.
 fn window_with(
     storage: u64,
     ranges: &[(&Arc<[StorageId]>, usize, usize)],
     unevaluated: usize,
-) -> Child {
-    let mut child = window(storage, &[]);
-    let NodeMetadata::Window(window) = &mut child.metadata else {
-        unreachable!();
-    };
-
-    for &(group, len, trust) in ranges {
-        window.ranges.push(RangeMetadata {
-            group: group.clone(),
-            ring: Ring {
-                start: window.len,
-                len,
+) -> Storage {
+    let mut len = 0;
+    let ranges: Vec<GroupRange> = ranges
+        .iter()
+        .map(|&(group, range_len, trust)| {
+            let range = GroupRange {
+                group: group.clone(),
+                start: len,
+                len: range_len,
                 shift: 0,
-            },
-            trust,
-        });
-        window.len += len;
-    }
-    window.unevaluated_start = window.len;
-    window.len += unevaluated;
-    child.candidates = Some(window.len);
-    child.sail_time = window.len;
+                trust,
+            };
+            len += range_len;
 
-    child
+            range
+        })
+        .collect();
+    let unevaluated_start = len;
+    len += unevaluated;
+
+    Storage {
+        id: StorageId::Custom(storage),
+        len,
+        unevaluated_start,
+        ranges,
+    }
 }
 
 /// Returns the walks of the first cover set of `children`, placeable or not.
-fn first_candidate(children: &[Child]) -> GroupedCandidate {
+fn first_candidate(children: &[Child<'_>]) -> GroupedCandidate {
     let set = cover_sets(children)
         .into_iter()
         .next()
@@ -353,10 +347,11 @@ fn unevaluated(owner: usize, start: usize, len: usize) -> Walk {
 #[test]
 fn walks_ranges() {
     let (ab, ac, abc) = (group(&[A, B]), group(&[A, C]), group(&[A, B, C]));
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 2, 2), (&ac, 1, 1), (&abc, 3, 3)], 0),
         window_with(B, &[(&ab, 2, 2), (&abc, 3, 3)], 0),
     ];
+    let children = children(&storages);
 
     let candidate = first_candidate(&children);
 
@@ -374,11 +369,12 @@ fn walks_ranges() {
 #[test]
 fn walks_unevaluated_once() {
     let (ab, abc) = (group(&[A, B]), group(&[A, B, C]));
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 2, 2), (&abc, 1, 1)], 2),
         window_with(B, &[(&ab, 2, 2), (&abc, 1, 1)], 3),
         window_with(D, &[], 0),
     ];
+    let children = children(&storages);
 
     let candidate = first_candidate(&children);
 
@@ -399,10 +395,11 @@ fn walks_unevaluated_once() {
 #[test]
 fn walks_required_trust() {
     let ab = group(&[A, B]);
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 5, 1)], 0),
         window_with(B, &[(&ab, 4, 3)], 0),
     ];
+    let children = children(&storages);
 
     let candidate = first_candidate(&children);
 
@@ -418,10 +415,11 @@ fn walks_required_trust() {
 #[test]
 fn walks_damaged_tie() {
     let ab = group(&[A, B]);
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 4, 1)], 0),
         window_with(B, &[(&ab, 4, 3)], 0),
     ];
+    let children = children(&storages);
 
     assert_eq!(
         first_candidate(&children).walks,
@@ -429,9 +427,9 @@ fn walks_damaged_tie() {
     );
 }
 
-/// Returns `(A, B, C)` children with AB, ACD and the ABCD union, D isn't borrowed.
+/// Returns `(A, B, C)` storages with AB, ACD and the ABCD union, D isn't borrowed.
 /// C trusts `c_trust` of ABCD's 6 positions, A and B trust all of them.
-fn extra_children(c_trust: usize) -> [Child; 3] {
+fn extra_storages(c_trust: usize) -> [Storage; 3] {
     let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
 
     [
@@ -446,7 +444,7 @@ fn extra_children(c_trust: usize) -> [Child; 3] {
 #[test]
 fn walks_extra_untrusted() {
     assert_eq!(
-        first_candidate(&extra_children(0)).walks,
+        first_candidate(&children(&extra_storages(0))).walks,
         [aligned(0, 0, 2, 0b011), aligned(1, 0, 6, 0b011)]
     );
 }
@@ -455,7 +453,7 @@ fn walks_extra_untrusted() {
 /// part there, without shortening A and B's aligned part.
 #[test]
 fn walks_extra_partial() {
-    let candidate = first_candidate(&extra_children(3));
+    let candidate = first_candidate(&children(&extra_storages(3)));
 
     assert_eq!(
         candidate.walks,
@@ -477,7 +475,7 @@ fn walks_extra_partial() {
 #[test]
 fn walks_extra_trusted() {
     assert_eq!(
-        first_candidate(&extra_children(6)).walks,
+        first_candidate(&children(&extra_storages(6))).walks,
         [aligned(0, 0, 2, 0b011), aligned(1, 0, 6, 0b111)]
     );
 }
@@ -487,11 +485,12 @@ fn walks_extra_trusted() {
 #[test]
 fn walks_damaged_extras() {
     let (ab, acd, abcd) = (group(&[A, B]), group(&[A, C, D]), group(&[A, B, C, D]));
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 0, 0), (&acd, 0, 0), (&abcd, 8, 2)], 0),
         window_with(B, &[(&ab, 0, 0), (&abcd, 6, 5)], 0),
         window_with(C, &[(&acd, 0, 0), (&abcd, 7, 4)], 0),
     ];
+    let children = children(&storages);
 
     let candidate = first_candidate(&children);
 
@@ -511,11 +510,12 @@ fn walks_damaged_extras() {
 #[test]
 fn walks_unevaluated_only() {
     let (ab, ac) = (group(&[A, B]), group(&[A, C]));
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 0, 0), (&ac, 0, 0)], 3),
         window_with(B, &[(&ab, 0, 0)], 1),
         window_with(C, &[(&ac, 0, 0)], 2),
     ];
+    let children = children(&storages);
 
     let candidate = first_candidate(&children);
 
@@ -537,11 +537,12 @@ fn walks_unevaluated_only() {
 #[test]
 fn estimates_ordinary() {
     let (ab, abc) = (group(&[A, B]), group(&[A, B, C]));
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 20, 20), (&abc, 30, 30)], 0),
         window_with(B, &[(&ab, 20, 20), (&abc, 30, 30)], 0),
         window_with(9, &[], 3),
     ];
+    let children = children(&storages);
 
     let grouped = Alternative::local(first_candidate(&children), 3).unwrap();
     let ordinary = ordinary_candidate(&children, 3);
@@ -556,12 +557,13 @@ fn estimates_ordinary() {
 #[test]
 fn estimates_disjoint() {
     let (ab, cd) = (group(&[A, B]), group(&[C, D]));
-    let children = [
+    let storages = [
         window_with(A, &[(&ab, 40, 40)], 0),
         window_with(B, &[(&ab, 40, 40)], 0),
         window_with(C, &[(&cd, 10, 10)], 0),
         window_with(D, &[(&cd, 10, 10)], 0),
     ];
+    let children = children(&storages);
 
     let works: Vec<u64> = cover_sets(&children)
         .into_iter()

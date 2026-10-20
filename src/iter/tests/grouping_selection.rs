@@ -144,7 +144,7 @@ fn add_ab(world: &mut World, count: u32) -> Vec<EntityId> {
 }
 
 /// Asserts that a window over a grouped storage reports its group, its own storage id
-/// and the regions of the storage, read from the base's metadata.
+/// and the regions of the storage, borrowed from the storage's own metadata.
 #[test]
 fn window_metadata() {
     let mut world = World::new_for_test();
@@ -156,17 +156,20 @@ fn window_metadata() {
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
     let (_, _, metadata) = (&a).into_shiperator();
 
-    let NodeMetadata::Window(window) = &metadata.0 else {
+    let NodeMetadata::Window(handle) = metadata.0 else {
         panic!("a grouped window reports its group");
     };
+    // SAFE: `a` keeps A borrowed, and its group metadata unmodified, until the end of the test.
+    let window = unsafe { handle.get() };
     assert_eq!(window.storage_id, StorageId::of::<SparseSet<A>>());
     assert_eq!((window.unevaluated_start, window.len), (4, 5));
-    let [range] = &window.ranges[..] else {
+    assert!(core::ptr::eq(window.ranges, &a.groups.ranges[..]));
+    let [range] = window.ranges else {
         panic!("A holds a single range");
     };
     assert!(Arc::ptr_eq(&range.group, &b.groups.ranges[0].group));
     assert_eq!(
-        (range.ring, range.trust),
+        (range.ring(), range.trust),
         (
             Ring {
                 start: 0,
@@ -190,14 +193,14 @@ fn window_metadata_overlapping() {
     let a = world.borrow::<View<'_, A>>().unwrap();
     let (_, _, metadata) = (&a).into_shiperator();
 
-    let NodeMetadata::Window(window) = &metadata.0 else {
+    let NodeMetadata::Window(handle) = metadata.0 else {
         panic!("a grouped window reports its groups");
     };
-    let lens: Vec<usize> = window.ranges.iter().map(|range| range.ring.len).collect();
+    // SAFE: `a` keeps A borrowed, and its group metadata unmodified, until the end of the test.
+    let window = unsafe { handle.get() };
+    let lens: Vec<usize> = window.ranges.iter().map(|range| range.len).collect();
     assert_eq!(lens, [1, 1, 1]);
-    for (range, storage_range) in window.ranges.iter().zip(&a.groups.ranges) {
-        assert!(Arc::ptr_eq(&range.group, &storage_range.group));
-    }
+    assert!(core::ptr::eq(window.ranges, &a.groups.ranges[..]));
 }
 
 /// Asserts that a query over storages without any group has no grouped alternative

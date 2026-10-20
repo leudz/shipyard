@@ -83,7 +83,7 @@ use core::any::type_name;
 ///   [`IntoShiperator`](crate::iter::IntoShiperator)'s contract, with the returned guards in place
 ///   of a Rust borrow: they come from the same storage borrows and agree with each other.
 ///   The metadata is only read while [`World::iter`] builds the query, [`IntoIterRef`] doesn't
-///   keep it.
+///   keep it. The returned guards keep the group metadata it points to borrowed.
 /// - The returned `Borrow<'a>` and `all_borrow` guards keep every storage the Shiperator reads
 ///   borrowed, exclusively when it yields mutable outputs. [`IntoIterRef`] holds them as long as
 ///   it and the items of its iterators are alive, nothing the Shiperator or the access points to
@@ -305,8 +305,7 @@ unsafe impl<T: Component + Send + Sync> IterComponent for &'_ mut T {
             );
         }
 
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view);
 
         let entities = window.entity_iter();
 
@@ -343,8 +342,7 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<&'_ mut T> {
             );
         }
 
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
 
         let entities = window.entity_iter();
 
@@ -381,8 +379,7 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<&'_ mut T> {
             );
         }
 
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
 
         let entities = window.entity_iter();
 
@@ -419,8 +416,7 @@ unsafe impl<T: Component> IterComponent for NonSendSync<&'_ mut T> {
             );
         }
 
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
 
         let entities = window.entity_iter();
 
@@ -449,8 +445,7 @@ unsafe impl<T: Component + Send + Sync> IterComponent for Mut<'_, T> {
     > {
         let view =
             ViewMut::<'a, T, track::Modification>::borrow(all_storages, all_borrow, None, current)?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view);
 
         let entities = window.entity_iter();
 
@@ -484,8 +479,7 @@ unsafe impl<T: Component + Sync> IterComponent for NonSend<Mut<'_, T>> {
             None,
             current,
         )?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
 
         let entities = window.entity_iter();
 
@@ -519,8 +513,7 @@ unsafe impl<T: Component + Send> IterComponent for NonSync<Mut<'_, T>> {
             None,
             current,
         )?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
 
         let entities = window.entity_iter();
 
@@ -554,8 +547,7 @@ unsafe impl<T: Component> IterComponent for NonSendSync<Mut<'_, T>> {
             None,
             current,
         )?;
-        let metadata = ConstructionMetadata::window(&view);
-        let (window, all_borrow, borrow) = FullRawWindowMut::new_owned(view.0);
+        let (window, all_borrow, borrow, metadata) = FullRawWindowMut::new_owned(view.0);
 
         let entities = window.entity_iter();
 
@@ -594,8 +586,14 @@ macro_rules! impl_iter_component {
 
                 // Owned iteration only builds windows and tuples of them,
                 // they can all be captains and sailors.
+                // SAFE: Each child's metadata comes from its own `into_shiperator` call, along with
+                // the guards we keep in `$borrow` and return. `IterComponent`'s contract keeps the
+                // storages that call borrowed, with their group metadata unmodified and readable,
+                // as long as these guards live.
                 let mut children = [$(
-                    Child::new(true, true, $raw_window.sail_time(), &$entity_iter, $metadata),
+                    unsafe {
+                        Child::new(true, true, $raw_window.sail_time(), &$entity_iter, $metadata)
+                    },
                 )+];
                 let selection = planner::select(&mut children);
 
