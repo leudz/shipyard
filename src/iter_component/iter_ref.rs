@@ -9,6 +9,8 @@ pub struct IntoIterRef<'a, T: IterComponent> {
     pub(crate) _all_borrow: Option<SharedBorrow<'a>>,
     pub(crate) _borrow: T::Borrow<'a>,
     /// Entities each iterator starts from, never consumed.
+    ///
+    /// Only execution state, the construction metadata was dropped once the query was built.
     pub(crate) entities: RawEntityIdAccess,
     pub(crate) is_exact_sized: bool,
     pub(crate) phantom: PhantomData<T>,
@@ -48,9 +50,7 @@ impl<'a, 'b, T: IterComponent> IntoIterRef<'a, T> {
         // Each iterator starts from its own copy of the entities: a fresh cursor and fresh
         // follow-up positions. It borrows `self` for 'b, so even sharing the plan it can't
         // outlive the borrows we hold.
-        let RawEntityIdAccess {
-            cursor, schedule, ..
-        } = self.entities.clone();
+        let RawEntityIdAccess { cursor, schedule } = self.entities.clone();
 
         Shiper {
             shiperator,

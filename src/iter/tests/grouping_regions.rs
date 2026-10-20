@@ -8,8 +8,8 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
 use crate::iter::plan::{Coverage, NodeState, SegmentDescriptor};
-use crate::iter::planner::NodeMetadata;
 use crate::iter::planner::regions::grouped_entities;
+use crate::iter::planner::{ConstructionMetadata, NodeMetadata};
 use crate::iter::{IntoShiperator, Mixed, RawEntityIdAccess, SegmentRow, Shiper, Shiperator};
 use crate::sparse_set::{FullRawWindow, Groups};
 use crate::track;
@@ -47,9 +47,11 @@ type PairIter<'a> = Shiper<
 
 /// Builds the iterator walking the grouped alternative `query`'s constructor reported,
 /// whether or not it's cheaper than the ordinary walk.
-pub(super) fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
-    let (mut mixed, _, entities) = query;
-    let NodeMetadata::Mixed(selection) = entities.metadata else {
+pub(super) fn grouped<S: Shiperator>(
+    query: (S, RawEntityIdAccess, ConstructionMetadata),
+) -> Shiper<S> {
+    let (mut mixed, _, metadata) = query;
+    let NodeMetadata::GroupedMixed(selection) = metadata.0 else {
         panic!("the query has a grouped alternative");
     };
     let alternative = selection.cheapest().unwrap();

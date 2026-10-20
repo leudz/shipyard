@@ -30,6 +30,8 @@ pub use parallel::ParShiperator;
 #[doc(hidden)]
 pub use plan::{SegmentEntry, SegmentRow};
 #[doc(hidden)]
+pub use planner::ConstructionMetadata;
+#[doc(hidden)]
 pub use raw_entity_id_access::RawEntityIdAccess;
 pub use shiperator::Shiperator;
 pub use with_id::WithId;
@@ -53,8 +55,6 @@ pub struct Shiper<S> {
 
 impl<S: Shiperator> Shiper<S> {
     /// Returns an iterator starting with `entities`' initial cursor then entering its follow-ups.
-    ///
-    /// `entities`' construction metadata is dropped, the iterator doesn't keep it.
     ///
     /// ### Safety
     ///

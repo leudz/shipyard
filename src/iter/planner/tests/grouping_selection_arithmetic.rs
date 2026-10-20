@@ -15,7 +15,7 @@ fn member(group: &Arc<[StorageId]>, member: usize, range_len: usize, len: usize)
         sail_time: len,
         candidates: Some(len),
         entities: EntityCursor::empty(),
-        metadata: NodeMetadata::Window(WindowMetadata {
+        metadata: NodeMetadata::Window(Box::new(WindowMetadata {
             storage_id: group[member],
             len,
             unevaluated_start: range_len,
@@ -28,7 +28,7 @@ fn member(group: &Arc<[StorageId]>, member: usize, range_len: usize, len: usize)
                 },
                 trust: range_len,
             }],
-        }),
+        })),
     }
 }
 
@@ -290,7 +290,7 @@ fn storage_groups(ranges: Vec<GroupRange>, unevaluated_start: usize) -> Groups {
 /// Returns the window metadata of a storage of `len` components with `groups`.
 fn metadata(groups: &Groups, len: usize) -> Option<WindowMetadata> {
     match NodeMetadata::of_storage(groups, len) {
-        NodeMetadata::Window(window) => Some(window),
+        NodeMetadata::Window(window) => Some(*window),
         _ => None,
     }
 }
@@ -468,7 +468,8 @@ fn nested(candidates: usize, work: u64, lookups: usize, alternatives: &[(usize, 
         sail_time: candidates,
         candidates: Some(candidates),
         entities: EntityCursor::empty(),
-        metadata: NodeMetadata::Mixed(Selection {
+        // The nested `Mixed` reports its selection like its constructor would.
+        metadata: Selection {
             ordinary: OrdinaryCandidate {
                 captain: 0,
                 work: Some(work),
@@ -476,7 +477,9 @@ fn nested(candidates: usize, work: u64, lookups: usize, alternatives: &[(usize, 
             alternatives,
             lookups,
             filtered: false,
-        }),
+        }
+        .into_metadata()
+        .0,
     }
 }
 
@@ -549,7 +552,7 @@ fn two_levels() {
 
     let mut root_children = [
         Child {
-            metadata: NodeMetadata::Mixed(middle),
+            metadata: middle.into_metadata().0,
             ..ungrouped(20)
         },
         ungrouped(40),

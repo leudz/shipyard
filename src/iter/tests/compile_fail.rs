@@ -4,7 +4,7 @@
 /// implementation delegating to a view.
 ///
 /// ```compile_fail,E0200
-/// use shipyard::iter::{IntoShiperator, RawEntityIdAccess};
+/// use shipyard::iter::{ConstructionMetadata, IntoShiperator, RawEntityIdAccess};
 /// use shipyard::{Component, View};
 ///
 /// #[derive(Component)]
@@ -15,7 +15,7 @@
 /// impl<'a, 'v: 'a> IntoShiperator for Positions<'a, 'v> {
 ///     type Shiperator = <&'a View<'v, Pos> as IntoShiperator>::Shiperator;
 ///
-///     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+///     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
 ///         self.0.into_shiperator()
 ///     }
 ///
@@ -38,7 +38,7 @@ struct SafeIntoShiperatorImpl;
 /// use shipyard::advanced::tracking::TrackingTimestamp;
 /// use shipyard::all_storages::AllStorages;
 /// use shipyard::error::GetStorage;
-/// use shipyard::iter::{IterComponent, RawEntityIdAccess};
+/// use shipyard::iter::{ConstructionMetadata, IterComponent, RawEntityIdAccess};
 /// use shipyard::Component;
 ///
 /// #[derive(Component)]
@@ -59,8 +59,8 @@ struct SafeIntoShiperatorImpl;
 ///             Self::Shiperator<'a>,
 ///             Option<SharedBorrow<'a>>,
 ///             Self::Borrow<'a>,
-///             usize,
 ///             RawEntityIdAccess,
+///             ConstructionMetadata,
 ///         ),
 ///         GetStorage,
 ///     > {

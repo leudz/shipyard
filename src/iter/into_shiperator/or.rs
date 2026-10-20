@@ -1,5 +1,5 @@
 use crate::iter::plan::{OrBranch, PlanBuilder, SegmentRow};
-use crate::iter::planner::NodeMetadata;
+use crate::iter::planner::ConstructionMetadata;
 use crate::iter::{IntoShiperator, RawEntityIdAccess, Shiperator};
 use crate::or::{Or, OrWindow};
 
@@ -15,9 +15,9 @@ where
     type Shiperator = OrWindow<(T::Shiperator, U::Shiperator)>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator_a, _, entities_a) = (self.0).0.into_shiperator();
-        let (shiperator_b, _, entities_b) = (self.0).1.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (shiperator_a, entities_a, _) = (self.0).0.into_shiperator();
+        let (shiperator_b, entities_b, _) = (self.0).1.into_shiperator();
 
         let mut or = OrWindow {
             storages: (shiperator_a, shiperator_b),
@@ -64,17 +64,20 @@ where
         let Some((branch, cursor)) = initial else {
             or.branch = OrBranch::A;
 
-            return (or, 0, RawEntityIdAccess::empty().filtered());
+            return (
+                or,
+                RawEntityIdAccess::empty(),
+                ConstructionMetadata::filtered(),
+            );
         };
 
         or.branch = branch;
         let entities = RawEntityIdAccess {
             cursor,
             schedule: plan.finish(),
-            metadata: NodeMetadata::Filtered,
         };
 
-        (or, cursor.len(), entities)
+        (or, entities, ConstructionMetadata::filtered())
     }
 
     #[inline]

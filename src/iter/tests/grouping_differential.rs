@@ -652,15 +652,13 @@ impl Stats {
     where
         Q::Shiperator: Shiperator,
     {
-        let (_, _, entities) = query.into_shiperator();
-        let NodeMetadata::Mixed(selection) = &entities.metadata else {
+        let (_, _, metadata) = query.into_shiperator();
+        let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
             return;
         };
 
         let Some(winner) = selection.winner() else {
-            if !selection.alternatives.is_empty() {
-                self.ordinary_won += 1;
-            }
+            self.ordinary_won += 1;
             return;
         };
 
@@ -2006,8 +2004,8 @@ fn winner_walks<Q: IntoShiperator>(query: Q) -> Vec<&'static str>
 where
     Q::Shiperator: Shiperator,
 {
-    let (_, _, entities) = query.into_shiperator();
-    let NodeMetadata::Mixed(selection) = &entities.metadata else {
+    let (_, _, metadata) = query.into_shiperator();
+    let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
         return Vec::new();
     };
 

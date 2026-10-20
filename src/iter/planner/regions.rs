@@ -9,7 +9,7 @@
 //! The group can be held by a nested `Mixed`. Each `Mixed` between the root and that one then
 //! drives every segment through the single child leading to it, the rest of the query is looked up.
 
-use super::{Alternative, GroupedCandidate, Member, NodeMetadata, Route, Walk, mask_children};
+use super::{Alternative, GroupedCandidate, Member, Route, Walk, mask_children};
 use crate::iter::plan::{
     Coverage, CoverageSpan, NodeKind, NodeState, Plan, SegmentDescriptor, SegmentEntry, SegmentRow,
     SegmentSchedule,
@@ -62,7 +62,6 @@ pub(crate) fn grouped_entities<S: Shiperator>(
     RawEntityIdAccess {
         cursor: first.cursor(),
         schedule: Some(schedule),
-        metadata: NodeMetadata::Ungrouped,
     }
 }
 

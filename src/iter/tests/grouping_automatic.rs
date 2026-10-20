@@ -198,8 +198,8 @@ fn group_free_sailor() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
 
-    let (_, _, entities) = (&c).into_shiperator();
-    assert!(matches!(entities.metadata, NodeMetadata::Ungrouped));
+    let (_, _, metadata) = (&c).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Ungrouped));
     assert_eq!(next_ids((&c).iter()), sorted(owners));
 
     let iter = (&a, &b, &c).iter();

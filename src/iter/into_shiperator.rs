@@ -7,7 +7,7 @@ use crate::entity_id::EntityId;
 #[cfg(feature = "parallel")]
 use crate::iter::ParShiperator;
 use crate::iter::mixed::{Mixed, embed_captain_entities};
-use crate::iter::planner::{self, Child, NodeMetadata};
+use crate::iter::planner::{self, Child, ConstructionMetadata};
 use crate::iter::{RawEntityIdAccess, Shiper, Shiperator};
 use crate::optional::Optional;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
@@ -75,11 +75,11 @@ where
 {
     #[inline]
     fn iter(self) -> Shiper<Self::Shiperator> {
-        let (mut shiperator, current_len, entities) = self.into_shiperator();
-        debug_assert_eq!(current_len, entities.cursor.len());
+        let (mut shiperator, entities, metadata) = self.into_shiperator();
 
         // We're the query's root, every node has been built and nothing will pick another walk.
-        let entities = planner::install_winner(&mut shiperator, entities);
+        // The metadata ends here, the iterator only gets the execution state.
+        let entities = planner::install_winner(&mut shiperator, entities, metadata);
 
         // SAFE: `IntoShiperator` is an unsafe trait, its implementation guarantees `shiperator`'s
         // installed state matches the first segment of `entities` and every follow-up has a row
@@ -106,7 +106,7 @@ where
 /// and returns its results unchanged:
 ///
 /// ```
-/// use shipyard::iter::{IntoShiperator, RawEntityIdAccess};
+/// use shipyard::iter::{ConstructionMetadata, IntoShiperator, RawEntityIdAccess};
 /// use shipyard::{Component, IntoIter, View, World};
 ///
 /// #[derive(Component)]
@@ -114,12 +114,12 @@ where
 ///
 /// struct Positions<'a, 'v>(&'a View<'v, Pos>);
 ///
-/// // SAFE: We return the view's own Shiperator and entities, unchanged.
+/// // SAFE: We return the view's own Shiperator, entities and metadata, unchanged.
 /// // `Positions` holds the view's borrow for 'a, as long as the Shiperator.
 /// unsafe impl<'a, 'v: 'a> IntoShiperator for Positions<'a, 'v> {
 ///     type Shiperator = <&'a View<'v, Pos> as IntoShiperator>::Shiperator;
 ///
-///     fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+///     fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
 ///         self.0.into_shiperator()
 ///     }
 ///
@@ -141,17 +141,22 @@ where
 /// assert_eq!(sum, 3.0);
 /// ```
 ///
+/// The [`ConstructionMetadata`] is opaque, only shipyard reads it. While a query is built, each
+/// tuple reads its children's to rank their walks, then the query's root reads its own to pick
+/// one. The root drops it before building the iterator: it doesn't outlive the
+/// [`iter`](IntoIter::iter) call and iterators never hold it.
+///
 /// ### Safety
 ///
 /// Iterators trust what [`into_shiperator`](IntoShiperator::into_shiperator) returns without
 /// checking it. Implementations must uphold all of the following, for the returned
 /// Shiperator, its clones and every segment state they install:
 ///
-/// - The Shiperator, the length and the [`RawEntityIdAccess`] describe the same query, built
-///   from the same storage borrows. The length is the number of candidates of the access's
-///   first segment. The access, follow-ups and grouping metadata included, must come from the
-///   `into_shiperator` of the views the Shiperator is made of. An access returned by another
-///   call can't be paired with an unrelated Shiperator, even one of the same type.
+/// - The Shiperator, the [`RawEntityIdAccess`] and the [`ConstructionMetadata`] describe the
+///   same query, built from the same storage borrows. The access, follow-ups included, and the
+///   metadata must come from the `into_shiperator` of the views the Shiperator is made of.
+///   Values returned by another call can't be paired with an unrelated Shiperator, even one of
+///   the same type.
 /// - [`captain_indices_of`](Shiperator::captain_indices_of) resolves a candidate's local index
 ///   to the components of that candidate's entity.
 ///   [`sailor_indices_of`](Shiperator::sailor_indices_of) and
@@ -173,13 +178,12 @@ pub unsafe trait IntoShiperator {
     #[allow(missing_docs)]
     type Shiperator;
 
-    /// Returns the Shiperator, the number of candidates in its first segment
-    /// and the entities driving the iteration.
+    /// Returns the Shiperator, the entities driving the iteration and what the query's root
+    /// needs to know about grouping to pick its walk.
     ///
-    /// The Shiperator's state matches the first segment, follow-up segments install their own.\
-    /// The returned length doesn't count follow-up segments,
-    /// the total number of candidates can be larger.
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess);
+    /// The Shiperator's state matches the entities' first segment, follow-up segments install
+    /// their own.
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata);
     /// Returns `true` if the Shiperator can be a captain.
     fn can_captain() -> bool;
     /// Returns `true` if the Shiperator can be a sailor.
@@ -195,14 +199,12 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = FullRawWindow<'tmp, T, Track>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
         let window = FullRawWindow::from_view(self);
-        let len = window.len();
-        let iter = window
-            .entity_iter()
-            .with_metadata(NodeMetadata::window(self.sparse_set));
+        let entities = window.entity_iter();
+        let metadata = ConstructionMetadata::window(self.sparse_set);
 
-        (window, len, iter)
+        (window, entities, metadata)
     }
 
     #[inline]
@@ -223,14 +225,12 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = FullRawWindow<'tmp, T, Track>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
         let window = FullRawWindow::from_view_mut(self);
-        let len = window.len();
-        let iter = window
-            .entity_iter()
-            .with_metadata(NodeMetadata::window(self.sparse_set));
+        let entities = window.entity_iter();
+        let metadata = ConstructionMetadata::window(self.sparse_set);
 
-        (window, len, iter)
+        (window, entities, metadata)
     }
 
     #[inline]
@@ -253,13 +253,13 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = FullRawWindowMut<'tmp, T, Track>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let metadata = NodeMetadata::window(self.sparse_set);
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        // `new` takes the view, we read its storage's metadata first.
+        let metadata = ConstructionMetadata::window(self.sparse_set);
         let window = FullRawWindowMut::new(self);
-        let len = window.len();
-        let iter = window.entity_iter().with_metadata(metadata);
+        let entities = window.entity_iter();
 
-        (window, len, iter)
+        (window, entities, metadata)
     }
 
     #[inline]
@@ -278,13 +278,12 @@ unsafe impl<'tmp> IntoShiperator for &'tmp [EntityId] {
     type Shiperator = &'tmp [EntityId];
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let len = self.len();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
         // SAFE: The slice is borrowed for `'tmp` and the access is only used by iterators
         // over this Shiperator, which hold that borrow.
-        let iter = unsafe { RawEntityIdAccess::new(NonNull::from(self).cast(), len) };
+        let entities = unsafe { RawEntityIdAccess::new(NonNull::from(self).cast(), self.len()) };
 
-        (self, len, iter)
+        (self, entities, ConstructionMetadata::ungrouped())
     }
 
     #[inline]
@@ -303,10 +302,14 @@ unsafe impl<'tmp> IntoShiperator for &'tmp [EntityId] {
 unsafe impl<'tmp, 'v: 'tmp, T: Component> IntoShiperator for Optional<&'tmp View<'v, T>> {
     type Shiperator = Optional<FullRawWindow<'tmp, T, T::Tracking>>;
 
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator, len, entities) = self.0.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (shiperator, entities, _) = self.0.into_shiperator();
 
-        (Optional(shiperator), len, entities.filtered())
+        (
+            Optional(shiperator),
+            entities,
+            ConstructionMetadata::filtered(),
+        )
     }
 
     fn can_captain() -> bool {
@@ -324,10 +327,14 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 {
     type Shiperator = Optional<FullRawWindow<'tmp, T, Track>>;
 
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator, len, entities) = self.0.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (shiperator, entities, _) = self.0.into_shiperator();
 
-        (Optional(shiperator), len, entities.filtered())
+        (
+            Optional(shiperator),
+            entities,
+            ConstructionMetadata::filtered(),
+        )
     }
 
     fn can_captain() -> bool {
@@ -345,10 +352,14 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 {
     type Shiperator = Optional<FullRawWindowMut<'tmp, T, Track>>;
 
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (shiperator, len, entities) = self.0.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (shiperator, entities, _) = self.0.into_shiperator();
 
-        (Optional(shiperator), len, entities.filtered())
+        (
+            Optional(shiperator),
+            entities,
+            ConstructionMetadata::filtered(),
+        )
     }
 
     fn can_captain() -> bool {
@@ -364,7 +375,7 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
 unsafe impl<T: IntoShiperator> IntoShiperator for (T,) {
     type Shiperator = T::Shiperator;
 
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
         self.0.into_shiperator()
     }
 
@@ -402,8 +413,8 @@ macro_rules! impl_into_shiperator_tuple {
             #[track_caller]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let mut shiperators = ($(self.$index.into_shiperator(),)+);
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let shiperators = ($(self.$index.into_shiperator(),)+);
 
                 let can_captains = ($(
                     $type::can_captain(),
@@ -440,7 +451,8 @@ macro_rules! impl_into_shiperator_tuple {
                         can_captains.$index,
                         can_sailors.$index,
                         shiperators.$index.0.sail_time(),
-                        &mut shiperators.$index.2,
+                        &shiperators.$index.1,
+                        shiperators.$index.2,
                     ),
                 )+];
                 let selection = planner::select(&mut children);
@@ -460,23 +472,20 @@ macro_rules! impl_into_shiperator_tuple {
                 let captain = selection.ordinary.captain;
                 let mut captain_mask = 0;
                 let mut captain_slot = 0;
-                let mut len = 0;
                 let mut entity_iter = RawEntityIdAccess::empty();
 
                 $(
                     if captain == $index {
                         captain_mask = 1 << $index;
                         captain_slot = slots.$index;
-                        len = shiperators.$index.1;
-                        entity_iter = shiperators.$index.2;
+                        entity_iter = shiperators.$index.1;
                     }
                 )+
 
                 let mixed = Mixed::new(($(shiperators.$index.0,)+), captain_mask);
-                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter)
-                    .with_metadata(selection.into_metadata());
+                let entity_iter = embed_captain_entities(&mixed, captain_slot, entity_iter);
 
-                (mixed, len, entity_iter)
+                (mixed, entity_iter, selection.into_metadata())
             }
 
             #[inline]

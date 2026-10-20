@@ -126,7 +126,6 @@ pub(crate) fn embed_captain_entities<S: Shiperator>(
     RawEntityIdAccess {
         cursor: entities.cursor,
         schedule: plan.finish(),
-        metadata: entities.metadata,
     }
 }
 

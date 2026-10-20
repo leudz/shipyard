@@ -255,10 +255,10 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     #[track_caller]
-                    fn into_shiperator(self) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
-                        let (shiperator, end, entities) = (#iter_fields_access).into_shiperator();
+                    fn into_shiperator(self) -> (Self::Shiperator, shipyard::iter::RawEntityIdAccess, shipyard::iter::ConstructionMetadata) {
+                        let (shiperator, entities, metadata) = (#iter_fields_access).into_shiperator();
 
-                        (#iter_name (shiperator), end, entities)
+                        (#iter_name (shiperator), entities, metadata)
                     }
 
                     #[inline]
@@ -421,7 +421,7 @@ pub(crate) fn expand_into_iter(
 
                     #[inline]
                     #[track_caller]
-                    fn into_shiperator(self) -> (Self::Shiperator, usize, shipyard::iter::RawEntityIdAccess) {
+                    fn into_shiperator(self) -> (Self::Shiperator, shipyard::iter::RawEntityIdAccess, shipyard::iter::ConstructionMetadata) {
                         #tuple.into_shiperator()
                     }
 

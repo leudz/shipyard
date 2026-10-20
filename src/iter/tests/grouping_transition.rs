@@ -79,10 +79,10 @@ fn or_both() {
     let world = or_world(2, 1);
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
 
-    let (or_window, len, entities) = (&a | &b).into_shiperator();
+    let (or_window, entities, _) = (&a | &b).into_shiperator();
 
     assert_eq!(or_window.branch, OrBranch::A);
-    assert_eq!(len, 2);
+    assert_eq!(entities.cursor.len(), 2);
 
     let schedule = entities.schedule.unwrap();
     let follow_ups: Vec<_> = schedule.follow_ups().collect();
@@ -100,10 +100,10 @@ fn or_first_only() {
     let world = or_world(2, 0);
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
 
-    let (or_window, len, entities) = (&a | &b).into_shiperator();
+    let (or_window, entities, _) = (&a | &b).into_shiperator();
 
     assert_eq!(or_window.branch, OrBranch::A);
-    assert_eq!(len, 2);
+    assert_eq!(entities.cursor.len(), 2);
     assert!(entities.schedule.is_none());
 }
 
@@ -114,10 +114,10 @@ fn or_second_only() {
     let world = or_world(0, 3);
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
 
-    let (or_window, len, entities) = (&a | &b).into_shiperator();
+    let (or_window, entities, _) = (&a | &b).into_shiperator();
 
     assert_eq!(or_window.branch, OrBranch::B);
-    assert_eq!(len, 3);
+    assert_eq!(entities.cursor.len(), 3);
     assert!(entities.schedule.is_none());
 }
 
@@ -127,9 +127,8 @@ fn or_none() {
     let world = or_world(0, 0);
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
 
-    let (_, len, entities) = (&a | &b).into_shiperator();
+    let (_, entities, _) = (&a | &b).into_shiperator();
 
-    assert_eq!(len, 0);
     assert!(entities.cursor.is_empty());
     assert!(entities.schedule.is_none());
 }

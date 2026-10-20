@@ -37,27 +37,22 @@ fn window(storage: u64, groups: &[&Arc<[StorageId]>]) -> Child {
         sail_time: len,
         candidates: Some(len),
         entities: EntityCursor::empty(),
-        metadata: NodeMetadata::Window(WindowMetadata {
+        metadata: NodeMetadata::Window(Box::new(WindowMetadata {
             storage_id: StorageId::Custom(storage),
             len,
             unevaluated_start: len,
             ranges,
-        }),
+        })),
     }
 }
 
 /// A nested `Mixed` child, it never holds group members of its parent.
 fn nested() -> Child {
     Child {
-        metadata: NodeMetadata::Mixed(Selection {
-            ordinary: OrdinaryCandidate {
-                captain: 0,
-                work: Some(4),
-            },
-            alternatives: Vec::new(),
+        metadata: NodeMetadata::Mixed {
             lookups: 1,
-            filtered: false,
-        }),
+            ordinary_work: Some(4),
+        },
         ..window(9, &[])
     }
 }

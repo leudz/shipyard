@@ -10,8 +10,8 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
 use crate::iter::plan::NodeState;
-use crate::iter::planner::NodeMetadata;
 use crate::iter::planner::regions::grouped_entities;
+use crate::iter::planner::{ConstructionMetadata, NodeMetadata};
 use crate::iter::{
     IntoIter, IntoIterRef, IntoShiperator, IterComponent, Mixed, OneOfTwo, RawEntityIdAccess,
     Shiper, Shiperator, is_exact_traversal,
@@ -86,9 +86,9 @@ type PairIter<'a> = Shiper<
 
 /// Builds the iterator walking the grouped alternative `query`'s constructor reported, even
 /// when the ordinary walk is cheaper. Our worlds are too small for grouping to win on its own.
-fn grouped<S: Shiperator>(query: (S, usize, RawEntityIdAccess)) -> Shiper<S> {
-    let (mut mixed, _, entities) = query;
-    let NodeMetadata::Mixed(selection) = entities.metadata else {
+fn grouped<S: Shiperator>(query: (S, RawEntityIdAccess, ConstructionMetadata)) -> Shiper<S> {
+    let (mut mixed, _, metadata) = query;
+    let NodeMetadata::GroupedMixed(selection) = metadata.0 else {
         panic!("the query has a grouped alternative");
     };
     let alternative = selection.cheapest().unwrap();
@@ -107,9 +107,9 @@ where
     T::Shiperator<'a>: Shiperator,
 {
     let current = all_storages.get_current();
-    let (mut mixed, all_borrow, borrow, _, entities) =
+    let (mut mixed, all_borrow, borrow, _, metadata) =
         T::into_shiperator(all_storages, None, current).unwrap();
-    let NodeMetadata::Mixed(selection) = entities.metadata else {
+    let NodeMetadata::GroupedMixed(selection) = metadata.0 else {
         panic!("the query has a grouped alternative");
     };
     let alternative = selection.cheapest().unwrap();

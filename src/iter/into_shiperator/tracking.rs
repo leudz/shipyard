@@ -1,6 +1,6 @@
 use crate::component::Component;
-use crate::iter::IntoShiperator;
-use crate::iter::RawEntityIdAccess;
+use crate::iter::planner::ConstructionMetadata;
+use crate::iter::{IntoShiperator, RawEntityIdAccess};
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::tracking::{
     Inserted, InsertedOrModified, InsertionOrModificationTracking, InsertionTracking,
@@ -20,10 +20,10 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = self.0.into_shiperator();
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let (window, entities, _) = self.0.into_shiperator();
 
-                ($type(window), len, entity_access.filtered())
+                ($type(window), entities, ConstructionMetadata::filtered())
             }
 
             #[inline]
@@ -47,10 +47,10 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = self.0.into_shiperator();
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let (window, entities, _) = self.0.into_shiperator();
 
-                ($type(window), len, entity_access.filtered())
+                ($type(window), entities, ConstructionMetadata::filtered())
             }
 
             #[inline]
@@ -74,10 +74,10 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = self.0.into_shiperator();
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let (window, entities, _) = self.0.into_shiperator();
 
-                ($type(window), len, entity_access.filtered())
+                ($type(window), entities, ConstructionMetadata::filtered())
             }
 
             #[inline]

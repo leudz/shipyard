@@ -180,11 +180,6 @@ impl<'w, T: Component, Track: Tracking> FullRawWindow<'w, T, Track> {
         }
     }
 
-    #[inline]
-    pub(crate) fn len(&self) -> usize {
-        self.dense_len
-    }
-
     /// Returns an entity source over the whole storage.
     #[inline]
     pub(crate) fn entity_iter(&self) -> RawEntityIdAccess {
@@ -417,11 +412,6 @@ impl<'w, T: Component, Track: Tracking> FullRawWindowMut<'w, T, Track> {
         } else {
             None
         }
-    }
-
-    #[inline]
-    pub(crate) fn len(&self) -> usize {
-        self.dense_len
     }
 
     /// Returns an entity source over the whole storage.

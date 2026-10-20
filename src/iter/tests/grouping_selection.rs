@@ -6,8 +6,10 @@
 
 use crate::component::Component;
 use crate::entity_id::EntityId;
-use crate::iter::planner::{Alternative, NodeMetadata, Route, Selection, Walk};
-use crate::iter::{IntoIter, IntoShiperator, IterComponent, Optional, RawEntityIdAccess};
+use crate::iter::planner::{
+    Alternative, ConstructionMetadata, NodeMetadata, Route, Selection, Walk,
+};
+use crate::iter::{IntoIter, IntoShiperator, IterComponent, Optional};
 use crate::sparse_set::{Ring, SparseSet};
 use crate::storage::StorageId;
 use crate::track;
@@ -72,43 +74,39 @@ impl Component for Modif {
 }
 
 /// Returns the selection a `Mixed` reported, `None` when it had no grouped alternative.
-fn selection(entities: &RawEntityIdAccess) -> Option<&Selection> {
-    match &entities.metadata {
-        NodeMetadata::Mixed(selection) if !selection.alternatives.is_empty() => Some(selection),
+fn selection(metadata: &ConstructionMetadata) -> Option<&Selection> {
+    match &metadata.0 {
+        NodeMetadata::GroupedMixed(selection) => Some(selection),
         _ => None,
     }
 }
 
 /// Asserts that a `Mixed` reported no grouped alternative, without filter.
-fn assert_ungrouped(entities: &RawEntityIdAccess) {
-    let NodeMetadata::Mixed(selection) = &entities.metadata else {
-        panic!("a Mixed without filter reports its selection");
-    };
-
-    assert!(selection.alternatives.is_empty());
+fn assert_ungrouped(metadata: &ConstructionMetadata) {
+    assert!(matches!(metadata.0, NodeMetadata::Mixed { .. }));
 }
 
-/// Asserts that the cheapest grouped alternative of `entities` wins with the members
+/// Asserts that the cheapest grouped alternative of `metadata` wins with the members
 /// `member_mask` flags.
-fn assert_grouped_wins(entities: &RawEntityIdAccess, member_mask: u32) {
-    let selection = selection(entities).expect("a grouped alternative");
+fn assert_grouped_wins(metadata: &ConstructionMetadata, member_mask: u32) {
+    let selection = selection(metadata).expect("a grouped alternative");
     let winner = selection.winner().expect("the grouped alternative wins");
 
     assert_eq!(winner.group().required, member_mask);
 }
 
-/// Asserts that `entities` reported a grouped alternative but its ordinary walk with
+/// Asserts that `metadata` reports a grouped alternative but its ordinary walk with
 /// child `captain` wins.
-fn assert_ordinary_wins(entities: &RawEntityIdAccess, captain: usize) {
-    let selection = selection(entities).expect("a grouped alternative");
+fn assert_ordinary_wins(metadata: &ConstructionMetadata, captain: usize) {
+    let selection = selection(metadata).expect("a grouped alternative");
 
     assert!(selection.winner().is_none());
     assert_eq!(selection.ordinary.captain, captain);
 }
 
-/// Returns the cheapest grouped alternative of `entities`.
-fn cheapest(entities: &RawEntityIdAccess) -> &Alternative {
-    selection(entities)
+/// Returns the cheapest grouped alternative of `metadata`.
+fn cheapest(metadata: &ConstructionMetadata) -> &Alternative {
+    selection(metadata)
         .expect("a grouped alternative")
         .cheapest()
         .unwrap()
@@ -125,14 +123,14 @@ fn aligned_walk(len: usize, captains: u32) -> Walk {
     }
 }
 
-/// Returns the walks of the cheapest grouped alternative of `entities`.
-fn walks(entities: &RawEntityIdAccess) -> &[Walk] {
-    &cheapest(entities).group().walks
+/// Returns the walks of the cheapest grouped alternative of `metadata`.
+fn walks(metadata: &ConstructionMetadata) -> &[Walk] {
+    &cheapest(metadata).group().walks
 }
 
-/// Returns the candidates and work of each grouped alternative of `entities`, in order.
-fn estimates(entities: &RawEntityIdAccess) -> Vec<(usize, u64)> {
-    selection(entities)
+/// Returns the candidates and work of each grouped alternative of `metadata`, in order.
+fn estimates(metadata: &ConstructionMetadata) -> Vec<(usize, u64)> {
+    selection(metadata)
         .expect("a grouped alternative")
         .alternatives
         .iter()
@@ -156,9 +154,9 @@ fn window_metadata() {
     world.add_entity(A(11));
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (_, _, entities) = (&a).into_shiperator();
+    let (_, _, metadata) = (&a).into_shiperator();
 
-    let NodeMetadata::Window(window) = &entities.metadata else {
+    let NodeMetadata::Window(window) = &metadata.0 else {
         panic!("a grouped window reports its group");
     };
     assert_eq!(window.storage_id, StorageId::of::<SparseSet<A>>());
@@ -190,9 +188,9 @@ fn window_metadata_overlapping() {
     world.group::<(A, B)>().group::<(A, C)>();
 
     let a = world.borrow::<View<'_, A>>().unwrap();
-    let (_, _, entities) = (&a).into_shiperator();
+    let (_, _, metadata) = (&a).into_shiperator();
 
-    let NodeMetadata::Window(window) = &entities.metadata else {
+    let NodeMetadata::Window(window) = &metadata.0 else {
         panic!("a grouped window reports its groups");
     };
     let lens: Vec<usize> = window.ranges.iter().map(|range| range.ring.len).collect();
@@ -211,10 +209,10 @@ fn no_metadata() {
     world.add_entity(A(10));
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (mixed, len, entities) = (&a, &b).into_shiperator();
+    let (mixed, entities, metadata) = (&a, &b).into_shiperator();
 
-    assert_ungrouped(&entities);
-    assert_eq!((mixed.captain_mask, len), (0b10, 3));
+    assert_ungrouped(&metadata);
+    assert_eq!((mixed.captain_mask, entities.cursor.len()), (0b10, 3));
 }
 
 /// Asserts that a group of storages outside the query doesn't give it a grouped alternative.
@@ -228,9 +226,9 @@ fn unrelated_group() {
     world.group::<(C, D)>();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (mixed, _, entities) = (&a, &b).into_shiperator();
+    let (mixed, _, metadata) = (&a, &b).into_shiperator();
 
-    assert_ungrouped(&entities);
+    assert_ungrouped(&metadata);
     assert_eq!(mixed.captain_mask, 0b01);
 }
 
@@ -242,11 +240,11 @@ fn empty_group() {
     world.group::<(A, B)>();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (mixed, _, entities) = (&a, &b).into_shiperator();
+    let (mixed, _, metadata) = (&a, &b).into_shiperator();
 
-    assert!(walks(&entities).is_empty());
-    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(0));
-    assert_ordinary_wins(&entities, 0);
+    assert!(walks(&metadata).is_empty());
+    assert_eq!(selection(&metadata).unwrap().ordinary.work, Some(0));
+    assert_ordinary_wins(&metadata, 0);
     assert_eq!(mixed.captain_mask, 0b01);
 }
 
@@ -261,16 +259,16 @@ fn aligned() {
     world.group::<(A, B)>();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (mixed, len, entities) = (&a, &b).into_shiperator();
+    let (mixed, entities, metadata) = (&a, &b).into_shiperator();
 
-    assert_grouped_wins(&entities, 0b11);
-    assert_eq!(walks(&entities), [aligned_walk(5, 0b11)]);
+    assert_grouped_wins(&metadata, 0b11);
+    assert_eq!(walks(&metadata), [aligned_walk(5, 0b11)]);
     // 5 candidates without sailor against B's 5 candidates with A looked up.
-    let selection = selection(&entities).unwrap();
+    let selection = selection(&metadata).unwrap();
     assert_eq!(selection.cheapest().unwrap().work, 10);
     assert_eq!(selection.ordinary.work, Some(15));
 
-    assert_eq!((mixed.captain_mask, len), (0b10, 5));
+    assert_eq!((mixed.captain_mask, entities.cursor.len()), (0b10, 5));
 }
 
 /// Asserts that a small ordinary captain beats a large group,
@@ -287,9 +285,9 @@ fn small_captain() {
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
-    let (mixed, _, entities) = (&a, &b, &c).into_shiperator();
+    let (mixed, _, metadata) = (&a, &b, &c).into_shiperator();
 
-    assert_ordinary_wins(&entities, 2);
+    assert_ordinary_wins(&metadata, 2);
     assert_eq!(mixed.captain_mask, 0b100);
 }
 
@@ -307,10 +305,10 @@ fn disjoint_groups() {
     let (a, b, c, d) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
         .unwrap();
-    let (_, _, entities) = (&a, &b, &c, &d).into_shiperator();
+    let (_, _, metadata) = (&a, &b, &c, &d).into_shiperator();
 
-    assert_grouped_wins(&entities, 0b1100);
-    assert_eq!(walks(&entities), [aligned_walk(10, 0b1100)]);
+    assert_grouped_wins(&metadata, 0b1100);
+    assert_eq!(walks(&metadata), [aligned_walk(10, 0b1100)]);
 }
 
 /// Asserts that two disjoint groups with equal estimates pick the one whose
@@ -328,11 +326,11 @@ fn disjoint_tie() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
         .unwrap();
 
-    let (_, _, entities) = (&a, &b, &c, &d).into_shiperator();
-    assert_grouped_wins(&entities, 0b0011);
+    let (_, _, metadata) = (&a, &b, &c, &d).into_shiperator();
+    assert_grouped_wins(&metadata, 0b0011);
 
-    let (_, _, entities) = (&c, &d, &a, &b).into_shiperator();
-    assert_grouped_wins(&entities, 0b0011);
+    let (_, _, metadata) = (&c, &d, &a, &b).into_shiperator();
+    assert_grouped_wins(&metadata, 0b0011);
 }
 
 /// Asserts that entities added after a regroup make every member walk its unevaluated
@@ -346,10 +344,10 @@ fn multiwalk() {
 
     {
         let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-        let (_, _, entities) = (&a, &b).into_shiperator();
+        let (_, _, metadata) = (&a, &b).into_shiperator();
 
         assert_eq!(
-            walks(&entities),
+            walks(&metadata),
             [
                 aligned_walk(10, 0b11),
                 Walk::Unevaluated {
@@ -366,19 +364,19 @@ fn multiwalk() {
         );
         // 10 aligned candidates, then 20 unevaluated ones looking the other member up,
         // against A's 20 candidates looking B up.
-        assert_eq!(estimates(&entities), [(30, 10 * 2 + 20 * 3)]);
-        assert_eq!(selection(&entities).unwrap().ordinary.work, Some(20 * 3));
-        assert_ordinary_wins(&entities, 0);
+        assert_eq!(estimates(&metadata), [(30, 10 * 2 + 20 * 3)]);
+        assert_eq!(selection(&metadata).unwrap().ordinary.work, Some(20 * 3));
+        assert_ordinary_wins(&metadata, 0);
     }
 
     world.regroup();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (_, _, entities) = (&a, &b).into_shiperator();
+    let (_, _, metadata) = (&a, &b).into_shiperator();
 
-    assert_eq!(walks(&entities), [aligned_walk(20, 0b11)]);
-    assert_eq!(estimates(&entities), [(20, 40)]);
-    assert_grouped_wins(&entities, 0b11);
+    assert_eq!(walks(&metadata), [aligned_walk(20, 0b11)]);
+    assert_eq!(estimates(&metadata), [(20, 40)]);
+    assert_grouped_wins(&metadata, 0b11);
 }
 
 /// Asserts that equal estimates keep the ordinary walk: 4 aligned AB candidates looking up C
@@ -395,12 +393,12 @@ fn equal_cost() {
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
-    let (mixed, _, entities) = (&a, &b, &c).into_shiperator();
+    let (mixed, _, metadata) = (&a, &b, &c).into_shiperator();
 
-    let selection = selection(&entities).unwrap();
+    let selection = selection(&metadata).unwrap();
     assert_eq!(selection.cheapest().unwrap().work, 12);
     assert_eq!(selection.ordinary.work, Some(12));
-    assert_ordinary_wins(&entities, 2);
+    assert_ordinary_wins(&metadata, 2);
     assert_eq!(mixed.captain_mask, 0b100);
 }
 
@@ -447,9 +445,9 @@ fn overlap_world() -> World {
     world
 }
 
-/// Returns the length of each range the cheapest alternative of `entities` walks, by group size.
-fn cover_ranges(entities: &RawEntityIdAccess) -> Vec<usize> {
-    cheapest(entities)
+/// Returns the length of each range the cheapest alternative of `metadata` walks, by group size.
+fn cover_ranges(metadata: &ConstructionMetadata) -> Vec<usize> {
+    cheapest(metadata)
         .group()
         .ranges
         .iter()
@@ -463,12 +461,12 @@ fn cover_ranges(entities: &RawEntityIdAccess) -> Vec<usize> {
 fn overlapping() {
     let world = overlap_world();
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (_, _, entities) = (&a, &b).into_shiperator();
+    let (_, _, metadata) = (&a, &b).into_shiperator();
 
-    assert_grouped_wins(&entities, 0b11);
-    assert_eq!(cover_ranges(&entities), [2, 3]);
+    assert_grouped_wins(&metadata, 0b11);
+    assert_eq!(cover_ranges(&metadata), [2, 3]);
     assert_eq!(
-        walks(&entities),
+        walks(&metadata),
         [
             aligned_walk(6, 0b11),
             Walk::Aligned {
@@ -480,8 +478,8 @@ fn overlapping() {
         ]
     );
     // 13 candidates without sailor, against B's 16 candidates looking A up.
-    assert_eq!(estimates(&entities), [(13, 26)]);
-    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(16 * 3));
+    assert_eq!(estimates(&metadata), [(13, 26)]);
+    assert_eq!(selection(&metadata).unwrap().ordinary.work, Some(16 * 3));
 }
 
 /// Asserts that an `(A, B, C)` query over AB and AC covers their ABC union alone:
@@ -492,12 +490,12 @@ fn union_exclusion() {
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
-    let (_, _, entities) = (&a, &b, &c).into_shiperator();
+    let (_, _, metadata) = (&a, &b, &c).into_shiperator();
 
-    assert_grouped_wins(&entities, 0b111);
-    assert_eq!(cover_ranges(&entities), [3]);
-    assert_eq!(walks(&entities), [aligned_walk(7, 0b111)]);
-    assert_eq!(estimates(&entities), [(7, 14)]);
+    assert_grouped_wins(&metadata, 0b111);
+    assert_eq!(cover_ranges(&metadata), [3]);
+    assert_eq!(walks(&metadata), [aligned_walk(7, 0b111)]);
+    assert_eq!(estimates(&metadata), [(7, 14)]);
 }
 
 /// Asserts that a small ordinary captain beats walks over several ranges.
@@ -511,9 +509,9 @@ fn overlap_small_captain() {
     let (a, b, d) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, D>)>()
         .unwrap();
-    let (mixed, _, entities) = (&a, &b, &d).into_shiperator();
+    let (mixed, _, metadata) = (&a, &b, &d).into_shiperator();
 
-    assert_ordinary_wins(&entities, 2);
+    assert_ordinary_wins(&metadata, 2);
     assert_eq!(mixed.captain_mask, 0b100);
     assert_eq!((&a, &b, &d).iter().ids().collect::<Vec<_>>(), [ab]);
 }
@@ -533,13 +531,13 @@ fn absent_union() {
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
-    let (_, _, entities) = (&a, &b, &c).into_shiperator();
+    let (_, _, metadata) = (&a, &b, &c).into_shiperator();
 
     // 3 candidates each looking 2 components up cost 12, C captaining alone 16.
-    assert_grouped_wins(&entities, 0b111);
-    assert!(cover_ranges(&entities).is_empty());
+    assert_grouped_wins(&metadata, 0b111);
+    assert!(cover_ranges(&metadata).is_empty());
     assert_eq!(
-        walks(&entities),
+        walks(&metadata),
         [
             Walk::Unevaluated {
                 owner: 0,
@@ -558,8 +556,8 @@ fn absent_union() {
             },
         ]
     );
-    assert_eq!(estimates(&entities), [(3, 12)]);
-    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(16));
+    assert_eq!(estimates(&metadata), [(3, 12)]);
+    assert_eq!(selection(&metadata).unwrap().ordinary.work, Some(16));
 }
 
 /// AB and ACD groups holding 6 AB entities, 6 ACD entities and 5 entities owning all four
@@ -586,12 +584,12 @@ fn extra_captain() {
     let (a, b, c) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
-    let (_, _, entities) = (&a, &b, &c).into_shiperator();
+    let (_, _, metadata) = (&a, &b, &c).into_shiperator();
 
-    assert_grouped_wins(&entities, 0b011);
-    assert_eq!(cover_ranges(&entities), [2, 4]);
+    assert_grouped_wins(&metadata, 0b011);
+    assert_eq!(cover_ranges(&metadata), [2, 4]);
     assert_eq!(
-        walks(&entities),
+        walks(&metadata),
         [
             aligned_walk(6, 0b011),
             Walk::Aligned {
@@ -603,7 +601,7 @@ fn extra_captain() {
         ]
     );
     // 6 candidates looking C up and 5 looking nothing up, against 11 looking 2 components up.
-    assert_eq!(cheapest(&entities).work, 28);
+    assert_eq!(cheapest(&metadata).work, 28);
 }
 
 /// Asserts that a set of overlapping groups competes with a disjoint group: with AB and AC
@@ -619,9 +617,9 @@ fn overlap_disjoint() {
     let (a, b, d, e) = world
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, D>, View<'_, E>)>()
         .unwrap();
-    let (_, _, entities) = (&a, &b, &d, &e).into_shiperator();
+    let (_, _, metadata) = (&a, &b, &d, &e).into_shiperator();
 
-    let required: Vec<u32> = selection(&entities)
+    let required: Vec<u32> = selection(&metadata)
         .unwrap()
         .alternatives
         .iter()
@@ -629,8 +627,8 @@ fn overlap_disjoint() {
         .collect();
     assert_eq!(required, [0b0011, 0b1100]);
     // AB walks 16 candidates looking D and E up, DE walks 3 looking A and B up.
-    assert_eq!(estimates(&entities), [(16, 16 * 4), (3, 3 * 4)]);
-    assert_grouped_wins(&entities, 0b1100);
+    assert_eq!(estimates(&metadata), [(16, 16 * 4), (3, 3 * 4)]);
+    assert_grouped_wins(&metadata, 0b1100);
 }
 
 /// Asserts that queries containing `Not`, `Optional`, `Or` or a tracking filter keep
@@ -655,25 +653,25 @@ fn filters() {
         )>()
         .unwrap();
 
-    let (mixed, _, entities) = (&a, &b, !&d).into_shiperator();
-    assert!(matches!(entities.metadata, NodeMetadata::Filtered));
+    let (mixed, _, metadata) = (&a, &b, !&d).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Filtered));
     assert_eq!(mixed.captain_mask, 0b001);
 
-    let (mixed, _, entities) = (&a, &b, Optional(&d)).into_shiperator();
-    assert!(matches!(entities.metadata, NodeMetadata::Filtered));
+    let (mixed, _, metadata) = (&a, &b, Optional(&d)).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Filtered));
     assert_eq!(mixed.captain_mask, 0b001);
 
-    let (mixed, _, entities) = (&a, &b, &c | &d).into_shiperator();
-    assert!(matches!(entities.metadata, NodeMetadata::Filtered));
+    let (mixed, _, metadata) = (&a, &b, &c | &d).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Filtered));
     assert_eq!(mixed.captain_mask, 0b001);
 
-    let (mixed, _, entities) = (&c, ins.inserted()).into_shiperator();
-    assert!(matches!(entities.metadata, NodeMetadata::Filtered));
+    let (mixed, _, metadata) = (&c, ins.inserted()).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Filtered));
     assert_eq!(mixed.captain_mask, 0b01);
 
     // A filter in a nested query disables grouping for its parent too.
-    let (_, _, entities) = ((&c, !&d), &a, &b).into_shiperator();
-    assert!(matches!(entities.metadata, NodeMetadata::Filtered));
+    let (_, _, metadata) = ((&c, !&d), &a, &b).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Filtered));
 }
 
 /// Asserts that a modification tracked window isn't a filter and stays eligible.
@@ -686,9 +684,9 @@ fn modification_tracked() {
     world.group::<(Modif, B)>();
 
     let (mut modifs, b) = world.borrow::<(ViewMut<'_, Modif>, View<'_, B>)>().unwrap();
-    let (_, _, entities) = (&mut modifs, &b).into_shiperator();
+    let (_, _, metadata) = (&mut modifs, &b).into_shiperator();
 
-    assert_grouped_wins(&entities, 0b11);
+    assert_grouped_wins(&metadata, 0b11);
 }
 
 /// Asserts that a storage repeated in a query doesn't prove its group: we don't pick which
@@ -701,12 +699,12 @@ fn repeated_storage() {
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
 
-    let (mixed, _, entities) = (&a, &a, &b).into_shiperator();
-    assert_ungrouped(&entities);
+    let (mixed, _, metadata) = (&a, &a, &b).into_shiperator();
+    assert_ungrouped(&metadata);
     assert_eq!(mixed.captain_mask, 0b001);
 
-    let (_, _, entities) = (&a, &b, &b).into_shiperator();
-    assert_ungrouped(&entities);
+    let (_, _, metadata) = (&a, &b, &b).into_shiperator();
+    assert_ungrouped(&metadata);
 }
 
 /// Asserts that a group with a thread-local member only matches that thread-local storage,
@@ -731,11 +729,11 @@ fn thread_local_identity() {
         .borrow::<(View<'_, A>, NonSend<View<'_, A>>, View<'_, B>)>()
         .unwrap();
 
-    let (_, _, entities) = (&a, &b).into_shiperator();
-    assert_ungrouped(&entities);
+    let (_, _, metadata) = (&a, &b).into_shiperator();
+    assert_ungrouped(&metadata);
 
-    let (_, _, entities) = (&*local_a, &b).into_shiperator();
-    assert_grouped_wins(&entities, 0b11);
+    let (_, _, metadata) = (&*local_a, &b).into_shiperator();
+    assert_grouped_wins(&metadata, 0b11);
 }
 
 /// Asserts that a nested `Mixed` isn't a group member for its parent, its parent drives
@@ -756,11 +754,11 @@ fn nested() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
 
-    let (_, _, entities) = (&a, &b).into_shiperator();
-    assert_grouped_wins(&entities, 0b11);
+    let (_, _, metadata) = (&a, &b).into_shiperator();
+    assert_grouped_wins(&metadata, 0b11);
 
-    let (mixed, _, entities) = ((&a, &b), &c).into_shiperator();
-    let selection = selection(&entities).unwrap();
+    let (mixed, _, metadata) = ((&a, &b), &c).into_shiperator();
+    let selection = selection(&metadata).unwrap();
     let winner = selection.winner().unwrap();
 
     assert_eq!(selection.ordinary.captain, 1);
@@ -811,13 +809,13 @@ fn locally_losing() {
         )>()
         .unwrap();
 
-    let (_, _, entities) = (&a, &b, &c, &d, &e).into_shiperator();
-    assert_eq!(estimates(&entities), [(6, 24), (5, 25)]);
-    assert_grouped_wins(&entities, 0b00111);
+    let (_, _, metadata) = (&a, &b, &c, &d, &e).into_shiperator();
+    assert_eq!(estimates(&metadata), [(6, 24), (5, 25)]);
+    assert_grouped_wins(&metadata, 0b00111);
 
-    let (_, _, entities) = ((&a, &b, &c, &d, &e), &f, &g).into_shiperator();
-    assert_eq!(estimates(&entities), [(6, 36), (5, 35)]);
-    let winner = selection(&entities).unwrap().winner().unwrap();
+    let (_, _, metadata) = ((&a, &b, &c, &d, &e), &f, &g).into_shiperator();
+    assert_eq!(estimates(&metadata), [(6, 36), (5, 35)]);
+    let winner = selection(&metadata).unwrap().winner().unwrap();
     assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
     assert_eq!(winner.group().required, 0b11000);
 
@@ -852,14 +850,14 @@ fn route_tie() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
         .unwrap();
 
-    let (_, _, entities) = ((&a, &b), &c, &d).into_shiperator();
-    assert_eq!(estimates(&entities), [(5, 20), (5, 20)]);
-    let winner = selection(&entities).unwrap().winner().unwrap();
+    let (_, _, metadata) = ((&a, &b), &c, &d).into_shiperator();
+    assert_eq!(estimates(&metadata), [(5, 20), (5, 20)]);
+    let winner = selection(&metadata).unwrap().winner().unwrap();
     assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
 
-    let (_, _, entities) = (&c, &d, (&a, &b)).into_shiperator();
-    assert_eq!(estimates(&entities), [(5, 20), (5, 20)]);
-    let winner = selection(&entities).unwrap().winner().unwrap();
+    let (_, _, metadata) = (&c, &d, (&a, &b)).into_shiperator();
+    assert_eq!(estimates(&metadata), [(5, 20), (5, 20)]);
+    let winner = selection(&metadata).unwrap().winner().unwrap();
     assert!(matches!(winner.route, Route::Local(_)));
     assert_eq!(winner.group().required, 0b011);
 }
@@ -877,10 +875,10 @@ fn damaged_owner() {
     world.delete_component::<B>(pairs[6]);
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
-    let (_, _, entities) = (&a, &b).into_shiperator();
+    let (_, _, metadata) = (&a, &b).into_shiperator();
 
     assert_eq!(
-        walks(&entities),
+        walks(&metadata),
         [
             aligned_walk(6, 0b11),
             Walk::Damaged {
@@ -892,9 +890,9 @@ fn damaged_owner() {
             }
         ]
     );
-    assert_eq!(estimates(&entities), [(9, 21)]);
-    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(27));
-    assert_grouped_wins(&entities, 0b11);
+    assert_eq!(estimates(&metadata), [(9, 21)]);
+    assert_eq!(selection(&metadata).unwrap().ordinary.work, Some(27));
+    assert_grouped_wins(&metadata, 0b11);
 
     let mut ids: Vec<EntityId> = (&a, &b).iter().ids().collect();
     ids.sort_unstable();
@@ -924,27 +922,29 @@ fn owned_route() {
     let all_storages = world.borrow::<AllStoragesView<'_>>().unwrap();
     let current = TrackingTimestamp::origin();
 
-    let (mixed, _, _, _, entities) =
+    let (mixed, _, _, _, metadata) =
         <(&A, &B) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
-    assert_grouped_wins(&entities, 0b11);
+    assert_grouped_wins(&metadata, 0b11);
     assert_eq!(mixed.captain_mask, 0b10);
 
-    let (mixed, _, _, _, entities) =
+    let (mixed, _, _, _, metadata) =
         <(&A, &B, &C) as IterComponent>::into_shiperator(&all_storages, None, current).unwrap();
-    assert_ordinary_wins(&entities, 2);
+    assert_ordinary_wins(&metadata, 2);
     assert_eq!(mixed.captain_mask, 0b100);
 }
 
-/// Asserts that `IntoIterRef` doesn't keep the construction metadata of a query
-/// that reported a grouped alternative.
+/// Asserts that every iterator of an `IntoIterRef` starts from the grouped walk installed when
+/// it was built, a consumed iterator doesn't move the next one's start.
 #[test]
-fn owned_released() {
+fn owned_reuse() {
     let world = owned_world();
 
-    let iter_ref = world.iter::<(&A, &B)>();
+    let mut iter_ref = world.iter::<(&A, &B)>();
 
-    assert!(matches!(
-        iter_ref.entities.metadata,
-        NodeMetadata::Ungrouped
-    ));
+    for _ in 0..2 {
+        let iter = iter_ref.iter();
+        assert_eq!(iter.shiperator.captain_mask, 0b11);
+        assert_eq!(iter.cursor.len(), 20);
+        assert_eq!(iter.count(), 20);
+    }
 }

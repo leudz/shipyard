@@ -267,9 +267,9 @@ fn large_c() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
 
-    let (_, _, entities) = ((&a, &b), &c).into_shiperator();
-    let NodeMetadata::Mixed(selection) = &entities.metadata else {
-        panic!("a Mixed reports its selection");
+    let (_, _, metadata) = ((&a, &b), &c).into_shiperator();
+    let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
+        panic!("a Mixed with grouped alternatives reports its selection");
     };
     assert_eq!(selection.ordinary.captain, 0);
     assert_eq!(selection.ordinary.work, Some(40));
@@ -308,9 +308,9 @@ fn tiny_c() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
 
-    let (_, _, entities) = ((&a, &b), &c).into_shiperator();
-    let NodeMetadata::Mixed(selection) = &entities.metadata else {
-        panic!("a Mixed reports its selection");
+    let (_, _, metadata) = ((&a, &b), &c).into_shiperator();
+    let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
+        panic!("a Mixed with grouped alternatives reports its selection");
     };
     // The pair still reported its aligned walk, which costs 30 here against 8.
     assert_eq!(selection.cheapest().unwrap().work, 30);
@@ -583,17 +583,12 @@ fn cross_boundary() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
 
-    let (_, _, inner_entities) = (&a, &b).into_shiperator();
-    let NodeMetadata::Mixed(inner_selection) = &inner_entities.metadata else {
-        panic!("a Mixed reports its selection");
-    };
-    assert!(inner_selection.alternatives.is_empty());
+    // Both `Mixed`s report their ordinary walk alone, without grouped alternative.
+    let (_, _, inner_metadata) = (&a, &b).into_shiperator();
+    assert!(matches!(inner_metadata.0, NodeMetadata::Mixed { .. }));
 
-    let (_, _, entities) = ((&a, &b), &c).into_shiperator();
-    let NodeMetadata::Mixed(selection) = &entities.metadata else {
-        panic!("a Mixed reports its selection");
-    };
-    assert!(selection.alternatives.is_empty());
+    let (_, _, metadata) = ((&a, &b), &c).into_shiperator();
+    assert!(matches!(metadata.0, NodeMetadata::Mixed { .. }));
 
     let iter = ((&a, &b), &c).iter();
     assert!(iter.schedule.is_none());

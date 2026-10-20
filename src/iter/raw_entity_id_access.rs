@@ -1,7 +1,6 @@
 use crate::entity_id::EntityId;
 use crate::iter::EntityCursor;
 use crate::iter::plan::SegmentSchedule;
-use crate::iter::planner::NodeMetadata;
 use core::ptr::NonNull;
 
 /// Entities driving a new iteration.
@@ -10,14 +9,14 @@ use core::ptr::NonNull;
 /// multiple segments, the schedule of the follow-ups.\
 /// An empty cursor never has follow-ups: constructors skip empty segments.
 ///
-/// While a query is built, it also carries what its node knows about grouping.
-/// Iterators drop it, it's never part of their state.
+/// This is all the execution state an iterator takes from its construction. What a node knows
+/// about grouping travels separately, see
+/// [`ConstructionMetadata`](crate::iter::ConstructionMetadata).
 #[derive(Clone)]
 #[doc(hidden)]
 pub struct RawEntityIdAccess {
     pub(crate) cursor: EntityCursor,
     pub(crate) schedule: Option<SegmentSchedule>,
-    pub(crate) metadata: NodeMetadata,
 }
 
 impl RawEntityIdAccess {
@@ -35,7 +34,6 @@ impl RawEntityIdAccess {
             // SAFE: Our caller upholds `EntityCursor::new`'s requirements, they are the same as ours.
             cursor: unsafe { EntityCursor::new(start, len) },
             schedule: None,
-            metadata: NodeMetadata::Ungrouped,
         }
     }
 
@@ -45,27 +43,7 @@ impl RawEntityIdAccess {
         RawEntityIdAccess {
             cursor: EntityCursor::empty(),
             schedule: None,
-            metadata: NodeMetadata::Ungrouped,
         }
-    }
-
-    /// Replaces the grouping metadata.
-    #[inline]
-    pub(crate) fn with_metadata(mut self, metadata: NodeMetadata) -> RawEntityIdAccess {
-        self.metadata = metadata;
-        self
-    }
-
-    /// Marks these entities as coming from a filter, grouping is disabled for the whole query.
-    #[inline]
-    pub(crate) fn filtered(self) -> RawEntityIdAccess {
-        self.with_metadata(NodeMetadata::Filtered)
-    }
-
-    /// Drops the grouping metadata, for state that outlives the construction.
-    #[inline]
-    pub(crate) fn without_metadata(self) -> RawEntityIdAccess {
-        self.with_metadata(NodeMetadata::Ungrouped)
     }
 
     /// Returns the number of candidates, follow-ups included, `None` when it overflows.

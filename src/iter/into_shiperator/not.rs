@@ -1,6 +1,6 @@
 use crate::component::Component;
-use crate::iter::IntoShiperator;
-use crate::iter::RawEntityIdAccess;
+use crate::iter::planner::ConstructionMetadata;
+use crate::iter::{IntoShiperator, RawEntityIdAccess};
 use crate::not::Not;
 use crate::sparse_set::{FullRawWindow, FullRawWindowMut};
 use crate::tracking::{
@@ -17,10 +17,10 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = Not<FullRawWindow<'tmp, T, Track>>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (window, len, entity_access) = self.0.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (window, entities, _) = self.0.into_shiperator();
 
-        (Not(window), len, entity_access.filtered())
+        (Not(window), entities, ConstructionMetadata::filtered())
     }
 
     #[inline]
@@ -41,10 +41,10 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = Not<FullRawWindow<'tmp, T, Track>>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (window, len, entity_access) = self.0.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (window, entities, _) = self.0.into_shiperator();
 
-        (Not(window), len, entity_access.filtered())
+        (Not(window), entities, ConstructionMetadata::filtered())
     }
 
     #[inline]
@@ -65,10 +65,10 @@ unsafe impl<'tmp, 'v: 'tmp, T: Component, Track: Tracking> IntoShiperator
     type Shiperator = Not<FullRawWindowMut<'tmp, T, Track>>;
 
     #[inline]
-    fn into_shiperator(self) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-        let (window, len, entity_access) = self.0.into_shiperator();
+    fn into_shiperator(self) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+        let (window, entities, _) = self.0.into_shiperator();
 
-        (Not(window), len, entity_access.filtered())
+        (Not(window), entities, ConstructionMetadata::filtered())
     }
 
     #[inline]
@@ -94,10 +94,10 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = (self.0).0.into_shiperator();
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let (window, entities, _) = (self.0).0.into_shiperator();
 
-                (Not($type(window)), len, entity_access.filtered())
+                (Not($type(window)), entities, ConstructionMetadata::filtered())
             }
 
             #[inline]
@@ -121,10 +121,10 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = (self.0).0.into_shiperator();
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let (window, entities, _) = (self.0).0.into_shiperator();
 
-                (Not($type(window)), len, entity_access.filtered())
+                (Not($type(window)), entities, ConstructionMetadata::filtered())
             }
 
             #[inline]
@@ -148,10 +148,10 @@ macro_rules! impl_into_shiperator_tracking {
             #[inline]
             fn into_shiperator(
                 self,
-            ) -> (Self::Shiperator, usize, RawEntityIdAccess) {
-                let (window, len, entity_access) = (self.0).0.into_shiperator();
+            ) -> (Self::Shiperator, RawEntityIdAccess, ConstructionMetadata) {
+                let (window, entities, _) = (self.0).0.into_shiperator();
 
-                (Not($type(window)), len, entity_access.filtered())
+                (Not($type(window)), entities, ConstructionMetadata::filtered())
             }
 
             #[inline]

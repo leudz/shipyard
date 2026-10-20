@@ -5,7 +5,7 @@ use shipyard::advanced::Mut;
 use shipyard::advanced::atomic_refcell::SharedBorrow;
 use shipyard::advanced::tracking::TrackingTimestamp;
 use shipyard::all_storages::AllStorages;
-use shipyard::iter::{IterComponent, RawEntityIdAccess};
+use shipyard::iter::{ConstructionMetadata, IterComponent, RawEntityIdAccess};
 use shipyard::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -227,7 +227,7 @@ fn held_mut() {
 /// Custom component set delegating to `&mut A`.
 struct CustomA;
 
-// SAFE: We return `&mut A`'s results unchanged, guards included.
+// SAFE: We return `&mut A`'s results unchanged, guards and metadata included.
 unsafe impl IterComponent for CustomA {
     type Shiperator<'a> = <&'static mut A as IterComponent>::Shiperator<'a>;
     type Borrow<'a> = <&'static mut A as IterComponent>::Borrow<'a>;
@@ -241,8 +241,8 @@ unsafe impl IterComponent for CustomA {
             Self::Shiperator<'a>,
             Option<SharedBorrow<'a>>,
             Self::Borrow<'a>,
-            usize,
             RawEntityIdAccess,
+            ConstructionMetadata,
         ),
         error::GetStorage,
     > {

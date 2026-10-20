@@ -1,7 +1,8 @@
 //! Construction-only choice between an ordinary walk and walks over group ranges.
 //!
 //! While a query is built, each node reports what it knows about grouping in a
-//! [`NodeMetadata`], read from its storages while they're borrowed.\
+//! [`ConstructionMetadata`], read from its storages while they're borrowed.
+//! It travels next to the node's entities, never inside them.\
 //! A `Mixed` hands its immediate children to [`select`], which ranks the ordinary captains
 //! and estimates its grouped [`Alternative`]s: walks over the ranges containing each set of
 //! overlapping groups its window children fully hold (see [`cover_sets`]), and the
@@ -29,27 +30,63 @@ use core::cmp::Reverse;
 use core::fmt;
 use core::ops::Range;
 
-/// What a query node knows about grouping, reported while its storages are borrowed.
+/// What a query node knows about grouping, reported by
+/// [`IntoShiperator::into_shiperator`](crate::iter::IntoShiperator::into_shiperator).
 ///
-/// It only exists while the query is built, iterators don't keep it.
-#[derive(Clone, Default)]
+/// Only shipyard reads it: a node's parent while building its own selection, then the query's
+/// root to pick its walk. The root drops it before building the iterator, iterators and
+/// [`IntoIterRef`](crate::iter::IntoIterRef) never keep it.
+#[doc(hidden)]
+pub struct ConstructionMetadata(pub(crate) NodeMetadata);
+
+impl ConstructionMetadata {
+    /// Returns the metadata of a node grouping can neither use nor be prevented by.
+    #[inline]
+    pub(crate) fn ungrouped() -> ConstructionMetadata {
+        ConstructionMetadata(NodeMetadata::Ungrouped)
+    }
+
+    /// Returns the metadata of a filter, or of a query containing one.
+    #[inline]
+    pub(crate) fn filtered() -> ConstructionMetadata {
+        ConstructionMetadata(NodeMetadata::Filtered)
+    }
+
+    /// Returns the metadata of a plain window over `sparse_set`.
+    #[inline]
+    pub(crate) fn window<T: Component>(sparse_set: &SparseSet<T>) -> ConstructionMetadata {
+        ConstructionMetadata(NodeMetadata::window(sparse_set))
+    }
+}
+
+/// What a query node knows about grouping, see [`ConstructionMetadata`].
+///
+/// Every node reports one, so variants stay small: whatever only grouped storages need is boxed.
+#[derive(Clone)]
 pub(crate) enum NodeMetadata {
     /// Nothing that could help or prevent grouping.
     ///
     /// A window over a storage without group range or an entity slice.
-    #[default]
     Ungrouped,
     /// A plain window over a storage holding group ranges.
-    Window(WindowMetadata),
+    Window(Box<WindowMetadata>),
     /// An `Optional`, `Not`, tracking filter or `Or`, or a query containing one.
     ///
     /// These queries keep ordinary selection all the way up to the root.
     Filtered,
+    /// A `Mixed` without filter or grouped alternative, its parent can only look it up or drive
+    /// through its ordinary walk.
+    Mixed {
+        /// See [`Selection::lookups`].
+        lookups: usize,
+        /// See [`OrdinaryCandidate::work`].
+        ordinary_work: Option<u64>,
+    },
     /// A `Mixed` without filter, with its ordinary walk and its grouped alternatives.
     ///
     /// Its parent can drive through any of these alternatives, only the query's root
     /// installs one, see [`install_winner`].
-    Mixed(Selection),
+    GroupedMixed(Box<Selection>),
 }
 
 impl NodeMetadata {
@@ -90,7 +127,7 @@ impl NodeMetadata {
             return NodeMetadata::Ungrouped;
         }
 
-        NodeMetadata::Window(window)
+        NodeMetadata::Window(Box::new(window))
     }
 }
 
@@ -160,15 +197,16 @@ pub(crate) struct Child {
 }
 
 impl Child {
-    /// Describes a child from its capabilities, sail time and `entities`.
+    /// Describes a child from its capabilities, sail time, `entities` and `metadata`.
     ///
-    /// The metadata moves out of `entities`, it doesn't follow them into the iterator.
+    /// `entities` and `metadata` must come from the same `into_shiperator` call.
     #[inline]
     pub(crate) fn new(
         can_captain: bool,
         can_sailor: bool,
         sail_time: usize,
-        entities: &mut RawEntityIdAccess,
+        entities: &RawEntityIdAccess,
+        metadata: ConstructionMetadata,
     ) -> Child {
         Child {
             can_captain,
@@ -176,7 +214,7 @@ impl Child {
             sail_time,
             candidates: entities.candidate_count(),
             entities: entities.cursor,
-            metadata: core::mem::take(&mut entities.metadata),
+            metadata: metadata.0,
         }
     }
 
@@ -194,7 +232,8 @@ impl Child {
     /// filters can read more, but they disable grouping so their estimate is never compared.
     fn lookups(&self) -> usize {
         match &self.metadata {
-            NodeMetadata::Mixed(selection) => selection.lookups,
+            NodeMetadata::Mixed { lookups, .. } => *lookups,
+            NodeMetadata::GroupedMixed(selection) => selection.lookups,
             _ => 1,
         }
     }
@@ -204,7 +243,8 @@ impl Child {
     /// Returns `None` when it doesn't fit in a `u64`.
     fn ordinary_work(&self) -> Option<u64> {
         match &self.metadata {
-            NodeMetadata::Mixed(selection) => selection.ordinary.work,
+            NodeMetadata::Mixed { ordinary_work, .. } => *ordinary_work,
+            NodeMetadata::GroupedMixed(selection) => selection.ordinary.work,
             _ => walk_work(self.candidates?, 0),
         }
     }
@@ -212,7 +252,7 @@ impl Child {
     /// Moves out the grouped alternatives this child reported, only a nested `Mixed` has some.
     fn take_alternatives(&mut self) -> Vec<Alternative> {
         match &mut self.metadata {
-            NodeMetadata::Mixed(selection) => core::mem::take(&mut selection.alternatives),
+            NodeMetadata::GroupedMixed(selection) => core::mem::take(&mut selection.alternatives),
             _ => Vec::new(),
         }
     }
@@ -462,21 +502,29 @@ impl Selection {
     }
 
     /// Returns the metadata of the `Mixed` this selection is about, for its parent.
-    pub(crate) fn into_metadata(self) -> NodeMetadata {
-        if self.filtered {
+    pub(crate) fn into_metadata(self) -> ConstructionMetadata {
+        let metadata = if self.filtered {
             NodeMetadata::Filtered
+        } else if self.alternatives.is_empty() {
+            // The parent only needs our ordinary estimate, it doesn't have to be boxed.
+            NodeMetadata::Mixed {
+                lookups: self.lookups,
+                ordinary_work: self.ordinary.work,
+            }
         } else {
-            NodeMetadata::Mixed(self)
-        }
+            NodeMetadata::GroupedMixed(Box::new(self))
+        };
+
+        ConstructionMetadata(metadata)
     }
 }
 
 /// Returns the entities driving a whole query, installing its cheapest alternative on `root`
 /// when it beats its ordinary walk.
 ///
-/// `root` and `entities` are what the query's constructor returned, `root` still in the state
-/// it built.\
-/// The returned entities never carry metadata, the losing alternatives are dropped here.
+/// `root`, `entities` and `metadata` are what the query's constructor returned, `root` still
+/// in the state it built.\
+/// The metadata is consumed here, the losing alternatives are dropped with it.
 ///
 /// Only the root may call this. Each nested `Mixed` keeps the ordinary walk its constructor
 /// installed until then: its parent estimated its own alternatives with that walk and may
@@ -484,14 +532,15 @@ impl Selection {
 pub(crate) fn install_winner<S: Shiperator>(
     root: &mut S,
     entities: RawEntityIdAccess,
+    metadata: ConstructionMetadata,
 ) -> RawEntityIdAccess {
-    // Only a `Mixed` reports a selection. Wrappers either forward their child's report
-    // untouched or mark it filtered, so this one is about `root`'s own immediate children.
-    let NodeMetadata::Mixed(selection) = &entities.metadata else {
-        return entities.without_metadata();
+    // Only a `Mixed` reports alternatives. Wrappers either forward their child's report
+    // untouched or mark it filtered, so these are about `root`'s own immediate children.
+    let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
+        return entities;
     };
     let Some(winner) = selection.winner() else {
-        return entities.without_metadata();
+        return entities;
     };
 
     // `root` gets the first grouped segment's state, overwriting the ordinary one.
