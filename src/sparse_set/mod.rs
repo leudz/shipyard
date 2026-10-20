@@ -1216,61 +1216,94 @@ struct SortRepair<'a, T> {
 
 impl<T> Drop for SortRepair<'_, T> {
     fn drop(&mut self) {
-        // Calling `original(d)` the sparse index of `dense[d]`, the row that should end at `d`:
-        // `original` is a permutation of `sortable`. The sort kept the same ids in the slice,
-        // and before it each of them was pointed at by its own sparse entry, inside `sortable`.
-        //
-        // We follow each of its cycles. The component `start` needs is moved there,
-        // and the one it displaces is carried forward: after the swap, `current` always holds
-        // `start`'s original component. When the cycle comes back to `start`,
-        // `current` is the destination that needs it, so it's already in place.
-        // A cycle of `k` rows takes `k - 1` swaps.
-        //
-        // We read `next` before overwriting the sparse entry with `current`.
-        // The overwrite marks the destination repaired: `original(d) == d` from then on,
-        // so when the outer loop reaches a destination of a cycle we already walked,
-        // it's a fixed point and nothing moves.
-        //
-        // Only rows of `sortable` are read or written, with indices `original` produced,
-        // and only the sparse entries of the ids in `dense[sortable]` change.
-        // None of this calls user code, allocates or drops a component, so it can't panic.
-        //
-        // `current` and `next` are always rows of `sortable`: `current` starts as `start`
-        // then takes the values of `next`, which `original` maps inside `sortable`.
-        // `sortable` is part of the ungrouped region, inside the storage, and `dense`, `data`
+        // SAFE: `sortable` is part of the ungrouped region, inside the storage, and `dense`, `data`
         // and the enabled timestamp vectors all have the storage's length.
-        for start in self.sortable.clone() {
-            let mut current = start;
+        // The sort kept the same ids in `dense[sortable]`, they come from `dense` so their
+        // sparse page is allocated. Nothing touched the sparse array or the rows since sorting
+        // started, so each entry still holds its entity's original row, one of `sortable`'s,
+        // and no two entities share a row.
+        unsafe {
+            repair_rows(
+                self.sortable.clone(),
+                self.dense,
+                self.sparse,
+                self.data,
+                self.insertion_data.as_deref_mut(),
+                self.modification_data.as_deref_mut(),
+            );
+        }
+    }
+}
 
-            loop {
-                // SAFE: `current` is a row of `sortable`, in bounds of `dense`.
-                let entity = unsafe { *self.dense.get_unchecked(current) };
+/// Moves the components and timestamps of `domain` to follow the ids of `dense[domain]`,
+/// pointing each of their sparse entries at its new row.
+///
+/// The ids are already in the order we want, `dense` doesn't change. Rows outside `domain`
+/// and the sparse entries of ids outside it aren't touched.\
+/// Rows already in place don't move. A cycle of `k` rows takes `k - 1` swaps of each row array,
+/// a component can move several times along its cycle.
+///
+/// It never calls user code, allocates or drops a component, so it can't panic.
+///
+/// ### Safety
+///
+/// - `domain` must be in bounds of `dense`, `data` and each timestamp slice passed.
+/// - Every id of `dense[domain]` must have an allocated sparse page, and its sparse entry
+///   must hold the row of that entity's component and timestamps.
+/// - These rows must be exactly the rows of `domain`, each one held by a single entry.
+unsafe fn repair_rows<T>(
+    domain: Range<usize>,
+    dense: &[EntityId],
+    sparse: &mut SparseArray,
+    data: &mut [T],
+    mut insertion_data: Option<&mut [TrackingTimestamp]>,
+    mut modification_data: Option<&mut [TrackingTimestamp]>,
+) {
+    // Calling `original(d)` the sparse index of `dense[d]`, the row that should end at `d`:
+    // our caller guarantees `original` is a permutation of `domain`.
+    //
+    // We follow each of its cycles. The component `start` needs is moved there,
+    // and the one it displaces is carried forward: after the swap, `current` always holds
+    // `start`'s original component. When the cycle comes back to `start`,
+    // `current` is the destination that needs it, so it's already in place.
+    //
+    // We read `next` before overwriting the sparse entry with `current`.
+    // The overwrite marks the destination repaired: `original(d) == d` from then on,
+    // so when the outer loop reaches a destination of a cycle we already walked,
+    // it's a fixed point and nothing moves.
+    //
+    // `current` and `next` are always rows of `domain`: `current` starts as `start`
+    // then takes the values of `next`, which `original` maps inside `domain`.
+    for start in domain {
+        let mut current = start;
 
-                // SAFE: `entity` is one of the sorted ids, they come from `dense`
-                // so they own a component and their sparse page is allocated.
-                let sparse_entity = unsafe { self.sparse.get_mut_unchecked(entity) };
-                let next = sparse_entity.uindex();
-                // `current` was already the index of a component of the storage, it's a valid index.
-                sparse_entity.set_index(current as u64);
+        loop {
+            // SAFE: `current` is a row of `domain`, in bounds of `dense`.
+            let entity = unsafe { *dense.get_unchecked(current) };
 
-                if next == start {
-                    break;
-                }
+            // SAFE: `entity` is an id of `dense[domain]`, our caller guarantees its page is allocated.
+            let sparse_entity = unsafe { sparse.get_mut_unchecked(entity) };
+            let next = sparse_entity.uindex();
+            // `current` is a row of `domain`, a valid component index.
+            sparse_entity.set_index(current as u64);
 
-                // SAFE: `current` and `next` are rows of `sortable`, in bounds of `data`
-                // and of the timestamp vectors the storage tracks.
-                unsafe {
-                    swap_unchecked(self.data, current, next);
-                    if let Some(insertion_data) = &mut self.insertion_data {
-                        swap_unchecked(insertion_data, current, next);
-                    }
-                    if let Some(modification_data) = &mut self.modification_data {
-                        swap_unchecked(modification_data, current, next);
-                    }
-                }
-
-                current = next;
+            if next == start {
+                break;
             }
+
+            // SAFE: `current` and `next` are rows of `domain`, in bounds of `data`
+            // and of the timestamp slices we got.
+            unsafe {
+                swap_unchecked(data, current, next);
+                if let Some(insertion_data) = &mut insertion_data {
+                    swap_unchecked(insertion_data, current, next);
+                }
+                if let Some(modification_data) = &mut modification_data {
+                    swap_unchecked(modification_data, current, next);
+                }
+            }
+
+            current = next;
         }
     }
 }

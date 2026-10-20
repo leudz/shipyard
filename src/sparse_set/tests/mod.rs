@@ -1,6 +1,7 @@
 mod grouping;
 mod miri;
 mod moves;
+mod permutation;
 mod range_moves;
 mod removal;
 mod replacement;
