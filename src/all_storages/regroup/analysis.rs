@@ -276,13 +276,18 @@ impl Plan {
             .expect("every grouped storage has a plan")
     }
 
-    /// Returns the position of the plan of the group made of the sorted `members`,
-    /// adding a new union when there's none.
+    /// Returns the position of the plan of the group made of the sorted `members`, if any.
     ///
     /// This compares by value, so each set of members has a single identity,
     /// whether it was declared or created as a union before.
+    pub(super) fn find(&self, members: &[StorageId]) -> Option<usize> {
+        self.groups.iter().position(|plan| *plan.group == *members)
+    }
+
+    /// Returns the position of the plan of the group made of the sorted `members`,
+    /// adding a new union when there's none.
     fn find_or_add(&mut self, members: &[StorageId]) -> usize {
-        if let Some(index) = self.groups.iter().position(|plan| *plan.group == *members) {
+        if let Some(index) = self.find(members) {
             return index;
         }
 
@@ -340,7 +345,7 @@ impl Plan {
     /// holding an unevaluated component of `entity`.
     ///
     /// An entity can gain several components, only one of them counts its departures.
-    fn is_first_unevaluated(
+    pub(super) fn is_first_unevaluated(
         &self,
         memberships: &Memberships<'_>,
         group_index: usize,

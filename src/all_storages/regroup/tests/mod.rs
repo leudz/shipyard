@@ -2,6 +2,7 @@ mod analysis;
 mod churn;
 mod declaration;
 mod discovery;
+mod layout;
 mod original_row;
 mod promotion;
 mod repair;
