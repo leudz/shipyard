@@ -15,6 +15,22 @@ use crate::sparse_set::{GroupRegion, Groups, SparseArray};
 use crate::tracking::TrackingTimestamp;
 use alloc::borrow::Cow;
 use core::any::Any;
+use core::ops::Range;
+
+/// A grouped storage's ids, lent by [`Storage::reorder_ids`] to be reordered,
+/// next to the parts that stay as they are.
+#[doc(hidden)]
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "regroup doesn't use the two-phase path yet")
+)]
+pub struct ReorderParts<'a> {
+    /// The `EntityId` of every component, in physical order.
+    pub(crate) dense: &'a mut [EntityId],
+    /// Still holds the rows the components and timestamps are in.
+    pub(crate) sparse: &'a SparseArray,
+    pub(crate) groups: &'a Groups,
+}
 
 pub trait SizedAny {
     fn as_any(&self) -> &dyn Any;
@@ -160,6 +176,46 @@ pub trait Storage: SizedAny {
     #[allow(unused_variables)]
     #[track_caller]
     fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
+        panic!("grouping only supports SparseSet storages");
+    }
+
+    /// Returns the `EntityId` of every component in physical order, to reorder them,
+    /// along with the storage's sparse array and groups, if the storage supports grouping.
+    ///
+    /// Nothing follows the ids: each sparse entry keeps the row its entity's component
+    /// and timestamps are in, until [`repair_rows`](Storage::repair_rows) moves them.
+    ///
+    /// ### Safety
+    ///
+    /// - The ids must only be permuted, none can be added, lost or duplicated.
+    /// - Before the storage is used in any other way than through this function,
+    ///   [`sparse_array`](Storage::sparse_array), [`dense`](Storage::dense),
+    ///   [`groups`](Storage::groups) and [`groups_mut`](Storage::groups_mut),
+    ///   every reordered row has to be repaired with [`repair_rows`](Storage::repair_rows).
+    #[doc(hidden)]
+    #[inline]
+    unsafe fn reorder_ids(&mut self) -> Option<ReorderParts<'_>> {
+        None
+    }
+
+    /// Moves the components and timestamps of `domain` to follow the ids
+    /// [`reorder_ids`](Storage::reorder_ids) reordered, pointing their sparse entries at their new row.
+    ///
+    /// Rows already in place don't move and nothing outside `domain` is touched.
+    ///
+    /// ### Panics
+    ///
+    /// - The storage doesn't support grouping.
+    ///
+    /// ### Safety
+    ///
+    /// - `domain` must be in bounds of the storage.
+    /// - The sparse entry of every id of `dense[domain]` must hold the row of that entity's
+    ///   component and timestamps, and these rows must be exactly the rows of `domain`.\
+    ///   This holds when, since the last repair, ids were only permuted inside `domain`.
+    #[doc(hidden)]
+    #[allow(unused_variables)]
+    unsafe fn repair_rows(&mut self, domain: Range<usize>) {
         panic!("grouping only supports SparseSet storages");
     }
 }

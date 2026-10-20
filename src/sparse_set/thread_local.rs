@@ -4,8 +4,9 @@ use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::sparse_set::{GroupRegion, Groups, SparseSet, sparse_array::SparseArray};
-use crate::storage::{SBoxBuilder, Storage, StorageId};
+use crate::storage::{ReorderParts, SBoxBuilder, Storage, StorageId};
 use crate::tracking::TrackingTimestamp;
+use core::ops::Range;
 
 impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
     #[inline]
@@ -124,6 +125,16 @@ impl<T: Component + Sync> Storage for NonSend<SparseSet<T>> {
     fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
         self.private_move_to(entity, destination);
     }
+
+    unsafe fn reorder_ids(&mut self) -> Option<ReorderParts<'_>> {
+        // SAFE: our caller upholds `Storage::reorder_ids`'s requirements, they're the same.
+        Some(unsafe { self.0.private_reorder_ids() })
+    }
+
+    unsafe fn repair_rows(&mut self, domain: Range<usize>) {
+        // SAFE: our caller upholds `Storage::repair_rows`'s requirements, they're the same.
+        unsafe { self.0.private_repair_rows(domain) }
+    }
 }
 
 impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
@@ -241,6 +252,16 @@ impl<T: Component + Send> Storage for NonSync<SparseSet<T>> {
     #[track_caller]
     fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
         self.private_move_to(entity, destination);
+    }
+
+    unsafe fn reorder_ids(&mut self) -> Option<ReorderParts<'_>> {
+        // SAFE: our caller upholds `Storage::reorder_ids`'s requirements, they're the same.
+        Some(unsafe { self.0.private_reorder_ids() })
+    }
+
+    unsafe fn repair_rows(&mut self, domain: Range<usize>) {
+        // SAFE: our caller upholds `Storage::repair_rows`'s requirements, they're the same.
+        unsafe { self.0.private_repair_rows(domain) }
     }
 }
 
@@ -362,5 +383,15 @@ impl<T: Component> Storage for NonSendSync<SparseSet<T>> {
     #[track_caller]
     fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
         self.private_move_to(entity, destination);
+    }
+
+    unsafe fn reorder_ids(&mut self) -> Option<ReorderParts<'_>> {
+        // SAFE: our caller upholds `Storage::reorder_ids`'s requirements, they're the same.
+        Some(unsafe { self.0.private_reorder_ids() })
+    }
+
+    unsafe fn repair_rows(&mut self, domain: Range<usize>) {
+        // SAFE: our caller upholds `Storage::repair_rows`'s requirements, they're the same.
+        unsafe { self.0.private_repair_rows(domain) }
     }
 }

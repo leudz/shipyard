@@ -155,3 +155,109 @@ fn drops() {
     drop(sparse_set);
     assert_eq!(drops.load(AtomicOrdering::Relaxed), 6);
 }
+
+/// Builds a tracked storage of 6 components, 3 of them in a rotated range.
+fn tracked_storage() -> SparseSet<TrackedI32> {
+    storage_with_tails(&[(3, 1)], 3, 0, |index| {
+        TrackedI32(i32::try_from(index).unwrap())
+    })
+}
+
+/// Returns what each row holds besides its id: the sparse entry of the entity with the row's index,
+/// the component, and its insertion and modification timestamps.
+fn rows(sparse_set: &SparseSet<TrackedI32>) -> Vec<(Option<EntityId>, i32, u64, u64)> {
+    (0..sparse_set.len())
+        .map(|row| {
+            (
+                sparse_set.sparse.get(EntityId::new(row as u64)),
+                sparse_set.data[row].0,
+                sparse_set.insertion_data[row].get(),
+                sparse_set.modification_data[row].get(),
+            )
+        })
+        .collect()
+}
+
+/// Reverses the ids of a `tracked_storage` through the erased `reorder_ids`, sorting them by their
+/// frozen sparse entry while reading the groups from the same borrow, and checks nothing else moved.
+/// Then repairs every row through the erased `repair_rows` and checks every association.
+///
+/// `inner` reaches the `SparseSet` behind `storage`.
+fn reverse_erased<S: Storage>(mut storage: S, inner: impl Fn(&S) -> &SparseSet<TrackedI32>) {
+    let before = rows(inner(&storage));
+    let len = inner(&storage).len();
+
+    let erased: &mut dyn Storage = &mut storage;
+    // SAFE: we only sort the ids, and repair every row before any other use of the storage.
+    let parts = unsafe { erased.reorder_ids() }.unwrap();
+    parts.dense.sort_unstable_by_key(|&entity| {
+        core::cmp::Reverse(parts.sparse.get(entity).unwrap().uindex())
+    });
+    assert_eq!(parts.groups.ranges.len(), 1);
+    assert_eq!(parts.groups.ungrouped_range(len), 3..6);
+
+    assert_eq!(indices(inner(&storage)), [5, 4, 3, 2, 1, 0]);
+    assert_eq!(rows(inner(&storage)), before);
+
+    let erased: &mut dyn Storage = &mut storage;
+    // SAFE: `0..len` is the whole storage. Its ids were only permuted and nothing repaired them yet,
+    // so their sparse entries hold their original rows, which are all of `0..len`.
+    unsafe { erased.repair_rows(0..len) };
+
+    assert_rows(inner(&storage), |component| {
+        Some(u64::try_from(component.0).unwrap())
+    });
+    assert_eq!(indices(inner(&storage)), [5, 4, 3, 2, 1, 0]);
+}
+
+/// Asserts that reordering a `SparseSet`'s ids through the erased storage leaves its sparse array,
+/// components and timestamps in place, until the erased repair brings each one to its entity.
+#[test]
+fn erased() {
+    reverse_erased(tracked_storage(), |storage| storage);
+}
+
+/// Asserts that a `NonSend` storage forwards reordering and repair to its `SparseSet`,
+/// with the same results as [`erased`].
+#[cfg(feature = "thread_local")]
+#[test]
+fn erased_non_send() {
+    reverse_erased(crate::borrow::NonSend(tracked_storage()), |storage| {
+        &storage.0
+    });
+}
+
+/// Asserts that a `NonSync` storage forwards reordering and repair to its `SparseSet`,
+/// with the same results as [`erased`].
+#[cfg(feature = "thread_local")]
+#[test]
+fn erased_non_sync() {
+    reverse_erased(crate::borrow::NonSync(tracked_storage()), |storage| {
+        &storage.0
+    });
+}
+
+/// Asserts that a `NonSendSync` storage forwards reordering and repair to its `SparseSet`,
+/// with the same results as [`erased`].
+#[cfg(feature = "thread_local")]
+#[test]
+fn erased_non_send_sync() {
+    reverse_erased(crate::borrow::NonSendSync(tracked_storage()), |storage| {
+        &storage.0
+    });
+}
+
+/// Storage that isn't a `SparseSet`.
+struct Custom;
+
+impl Storage for Custom {}
+
+/// Asserts that a custom storage that doesn't support grouping has no ids to reorder.
+#[test]
+fn erased_custom() {
+    let mut custom = Custom;
+    let erased: &mut dyn Storage = &mut custom;
+
+    // SAFE: the default implementation returns `None`, there are no ids to reorder or repair.
+    assert!(unsafe { erased.reorder_ids() }.is_none());
+}

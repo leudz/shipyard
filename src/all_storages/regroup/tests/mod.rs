@@ -1,6 +1,7 @@
 mod churn;
 mod declaration;
 mod discovery;
+mod original_row;
 mod promotion;
 mod repair;
 

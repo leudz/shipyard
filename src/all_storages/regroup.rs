@@ -4,7 +4,7 @@ mod tests;
 use crate::ShipHashMap;
 use crate::all_storages::{AllStorages, member_groups};
 use crate::entity_id::EntityId;
-use crate::sparse_set::{GroupRange, GroupRegion};
+use crate::sparse_set::{GroupRange, GroupRegion, SparseArray};
 use crate::storage::{SBox, Storage, StorageId};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -376,6 +376,25 @@ impl Discovery {
 
         Some(&self.members)
     }
+}
+
+/// Returns the row `entity`'s component had when regroup started in the storage with the sparse
+/// array `sparse`, `None` when `entity` doesn't own a component there.
+///
+/// The generation has to match, a component of a deleted entity reusing the same index doesn't count.
+///
+/// Regroup orders ids before moving any component. Until it repairs the rows, sparse arrays are
+/// frozen, so this is the component's starting row. Regroup also leaves every storage's `Groups`
+/// as it found them until it publishes the final layout, apart from attaching new empty union ranges
+/// that hold no row, so their regions and rings still tell where that row was.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "regroup doesn't use the two-phase path yet")
+)]
+fn original_row(sparse: &SparseArray, entity: EntityId) -> Option<usize> {
+    let stored = sparse.get(entity)?;
+
+    (stored.generation() == entity.generation()).then(|| stored.uindex())
 }
 
 /// Returns `true` when `entity` owns a component in every member of `group`.

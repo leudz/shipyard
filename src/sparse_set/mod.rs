@@ -35,7 +35,7 @@ use crate::entity_id::EntityId;
 use crate::error;
 use crate::memory_usage::StorageMemoryUsage;
 use crate::r#mut::Mut;
-use crate::storage::{SBoxBuilder, Storage, StorageId};
+use crate::storage::{ReorderParts, SBoxBuilder, Storage, StorageId};
 use crate::tracking::{Tracking, TrackingTimestamp};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -998,6 +998,51 @@ impl<T: Component> SparseSet<T> {
         });
     }
 
+    /// Returns the entity ids to reorder them, along with the sparse array and groups.
+    ///
+    /// Nothing follows the ids until [`private_repair_rows`](Self::private_repair_rows).
+    ///
+    /// ### Safety
+    ///
+    /// - The ids must only be permuted, none can be added, lost or duplicated.
+    /// - Every reordered row has to be repaired with `private_repair_rows` before the storage
+    ///   is used in any other way than reading its ids, sparse array and groups,
+    ///   changing its groups or reordering its ids.
+    pub(crate) unsafe fn private_reorder_ids(&mut self) -> ReorderParts<'_> {
+        ReorderParts {
+            dense: &mut self.dense,
+            sparse: &self.sparse,
+            groups: &self.groups,
+        }
+    }
+
+    /// Moves the components and timestamps of `domain` to follow the ids
+    /// [`private_reorder_ids`](Self::private_reorder_ids) reordered,
+    /// pointing their sparse entries at their new row.
+    ///
+    /// ### Safety
+    ///
+    /// - `domain` must be in bounds of the storage.
+    /// - The sparse entry of every id of `dense[domain]` must hold the row of that entity's
+    ///   component and timestamps, and these rows must be exactly the rows of `domain`.
+    pub(crate) unsafe fn private_repair_rows(&mut self, domain: Range<usize>) {
+        // SAFE: `dense`, `data` and the timestamp vectors the storage tracks all have the storage's
+        // length, so `domain` is in bounds of each of them. Ids of `dense` have an allocated
+        // sparse page, and our caller guarantees their entries hold exactly `domain`'s rows.
+        unsafe {
+            repair_rows(
+                domain,
+                &self.dense,
+                &mut self.sparse,
+                &mut self.data,
+                self.is_tracking_insertion
+                    .then_some(&mut self.insertion_data[..]),
+                self.is_tracking_modification
+                    .then_some(&mut self.modification_data[..]),
+            );
+        }
+    }
+
     /// Applies the given function `f` to the entities `a` and `b`.\
     /// The two entities shouldn't point to the same component.  
     ///
@@ -1440,5 +1485,15 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
     #[track_caller]
     fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
         self.private_move_to(entity, destination);
+    }
+
+    unsafe fn reorder_ids(&mut self) -> Option<ReorderParts<'_>> {
+        // SAFE: our caller upholds `Storage::reorder_ids`'s requirements, they're the same.
+        Some(unsafe { self.private_reorder_ids() })
+    }
+
+    unsafe fn repair_rows(&mut self, domain: Range<usize>) {
+        // SAFE: our caller upholds `Storage::repair_rows`'s requirements, they're the same.
+        unsafe { self.private_repair_rows(domain) }
     }
 }
