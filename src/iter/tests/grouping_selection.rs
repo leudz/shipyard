@@ -48,6 +48,18 @@ impl Component for E {
 }
 
 #[derive(Debug, PartialEq)]
+struct F(u32);
+impl Component for F {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
+struct G(u32);
+impl Component for G {
+    type Tracking = track::Untracked;
+}
+
+#[derive(Debug, PartialEq)]
 struct Ins(u32);
 impl Component for Ins {
     type Tracking = track::Insertion;
@@ -116,6 +128,16 @@ fn aligned_walk(len: usize, captains: u32) -> Walk {
 /// Returns the walks of the cheapest grouped alternative of `entities`.
 fn walks(entities: &RawEntityIdAccess) -> &[Walk] {
     &cheapest(entities).group().walks
+}
+
+/// Returns the candidates and work of each grouped alternative of `entities`, in order.
+fn estimates(entities: &RawEntityIdAccess) -> Vec<(usize, u64)> {
+    selection(entities)
+        .expect("a grouped alternative")
+        .alternatives
+        .iter()
+        .map(|alternative| (alternative.candidates, alternative.work))
+        .collect()
 }
 
 /// Adds `count` entities owning `A(i)` and `B(i)`.
@@ -342,6 +364,10 @@ fn multiwalk() {
                 },
             ]
         );
+        // 10 aligned candidates, then 20 unevaluated ones looking the other member up,
+        // against A's 20 candidates looking B up.
+        assert_eq!(estimates(&entities), [(30, 10 * 2 + 20 * 3)]);
+        assert_eq!(selection(&entities).unwrap().ordinary.work, Some(20 * 3));
         assert_ordinary_wins(&entities, 0);
     }
 
@@ -351,6 +377,7 @@ fn multiwalk() {
     let (_, _, entities) = (&a, &b).into_shiperator();
 
     assert_eq!(walks(&entities), [aligned_walk(20, 0b11)]);
+    assert_eq!(estimates(&entities), [(20, 40)]);
     assert_grouped_wins(&entities, 0b11);
 }
 
@@ -452,6 +479,9 @@ fn overlapping() {
             }
         ]
     );
+    // 13 candidates without sailor, against B's 16 candidates looking A up.
+    assert_eq!(estimates(&entities), [(13, 26)]);
+    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(16 * 3));
 }
 
 /// Asserts that an `(A, B, C)` query over AB and AC covers their ABC union alone:
@@ -467,6 +497,7 @@ fn union_exclusion() {
     assert_grouped_wins(&entities, 0b111);
     assert_eq!(cover_ranges(&entities), [3]);
     assert_eq!(walks(&entities), [aligned_walk(7, 0b111)]);
+    assert_eq!(estimates(&entities), [(7, 14)]);
 }
 
 /// Asserts that a small ordinary captain beats walks over several ranges.
@@ -527,6 +558,8 @@ fn absent_union() {
             },
         ]
     );
+    assert_eq!(estimates(&entities), [(3, 12)]);
+    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(16));
 }
 
 /// AB and ACD groups holding 6 AB entities, 6 ACD entities and 5 entities owning all four
@@ -595,6 +628,8 @@ fn overlap_disjoint() {
         .map(|alternative| alternative.group().required)
         .collect();
     assert_eq!(required, [0b0011, 0b1100]);
+    // AB walks 16 candidates looking D and E up, DE walks 3 looking A and B up.
+    assert_eq!(estimates(&entities), [(16, 16 * 4), (3, 3 * 4)]);
     assert_grouped_wins(&entities, 0b1100);
 }
 
@@ -735,6 +770,137 @@ fn nested() {
     assert_eq!(winner.group().required, 0b11);
     // Constructors still install the ordinary walk, only the root swaps it.
     assert_eq!(mixed.captain_mask, 0b10);
+}
+
+/// Asserts that a parent can prefer the alternative its nested `Mixed` ranks second.
+///
+/// ABC and DE are disjoint groups, 4 entities own every component.\
+/// Alone, `(A, B, C, D, E)` prefers walking the 6 ABC entities and looking D and E up (24)
+/// over walking the 5 DE entities and looking A, B and C up (25).\
+/// In `((A, B, C, D, E), F, G)` each candidate also looks F and G up: ABC costs 24 + 12 and
+/// DE 25 + 10, DE wins. Lone components make every ordinary walk far more expensive.
+#[test]
+fn locally_losing() {
+    let mut world = World::new_for_test();
+    let matches: Vec<EntityId> = (0..4)
+        .map(|i| world.add_entity((A(i), B(i), C(i), D(i), E(i), F(i), G(i))))
+        .collect();
+    world.add_entity((A(10), B(10), C(10)));
+    world.add_entity((A(11), B(11), C(11)));
+    world.add_entity((D(12), E(12)));
+    for i in 20..40 {
+        world.add_entity(A(i));
+        world.add_entity(B(i));
+        world.add_entity(C(i));
+        world.add_entity(D(i));
+        world.add_entity(E(i));
+        world.add_entity(F(i));
+        world.add_entity(G(i));
+    }
+    world.group::<(A, B, C)>().group::<(D, E)>();
+
+    let (a, b, c, d, e, f, g) = world
+        .borrow::<(
+            View<'_, A>,
+            View<'_, B>,
+            View<'_, C>,
+            View<'_, D>,
+            View<'_, E>,
+            View<'_, F>,
+            View<'_, G>,
+        )>()
+        .unwrap();
+
+    let (_, _, entities) = (&a, &b, &c, &d, &e).into_shiperator();
+    assert_eq!(estimates(&entities), [(6, 24), (5, 25)]);
+    assert_grouped_wins(&entities, 0b00111);
+
+    let (_, _, entities) = ((&a, &b, &c, &d, &e), &f, &g).into_shiperator();
+    assert_eq!(estimates(&entities), [(6, 36), (5, 35)]);
+    let winner = selection(&entities).unwrap().winner().unwrap();
+    assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
+    assert_eq!(winner.group().required, 0b11000);
+
+    // The DE walk is installed: 5 candidates, the root rejecting none.
+    let iter = ((&a, &b, &c, &d, &e), &f, &g).iter();
+    assert_eq!(iter.size_hint(), (0, Some(5)));
+    let mut ids: Vec<EntityId> = iter.ids().collect();
+    ids.sort_unstable();
+    assert_eq!(ids, matches);
+}
+
+/// Asserts that a nested alternative and a local one with equal estimates keep the one
+/// involving the earlier child, whichever route it takes.
+///
+/// AB and CD are disjoint groups over the same 5 entities. Driving the AB pair costs 10 plus
+/// 10 for looking C and D up. Driving CD costs 10 plus 10 for looking the AB pair up.
+#[test]
+fn route_tie() {
+    let mut world = World::new_for_test();
+    for i in 0..5 {
+        world.add_entity((A(i), B(i), C(i), D(i)));
+    }
+    for i in 10..20 {
+        world.add_entity(A(i));
+        world.add_entity(B(i));
+        world.add_entity(C(i));
+        world.add_entity(D(i));
+    }
+    world.group::<(A, B)>().group::<(C, D)>();
+
+    let (a, b, c, d) = world
+        .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>, View<'_, D>)>()
+        .unwrap();
+
+    let (_, _, entities) = ((&a, &b), &c, &d).into_shiperator();
+    assert_eq!(estimates(&entities), [(5, 20), (5, 20)]);
+    let winner = selection(&entities).unwrap().winner().unwrap();
+    assert!(matches!(winner.route, Route::Nested { child: 0, .. }));
+
+    let (_, _, entities) = (&c, &d, (&a, &b)).into_shiperator();
+    assert_eq!(estimates(&entities), [(5, 20), (5, 20)]);
+    let winner = selection(&entities).unwrap().winner().unwrap();
+    assert!(matches!(winner.route, Route::Local(_)));
+    assert_eq!(winner.group().required, 0b011);
+}
+
+/// Asserts that removing a B from the middle of an aligned range splits the walk: the prefix
+/// A and B still both trust, then the rest of B's range, B being shorter, with A looked up.
+///
+/// B's removal moves its last pair into the hole, so it trusts its first 6 positions.\
+/// 6 aligned candidates and 3 damaged ones looking A up cost 21, against 27 for B captaining.
+#[test]
+fn damaged_owner() {
+    let mut world = World::new_for_test();
+    let pairs = add_ab(&mut world, 10);
+    world.group::<(A, B)>();
+    world.delete_component::<B>(pairs[6]);
+
+    let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let (_, _, entities) = (&a, &b).into_shiperator();
+
+    assert_eq!(
+        walks(&entities),
+        [
+            aligned_walk(6, 0b11),
+            Walk::Damaged {
+                range: 0,
+                owner: 1,
+                start: 6,
+                len: 3,
+                captains: 0b10
+            }
+        ]
+    );
+    assert_eq!(estimates(&entities), [(9, 21)]);
+    assert_eq!(selection(&entities).unwrap().ordinary.work, Some(27));
+    assert_grouped_wins(&entities, 0b11);
+
+    let mut ids: Vec<EntityId> = (&a, &b).iter().ids().collect();
+    ids.sort_unstable();
+    let mut expected = pairs;
+    expected.remove(6);
+    assert_eq!(ids, expected);
 }
 
 /// A world where AB is grouped over 20 entities and only 2 of them own C.

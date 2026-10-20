@@ -13,6 +13,7 @@
 use crate::fixtures::{A, B, C};
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
+use shipyard::iter::IntoIterRef;
 use shipyard::{EntityId, IntoIter, View, World};
 use std::hint::black_box;
 
@@ -138,10 +139,49 @@ pub fn delete_b(world: &mut World, pairs: &[(EntityId, u32)]) {
     }
 }
 
+// The `construct_drop` consumers hide the iterator so its construction can't be optimized out,
+// then drop it untouched.
+
 /// Builds the pair iterator and drops it without advancing it.
 #[inline(never)]
 pub fn construct_drop_pair(a: &View<'_, A>, b: &View<'_, B>) {
     let iter = (a, b).iter();
-    // We hide the iterator so its construction can't be optimized out, then drop it untouched.
+    drop(black_box(iter));
+}
+
+/// Builds the flat triple iterator and drops it without advancing it.
+#[inline(never)]
+pub fn construct_drop_triple(a: &View<'_, A>, b: &View<'_, B>, c: &View<'_, C>) {
+    let iter = (a, b, c).iter();
+    drop(black_box(iter));
+}
+
+/// Builds the nested `((A, B), C)` iterator and drops it without advancing it.
+#[inline(never)]
+pub fn construct_drop_nested(a: &View<'_, A>, b: &View<'_, B>, c: &View<'_, C>) {
+    let iter = ((a, b), c).iter();
+    drop(black_box(iter));
+}
+
+/// Builds the `(A, B, !C)` iterator and drops it without advancing it.
+#[inline(never)]
+pub fn construct_drop_filtered(a: &View<'_, A>, b: &View<'_, B>, c: &View<'_, C>) {
+    let iter = (a, b, !c).iter();
+    drop(black_box(iter));
+}
+
+/// Borrows A and B through `World::iter` and releases them, without building any iterator
+/// from the result.
+#[inline(never)]
+pub fn construct_drop_owned(world: &World) {
+    let iter_ref = world.iter::<(&A, &B)>();
+    drop(black_box(iter_ref));
+}
+
+/// Builds a pair iterator from `iter_ref`, which keeps its borrows, and drops it without
+/// advancing it.
+#[inline(never)]
+pub fn construct_drop_reuse(iter_ref: &mut IntoIterRef<'_, (&A, &B)>) {
+    let iter = iter_ref.iter();
     drop(black_box(iter));
 }

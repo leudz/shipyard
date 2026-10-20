@@ -563,14 +563,21 @@ fn end_to_end(c: &mut Criterion) {
 fn build_and_drop(c: &mut Criterion) {
     let mut group = c.benchmark_group("construction+drop");
 
-    // Small and large ordinary queries, then grouped ones: a single aligned segment at both
-    // sizes and `coverage`, whose plan also holds the unevaluated walks.
+    // Pairs:
+    // - without any group, small and large
+    // - with an ABC group that doesn't hold every match, read but unusable
+    // - a single aligned segment, small and large
+    // - several walks: `coverage` with its unevaluated regions, `damaged` with its damaged
+    //   suffix, `pairs` with two ranges cut at wrap points
     let cases = [
         ("small_ordinary", fixtures::small_ordinary()),
         ("dense", fixtures::dense()),
+        ("projection", fixtures::small_projection()),
         ("small_grouped", fixtures::small_grouped()),
         ("aligned", fixtures::aligned()),
         ("coverage", fixtures::coverage()),
+        ("damaged", fixtures::damaged()),
+        ("pairs", fixtures::multiple_pairs(Layout::Grouped)),
     ];
 
     for (name, fixture) in &cases {
@@ -581,6 +588,82 @@ fn build_and_drop(c: &mut Criterion) {
 
         construction_drop(&mut group, name, || {
             construct_drop_pair(black_box(&a), black_box(&b))
+        });
+    }
+
+    // Flat triples: a small C captaining against a large group, then the ABC union cut at
+    // wrap points.
+    let cases = [
+        ("small_captain", fixtures::small_captain()),
+        ("triples", fixtures::multiple_triples(Layout::Grouped)),
+    ];
+
+    for (name, fixture) in &cases {
+        let (a, b, c) = fixture
+            .world
+            .borrow::<(View<A>, View<B>, View<C>)>()
+            .unwrap();
+        let hint = (&a, &b, &c).iter().size_hint();
+        let ids = (&a, &b, &c).iter().with_id().map(|(id, _)| id);
+        check_members(name, fixture, hint, ids);
+
+        construction_drop(&mut group, name, || {
+            construct_drop_triple(black_box(&a), black_box(&b), black_box(&c))
+        });
+    }
+
+    // Nested `((A, B), C)`: without any group, then driven by the nested aligned pair.
+    let cases = [
+        ("nested_ordinary", fixtures::nested()),
+        ("nested_grouped", fixtures::partial()),
+    ];
+
+    for (name, fixture) in &cases {
+        let (a, b, c) = fixture
+            .world
+            .borrow::<(View<A>, View<B>, View<C>)>()
+            .unwrap();
+        let hint = ((&a, &b), &c).iter().size_hint();
+        let ids = ((&a, &b), &c).iter().with_id().map(|(id, _)| id);
+        check_members(name, fixture, hint, ids);
+
+        construction_drop(&mut group, name, || {
+            construct_drop_nested(black_box(&a), black_box(&b), black_box(&c))
+        });
+    }
+
+    // A filter over grouped storages keeps ordinary selection.
+    let filtered = fixtures::small_filtered();
+    let (a, b, c) = filtered
+        .world
+        .borrow::<(View<A>, View<B>, View<C>)>()
+        .unwrap();
+    let hint = (&a, &b, !&c).iter().size_hint();
+    let ids = (&a, &b, !&c).iter().with_id().map(|(id, _)| id);
+    check_members("filtered", &filtered, hint, ids);
+
+    construction_drop(&mut group, "filtered", || {
+        construct_drop_filtered(black_box(&a), black_box(&b), black_box(&c))
+    });
+
+    // Owned pairs, without and with a group. `owned_*` borrow the storages and build the
+    // initial state each time, `reuse_*` build iterators from one `World::iter` holding them.
+    let cases = [
+        ("ordinary", fixtures::small_ordinary()),
+        ("grouped", fixtures::small_grouped()),
+    ];
+
+    for (name, fixture) in &cases {
+        let mut iter_ref = fixture.world.iter::<(&A, &B)>();
+        let hint = iter_ref.iter().size_hint();
+        let ids = iter_ref.iter().with_id().map(|(id, _)| id);
+        check_members(&format!("owned_{name}"), fixture, hint, ids);
+
+        construction_drop(&mut group, &format!("owned_{name}"), || {
+            construct_drop_owned(black_box(&fixture.world))
+        });
+        construction_drop(&mut group, &format!("reuse_{name}"), || {
+            construct_drop_reuse(black_box(&mut iter_ref))
         });
     }
 }

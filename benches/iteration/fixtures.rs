@@ -481,6 +481,37 @@ pub fn small_grouped() -> Fixture {
     aligned_pairs(SMALL_QUERY)
 }
 
+/// `small_grouped`'s world, for `(&A, &B, !&C)` where no entity owns a C.
+///
+/// The filter keeps ordinary selection even though A and B are grouped: A captains over the
+/// pairs and its lone components, B is looked up.
+///
+/// Candidates: `SMALL_QUERY + 3`. Yields: `SMALL_QUERY`.
+pub fn small_filtered() -> Fixture {
+    let mut fixture = aligned_pairs(SMALL_QUERY);
+    fixture.candidates += 3;
+    fixture.exact = false;
+    fixture
+}
+
+/// `SMALL_QUERY` AB pairs, every second one also owning a C, grouped as `(A, B, C)`.
+///
+/// For `(&A, &B)` the ABC group doesn't hold every match. The query reads the group metadata
+/// and walks ordinarily: A captains, B is looked up.
+///
+/// Candidates: `SMALL_QUERY`. Yields: `SMALL_QUERY`.
+pub fn small_projection() -> Fixture {
+    let mut fixture = Fixture::new(World::new(), SMALL_QUERY, false);
+    for i in 0..SMALL_QUERY {
+        let id = fixture.add_pair(i);
+        if i % 2 == 0 {
+            fixture.world.add_component(id, C(c_value(i)));
+        }
+    }
+    fixture.world.group::<(A, B, C)>();
+    fixture
+}
+
 /// Whether a fixture declares its groups, or builds the same entities without any as a control.
 #[derive(Clone, Copy, PartialEq)]
 pub enum Layout {

@@ -258,3 +258,47 @@ fn nested_mut() {
 
     assert_eq!(items, [(e[3], (3, 13, 23))]);
 }
+
+#[derive(Borrow, IntoIter)]
+struct PlaceView<'v> {
+    pos: ViewMut<'v, Pos>,
+    tag: View<'v, Tag>,
+}
+
+/// Asserts that a mutable named derived view over a grouped pair drives the aligned walk:
+/// an exact walk over the pairs, each write landing on its own entity's `Pos`.
+///
+/// 6 entities own `Pos(i)` and `Tag(10 + i)` and 4 more only own `Pos(i)`, then `(Pos, Tag)`
+/// is grouped. The aligned walk costs 12, against 18 for `Tag` captaining.
+#[test]
+fn grouped_mut() {
+    let mut world = World::new();
+    let pairs: Vec<EntityId> = (0..6)
+        .map(|i| world.add_entity((Pos(i), Tag(10 + i))))
+        .collect();
+    let lone: Vec<EntityId> = (6..10).map(|i| world.add_entity(Pos(i))).collect();
+    world.group::<(Pos, Tag)>();
+
+    {
+        let mut place = world.borrow::<PlaceView>().unwrap();
+        assert_eq!((&mut place).iter().size_hint(), (6, Some(6)));
+
+        let mut items = every_way!((&mut place).iter(), |place: Place| (
+            place.pos.0,
+            place.tag.0
+        ));
+        items.sort_by_key(|(id, _)| *id);
+        let expected: Vec<_> = (0..6).map(|i| (pairs[i as usize], (i, 10 + i))).collect();
+        assert_eq!(items, expected);
+
+        (&mut place).iter().for_each(|place| place.pos.0 += 100);
+    }
+
+    let pos = world.borrow::<View<Pos>>().unwrap();
+    for (i, &id) in (0..).zip(&pairs) {
+        assert_eq!(pos[id].0, 100 + i);
+    }
+    for (i, &id) in (6..).zip(&lone) {
+        assert_eq!(pos[id].0, i);
+    }
+}
