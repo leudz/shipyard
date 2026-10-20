@@ -1,23 +1,25 @@
 //! Construction-only choice between an ordinary walk and walks over group ranges.
 //!
 //! While a query is built, each node reports what it knows about grouping in a
-//! [`ConstructionMetadata`]. A window's points to its storage's group metadata, nothing is copied:
-//! the storage stays borrowed while the query is built.
-//! It travels next to the node's entities, never inside them.\
-//! A `Mixed` hands its immediate children to [`choose`], which picks its ordinary captain.
-//! When a child brings groups, [`select`] also estimates its grouped [`Alternative`]s: walks
-//! over the ranges containing each set of overlapping groups its window children fully hold
-//! (see [`cover_sets`]), and the alternatives its nested `Mixed` children reported, driven
-//! through them.\
-//! Everything is kept in a [`Selection`] until the query decides which walk drives.
-//! An alternative only keeps its estimate and where its group is, not its walks.
+//! [`ConstructionMetadata`], next to its entities, never inside them.
+//! A window's points to its storage's group metadata, nothing is copied: the storage stays
+//! borrowed while the query is built, and the metadata is dropped before the iterator is returned.
 //!
-//! Nothing here reads entities. Estimates only use group metadata, and the metadata is
-//! released once the iterator is built.\
-//! Constructors always install their ordinary walk. Once the whole query is built,
-//! [`install_winner`] swaps in its root's cheapest alternative when it beats the ordinary walk,
-//! [`regions::grouped_entities`] reading its walks from the metadata again to turn them into
-//! segments. Estimates and segments list walks the same way, see [`GroupedCandidate::walks`].
+//! Picking a walk reads that metadata in two passes:
+//! - Estimation, bottom-up as constructors run. A `Mixed` hands its immediate children to
+//!   [`choose`], which picks its ordinary captain. Children without groups stop there.
+//!   Otherwise [`select`] also estimates its grouped [`Alternative`]s: walks over the ranges
+//!   containing each set of overlapping groups its window children fully hold (see
+//!   [`cover_sets`]), and the alternatives its nested `Mixed` children reported, driven through
+//!   them. Everything is kept in a [`Selection`], an alternative only keeps its estimate and where
+//!   its group is, not its walks.
+//! - Materialization, once, at the query's root. Constructors always install their ordinary walk.
+//!   [`install_winner`] swaps in the root's cheapest alternative when it beats the ordinary walk:
+//!   [`regions::grouped_entities`] lists that alternative's walks again and turns them into
+//!   segments. A single segment is installed as is, several are published as a plan.
+//!
+//! Both passes list walks the same way, see [`GroupedCandidate::walks`].
+//! Nothing here reads entities, estimates only use group metadata.
 pub(crate) mod regions;
 mod scratch;
 #[cfg(test)]
@@ -64,7 +66,9 @@ impl ConstructionMetadata {
     /// Returns the metadata of a plain window over `sparse_set`.
     #[inline]
     pub(crate) fn window<T: Component>(sparse_set: &SparseSet<T>) -> ConstructionMetadata {
-        ConstructionMetadata(NodeMetadata::window(sparse_set))
+        let metadata = NodeMetadata::of_storage(&sparse_set.groups, sparse_set.dense.len());
+
+        ConstructionMetadata(metadata)
     }
 }
 
@@ -102,12 +106,6 @@ pub(crate) enum NodeMetadata<W = WindowHandle> {
 }
 
 impl NodeMetadata {
-    /// Returns the metadata of a plain window over `sparse_set`.
-    #[inline]
-    pub(crate) fn window<T: Component>(sparse_set: &SparseSet<T>) -> NodeMetadata {
-        NodeMetadata::of_storage(&sparse_set.groups, sparse_set.dense.len())
-    }
-
     /// Returns the metadata of a plain window over a storage of `len` components with `groups`.
     ///
     /// The returned metadata points to `groups`, see [`WindowHandle::get`].

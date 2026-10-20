@@ -145,8 +145,8 @@ where
 ///
 /// The [`ConstructionMetadata`] is opaque, only shipyard reads it. While a query is built, each
 /// tuple reads its children's to rank their walks, then the query's root reads its own to pick
-/// one. The root drops it before building the iterator: it doesn't outlive the
-/// [`iter`](IntoIter::iter) call and iterators never hold it.\
+/// one, reading the group metadata again to install it. The root drops it before building the
+/// iterator: it doesn't outlive the [`iter`](IntoIter::iter) call and iterators never hold it.\
 /// It points to the group metadata of the storages the views borrow, without borrowing them
 /// itself. The Shiperator returned with it keeps them borrowed.
 ///
