@@ -22,8 +22,9 @@
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
+use crate::iter::plan::SegmentDescriptor;
 use crate::iter::planner::{NodeMetadata, Route, Walk};
-use crate::iter::{IntoIter, IntoShiperator, OneOfTwo, Shiper, Shiperator};
+use crate::iter::{EntityCursor, IntoIter, IntoShiperator, OneOfTwo, Shiperator};
 use crate::r#mut::Mut;
 use crate::sparse_set::{GroupRegion, Ring, SparseSet};
 use crate::storage::StorageId;
@@ -33,6 +34,7 @@ use crate::world::World;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::format;
 use alloc::sync::Arc;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::ops::Range;
@@ -932,16 +934,39 @@ fn check_layout(
     }
 }
 
-/// Asserts that no segment of `iter`'s plan is empty or walks an evaluated ungrouped region.
+/// Asserts that when `query` picks a grouped walk, none of its segments is empty or walks
+/// an evaluated ungrouped region.
 ///
 /// `storages` are the dense entities and the ungrouped region of each storage of the query.
-fn assert_regions<S>(iter: &Shiper<S>, storages: &[(&[EntityId], Range<usize>)], context: &str) {
-    let Some(schedule) = &iter.schedule else {
+fn assert_regions<Q>(query: Q, storages: &[(&[EntityId], Range<usize>)], context: &str)
+where
+    Q: IntoShiperator + Copy,
+    Q::Shiperator: Shiperator,
+{
+    // Ordinary walks visit their captain's whole storage, ungrouped region included.
+    let (_, _, metadata) = query.into_shiperator();
+    let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
         return;
     };
+    if selection.winner().is_none() {
+        return;
+    }
 
-    for segment in schedule.plan().segments() {
-        let first = segment.cursor().as_ptr().as_ptr().cast_const();
+    // A single segment is installed without plan, `iter`'s cursor is all of it.
+    let iter = query.iter();
+    let segments: Vec<EntityCursor> = match &iter.schedule {
+        Some(schedule) => schedule
+            .plan()
+            .segments()
+            .iter()
+            .map(SegmentDescriptor::cursor)
+            .collect(),
+        None if iter.cursor.is_empty() => Vec::new(),
+        None => vec![iter.cursor],
+    };
+
+    for segment in segments {
+        let first = segment.as_ptr().as_ptr().cast_const();
         let (dense, ungrouped) = storages
             .iter()
             .find(|(dense, _)| dense.as_ptr_range().contains(&first))
@@ -1082,19 +1107,15 @@ fn check_views(scenario: &Scenario, rng: &mut Rng, stats: &mut Stats, context: &
     stats.observe(((&a, &b), &c));
     stats.observe(((&a, &b), (&c, &d)));
 
-    assert_regions(&(&a, &b).iter(), &storages, &format!("(A, B), {context}"));
+    assert_regions((&a, &b), &storages, &format!("(A, B), {context}"));
+    assert_regions((&a, &b, &c), &storages, &format!("(A, B, C), {context}"));
     assert_regions(
-        &(&a, &b, &c).iter(),
-        &storages,
-        &format!("(A, B, C), {context}"),
-    );
-    assert_regions(
-        &(&a, &b, &c, &d).iter(),
+        (&a, &b, &c, &d),
         &storages,
         &format!("(A, B, C, D), {context}"),
     );
     assert_regions(
-        &((&a, &b), (&c, &d)).iter(),
+        ((&a, &b), (&c, &d)),
         &storages,
         &format!("((A, B), (C, D)), {context}"),
     );

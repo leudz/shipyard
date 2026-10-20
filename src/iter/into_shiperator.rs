@@ -86,8 +86,9 @@ where
         // installed state matches the first segment of `entities` and every follow-up has a row
         // built for `shiperator`'s layout, from the same storage borrows.
         // `install_winner` either keeps that pair or installs the first grouped segment on
-        // `shiperator` and returns that segment's entities, with the plan `grouped_entities`
-        // built from `shiperator`'s own description and the metadata of these same borrows.
+        // `shiperator` and returns that segment's entities. Follow-ups, if any, are in the plan
+        // `grouped_entities` built from `shiperator`'s own description and the metadata of these
+        // same borrows.
         unsafe { Shiper::new(shiperator, entities) }
     }
 

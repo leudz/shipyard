@@ -143,8 +143,8 @@ where
 
     Ok(IntoIterRef {
         // Holds the first segment's state, each iterator starts from a clone of it.
-        // Our borrows keep the storages from changing layout, so the plan built from them
-        // stays accurate, and `entities` keeps that plan alive.
+        // Our borrows keep the storages from changing layout, so the state and any plan built
+        // from them stay accurate, and `entities` keeps that plan alive.
         shiperator,
         _all_borrow: all_borrow,
         _borrow: borrow,

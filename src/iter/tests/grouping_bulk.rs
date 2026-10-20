@@ -161,7 +161,9 @@ fn partial_strategy() {
         .borrow::<(View<'_, A>, View<'_, B>, View<'_, C>)>()
         .unwrap();
     let iter = (&a, &b, &c).iter();
-    assert!(iter.schedule.is_some());
+    // The aligned AB pair drives a single segment, installed without plan.
+    assert_eq!(iter.shiperator.captain_mask, 0b011);
+    assert!(iter.schedule.is_none());
     assert_eq!(iter.shiperator.bulk_strategy(), BulkStrategy::Partial);
     assert_eq!(
         every_way(|| (&a, &b, &c).iter(), |(a, b, _)| (a.0, b.0)),

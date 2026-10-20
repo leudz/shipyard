@@ -384,8 +384,8 @@ macro_rules! impl_shiperator_output {
                     }
                 )+
 
-                // `coverage` lives in the plan `entry` reads from,
-                // our caller keeps it alive while we resolve captain indices.
+                // `coverage` lives in the plan `entry` reads from, our caller keeps it alive while
+                // we resolve captain indices. A row outside any plan only gives empty slices.
                 self.set_segment_state(captain_mask, coverage);
             }
 

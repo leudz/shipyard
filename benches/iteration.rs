@@ -238,6 +238,15 @@ fn grouped(c: &mut Criterion) {
         time_traversals!(iters, (&a, &b).iter(), for_each_pair)
     });
 
+    check_sum(
+        "aligned_next",
+        next_pair((&a, &b).iter()),
+        aligned.pair_sum(),
+    );
+    traversal(&mut group, "aligned_next", &aligned, |iters| {
+        time_traversals!(iters, (&a, &b).iter(), next_pair)
+    });
+
     // Mutation gets its own world, the read cases above keep their model.
     let aligned_mut = fixtures::aligned();
     let (mut a, b) = aligned_mut.world.borrow::<(ViewMut<A>, View<B>)>().unwrap();

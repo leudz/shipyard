@@ -58,12 +58,12 @@ pub trait Shiperator {
     ///
     /// ### Safety
     ///
-    /// - `entry`'s next states must be the states of this node's subtree, from a row of a plan
-    ///   built for this Shiperator
+    /// - `entry`'s next states must be the states of this node's subtree, from a row built for
+    ///   this Shiperator, in a plan or alone
     /// - until the next entry, the candidates this Shiperator receives as a captain must come from
     ///   the segment this row was built for
-    /// - the plan `entry` reads from must stay alive as long as this Shiperator, or a clone of it,
-    ///   resolves captain indices
+    /// - the plan `entry` reads from, if any, must stay alive as long as this Shiperator, or a
+    ///   clone of it, resolves captain indices
     unsafe fn enter_segment(&mut self, entry: &mut SegmentEntry<'_>);
     /// Approximation of how much time iterating this Shiperator will take.\
     /// This helps pick the fastest Shiperator when iterating multiple storages.

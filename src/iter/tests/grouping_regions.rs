@@ -15,6 +15,7 @@ use crate::sparse_set::{FullRawWindow, Groups};
 use crate::track;
 use crate::views::{View, ViewMut};
 use crate::world::World;
+use alloc::vec;
 use alloc::vec::Vec;
 use core::ops::Range;
 use core::ptr;
@@ -111,18 +112,31 @@ pub(super) fn record(child: u32, start: usize, end: usize) -> Coverage {
     Coverage { child, start, end }
 }
 
-/// Describes every segment of the plan of `iter`, a flat query over `storages`.
+/// Describes every segment of `iter`, a flat query over `storages`.
 ///
-/// Also asserts that `iter` was installed for the first segment.
+/// A single segment is installed without plan, it's described from `iter`'s own state.
+/// Otherwise, also asserts that `iter` was installed for the plan's first segment.
 pub(super) fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]) -> Vec<Segment> {
+    let installed = SegmentRow::of(&iter.shiperator);
     let Some(schedule) = &iter.schedule else {
-        return Vec::new();
+        if iter.cursor.is_empty() {
+            return Vec::new();
+        }
+
+        // `describe` asserts that the installed state has no coverage.
+        let segment = SegmentDescriptor::from_cursor(iter.cursor, 0);
+        return vec![flat_segment(
+            &segment,
+            installed.states(),
+            Vec::new(),
+            storages,
+        )];
     };
     let plan = schedule.plan();
     let first = &plan.segments()[0];
 
     // The first segment was entered: our state is its row and our cursor walks its entities.
-    assert_eq!(SegmentRow::of(&iter.shiperator).states(), plan.row(first));
+    assert_eq!(installed.states(), plan.row(first));
     assert_eq!(iter.cursor.as_ptr(), first.cursor().as_ptr());
     assert_eq!(
         (iter.cursor.local_index(), iter.cursor.len()),
@@ -134,29 +148,39 @@ pub(super) fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]
         .iter()
         .map(|segment| {
             let row = plan.row(segment);
-            let NodeState::Mixed {
-                captain_mask,
-                coverage,
-            } = row[0]
-            else {
+            let NodeState::Mixed { coverage, .. } = row[0] else {
                 panic!("grouped walks drive a Mixed");
             };
 
-            Segment {
-                walks: walked(segment, storages),
-                captain_mask,
-                starts: row[1..]
-                    .iter()
-                    .map(|state| match *state {
-                        NodeState::Window { segment_start } => Some(segment_start),
-                        NodeState::Sailor => None,
-                        _ => unreachable!("flat queries only have windows"),
-                    })
-                    .collect(),
-                coverage: plan.coverage(coverage).to_vec(),
-            }
+            flat_segment(segment, row, plan.coverage(coverage).to_vec(), storages)
         })
         .collect()
+}
+
+/// Describes `segment` of a flat query over `storages`, installing `row` with `coverage`.
+fn flat_segment(
+    segment: &SegmentDescriptor,
+    row: &[NodeState],
+    coverage: Vec<Coverage>,
+    storages: &[&[EntityId]],
+) -> Segment {
+    let NodeState::Mixed { captain_mask, .. } = row[0] else {
+        panic!("grouped walks drive a Mixed");
+    };
+
+    Segment {
+        walks: walked(segment, storages),
+        captain_mask,
+        starts: row[1..]
+            .iter()
+            .map(|state| match *state {
+                NodeState::Window { segment_start } => Some(segment_start),
+                NodeState::Sailor => None,
+                _ => unreachable!("flat queries only have windows"),
+            })
+            .collect(),
+        coverage,
+    }
 }
 
 /// Returns the child whose storage holds `segment`'s entities and their indices in it.

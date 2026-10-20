@@ -203,7 +203,9 @@ fn group_free_sailor() {
     assert_eq!(next_ids((&c).iter()), sorted(owners));
 
     let iter = (&a, &b, &c).iter();
-    assert!(iter.schedule.is_some());
+    // The aligned AB pair drives a single segment, installed without plan.
+    assert_eq!(iter.shiperator.captain_mask, 0b011);
+    assert!(iter.schedule.is_none());
     let mut items: Vec<(EntityId, u32, u32, u32)> = iter
         .with_id()
         .map(|(id, (a, b, c))| (id, a.0, b.0, c.0))
@@ -319,8 +321,11 @@ fn projection() {
     world.group::<(A, B, C)>();
 
     let (a, b) = world.borrow::<(View<'_, A>, View<'_, B>)>().unwrap();
+    let (_, _, metadata) = (&a, &b).into_shiperator();
     let iter = (&a, &b).iter();
 
+    // The pair doesn't hold the whole group, it has no grouped alternative.
+    assert!(matches!(metadata.0, NodeMetadata::Mixed { .. }));
     assert!(iter.schedule.is_none());
     assert_eq!(next_ids(iter), sorted(pairs));
 }

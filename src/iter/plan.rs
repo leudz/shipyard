@@ -305,7 +305,7 @@ impl Plan {
     ///
     /// `span` must come from one of this plan's rows.\
     /// The records don't move while the plan is alive.
-    #[inline]
+    #[cfg(test)]
     pub(crate) fn coverage(&self, span: CoverageSpan) -> &[Coverage] {
         coverage_records(&self.coverage, span).expect("coverage span validated by Plan::new")
     }
@@ -662,8 +662,9 @@ impl Drop for SegmentSchedule {
 /// Sailor subtrees are skipped as a whole.
 #[doc(hidden)]
 pub struct SegmentEntry<'a> {
-    plan: &'a Plan,
     states: &'a [NodeState],
+    /// The pool the coverage spans of `states` point into.
+    coverage: &'a [Coverage],
 }
 
 impl<'a> SegmentEntry<'a> {
@@ -673,8 +674,20 @@ impl<'a> SegmentEntry<'a> {
     #[inline]
     pub(crate) fn new(plan: &'a Plan, segment: &SegmentDescriptor) -> SegmentEntry<'a> {
         SegmentEntry {
-            plan,
             states: plan.row(segment),
+            coverage: &plan.coverage,
+        }
+    }
+
+    /// Returns a reader over `row`, a row outside any plan.
+    ///
+    /// None of its `Mixed`s can have a coverage record, there's no pool for them to point into.\
+    /// The `Mixed`s get an empty static slice, nothing they install points into `row`.
+    #[inline]
+    pub(crate) fn without_coverage(row: &'a [NodeState]) -> SegmentEntry<'a> {
+        SegmentEntry {
+            states: row,
+            coverage: &[],
         }
     }
 
@@ -701,14 +714,20 @@ impl<'a> SegmentEntry<'a> {
 
     /// Returns the captain mask and coverage records of the next node, an active `Mixed`.
     ///
-    /// The records live in the plan, they don't move while it's alive.
+    /// The records live in the plan we read from, they don't move while it's alive.
+    /// Without plan, they're an empty static slice.
     #[inline]
     pub(crate) fn next_mixed(&mut self) -> (u32, &'a [Coverage]) {
         match self.next_state() {
             NodeState::Mixed {
                 captain_mask,
                 coverage,
-            } => (captain_mask, self.plan.coverage(coverage)),
+            } => {
+                let records = coverage_records(self.coverage, coverage)
+                    .expect("coverage spans point into the pool of their row");
+
+                (captain_mask, records)
+            }
             state => unreachable!("expected an active Mixed state, got {state:?}"),
         }
     }

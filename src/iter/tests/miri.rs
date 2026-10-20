@@ -9,7 +9,7 @@ use crate::all_storages::AllStorages;
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
-use crate::iter::plan::NodeState;
+use crate::iter::plan::{NodeState, SegmentRow};
 use crate::iter::planner::regions::grouped_entities;
 use crate::iter::planner::{ConstructionMetadata, NodeMetadata};
 use crate::iter::{
@@ -21,6 +21,7 @@ use crate::sparse_set::FullRawWindow;
 use crate::track;
 use crate::views::{AllStoragesView, View, ViewMut};
 use crate::world::World;
+use alloc::vec;
 use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use core::cell::Cell;
@@ -130,14 +131,22 @@ where
     }
 }
 
-/// Returns the `(captain_mask, coverage records, candidates)` of every segment of `iter`'s
-/// plan, read from the root `Mixed`'s state, or from the child at `nested` for a nested query.
+/// Returns the `(captain_mask, coverage records, candidates)` of every segment of `iter`,
+/// read from the root `Mixed`'s state, or from the child at `nested` for a nested query.
+///
+/// A single segment is installed without plan, it's read from `iter`'s own state.
 fn route<S: Shiperator>(iter: &Shiper<S>, nested: Option<usize>) -> Vec<(u32, usize, usize)> {
-    let plan = iter
-        .schedule
-        .as_ref()
-        .expect("grouped walks have a plan")
-        .plan();
+    let owner = nested.map_or(0, |child| child + 1);
+    let Some(schedule) = &iter.schedule else {
+        let installed = SegmentRow::of(&iter.shiperator);
+        // `describe` asserts that the installed state has no coverage.
+        let NodeState::Mixed { captain_mask, .. } = installed.states()[owner] else {
+            panic!("grouped walks drive a Mixed");
+        };
+
+        return vec![(captain_mask, 0, iter.cursor.len())];
+    };
+    let plan = schedule.plan();
 
     plan.segments()
         .iter()
@@ -146,7 +155,7 @@ fn route<S: Shiperator>(iter: &Shiper<S>, nested: Option<usize>) -> Vec<(u32, us
             let NodeState::Mixed {
                 captain_mask,
                 coverage,
-            } = row[nested.map_or(0, |child| child + 1)]
+            } = row[owner]
             else {
                 panic!("grouped walks drive a Mixed");
             };
@@ -249,6 +258,41 @@ fn ordinary_held_mut() {
 
     let values: Vec<u32> = [0, 1, 2, 4].map(|i| a.get(e[i]).unwrap().0).into();
     assert_eq!(values, [10, 1, 14, 18]);
+}
+
+/// Asserts that a grouped walk making a single segment, installed without plan by the normal
+/// constructor at an offset in A, hands out mutable items that can all be held at once across
+/// a `next` and both split halves, each write landing on its own entity.
+#[test]
+fn plan_free_held_mut() {
+    // A's unevaluated pairs start after its A-only component, B is evaluated as ungrouped.
+    let mut world = World::new_for_test();
+    world.add_entity(A(0));
+    let b_only: Vec<EntityId> = (0..4).map(|i| world.add_entity(B(20 + i))).collect();
+    world.group::<(A, B)>();
+    let pairs = &b_only[..3];
+    for (i, &id) in (0..).zip(pairs) {
+        world.add_component(id, A(10 + i));
+    }
+
+    let (mut a, mut b) = world.borrow::<(ViewMut<'_, A>, ViewMut<'_, B>)>().unwrap();
+    let mut iter = (&mut a, &mut b).iter();
+    assert!(iter.schedule.is_none());
+    assert_eq!(route(&iter, None), [(0b01, 0, 3)]);
+
+    let first = iter.next().unwrap();
+    let (left, right) = iter.split_current_segment();
+    let right: Vec<(&mut A, &mut B)> = right.unwrap().collect();
+    let left: Vec<(&mut A, &mut B)> = left.collect();
+    for (a, b) in [first].into_iter().chain(left).chain(right) {
+        a.0 += 100;
+        b.0 += 100;
+    }
+
+    for (i, &entity) in (0..).zip(pairs) {
+        assert_eq!(a.get(entity), Ok(&A(110 + i)), "{entity:?}");
+        assert_eq!(b.get(entity), Ok(&B(120 + i)), "{entity:?}");
+    }
 }
 
 /// Asserts that an owned wrapper hands each iterator its own reborrowed clone over a grouped plan

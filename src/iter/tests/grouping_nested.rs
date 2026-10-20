@@ -8,7 +8,7 @@ use super::grouping_regions::{record, walked};
 use crate::component::Component;
 use crate::entity_id::EntityId;
 use crate::get::Get;
-use crate::iter::plan::{Coverage, NodeState};
+use crate::iter::plan::{Coverage, NodeState, SegmentDescriptor};
 use crate::iter::planner::{NodeMetadata, Route};
 use crate::iter::{IntoIter, IntoShiperator, SegmentRow, Shiper, Shiperator};
 use crate::track;
@@ -84,15 +84,26 @@ fn segment(walks: (usize, Range<usize>), row: Vec<State>) -> Segment {
     Segment { walks, row }
 }
 
-/// Describes every segment of the plan of `iter`, walking one of `storages`.
+/// Describes every segment of `iter`, walking one of `storages`.
 ///
-/// Also asserts that `iter` was installed for the first segment.
+/// A single segment is installed without plan, it's described from `iter`'s own state.
+/// Otherwise, also asserts that `iter` was installed for the plan's first segment.
 fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]) -> Vec<Segment> {
-    let schedule = iter.schedule.as_ref().expect("a grouped plan");
+    let installed = SegmentRow::of(&iter.shiperator);
+    let Some(schedule) = &iter.schedule else {
+        // `describe` asserts that the installed state has no coverage.
+        let segment = SegmentDescriptor::from_cursor(iter.cursor, 0);
+        let row = installed.states().iter().map(|&state| state_of(state, &[]));
+
+        return vec![Segment {
+            walks: walked(&segment, storages),
+            row: row.collect(),
+        }];
+    };
     let plan = schedule.plan();
     let first = &plan.segments()[0];
 
-    assert_eq!(SegmentRow::of(&iter.shiperator).states(), plan.row(first));
+    assert_eq!(installed.states(), plan.row(first));
     assert_eq!(iter.cursor.as_ptr(), first.cursor().as_ptr());
     assert_eq!(schedule.follow_ups().len(), plan.segments().len() - 1);
 
@@ -103,18 +114,23 @@ fn segments<S: Shiperator>(iter: &Shiper<S>, storages: &[&[EntityId]]) -> Vec<Se
             row: plan
                 .row(segment)
                 .iter()
-                .map(|state| match *state {
-                    NodeState::Sailor => Sailor,
-                    NodeState::Window { segment_start } => window(segment_start),
-                    NodeState::Mixed {
-                        captain_mask,
-                        coverage,
-                    } => covered(captain_mask, plan.coverage(coverage)),
-                    NodeState::Or { .. } => unreachable!("these queries don't have Or"),
+                .map(|&state| match state {
+                    NodeState::Mixed { coverage, .. } => state_of(state, plan.coverage(coverage)),
+                    state => state_of(state, &[]),
                 })
                 .collect(),
         })
         .collect()
+}
+
+/// Returns `state` as these tests compare it, a `Mixed` with the records of `coverage`.
+fn state_of(state: NodeState, coverage: &[Coverage]) -> State {
+    match state {
+        NodeState::Sailor => Sailor,
+        NodeState::Window { segment_start } => window(segment_start),
+        NodeState::Mixed { captain_mask, .. } => covered(captain_mask, coverage),
+        NodeState::Or { .. } => unreachable!("these queries don't have Or"),
+    }
 }
 
 fn sorted<T: Ord>(mut items: Vec<T>) -> Vec<T> {
@@ -665,6 +681,17 @@ fn removal_then_regroup() {
 
         // A's 9 components are still in its range, but none is trusted:
         // 27 for the pair's damaged walk and 9 more for C, as much as the pair's ordinary walk.
+        // The damaged walk would install the same state, only the selection tells them apart.
+        let (_, _, metadata) = ((&a, &b), &c).into_shiperator();
+        let NodeMetadata::GroupedMixed(selection) = &metadata.0 else {
+            panic!("a Mixed with grouped alternatives reports its selection");
+        };
+        assert_eq!(
+            selection.cheapest().unwrap().work,
+            selection.ordinary.work.unwrap()
+        );
+        assert!(selection.winner().is_none());
+
         let iter = ((&a, &b), &c).iter();
         assert!(iter.schedule.is_none());
         assert_eq!(iter.shiperator.captain_mask, 0b01);

@@ -5,6 +5,7 @@ mod grouping_fixtures;
 mod grouping_nested;
 #[cfg(feature = "parallel")]
 mod grouping_parallel;
+mod grouping_plan_free;
 mod grouping_regions;
 mod grouping_resolution;
 mod grouping_rings;
