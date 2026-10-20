@@ -6,6 +6,7 @@ const A: u64 = 0;
 const B: u64 = 1;
 const C: u64 = 2;
 const D: u64 = 3;
+const E: u64 = 4;
 
 /// Returns the group made of the storages `ids`.
 fn group(ids: &[u64]) -> Arc<[StorageId]> {
@@ -57,7 +58,7 @@ fn absent_union() {
     let storages = [window(A, &[&ab, &ac]), window(B, &[&ab]), window(C, &[&ac])];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b111);
@@ -76,7 +77,7 @@ fn union_only() {
     ];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b111);
@@ -93,7 +94,7 @@ fn projection() {
     let storages = [window(A, &[&ab, &ac, &abc]), window(B, &[&ab, &abc])];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b11);
@@ -111,7 +112,7 @@ fn larger_only() {
     let storages = [window(A, &[&abc]), window(B, &[&abc])];
     let children = children(&storages);
 
-    assert!(cover_sets(&children).is_empty());
+    assert!(cover_sets(&children).next().is_none());
 }
 
 /// Asserts that disjoint AB and CD give distinct sets, ordered by their first child.
@@ -126,7 +127,7 @@ fn disjoint() {
     ];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     let required: Vec<u32> = sets.iter().map(|set| set.required).collect();
     assert_eq!(required, [0b0011, 0b1100]);
@@ -146,7 +147,7 @@ fn extra_member() {
     ];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b011);
@@ -169,7 +170,7 @@ fn transitive() {
     ];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b1111);
@@ -188,7 +189,7 @@ fn subset() {
     ];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(sets[0].required, 0b111);
@@ -204,7 +205,7 @@ fn ambiguous_required() {
     let storages = [window(A, &[&ab]), window(A, &[&ab]), window(B, &[&ab])];
     let children = children(&storages);
 
-    assert!(cover_sets(&children).is_empty());
+    assert!(cover_sets(&children).next().is_none());
 }
 
 /// Asserts that an extra member held by two children doesn't come along.
@@ -219,7 +220,7 @@ fn ambiguous_extra() {
     ];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets.len(), 1);
     assert_eq!(range_children(&sets[0].ranges[1]), [0, 1]);
@@ -233,7 +234,7 @@ fn nested_boundary() {
     let a = window(A, &[&ab]);
     let children = [a.child(), nested()];
 
-    assert!(cover_sets(&children).is_empty());
+    assert!(cover_sets(&children).next().is_none());
 }
 
 /// Asserts that each member reports its own part of a range, in child order,
@@ -247,11 +248,11 @@ fn member_parts() {
     let storages = [window(B, &[&ab]), a];
     let children = children(&storages);
 
-    let sets = cover_sets(&children);
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
 
     assert_eq!(sets[0].required, 0b11);
     assert_eq!(
-        sets[0].ranges[0].members,
+        *sets[0].ranges[0].members,
         [
             RangeMember {
                 child: 0,
@@ -273,6 +274,47 @@ fn member_parts() {
             },
         ]
     );
+}
+
+/// Asserts that a range with as many members as fit inline lists them all, in child order.
+#[test]
+fn members_inline() {
+    let abcd = group(&[A, B, C, D]);
+    let storages = [
+        window(D, &[&abcd]),
+        window(C, &[&abcd]),
+        window(B, &[&abcd]),
+        window(A, &[&abcd]),
+    ];
+    let children = children(&storages);
+
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+
+    assert!(matches!(
+        sets[0].ranges[0].members,
+        ScratchVec::Inline { .. }
+    ));
+    assert_eq!(range_children(&sets[0].ranges[0]), [0, 1, 2, 3]);
+}
+
+/// Asserts that a range with more members than fit inline moves them to the heap
+/// and still lists them all, in child order.
+#[test]
+fn members_spilled() {
+    let abcde = group(&[A, B, C, D, E]);
+    let storages = [
+        window(E, &[&abcde]),
+        window(D, &[&abcde]),
+        window(C, &[&abcde]),
+        window(B, &[&abcde]),
+        window(A, &[&abcde]),
+    ];
+    let children = children(&storages);
+
+    let sets: Vec<CoverSet> = cover_sets(&children).collect();
+
+    assert!(matches!(sets[0].ranges[0].members, ScratchVec::Heap(_)));
+    assert_eq!(range_children(&sets[0].ranges[0]), [0, 1, 2, 3, 4]);
 }
 
 /// Storage `storage` holding a range for each `(group, len, trust)`,
@@ -312,7 +354,6 @@ fn window_with(
 /// Returns the walks of the first cover set of `children`, placeable or not.
 fn first_candidate(children: &[Child<'_>]) -> GroupedCandidate {
     let set = cover_sets(children)
-        .into_iter()
         .next()
         .expect("the children hold a group");
 
@@ -566,7 +607,6 @@ fn estimates_disjoint() {
     let children = children(&storages);
 
     let works: Vec<u64> = cover_sets(&children)
-        .into_iter()
         .map(|set| {
             Alternative::local(GroupedCandidate::new(&children, set), 4)
                 .unwrap()

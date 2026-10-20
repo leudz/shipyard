@@ -56,7 +56,7 @@ pub(crate) struct GroupRange {
 /// Calling `s` the shift's remainder, physical offsets `[s, len)` hold logical `[0, len - s)`
 /// and offsets `[0, s)` hold logical `[len - s, len)`.\
 /// The boundary between the logical last position and logical 0 is the wrap point.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 pub(crate) struct Ring {
     pub(crate) start: usize,
     pub(crate) len: usize,

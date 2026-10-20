@@ -16,6 +16,7 @@
 //! [`install_winner`] swaps in its root's cheapest alternative when it beats the ordinary walk,
 //! [`regions::grouped_entities`] turning it into segments.
 pub(crate) mod regions;
+mod scratch;
 #[cfg(test)]
 mod tests;
 
@@ -31,6 +32,7 @@ use core::cmp::Reverse;
 use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;
+use scratch::ScratchVec;
 
 /// What a query node knows about grouping, reported by
 /// [`IntoShiperator::into_shiperator`](crate::iter::IntoShiperator::into_shiperator).
@@ -636,7 +638,6 @@ fn ordinary_captain(children: &[Child<'_>]) -> usize {
 /// Alternatives whose estimate doesn't fit in a `u64` can't beat anything and are left out.
 fn alternatives(children: &mut [Child<'_>], lookups: usize) -> Vec<Alternative> {
     let local: Vec<GroupedCandidate> = cover_sets(children)
-        .into_iter()
         .map(|set| GroupedCandidate::new(children, set))
         .collect();
     let mut local = local.into_iter().peekable();
@@ -688,11 +689,14 @@ pub(crate) struct CoverRange {
     ///
     /// The required members are always there. Other members the query holds can come along,
     /// members the query doesn't borrow never do.
-    pub(crate) members: Vec<RangeMember>,
+    pub(crate) members: RangeMembers,
 }
 
+/// The members of a [`CoverRange`], groups usually have a handful of them.
+pub(crate) type RangeMembers = ScratchVec<RangeMember, 4>;
+
 /// A child's part of a [`CoverRange`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 pub(crate) struct RangeMember {
     /// Position of the child among the `Mixed`'s children.
     pub(crate) child: usize,
@@ -711,43 +715,45 @@ pub(crate) struct RangeMember {
 /// an ABC union, not in AB or AC. So an `(A, B, C)` query covers ABC, whether or not the
 /// union exists yet, and doesn't walk AB or AC.\
 /// Disjoint groups give distinct sets, they compete as distinct alternatives.
-pub(crate) fn cover_sets(children: &[Child<'_>]) -> Vec<CoverSet> {
-    // Each fully held group as the children holding its members, deduplicated by pointer.
-    // Every member lists the group, the first one we meet is enough.
-    let mut seen: Vec<&Arc<[StorageId]>> = Vec::new();
-    let mut held: Vec<u32> = Vec::new();
-    for window in children.iter().filter_map(Child::window) {
+pub(crate) fn cover_sets<'a>(children: &'a [Child<'_>]) -> impl Iterator<Item = CoverSet> + 'a {
+    // `joined[child]` is the set `child` is part of so far, 0 for none.
+    // Our masks cap queries at 32 children, so every child has a slot.
+    let mut joined = [0u32; u32::BITS as usize];
+
+    for (position, child) in children.iter().enumerate() {
+        let Some(window) = child.window() else {
+            continue;
+        };
+
         for range in window.ranges {
-            if seen.iter().any(|group| Arc::ptr_eq(group, &range.group)) {
+            // Every member lists the group, we only take it from its first member.
+            // A held group's first member is the window we're reading.
+            let Some(held) = member_mask(children, &range.group) else {
+                continue;
+            };
+            if held.trailing_zeros() as usize != position {
                 continue;
             }
-            seen.push(&range.group);
 
-            if let Some(mask) = member_mask(children, &range.group) {
-                held.push(mask);
+            // The group joins the sets it shares a member with. Each member of a set holds
+            // the whole set, so their union is the merged set.
+            let set = mask_children(held).fold(held, |set, member| set | joined[member]);
+            for member in mask_children(set) {
+                joined[member] = set;
             }
         }
     }
 
-    // We join groups sharing a member until no two sets overlap.
-    let mut required: Vec<u32> = Vec::new();
-    for mut mask in held {
-        // Merging can make a set overlap others it didn't before, so we absorb them all.
-        while let Some(position) = required.iter().position(|&other| other & mask != 0) {
-            mask |= required.swap_remove(position);
-        }
-        required.push(mask);
-    }
-    // The lowest bit is the first child, the order doesn't depend on how groups were found.
-    required.sort_unstable_by_key(|mask| mask.trailing_zeros());
-
-    required
+    // We read each set at its first child, so they come ordered by it.
+    joined
         .into_iter()
-        .map(|required| CoverSet {
+        .take(children.len())
+        .enumerate()
+        .filter(|&(position, set)| set.trailing_zeros() as usize == position)
+        .map(|(_, required)| CoverSet {
             required,
             ranges: containing_ranges(children, required),
         })
-        .collect()
 }
 
 /// Returns the children holding `group`'s members, bit `i` for child `i`,
@@ -782,31 +788,26 @@ fn window_child(children: &[Child<'_>], storage_id: StorageId) -> Option<usize> 
 
 /// Returns every range whose group contains all members `required` flags.
 fn containing_ranges(children: &[Child<'_>], required: u32) -> Vec<CoverRange> {
-    let storage_of = |child: usize| {
+    let window_of = |child: usize| {
         children[child]
             .window()
             .expect("required members are window children")
-            .storage_id
     };
-    let required_storages: Vec<StorageId> = (0..children.len())
-        .filter(|&child| required & (1 << child) != 0)
-        .map(storage_of)
-        .collect();
 
     // A group containing every required member is attached to each of them,
     // the first one's ranges list all of them.
-    let first = required.trailing_zeros() as usize;
-    let first_window = children[first]
-        .window()
-        .expect("required members are window children");
+    let first_window = window_of(required.trailing_zeros() as usize);
 
     first_window
         .ranges
         .iter()
         .filter(|range| {
-            required_storages
-                .iter()
-                .all(|storage_id| range.group.binary_search(storage_id).is_ok())
+            mask_children(required).all(|child| {
+                range
+                    .group
+                    .binary_search(&window_of(child).storage_id)
+                    .is_ok()
+            })
         })
         .map(|range| CoverRange {
             #[cfg(test)]
@@ -817,26 +818,26 @@ fn containing_ranges(children: &[Child<'_>], required: u32) -> Vec<CoverRange> {
 }
 
 /// Returns each child holding a member of `group` alone, in child order, with its part of `group`'s range.
-fn range_members(children: &[Child<'_>], group: &Arc<[StorageId]>) -> Vec<RangeMember> {
-    let mut members: Vec<RangeMember> = group
-        .iter()
-        .filter_map(|&storage_id| window_child(children, storage_id))
-        .map(|child| {
-            let range = children[child]
-                .window()
-                .expect("window_child only returns windows")
-                .ranges
-                .iter()
-                .find(|range| Arc::ptr_eq(&range.group, group))
-                .expect("every member holds a range for its group");
+fn range_members(children: &[Child<'_>], group: &Arc<[StorageId]>) -> RangeMembers {
+    let mut members = RangeMembers::new();
+    for &storage_id in group.iter() {
+        let Some(child) = window_child(children, storage_id) else {
+            continue;
+        };
+        let range = children[child]
+            .window()
+            .expect("window_child only returns windows")
+            .ranges
+            .iter()
+            .find(|range| Arc::ptr_eq(&range.group, group))
+            .expect("every member holds a range for its group");
 
-            RangeMember {
-                child,
-                ring: range.ring(),
-                trust: range.trust,
-            }
-        })
-        .collect();
+        members.push(RangeMember {
+            child,
+            ring: range.ring(),
+            trust: range.trust,
+        });
+    }
 
     // Group ids are sorted by storage, we want the members in child order.
     members.sort_unstable_by_key(|member| member.child);
