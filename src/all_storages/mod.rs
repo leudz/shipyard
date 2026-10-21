@@ -16,7 +16,7 @@ pub use retain::TupleRetainStorage;
 
 pub(crate) use builder::AllStoragesBuilder;
 pub(crate) use clone::TupleClone;
-pub(crate) use group::Grouping;
+pub(crate) use group::{ConnectedSet, Grouping};
 
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::Borrow;

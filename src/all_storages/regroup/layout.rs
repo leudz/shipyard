@@ -17,11 +17,10 @@
 //! ungrouped regions are never scanned. Every scratch buffer scales with storages and ranges.
 
 use super::analysis::{Discovery, Membership, Memberships, Plan};
-use super::{original_row, storage_mut, storage_ptr};
-use crate::ShipHashMap;
+use super::{Selected, original_row};
 use crate::entity_id::EntityId;
 use crate::sparse_set::Ring;
-use crate::storage::{SBox, Storage, StorageId};
+use crate::storage::StorageId;
 use alloc::vec::Vec;
 use core::ops::Range;
 
@@ -34,23 +33,20 @@ pub(super) struct Layout {
     pub(super) envelope: Option<Range<usize>>,
 }
 
-/// Reorders the ids of every grouped storage into the layout `plan` decided,
+/// Reorders the ids of every selected grouped storage into the layout `plan` decided,
 /// and returns what [`finish`] needs to complete it.
 ///
 /// ### Safety
 ///
-/// - `plan` has to come from `analyze`, and the storages can't have changed since.
-/// - Every grouped storage's ids are reordered without their components and timestamps.
+/// - `plan` has to come from `analyze` over the same `selected` storages, and they can't have
+///   changed since.
+/// - Every selected grouped storage's ids are reordered without their components and timestamps.
 ///   Before a storage is used in any other way than reading its ids, sparse array and groups,
 ///   it has to be completed with [`finish`].
-pub(super) unsafe fn build(
-    storages: &mut ShipHashMap<StorageId, SBox>,
-    storage_ids: &[StorageId],
-    plan: &Plan,
-) -> Vec<Layout> {
+pub(super) unsafe fn build(selected: &mut Selected<'_>, plan: &Plan) -> Vec<Layout> {
     // SAFE: our caller completes every storage with `finish` before using it otherwise,
     // which repairs every row we reorder.
-    let mut builder = unsafe { Builder::open(storages, storage_ids, plan) };
+    let mut builder = unsafe { Builder::open(selected, plan) };
 
     builder.gather();
 
@@ -74,10 +70,11 @@ pub(super) unsafe fn build(
 ///
 /// ### Safety
 ///
-/// `layouts` have to come from [`build`], and the storages can't have changed since.
-pub(super) unsafe fn finish(storages: &mut ShipHashMap<StorageId, SBox>, layouts: &[Layout]) {
+/// `layouts` have to come from [`build`] over the same `selected` storages, and they can't have
+/// changed since.
+pub(super) unsafe fn finish(selected: &mut Selected<'_>, layouts: &[Layout]) {
     for layout in layouts {
-        let storage = storage_mut(storages, layout.storage_id);
+        let storage = selected.get_mut(layout.storage_id);
 
         if let Some(envelope) = layout.envelope.clone() {
             // SAFE: `build` only permuted the storage's ids, and its envelope holds every row
@@ -240,28 +237,18 @@ struct Builder<'a, 'p> {
 }
 
 impl<'a, 'p> Builder<'a, 'p> {
-    /// Lends the ids of every storage of the sorted `storage_ids` that has at least one range.
+    /// Lends the ids of every selected storage that has at least one range.
     ///
     /// ### Safety
     ///
     /// The ids are lent with `Storage::reorder_ids`. They can only be permuted, and every storage
     /// has to be repaired over its reordered rows before it's used in any other way than reading
     /// its ids, sparse array and groups.
-    unsafe fn open(
-        storages: &'a mut ShipHashMap<StorageId, SBox>,
-        storage_ids: &[StorageId],
-        plan: &'p Plan,
-    ) -> Builder<'a, 'p> {
+    unsafe fn open(selected: &'a mut Selected<'_>, plan: &'p Plan) -> Builder<'a, 'p> {
         let mut memberships = Vec::new();
         let mut dense = Vec::new();
 
-        for &storage_id in storage_ids {
-            let storage = storage_ptr(storages, storage_id);
-            // SAFE: `storage` was just created. We keep one exclusive reference to each storage
-            // for 'a, and they're all different storages. Our borrow of `storages` keeps anyone
-            // else from getting to them, and getting the pointers of the other storages
-            // doesn't touch this one.
-            let storage: &'a mut dyn Storage = unsafe { &mut *storage };
+        for (storage_id, storage) in selected.iter_mut() {
             if !storage.groups().is_some_and(|groups| groups.has_ranges()) {
                 continue;
             }

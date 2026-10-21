@@ -2,14 +2,15 @@ mod analysis;
 mod churn;
 mod declaration;
 mod discovery;
+mod guarded;
 mod layout;
 mod original_row;
 mod promotion;
 mod removals;
 mod selected;
 
+use super::Selected;
 use super::analysis::{Discovery, Frozen, Plan, analyze};
-use super::{Selected, storage_ptr};
 use crate::all_storages::{LockPresent, ThreadIdPresent};
 use crate::component::Component;
 use crate::entity_id::EntityId;
@@ -354,13 +355,13 @@ fn attach_ids(world: &World, ids: &[StorageId]) -> Arc<[StorageId]> {
     let group: Arc<[StorageId]> = Arc::from(ids);
 
     let mut all_storages = world.all_storages_mut().unwrap();
-    let storages = all_storages.storages.get_mut();
+    let mut selected = Selected::all(all_storages.storages.get_mut());
     for &member_id in group.iter() {
-        let member = storage_ptr(storages, member_id);
-        // SAFE: `member` was just created and is the only reference to this storage.
-        let groups = unsafe { &mut *member }.groups_mut().unwrap();
-
-        groups.attach(group.clone(), member_id);
+        selected
+            .get_mut(member_id)
+            .groups_mut()
+            .unwrap()
+            .attach(group.clone(), member_id);
     }
 
     group

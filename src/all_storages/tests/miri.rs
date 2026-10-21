@@ -12,7 +12,6 @@ use crate::entity_id::EntityId;
 #[cfg(feature = "std")]
 use crate::error;
 use crate::get::Get;
-#[cfg(feature = "std")]
 use crate::sparse_set::SparseSet;
 use crate::storage::{Storage, StorageId};
 use crate::track;
@@ -581,6 +580,80 @@ fn regroup_moves() {
     assert_eq!(values_of(&world, cm1), [1, 10]);
     assert_eq!(values_of(&world, ca2), [2]);
     assert_eq!(values_of(&world, both3), [3, 10]);
+
+    drop(world);
+    assert_eq!(drops(&counter), 4);
+}
+
+/// Asserts that regrouping one connected set through borrow guards moves heap-owning,
+/// over-aligned and zero-sized components and attaches their union, while a storage outside the
+/// set stays borrowed exclusively and is written through. A held borrow of a member then fails
+/// the next regroup before anything moves, and the guards it took are released.
+/// Each component is dropped exactly once.
+#[test]
+fn regroup_guarded() {
+    use crate::views::ViewMut;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::builder_for_test()
+        .with_group::<(Counted, Aligned)>()
+        .with_group::<(Counted, Marker)>()
+        .build();
+    let both = world.add_entity((counted(0, &counter), Aligned(0), Marker));
+    let ca = world.add_entity((counted(1, &counter), Aligned(1)));
+    let cm = world.add_entity((counted(2, &counter), Marker));
+    let heap = world.add_entity(Heap(vec![7]));
+    let counted_id = StorageId::of::<SparseSet<Counted>>();
+    let set = world
+        .all_storages()
+        .unwrap()
+        .grouping
+        .set_of(counted_id)
+        .unwrap()
+        .clone();
+
+    let mut held = world.borrow::<ViewMut<'_, Heap>>().unwrap();
+    world
+        .all_storages()
+        .unwrap()
+        .regroup_connected_set(&set)
+        .unwrap();
+    (&mut held).get(heap).unwrap().0.push(8);
+    drop(held);
+
+    let counted_view = world.borrow::<View<'_, Counted>>().unwrap();
+    // The two declared groups and the union of `both`.
+    assert_eq!(counted_view.groups.ranges.len(), 3);
+    assert_eq!(counted_view.groups.unevaluated_start, counted_view.len());
+    drop(counted_view);
+    assert_eq!(values_of(&world, both), [0]);
+    assert_eq!(values_of(&world, ca), [1]);
+    assert_eq!(values_of(&world, cm), [2]);
+    assert_eq!(world.get::<&Heap>(heap).unwrap().0, [7, 8]);
+
+    let late = world.add_entity((counted(3, &counter), Marker));
+    let held = world.borrow::<View<'_, Marker>>().unwrap();
+    assert!(
+        world
+            .all_storages()
+            .unwrap()
+            .regroup_connected_set(&set)
+            .is_err()
+    );
+    drop(held);
+    // `Counted` and `Aligned` were borrowed before `Marker` failed, they're free again.
+    drop(
+        world
+            .borrow::<(ViewMut<'_, Counted>, ViewMut<'_, Aligned>)>()
+            .unwrap(),
+    );
+    world
+        .all_storages()
+        .unwrap()
+        .regroup_connected_set(&set)
+        .unwrap();
+    assert_eq!(values_of(&world, late), [3]);
+    assert_eq!(drops(&counter), 0);
 
     drop(world);
     assert_eq!(drops(&counter), 4);

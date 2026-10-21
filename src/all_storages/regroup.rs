@@ -20,27 +20,13 @@ mod layout;
 mod tests;
 
 use crate::ShipHashMap;
-use crate::all_storages::AllStorages;
+use crate::all_storages::{AllStorages, ConnectedSet, CustomStorageAccess};
+use crate::atomic_refcell::ARefMut;
 use crate::entity_id::EntityId;
+use crate::error;
 use crate::sparse_set::SparseArray;
 use crate::storage::{SBox, Storage, StorageId};
 use alloc::vec::Vec;
-
-/// A pointer to a storage.
-///
-/// The `'static` is spelled out, inside a reference it would default to the reference's lifetime.
-type StoragePtr = *mut (dyn Storage + 'static);
-
-// Layout works on every grouped storage at once, so it gets to them through raw pointers.
-// This is sound because:
-// - `&mut AllStorages` guarantees nobody else borrows any storage,
-// - group members are distinct storages, `WorldBuilder::with_group` rejects groups listing a storage twice,
-// - storages can't be removed while we hold the map mutably, so the pointers stay valid,
-// - getting a fresh pointer to a storage invalidates the previous pointers and references to that
-//   storage only, the other storages live in their own allocations,
-// - layout makes exactly one exclusive reference per storage, each lending its ids apart from its
-//   sparse array and groups. It holds the map mutably while its references live,
-//   so no new pointer can be made meanwhile.
 
 impl AllStorages {
     /// Moves components to the groups they belong to, to speed up iteration.
@@ -49,23 +35,46 @@ impl AllStorages {
     /// Components only move to their group during a regroup.\
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
     pub fn regroup(&mut self) {
-        let storages = self.storages.get_mut();
+        regroup_selected(&mut Selected::all(self.storages.get_mut()));
+    }
 
-        // Analysis decides what changes without moving anything, a clean world stops here.
-        let mut selected = Selected::all(storages);
-        let Some(plan) = analysis::analyze(&mut selected) else {
-            return;
-        };
-        let storage_ids = selected.ids().to_vec();
-        drop(selected);
-
-        // We only move ids first, components and timestamps follow when each storage is finished.
-        // SAFE: `plan` was just made from these storages, and `finish` completes every one of
-        // them before anything else uses them.
-        unsafe {
-            let layouts = layout::build(storages, &storage_ids, &plan);
-            layout::finish(storages, &layouts);
+    /// Regroups the storages of `set`, borrowing only them.
+    ///
+    /// Every member is borrowed exclusively, in order, before anything moves. When a borrow fails,
+    /// the ones already taken are released and nothing changes.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "regroup_set and workloads will use it")
+    )]
+    pub(crate) fn regroup_connected_set(
+        &self,
+        set: &ConnectedSet,
+    ) -> Result<(), error::GetStorage> {
+        // Dropping `guards` on an early return releases the borrows already taken.
+        let mut guards = Vec::with_capacity(set.members.len());
+        for &storage_id in &set.members {
+            guards.push(self.custom_storage_mut_by_id(storage_id)?);
         }
+
+        regroup_selected(&mut Selected::guarded(set, &mut guards));
+
+        Ok(())
+    }
+}
+
+/// Moves the components of the `selected` storages to the groups they belong to.
+fn regroup_selected(selected: &mut Selected<'_>) {
+    // Analysis decides what changes without moving anything, a clean set stops here.
+    let Some(plan) = analysis::analyze(selected) else {
+        return;
+    };
+
+    // We only move ids first, components and timestamps follow when each storage is finished.
+    // SAFE: `plan` was just made from these storages, and `finish` completes every one of
+    // them before anything else uses them.
+    unsafe {
+        let layouts = layout::build(selected, &plan);
+        layout::finish(selected, &layouts);
     }
 }
 
@@ -96,6 +105,19 @@ impl<'a> Selected<'a> {
         Selected { ids, storages }
     }
 
+    /// Selects the members of `set`, `guards` borrowing each of them in member order.
+    ///
+    /// A connected set's members are sorted and distinct, as `Selected` needs.
+    fn guarded(
+        set: &ConnectedSet,
+        guards: &'a mut [ARefMut<'_, &mut (dyn Storage + 'static)>],
+    ) -> Selected<'a> {
+        Selected {
+            ids: set.members.clone(),
+            storages: guards.iter_mut().map(|guard| &mut **guard).collect(),
+        }
+    }
+
     /// Returns the ids of the selected storages, sorted.
     pub(super) fn ids(&self) -> &[StorageId] {
         &self.ids
@@ -123,6 +145,16 @@ impl<'a> Selected<'a> {
         &mut *self.storages[position]
     }
 
+    /// Returns every selected storage with its id, sorted by id.
+    pub(super) fn iter_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (StorageId, &mut (dyn Storage + 'static))> {
+        self.ids
+            .iter()
+            .copied()
+            .zip(self.storages.iter_mut().map(|storage| &mut **storage))
+    }
+
     /// Returns the position of `storage_id` in `ids`.
     ///
     /// ### Panics
@@ -142,32 +174,6 @@ fn storage_of(sbox: &mut SBox) -> &mut (dyn Storage + 'static) {
     // We borrow `sbox` mutably for as long as the reference lives, no other reference
     // to this storage can exist.
     unsafe { &mut *sbox.0 }.get_mut()
-}
-
-/// Returns a pointer to the storage with id `storage_id`.
-///
-/// Calling this again for the same storage invalidates its previous pointer.
-fn storage_ptr(storages: &mut ShipHashMap<StorageId, SBox>, storage_id: StorageId) -> StoragePtr {
-    let sbox = storages
-        .get_mut(&storage_id)
-        .expect("group members cannot be deleted");
-
-    storage_of(sbox)
-}
-
-/// Returns the storage with id `storage_id`.
-///
-/// Unlike `storage_ptr`, the borrow checker makes sure this is the only reference to any storage
-/// while it lives.
-fn storage_mut(
-    storages: &mut ShipHashMap<StorageId, SBox>,
-    storage_id: StorageId,
-) -> &mut (dyn Storage + 'static) {
-    let storage = storage_ptr(storages, storage_id);
-
-    // SAFE: `storage` was just created, and the returned reference borrows `storages` mutably,
-    // so nothing else can get to a storage until it's dropped.
-    unsafe { &mut *storage }
 }
 
 /// Returns the row `entity`'s component had when regroup started in the storage with the sparse
