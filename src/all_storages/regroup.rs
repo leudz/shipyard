@@ -20,7 +20,7 @@ mod layout;
 mod tests;
 
 use crate::ShipHashMap;
-use crate::all_storages::{AllStorages, ConnectedSet, CustomStorageAccess};
+use crate::all_storages::{AllStorages, ConnectedSet, CustomStorageAccess, GroupMember};
 use crate::atomic_refcell::ARefMut;
 use crate::entity_id::EntityId;
 use crate::error;
@@ -38,14 +38,39 @@ impl AllStorages {
         regroup_selected(&mut Selected::all(self.storages.get_mut()));
     }
 
+    /// Regroups the [connected set] holding `T`'s storage, leaving the rest of the world alone.
+    ///
+    /// Every storage of the set is borrowed exclusively until the regroup ends, the other storages
+    /// can stay borrowed meanwhile.\
+    /// `T` can be any member of the set, all of them give the same result.
+    ///
+    /// ### Errors
+    ///
+    /// - [`NotGrouped`] when `T`'s storage isn't part of any group.
+    /// - [`Storage`] when a storage of the set is already borrowed, or is `!Send` and this isn't
+    ///   the world's thread. It can be a member other than `T`. Nothing moves in that case.
+    ///
+    /// [connected set]: crate::world::WorldBuilder::with_group
+    /// [`NotGrouped`]: error::RegroupSet::NotGrouped
+    /// [`Storage`]: error::RegroupSet::Storage
+    pub fn regroup_set<T: GroupMember>(&self) -> Result<(), error::RegroupSet> {
+        let storage_id = T::storage_id();
+
+        let Some(set) = self.grouping.set_of(storage_id) else {
+            return Err(error::RegroupSet::NotGrouped {
+                name: T::storage_name(),
+                id: storage_id,
+            });
+        };
+
+        self.regroup_connected_set(set)
+            .map_err(error::RegroupSet::Storage)
+    }
+
     /// Regroups the storages of `set`, borrowing only them.
     ///
     /// Every member is borrowed exclusively, in order, before anything moves. When a borrow fails,
     /// the ones already taken are released and nothing changes.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "regroup_set and workloads will use it")
-    )]
     pub(crate) fn regroup_connected_set(
         &self,
         set: &ConnectedSet,
@@ -53,7 +78,23 @@ impl AllStorages {
         // Dropping `guards` on an early return releases the borrows already taken.
         let mut guards = Vec::with_capacity(set.members.len());
         for &storage_id in &set.members {
-            guards.push(self.custom_storage_mut_by_id(storage_id)?);
+            match self.custom_storage_mut_by_id(storage_id) {
+                Ok(guard) => guards.push(guard),
+                Err(mut error) => {
+                    // Borrowing by id doesn't know the storage's type, so we take its name
+                    // from the group declaration.
+                    if let error::GetStorage::StorageBorrow { name, .. }
+                    | error::GetStorage::MissingStorage { name, .. } = &mut error
+                    {
+                        *name = self
+                            .grouping
+                            .member(storage_id)
+                            .map(|member| member.storage_name);
+                    }
+
+                    return Err(error);
+                }
+            }
         }
 
         regroup_selected(&mut Selected::guarded(set, &mut guards));

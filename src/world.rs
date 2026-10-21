@@ -6,7 +6,7 @@ mod tests;
 pub use builder::WorldBuilder;
 
 use crate::all_storages::{
-    AllStorages, CustomStorageAccess, TupleClone, TupleDeleteAny, TupleRetainStorage,
+    AllStorages, CustomStorageAccess, GroupMember, TupleClone, TupleDeleteAny, TupleRetainStorage,
 };
 use crate::atomic_refcell::{ARef, ARefMut, AtomicRefCell};
 use crate::borrow::WorldBorrow;
@@ -1366,6 +1366,57 @@ impl World {
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
     pub fn regroup(&mut self) {
         self.all_storages.get_mut().regroup();
+    }
+
+    /// Regroups the [connected set] holding `T`'s storage, leaving the rest of the world alone.
+    ///
+    /// Like [`World::borrow`], it only needs a shared reference to the world.\
+    /// Every storage of the set is borrowed exclusively until the regroup ends, the other storages
+    /// can stay borrowed meanwhile.\
+    /// `T` can be any member of the set, all of them give the same result.
+    ///
+    /// ### Errors
+    ///
+    /// - [`NotGrouped`] when `T`'s storage isn't part of any group.
+    /// - [`Storage`] when `AllStorages` is borrowed mutably, or a storage of the set is already
+    ///   borrowed, or is `!Send` and this isn't the world's thread.
+    ///   It can be a member other than `T`. Nothing moves in that case.
+    ///
+    /// ### Example
+    ///
+    /// ```
+    /// use shipyard::{error, Component, World};
+    ///
+    /// #[derive(Component)]
+    /// struct Pos(f32);
+    ///
+    /// #[derive(Component)]
+    /// struct Vel(f32);
+    ///
+    /// #[derive(Component)]
+    /// struct Health(u32);
+    ///
+    /// let mut world = World::builder().with_group::<(Pos, Vel)>().build();
+    /// world.add_entity((Pos(0.0), Vel(1.0)));
+    ///
+    /// world.regroup_set::<Pos>().unwrap();
+    ///
+    /// // Health isn't part of any group.
+    /// assert!(matches!(
+    ///     world.regroup_set::<Health>(),
+    ///     Err(error::RegroupSet::NotGrouped { .. })
+    /// ));
+    /// ```
+    ///
+    /// [connected set]: crate::world::WorldBuilder::with_group
+    /// [`NotGrouped`]: error::RegroupSet::NotGrouped
+    /// [`Storage`]: error::RegroupSet::Storage
+    pub fn regroup_set<T: GroupMember>(&self) -> Result<(), error::RegroupSet> {
+        let all_storages = self.all_storages.borrow().map_err(|borrow| {
+            error::RegroupSet::Storage(error::GetStorage::AllStoragesBorrow(borrow))
+        })?;
+
+        all_storages.regroup_set::<T>()
     }
 
     #[doc = "Retrieve components of `entity`.

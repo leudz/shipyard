@@ -10,8 +10,9 @@ mod tests;
 
 pub use custom_storage::CustomStorageAccess;
 pub use delete_any::{CustomDeleteAny, TupleDeleteAny};
+pub use group::GroupMember;
 #[doc(hidden)]
-pub use group::{GroupMember, MemberInfo, TupleGroup};
+pub use group::{MemberInfo, TupleGroup};
 pub use retain::TupleRetainStorage;
 
 pub(crate) use builder::AllStoragesBuilder;

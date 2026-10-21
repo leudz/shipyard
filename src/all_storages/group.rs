@@ -16,6 +16,7 @@ use crate::world::{World, WorldBuilder};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+use core::any::type_name;
 
 /// Seals the grouping traits, only built-in storages can be grouped.
 ///
@@ -27,19 +28,24 @@ mod seal {
     pub trait Tuple {}
 }
 
-/// One element of a [`TupleGroup`].
+/// A storage that can be part of a group, see [`WorldBuilder::with_group`].
 ///
 /// Thread-local storages are written with the same wrappers used to borrow them, for example `NonSend<T>`.\
 /// Only components and their thread-local wrappers are group members, it can't be implemented
 /// outside of shipyard.
-#[doc(hidden)]
 pub trait GroupMember: seal::Member {
     /// `false` when the storage is `!Send`, it can then only be borrowed exclusively from the world's thread.
+    #[doc(hidden)]
     const THREAD_SAFE: bool;
 
     /// Returns the id of the storage this element refers to.
+    #[doc(hidden)]
     fn storage_id() -> StorageId;
+    /// Returns the type name of the storage this element refers to.
+    #[doc(hidden)]
+    fn storage_name() -> &'static str;
     /// Creates the storage if it doesn't exist yet.
+    #[doc(hidden)]
     fn get_or_insert(all_storages: &mut AllStorages);
 }
 
@@ -51,6 +57,11 @@ impl<T: Component + Send + Sync> GroupMember for T {
     #[inline]
     fn storage_id() -> StorageId {
         StorageId::of::<SparseSet<T>>()
+    }
+
+    #[inline]
+    fn storage_name() -> &'static str {
+        type_name::<SparseSet<T>>()
     }
 
     #[inline]
@@ -69,6 +80,11 @@ impl<T: Component + Sync> GroupMember for NonSend<T> {
     #[inline]
     fn storage_id() -> StorageId {
         StorageId::of::<NonSend<SparseSet<T>>>()
+    }
+
+    #[inline]
+    fn storage_name() -> &'static str {
+        type_name::<NonSend<SparseSet<T>>>()
     }
 
     #[inline]
@@ -92,6 +108,11 @@ impl<T: Component + Send> GroupMember for NonSync<T> {
     }
 
     #[inline]
+    fn storage_name() -> &'static str {
+        type_name::<NonSync<SparseSet<T>>>()
+    }
+
+    #[inline]
     fn get_or_insert(all_storages: &mut AllStorages) {
         all_storages.exclusive_storage_or_insert_non_sync_mut(Self::storage_id(), || {
             NonSync(SparseSet::<T>::new())
@@ -112,6 +133,11 @@ impl<T: Component> GroupMember for NonSendSync<T> {
     }
 
     #[inline]
+    fn storage_name() -> &'static str {
+        type_name::<NonSendSync<SparseSet<T>>>()
+    }
+
+    #[inline]
     fn get_or_insert(all_storages: &mut AllStorages) {
         all_storages.exclusive_storage_or_insert_non_send_sync_mut(Self::storage_id(), || {
             NonSendSync(SparseSet::<T>::new())
@@ -124,6 +150,8 @@ impl<T: Component> GroupMember for NonSendSync<T> {
 #[derive(Clone, Copy)]
 pub struct MemberInfo {
     pub(crate) storage_id: StorageId,
+    /// The storage's type name, to name it in errors.
+    pub(crate) storage_name: &'static str,
     /// Creates the storage if it doesn't exist yet.
     pub(crate) create: fn(&mut AllStorages),
     /// `false` when the storage can only be borrowed exclusively from the world's thread.
@@ -149,6 +177,7 @@ macro_rules! impl_group {
             fn members() -> Vec<MemberInfo> {
                 vec![$(MemberInfo {
                     storage_id: $member::storage_id(),
+                    storage_name: $member::storage_name(),
                     create: $member::get_or_insert,
                     thread_safe: $member::THREAD_SAFE,
                 }),+]
@@ -264,17 +293,13 @@ impl Grouping {
     }
 
     /// Returns the information about the member storage `storage_id`, `None` if it isn't one.
-    fn member(&self, storage_id: StorageId) -> Option<&MemberInfo> {
+    pub(crate) fn member(&self, storage_id: StorageId) -> Option<&MemberInfo> {
         self.members
             .iter()
             .find(|member| member.storage_id == storage_id)
     }
 
     /// Returns the connected set `storage_id` is part of, `None` if it isn't in any declared group.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "workload preparation will use it")
-    )]
     pub(crate) fn set_of(&self, storage_id: StorageId) -> Option<&ConnectedSet> {
         self.sets
             .iter()

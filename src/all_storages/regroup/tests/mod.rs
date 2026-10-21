@@ -6,6 +6,7 @@ mod guarded;
 mod layout;
 mod original_row;
 mod promotion;
+mod regroup_set;
 mod removals;
 mod selected;
 
@@ -423,4 +424,34 @@ fn group_of<T: Component + Send + Sync>(
 /// Returns `T`'s entities in physical order.
 fn dense_of<T: Component + Send + Sync>(world: &World) -> Vec<EntityId> {
     world.borrow::<View<'_, T>>().unwrap().dense.clone()
+}
+
+/// What regroup can change in `T`'s storage: its ids in physical order, its ranges as
+/// `(start, len, shift, trust)` and where its unevaluated region starts.
+type Snapshot = (Vec<EntityId>, Vec<(usize, usize, isize, usize)>, usize);
+
+fn snapshot<T: Component + Send + Sync>(world: &World) -> Snapshot {
+    let view = world.borrow::<View<'_, T>>().unwrap();
+    let ranges = view
+        .groups
+        .ranges
+        .iter()
+        .map(|range| (range.start, range.len, range.shift, range.trust))
+        .collect();
+
+    (view.dense.to_vec(), ranges, view.groups.unevaluated_start)
+}
+
+/// Returns a world with the disjoint AB and CD, three unevaluated entities in each.
+fn two_sets() -> World {
+    let mut world = World::builder_for_test()
+        .with_group::<(A, B)>()
+        .with_group::<(C, D)>()
+        .build();
+    for i in 0..3 {
+        world.add_entity((A(i), B(i)));
+        world.add_entity((C, D));
+    }
+
+    world
 }

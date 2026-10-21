@@ -121,6 +121,12 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     ///
     /// The more groups overlap, the more pieces a group is split into and the slower iteration gets.
     ///
+    /// ### Connected sets
+    ///
+    /// Groups sharing a storage, directly or through other groups, form a connected set.\
+    /// With `A+B`, `B+C` and `D+E` groups, `A`, `B` and `C` form one connected set and `D` and `E` another.\
+    /// A set can only be regrouped as a whole, see [`World::regroup_set`].
+    ///
     /// ### Current limitations
     ///
     /// - All of a group's storages have to be in the same tuple when creating an iterator.\

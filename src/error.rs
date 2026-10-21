@@ -202,6 +202,48 @@ impl Display for GetStorage {
     }
 }
 
+/// Error returned by [`World::regroup_set`] and [`AllStorages::regroup_set`].
+///
+/// [`World::regroup_set`]: crate::world::World::regroup_set()
+/// [`AllStorages::regroup_set`]: crate::all_storages::AllStorages::regroup_set()
+#[derive(PartialEq, Eq)]
+pub enum RegroupSet {
+    /// The storage isn't part of any group declared with [`WorldBuilder::with_group`].
+    ///
+    /// [`WorldBuilder::with_group`]: crate::world::WorldBuilder::with_group()
+    NotGrouped {
+        #[allow(missing_docs)]
+        name: &'static str,
+        #[allow(missing_docs)]
+        id: StorageId,
+    },
+    /// A storage of the set couldn't be borrowed.
+    ///
+    /// It can be any member of the set, not only the one passed to `regroup_set`.
+    Storage(GetStorage),
+}
+
+#[cfg(feature = "std")]
+impl Error for RegroupSet {}
+
+impl Debug for RegroupSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        match self {
+            RegroupSet::NotGrouped { name, .. } => f.write_fmt(format_args!(
+                "{} storage isn't part of any group. Groups are declared with WorldBuilder::with_group.",
+                name
+            )),
+            RegroupSet::Storage(get_storage) => Debug::fmt(get_storage, f),
+        }
+    }
+}
+
+impl Display for RegroupSet {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), core::fmt::Error> {
+        Debug::fmt(self, f)
+    }
+}
+
 /// Error related to adding an entity.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum NewEntity {

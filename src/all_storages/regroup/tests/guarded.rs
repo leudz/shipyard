@@ -2,22 +2,6 @@ use super::*;
 use crate::all_storages::ConnectedSet;
 use crate::error;
 
-/// What regroup can change in `T`'s storage: its ids in physical order, its ranges as
-/// `(start, len, shift, trust)` and where its unevaluated region starts.
-type Snapshot = (Vec<EntityId>, Vec<(usize, usize, isize, usize)>, usize);
-
-fn snapshot<T: Component + Send + Sync>(world: &World) -> Snapshot {
-    let view = world.borrow::<View<'_, T>>().unwrap();
-    let ranges = view
-        .groups
-        .ranges
-        .iter()
-        .map(|range| (range.start, range.len, range.shift, range.trust))
-        .collect();
-
-    (view.dense.to_vec(), ranges, view.groups.unevaluated_start)
-}
-
 /// Returns the connected set holding `T`'s storage.
 fn set_of<T: Component + Send + Sync>(world: &World) -> ConnectedSet {
     world
@@ -34,20 +18,6 @@ fn regroup_set_of<T: Component + Send + Sync>(world: &World) -> Result<(), error
     let set = set_of::<T>(world);
 
     world.all_storages().unwrap().regroup_connected_set(&set)
-}
-
-/// Returns a world with the disjoint AB and CD, three unevaluated entities in each.
-fn two_sets() -> World {
-    let mut world = World::builder_for_test()
-        .with_group::<(A, B)>()
-        .with_group::<(C, D)>()
-        .build();
-    for i in 0..3 {
-        world.add_entity((A(i), B(i)));
-        world.add_entity((C, D));
-    }
-
-    world
 }
 
 /// Asserts that regrouping AB's set groups its entities and leaves CD's dirty storages exactly
@@ -194,7 +164,7 @@ fn non_send() {
 }
 
 /// Asserts that regrouping a set with a `NonSend` member from another thread fails with a
-/// wrong-thread error for that member, `A` being borrowed and released on the way.
+/// wrong-thread error naming that member, `A` being borrowed and released on the way.
 #[cfg(all(feature = "thread_local", feature = "std"))]
 #[test]
 fn non_send_wrong_thread() {
@@ -217,10 +187,11 @@ fn non_send_wrong_thread() {
     assert!(matches!(
         result,
         Err(error::GetStorage::StorageBorrow {
+            name: Some(name),
             id: failed,
             borrow: error::Borrow::WrongThread,
-            ..
-        }) if failed == StorageId::of::<NonSend<SparseSet<B>>>()
+        }) if name == core::any::type_name::<NonSend<SparseSet<B>>>()
+            && failed == StorageId::of::<NonSend<SparseSet<B>>>()
     ));
     drop(world.borrow::<ViewMut<'_, A>>().unwrap());
 }
