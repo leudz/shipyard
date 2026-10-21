@@ -334,10 +334,13 @@ fn callbacks() {
 #[test]
 fn grouped_older_generation() {
     let mut sparse_set = tracked_storage(&[(3, 1), (4, -2)], 1, 1);
-    assert_replacement(&mut sparse_set, 2);
-    // Generation 1 of entity 2 is unevaluated now, we put it back in its range at the end.
-    let group = sparse_set.groups.ranges[0].group.clone();
-    sparse_set.private_move_to(EntityId::new_from_parts(2, 1), GroupRegion::Range(&group));
+    // Entity 2's component, in the first range, becomes generation 1's where it is.
+    let newer = EntityId::new_from_parts(2, 1);
+    let row = sparse_set.index_of(EntityId::new(2)).unwrap();
+    sparse_set.dense[row] = newer;
+    // SAFE: entity 2 owns a component in the storage, so its sparse page is allocated.
+    *unsafe { sparse_set.sparse.get_mut_unchecked(newer) } =
+        EntityId::new_from_parts(row as u64, 1);
     let before = layout(&sparse_set);
     let dense = sparse_set.dense.clone();
 

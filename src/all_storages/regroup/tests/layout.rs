@@ -136,7 +136,7 @@ fn tail() {
 /// Asserts that when B loses and gets back a component, the untouched A, which trusts its whole
 /// range, is the reference and keeps every id where it is.
 #[test]
-fn readd() {
+fn reinsert() {
     let (mut world, _) = pairs(8);
     let group = groups_of::<A>(&world)[0].clone();
     let (order, _) = group_of::<A>(&world, &group);

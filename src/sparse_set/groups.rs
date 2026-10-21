@@ -63,10 +63,10 @@ pub(crate) struct Ring {
     pub(crate) shift: isize,
 }
 
-/// A region of a grouped storage, used as the destination of a regroup move.
-#[doc(hidden)]
+/// The region of a grouped storage a slot is in, see `Groups::region_of`.
+#[cfg(test)]
 #[derive(Clone, Copy)]
-pub enum GroupRegion<'a> {
+pub(crate) enum GroupRegion<'a> {
     /// The range of the group with these sorted member ids.
     Range(&'a Arc<[StorageId]>),
     /// Components that regroup evaluated and found to belong to no group.
@@ -100,19 +100,6 @@ impl GroupRange {
         self.shift = self
             .shift
             .checked_add(1)
-            .expect("ring shifts fit in an isize");
-    }
-
-    /// Moves the whole range one slot to the right, keeping every component's logical position.
-    ///
-    /// The caller moves the range's physical first component to the slot after its end.
-    pub(crate) fn move_right(&mut self) {
-        // The component that was at offset 0 is now at offset `len - 1`, every other one moved
-        // one offset back. One less shift keeps them all at their logical position.
-        self.start += 1;
-        self.shift = self
-            .shift
-            .checked_sub(1)
             .expect("ring shifts fit in an isize");
     }
 
@@ -291,15 +278,6 @@ impl Groups {
         self.ranges
             .iter()
             .position(|range| range.ring().contains(index))
-    }
-
-    /// Returns the position in `ranges` of `group`'s range.
-    ///
-    /// Groups are compared by pointer, an equal group allocated separately doesn't match.
-    pub(crate) fn range_index(&self, group: &Arc<[StorageId]>) -> Option<usize> {
-        self.ranges
-            .iter()
-            .position(|range| Arc::ptr_eq(&range.group, group))
     }
 
     /// Returns `group`'s range in this storage.

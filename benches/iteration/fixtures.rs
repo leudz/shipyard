@@ -288,8 +288,8 @@ impl Fixture {
                     lost[position] = true;
                     self.unmatched_a.push((id, m.a));
                 }
-                Change::ReaddA(a) => m.a = a,
-                Change::ReaddB(b) => m.b = b,
+                Change::ReinsertA(a) => m.a = a,
+                Change::ReinsertB(b) => m.b = b,
                 Change::AddC(c) => m.c = Some(c),
                 Change::RemoveC => m.c = None,
             }
@@ -810,9 +810,9 @@ pub enum Change {
     /// Deletes its A.
     RemoveA,
     /// Deletes its A, then gives it this one.
-    ReaddA(u32),
+    ReinsertA(u32),
     RemoveB,
-    ReaddB(u32),
+    ReinsertB(u32),
     /// Gives it this C.
     AddC(u32),
     RemoveC,
@@ -861,8 +861,8 @@ impl Churn {
     pub fn apply(&self, world: &mut World, mut added: impl FnMut(EntityId, u32)) {
         for &(id, change) in &self.changes {
             match change {
-                Change::RemoveA | Change::ReaddA(_) => world.delete_component::<A>(id),
-                Change::RemoveB | Change::ReaddB(_) => world.delete_component::<B>(id),
+                Change::RemoveA | Change::ReinsertA(_) => world.delete_component::<A>(id),
+                Change::RemoveB | Change::ReinsertB(_) => world.delete_component::<B>(id),
                 Change::RemoveC => world.delete_component::<C>(id),
                 Change::RemoveH => world.delete_component::<H>(id),
                 Change::Delete => {
@@ -874,8 +874,8 @@ impl Churn {
 
         for &(id, change) in &self.changes {
             match change {
-                Change::ReaddA(a) => world.add_component(id, A(a)),
-                Change::ReaddB(b) => world.add_component(id, B(b)),
+                Change::ReinsertA(a) => world.add_component(id, A(a)),
+                Change::ReinsertB(b) => world.add_component(id, B(b)),
                 Change::AddC(c) => world.add_component(id, C(c)),
                 _ => {}
             }

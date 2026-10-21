@@ -1,30 +1,19 @@
 use super::*;
 
-/// Moves `entity`'s `T` and `U` components to the end of `group`'s range.
-fn place<T: Component + Send + Sync, U: Component + Send + Sync>(
-    world: &World,
-    group: &Arc<[StorageId]>,
-    entity: EntityId,
-) {
-    let (mut t, mut u) = world.borrow::<(ViewMut<'_, T>, ViewMut<'_, U>)>().unwrap();
-    t.private_move_to(entity, GroupRegion::Range(group));
-    u.private_move_to(entity, GroupRegion::Range(group));
-}
-
-/// Moves `entity`'s `T` component to `T`'s unevaluated region, damaging the range it leaves.
-fn evict<T: Component + Send + Sync>(world: &World, entity: EntityId) {
-    let mut t = world.borrow::<ViewMut<'_, T>>().unwrap();
-    t.private_move_to(entity, GroupRegion::Unevaluated);
+/// Removes `entity`'s `T` and adds it back, the component lands in `T`'s unevaluated region.
+fn reinsert<T: Component + Send + Sync>(world: &mut World, entity: EntityId) {
+    let (component,) = world.remove::<(T,)>(entity);
+    world.add_component(entity, component.unwrap());
 }
 
 /// Returns a world with AB holding `e0`, `e1` and `e2`, AC holding `e3` and `e4`,
 /// all aligned and fully trusted, with the entities in index order.
 ///
-/// AC is filled first, so each AB append passes a hole through it and rotates it in A.
+/// `e2` joins AB after the first regroup, so AC slides by one slot in A and gets rotated.
 fn overlapping() -> (World, Arc<[StorageId]>, Arc<[StorageId]>, Vec<EntityId>) {
     let mut world = World::new_for_test();
     let mut entities = Vec::new();
-    for index in 0..3 {
+    for index in 0..2 {
         entities.push(world.add_entity((A(index), B(index))));
     }
     for index in 3..5 {
@@ -33,11 +22,9 @@ fn overlapping() -> (World, Arc<[StorageId]>, Arc<[StorageId]>, Vec<EntityId>) {
 
     let ab = attach::<A, B>(&world);
     let ac = attach::<A, C>(&world);
-    place::<A, C>(&world, &ac, entities[3]);
-    place::<A, C>(&world, &ac, entities[4]);
-    for &entity in &entities[..3] {
-        place::<A, B>(&world, &ab, entity);
-    }
+    world.regroup();
+    entities.insert(2, world.add_entity((A(2), B(2))));
+    world.regroup();
 
     (world, ab, ac, entities)
 }
@@ -107,8 +94,8 @@ fn aligned() {
 fn evicted() {
     let (mut world, ab, ac, e) = overlapping();
     // B's AB becomes [e0, e2] and only trusts e0. C's AC becomes [e3] and trusts it.
-    evict::<B>(&world, e[1]);
-    evict::<C>(&world, e[4]);
+    reinsert::<B>(&mut world, e[1]);
+    reinsert::<C>(&mut world, e[4]);
 
     regroup(&mut world);
 
@@ -130,7 +117,7 @@ fn evicted() {
 #[test]
 fn other_groups_kept() {
     let (mut world, ab, ac, e) = overlapping();
-    evict::<B>(&world, e[2]);
+    reinsert::<B>(&mut world, e[2]);
 
     regroup(&mut world);
 

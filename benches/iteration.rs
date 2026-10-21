@@ -637,14 +637,14 @@ fn rebuilt_cases() -> Vec<Rebuilt> {
             name: "regroup",
             family: Family::Pairs,
             build: fixtures::aligned,
-            churn: |f| Churn::each(&f.spread_matches(CHURN), readd_b),
+            churn: |f| Churn::each(&f.spread_matches(CHURN), reinsert_b),
             cycle: true,
         },
         Rebuilt {
             name: "regroup_tail",
             family: Family::Pairs,
             build: fixtures::aligned,
-            churn: |f| Churn::each(&f.tail_matches(CHURN), readd_b),
+            churn: |f| Churn::each(&f.tail_matches(CHURN), reinsert_b),
             cycle: true,
         },
         Rebuilt {
@@ -683,9 +683,9 @@ fn rebuilt_cases() -> Vec<Rebuilt> {
             churn: |f| {
                 Churn::each(&f.spread_matches(CHURN), |k, m| match k % 4 {
                     0 => Change::RemoveB,
-                    1 => Change::ReaddB(m.b),
+                    1 => Change::ReinsertB(m.b),
                     2 => Change::Delete,
-                    _ => Change::ReaddA(m.a),
+                    _ => Change::ReinsertA(m.a),
                 })
                 .adding(NEW_PAIRS)
             },
@@ -695,21 +695,21 @@ fn rebuilt_cases() -> Vec<Rebuilt> {
             name: "regroup_additions",
             family: Family::Pairs,
             build: fixtures::aligned,
-            churn: |_| Churn::each(&[], readd_b).adding(NEW_PAIRS),
+            churn: |_| Churn::each(&[], reinsert_b).adding(NEW_PAIRS),
             cycle: false,
         },
         Rebuilt {
             name: "regroup_quarter",
             family: Family::Pairs,
             build: fixtures::aligned,
-            churn: |f| Churn::each(&f.spread_matches(QUARTER), readd_b),
+            churn: |f| Churn::each(&f.spread_matches(QUARTER), reinsert_b),
             cycle: false,
         },
         Rebuilt {
             name: "regroup_heavy_b",
             family: Family::Heavy,
             build: fixtures::heavy,
-            churn: |f| Churn::each(&f.spread_matches(CHURN), readd_b),
+            churn: |f| Churn::each(&f.spread_matches(CHURN), reinsert_b),
             cycle: true,
         },
         Rebuilt {
@@ -733,8 +733,8 @@ fn rebuilt_cases() -> Vec<Rebuilt> {
 const NEW_PAIRS: Range<u32> = N + 3..N + 3 + CHURN;
 
 /// Gives back its B to `m`.
-fn readd_b(_: usize, m: &Match) -> Change {
-    Change::ReaddB(m.b)
+fn reinsert_b(_: usize, m: &Match) -> Change {
+    Change::ReinsertB(m.b)
 }
 
 /// The queries checking a rebuilt case once regrouped, and the storages its fingerprint covers.

@@ -1,3 +1,19 @@
+//! Moves components to the groups they belong to, in two phases.
+//!
+//! 1. `analysis::analyze` decides what changes. It reads every grouped storage as it is and only
+//!    looks at what can have changed: the unevaluated regions and the untrusted suffixes.
+//!    It returns early for a clean world, and otherwise counts, per group and per storage,
+//!    what leaves and joins each range.
+//! 2. `layout::build` moves entity ids only, to their final rows. Components and timestamps don't
+//!    move, and sparse arrays are frozen: each entry still holds the row its entity's component
+//!    started in, see `original_row`. `Groups` also stay as regroup found them, apart from new
+//!    empty unions, so a frozen row read against them tells where a component was.
+//!    The members of each group copy the order of one of them, its reference.
+//! 3. `layout::finish` repairs each storage once all ids are final, since building reads other
+//!    storages' frozen rows. Components and timestamps follow their ids along the permutation's
+//!    cycles over the rows whose id changed, and sparse entries point at the new rows.
+//!    Then the final ranges are published, fully trusted, with nothing left unevaluated.
+
 mod analysis;
 mod layout;
 #[cfg(test)]

@@ -18,7 +18,9 @@ pub use bulk_add_entity::BulkAddEntity;
 pub use delete::TupleDelete;
 pub use drain::SparseSetDrain;
 #[doc(hidden)]
-pub use groups::{GroupRegion, Groups};
+#[cfg(test)]
+pub(crate) use groups::GroupRegion;
+pub use groups::Groups;
 pub use memory_usage::{SparseSetMemory, SparseSetMemoryUsage};
 pub use remove::TupleRemove;
 pub use sparse_array::SparseArray;
@@ -455,14 +457,6 @@ impl<T: Component> SparseSet<T> {
     }
 }
 
-/// A region of a grouped storage, with ranges identified by their position in [`Groups::ranges`].
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum LocalRegion {
-    Range(usize),
-    Ungrouped,
-    Unevaluated,
-}
-
 impl<T: Component> SparseSet<T> {
     /// Swaps the components at physical indices `i` and `j`, along with their entities and timestamps.
     ///
@@ -509,205 +503,6 @@ impl<T: Component> SparseSet<T> {
         }
     }
 
-    /// Moves every range from `first` on one slot to the right, keeping their logical order.
-    ///
-    /// The component in the slot right after the last range is carried along and ends
-    /// right before `ranges[first]`.
-    fn move_ranges_right(&mut self, first: usize) {
-        for range_index in (first..self.groups.ranges.len()).rev() {
-            let ring = self.groups.ranges[range_index].ring();
-
-            // The carried component is right after this range. It swaps with the range's
-            // physical first component, which keeps its logical position once the range moved.
-            if ring.len != 0 {
-                self.swap_rows(ring.end(), ring.start);
-            }
-            self.groups.ranges[range_index].move_right();
-        }
-    }
-
-    /// Moves `entity`'s component to `destination`, wherever it currently is in this storage.
-    ///
-    /// A move into a range appends the component at the range's logical end.\
-    /// A move out of a range is a logical swap-remove: the range's logical last component
-    /// takes its position.\
-    /// Every other range keeps its logical order and trust.\
-    /// Timestamps move with the component. A move isn't a modification and doesn't call any callback.
-    ///
-    /// A storage without any range is implicitly ungrouped, moving to `Ungrouped` does nothing.
-    ///
-    /// ### Panics
-    ///
-    /// - `entity` doesn't have a component in this storage.
-    /// - `destination` is a group without a range in this storage.
-    /// - `destination` is `Unevaluated` and this storage has no range.
-    #[track_caller]
-    pub(crate) fn private_move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
-        let index = self
-            .index_of(entity)
-            .expect("only components present in the storage can be moved");
-
-        let destination = match destination {
-            GroupRegion::Range(group) => LocalRegion::Range(
-                self.groups
-                    .range_index(group)
-                    .expect("the destination group has no range in this storage"),
-            ),
-            GroupRegion::Ungrouped => LocalRegion::Ungrouped,
-            GroupRegion::Unevaluated => LocalRegion::Unevaluated,
-        };
-
-        // Without range every component is already ungrouped, and there's no unevaluated region.
-        // A range destination can't get here, finding its range would have panicked.
-        if !self.groups.has_ranges() {
-            assert!(
-                destination == LocalRegion::Ungrouped,
-                "a storage without group ranges has no unevaluated region"
-            );
-
-            return;
-        }
-
-        let source = match self.groups.range_index_of(index) {
-            Some(range_index) => LocalRegion::Range(range_index),
-            None if index < self.groups.unevaluated_start => LocalRegion::Ungrouped,
-            None => LocalRegion::Unevaluated,
-        };
-
-        if source == destination {
-            return;
-        }
-
-        // The ungrouped region sits between the ranges and the unevaluated region,
-        // so every move goes through it: out of the source, then into the destination.
-        // Each step returns the component's new index, hole passing moves it around.
-        let index = match source {
-            LocalRegion::Range(range_index) => self.range_to_ungrouped(range_index, index),
-            LocalRegion::Ungrouped => index,
-            LocalRegion::Unevaluated => self.unevaluated_to_ungrouped(index),
-        };
-
-        match destination {
-            LocalRegion::Range(range_index) => self.ungrouped_to_range(range_index, index),
-            LocalRegion::Ungrouped => {}
-            LocalRegion::Unevaluated => self.ungrouped_to_unevaluated(index),
-        }
-
-        #[cfg(debug_assertions)]
-        self.groups.assert_invariants(self.dense.len());
-    }
-
-    /// Moves the component at `index`, inside range `range_index`, to the ungrouped region.\
-    /// Returns its new index.
-    fn range_to_ungrouped(&mut self, range_index: usize, index: usize) -> usize {
-        let logical = self.groups.ranges[range_index].ring().logical_of(index);
-
-        // The component leaves its range at the slot right after the shrunk range,
-        // then the later ranges move left over it and leave it as the first ungrouped component.
-        self.take_from_range(range_index, logical);
-        self.move_ranges_left(range_index + 1);
-
-        self.groups.grouped_end()
-    }
-
-    /// Takes the component at `logical` out of range `range_index` with a logical swap-remove.
-    ///
-    /// The component ends right after the shrunk range, in a slot no range covers anymore.\
-    /// Trust is lowered conservatively: other members only agree once they did the same.
-    fn take_from_range(&mut self, range_index: usize, logical: usize) {
-        let ring = self.groups.ranges[range_index].ring();
-        let last = ring.len - 1;
-
-        // The logical last component fills the hole, ours takes its place.
-        // Members at different rotations all get the same logical result,
-        // unlike with a physical swap-remove.
-        self.swap_rows(ring.physical_of(logical), ring.physical_of(last));
-
-        // Our component sits at the wrap point now. We move it to the ring's physical last slot
-        // from the cheaper side, only that member's start and shift depend on the side.
-        let wrap_offset = ring.wrap_offset();
-        let unwrapped_len = ring.len - wrap_offset;
-        let new_wrap_offset = if wrap_offset == 0 {
-            // Unrotated, the logical last component is the physical last one.
-            0
-        } else if unwrapped_len <= wrap_offset {
-            // The unwrapped part slides left over our component.
-            for physical in ring.start + wrap_offset - 1..ring.end() - 1 {
-                self.swap_rows(physical, physical + 1);
-            }
-
-            wrap_offset - 1
-        } else {
-            // The wrapped part slides right over our component, which lands on the first slot.
-            // Then it swaps with the unwrapped part's last component, which becomes the
-            // wrapped part's first.
-            for physical in (ring.start..ring.start + wrap_offset - 1).rev() {
-                self.swap_rows(physical, physical + 1);
-            }
-            self.swap_rows(ring.start, ring.end() - 1);
-
-            // The unwrapped part is the longer one so it has at least 2 components,
-            // the wrap offset stays smaller than the new length.
-            wrap_offset
-        };
-
-        let range = &mut self.groups.ranges[range_index];
-        // Only `logical` and the old last position changed, the positions before `logical` didn't.
-        range.trust = range.trust.min(logical);
-        range.resize(last, new_wrap_offset);
-    }
-
-    /// Appends the ungrouped component at `index` to range `range_index`.
-    fn ungrouped_to_range(&mut self, range_index: usize, index: usize) {
-        // We swap it with the first ungrouped component, right after the last range.
-        // The later ranges then move right over it, which leaves it right after our range.
-        let grouped_end = self.groups.grouped_end();
-        self.swap_rows(index, grouped_end);
-        self.move_ranges_right(range_index + 1);
-
-        self.append_to_range(range_index);
-    }
-
-    /// Appends the component right after range `range_index` at the range's logical end.
-    fn append_to_range(&mut self, range_index: usize) {
-        let ring = self.groups.ranges[range_index].ring();
-
-        // The logical end is at the wrap point. We open a slot there from the cheaper side,
-        // only that member's start and shift depend on the side.
-        let new_wrap_offset = if ring.len == 0 || ring.wrap_offset() == 0 {
-            // The logical end is the physical end, where our component already is.
-            0
-        } else {
-            let wrap_offset = ring.wrap_offset();
-
-            if ring.len - wrap_offset <= wrap_offset {
-                // The unwrapped part slides right, our component lands right before it.
-                for physical in (ring.start + wrap_offset..ring.end()).rev() {
-                    self.swap_rows(physical, physical + 1);
-                }
-
-                wrap_offset + 1
-            } else {
-                // The wrapped part's first component moves to the end, after the unwrapped part's
-                // last. Our component takes its slot and slides right to the end of the wrapped part.
-                self.swap_rows(ring.start, ring.end());
-                for physical in ring.start..ring.start + wrap_offset - 1 {
-                    self.swap_rows(physical, physical + 1);
-                }
-
-                wrap_offset
-            }
-        };
-
-        let range = &mut self.groups.ranges[range_index];
-        // Regroup appends the same entity at the same logical end of every member,
-        // so a fully trusted range stays fully trusted. A damaged one stays damaged.
-        if range.trust == range.len {
-            range.trust += 1;
-        }
-        range.resize(ring.len + 1, new_wrap_offset);
-    }
-
     /// Moves the ungrouped component at `index` to the unevaluated region.
     fn ungrouped_to_unevaluated(&mut self, index: usize) {
         // We swap it with the last ungrouped component, then grow the unevaluated region over it.
@@ -717,28 +512,16 @@ impl<T: Component> SparseSet<T> {
         self.groups.unevaluated_start = new_index;
     }
 
-    /// Moves the unevaluated component at `index` to the ungrouped region.
-    /// Returns its new index.
-    fn unevaluated_to_ungrouped(&mut self, index: usize) -> usize {
-        // We swap it with the first unevaluated component, then grow the ungrouped region over it.
-        let new_index = self.groups.unevaluated_start;
-        self.swap_rows(index, new_index);
-
-        self.groups.unevaluated_start += 1;
-
-        new_index
-    }
-
     /// Moves the component at `index` to the unevaluated region, wherever it is.\
     /// Returns its new index.
     ///
-    /// This prepares a component to be removed or replaced. Unlike a regroup move, it leaves its
-    /// range with a physical swap-remove, so its cost doesn't depend on the range's length.
+    /// This prepares a component to be removed or replaced. It leaves its range with a physical
+    /// swap-remove, so its cost doesn't depend on the range's length.
     /// That range only keeps trusting the logical positions the move didn't change.
     /// Every other range keeps its logical order and trust.\
     /// Timestamps move with the component. A move isn't a modification and doesn't call any callback.
     #[inline]
-    fn extract_to_unevaluated(&mut self, index: usize) -> usize {
+    pub(crate) fn extract_to_unevaluated(&mut self, index: usize) -> usize {
         // Most storages have no group, we keep their cost to this single branch.
         if !self.groups.has_ranges() || index >= self.groups.unevaluated_start {
             return index;
@@ -757,8 +540,8 @@ impl<T: Component> SparseSet<T> {
     /// with a physical swap-remove.\
     /// Returns its new index.
     ///
-    /// Unlike [`take_from_range`](Self::take_from_range), its cost doesn't depend on the range's length.
-    /// Other members can't reproduce the resulting order though, so the range's trust gets lowered further.
+    /// Its cost doesn't depend on the range's length. Other members can't reproduce the resulting
+    /// order though, so the range only trusts what's before both changed positions.
     fn extract_from_range(&mut self, range_index: usize, index: usize) -> usize {
         let ring = self.groups.ranges[range_index].ring();
         let logical = ring.logical_of(index);
@@ -1482,11 +1265,6 @@ impl<T: Component + Send + Sync> Storage for SparseSet<T> {
 
     fn dense(&self) -> Option<&[EntityId]> {
         Some(&self.dense)
-    }
-
-    #[track_caller]
-    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
-        self.private_move_to(entity, destination);
     }
 
     unsafe fn reorder_ids(&mut self) -> Option<ReorderParts<'_>> {

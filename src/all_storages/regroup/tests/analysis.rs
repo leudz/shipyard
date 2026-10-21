@@ -93,7 +93,7 @@ fn deletion() {
 
 /// Asserts that a pair losing B and getting a new one back is counted again in the group.
 #[test]
-fn readd() {
+fn reinsert() {
     let (mut world, _) = pairs(8);
     let (group, order) = ab_order(&world);
     world.remove::<(B,)>(order[1]);

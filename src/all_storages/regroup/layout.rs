@@ -278,9 +278,7 @@ impl<'a, 'p> Builder<'a, 'p> {
 
         Builder {
             touched: alloc::vec![None; dense.len()],
-            memberships: Memberships {
-                storages: memberships,
-            },
+            memberships: Memberships::new(memberships),
             dense,
             plan,
             discovery: Discovery::default(),
@@ -289,19 +287,13 @@ impl<'a, 'p> Builder<'a, 'p> {
 
     /// Returns the position of the storage with id `storage_id`.
     fn index_of(&self, storage_id: StorageId) -> usize {
-        self.memberships
-            .storages
-            .binary_search_by_key(&storage_id, |membership| membership.storage_id)
-            .expect("group members are grouped storages")
+        self.memberships.position(storage_id)
     }
 
     /// Returns the position of the plan of the group `entity`'s component in the storage at
     /// `index` goes to, `None` when it goes to the ungrouped region.
     fn classify(&mut self, index: usize, entity: EntityId) -> Option<usize> {
-        let storage_id = self.memberships.storages[index].storage_id;
-        let members = self
-            .discovery
-            .discover(&self.memberships, storage_id, entity)?;
+        let members = self.discovery.discover(&self.memberships, index, entity)?;
 
         Some(
             self.plan
@@ -348,11 +340,28 @@ impl<'a, 'p> Builder<'a, 'p> {
         let mut gathered = alloc::vec![0; plan.groups.len()];
         let mut promoted = alloc::vec![0; self.dense.len()];
 
-        for index in 0..self.dense.len() {
+        // Analysis counted everything we have to gather, we stop once it's all there.
+        // Often that's nothing, then we don't walk at all.
+        let mut left = plan
+            .groups
+            .iter()
+            .map(|group_plan| group_plan.leaving)
+            .chain(
+                plan.storages
+                    .iter()
+                    .map(|storage_plan| storage_plan.promoted),
+            )
+            .sum::<usize>();
+
+        'walk: for index in 0..self.dense.len() {
             let membership = self.memberships.storages[index];
 
             // Gathering never touches the unevaluated regions, we can read them as we go.
             for row in membership.groups.unevaluated_start..self.dense[index].len() {
+                if left == 0 {
+                    break 'walk;
+                }
+
                 let entity = self.dense[index][row];
                 let Some(group_index) = self.classify(index, entity) else {
                     continue;
@@ -385,20 +394,24 @@ impl<'a, 'p> Builder<'a, 'p> {
                         // The entity sits in the kept prefix of every member of the source,
                         // we gather it once for all of them, from the first.
                         if logical < plan.groups[source_index].kept && member_id == range.group[0] {
+                            let before = gathered[source_index];
                             self.gather_kept(
                                 source_index,
                                 logical,
                                 entity,
                                 &mut gathered[source_index],
                             );
+                            left -= gathered[source_index] - before;
                         }
                     } else if row < member.groups.unevaluated_start {
+                        let before = promoted[member_index];
                         self.gather_promoted(
                             member_index,
                             row,
                             entity,
                             &mut promoted[member_index],
                         );
+                        left -= promoted[member_index] - before;
                     }
                 }
             }

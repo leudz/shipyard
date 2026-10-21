@@ -423,42 +423,14 @@ fn move_left() {
     }
 }
 
-/// Asserts that moving a range right keeps every logical position,
-/// only the physical first component lands on the slot after the old end.
-#[test]
-fn move_right() {
-    for len in 1..=4 {
-        for shift in -5..=5 {
-            let before = ring(3, len, shift);
-            let mut range = ring_range(before);
-
-            range.move_right();
-
-            let expected: Vec<usize> = physical_order(before)
-                .into_iter()
-                .map(|physical| {
-                    if physical == before.start {
-                        before.end()
-                    } else {
-                        physical
-                    }
-                })
-                .collect();
-            assert_eq!(physical_order(range.ring()), expected, "{before:?}");
-        }
-    }
-}
-
 /// Asserts that moving an empty range only moves its start.
 #[test]
 fn move_empty() {
     let mut range = ring_range(ring(3, 0, -2));
 
     range.move_left();
+
     assert_eq!(range.start, 2);
-    range.move_right();
-    range.move_right();
-    assert_eq!(range.start, 4);
 }
 
 /// Asserts that resizing picks the requested wrap point by moving the shift by the difference
@@ -545,8 +517,6 @@ fn region_of_empty_interior() {
     assert_eq!(groups.range_index_of(5), None);
     assert!(matches!(groups.region_of(2), GroupRegion::Range(group) if Arc::ptr_eq(group, &ad)));
     assert!(matches!(groups.region_of(5), GroupRegion::Ungrouped));
-    assert_eq!(groups.range_index(&ac), Some(1));
-    assert_eq!(groups.range_index(&group(&[0, 2])), None);
 }
 
 /// Asserts that rotations don't change which region holds a slot.

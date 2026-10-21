@@ -262,47 +262,18 @@ fn storage_groups_non_send() {
     );
 }
 
-/// Asserts that clear and refill cycles don't add up rotations: each refill grows the first range,
-/// which moves the second one right twice, and each clear puts both shifts back to 0, so every
-/// cycle ends with the same shifts.
+/// Asserts that clearing a storage with rotated ranges empties them and puts every shift back to 0.
 #[test]
-fn groups_clear_refill() {
-    let ab: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(1)]);
-    let ac: Arc<[StorageId]> = Arc::from([StorageId::Custom(0), StorageId::Custom(2)]);
-    let mut sparse_set = SparseSet::new();
-    sparse_set.groups.attach(ab.clone(), StorageId::Custom(0));
-    sparse_set.groups.attach(ac.clone(), StorageId::Custom(0));
+fn groups_clear_rotated() {
+    let mut sparse_set = ints_with_tails(&[(3, 1), (2, -1)], 1, 1);
 
-    for _ in 0..3 {
-        for index in 0..4 {
-            sparse_set
-                .insert(
-                    EntityId::new(index),
-                    I32(index as i32),
-                    TrackingTimestamp::new(0),
-                )
-                .assert_inserted();
-        }
+    sparse_set.private_clear(TrackingTimestamp::new(0));
 
-        // The second range fills first, so the first one's growth moves it.
-        for (index, group) in [(2, &ac), (3, &ac), (0, &ab), (1, &ab)] {
-            sparse_set.private_move_to(EntityId::new(index), GroupRegion::Range(group));
-        }
-        let shifts: Vec<isize> = sparse_set
+    assert!(
+        sparse_set
             .groups
             .ranges
             .iter()
-            .map(|range| range.shift)
-            .collect();
-        assert_eq!(shifts, [0, -2]);
-
-        sparse_set.private_clear(TrackingTimestamp::new(0));
-        assert!(
-            sparse_set
-                .groups
-                .ranges
-                .iter()
-                .all(|range| range.shift == 0)
-        );
-    }
+            .all(|range| range.len == 0 && range.shift == 0)
+    );
 }

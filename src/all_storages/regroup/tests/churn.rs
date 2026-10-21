@@ -104,13 +104,13 @@ fn removal_both_members() {
 /// Asserts that pairs losing B and getting a new one back end up grouped again,
 /// each with its new B.
 #[test]
-fn readd_scattered() {
+fn reinsert_scattered() {
     let (mut world, e) = pairs(20);
-    let readded = [1, 8, 14];
-    for i in readded {
+    let reinserted = [1, 8, 14];
+    for i in reinserted {
         world.remove::<(B,)>(e[i]);
     }
-    for i in readded {
+    for i in reinserted {
         world.add_component(e[i], B(100 + i as u32));
     }
 
@@ -121,7 +121,7 @@ fn readd_scattered() {
     let expected = (0..)
         .zip(&e)
         .map(|(i, &entity)| {
-            let b = if readded.contains(&(i as usize)) {
+            let b = if reinserted.contains(&(i as usize)) {
                 100 + i
             } else {
                 i
@@ -173,8 +173,8 @@ fn one_member_of_three() {
     let mut world = World::new_for_test();
     let e: Vec<EntityId> = (0..20).map(|i| world.add_entity((A(i), B(i), C))).collect();
     world.group::<(A, B, C)>();
-    let readded = [0, 6, 11, 19];
-    for i in readded {
+    let reinserted = [0, 6, 11, 19];
+    for i in reinserted {
         world.remove::<(B,)>(e[i]);
         world.add_component(e[i], B(100 + i as u32));
     }
@@ -187,7 +187,7 @@ fn one_member_of_three() {
     let expected_b = (0..)
         .zip(&e)
         .map(|(i, &entity)| {
-            let b = if readded.contains(&(i as usize)) {
+            let b = if reinserted.contains(&(i as usize)) {
                 100 + i
             } else {
                 i

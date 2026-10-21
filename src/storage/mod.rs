@@ -11,7 +11,7 @@ pub(crate) use sbox::SBox;
 use crate::all_storages::AllStorages;
 use crate::entity_id::EntityId;
 use crate::memory_usage::StorageMemoryUsage;
-use crate::sparse_set::{GroupRegion, Groups, SparseArray};
+use crate::sparse_set::{Groups, SparseArray};
 use crate::tracking::TrackingTimestamp;
 use alloc::borrow::Cow;
 use core::any::Any;
@@ -153,26 +153,6 @@ pub trait Storage: SizedAny {
     #[inline]
     fn dense(&self) -> Option<&[EntityId]> {
         None
-    }
-
-    /// Moves `entity`'s component to `destination`, wherever it currently is in this storage.
-    ///
-    /// Regroup only calls it on storages that support grouping.\
-    /// A storage without any group range is implicitly ungrouped: moving to
-    /// [`GroupRegion::Ungrouped`] does nothing and no component can be moved to
-    /// [`GroupRegion::Unevaluated`].
-    ///
-    /// ### Panics
-    ///
-    /// - The storage doesn't support grouping.
-    /// - `entity` doesn't have a component in this storage.
-    /// - `destination` is a group without a range in this storage.
-    /// - `destination` is [`GroupRegion::Unevaluated`] and the storage has no group range.
-    #[doc(hidden)]
-    #[allow(unused_variables)]
-    #[track_caller]
-    fn move_to(&mut self, entity: EntityId, destination: GroupRegion<'_>) {
-        panic!("grouping only supports SparseSet storages");
     }
 
     /// Returns the `EntityId` of every component in physical order, to reorder them,

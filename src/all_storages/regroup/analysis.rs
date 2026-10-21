@@ -31,30 +31,69 @@ pub(super) struct Membership<'a> {
 /// The membership of every grouped storage, sorted by storage id.
 pub(super) struct Memberships<'a> {
     pub(super) storages: Vec<Membership<'a>>,
+    /// For each storage, the positions in `storages` of the members of each of its ranges,
+    /// one range after the other.
+    ///
+    /// Discovery runs for every entity it looks at, finding storages by id each time would cost
+    /// more than its sparse lookups.
+    members: Vec<Vec<usize>>,
+    /// For each storage, `true` when it holds a single range whose members hold no other range.
+    alone: Vec<bool>,
 }
 
 impl<'a> Memberships<'a> {
+    /// Gathers the membership of every grouped storage, `storages` has to be sorted by storage id.
+    pub(super) fn new(storages: Vec<Membership<'a>>) -> Memberships<'a> {
+        let mut memberships = Memberships {
+            storages,
+            members: Vec::new(),
+            alone: Vec::new(),
+        };
+
+        memberships.members = memberships
+            .storages
+            .iter()
+            .map(|membership| {
+                membership
+                    .groups
+                    .ranges
+                    .iter()
+                    .flat_map(|range| range.group.iter())
+                    .map(|&member_id| memberships.position(member_id))
+                    .collect()
+            })
+            .collect();
+
+        memberships.alone = (0..memberships.storages.len())
+            .map(|index| {
+                memberships.storages[index].groups.ranges.len() == 1
+                    && memberships.members[index]
+                        .iter()
+                        .all(|&member| memberships.storages[member].groups.ranges.len() == 1)
+            })
+            .collect();
+
+        memberships
+    }
+
+    /// Returns the position in `storages` of the storage with id `storage_id`.
+    ///
+    /// ### Panics
+    ///
+    /// - The storage has no range.
+    pub(super) fn position(&self, storage_id: StorageId) -> usize {
+        self.storages
+            .binary_search_by_key(&storage_id, |membership| membership.storage_id)
+            .expect("group members are grouped storages")
+    }
+
     /// Returns the membership of the storage with id `storage_id`.
     ///
     /// ### Panics
     ///
     /// - The storage has no range.
     pub(super) fn get(&self, storage_id: StorageId) -> &Membership<'a> {
-        let index = self
-            .storages
-            .binary_search_by_key(&storage_id, |membership| membership.storage_id)
-            .expect("group members are grouped storages");
-
-        &self.storages[index]
-    }
-
-    /// Returns `true` when `entity` owns a component in every member of `group`.
-    ///
-    /// The generation has to match, a component of a deleted entity reusing the same index doesn't count.
-    fn satisfies(&self, group: &[StorageId], entity: EntityId) -> bool {
-        group
-            .iter()
-            .all(|&member_id| self.get(member_id).sparse.contains(entity))
+        &self.storages[self.position(storage_id)]
     }
 }
 
@@ -94,9 +133,7 @@ impl<'a> Frozen<'a> {
         }
 
         Frozen {
-            memberships: Memberships {
-                storages: memberships,
-            },
+            memberships: Memberships::new(memberships),
             dense,
         }
     }
@@ -105,50 +142,88 @@ impl<'a> Frozen<'a> {
 /// Scratch buffers finding the storages an entity has to be grouped in, reused across entities.
 #[derive(Default)]
 pub(super) struct Discovery {
-    /// Members of the groups found so far, sorted once discovery is complete.
-    members: Vec<StorageId>,
+    /// Positions in `Memberships::storages` of the members of the groups found so far,
+    /// sorted once discovery is complete.
+    members: Vec<usize>,
     /// Groups whose satisfaction we already checked, by address.
     checked: Vec<*const StorageId>,
+    /// The ids of the sorted `members`.
+    ids: Vec<StorageId>,
 }
 
 impl Discovery {
     /// Returns the sorted ids of the storages `entity` has to be grouped in, starting from its
-    /// component in `storage_id`.
+    /// component in the storage at `index` of `memberships`.
     ///
-    /// These are the members of every group `entity` satisfies that's connected to `storage_id`
+    /// `entity` has to own a component in that storage, generation included.
+    ///
+    /// These are the members of every group `entity` satisfies that's connected to that storage
     /// through other groups it satisfies. Groups it doesn't satisfy don't connect anything,
     /// and owning the components of two disjoint groups doesn't merge them.\
-    /// Returns `None` when `entity` satisfies none of `storage_id`'s groups.
+    /// Returns `None` when `entity` satisfies none of that storage's groups.
     pub(super) fn discover(
         &mut self,
         memberships: &Memberships<'_>,
-        storage_id: StorageId,
+        index: usize,
         entity: EntityId,
     ) -> Option<&[StorageId]> {
+        // Groups only connect through shared members, nothing connects to a group whose members
+        // are in no other group. Checking it is all there is to do, and it's the common case.
+        if memberships.alone[index] {
+            let positions = &memberships.members[index];
+            let satisfied = positions.iter().all(|&position| {
+                position == index || memberships.storages[position].sparse.contains(entity)
+            });
+            if !satisfied {
+                return None;
+            }
+
+            // A range's members are sorted by id, so are their positions.
+            self.ids.clear();
+            self.ids.extend(
+                positions
+                    .iter()
+                    .map(|&position| memberships.storages[position].storage_id),
+            );
+
+            return Some(&self.ids);
+        }
+
         self.members.clear();
         self.checked.clear();
-        self.members.push(storage_id);
+        self.members.push(index);
 
         // `members` grows while we go through it, each member's groups are inspected once.
         // A group we check from one member is skipped from the others, it has the same answer.
         let mut next = 0;
-        while let Some(&member_id) = self.members.get(next) {
+        while let Some(&member) = self.members.get(next) {
             next += 1;
 
-            for range in &memberships.get(member_id).groups.ranges {
+            // The positions of each range's members follow each other.
+            let mut positions = memberships.members[member].as_slice();
+            for range in &memberships.storages[member].groups.ranges {
+                let (group_positions, rest) = positions.split_at(range.group.len());
+                positions = rest;
+
                 let group = Arc::as_ptr(&range.group).cast::<StorageId>();
                 if self.checked.contains(&group) {
                     continue;
                 }
                 self.checked.push(group);
 
-                if !memberships.satisfies(&range.group, entity) {
+                // Every storage in `members` holds a component of `entity`,
+                // we only look at the others.
+                let satisfied = group_positions.iter().all(|position| {
+                    self.members.contains(position)
+                        || memberships.storages[*position].sparse.contains(entity)
+                });
+                if !satisfied {
                     continue;
                 }
 
-                for &id in range.group.iter() {
-                    if !self.members.contains(&id) {
-                        self.members.push(id);
+                for position in group_positions {
+                    if !self.members.contains(position) {
+                        self.members.push(*position);
                     }
                 }
             }
@@ -159,9 +234,16 @@ impl Discovery {
             return None;
         }
 
+        // Storages are sorted by id, sorting their positions sorts their ids.
         self.members.sort_unstable();
+        self.ids.clear();
+        self.ids.extend(
+            self.members
+                .iter()
+                .map(|&position| memberships.storages[position].storage_id),
+        );
 
-        Some(&self.members)
+        Some(&self.ids)
     }
 }
 
@@ -301,17 +383,18 @@ impl Plan {
         self.groups.len() - 1
     }
 
-    /// Finds where `entity`'s component in `storage_id` goes, and counts it.
+    /// Finds where `entity`'s component in the storage at `index` goes, and counts it.
     ///
     /// Returns the position of the plan of its group, `None` when it goes to the ungrouped region.
     fn count(
         &mut self,
         memberships: &Memberships<'_>,
         discovery: &mut Discovery,
-        storage_id: StorageId,
+        index: usize,
         entity: EntityId,
     ) -> Option<usize> {
-        let members = discovery.discover(memberships, storage_id, entity)?;
+        let storage_id = memberships.storages[index].storage_id;
+        let members = discovery.discover(memberships, index, entity)?;
         let group_index = self.find_or_add(members);
 
         // Every member holds a component of the entity, we count it from the first one only.
@@ -325,11 +408,11 @@ impl Plan {
     /// Counts where every unevaluated component goes, and the components their entity moves
     /// out of kept prefixes and ungrouped regions.
     fn scan_unevaluated(&mut self, frozen: &Frozen<'_>, discovery: &mut Discovery) {
-        for (membership, dense) in frozen.memberships.storages.iter().zip(&frozen.dense) {
+        let storages = frozen.memberships.storages.iter().zip(&frozen.dense);
+        for (index, (membership, dense)) in storages.enumerate() {
             for &entity in &dense[membership.groups.unevaluated_start..] {
                 let storage_id = membership.storage_id;
-                let Some(group_index) =
-                    self.count(&frozen.memberships, discovery, storage_id, entity)
+                let Some(group_index) = self.count(&frozen.memberships, discovery, index, entity)
                 else {
                     continue;
                 };
@@ -422,19 +505,15 @@ impl Plan {
 
     /// Counts where every component past its range's kept prefix goes.
     fn scan_evaluated(&mut self, frozen: &Frozen<'_>, discovery: &mut Discovery) {
-        for (membership, dense) in frozen.memberships.storages.iter().zip(&frozen.dense) {
+        let storages = frozen.memberships.storages.iter().zip(&frozen.dense);
+        for (index, (membership, dense)) in storages.enumerate() {
             for range in &membership.groups.ranges {
                 let kept = self.groups[self.group_index(&range.group)].kept;
                 let ring = range.ring();
 
                 for logical in kept..range.len {
                     let entity = dense[ring.physical_of(logical)];
-                    self.count(
-                        &frozen.memberships,
-                        discovery,
-                        membership.storage_id,
-                        entity,
-                    );
+                    self.count(&frozen.memberships, discovery, index, entity);
                 }
             }
         }

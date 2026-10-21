@@ -585,6 +585,277 @@ fn regroup_moves() {
     assert_eq!(drops(&counter), 4);
 }
 
+/// Heap-owning component that counts how many times it's dropped, tracking everything.
+struct TrackedCounted {
+    values: Vec<u32>,
+    drops: Arc<AtomicUsize>,
+}
+
+impl Drop for TrackedCounted {
+    fn drop(&mut self) {
+        self.drops.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+impl Component for TrackedCounted {
+    type Tracking = track::All;
+}
+
+fn tracked_counted(value: u32, drops: &Arc<AtomicUsize>) -> TrackedCounted {
+    TrackedCounted {
+        values: vec![value],
+        drops: drops.clone(),
+    }
+}
+
+/// Asserts that regroup moves the timestamps of tracked, heap-owning components with them.
+/// After a modification, damage in both members, a deletion and a new pair, the grouped,
+/// inserted and modified queries and every value are the same once regrouped. A mutable traversal
+/// then reaches every pair once, and each component is dropped exactly once.
+#[test]
+fn regroup_tracked() {
+    use crate::iter::IntoIter;
+    use crate::views::ViewMut;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new_for_test();
+    world.group::<(TrackedCounted, Aligned)>();
+    let e: Vec<EntityId> = (0..8)
+        .map(|i| world.add_entity((tracked_counted(i, &counter), Aligned(u64::from(i)))))
+        .collect();
+    world.regroup();
+    world.run(|tracked: ViewMut<'_, TrackedCounted, track::All>| {
+        tracked.clear_all_inserted_and_modified();
+    });
+
+    world.run(|mut tracked: ViewMut<'_, TrackedCounted, track::All>| {
+        (&mut tracked).get(e[5]).unwrap().values.push(50);
+    });
+    world.remove::<(Aligned,)>(e[1]);
+    let (component,) = world.remove::<(TrackedCounted,)>(e[6]);
+    world.add_component(e[6], component.unwrap());
+    world.delete_entity(e[3]);
+    let new = world.add_entity((tracked_counted(8, &counter), Aligned(8)));
+    // Deletion tracking keeps e3's component until the world drops it.
+    assert_eq!(drops(&counter), 0);
+
+    let results = |world: &World| {
+        let (tracked, aligned) = world
+            .borrow::<(View<'_, TrackedCounted, track::All>, View<'_, Aligned>)>()
+            .unwrap();
+        let mut grouped: Vec<(EntityId, Vec<u32>, u64)> = (&tracked, &aligned)
+            .iter()
+            .with_id()
+            .map(|(entity, (tracked, aligned))| (entity, tracked.values.clone(), aligned.0))
+            .collect();
+        grouped.sort_unstable();
+        let mut inserted: Vec<EntityId> = (tracked.inserted(), &aligned)
+            .iter()
+            .with_id()
+            .map(|(entity, _)| entity)
+            .collect();
+        inserted.sort_unstable();
+        let mut modified: Vec<EntityId> = (tracked.modified(), &aligned)
+            .iter()
+            .with_id()
+            .map(|(entity, _)| entity)
+            .collect();
+        modified.sort_unstable();
+
+        (grouped, inserted, modified)
+    };
+    let before = results(&world);
+    let mut expected_inserted = vec![e[6], new];
+    expected_inserted.sort_unstable();
+    assert_eq!(before.1, expected_inserted);
+    assert_eq!(before.2, [e[5]]);
+
+    world.regroup();
+
+    assert_eq!(results(&world), before);
+    for (mut tracked, _) in &mut world.iter::<(&mut TrackedCounted, &Aligned)>() {
+        tracked.values.push(10);
+    }
+    let (tracked, aligned) = world
+        .borrow::<(View<'_, TrackedCounted, track::All>, View<'_, Aligned>)>()
+        .unwrap();
+    for (entity, values, _) in &before.0 {
+        let mut expected = values.clone();
+        expected.push(10);
+        assert_eq!(tracked.get(*entity).unwrap().values, expected);
+    }
+    assert_eq!(tracked.get(e[1]).unwrap().values, [1]);
+    assert!(aligned.get(e[1]).is_err());
+    drop((tracked, aligned));
+
+    drop(world);
+    assert_eq!(drops(&counter), 9);
+}
+
+/// Asserts that a component left by a deleted entity, at the index a new entity reuses,
+/// isn't grouped with the new entity's component and keeps its value.
+/// Each component is dropped exactly once.
+#[test]
+fn regroup_generation_reuse() {
+    use crate::AddComponent;
+    use crate::iter::IntoIter;
+    use crate::views::ViewMut;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new_for_test();
+    world.group::<(Counted, Aligned)>();
+    let old = world.add_entity((counted(0, &counter), Aligned(0)));
+    let other = world.add_entity((counted(1, &counter), Aligned(1)));
+    world.regroup();
+    world.delete_entity(old);
+    let new = world.add_entity((counted(2, &counter),));
+    assert_eq!(new.index(), old.index());
+    // The deleted entity's id gets an `Aligned` again, it stays a component of a dead entity.
+    world
+        .borrow::<ViewMut<'_, Aligned>>()
+        .unwrap()
+        .add_component_unchecked(old, Aligned(9));
+
+    world.regroup();
+
+    let (counted_view, aligned) = world
+        .borrow::<(View<'_, Counted>, View<'_, Aligned>)>()
+        .unwrap();
+    let grouped: Vec<EntityId> = (&counted_view, &aligned)
+        .iter()
+        .with_id()
+        .map(|(entity, _)| entity)
+        .collect();
+    assert_eq!(grouped, [other]);
+    assert_eq!(aligned.get(old).unwrap().0, 9);
+    assert_eq!(counted_view.get(new).unwrap().values, [2]);
+    drop((counted_view, aligned));
+
+    drop(world);
+    assert_eq!(drops(&counter), 3);
+}
+
+/// Asserts that a regroup after scattered re-additions, removals and a deletion in both members
+/// of a group of heap-owning components moves every row through its payload cycles without
+/// losing, duplicating or dropping one: values stay with their entities, each dropped once.
+#[test]
+fn regroup_churn() {
+    use crate::iter::IntoIter;
+
+    let counter = Arc::new(AtomicUsize::new(0));
+    let mut world = World::new_for_test();
+    world.group::<(Counted, Aligned)>();
+    let e: Vec<EntityId> = (0..24)
+        .map(|i| world.add_entity((counted(i, &counter), Aligned(u64::from(i)))))
+        .collect();
+    world.regroup();
+
+    for i in (1..24).step_by(4) {
+        let (component,) = world.remove::<(Counted,)>(e[i]);
+        world.add_component(e[i], component.unwrap());
+    }
+    for i in (2..24).step_by(5) {
+        world.remove::<(Aligned,)>(e[i]);
+    }
+    world.delete_entity(e[9]);
+    assert_eq!(drops(&counter), 1);
+
+    world.regroup();
+
+    let (counted_view, aligned) = world
+        .borrow::<(View<'_, Counted>, View<'_, Aligned>)>()
+        .unwrap();
+    let mut grouped: Vec<(EntityId, Vec<u32>, u64)> = (&counted_view, &aligned)
+        .iter()
+        .with_id()
+        .map(|(entity, (counted, aligned))| (entity, counted.values.clone(), aligned.0))
+        .collect();
+    grouped.sort_unstable();
+    let mut expected: Vec<(EntityId, Vec<u32>, u64)> = (0..24u32)
+        .filter(|&i| i != 9 && i % 5 != 2)
+        .map(|i| (e[i as usize], vec![i], u64::from(i)))
+        .collect();
+    expected.sort_unstable();
+    assert_eq!(grouped, expected);
+    for i in (2..24).step_by(5) {
+        assert_eq!(counted_view.get(e[i]).unwrap().values, [i as u32]);
+    }
+    drop((counted_view, aligned));
+
+    drop(world);
+    assert_eq!(drops(&counter), 24);
+}
+
+/// Defines a test grouping `Aligned` with heap-owning components behind `$wrapper`.
+/// After a deletion, a re-addition and a new pair, regroup keeps every value with its entity,
+/// and each component is dropped exactly once.
+#[cfg(all(feature = "std", feature = "thread_local"))]
+macro_rules! regroup_wrapped {
+    ($name: ident, $wrapper: ident) => {
+        #[test]
+        fn $name() {
+            use crate::AddComponent;
+            use crate::Remove;
+            use crate::borrow::$wrapper;
+            use crate::iter::IntoIter;
+            use crate::views::ViewMut;
+
+            let counter = Arc::new(AtomicUsize::new(0));
+            let mut world = World::new_for_test();
+            let add = |world: &mut World, i: u32| {
+                let entity = world.add_entity((Aligned(u64::from(i)),));
+                world
+                    .borrow::<$wrapper<ViewMut<'_, Counted>>>()
+                    .unwrap()
+                    .add_component_unchecked(entity, counted(i, &counter));
+                entity
+            };
+            let e: Vec<EntityId> = (0..6).map(|i| add(&mut world, i)).collect();
+            world.group::<(Aligned, $wrapper<Counted>)>();
+
+            world.delete_entity(e[1]);
+            {
+                let mut wrapped = world.borrow::<$wrapper<ViewMut<'_, Counted>>>().unwrap();
+                // From the middle of the range, its last component takes the slot.
+                let component = wrapped.remove(e[2]).unwrap();
+                wrapped.add_component_unchecked(e[2], component);
+            }
+            let new = add(&mut world, 6);
+
+            world.regroup();
+
+            let (aligned, wrapped) = world
+                .borrow::<(View<'_, Aligned>, $wrapper<View<'_, Counted>>)>()
+                .unwrap();
+            let mut grouped: Vec<(EntityId, Vec<u32>, u64)> = (&aligned, &*wrapped)
+                .iter()
+                .with_id()
+                .map(|(entity, (aligned, counted))| (entity, counted.values.clone(), aligned.0))
+                .collect();
+            grouped.sort_unstable();
+            let mut expected: Vec<(EntityId, Vec<u32>, u64)> = [0, 2, 3, 4, 5]
+                .into_iter()
+                .map(|i: u32| (e[i as usize], vec![i], u64::from(i)))
+                .chain([(new, vec![6], 6)])
+                .collect();
+            expected.sort_unstable();
+            assert_eq!(grouped, expected);
+            drop((aligned, wrapped));
+
+            assert_eq!(drops(&counter), 1);
+            drop(world);
+            assert_eq!(drops(&counter), 7);
+        }
+    };
+}
+
+#[cfg(all(feature = "std", feature = "thread_local"))]
+regroup_wrapped!(regroup_non_send, NonSend);
+#[cfg(all(feature = "std", feature = "thread_local"))]
+regroup_wrapped!(regroup_non_sync, NonSync);
+#[cfg(all(feature = "std", feature = "thread_local"))]
+regroup_wrapped!(regroup_non_send_sync, NonSendSync);
+
 /// Heap-owning value that is neither `Send` nor `Sync` and counts how many times it's dropped.
 ///
 /// Used as a custom storage and as a unique.

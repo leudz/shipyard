@@ -8,7 +8,11 @@ fn discover(world: &World, storage_id: StorageId, entity: EntityId) -> Option<Ve
     let frozen = Frozen::new(storages, &storage_ids);
 
     Discovery::default()
-        .discover(&frozen.memberships, storage_id, entity)
+        .discover(
+            &frozen.memberships,
+            frozen.memberships.position(storage_id),
+            entity,
+        )
         .map(<[StorageId]>::to_vec)
 }
 
@@ -24,6 +28,21 @@ fn discover_overlapping() {
 
     assert_eq!(discover(&world, id::<A>(), entity), Some(abc.clone()));
     assert_eq!(discover(&world, id::<C>(), entity), Some(abc));
+}
+
+/// Asserts that with AB and AC, an entity holding A, B and C has to be grouped in all three
+/// from B, whose only group shares A with another group.
+#[test]
+fn discover_shared_member() {
+    let mut world = World::new_for_test();
+    let entity = world.add_entity((A(0), B(0), C));
+    attach_ids(&world, &[id::<A>(), id::<B>()]);
+    attach_ids(&world, &[id::<A>(), id::<C>()]);
+
+    assert_eq!(
+        discover(&world, id::<B>(), entity),
+        Some(sorted_ids(vec![id::<A>(), id::<B>(), id::<C>()]))
+    );
 }
 
 /// Asserts that with AB and AC, an entity holding only A and B has to be grouped in A and B.

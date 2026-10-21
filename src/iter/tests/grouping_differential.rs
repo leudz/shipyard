@@ -447,12 +447,11 @@ impl Scenario {
             Op::Group { mask } => self.group(mask),
             Op::Regroup => self.world.regroup(),
             Op::Damage { id, slot } => {
-                with_kind!(slot, K => self
-                    .world
-                    .borrow::<ViewMut<'_, K>>()
-                    .unwrap()
-                    .sparse_set
-                    .private_move_to(id, GroupRegion::Unevaluated));
+                with_kind!(slot, K => {
+                    let view = self.world.borrow::<ViewMut<'_, K>>().unwrap();
+                    let index = view.index_of(id).expect("damaged components exist");
+                    view.sparse_set.extract_to_unevaluated(index);
+                });
             }
         }
     }
@@ -2067,11 +2066,11 @@ fn tracked_world() -> (World, Vec<EntityId>) {
         .map(|i| world.add_entity((A(i), Tracked(i))))
         .collect();
     world.group::<(A, Tracked)>();
-    world
-        .borrow::<ViewMut<'_, A>>()
-        .unwrap()
-        .sparse_set
-        .private_move_to(e[10], GroupRegion::Unevaluated);
+    {
+        let a = world.borrow::<ViewMut<'_, A>>().unwrap();
+        let index = a.index_of(e[10]).unwrap();
+        a.sparse_set.extract_to_unevaluated(index);
+    }
     e.push(world.add_entity((A(12), Tracked(12))));
     world
         .borrow::<ViewMut<'_, Tracked>>()
