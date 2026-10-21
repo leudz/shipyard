@@ -6,6 +6,7 @@ mod ordering;
 mod parallel;
 mod pending;
 mod prepare;
+mod registration;
 mod regroup;
 mod requirements;
 
@@ -37,7 +38,9 @@ impl Unique for U32 {}
 impl Unique for U16 {}
 
 /// Grouped components, for regroup tests.
+#[derive(Clone)]
 struct A;
+#[derive(Clone)]
 struct B;
 struct C;
 struct D;

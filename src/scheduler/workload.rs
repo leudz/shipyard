@@ -450,11 +450,16 @@ impl Workload {
             .borrow_mut()
             .map_err(|_| error::AddWorkload::Borrow)?;
 
+        // We borrow it before adding the workload, it can't be added without its regroups.
+        let all_storages = world
+            .all_storages()
+            .map_err(|_| error::AddWorkload::TrackingAllStoragesBorrow)?;
+
         let mut tracking_to_enable = Vec::new();
 
         let name = self.name.dyn_clone();
 
-        let workload_info = create_workload::create_workload(
+        let mut workload_info = create_workload::create_workload(
             self,
             systems,
             system_names,
@@ -465,9 +470,14 @@ impl Workload {
             default,
         )?;
 
-        let all_storages = world
-            .all_storages()
-            .map_err(|_| error::AddWorkload::TrackingAllStoragesBorrow)?;
+        let batches = workloads
+            .get_mut(&name)
+            .expect("create_workload added the workload");
+        prepare::prepare_regroups(
+            batches,
+            &mut workload_info.batches_info,
+            &all_storages.grouping,
+        );
 
         for enable_tracking_fn in &tracking_to_enable {
             (enable_tracking_fn)(&all_storages).map_err(|err| match err {

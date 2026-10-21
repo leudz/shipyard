@@ -38,10 +38,6 @@ pub(crate) enum Step {
     /// Runs the user system at this index in the systems list.
     System(usize),
     /// Runs the regroup at this index in [`Batches::regroups`].
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "workloads don't plan regroups yet")
-    )]
     Regroup(usize),
 }
 
@@ -82,10 +78,6 @@ impl PartialEq for RegroupHook {
 
 impl RegroupStep {
     /// Returns the step regrouping `set`, one of `grouping`'s connected sets.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "workloads don't plan regroups yet")
-    )]
     pub(crate) fn new(set: &ConnectedSet, grouping: &Grouping, trigger: RegroupTrigger) -> Self {
         let borrow = set
             .members
@@ -114,10 +106,6 @@ impl RegroupStep {
     }
 
     /// Returns what workload information shows about this step.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "workloads don't plan regroups yet")
-    )]
     pub(crate) fn info(&self) -> RegroupInfo {
         RegroupInfo {
             borrow: self.borrow.clone(),

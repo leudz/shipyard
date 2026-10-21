@@ -24,10 +24,6 @@ use core::mem;
 /// The user systems' sequential order doesn't change.
 ///
 /// `batches_info` describes `batches` and gets the same changes.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "workloads don't plan regroups yet")
-)]
 pub(super) fn prepare_regroups(
     batches: &mut Batches,
     batches_info: &mut Vec<BatchInfo>,
