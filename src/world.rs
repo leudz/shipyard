@@ -749,12 +749,14 @@ let i = world.run(sys1);
     ///
     /// - Scheduler (shared)
     /// - Systems' borrow as they are executed
+    /// - Connected sets regrouped by the workload (exclusive), as they are regrouped
     ///
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
     /// - Workload did not exist.
     /// - Storage borrow failed.
+    /// - Regroup borrow failed.
     /// - User error returned by system.
     pub fn run_workload<T>(&self, label: impl AsLabel<T>) -> Result<(), error::RunWorkload> {
         let scheduler = self
@@ -831,11 +833,13 @@ let i = world.run(sys1);
     ///
     /// - Scheduler (shared)
     /// - Systems' borrow as they are executed
+    /// - Connected sets regrouped by the workload (exclusive), as they are regrouped
     ///
     /// ### Errors
     ///
     /// - Scheduler borrow failed.
     /// - Storage borrow failed.
+    /// - Regroup borrow failed.
     /// - User error returned by system.
     pub fn run_default_workload(&self) -> Result<(), error::RunWorkload> {
         let scheduler = self
@@ -1369,6 +1373,9 @@ impl World {
     /// Groups are declared with [`WorldBuilder::with_group`].\
     /// Components only move to their group during a regroup.\
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
+    ///
+    /// Workloads added to the world regroup storages they use automatically.\
+    /// This is for the rest, like iterating in [`World::run`].
     pub fn regroup(&mut self) {
         self.all_storages.get_mut().regroup();
     }
@@ -1384,7 +1391,7 @@ impl World {
     ///
     /// - [`NotGrouped`] when `T`'s storage isn't part of any group.
     /// - [`Storage`] when `AllStorages` is borrowed mutably, or a storage of the set is already
-    ///   borrowed, or is `!Send` and this isn't the world's thread.
+    ///   borrowed, or is `!Send` and this isn't the world's thread.\
     ///   It can be a member other than `T`. Nothing moves in that case.
     ///
     /// ### Example

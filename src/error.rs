@@ -472,6 +472,8 @@ pub enum RunWorkload {
     /// Workload is not present in the world.
     MissingWorkload,
     /// A regroup added by the workload couldn't borrow a storage of its connected set.
+    ///
+    /// It can be a storage none of the workload's systems borrow, the regroup borrows the whole set.
     Regroup(GetStorage),
 }
 

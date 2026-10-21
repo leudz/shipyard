@@ -127,6 +127,48 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     /// With `A+B`, `B+C` and `D+E` groups, `A`, `B` and `C` form one connected set and `D` and `E` another.\
     /// A set can only be regrouped as a whole, see [`World::regroup_set`].
     ///
+    /// Groups can only be declared here, so the connected sets are fixed once the world is built.
+    ///
+    /// ### Regrouping
+    ///
+    /// Components added to a group's storages wait outside the group until a regroup,
+    /// removals can also leave the group out of place.\
+    /// Iteration stays correct meanwhile, it's only slower.
+    ///
+    /// - [`World::regroup`] and [`AllStorages::regroup`] regroups the whole world.
+    /// - [`World::regroup_set`] and [`AllStorages::regroup_set`] regroups a single connected set.
+    /// - Workloads added to the world regroup what they use automatically.
+    ///
+    /// ### Workloads
+    ///
+    /// Workloads added with [`Workload::add_to_world`] or [`World::add_workload`] regroup the
+    /// connected sets their systems borrow:
+    ///
+    /// - Each set is regrouped before the first system borrowing one of its storages, to take in
+    ///   the changes made outside the workload. Workloads that only read get this regroup too.
+    /// - A system borrowing a grouped storage exclusively, with a `ViewMut` for example, leaves it
+    ///   to regroup once it ran. Even if it only changed values, the workload can't know.\
+    ///   A system skipped by its condition doesn't.
+    /// - The set of that storage is then regrouped before the storage's next borrow,
+    ///   and before the workload ends.
+    ///
+    /// A regroup is only needed before the written storage is used again. Other storages of its set can be used in the meantime.\
+    /// With an `A+B` group, `write A -> read B -> read A` runs as
+    /// `write A -> read B -> regroup A+B -> read A`. Reading `B` doesn't wait for the regroup,
+    /// reading `A` does. A single regroup takes care of every storage of the set written since the last one.
+    ///
+    /// A regroup borrows every storage of its set exclusively, including the ones the systems don't use.\
+    /// If one of them is already borrowed, the workload returns [`RunWorkload::Regroup`].
+    ///
+    /// When a system returns an error, the workload stops without regrouping what was left to regroup.\
+    /// The next workload using these sets regroups them when it starts.
+    ///
+    /// Only the storages systems borrow directly count. Borrows made by `run_if` or `skip_if` conditions,
+    /// or through `AllStorages`, don't wait for a regroup, and their changes don't make the workload regroup.\
+    /// Use [`AllStorages::regroup_set`] when they need one.
+    ///
+    /// Workloads made with [`Workload::build`] don't regroup, they aren't tied to a world.
+    ///
     /// ### Current limitations
     ///
     /// - All of a group's storages have to be in the same tuple when creating an iterator.\
@@ -142,7 +184,7 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     /// ### Example
     ///
     /// ```
-    /// use shipyard::{Component, World};
+    /// use shipyard::{Component, IntoIter, View, ViewMut, World};
     ///
     /// #[derive(Component)]
     /// struct Pos(f32);
@@ -150,8 +192,29 @@ impl<Lock, ThreadId> WorldBuilder<Lock, ThreadId> {
     /// #[derive(Component)]
     /// struct Vel(f32);
     ///
-    /// let world = World::builder().with_group::<(Pos, Vel)>().build();
+    /// fn movement(mut positions: ViewMut<Pos>, velocities: View<Vel>) {
+    ///     (&mut positions, &velocities)
+    ///         .iter()
+    ///         .for_each(|(pos, vel)| pos.0 += vel.0);
+    /// }
+    ///
+    /// let mut world = World::builder().with_group::<(Pos, Vel)>().build();
+    /// world.add_entity((Pos(0.0), Vel(1.0)));
+    ///
+    /// // The workload regroups `Pos` and `Vel` before `movement` runs.
+    /// world.add_workload(|| movement);
+    /// world.run_default_workload().unwrap();
+    ///
+    /// // Outside of workloads, we regroup ourselves.
+    /// world.add_entity((Pos(1.0), Vel(1.0)));
+    /// world.regroup();
     /// ```
+    ///
+    /// [`Workload::add_to_world`]: crate::Workload::add_to_world
+    /// [`Workload::build`]: crate::Workload::build
+    /// [`RunWorkload::Regroup`]: crate::error::RunWorkload::Regroup
+    /// [`AllStorages::regroup`]: crate::all_storages::AllStorages::regroup
+    /// [`AllStorages::regroup_set`]: crate::all_storages::AllStorages::regroup_set
     #[track_caller]
     pub fn with_group<G: TupleGroup>(mut self) -> WorldBuilder<Lock, ThreadId> {
         self.all_storages_builder.grouping.declare::<G>();

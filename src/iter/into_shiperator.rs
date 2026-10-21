@@ -101,7 +101,7 @@ where
 
 /// Turns a view into a Shiperator.
 ///
-/// Calling [`iter`](IntoIter::iter), [`par_iter`](IntoIter::par_iter) or
+/// Calling [`iter`](IntoIter::iter), `par_iter` or
 /// [`into_shiperator`](IntoShiperator::into_shiperator) is always safe.\
 /// Implementing this trait is only needed for custom views, `#[derive(IntoIter)]` generates it.
 /// The simplest implementation delegates to an existing one, a view or a tuple of views,

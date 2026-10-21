@@ -1835,7 +1835,8 @@ for (i, j) in &mut iter {
 
     /// Clones all storages with a registered clone function from this `AllStorages` to `other`.
     ///
-    /// Tracking is not cloned. Components will count as inserted in `other`.
+    /// Tracking is not cloned. Components will count as inserted in `other`.\
+    /// `other` keeps its own groups, copied components only move to them at `other`'s next regroup.
     #[track_caller]
     pub fn clone_storages_to(&self, other: &mut AllStorages) {
         let other_current = other.get_current();

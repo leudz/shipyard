@@ -34,6 +34,9 @@ impl AllStorages {
     /// Groups are declared with [`WorldBuilder::with_group`](crate::world::WorldBuilder::with_group).\
     /// Components only move to their group during a regroup.\
     /// Iteration stays correct between regroups, but adding or removing components slows it down.
+    ///
+    /// Workloads added to the world regroup storages they use automatically.\
+    /// This is for the rest, like iterating in [`AllStorages::run`].
     pub fn regroup(&mut self) {
         regroup_selected(&mut Selected::all(self.storages.get_mut()));
     }

@@ -51,6 +51,8 @@ pub struct ScheduledWorkload {
 impl ScheduledWorkload {
     /// Runs the workload.
     ///
+    /// It doesn't regroup, see [`Workload::build`].
+    ///
     /// ### Borrows
     ///
     /// - Systems' borrow as they are executed
@@ -89,6 +91,9 @@ impl ScheduledWorkload {
 
 impl World {
     /// Creates a new workload and store it in the [`World`].
+    ///
+    /// Like [`Workload::add_to_world`], the workload regroups the world's groups it uses,
+    /// see [`WorldBuilder::with_group`](crate::world::WorldBuilder::with_group).
     pub fn add_workload<Views, R, W, F: FnOnce() -> W + 'static>(&self, workload: F)
     where
         W: IntoWorkload<Views, R>,
@@ -422,6 +427,9 @@ impl Workload {
     /// Finishes the workload creation and stores it in the [`World`].
     /// Returns a struct with describing how the workload has been split in batches.
     ///
+    /// The workload regroups the world's groups it uses, the regroups are planned here.\
+    /// See [`WorldBuilder::with_group`](crate::world::WorldBuilder::with_group) for when they run.
+    ///
     /// ### Borrows
     ///
     /// - Scheduler (exclusive)
@@ -529,6 +537,10 @@ impl Workload {
         Ok(())
     }
     /// Build the [`Workload`](super::Workload) from the [`Workload`].
+    ///
+    /// Unlike [`Workload::add_to_world`], the built workload doesn't regroup, it isn't tied to a world's groups.\
+    /// Iteration stays correct, but components added since the last regroup are slower to iterate.\
+    /// Call [`World::regroup`] or [`World::regroup_set`] when it matters.
     pub fn build(self) -> Result<(ScheduledWorkload, WorkloadInfo), error::AddWorkload> {
         let mut workload = ScheduledWorkload {
             name: self.name.clone(),
